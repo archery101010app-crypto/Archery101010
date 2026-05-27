@@ -7,7 +7,13 @@ import { UserProfile } from "@/lib/authService";
 import { Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function Header({ user }: { user: UserProfile }) {
+interface HeaderProps {
+  user: UserProfile;
+  coachViewMode?: boolean;
+  onToggleCoachViewMode?: (val: boolean) => void;
+}
+
+export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
   const { language, setLanguage, t } = useLanguage();
   const { pendingCount, syncStatus, isSyncing, triggerSync } = useSync();
   const [showStatusTooltip, setShowStatusTooltip] = useState(false);
@@ -39,8 +45,34 @@ export default function Header({ user }: { user: UserProfile }) {
         </span>
       </div>
 
-      {/* Sync Wifi Button & Language Selector */}
-      <div className="flex items-center gap-4">
+      {/* Sync Wifi Button, View Switcher & Language Selector */}
+      <div className="flex items-center gap-3">
+        {/* Coach View Switcher Toggle */}
+        {user && user.role === "coach" && onToggleCoachViewMode && (
+          <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">
+            <button
+              onClick={() => onToggleCoachViewMode(false)}
+              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider transition-all ${
+                !coachViewMode 
+                  ? "bg-cyan-neon text-black font-extrabold" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              Atleta
+            </button>
+            <button
+              onClick={() => onToggleCoachViewMode(true)}
+              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider transition-all ${
+                coachViewMode 
+                  ? "bg-cyan-neon text-black font-extrabold" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              Coach
+            </button>
+          </div>
+        )}
+
         {/* Compact i18n selector */}
         <div className="flex bg-neutral-900/60 p-0.5 rounded-full border border-gray-border">
           <button

@@ -3,20 +3,49 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions } from "@/lib/db/indexedDB";
-import { motion } from "framer-motion";
-import { Trophy, Target, ShieldAlert, ArrowUpRight, Lock, Sparkles } from "lucide-react";
+import { getLocalSessions, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Trophy, 
+  Target, 
+  ShieldAlert, 
+  ArrowUpRight, 
+  Lock, 
+  Sparkles,
+  Users,
+  Calendar,
+  CheckCircle2,
+  TrendingUp,
+  Activity,
+  CheckSquare,
+  Square,
+  Plus
+} from "lucide-react";
+import ClubLogoIcon from "../ui/ClubLogoIcon";
 
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
 
 interface DashboardViewProps {
   user: UserProfile;
+  coachViewMode?: boolean;
   onNavigate: (screen: Screen, tab?: "SESSIONS" | "VOLUME") => void;
 }
 
-export default function DashboardView({ user, onNavigate }: DashboardViewProps) {
+const COUNTRIES = [
+  { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
+  { code: "ES", name: "España", flag: "🇪🇸" },
+  { code: "MX", name: "México", flag: "🇲🇽" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷" },
+  { code: "US", name: "United States", flag: "🇺🇸" }
+];
+
+export default function DashboardView({ user, coachViewMode = false, onNavigate }: DashboardViewProps) {
   const { language, t } = useLanguage();
   const [sessions, setSessions] = useState<any[]>([]);
+  const [athletes, setAthletes] = useState<UserProfile[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+
   const [stats, setStats] = useState({
     lastScore: 275,
     lastMax: 300,
@@ -32,14 +61,13 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
       setSessions(localSess);
       
       if (localSess.length > 0) {
-        // Compute real stats based on local sessions database
         let totalArrows = 0;
         let best = 0;
         let bestMax = 300;
         let bestDate = 0;
         
         localSess.forEach((s) => {
-          totalArrows += (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+          totalArrows += ((s.endsCount || 0) * (s.arrowsPerEnd || 0)) + (s.warmupArrows || 0);
           if ((s.score || 0) >= best) {
             best = s.score;
             bestMax = s.maxScore || 300;
@@ -61,10 +89,94 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
     loadStats();
   }, []);
 
-  const lastPercentage = Math.round((stats.lastScore / stats.lastMax) * 100);
-  const bestPercentage = Math.round((stats.bestScore / stats.bestMax) * 100);
+  useEffect(() => {
+    async function loadAthletes() {
+      if (user.role === "coach" && user.clubId) {
+        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        let clubArchers = list.filter(u => u.clubId === user.clubId && u.role === "archer");
+        
+        if (clubArchers.length === 0) {
+          const demoArchers: UserProfile[] = [
+            {
+              uid: "USR-D-ATHLETE-1",
+              email: "daniela@archery101010.com",
+              fullName: "Daniela Solano",
+              birthDate: "2002-08-12",
+              country: user.country,
+              gender: "F",
+              bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 42, defaultDistance: 70 },
+              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId,
+              clubName: user.clubName,
+              clubLogo: user.clubLogo,
+              clubCountry: user.clubCountry,
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            },
+            {
+              uid: "USR-D-ATHLETE-2",
+              email: "carlos@archery101010.com",
+              fullName: "Carlos Ruiz",
+              birthDate: "1998-04-25",
+              country: user.country,
+              gender: "M",
+              bowConfig: { type: "Compound", brand: "Mathews", model: "TRX", poundage: 58, defaultDistance: 50 },
+              physicalData: { height: 178, weight: 76, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId,
+              clubName: user.clubName,
+              clubLogo: user.clubLogo,
+              clubCountry: user.clubCountry,
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            },
+            {
+              uid: "USR-D-ATHLETE-3",
+              email: "sebastian@archery101010.com",
+              fullName: "Sebastián Castro",
+              birthDate: "2005-11-03",
+              country: user.country,
+              gender: "M",
+              bowConfig: { type: "Barebow", brand: "Gillo", model: "G1", poundage: 36, defaultDistance: 18 },
+              physicalData: { height: 172, weight: 64, dominantEye: "L", dominantHand: "R" },
+              clubId: user.clubId,
+              clubName: user.clubName,
+              clubLogo: user.clubLogo,
+              clubCountry: user.clubCountry,
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            }
+          ];
 
-  // Animation variants for Bento layout cascade
+          const updatedList = [...list, ...demoArchers];
+          await saveLocalSetting("simulated_users", updatedList);
+          clubArchers = demoArchers;
+        }
+        
+        setAthletes(clubArchers);
+
+        const dateKey = new Date().toISOString().split("T")[0];
+        const savedAttendance = await getLocalSetting<Record<string, boolean>>(`attendance_${user.clubId}_${dateKey}`, {});
+        setAttendance(savedAttendance);
+      }
+    }
+    loadAthletes();
+  }, [user, coachViewMode]);
+
+  const toggleAttendance = async (athleteUid: string) => {
+    const nextAttendance = {
+      ...attendance,
+      [athleteUid]: !attendance[athleteUid]
+    };
+    setAttendance(nextAttendance);
+
+    const dateKey = new Date().toISOString().split("T")[0];
+    await saveLocalSetting(`attendance_${user.clubId}_${dateKey}`, nextAttendance);
+  };
+
+  const lastPercentage = stats.lastMax > 0 ? Math.round((stats.lastScore / stats.lastMax) * 100) : 0;
   const containerVariants: any = {
     animate: { transition: { staggerChildren: 0.05 } }
   };
@@ -74,6 +186,162 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
     animate: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }
   };
 
+  const clubFlag = COUNTRIES.find(c => c.code === user.clubCountry)?.flag || COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
+  const clubCountryName = COUNTRIES.find(c => c.code === user.clubCountry)?.name || COUNTRIES.find(c => c.code === user.country)?.name || "Costa Rica";
+
+  if (user.role === "coach" && coachViewMode) {
+    const presentCount = Object.values(attendance).filter(Boolean).length;
+
+    return (
+      <motion.div
+        variants={containerVariants}
+        initial="initial"
+        animate="animate"
+        className="flex flex-col gap-4 py-4"
+      >
+        <div className="flex flex-col mb-1">
+          <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
+            <span>CONSOLA COACH</span>
+            <span className="text-cyan-neon text-xs font-black bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20 shadow-glow-cyan animate-pulse">
+              {user.clubName || "Club"}
+            </span>
+          </h2>
+          <p className="text-xs text-gray-dim mt-0.5">
+            Planificación y Control Grupal · {clubFlag} {clubCountryName}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
+            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Atletas Activos</span>
+            <span className="text-2xl font-black text-white">{athletes.length}</span>
+          </div>
+          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
+            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Volumen Club</span>
+            <span className="text-2xl font-black text-cyan-neon">14,280</span>
+          </div>
+          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
+            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Asistencias Hoy</span>
+            <span className="text-2xl font-black text-yellow-gold">{presentCount}</span>
+          </div>
+        </div>
+
+        <motion.div
+          variants={cardVariants}
+          className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex flex-col gap-3"
+        >
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-white text-xs font-black uppercase tracking-wide">Asistencia Grupal de Hoy</h3>
+              <p className="text-[9px] text-gray-dim mt-0.5">
+                {new Date().toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "short"
+                })}
+              </p>
+            </div>
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black">
+              {presentCount} / {athletes.length} presentes
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2 mt-1">
+            {athletes.map((ath) => {
+              const isPresent = !!attendance[ath.uid];
+              return (
+                <div
+                  key={ath.uid}
+                  onClick={() => toggleAttendance(ath.uid)}
+                  className={`flex justify-between items-center p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    isPresent
+                      ? "border-cyan-neon/20 bg-cyan-neon/5"
+                      : "border-white/[0.03] bg-neutral-950/20"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-[10px] text-gray-dim">
+                      {ath.fullName.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-white text-xs font-bold leading-tight">{ath.fullName}</span>
+                      <span className="text-[9px] text-gray-dim mt-0.5">{ath.bowConfig.type}</span>
+                    </div>
+                  </div>
+                  <button type="button" className="text-gray-dim">
+                    {isPresent ? (
+                      <CheckCircle2 size={16} className="text-cyan-neon shadow-glow-cyan" />
+                    ) : (
+                      <div className="w-4 h-4 rounded border border-gray-border" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        <motion.div
+          variants={cardVariants}
+          className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex flex-col gap-3"
+        >
+          <div className="flex justify-between items-center">
+            <h3 className="text-white text-xs font-black uppercase tracking-wide">Macrociclos & Metas Club</h3>
+            <span className="text-[9px] text-yellow-gold font-bold">Fase Activa</span>
+          </div>
+
+          <div className="flex flex-col gap-1.5 mt-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-gray-dim">Volumen Acumulado del Club:</span>
+              <span className="text-white font-extrabold">3,480 / 5,000 flechas</span>
+            </div>
+            <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
+              <div className="bg-cyan-neon h-full rounded-full" style={{ width: "70%" }} />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 mt-2">
+            <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">Cronograma de Fases</span>
+            <div className="grid grid-cols-4 gap-1.5 mt-1 relative">
+              {[
+                { name: "Física", active: false, done: true },
+                { name: "Volumen", active: true, done: false },
+                { name: "Puesta Punto", active: false, done: false },
+                { name: "Competitiva", active: false, done: false }
+              ].map((phase, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-1.5">
+                  <div className={`w-full h-1.5 rounded-full ${
+                    phase.active 
+                      ? "bg-cyan-neon shadow-glow-cyan animate-pulse" 
+                      : phase.done 
+                      ? "bg-cyan-brand/40" 
+                      : "bg-neutral-800"
+                  }`} />
+                  <span className={`text-[8px] font-black uppercase text-center leading-none ${
+                    phase.active ? "text-cyan-neon font-black" : "text-gray-dim"
+                  }`}>
+                    {phase.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.button
+          variants={cardVariants}
+          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onNavigate("CALENDAR")}
+          className="w-full py-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center gap-1.5 mt-2"
+        >
+          <Calendar size={16} />
+          <span>Programar Control Grupal</span>
+        </motion.button>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       variants={containerVariants}
@@ -81,7 +349,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
       animate="animate"
       className="flex flex-col gap-4 py-4"
     >
-      {/* Welcome Banner */}
       <div className="flex flex-col mb-1">
         <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
           <span>{t("dashHome")}</span>
@@ -91,14 +358,17 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
             </span>
           )}
         </h2>
-        <p className="text-xs text-gray-dim mt-0.5">
-          Hola, {user.fullName} · {user.bowConfig.type} · {user.clubName || "Independiente"}
+        <p className="text-xs text-gray-dim mt-0.5 flex items-center gap-1">
+          <span>Hola, {user.fullName} · {user.bowConfig.type} ·</span>
+          <span className="flex items-center gap-0.5">
+            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3.5 h-3.5" />
+            <span className="underline decoration-cyan-neon/30">{user.clubName || "Independiente"}</span>
+            <span>{clubFlag}</span>
+          </span>
         </p>
       </div>
 
-      {/* Bento Grid */}
       <div className="grid grid-cols-3 gap-3">
-        {/* Widget 1: Last Session (Full width) */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
@@ -116,7 +386,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
             <span className="text-xs text-yellow-gold font-bold">{lastPercentage}% precisión</span>
           </div>
 
-          {/* SVG Animated Speedometer widget */}
           <div className="relative w-28 h-20 flex items-center justify-center">
             <svg className="w-24 h-24 transform -rotate-90">
               <circle
@@ -134,7 +403,7 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
                 className="stroke-cyan-neon"
                 strokeWidth="6"
                 fill="none"
-                strokeDasharray="239" // 2 * pi * r
+                strokeDasharray="239"
                 initial={{ strokeDashoffset: 239 }}
                 animate={{ strokeDashoffset: 239 - (239 * lastPercentage) / 100 }}
                 transition={{ duration: 1.2, ease: "easeInOut" }}
@@ -148,7 +417,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
-        {/* Widget 2: Total Arrows Volume (1/3 width) - Click navigates to Volume stats tab */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY", "VOLUME")}
@@ -166,7 +434,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
-        {/* Widget 3: Best Session (1/3 width) - Border gradient cian */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
@@ -192,7 +459,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
-        {/* Widget 4: Advanced Analytics (1/3 width) - Locked PRO overlay */}
         <motion.div
           variants={cardVariants}
           className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-white/5 flex flex-col justify-between aspect-square relative overflow-hidden group cursor-pointer"
@@ -200,7 +466,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
         >
           {user.plan === "FREE" ? (
             <>
-              {/* Blur locking overlay */}
               <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1 z-15">
                 <Lock size={16} className="text-yellow-gold shadow-glow-yellow animate-pulse" />
                 <span className="text-[8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded-full uppercase scale-90">
@@ -224,7 +489,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           )}
         </motion.div>
 
-        {/* Widget 5: Weekly Progress Graph (2/3 width) */}
         <motion.div
           variants={cardVariants}
           className="col-span-2 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36"
@@ -232,15 +496,12 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase">
             {t("weeklyProgress")}
           </span>
-          {/* SVG Line Graph */}
           <div className="w-full h-20 mt-1 relative">
             <svg viewBox="0 0 100 40" className="w-full h-full">
-              {/* Area under line */}
               <path
                 d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12 L 95,38 L 5,38 Z"
                 fill="rgba(0, 229, 255, 0.06)"
               />
-              {/* Line graph */}
               <path
                 d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12"
                 fill="none"
@@ -249,7 +510,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              {/* Dots */}
               {[
                 { x: 5, y: 35 },
                 { x: 20, y: 30 },
@@ -270,7 +530,6 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           </div>
         </motion.div>
 
-        {/* Widget 6: Clubs & Programs (1/3 width) */}
         <motion.div
           variants={cardVariants}
           className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 group"
@@ -279,21 +538,21 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase leading-snug">
             {t("clubsPrograms")}
           </span>
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-0.5 overflow-hidden">
             <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
               {user.clubName || "Mi Club"}
             </span>
-            <span className="text-[9px] text-gray-dim truncate">
-              {user.role === "coach" ? "Entrenador" : "Miembro"}
+            <span className="text-[8px] text-gray-dim truncate flex items-center gap-1 mt-0.5">
+              <span>{clubFlag}</span>
+              <span>{user.role === "coach" ? "Entrenador" : "Miembro"}</span>
             </span>
           </div>
-          <div className="w-8 h-8 rounded-full bg-cyan-neon/10 flex items-center justify-center text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan">
-            <Trophy size={14} />
+          <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/5 group-hover:border-cyan-neon/20 transition-all">
+            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
           </div>
         </motion.div>
       </div>
 
-      {/* Start session action card */}
       <motion.button
         variants={cardVariants}
         whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}

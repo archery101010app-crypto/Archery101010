@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { registerUser } from "@/lib/authService";
+import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Award, Eye, User } from "lucide-react";
 
@@ -39,6 +40,12 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [clubOption, setClubOption] = useState<"CREATE" | "JOIN" | "NONE">("NONE");
   const [clubName, setClubName] = useState("");
   const [clubInviteCode, setClubInviteCode] = useState("");
+  
+  // Club Customization States
+  const [clubCountry, setClubCountry] = useState("CR");
+  const [clubLogo, setClubLogo] = useState("0");
+  const [customLogoUrl, setCustomLogoUrl] = useState("");
+  const [isCustomLogo, setIsCustomLogo] = useState(false);
 
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">("Barebow");
   const [bowBrand, setBowBrand] = useState("");
@@ -130,6 +137,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         gender,
         clubId: clubIdParam,
         clubName: clubOption === "CREATE" ? clubName : null,
+        clubLogo: clubOption === "CREATE" ? (isCustomLogo ? customLogoUrl : clubLogo) : undefined,
+        clubCountry: clubOption === "CREATE" ? clubCountry : undefined,
         bowConfig: {
           type: bowType,
           brand: bowBrand,
@@ -381,14 +390,79 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   animate={{ height: "auto", opacity: 1 }}
                   className="flex flex-col gap-3 mt-1"
                 >
-                  <input
-                    type="text"
-                    value={clubName}
-                    onChange={(e) => setClubName(e.target.value)}
-                    placeholder={t("clubNamePlaceholder")}
-                    className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
-                  />
-                  <div className="p-3.5 bg-cyan-neon/5 border border-cyan-neon/20 rounded-xl text-[11px] text-cyan-neon font-medium">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">Nombre del Club</label>
+                    <input
+                      type="text"
+                      value={clubName}
+                      onChange={(e) => setClubName(e.target.value)}
+                      placeholder={t("clubNamePlaceholder")}
+                      className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">País de origen</label>
+                    <select
+                      value={clubCountry}
+                      onChange={(e) => setClubCountry(e.target.value)}
+                      className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-xs px-3 py-2.5 rounded-xl outline-none"
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c.code} value={c.code} className="bg-black text-white">
+                          {c.flag} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">Diseño del Logotipo</label>
+                    <div className="grid grid-cols-5 gap-2 bg-neutral-950/40 p-2 rounded-xl border border-white/5">
+                      {["0", "1", "2", "3", "4"].map((idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setClubLogo(idx);
+                            setIsCustomLogo(false);
+                          }}
+                          className={`aspect-square p-1 rounded-lg border flex items-center justify-center transition-all ${
+                            !isCustomLogo && clubLogo === idx
+                              ? "border-cyan-neon bg-cyan-neon/10"
+                              : "border-transparent bg-neutral-900/50 hover:bg-neutral-855 hover:border-white/5"
+                          }`}
+                        >
+                          <ClubLogoIcon logo={idx} className="w-6 h-6" />
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="checkbox"
+                        id="useCustomLogo"
+                        checked={isCustomLogo}
+                        onChange={(e) => setIsCustomLogo(e.target.checked)}
+                        className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 w-4 h-4 cursor-pointer"
+                      />
+                      <label htmlFor="useCustomLogo" className="text-[9px] text-gray-dim font-bold uppercase cursor-pointer select-none">
+                        Imagen personalizada (URL)
+                      </label>
+                    </div>
+
+                    {isCustomLogo && (
+                      <input
+                        type="text"
+                        value={customLogoUrl}
+                        onChange={(e) => setCustomLogoUrl(e.target.value)}
+                        placeholder="https://ejemplo.com/mi-logo.png"
+                        className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3 py-2.5 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                      />
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-cyan-neon/5 border border-cyan-neon/20 rounded-xl text-[10px] text-cyan-neon font-medium leading-relaxed">
                     {t("coachNotice")}
                   </div>
                 </motion.div>

@@ -16,6 +16,11 @@ export const settingsStore = localforage.createInstance({
   storeName: "settings_local"
 });
 
+export const calendarStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "calendar_events"
+});
+
 // Types
 export interface SyncItem {
   id: string; // unique transaction id, e.g. "TXN-1716800..."
@@ -26,6 +31,19 @@ export interface SyncItem {
   timestamp: number;
   attempts: number;
   status: "pending" | "failed";
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  description?: string;
+  createdByRole: "coach" | "archer";
+  createdByName: string;
+  createdByUid: string;
+  clubId?: string;
+  type: "competition" | "training" | "meeting" | "other";
+  timestamp: number;
 }
 
 // Generate unique text-based IDs (prefix + timestamp + random chars)
@@ -84,6 +102,23 @@ export async function getLocalSession(id: string): Promise<any | null> {
 
 export async function deleteLocalSession(id: string): Promise<void> {
   await sessionsStore.removeItem(id);
+}
+
+// Helper methods for Calendar Events
+export async function getLocalEvents(): Promise<CalendarEvent[]> {
+  const events: CalendarEvent[] = [];
+  await calendarStore.iterate((value: CalendarEvent) => {
+    events.push(value);
+  });
+  return events.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export async function saveLocalEvent(id: string, eventData: CalendarEvent): Promise<void> {
+  await calendarStore.setItem(id, eventData);
+}
+
+export async function deleteLocalEvent(id: string): Promise<void> {
+  await calendarStore.removeItem(id);
 }
 
 // Helper methods for Settings/Profile

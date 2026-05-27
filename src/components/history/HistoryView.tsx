@@ -524,6 +524,35 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </div>
             </div>
 
+            {/* Bloques y Fatiga report (para WA600/720 en Historial) */}
+            {selectedSession.blockStats && (
+              <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
+                <span className="text-[9px] text-gray-dim uppercase font-bold">Rendimiento por Bloques</span>
+                <div className="flex justify-between text-white/80">
+                  <span>Bloque 1 (Primera Mitad):</span>
+                  <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b1Score} pts</span>
+                </div>
+                {selectedSession.blockStats.completedB2 ? (
+                  <>
+                    <div className="flex justify-between text-white/80">
+                      <span>Bloque 2 (Segunda Mitad):</span>
+                      <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b2Score} pts</span>
+                    </div>
+                    <div className="flex justify-between border-t border-white/5 pt-1.5 mt-0.5">
+                      <span>Consistencia:</span>
+                      <span className={`font-black uppercase text-[10px] ${selectedSession.blockStats.diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
+                        {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? "(Fatiga)" : "(Excelente)"}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[10px] text-yellow-gold italic mt-0.5 border-t border-white/5 pt-1">
+                    Sesión finalizada anticipadamente (Bloque 2 no realizado).
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Ends breakdown lists */}
             <div className="bg-neutral-900/40 border border-white/5 rounded-2xl overflow-hidden p-4 flex flex-col gap-3">
               <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">

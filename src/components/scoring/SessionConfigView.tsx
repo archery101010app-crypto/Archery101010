@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { ArrowLeft, Target, Settings, ChevronDown, Check, Trash2, RotateCcw } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface SessionConfigViewProps {
   user: UserProfile;
@@ -18,8 +18,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
+  const [showPracticeInfoModal, setShowPracticeInfoModal] = useState(false);
+  const [practiceInfoType, setPracticeInfoType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
+  const [dontShowAgainPractice, setDontShowAgainPractice] = useState(false);
+  const [warmupArrows, setWarmupArrows] = useState(0);
+
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
-  const [format, setFormat] = useState<"WA 300" | "WA 720" | "Libre">("WA 300");
+  const [format, setFormat] = useState<"WA 300" | "WA 600" | "WA 720" | "Libre">("WA 300");
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig.type || "Barebow");
   const [distance, setDistance] = useState(user.bowConfig.defaultDistance || 18);
   const [autoScore, setAutoScore] = useState(false);
@@ -40,10 +45,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   }, []);
 
   // Automatically adjust parameters based on Format selection
-  const handleFormatChange = (newFormat: "WA 300" | "WA 720" | "Libre") => {
+  const handleFormatChange = (newFormat: "WA 300" | "WA 600" | "WA 720" | "Libre") => {
     setFormat(newFormat);
     if (newFormat === "WA 300") {
       setEndsCount(10);
+      setArrowsPerEnd(3);
+    } else if (newFormat === "WA 600") {
+      setEndsCount(20);
       setArrowsPerEnd(3);
     } else if (newFormat === "WA 720") {
       setEndsCount(12);
@@ -61,8 +69,17 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       includeNotes,
       endsCount,
       arrowsPerEnd,
-      maxScore: endsCount * arrowsPerEnd * 10 // e.g. 10 * 3 * 10 = 300
+      maxScore: endsCount * arrowsPerEnd * 10,
+      warmupArrows: warmupArrows
     });
+  };
+
+  const handleConfirmPracticeInfo = async () => {
+    setPracticeType(practiceInfoType);
+    if (dontShowAgainPractice) {
+      await saveLocalSetting(`hide_info_practice_${practiceInfoType}`, true);
+    }
+    setShowPracticeInfoModal(false);
   };
 
   const handleResumeDraft = () => {
@@ -156,7 +173,16 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <button
                 key={type}
                 type="button"
-                onClick={() => setPracticeType(type)}
+                onClick={async () => {
+                  const hide = await getLocalSetting(`hide_info_practice_${type}`, false);
+                  if (hide) {
+                    setPracticeType(type);
+                  } else {
+                    setPracticeInfoType(type);
+                    setDontShowAgainPractice(false);
+                    setShowPracticeInfoModal(true);
+                  }
+                }}
                 className={`py-3 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
@@ -181,6 +207,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition duration-200 appearance-none"
             >
               <option value="WA 300" className="bg-black text-white">WA 300 (10 Ends x 3 Flechas)</option>
+              <option value="WA 600" className="bg-black text-white">WA 600 (20 Ends x 3 Flechas)</option>
               <option value="WA 720" className="bg-black text-white">WA 720 (12 Ends x 6 Flechas)</option>
               <option value="Libre" className="bg-black text-white">Ajuste Libre / Manual</option>
             </select>
@@ -285,6 +312,33 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           </motion.div>
         )}
 
+        {/* Flechas de Calentamiento / Preparatorias */}
+        <div className="flex flex-col gap-2 bg-neutral-900/30 p-4 rounded-2xl border border-white/5">
+          <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-white text-sm font-bold">Flechas de Calentamiento</span>
+              <span className="text-[10px] text-gray-dim leading-none">Flechas preparatorias antes del registro</span>
+            </div>
+            <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setWarmupArrows(Math.max(0, warmupArrows - 6))}
+                className="px-2.5 py-1.5 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 hover:bg-neutral-900"
+              >
+                -6
+              </button>
+              <span className="w-10 text-center font-bold text-white text-xs">{warmupArrows}</span>
+              <button
+                type="button"
+                onClick={() => setWarmupArrows(Math.min(60, warmupArrows + 6))}
+                className="px-2.5 py-1.5 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 hover:bg-neutral-900"
+              >
+                +6
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Toggles */}
         <div className="flex flex-col gap-3.5 mt-2 bg-neutral-900/30 p-4 rounded-2xl border border-white/5">
           <div className="flex justify-between items-center">
@@ -339,6 +393,58 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <span>{t("startSessionBtn")}</span>
         </motion.button>
       </div>
+
+      {/* MODAL: Practice Info Explanation */}
+      <AnimatePresence>
+        {showPracticeInfoModal && (
+          <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
+              <div>
+                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
+                  Metodología de Práctica
+                </span>
+                <h3 className="text-white text-base font-black uppercase mt-1">
+                  Modo: {practiceInfoType}
+                </h3>
+              </div>
+
+              <p className="text-xs text-gray-dim leading-relaxed">
+                {practiceInfoType === "Control" && (
+                  "Simulación estricta de competencia. Con tiempos oficiales, planilla de puntuación reglamentaria, diana activa y sin interrupciones. Ideal para evaluar tu nivel en torneos."
+                )}
+                {practiceInfoType === "Práctica" && (
+                  "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas."
+                )}
+                {practiceInfoType === "Volumen" && (
+                  "Acumulación de flechas de alta intensidad. Diseñado para fortalecer resistencia física y consistencia de anclaje. Se enfoca en registrar cantidad de flechas tiradas."
+                )}
+              </p>
+
+              <div className="flex items-center gap-2 border-t border-white/5 pt-3">
+                <input
+                  type="checkbox"
+                  id="dontShowAgain"
+                  checked={dontShowAgainPractice}
+                  onChange={(e) => setDontShowAgainPractice(e.target.checked)}
+                  className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="dontShowAgain" className="text-[10px] text-gray-dim font-bold cursor-pointer uppercase select-none">
+                  No volver a mostrar
+                </label>
+              </div>
+
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={handleConfirmPracticeInfo}
+                  className="flex-1 py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                >
+                  Entendido, Iniciar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

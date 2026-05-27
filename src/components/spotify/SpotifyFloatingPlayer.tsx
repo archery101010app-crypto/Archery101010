@@ -86,20 +86,60 @@ export default function SpotifyFloatingPlayer() {
 
   return (
     <>
-      {/* 1. Green Spotify Floating Action Button */}
-      <motion.button
-        onClick={() => setIsOpen(true)}
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-24 left-6 z-[999] w-[62px] h-[62px] rounded-full bg-[#1DB954] text-white flex items-center justify-center shadow-[0_0_20px_rgba(29,185,84,0.45)] border border-[#1ED760]/20 cursor-pointer focus:outline-none"
-      >
-        <Music size={26} className="animate-pulse" />
-        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-gold rounded-full border-2 border-[#1DB954] flex items-center justify-center text-[7px] text-black font-black">
-          ♫
-        </span>
-      </motion.button>
+      {/* 1. Green Spotify Floating Action Button (Draggable) */}
+      {!isOpen && (
+        <motion.div
+          drag
+          dragMomentum={false}
+          dragElastic={0.05}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="fixed bottom-[140px] left-6 z-[999] cursor-grab active:cursor-grabbing"
+        >
+          <div
+            onClick={() => setIsOpen(true)}
+            className="w-[62px] h-[62px] rounded-full bg-[#1DB954] text-white flex items-center justify-center shadow-[0_0_20px_rgba(29,185,84,0.45)] border border-[#1ED760]/20 relative"
+          >
+            <Music size={26} className="animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-gold rounded-full border-2 border-[#1DB954] flex items-center justify-center text-[7px] text-black font-black">
+              ♫
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* 1.5 Mini Player Bar (Visible only when collapsed) */}
+      {!isOpen && (
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-neutral-950/90 backdrop-blur-md border border-neutral-800 rounded-xl px-3 flex items-center justify-between shadow-2xl cursor-pointer hover:border-[#1DB954]/30 transition-all"
+        >
+          <div className="flex items-center gap-2 overflow-hidden w-[70%]">
+            <div className="w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-white animate-spin [animation-duration:8s]">
+              <Music size={14} />
+            </div>
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-[9px] text-[#1DB954] font-black uppercase tracking-widest leading-none">
+                Reproduciendo
+              </span>
+              <span className="text-[10px] text-white font-bold truncate leading-snug mt-0.5">
+                {(() => {
+                  const active = SHARED_PLAYLISTS.find(p => p.id === activePlaylistId) || 
+                                 customPlaylists.find(p => p.id === activePlaylistId);
+                  return active ? active.name : "Focus Olímpico";
+                })()}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] bg-neutral-900 border border-neutral-800 text-gray-400 px-1.5 py-0.5 rounded uppercase font-black">
+              Ampliar ⤢
+            </span>
+          </div>
+        </motion.div>
+      )}
 
       {/* 2. Full-Screen Glassmorphic Spotify Panel */}
       <AnimatePresence>

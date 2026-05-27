@@ -7,6 +7,7 @@ import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
 import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
+import ClubLogoIcon from "../ui/ClubLogoIcon";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -31,6 +32,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
   const [editPersonal, setEditPersonal] = useState(false);
   const [editBow, setEditBow] = useState(false);
   const [editPhysical, setEditPhysical] = useState(false);
+  const [editClubDetails, setEditClubDetails] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   // Form Fields
@@ -57,6 +59,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
 
   // Coach WhatsApp notice field
   const [clubWhatsApp, setClubWhatsApp] = useState(user.whatsappNumber || "");
+
+  // Club customization form fields (Coach only)
+  const [clubName, setClubName] = useState(user.clubName || "");
+  const [clubCountry, setClubCountry] = useState(user.clubCountry || user.country);
+  const [clubLogo, setClubLogo] = useState(user.clubLogo || "0");
+  const [customLogoUrl, setCustomLogoUrl] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? user.clubLogo : "");
+  const [isCustomLogo, setIsCustomLogo] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? true : false);
 
   // DEV Simulate PRO flag state
   const [devSimulatePro, setDevSimulatePro] = useState(user.plan === "PRO");
@@ -131,6 +140,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
       });
       onProfileUpdated(updated);
       alert("WhatsApp del club guardado correctamente");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveClubDetails = async () => {
+    try {
+      const finalLogo = isCustomLogo ? customLogoUrl : clubLogo;
+      const updated = await updateProfile(user.uid, {
+        clubName,
+        clubLogo: finalLogo,
+        clubCountry
+      });
+      onProfileUpdated(updated);
+      setEditClubDetails(false);
+      alert("Ficha de Club premium guardada y propagada a todos los miembros.");
     } catch (e) {
       console.error(e);
     }
@@ -602,19 +627,122 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
       {/* SECTION 5: Coach management (Visible only to coaches) */}
       {user.role === "coach" && user.clubId && (
         <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("clubManage")}</h4>
+          <div className="flex justify-between items-center">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("clubManage")}</h4>
+            <button
+              onClick={() => {
+                if (editClubDetails) handleSaveClubDetails();
+                else setEditClubDetails(true);
+              }}
+              className="text-xs text-cyan-neon font-bold hover:underline cursor-pointer"
+            >
+              {editClubDetails ? "Guardar Ficha" : "Editar Ficha"}
+            </button>
+          </div>
+
           <div className="flex flex-col gap-3 mt-1">
+            {editClubDetails ? (
+              <div className="flex flex-col gap-3 p-1">
+                {/* Edit Club Name */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">Nombre del Club</span>
+                  <input
+                    type="text"
+                    value={clubName}
+                    onChange={(e) => setClubName(e.target.value)}
+                    className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                    placeholder="Nombre del club"
+                  />
+                </div>
+
+                {/* Edit Club Country */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">País del Club</span>
+                  <select
+                    value={clubCountry}
+                    onChange={(e) => setClubCountry(e.target.value)}
+                    className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Edit Club Logo */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">Logotipo del Club</span>
+                  <div className="grid grid-cols-5 gap-2 bg-neutral-950/60 p-2 rounded-xl border border-white/5">
+                    {["0", "1", "2", "3", "4"].map((idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setClubLogo(idx);
+                          setIsCustomLogo(false);
+                        }}
+                        className={`aspect-square p-1 rounded-lg border flex items-center justify-center transition-all ${
+                          !isCustomLogo && clubLogo === idx
+                            ? "border-cyan-neon bg-cyan-neon/10"
+                            : "border-transparent bg-neutral-900/50 hover:bg-neutral-800"
+                        }`}
+                      >
+                        <ClubLogoIcon logo={idx} className="w-6 h-6" />
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="checkbox"
+                      id="useCustomLogoProfile"
+                      checked={isCustomLogo}
+                      onChange={(e) => setIsCustomLogo(e.target.checked)}
+                      className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <label htmlFor="useCustomLogoProfile" className="text-[9px] text-gray-dim font-bold uppercase cursor-pointer select-none">
+                      Imagen personalizada (URL)
+                    </label>
+                  </div>
+
+                  {isCustomLogo && (
+                    <input
+                      type="text"
+                      value={customLogoUrl}
+                      onChange={(e) => setCustomLogoUrl(e.target.value)}
+                      placeholder="https://ejemplo.com/logo.png"
+                      className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 mt-1">
+                {/* Preview Card */}
+                <div className="flex items-center gap-3 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
+                  <ClubLogoIcon logo={user.clubLogo || "0"} className="w-12 h-12 shrink-0 bg-neutral-900 border border-white/10 rounded-xl p-1.5" />
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-white text-xs font-black truncate">{user.clubName || "Club Olímpico"}</span>
+                    <span className="text-[10px] text-gray-dim mt-0.5 flex items-center gap-1">
+                      <span>{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷"}</span>
+                      <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || "Costa Rica"}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Invite code */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-gray-dim font-bold">{t("inviteCode")}</span>
-              <span className="text-lg font-mono font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
+            <div className="flex flex-col gap-1 border-t border-white/[0.03] pt-2">
+              <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">{t("inviteCode")}</span>
+              <span className="text-sm font-mono font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
                 {user.clubInviteCode || "CLUB-1234"}
               </span>
             </div>
 
             {/* Coach personal WhatsApp */}
-            <div className="flex flex-col gap-1.5 mt-1">
-              <span className="text-[10px] text-gray-dim font-bold">{t("clubWhatsApp")}</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">{t("clubWhatsApp")}</span>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -625,7 +753,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
                 />
                 <button
                   onClick={handleSaveClubWhatsApp}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-xs cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 transition"
                 >
                   Ok
                 </button>
@@ -635,7 +763,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
             {/* Transfer role */}
             <button
               onClick={handleCoachTransfer}
-              className="w-full py-2.5 mt-2 rounded-xl bg-red-rival/10 border border-red-rival/35 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition"
+              className="w-full py-2.5 mt-1 rounded-xl bg-red-rival/10 border border-red-rival/35 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-98"
             >
               {t("transferBtn")}
             </button>

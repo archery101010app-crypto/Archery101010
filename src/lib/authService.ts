@@ -23,6 +23,8 @@ export interface UserProfile {
   };
   clubId: string | null;
   clubName: string | null;
+  clubLogo?: string; // index "0"-"4" or URL
+  clubCountry?: string; // country code for club flag
   role: "archer" | "coach" | "admin";
   plan: "FREE" | "PRO";
   isClubCreator: boolean;
@@ -64,6 +66,8 @@ export async function loginUser(email: string): Promise<UserProfile> {
       },
       clubId: "CLB-DEMO",
       clubName: "Club Olímpico San José",
+      clubLogo: "0",
+      clubCountry: "CR",
       role: "coach",
       plan: "FREE",
       isClubCreator: true,
@@ -98,6 +102,8 @@ export async function registerUser(profileData: Omit<UserProfile, "uid" | "role"
   let finalRole: "archer" | "coach" = "archer";
   let isCreator = false;
   let inviteCode = "";
+  let clubLogo = profileData.clubLogo || "0";
+  let clubCountry = profileData.clubCountry || profileData.country;
 
   if (profileData.clubId === "CREATE_NEW" && isAdult) {
     finalRole = "coach";
@@ -110,8 +116,21 @@ export async function registerUser(profileData: Omit<UserProfile, "uid" | "role"
     profileData.clubName = null;
     finalRole = "archer";
   } else if (profileData.clubId && profileData.clubId !== "NONE") {
-    // Joining an existing club
+    // Joining an existing club via invite code
     finalRole = "archer";
+    const invite = profileData.clubId; // the invite code entered
+    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const clubCoach = usersList.find((u) => u.role === "coach" && u.clubInviteCode === invite);
+    if (clubCoach) {
+      profileData.clubId = clubCoach.clubId;
+      profileData.clubName = clubCoach.clubName;
+      clubLogo = clubCoach.clubLogo || "0";
+      clubCountry = clubCoach.clubCountry || clubCoach.country;
+    } else {
+      // fallback
+      profileData.clubId = "CLB-JOINED";
+      profileData.clubName = "Club Unido";
+    }
   } else {
     // Independent
     profileData.clubId = null;
@@ -125,7 +144,9 @@ export async function registerUser(profileData: Omit<UserProfile, "uid" | "role"
     role: finalRole,
     plan: "FREE", // default register is free tier
     isClubCreator: isCreator,
-    clubInviteCode: inviteCode
+    clubInviteCode: inviteCode,
+    clubLogo,
+    clubCountry
   };
 
   // Save to database lists
@@ -145,11 +166,34 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   let currentLogged = await getLoggedUser();
 
   if (index !== -1) {
-    usersList[index] = { ...usersList[index], ...updates };
+    let updatedUser = { ...usersList[index], ...updates };
+
+    // Propagation: If Coach updates club name, country or logo, cascade to all club members
+    if (
+      updatedUser.role === "coach" && 
+      updatedUser.clubId && 
+      (updates.clubName !== undefined || updates.clubLogo !== undefined || updates.clubCountry !== undefined)
+    ) {
+      for (let i = 0; i < usersList.length; i++) {
+        if (usersList[i].clubId === updatedUser.clubId && usersList[i].uid !== updatedUser.uid) {
+          if (updates.clubName !== undefined) usersList[i].clubName = updates.clubName;
+          if (updates.clubLogo !== undefined) usersList[i].clubLogo = updates.clubLogo;
+          if (updates.clubCountry !== undefined) usersList[i].clubCountry = updates.clubCountry;
+        }
+      }
+    }
+
+    usersList[index] = updatedUser;
     await saveLocalSetting("simulated_users", usersList);
     
     if (currentLogged && currentLogged.uid === uid) {
+      // Refresh current user cache with all propagated changes too
       currentLogged = { ...currentLogged, ...updates };
+      if (updatedUser.role === "coach") {
+        currentLogged.clubLogo = updatedUser.clubLogo;
+        currentLogged.clubCountry = updatedUser.clubCountry;
+        currentLogged.clubName = updatedUser.clubName;
+      }
       await saveLocalSetting("current_user", currentLogged);
     }
     return usersList[index];

@@ -23,6 +23,7 @@ export default function Home() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authScreen, setAuthScreen] = useState<"LOGIN" | "REGISTER">("LOGIN");
   const [currentScreen, setCurrentScreen] = useState<Screen>("HOME");
+  const [coachViewMode, setCoachViewMode] = useState(false);
   const [sessionConfig, setSessionConfig] = useState<any | null>(null);
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
@@ -85,13 +86,14 @@ export default function Home() {
   return (
     <div className="flex-1 flex flex-col min-h-full">
       {/* Top Header common to all screens */}
-      <Header user={user} />
+      <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={setCoachViewMode} />
 
       {/* Screen Render Router */}
       <main className="flex-1 overflow-y-auto pb-24 px-4 pt-16">
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
+            coachViewMode={coachViewMode}
             onNavigate={(screen, tab) => {
               if (tab) setInitialHistoryTab(tab);
               else setInitialHistoryTab("SESSIONS");
