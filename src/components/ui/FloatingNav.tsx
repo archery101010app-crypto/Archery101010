@@ -4,7 +4,7 @@ import React from "react";
 import { Home, Target, History, Calendar, User } from "lucide-react";
 import { motion } from "framer-motion";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 interface FloatingNavProps {
   activeScreen: Screen;

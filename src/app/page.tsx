@@ -14,9 +14,11 @@ import HistoryView from "@/components/history/HistoryView";
 import CalendarView from "@/components/calendar/CalendarView";
 import ProfileView from "@/components/profile/ProfileView";
 import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
+import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
+import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
 
 // Screens that the authenticated user can access
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 
 export default function Home() {
@@ -25,6 +27,7 @@ export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("HOME");
   const [coachViewMode, setCoachViewMode] = useState(false);
   const [sessionConfig, setSessionConfig] = useState<any | null>(null);
+  const [duelConfig, setDuelConfig] = useState<any | null>(null);
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +45,47 @@ export default function Home() {
     }
     checkAuth();
   }, []);
+
+  // Load persistent font size from IndexedDB on mount
+  useEffect(() => {
+    async function loadFontSize() {
+      if (!user) return;
+      try {
+        const { getLocalSetting } = await import("@/lib/db/indexedDB");
+        const savedSize = await getLocalSetting<string>("user_font_size", "medium");
+        const root = document.documentElement;
+        if (savedSize === "small") {
+          root.style.fontSize = "14px";
+        } else if (savedSize === "large") {
+          root.style.fontSize = "18px";
+        } else {
+          root.style.fontSize = "16px";
+        }
+      } catch (e) {
+        console.error("Error loading font size settings", e);
+      }
+    }
+    loadFontSize();
+  }, [user]);
+
+  // Prevent accidental reload during active scoring sessions or matchplay duels
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Los datos no guardados se perderán. ¿Deseas salir?";
+      return "Los datos no guardados se perderán. ¿Deseas salir?";
+    };
+
+    const isSessionActive = (currentScreen === "TARGET" && sessionConfig !== null) || currentScreen === "MATCHPLAY_ARENA";
+
+    if (isSessionActive) {
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [currentScreen, sessionConfig]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
@@ -119,6 +163,30 @@ export default function Home() {
               }}
             />
           )
+        )}
+        {currentScreen === "MATCHPLAY_LOBBY" && (
+          <MatchplayLobbyView
+            user={user}
+            onBack={() => setCurrentScreen("HOME")}
+            onStartDuel={(config) => {
+              setDuelConfig(config);
+              setCurrentScreen("MATCHPLAY_ARENA");
+            }}
+          />
+        )}
+        {currentScreen === "MATCHPLAY_ARENA" && (
+          <MatchplayGameView
+            user={user}
+            config={duelConfig}
+            onBack={() => {
+              setDuelConfig(null);
+              setCurrentScreen("MATCHPLAY_LOBBY");
+            }}
+            onDuelSaved={() => {
+              setDuelConfig(null);
+              setCurrentScreen("HOME");
+            }}
+          />
         )}
         {currentScreen === "HISTORY" && (
           <HistoryView

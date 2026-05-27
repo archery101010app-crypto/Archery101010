@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 interface DashboardViewProps {
   user: UserProfile;
@@ -550,6 +550,38 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate 
           <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/5 group-hover:border-cyan-neon/20 transition-all">
             <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
           </div>
+        </motion.div>
+
+        {/* NEW Bento Card: Duelos de Eliminación */}
+        <motion.div
+          variants={cardVariants}
+          onClick={() => onNavigate("MATCHPLAY_LOBBY")}
+          className="col-span-3 bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-red-950/20 backdrop-blur-md rounded-3xl border border-purple-500/25 p-4 cursor-pointer hover:border-purple-400/40 transition-all duration-300 relative overflow-hidden group flex justify-between items-center h-28 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+        >
+          {/* Subtle light effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent opacity-50 group-hover:opacity-80 transition-opacity" />
+          
+          <div className="flex flex-col gap-1 z-10 w-[70%]">
+            <span className="text-[9px] text-purple-300 font-black tracking-widest uppercase flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-505 bg-red-500"></span>
+              </span>
+              En Vivo · Arena Competitiva
+            </span>
+            <h3 className="text-white text-base font-black uppercase tracking-wide mt-1">
+              ⚔️ Duelos de Eliminación
+            </h3>
+            <p className="text-[10px] text-gray-dim leading-snug mt-0.5">
+              Reta a otros arqueros a duelos en vivo (Set System o Acumulado) y pon a prueba tu precisión bajo presión.
+            </p>
+          </div>
+
+          <div className="w-12 h-12 rounded-2xl bg-neutral-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:text-purple-300 group-hover:border-purple-400/60 group-hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.1)] transition-all">
+            <Trophy size={20} className="animate-bounce [animation-duration:3s]" />
+          </div>
+          
+          <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
       </div>
 

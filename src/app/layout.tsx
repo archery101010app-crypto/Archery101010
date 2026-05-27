@@ -12,6 +12,12 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Archery 101010 - SaaS Premium de Tiro con Arco",
   description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Archery 101010"
+  }
 };
 
 export const viewport: Viewport = {

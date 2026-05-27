@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Music, Plus, Globe, Check } from "lucide-react";
+import { X, Play, Pause, Music, Plus, Globe, Check } from "lucide-react";
 
 // Predefined shared playlists for the archery club
 const SHARED_PLAYLISTS = [
@@ -35,6 +35,10 @@ export default function SpotifyFloatingPlayer() {
   const [userPlaylistUrl, setUserPlaylistUrl] = useState("");
   const [customPlaylists, setCustomPlaylists] = useState<Array<{id: string, name: string}>>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // UX improvements states
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMiniBarActive, setIsMiniBarActive] = useState(false);
 
   // Load active playlist and custom playlists on mount
   useEffect(() => {
@@ -71,6 +75,8 @@ export default function SpotifyFloatingPlayer() {
     // Save state and IndexedDB
     setCustomPlaylists(newList);
     setActivePlaylistId(id);
+    setIsPlaying(true);
+    setIsMiniBarActive(true);
     await saveLocalSetting("spotify_custom_lists", newList);
     await saveLocalSetting("spotify_active_id", id);
     
@@ -81,6 +87,8 @@ export default function SpotifyFloatingPlayer() {
 
   const handleSelectPlaylist = async (id: string) => {
     setActivePlaylistId(id);
+    setIsPlaying(true);
+    setIsMiniBarActive(true);
     await saveLocalSetting("spotify_active_id", id);
   };
 
@@ -100,7 +108,7 @@ export default function SpotifyFloatingPlayer() {
             onClick={() => setIsOpen(true)}
             className="w-[62px] h-[62px] rounded-full bg-[#1DB954] text-white flex items-center justify-center shadow-[0_0_20px_rgba(29,185,84,0.45)] border border-[#1ED760]/20 relative"
           >
-            <Music size={26} className="animate-pulse" />
+            <Music size={26} className={isPlaying ? "animate-pulse" : ""} />
             <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-gold rounded-full border-2 border-[#1DB954] flex items-center justify-center text-[7px] text-black font-black">
               ♫
             </span>
@@ -108,21 +116,27 @@ export default function SpotifyFloatingPlayer() {
         </motion.div>
       )}
 
-      {/* 1.5 Mini Player Bar (Visible only when collapsed) */}
-      {!isOpen && (
+      {/* 1.5 Mini Player Bar (Visible only when collapsed and active) */}
+      {!isOpen && isMiniBarActive && (
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-neutral-950/90 backdrop-blur-md border border-neutral-800 rounded-xl px-3 flex items-center justify-between shadow-2xl cursor-pointer hover:border-[#1DB954]/30 transition-all"
+          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-neutral-950/95 backdrop-blur-md border border-neutral-800 rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/30 transition-all"
         >
-          <div className="flex items-center gap-2 overflow-hidden w-[70%]">
-            <div className="w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-white animate-spin [animation-duration:8s]">
+          <div 
+            onClick={() => setIsOpen(true)}
+            className="flex items-center gap-2 overflow-hidden w-[60%] cursor-pointer"
+          >
+            <div 
+              className={`w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-white ${
+                isPlaying ? "animate-spin [animation-duration:8s]" : ""
+              }`}
+            >
               <Music size={14} />
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="text-[9px] text-[#1DB954] font-black uppercase tracking-widest leading-none">
-                Reproduciendo
+                {isPlaying ? "Reproduciendo" : "Pausado"}
               </span>
               <span className="text-[10px] text-white font-bold truncate leading-snug mt-0.5">
                 {(() => {
@@ -134,9 +148,34 @@ export default function SpotifyFloatingPlayer() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[8px] bg-neutral-900 border border-neutral-800 text-gray-400 px-1.5 py-0.5 rounded uppercase font-black">
-              Ampliar ⤢
-            </span>
+            {/* Play/Pause Control Button */}
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="p-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-[#1DB954] hover:text-white cursor-pointer hover:bg-neutral-850 transition"
+              title={isPlaying ? "Pausar" : "Reproducir"}
+            >
+              {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="translate-x-[0.5px]" />}
+            </button>
+
+            {/* Expand Button */}
+            <button
+              onClick={() => setIsOpen(true)}
+              className="text-[8px] bg-neutral-900 border border-neutral-800 text-gray-400 px-1.5 py-1 rounded uppercase font-black cursor-pointer hover:text-white transition"
+            >
+              ⤢
+            </button>
+
+            {/* Close Button (✕) */}
+            <button
+              onClick={() => {
+                setIsMiniBarActive(false);
+                setIsPlaying(false);
+              }}
+              className="p-1 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-red-rival cursor-pointer transition"
+              title="Cerrar reproductor"
+            >
+              <X size={12} />
+            </button>
           </div>
         </motion.div>
       )}

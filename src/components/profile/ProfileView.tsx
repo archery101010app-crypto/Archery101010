@@ -56,6 +56,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
   const [pushNotif, setPushNotif] = useState(true);
   const [emailNotif, setEmailNotif] = useState(true);
   const [waNotif, setWaNotif] = useState(true);
+  
+  // Font Size Accessibility State
+  const [fontSize, setFontSize] = useState("medium");
 
   // Coach WhatsApp notice field
   const [clubWhatsApp, setClubWhatsApp] = useState(user.whatsappNumber || "");
@@ -76,12 +79,29 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
       const push = await getLocalSetting("notif_push", true);
       const email = await getLocalSetting("notif_email", true);
       const wa = await getLocalSetting("notif_wa", true);
+      const size = await getLocalSetting<string>("user_font_size", "medium");
       setPushNotif(push);
       setEmailNotif(email);
       setWaNotif(wa);
+      setFontSize(size);
     }
     loadToggles();
   }, []);
+
+  const handleFontSizeChange = async (size: string) => {
+    setFontSize(size);
+    await saveLocalSetting("user_font_size", size);
+    
+    // Apply font size directly to root element
+    const root = document.documentElement;
+    if (size === "small") {
+      root.style.fontSize = "14px";
+    } else if (size === "large") {
+      root.style.fontSize = "18px";
+    } else {
+      root.style.fontSize = "16px";
+    }
+  };
 
   const handleSavePersonal = async () => {
     try {
@@ -620,6 +640,39 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
                 style={{ left: waNotif ? "18px" : "2px" }}
               />
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 4.5: Accessibility Settings (Font Size) */}
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+        <h4 className="text-white text-xs font-black uppercase tracking-wider">Ajuste de Texto</h4>
+        <div className="flex flex-col gap-2 mt-1">
+          <p className="text-[10px] text-gray-dim leading-snug">
+            Ajusta el tamaño de la letra para facilitar la lectura de las planillas de tiro y estadísticas de forma síncrona.
+          </p>
+          <div className="grid grid-cols-3 gap-2 bg-neutral-950/60 p-1 rounded-xl border border-white/5 mt-1">
+            {[
+              { id: "small", label: "Pequeño" },
+              { id: "medium", label: "Mediano" },
+              { id: "large", label: "Grande" }
+            ].map((size) => {
+              const isActive = fontSize === size.id;
+              return (
+                <button
+                  key={size.id}
+                  type="button"
+                  onClick={() => handleFontSizeChange(size.id)}
+                  className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-cyan-neon/10 border border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                      : "bg-transparent border border-transparent text-gray-dim hover:text-white"
+                  }`}
+                >
+                  {size.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

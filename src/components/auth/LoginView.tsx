@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { loginUser } from "@/lib/authService";
-import { Mail, Lock, AlertCircle } from "lucide-react";
-import { motion } from "framer-motion";
+import { Mail, Lock, AlertCircle, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -17,6 +17,63 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // PWA states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
+
+  // Capture beforeinstallprompt and check if app is already standalone
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches 
+      || (window.navigator as any).standalone === true;
+    
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isStandalone) {
+      setShowInstallBanner(false);
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    // If it is iOS and not standalone, show the banner manually to trigger the guide
+    if (isIOS && !isStandalone) {
+      setShowInstallBanner(true);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isIOS) {
+      setShowIOSModal(true);
+      return;
+    }
+
+    if (!deferredPrompt) {
+      // Fallback for browsers that don't support beforeinstallprompt but are Android/Chrome
+      alert("Para instalar, ve al menú del navegador (tres puntos) y selecciona 'Instalar aplicación' o 'Añadir a pantalla de inicio'.");
+      return;
+    }
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA installation outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBanner(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +178,47 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
       {/* Login form and fields */}
       <div className="w-full max-w-sm mx-auto flex flex-col gap-6">
+        
+        {/* PWA Install Banner */}
+        {showInstallBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full bg-gradient-to-r from-neutral-900/90 to-neutral-950/90 border border-cyan-neon/30 p-4 rounded-3xl flex flex-col gap-2 shadow-[0_0_20px_rgba(0,229,255,0.05)] relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex gap-2">
+                <span className="text-base">📱</span>
+                <div className="flex flex-col">
+                  <span className="text-white text-xs font-black uppercase tracking-wider">
+                    Instalar como App Local
+                  </span>
+                  <span className="text-[8px] text-cyan-neon font-black uppercase tracking-widest mt-0.5 animate-pulse">
+                    Recomendado · Velocidad 10x
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstallBanner(false)}
+                className="text-gray-dim hover:text-white p-0.5 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-dim leading-snug">
+              Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.
+            </p>
+            <button
+              type="button"
+              onClick={handleInstallClick}
+              className="w-full py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/30 hover:border-cyan-neon text-cyan-neon hover:text-white text-xs font-bold transition-all cursor-pointer text-center"
+            >
+              Instalar Ahora
+            </button>
+          </motion.div>
+        )}
+
         <h2 className="text-white/80 font-bold text-center text-sm tracking-wider uppercase">
           {t("loginTitle")}
         </h2>
@@ -218,6 +316,87 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       <footer className="text-center text-[10px] text-gray-dim tracking-wider mt-8">
         {t("copyright")}
       </footer>
+
+      {/* iOS Safari Installation Steps Modal */}
+      <AnimatePresence>
+        {showIOSModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="w-full max-w-[340px] bg-neutral-950 border border-neutral-800 p-5 rounded-[32px] flex flex-col gap-4 relative"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-white text-xs font-black uppercase tracking-wider">
+                  Instalación en iPhone / iPad
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowIOSModal(false)}
+                  className="p-1 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3.5 text-xs text-gray-dim leading-relaxed">
+                <div className="flex gap-2.5 items-start">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[10px] text-cyan-neon">
+                    1
+                  </div>
+                  <p>
+                    Abre esta app en el navegador <span className="text-white font-bold">Safari</span>.
+                  </p>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[10px] text-cyan-neon">
+                    2
+                  </div>
+                  <p className="flex items-center gap-1.5 flex-wrap">
+                    Presiona el botón de compartir 
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white">
+                      Compartir 📤
+                    </span> 
+                    abajo en la barra del sistema.
+                  </p>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[10px] text-cyan-neon">
+                    3
+                  </div>
+                  <p className="flex items-center gap-1.5 flex-wrap">
+                    Desliza hacia abajo y pulsa 
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white font-bold">
+                      Añadir a pantalla de inicio ➕
+                    </span>.
+                  </p>
+                </div>
+                <div className="flex gap-2.5 items-start">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[10px] text-cyan-neon">
+                    4
+                  </div>
+                  <p>
+                    Presiona <span className="text-white font-bold">Añadir</span> arriba a la derecha. ¡Listo!
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-cyan-neon/5 border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2 mt-2">
+                <span className="text-lg">⚡</span>
+                <span className="text-[9px] text-[#00E5FF] font-medium leading-tight">
+                  Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
+                </span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
