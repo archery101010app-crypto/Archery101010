@@ -10,16 +10,20 @@ import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, C
 
 interface HistoryViewProps {
   user: UserProfile;
+  initialTab?: "SESSIONS" | "VOLUME";
   onBack: () => void;
 }
 
-export default function HistoryView({ user, onBack }: HistoryViewProps) {
+export default function HistoryView({ user, initialTab, onBack }: HistoryViewProps) {
   const { language, t } = useLanguage();
   
   // Data State
   const [sessions, setSessions] = useState<any[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
+  
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<"SESSIONS" | "VOLUME">(initialTab || "SESSIONS");
   
   // Filter States
   const [dateFilter, setDateFilter] = useState<"7DAYS" | "MONTH" | "ALL">("ALL");
@@ -120,156 +124,326 @@ export default function HistoryView({ user, onBack }: HistoryViewProps) {
     });
   };
 
+  // Volume stats calculations
+  const calculateVolumeStats = () => {
+    let total = 0;
+    let recurve = 0;
+    let compound = 0;
+    let barebow = 0;
+    let control = 0;
+    let practice = 0;
+    let volume = 0;
+
+    sessions.forEach((s) => {
+      const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+      total += arrows;
+      
+      if (s.bowType === "Recurve") recurve += arrows;
+      else if (s.bowType === "Compound") compound += arrows;
+      else if (s.bowType === "Barebow") barebow += arrows;
+
+      if (s.practiceType === "Control") control += arrows;
+      else if (s.practiceType === "Práctica") practice += arrows;
+      else if (s.practiceType === "Volumen") volume += arrows;
+    });
+
+    return { total, recurve, compound, barebow, control, practice, volume };
+  };
+
+  const volStats = calculateVolumeStats();
+
   return (
     <div className="flex flex-col gap-4 py-4 min-h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h2 className="text-white text-lg font-black uppercase tracking-wide">
-            {t("historyTitle")}
-          </h2>
-          <p className="text-[10px] text-gray-dim uppercase tracking-wider">Historial</p>
+      {/* Header with Navigation Tabs */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div>
+            <h2 className="text-white text-lg font-black uppercase tracking-wide">
+              {t("historyTitle")}
+            </h2>
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider">Historial</p>
+          </div>
+        </div>
+
+        {/* Tab Selector Buttons */}
+        <div className="flex bg-neutral-900 p-0.5 rounded-full border border-gray-border">
+          <button
+            onClick={() => setActiveTab("SESSIONS")}
+            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide cursor-pointer transition ${
+              activeTab === "SESSIONS" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Sesiones
+          </button>
+          <button
+            onClick={() => setActiveTab("VOLUME")}
+            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide cursor-pointer transition ${
+              activeTab === "VOLUME" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Volumen
+          </button>
         </div>
       </div>
 
-      {/* Filter Panel */}
-      <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
-        {/* Date Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
-            Fecha:
-          </span>
-          <div className="flex gap-1.5">
-            {[
-              { id: "ALL", label: t("allTime") },
-              { id: "7DAYS", label: t("last7Days") },
-              { id: "MONTH", label: t("thisMonth") }
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setDateFilter(f.id as any)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
-                  dateFilter === f.id
-                    ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                    : "bg-neutral-950 border border-white/5 text-gray-dim"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {activeTab === "SESSIONS" ? (
+        <>
+          {/* Filter Panel */}
+          <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
+            {/* Date Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+                Fecha:
+              </span>
+              <div className="flex gap-1.5">
+                {[
+                  { id: "ALL", label: t("allTime") },
+                  { id: "7DAYS", label: t("last7Days") },
+                  { id: "MONTH", label: t("thisMonth") }
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setDateFilter(f.id as any)}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                      dateFilter === f.id
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
+                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Practice Type Filters */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
-            Tipo:
-          </span>
-          <div className="flex gap-1.5">
-            {[
-              { id: "ALL", label: t("filterAll") },
-              { id: "Control", label: t("practiceControl") },
-              { id: "Práctica", label: t("practicePractice") },
-              { id: "Volumen", label: t("practiceVolume") }
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setPracticeFilter(f.id)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
-                  practiceFilter === f.id
-                    ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                    : "bg-neutral-950 border border-white/5 text-gray-dim"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Practice Type Filters */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+                Tipo:
+              </span>
+              <div className="flex gap-1.5">
+                {[
+                  { id: "ALL", label: t("filterAll") },
+                  { id: "Control", label: t("practiceControl") },
+                  { id: "Práctica", label: t("practicePractice") },
+                  { id: "Volumen", label: t("practiceVolume") }
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setPracticeFilter(f.id)}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                      practiceFilter === f.id
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
+                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Bow Type Filters */}
-        <div className="flex items-center gap-2 overflow-x-auto">
-          <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
-            Arco:
-          </span>
-          <div className="flex gap-1.5">
-            {[
-              { id: "ALL", label: t("filterAll") },
-              { id: "Recurve", label: "Recurve" },
-              { id: "Compound", label: "Compound" },
-              { id: "Barebow", label: "Barebow" }
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setBowFilter(f.id)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
-                  bowFilter === f.id
-                    ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                    : "bg-neutral-950 border border-white/5 text-gray-dim"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {/* Bow Type Filters */}
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+                Arco:
+              </span>
+              <div className="flex gap-1.5">
+                {[
+                  { id: "ALL", label: t("filterAll") },
+                  { id: "Recurve", label: "Recurve" },
+                  { id: "Compound", label: "Compound" },
+                  { id: "Barebow", label: "Barebow" }
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setBowFilter(f.id)}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                      bowFilter === f.id
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
+                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Session list items */}
-      <div className="flex-1 flex flex-col gap-2.5">
-        {filteredSessions.length === 0 ? (
-          <div className="text-center py-10 text-gray-dim text-xs">
-            No se encontraron sesiones registradas.
+          {/* Session list items */}
+          <div className="flex-1 flex flex-col gap-2.5">
+            {filteredSessions.length === 0 ? (
+              <div className="text-center py-10 text-gray-dim text-xs">
+                No se encontraron sesiones registradas.
+              </div>
+            ) : (
+              filteredSessions.map((session) => {
+                const isPB = pbScore > 0 && session.score === pbScore;
+                
+                return (
+                  <motion.div
+                    key={session.id}
+                    onClick={() => setSelectedSession(session)}
+                    whileHover={{ scale: 1.01 }}
+                    className="bg-neutral-900/60 backdrop-blur border border-white/10 p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
+                  >
+                    <div className="flex flex-col gap-1 w-[70%]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-dim font-bold">{formatDate(session.timestamp)}</span>
+                        <span className="text-[8px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
+                          {session.practiceType}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className="text-xl font-black text-white">{session.score}</span>
+                        <span className="text-[10px] text-gray-dim">/ {session.maxScore}</span>
+                        <span className="text-[11px] text-yellow-gold font-bold ml-1">
+                          {Math.round((session.score / session.maxScore) * 100)}%
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-dim truncate">
+                        {session.format} · {session.bowType} · {session.distance}m
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isPB && (
+                        <span className="bg-yellow-gold/15 text-yellow-gold font-black border border-yellow-gold/25 text-[8px] px-2 py-0.5 rounded-full shadow-glow-yellow animate-pulse uppercase">
+                          🏆 PB
+                        </span>
+                      )}
+                      <ChevronRight size={16} className="text-gray-dim group-hover:text-white transition-colors" />
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
           </div>
-        ) : (
-          filteredSessions.map((session) => {
-            const isPB = pbScore > 0 && session.score === pbScore;
+        </>
+      ) : (
+        /* VOLUME TAB VIEW */
+        <div className="flex-1 flex flex-col gap-4">
+          
+          {/* Card Volume Giant */}
+          <div className="bg-neutral-900/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-1.5 relative overflow-hidden shadow-glow-cyan/5">
+            <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
+              Volumen Acumulado
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-extrabold text-white">{volStats.total}</span>
+              <span className="text-xs text-gray-dim font-bold">flechas registradas</span>
+            </div>
+            <p className="text-[10px] text-gray-dim leading-relaxed">
+              Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.
+            </p>
+          </div>
+
+          {/* Volume by Bow & Practice Type */}
+          <div className="grid grid-cols-2 gap-3">
             
-            return (
-              <motion.div
-                key={session.id}
-                onClick={() => setSelectedSession(session)}
-                whileHover={{ scale: 1.01 }}
-                className="bg-neutral-900/60 backdrop-blur border border-white/10 p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
-              >
-                <div className="flex flex-col gap-1 w-[70%]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-dim font-bold">{formatDate(session.timestamp)}</span>
-                    <span className="text-[8px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
-                      {session.practiceType}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1.5 mt-0.5">
-                    <span className="text-xl font-black text-white">{session.score}</span>
-                    <span className="text-[10px] text-gray-dim">/ {session.maxScore}</span>
-                    <span className="text-[11px] text-yellow-gold font-bold ml-1">
-                      {Math.round((session.score / session.maxScore) * 100)}%
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-gray-dim truncate">
-                    {session.format} · {session.bowType} · {session.distance}m
-                  </span>
-                </div>
+            {/* Widget: Arco Volumen */}
+            <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+              <span className="text-[9px] text-yellow-gold font-black tracking-wider uppercase">Por Tipo de Arco</span>
+              
+              <div className="flex flex-col gap-2.5">
+                {[
+                  { name: "Recurve", val: volStats.recurve },
+                  { name: "Compound", val: volStats.compound },
+                  { name: "Barebow", val: volStats.barebow }
+                ].map((item) => {
+                  const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
+                  return (
+                    <div key={item.name} className="flex flex-col gap-1">
+                      <div className="flex justify-between text-[10px] font-bold text-white">
+                        <span>{item.name}</span>
+                        <span className="text-yellow-gold">{item.val} ({percent}%)</span>
+                      </div>
+                      <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
+                        <div
+                          className="bg-yellow-gold h-full rounded-full"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                <div className="flex items-center gap-2">
-                  {isPB && (
-                    <span className="bg-yellow-gold/15 text-yellow-gold font-black border border-yellow-gold/25 text-[8px] px-2 py-0.5 rounded-full shadow-glow-yellow animate-pulse uppercase">
-                      🏆 PB
-                    </span>
-                  )}
-                  <ChevronRight size={16} className="text-gray-dim group-hover:text-white transition-colors" />
+            {/* Widget: Práctica Volumen */}
+            <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+              <span className="text-[9px] text-cyan-brand font-black tracking-wider uppercase">Por Práctica</span>
+              
+              <div className="flex flex-col gap-2.5">
+                {[
+                  { name: "Control", val: volStats.control },
+                  { name: "Práctica", val: volStats.practice },
+                  { name: "Volumen", val: volStats.volume }
+                ].map((item) => {
+                  const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
+                  return (
+                    <div key={item.name} className="flex flex-col gap-1">
+                      <div className="flex justify-between text-[10px] font-bold text-white">
+                        <span>{item.name}</span>
+                        <span className="text-cyan-neon">{item.val} ({percent}%)</span>
+                      </div>
+                      <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
+                        <div
+                          className="bg-cyan-neon h-full rounded-full"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Simplied List of Volume sessions */}
+          <div className="flex flex-col gap-2">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1">
+              Registro Histórico de Carga
+            </h4>
+            
+            <div className="flex flex-col gap-2">
+              {sessions.length === 0 ? (
+                <div className="text-center py-8 text-gray-dim text-xs">
+                  No hay sesiones para calcular volumen.
                 </div>
-              </motion.div>
-            );
-          })
-        )}
-      </div>
+              ) : (
+                sessions.map((s) => {
+                  const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+                  return (
+                    <div
+                      key={s.id}
+                      className="bg-neutral-900/40 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] text-gray-500 font-bold">{formatDate(s.timestamp)}</span>
+                        <span className="text-xs font-bold text-white uppercase">{s.format} ({s.distance}m)</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-black text-cyan-neon">+{arrows}</span>
+                        <span className="text-[9px] text-gray-dim block font-bold uppercase">{s.practiceType}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* DETAILED EXPANDED SESSION MODAL (Full screen overlay) */}
       <AnimatePresence>

@@ -13,15 +13,18 @@ import ScoringView from "@/components/scoring/ScoringView";
 import HistoryView from "@/components/history/HistoryView";
 import CalendarView from "@/components/calendar/CalendarView";
 import ProfileView from "@/components/profile/ProfileView";
+import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 
 // Screens that the authenticated user can access
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
+
 
 export default function Home() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authScreen, setAuthScreen] = useState<"LOGIN" | "REGISTER">("LOGIN");
   const [currentScreen, setCurrentScreen] = useState<Screen>("HOME");
   const [sessionConfig, setSessionConfig] = useState<any | null>(null);
+  const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
 
   // Check authentication status on mount
@@ -87,7 +90,14 @@ export default function Home() {
       {/* Screen Render Router */}
       <main className="flex-1 overflow-y-auto pb-24 px-4 pt-16">
         {currentScreen === "HOME" && (
-          <DashboardView user={user} onNavigate={setCurrentScreen} />
+          <DashboardView
+            user={user}
+            onNavigate={(screen, tab) => {
+              if (tab) setInitialHistoryTab(tab);
+              else setInitialHistoryTab("SESSIONS");
+              setCurrentScreen(screen);
+            }}
+          />
         )}
         {currentScreen === "TARGET" && (
           !sessionConfig ? (
@@ -109,7 +119,11 @@ export default function Home() {
           )
         )}
         {currentScreen === "HISTORY" && (
-          <HistoryView user={user} onBack={() => setCurrentScreen("HOME")} />
+          <HistoryView
+            user={user}
+            initialTab={initialHistoryTab}
+            onBack={() => setCurrentScreen("HOME")}
+          />
         )}
         {currentScreen === "CALENDAR" && (
           <CalendarView user={user} onBack={() => setCurrentScreen("HOME")} />
@@ -126,6 +140,9 @@ export default function Home() {
 
       {/* Floating Bottom Navigation */}
       <FloatingNav activeScreen={currentScreen} onScreenChange={setCurrentScreen} />
+
+      {/* Spotify Floating Player */}
+      <SpotifyFloatingPlayer />
     </div>
   );
 }

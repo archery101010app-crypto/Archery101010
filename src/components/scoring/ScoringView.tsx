@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { saveLocalSession, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
+import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare } from "lucide-react";
+import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2 } from "lucide-react";
 import confetti from "canvas-confetti";
 
 interface ScoringViewProps {
@@ -49,22 +49,78 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [currentArrowIdx, setCurrentArrowIdx] = useState(0);
   const [impacts, setImpacts] = useState<ShotImpact[]>([]);
 
+  // Exit & Zoom states
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [fontSize, setFontSize] = useState("normal");
+
   // Notes state
   const [endNote, setEndNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
   const [isFinishing, setIsFinishing] = useState(false); // Session summary modal state
 
-  // SVG Diana container ref for coordinate calculations
+  // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
+  const zoomedDianaRef = useRef<SVGSVGElement | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Setup ends list structure based on config on mount
+  // Load settings and restore draft if applicable on mount
   useEffect(() => {
-    const initialEnds = Array.from({ length: config.endsCount }, () => ({
-      arrows: Array.from({ length: config.arrowsPerEnd }, () => ""),
-      note: ""
-    }));
-    setEnds(initialEnds);
+    async function loadInitialSettings() {
+      const size = await getLocalSetting<string>("font_size_scoring", "normal");
+      setFontSize(size);
+    }
+    loadInitialSettings();
+
+    if (config.isDraft) {
+      setEnds(config.ends);
+      setImpacts(config.impacts || []);
+      setSessionNote(config.sessionNote || "");
+      
+      // Calculate first empty cell to focus on
+      let targetEnd = 0;
+      let targetArrow = 0;
+      let foundEmpty = false;
+      
+      for (let e = 0; e < config.endsCount; e++) {
+        const arr = config.ends[e]?.arrows || [];
+        for (let a = 0; a < config.arrowsPerEnd; a++) {
+          if (arr[a] === "" || arr[a] === undefined) {
+            targetEnd = e;
+            targetArrow = a;
+            foundEmpty = true;
+            break;
+          }
+        }
+        if (foundEmpty) break;
+      }
+      
+      if (!foundEmpty) {
+        targetEnd = config.endsCount - 1;
+        targetArrow = config.arrowsPerEnd - 1;
+      }
+      
+      setCurrentEndIdx(targetEnd);
+      setCurrentArrowIdx(targetArrow);
+    } else {
+      const initialEnds = Array.from({ length: config.endsCount }, () => ({
+        arrows: Array.from({ length: config.arrowsPerEnd }, () => ""),
+        note: ""
+      }));
+      setEnds(initialEnds);
+    }
   }, [config]);
+
+  // Scroll active row into view in keyboard table
+  useEffect(() => {
+    if (tableContainerRef.current && mode === "KEYBOARD") {
+      const container = tableContainerRef.current;
+      const activeRow = container.querySelector(`tr[data-active="true"]`);
+      if (activeRow) {
+        activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+  }, [currentEndIdx, mode]);
 
   // Sum total score
   const getScoreValue = (val: string): number => {
@@ -176,11 +232,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   };
 
-  // Diana SVG Tap coordinate conversion
-  const handleDianaTouch = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!dianaRef.current || currentEndIdx >= config.endsCount) return;
+  // Diana SVG Tap coordinate conversion with Zoom option
+  const handleDianaTouch = (e: React.MouseEvent<SVGSVGElement>, fromZoom = false) => {
+    if (currentEndIdx >= config.endsCount) return;
 
-    const svg = dianaRef.current;
+    // Check if current end is already full of arrows
+    const currentArrows = ends[currentEndIdx]?.arrows || [];
+    const actualShots = currentArrows.filter(a => a !== "").length;
+    if (actualShots >= config.arrowsPerEnd) {
+      alert("Este End ya está completo. Confírmalo para pasar al siguiente.");
+      return;
+    }
+
+    const svg = fromZoom ? zoomedDianaRef.current : dianaRef.current;
+    if (!svg) return;
+
     const rect = svg.getBoundingClientRect();
     const touchX = e.clientX - rect.left;
     const touchY = e.clientY - rect.top;
@@ -195,18 +261,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     // Map radial distance (radius out of 50%) to World Archery scoring zones
-    // Circle radii inside the SVG target:
-    // X / 10 ring: r < 5%
-    // 9 ring: r < 10%
-    // 8 ring: r < 15%
-    // 7 ring: r < 20%
-    // 6 ring: r < 25%
-    // 5 ring: r < 30%
-    // 4 ring: r < 35%
-    // 3 ring: r < 40%
-    // 2 ring: r < 45%
-    // 1 ring: r < 50%
-    // Miss: r >= 50%
     let value = "M";
     if (distance < 2.5) value = "X";
     else if (distance < 5) value = "10";
@@ -233,6 +287,43 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     handleScoreInput(value);
   };
 
+  const handleSaveDraft = async () => {
+    const sessionId = config.draftId || generateResilientId("SES");
+    const draftObj = {
+      id: sessionId,
+      userId: user.uid,
+      userName: user.fullName,
+      clubId: user.clubId,
+      timestamp: Date.now(),
+      practiceType: config.practiceType,
+      bowType: config.bowType,
+      distance: config.distance,
+      format: config.format,
+      endsCount: config.endsCount,
+      arrowsPerEnd: config.arrowsPerEnd,
+      maxScore: config.maxScore,
+      score: calculateTotalScore(),
+      ends: ends,
+      sessionNote: sessionNote,
+      impacts: impacts,
+      isDraft: true
+    };
+
+    try {
+      await saveLocalSession(sessionId, draftObj);
+      onSessionSaved(); // returns to Dashboard
+    } catch (err) {
+      console.error("Failed to save session draft", err);
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (config.draftId) {
+      await deleteLocalSession(config.draftId);
+    }
+    onBack(); // exits to Home
+  };
+
   const handleFinishAndSave = async () => {
     const finalScore = calculateTotalScore();
     const sessionId = generateResilientId("SES");
@@ -257,7 +348,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
 
     try {
-      // 1. Save local sychronously (IndexedDB zero latency)
+      // 1. Delete draft if it was restored
+      if (config.draftId) {
+        await deleteLocalSession(config.draftId);
+      }
+
+      // 2. Save local sychronously (IndexedDB zero latency)
       await saveLocalSession(sessionId, sessionObj);
 
       // 2. Queue cloud insertion to firestore
@@ -303,7 +399,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
-            onClick={onBack}
+            onClick={() => setIsExitModalOpen(true)}
             className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
           >
             <ArrowLeft size={16} />
@@ -395,9 +491,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           // TARGET MODE (Diana SVG)
           <div className="flex-1 flex flex-col gap-4">
             <div className="flex justify-center items-center py-2 relative">
+              {/* Zoom Button to enlarge target */}
+              <button
+                onClick={() => setIsZoomed(true)}
+                className="absolute top-2 right-6 p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-cyan-neon hover:text-white cursor-pointer z-10 shadow-lg"
+                title="Agrandar Diana para Precisión"
+              >
+                <Maximize2 size={16} />
+              </button>
+
               <svg
                 ref={dianaRef}
-                onClick={handleDianaTouch}
+                onClick={(e) => handleDianaTouch(e)}
                 viewBox="0 0 100 100"
                 className="w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative"
               >
@@ -448,26 +553,39 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </svg>
             </div>
 
-            {/* Miss trigger button */}
-            <button
-              onClick={() => handleScoreInput("M")}
-              className="py-2.5 mx-auto px-6 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
-            >
-              Registrar Fallo (Miss)
-            </button>
+            {/* Action buttons (Undo & Miss) */}
+            <div className="flex justify-center items-center gap-3">
+              <button
+                onClick={handleBackspace}
+                disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
+                className="py-2.5 px-6 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <Undo2 size={13} />
+                <span>Deshacer</span>
+              </button>
+              <button
+                onClick={() => handleScoreInput("M")}
+                className="py-2.5 px-6 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
+              >
+                Fallo (Miss)
+              </button>
+            </div>
           </div>
         ) : (
           // KEYBOARD MODE (tactile grid cells & 4x4 keypad)
-          <div className="flex-1 flex flex-col gap-4 justify-between">
-            {/* Table view Grid row */}
-            <div className="w-full overflow-hidden border border-gray-border/40 rounded-xl bg-neutral-950/40">
+          <div className="flex-1 flex flex-col gap-3 justify-between">
+            {/* Table view Grid row (with max-height and auto-scroll container ref) */}
+            <div
+              ref={tableContainerRef}
+              className="w-full overflow-y-auto border border-gray-border/40 rounded-xl bg-neutral-950/40 max-h-[160px]"
+            >
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-neutral-900 text-gray-dim font-bold uppercase text-[9px] tracking-wider border-b border-gray-border/40">
-                    <th className="py-2.5 px-3 text-center">End</th>
-                    <th className="py-2.5 px-3 text-center">Flechas</th>
-                    <th className="py-2.5 px-3 text-center">Total</th>
-                    <th className="py-2.5 px-3 text-center">Acum</th>
+                    <th className="py-2 px-3 text-center">End</th>
+                    <th className="py-2 px-3 text-center">Flechas</th>
+                    <th className="py-2 px-3 text-center">Total</th>
+                    <th className="py-2 px-3 text-center">Acum</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -477,19 +595,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     return (
                       <tr
                         key={idx}
+                        data-active={isCurrent}
                         className={`border-b border-gray-border/20 transition ${
                           isCurrent ? "bg-cyan-brand/5" : ""
                         }`}
                       >
-                        <td className="py-2.5 px-3 font-bold text-center text-gray-dim">{idx + 1}</td>
-                        <td className="py-2.5 px-3 flex items-center justify-center gap-1">
+                        <td className="py-2 px-3 font-bold text-center text-gray-dim">{idx + 1}</td>
+                        <td className="py-2 px-3 flex items-center justify-center gap-1">
                           {e.arrows.map((a, arrowIdx) => {
                             const isCellEditing = isCurrent && currentArrowIdx === arrowIdx;
+                            
+                            // Dynamic font class to satisfy font size requirements without layout overflow
+                            const textFontClass = fontSize === "large" ? "text-base" : fontSize === "xlarge" ? "text-lg" : "text-sm";
                             
                             return (
                               <div
                                 key={arrowIdx}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm border transition-all ${getArrowColorClass(
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all ${textFontClass} ${getArrowColorClass(
                                   a
                                 )} ${
                                   isCellEditing
@@ -502,10 +624,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                             );
                           })}
                         </td>
-                        <td className="py-2.5 px-3 text-center font-extrabold text-white">
+                        <td className="py-2 px-3 text-center font-extrabold text-white">
                           {calculateEndTotal(idx)}
                         </td>
-                        <td className="py-2.5 px-3 text-center font-extrabold text-gray-dim">
+                        <td className="py-2 px-3 text-center font-extrabold text-gray-dim">
                           {calculateRunningTotal(idx)}
                         </td>
                       </tr>
@@ -686,6 +808,118 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: Diana SVG Zoom Mode */}
+      <AnimatePresence>
+        {isZoomed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+          >
+            {/* Close Zoom button */}
+            <button
+              onClick={() => setIsZoomed(false)}
+              className="absolute top-6 right-6 py-2 px-4 rounded-xl bg-neutral-900 border border-neutral-800 text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+            >
+              Cerrar Zoom ✕
+            </button>
+            
+            <div className="flex flex-col items-center gap-4 text-center w-full">
+              <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+                Zoom Diana de Precisión
+              </span>
+              <p className="text-[10px] text-gray-dim leading-none">
+                End {currentEndIdx + 1} · Flecha {currentArrowIdx + 1} de {config.arrowsPerEnd}
+              </p>
+              
+              {/* Zoomed Target SVG */}
+              <svg
+                ref={zoomedDianaRef}
+                onClick={(e) => handleDianaTouch(e, true)}
+                viewBox="0 0 100 100"
+                className="w-full max-w-[320px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative"
+              >
+                <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.2]" />
+                <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.2]" />
+                <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.2]" />
+                <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.2]" />
+                <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
+                <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.15]" />
+                
+                {impacts
+                  .filter((imp) => imp.endIdx === currentEndIdx)
+                  .map((imp, idx) => (
+                    <g key={idx}>
+                      <line x1={imp.x} y1={imp.y} x2="50" y2="50" stroke="#FFF200" strokeWidth="0.4" strokeDasharray="1 1" opacity="0.6" />
+                      <circle cx={imp.x} cy={imp.y} r="1.6" className="fill-yellow-gold stroke-black stroke-[0.4px] shadow-lg" />
+                      <text x={imp.x} y={imp.y + 0.65} textAnchor="middle" fontSize="1.6" fontWeight="bold" fill="black">
+                        {imp.arrowIdx + 1}
+                      </text>
+                    </g>
+                  ))}
+              </svg>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBackspace}
+                  disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
+                  className="py-2.5 px-4 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Deshacer
+                </button>
+                <button
+                  onClick={() => handleScoreInput("M")}
+                  className="py-2.5 px-4 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
+                >
+                  Registrar Miss
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: Exit / Pause Session Dialog */}
+      <AnimatePresence>
+        {isExitModalOpen && (
+          <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
+              <h3 className="text-white text-base font-black uppercase">¿Pausar Sesión?</h3>
+              <p className="text-xs text-gray-dim">
+                Puedes guardar el progreso actual como borrador para reanudarlo más tarde, o descartar la sesión por completo.
+              </p>
+              
+              <div className="flex flex-col gap-2.5 mt-2">
+                <button
+                  onClick={handleSaveDraft}
+                  className="w-full py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                >
+                  Pausar & Guardar Borrador
+                </button>
+                <button
+                  onClick={handleDiscard}
+                  className="w-full py-3 rounded-full bg-red-rival/20 border border-red-rival/35 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/30 transition"
+                >
+                  Descartar Entrenamiento
+                </button>
+                <button
+                  onClick={() => setIsExitModalOpen(false)}
+                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+                >
+                  Seguir Tirando
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>

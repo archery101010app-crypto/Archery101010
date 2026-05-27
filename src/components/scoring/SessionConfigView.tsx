@@ -1,9 +1,8 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { ArrowLeft, Target, Settings, ChevronDown, Check } from "lucide-react";
+import { getLocalSessions, deleteLocalSession } from "@/lib/db/indexedDB";
+import { ArrowLeft, Target, Settings, ChevronDown, Check, Trash2, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SessionConfigViewProps {
@@ -15,7 +14,8 @@ interface SessionConfigViewProps {
 const DISTANCES = [18, 30, 50, 60, 70, 90];
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
@@ -26,6 +26,18 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [includeNotes, setIncludeNotes] = useState(true);
   const [endsCount, setEndsCount] = useState(10);
   const [arrowsPerEnd, setArrowsPerEnd] = useState(3);
+
+  // Search for draft sessions on mount
+  useEffect(() => {
+    async function checkDrafts() {
+      const list = await getLocalSessions();
+      const draft = list.find((s) => s.isDraft === true);
+      if (draft) {
+        setDraftSession(draft);
+      }
+    }
+    checkDrafts();
+  }, []);
 
   // Automatically adjust parameters based on Format selection
   const handleFormatChange = (newFormat: "WA 300" | "WA 720" | "Libre") => {
@@ -53,6 +65,23 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     });
   };
 
+  const handleResumeDraft = () => {
+    if (draftSession) {
+      onStartSession({
+        ...draftSession,
+        draftId: draftSession.id,
+        isDraft: true
+      });
+    }
+  };
+
+  const handleDiscardDraft = async () => {
+    if (draftSession && confirm("¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.")) {
+      await deleteLocalSession(draftSession.id);
+      setDraftSession(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5 py-4 min-h-full">
       {/* Header */}
@@ -73,6 +102,50 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
       {/* Configuration Form wrapper */}
       <div className="flex-1 flex flex-col gap-5">
+        {/* Draft Restore Alert Card */}
+        {draftSession && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-4 rounded-2xl border border-yellow-gold/30 bg-yellow-gold/5 flex flex-col gap-3 shadow-glow-yellow/5 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5 animate-pulse">
+                  <RotateCcw size={11} />
+                  Sesión Pausada
+                </span>
+                <h4 className="text-white text-xs font-bold mt-1">
+                  {draftSession.format} · {draftSession.distance}m · {draftSession.bowType}
+                </h4>
+                <p className="text-[9px] text-gray-dim">
+                  Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })}
+                </p>
+              </div>
+              <button
+                onClick={handleDiscardDraft}
+                className="p-1.5 rounded-lg border border-red-rival/20 bg-red-rival/5 text-red-rival hover:bg-red-rival/10 transition cursor-pointer"
+                title="Descartar Borrador"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+            
+            <button
+              onClick={handleResumeDraft}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer shadow-md hover:brightness-105 transition"
+            >
+              <RotateCcw size={13} />
+              <span>Reanudar Entrenamiento</span>
+            </button>
+          </motion.div>
+        )}
+
         {/* Practice Type Chips */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">

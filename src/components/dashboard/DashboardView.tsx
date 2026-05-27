@@ -11,18 +11,19 @@ type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE";
 
 interface DashboardViewProps {
   user: UserProfile;
-  onNavigate: (screen: Screen) => void;
+  onNavigate: (screen: Screen, tab?: "SESSIONS" | "VOLUME") => void;
 }
 
 export default function DashboardView({ user, onNavigate }: DashboardViewProps) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [sessions, setSessions] = useState<any[]>([]);
   const [stats, setStats] = useState({
     lastScore: 275,
     lastMax: 300,
-    totalPoints: 8520,
-    bestScore: 291,
-    bestMax: 300
+    totalArrows: 0,
+    bestScore: 0,
+    bestMax: 300,
+    bestDate: 0
   });
 
   useEffect(() => {
@@ -32,15 +33,17 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
       
       if (localSess.length > 0) {
         // Compute real stats based on local sessions database
-        let total = 0;
+        let totalArrows = 0;
         let best = 0;
         let bestMax = 300;
+        let bestDate = 0;
         
         localSess.forEach((s) => {
-          total += s.score || 0;
-          if ((s.score || 0) > best) {
+          totalArrows += (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+          if ((s.score || 0) >= best) {
             best = s.score;
             bestMax = s.maxScore || 300;
+            bestDate = s.timestamp;
           }
         });
 
@@ -48,9 +51,10 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
         setStats({
           lastScore: last.score || 0,
           lastMax: last.maxScore || 300,
-          totalPoints: total,
+          totalArrows: totalArrows,
           bestScore: best || last.score || 0,
-          bestMax: bestMax
+          bestMax: bestMax,
+          bestDate: bestDate || last.timestamp || 0
         });
       }
     }
@@ -144,26 +148,29 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
           <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
-        {/* Widget 2: Total Points (1/3 width) - Border gradient yellow */}
+        {/* Widget 2: Total Arrows Volume (1/3 width) - Click navigates to Volume stats tab */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-yellow-gold/20 flex flex-col justify-between aspect-square relative shadow-[0_0_12px_rgba(255,242,0,0.03)]"
+          onClick={() => onNavigate("HISTORY", "VOLUME")}
+          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-yellow-gold/20 flex flex-col justify-between aspect-square relative shadow-[0_0_12px_rgba(255,242,0,0.03)] cursor-pointer hover:border-yellow-gold/50 transition-all duration-300 group"
         >
           <span className="text-[9px] text-yellow-gold font-black tracking-wider uppercase leading-snug">
-            {t("totalPoints")}
+            Volumen Total
           </span>
           <div className="flex flex-col gap-0.5">
             <span className="text-2xl font-black text-white tracking-tight leading-none">
-              {stats.totalPoints}
+              {stats.totalArrows}
             </span>
-            <span className="text-[9px] text-gray-dim font-bold">puntos</span>
+            <span className="text-[9px] text-gray-dim font-bold">flechas</span>
           </div>
+          <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
         {/* Widget 3: Best Session (1/3 width) - Border gradient cian */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-cyan-brand/20 flex flex-col justify-between aspect-square relative"
+          onClick={() => onNavigate("HISTORY")}
+          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-cyan-brand/20 flex flex-col justify-between aspect-square relative cursor-pointer hover:border-cyan-brand/50 transition-all duration-300 group"
         >
           <span className="text-[9px] text-cyan-brand font-black tracking-wider uppercase leading-snug">
             {t("bestSession")}
@@ -172,8 +179,17 @@ export default function DashboardView({ user, onNavigate }: DashboardViewProps) 
             <span className="text-2xl font-black text-white tracking-tight leading-none">
               {stats.bestScore}
             </span>
-            <span className="text-[9px] text-gray-dim font-bold">max: {stats.bestMax}</span>
+            <span className="text-[9px] text-gray-dim font-bold leading-tight">max: {stats.bestMax}</span>
+            {stats.bestDate > 0 && (
+              <span className="text-[8px] text-yellow-gold font-bold mt-0.5">
+                {new Date(stats.bestDate).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+                  month: "short",
+                  day: "numeric"
+                })}
+              </span>
+            )}
           </div>
+          <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 
         {/* Widget 4: Advanced Analytics (1/3 width) - Locked PRO overlay */}
