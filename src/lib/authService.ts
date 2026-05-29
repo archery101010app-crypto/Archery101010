@@ -39,29 +39,46 @@ export async function getLoggedUser(): Promise<UserProfile | null> {
   return await getLocalSetting<UserProfile | null>("current_user", null);
 }
 
+const LOGIN_TIMEOUT_MS = 3000; // 3 seconds timeout
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout de conexión a la nube")), timeoutMs)
+    )
+  ]);
+}
+
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
   let user: UserProfile | undefined = undefined;
 
   // 1. Try to fetch from Firestore if online to enable real-time multi-device sync
   if (typeof navigator !== "undefined" && navigator.onLine) {
     try {
-      const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        user = querySnapshot.docs[0].data() as UserProfile;
-        
-        // Save/update in local simulated list to keep it updated offline
-        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const idx = localUsers.findIndex((u) => u.uid === user!.uid);
-        if (idx !== -1) {
-          localUsers[idx] = user;
-        } else {
-          localUsers.push(user);
+      // Check if the api key is the mock placeholder to prevent hanging on mock environments
+      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+      
+      if (!isMockFirebase) {
+        const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()));
+        const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
+        if (!querySnapshot.empty) {
+          user = querySnapshot.docs[0].data() as UserProfile;
+          
+          // Save/update in local simulated list to keep it updated offline
+          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const idx = localUsers.findIndex((u) => u.uid === user!.uid);
+          if (idx !== -1) {
+            localUsers[idx] = user;
+          } else {
+            localUsers.push(user);
+          }
+          await saveLocalSetting("simulated_users", localUsers);
         }
-        await saveLocalSetting("simulated_users", localUsers);
       }
     } catch (err) {
-      console.error("Firestore user fetch failed, falling back to local database:", err);
+      console.warn("Firestore user fetch timed out or failed, falling back to local database:", err);
     }
   }
 
