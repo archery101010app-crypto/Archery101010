@@ -48,7 +48,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [assignedAthleteIds, setAssignedAthleteIds] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
 
-  // Seed demo macrocycles on mount
+  // Seed demo macrocycles on mount and listen to updates
   useEffect(() => {
     async function loadData() {
       // Load roster of athletes
@@ -186,6 +186,18 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     if (isPro) {
       loadData();
     }
+
+    const handleDbChange = (e: any) => {
+      const targetStores = ["simulated_users", "macrocycles_local"];
+      if (targetStores.includes(e.detail?.store) && isPro) {
+        loadData();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, [isPro, user]);
 
   const handleOpenCreate = () => {

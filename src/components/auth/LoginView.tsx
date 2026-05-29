@@ -86,7 +86,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
     try {
       // Authenticate with mock service (IndexedDB resilient)
-      const user = await loginUser(email);
+      const user = await loginUser(email, password);
       onLoginSuccess(user);
     } catch (err: any) {
       setError(err.message || "Error al iniciar sesión");

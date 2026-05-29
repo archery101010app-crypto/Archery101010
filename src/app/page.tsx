@@ -23,6 +23,7 @@ import NotificationBar from "@/components/ads/NotificationBar";
 import AdPopupOverlay from "@/components/ads/AdPopupOverlay";
 import SuperAdminView from "@/components/admin/SuperAdminView";
 import { AdCampaign } from "@/lib/db/adTypes";
+import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
 
 // Screens that the authenticated user can access
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
@@ -42,10 +43,19 @@ export default function Home() {
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
   const [activeBanner, setActiveBanner] = useState<AdCampaign | null>(null);
   const [activeNotification, setActiveNotification] = useState<AdCampaign | null>(null);
+  const [dbVersion, setDbVersion] = useState(0);
 
-  // Check authentication status on mount
+  // Check authentication status and initialize database on mount
   useEffect(() => {
-    async function checkAuth() {
+    async function initApp() {
+      try {
+        // Seed default ad campaigns if none exist in local storage
+        const { seedDemoAdCampaigns } = await import("@/lib/adManager");
+        await seedDemoAdCampaigns();
+      } catch (err) {
+        console.error("Error seeding default ad campaigns:", err);
+      }
+
       try {
         const loggedUser = await getLoggedUser();
         setUser(loggedUser);
@@ -55,10 +65,10 @@ export default function Home() {
         setLoading(false);
       }
     }
-    checkAuth();
+    initApp();
   }, []);
 
-  // Check active ad campaigns on screen or user change
+  // Check active ad campaigns on screen, user, or local database change
   useEffect(() => {
     async function checkAds() {
       if (!user || user.plan === "PRO" || currentScreen === "ADMIN") {
@@ -73,15 +83,50 @@ export default function Home() {
         const banner = await getActiveBannerCampaign(currentScreen, user.role, user.plan);
         const notif = await getActiveNotificationBar(currentScreen, user.role, user.plan);
 
-        setActivePopup(popup);
-        setActiveBanner(banner);
-        setActiveNotification(notif);
+         setActivePopup(popup);
+         setActiveBanner(banner);
+         setActiveNotification(notif);
       } catch (err) {
         console.error("Error checking active ads:", err);
       }
     }
     checkAds();
-  }, [currentScreen, user]);
+  }, [currentScreen, user, dbVersion]);
+
+  // Start real-time Firestore synchronization when user is authenticated
+  useEffect(() => {
+    if (user) {
+      startRealtimeSync(user.uid);
+    } else {
+      stopRealtimeSync();
+    }
+    return () => {
+      stopRealtimeSync();
+    };
+  }, [user]);
+
+  // Listen to database changes and user updates in real-time
+  useEffect(() => {
+    const handleUserUpdate = (e: any) => {
+      if (e.detail?.user) {
+        setUser(e.detail.user);
+      }
+    };
+
+    const handleDbChange = (e: any) => {
+      if (e.detail?.store === "ad_campaigns") {
+        setDbVersion((prev) => prev + 1);
+      }
+    };
+
+    window.addEventListener("current-user-updated", handleUserUpdate);
+    window.addEventListener("local-db-change", handleDbChange);
+
+    return () => {
+      window.removeEventListener("current-user-updated", handleUserUpdate);
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
+  }, []);
 
   // Load persistent font size from IndexedDB on mount
   useEffect(() => {

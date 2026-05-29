@@ -131,6 +131,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
     try {
       const user = await registerUser({
         email,
+        password,
         fullName,
         birthDate,
         country,

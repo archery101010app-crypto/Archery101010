@@ -1,5 +1,6 @@
-import { saveLocalSetting, getLocalSetting } from "./db/indexedDB";
-import { generateResilientId } from "./db/indexedDB";
+import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue } from "./db/indexedDB";
+import { db } from "./firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 export interface UserProfile {
   uid: string;
@@ -30,6 +31,7 @@ export interface UserProfile {
   isClubCreator: boolean;
   whatsappNumber?: string;
   clubInviteCode?: string;
+  password?: string;
 }
 
 // Emulates real backend Firebase calls using local DB to support zero-config developer onboarding
@@ -37,18 +39,51 @@ export async function getLoggedUser(): Promise<UserProfile | null> {
   return await getLocalSetting<UserProfile | null>("current_user", null);
 }
 
-export async function loginUser(email: string): Promise<UserProfile> {
-  // Mock login: find if user exists in database list or create a default one
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-  let user = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+export async function loginUser(email: string, password?: string): Promise<UserProfile> {
+  let user: UserProfile | undefined = undefined;
 
+  // 1. Try to fetch from Firestore if online to enable real-time multi-device sync
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    try {
+      const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        user = querySnapshot.docs[0].data() as UserProfile;
+        
+        // Save/update in local simulated list to keep it updated offline
+        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const idx = localUsers.findIndex((u) => u.uid === user!.uid);
+        if (idx !== -1) {
+          localUsers[idx] = user;
+        } else {
+          localUsers.push(user);
+        }
+        await saveLocalSetting("simulated_users", localUsers);
+      }
+    } catch (err) {
+      console.error("Firestore user fetch failed, falling back to local database:", err);
+    }
+  }
+
+  // 2. Fallback to local IndexedDB store if offline or not found in Firestore
   if (!user) {
-    const isSuperAdminEmail = email.toLowerCase() === "admin@archery101010.com";
-    // Return a default demo coach profile if no user was registered yet
+    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    user = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  // 3. If user exists, validate password if set
+  if (user) {
+    if (user.password && password && user.password !== password) {
+      throw new Error("Contraseña incorrecta. Por favor intenta de nuevo.");
+    }
+  } else {
+    // 4. Create default profile if user doesn't exist anywhere
+    const isSuperAdminEmail = email.toLowerCase() === "admin@archery101010.com" || email.toLowerCase() === "admin2@archery101010.com";
+    
     user = {
-      uid: isSuperAdminEmail ? "USR-SUPERADMIN" : "USR-DEMO-101010",
+      uid: isSuperAdminEmail ? `USR-SUPERADMIN-${email.split("@")[0].toUpperCase()}` : generateResilientId("USR"),
       email: email,
-      fullName: isSuperAdminEmail ? "Super Administrador" : "Arquero Demo",
+      fullName: isSuperAdminEmail ? `Super Admin ${email.split("@")[0].toUpperCase()}` : "Arquero Demo",
       birthDate: "1995-05-15",
       country: "CR",
       gender: "M",
@@ -73,19 +108,30 @@ export async function loginUser(email: string): Promise<UserProfile> {
       plan: isSuperAdminEmail ? "PRO" : "FREE",
       isClubCreator: !isSuperAdminEmail,
       whatsappNumber: isSuperAdminEmail ? undefined : "+50688888888",
-      clubInviteCode: isSuperAdminEmail ? undefined : "ARC-1010"
+      clubInviteCode: isSuperAdminEmail ? undefined : "ARC-1010",
+      password: password || undefined // Save whatever password they used on their first login
     };
-    
-    // Add to simulation database list
+
+    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
+
+    // Queue new user profile to Firestore sync queue
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "INSERT",
+      payloadId: user.uid,
+      payload: user,
+      timestamp: Date.now()
+    });
   }
 
   await saveLocalSetting("current_user", user);
   return user;
 }
 
-export async function registerUser(profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode">): Promise<UserProfile> {
+export async function registerUser(profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode"> & { password?: string }): Promise<UserProfile> {
   const uid = generateResilientId("USR");
   
   // Rule 8: Es coach si es mayor de edad (>=18 años) y es el que se registra de primero en un club que crea
@@ -147,13 +193,24 @@ export async function registerUser(profileData: Omit<UserProfile, "uid" | "role"
     isClubCreator: isCreator,
     clubInviteCode: inviteCode,
     clubLogo,
-    clubCountry
+    clubCountry,
+    password: profileData.password
   };
 
   // Save to database lists
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
   usersList.push(newProfile);
   await saveLocalSetting("simulated_users", usersList);
+
+  // Queue to Firestore sync queue
+  await addToSyncQueue({
+    id: generateResilientId("TXN"),
+    collection: "users",
+    operation: "INSERT",
+    payloadId: newProfile.uid,
+    payload: newProfile,
+    timestamp: Date.now()
+  });
 
   // Set as current logged user
   await saveLocalSetting("current_user", newProfile);
@@ -186,6 +243,16 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 
     usersList[index] = updatedUser;
     await saveLocalSetting("simulated_users", usersList);
+
+    // Queue update to Firestore sync queue
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "UPDATE",
+      payloadId: updatedUser.uid,
+      payload: updatedUser,
+      timestamp: Date.now()
+    });
     
     if (currentLogged && currentLogged.uid === uid) {
       // Refresh current user cache with all propagated changes too
@@ -203,6 +270,17 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   if (currentLogged && currentLogged.uid === uid) {
     const updated = { ...currentLogged, ...updates };
     await saveLocalSetting("current_user", updated);
+
+    // Queue update to Firestore sync queue
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "UPDATE",
+      payloadId: updated.uid,
+      payload: updated,
+      timestamp: Date.now()
+    });
+
     return updated;
   }
 

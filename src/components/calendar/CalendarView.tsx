@@ -68,6 +68,18 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
       setMacrocycles(macroList);
     }
     loadData();
+
+    const handleDbChange = (e: any) => {
+      const targetStores = ["sessions_local", "calendar_events", "macrocycles_local"];
+      if (targetStores.includes(e.detail?.store)) {
+        loadData();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, []);
 
   const getPhaseOnDate = (dateStr: string) => {

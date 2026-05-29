@@ -19,50 +19,48 @@ export default function AdminUsersTab() {
       setUsers(list);
     }
     loadUsers();
+
+    const handleDbChange = (e: any) => {
+      if (e.detail?.store === "simulated_users") {
+        loadUsers();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, []);
 
   const handleTogglePlan = async (uid: string) => {
-    const updated = users.map((u) => {
-      if (u.uid === uid) {
-        const newPlan = u.plan === "FREE" ? "PRO" : "FREE";
-        return { ...u, plan: newPlan as "FREE" | "PRO" };
-      }
-      return u;
-    });
-    setUsers(updated);
-    await saveLocalSetting("simulated_users", updated);
+    const userToUpdate = users.find((u) => u.uid === uid);
+    if (!userToUpdate) return;
 
-    // If active user is the one changed, update their profile too
-    const currentLogged = await getLocalSetting<UserProfile | null>("current_user", null);
-    if (currentLogged && currentLogged.uid === uid) {
-      const found = updated.find((u) => u.uid === uid);
-      if (found) {
-        await saveLocalSetting("current_user", found);
-      }
+    try {
+      const { updateProfile } = await import("@/lib/authService");
+      const newPlan = userToUpdate.plan === "FREE" ? "PRO" : "FREE";
+      const updatedProfile = await updateProfile(uid, { plan: newPlan });
+      setUsers(users.map((u) => (u.uid === uid ? updatedProfile : u)));
+    } catch (err) {
+      console.error("Error toggling plan:", err);
     }
   };
 
   const handleToggleRole = async (uid: string) => {
-    const roles: ("archer" | "coach" | "admin" | "superadmin")[] = ["archer", "coach", "admin", "superadmin"];
-    const updated = users.map((u) => {
-      if (u.uid === uid) {
-        const currentIndex = roles.indexOf(u.role as any);
-        const nextIndex = (currentIndex + 1) % roles.length;
-        const newRole = roles[nextIndex];
-        return { ...u, role: newRole };
-      }
-      return u;
-    });
-    setUsers(updated);
-    await saveLocalSetting("simulated_users", updated);
+    const userToUpdate = users.find((u) => u.uid === uid);
+    if (!userToUpdate) return;
 
-    // If active user is the one changed, update their profile too
-    const currentLogged = await getLocalSetting<UserProfile | null>("current_user", null);
-    if (currentLogged && currentLogged.uid === uid) {
-      const found = updated.find((u) => u.uid === uid);
-      if (found) {
-        await saveLocalSetting("current_user", found);
-      }
+    try {
+      const { updateProfile } = await import("@/lib/authService");
+      const roles: ("archer" | "coach" | "admin" | "superadmin")[] = ["archer", "coach", "admin", "superadmin"];
+      const currentIndex = roles.indexOf(userToUpdate.role as any);
+      const nextIndex = (currentIndex + 1) % roles.length;
+      const newRole = roles[nextIndex];
+
+      const updatedProfile = await updateProfile(uid, { role: newRole });
+      setUsers(users.map((u) => (u.uid === uid ? updatedProfile : u)));
+    } catch (err) {
+      console.error("Error toggling role:", err);
     }
   };
 

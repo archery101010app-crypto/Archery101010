@@ -43,6 +43,17 @@ export default function AdminCampaignsTab() {
       setCampaigns(list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     }
     loadCampaigns();
+
+    const handleDbChange = (e: any) => {
+      if (e.detail?.store === "ad_campaigns") {
+        loadCampaigns();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, []);
 
   const handleOpenCreateModal = () => {
