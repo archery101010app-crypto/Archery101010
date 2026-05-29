@@ -41,15 +41,24 @@ export function useSync() {
     setIsSyncing(false);
   };
 
-  // Run automatically when network reconnection is detected
+  // Run automatically when network reconnection is detected and listen to queue changes
   useEffect(() => {
     const handleOnline = () => {
       runSync(handleSyncProgress);
     };
 
+    const handleQueueChange = () => {
+      checkQueue();
+    };
+
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
-  }, []);
+    window.addEventListener("sync-queue-changed", handleQueueChange);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("sync-queue-changed", handleQueueChange);
+    };
+  }, [checkQueue]);
 
   return {
     pendingCount,

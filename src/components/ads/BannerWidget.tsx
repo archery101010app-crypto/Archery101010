@@ -79,7 +79,7 @@ export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetPro
   };
 
   return (
-    <div className="fixed top-16 left-0 right-0 z-30 h-14 w-full px-0 md:px-4 flex justify-center pointer-events-none">
+    <div className="fixed top-16 left-0 right-0 z-30 h-20 w-full px-0 md:px-4 flex justify-center pointer-events-none">
       <motion.div
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -122,17 +122,17 @@ export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetPro
 
               {/* Text content */}
               <div className="relative z-10 px-4 md:px-8 flex flex-col justify-center max-w-[80%]">
-                <span className="text-[7px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-neon/10 px-1.5 py-0.5 rounded w-max mb-0.5">
+                <span className="text-[7px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-neon/10 px-1.5 py-0.5 rounded w-max mb-1">
                   Patrocinador
                 </span>
                 {currentSlide.title && (
-                  <h4 className="text-xs md:text-sm font-black text-white truncate flex items-center gap-1.5">
+                  <h4 className="text-sm md:text-base font-black text-white truncate flex items-center gap-1.5">
                     {currentSlide.title}
-                    <ExternalLink size={10} className="inline opacity-50" />
+                    <ExternalLink size={12} className="inline opacity-50" />
                   </h4>
                 )}
                 {currentSlide.subtitle && (
-                  <p className="text-[9px] md:text-xs text-white/60 truncate font-medium">
+                  <p className="text-[10px] md:text-sm text-white/60 truncate font-medium">
                     {currentSlide.subtitle}
                   </p>
                 )}

@@ -159,8 +159,8 @@ export default function AdminCampaignsTab() {
       slideIntervalSeconds,
       targetScreens,
       targetRoles,
-      totalImpressions: 0,
-      totalClicks: 0,
+      totalImpressions: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalImpressions || 0 : 0,
+      totalClicks: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalClicks || 0 : 0,
       createdAt: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.createdAt || nowStr : nowStr,
       updatedAt: nowStr
     };
@@ -327,6 +327,44 @@ export default function AdminCampaignsTab() {
                     {camp.totalImpressions > 0 
                       ? `${((camp.totalClicks / camp.totalImpressions) * 100).toFixed(1)}%`
                       : "0.0%"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Config Details */}
+              <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[10px]">
+                <div className="flex justify-between items-center text-white/40">
+                  <span>Frecuencia:</span>
+                  <span className="font-bold text-white/80">
+                    {camp.frequencyMinutes > 0 ? `${camp.frequencyMinutes} min` : "Al abrir app"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-white/40">
+                  <span>Límite diario:</span>
+                  <span className="font-bold text-white/80">{camp.maxImpressionsPerDay} imp</span>
+                </div>
+                {camp.type === "popup" && (
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Mostrar al abrir:</span>
+                    <span className="font-bold text-white/80">{camp.showOnAppOpen ? "Sí" : "No"}</span>
+                  </div>
+                )}
+                {camp.type === "banner_widget" && (
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Transición:</span>
+                    <span className="font-bold text-white/80">{camp.slideIntervalSeconds || 5} s</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-start text-white/40">
+                  <span>Pantallas:</span>
+                  <span className="font-bold text-white/80 text-[9px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
+                    {camp.targetScreens.join(", ")}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-white/40">
+                  <span>Roles:</span>
+                  <span className="font-bold text-white/80 uppercase text-[9px]">
+                    {camp.targetRoles.map(r => r === "archer" ? "Arq" : "Coach").join(", ")}
                   </span>
                 </div>
               </div>
@@ -596,6 +634,20 @@ export default function AdminCampaignsTab() {
                         />
                       </div>
                     )}
+                    
+                    <div className="flex justify-between items-center col-span-2 bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] mt-1">
+                      <span className="text-white/70">¿Probando en tiempo real? Configura valores para testeo:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFrequencyMinutes(0);
+                          setMaxImpressionsPerDay(999);
+                        }}
+                        className="px-2.5 py-1 bg-cyan-neon text-black font-black uppercase rounded-lg hover:scale-102 transition cursor-pointer text-[9px]"
+                      >
+                        Valores de Prueba
+                      </button>
+                    </div>
                   </div>
 
                   {type === "popup" && (
@@ -693,7 +745,7 @@ export default function AdminCampaignsTab() {
 
                     {/* Mockup for Banner Widget */}
                     {type === "banner_widget" && (
-                      <div className="w-full h-10 bg-[#0E0E12] border border-cyan-neon/30 rounded-xl relative flex items-center justify-between px-3 overflow-hidden">
+                      <div className="w-full h-14 bg-[#0E0E12] border border-cyan-neon/30 rounded-xl relative flex items-center justify-between px-3 overflow-hidden">
                         <div 
                           className="absolute inset-0 bg-cover bg-center opacity-40" 
                           style={{ backgroundImage: `url(${slides[0]?.imageUrl || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop"})` }} 

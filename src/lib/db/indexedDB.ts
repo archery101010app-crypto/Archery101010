@@ -84,6 +84,21 @@ export async function addToSyncQueue(item: Omit<SyncItem, "attempts" | "status">
     status: "pending"
   };
   await syncQueueStore.setItem(newItem.id, newItem);
+
+  // Notify custom event for UI indicators
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("sync-queue-changed"));
+  }
+
+  // Trigger real-time sequential background synchronization immediately.
+  // Dynamic import avoids compilation circular dependencies with syncManager.
+  if (typeof window !== "undefined") {
+    import("./syncManager")
+      .then(({ runSync }) => {
+        runSync().catch((err) => console.error("Immediate sync execution failed:", err));
+      })
+      .catch((err) => console.error("Failed to load syncManager for immediate sync:", err));
+  }
 }
 
 export async function removeFromSyncQueue(id: string): Promise<void> {

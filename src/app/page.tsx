@@ -218,17 +218,18 @@ export default function Home() {
     );
   }
 
-  // Calculate dynamic main padding top based on active ads
+  // Calculate dynamic main padding top based on active ads.
+  // We subtract 16px to account for the view's internal py-4 padding.
   const hasBanner = activeBanner !== null;
   const hasNotification = activeNotification !== null;
   
-  let mainPaddingTopClass = "pt-16";
+  let mainPaddingTopClass = "pt-[52px]"; // 64px Header - 12px small buffer. Content starts exactly below Header.
   if (hasBanner && hasNotification) {
-    mainPaddingTopClass = "pt-[148px]";
+    mainPaddingTopClass = "pt-[156px]"; // 64px Header + 80px Banner + 28px Notification - 16px view padding
   } else if (hasBanner) {
-    mainPaddingTopClass = "pt-[120px]";
+    mainPaddingTopClass = "pt-[128px]"; // 64px Header + 80px Banner - 16px view padding
   } else if (hasNotification) {
-    mainPaddingTopClass = "pt-[92px]";
+    mainPaddingTopClass = "pt-[76px]"; // 64px Header + 28px Notification - 16px view padding
   }
 
   // Authenticated application flow
@@ -239,7 +240,11 @@ export default function Home() {
 
       {/* Ads widgets */}
       <BannerWidget campaign={activeBanner} onSlideClick={() => {}} />
-      <NotificationBar campaign={activeNotification} onClose={() => setActiveNotification(null)} />
+      <NotificationBar 
+        campaign={activeNotification} 
+        onClose={() => setActiveNotification(null)} 
+        positionTop={activeBanner ? 144 : 64} // 64px Header + 80px Banner height = 144px
+      />
 
       {/* Screen Render Router */}
       <main className={`flex-1 overflow-y-auto pb-24 px-4 ${mainPaddingTopClass}`}>

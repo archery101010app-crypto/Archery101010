@@ -8,9 +8,10 @@ import { AdCampaign } from "@/lib/db/adTypes";
 interface NotificationBarProps {
   campaign: AdCampaign | null;
   onClose: () => void;
+  positionTop?: number;
 }
 
-export default function NotificationBar({ campaign, onClose }: NotificationBarProps) {
+export default function NotificationBar({ campaign, onClose, positionTop }: NotificationBarProps) {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -33,9 +34,14 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
     ? { backgroundColor: currentSlide.backgroundColor }
     : { backgroundImage: "linear-gradient(to right, #00BFFF, #00E5FF)" }; // default cyan-brand to cyan-neon
 
+  const topVal = positionTop ?? 64; // Default to 64px (top-16)
+
   return (
     <AnimatePresence>
-      <div className="fixed top-16 left-0 right-0 z-20 h-7 w-full flex justify-center pointer-events-none">
+      <div 
+        style={{ top: `${topVal}px` }}
+        className="fixed left-0 right-0 z-20 h-7 w-full flex justify-center pointer-events-none"
+      >
         <motion.div
           initial={{ y: -30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
