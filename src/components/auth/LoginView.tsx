@@ -138,42 +138,26 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       </div>
 
       {/* Brand logo section */}
-      <div className="flex flex-col items-center justify-center my-auto py-4">
-        {/* Colorful 101010 blocks */}
-        <div className="flex gap-2.5 mb-3">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.4 }}
-            className="w-12 h-12 bg-cyan-neon rounded-2xl flex items-center justify-center font-black text-black text-xl shadow-glow-cyan"
-          >
-            10
-          </motion.div>
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="w-12 h-12 bg-red-rival rounded-2xl flex items-center justify-center font-black text-black text-xl shadow-glow-red"
-          >
-            10
-          </motion.div>
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="w-12 h-12 bg-yellow-gold rounded-2xl flex items-center justify-center font-black text-black text-xl shadow-glow-yellow"
-          >
-            10
-          </motion.div>
-        </div>
-        <motion.h1
+      <div className="flex flex-col items-center justify-center my-auto py-6">
+        <motion.div 
+          initial={{ y: -15, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="flex text-[52px] md:text-6xl tracking-tighter font-extrabold select-none mb-1.5"
+          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+        >
+          <span className="text-cyan-neon drop-shadow-[0_0_20px_rgba(0,191,255,0.4)]">10</span>
+          <span className="text-red-rival drop-shadow-[0_0_20px_rgba(255,0,0,0.3)]">10</span>
+          <span className="text-yellow-gold drop-shadow-[0_0_20px_rgba(255,229,0,0.3)]">10</span>
+        </motion.div>
+        <motion.span
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="text-white text-3xl font-extrabold tracking-[0.25em] text-center"
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="text-white/40 text-[10px] font-black tracking-[0.55em] uppercase text-center pl-1.5"
         >
-          {t("appTitle")}
-        </motion.h1>
+          ARCHERY
+        </motion.span>
       </div>
 
       {/* Login form and fields */}

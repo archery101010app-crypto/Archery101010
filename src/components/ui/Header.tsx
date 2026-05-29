@@ -34,14 +34,17 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-5 flex items-center justify-between z-40">
       {/* Brand logo compact */}
-      <div className="flex items-center gap-1.5">
-        <div className="flex gap-0.5">
-          <div className="w-5 h-5 bg-cyan-neon rounded-md flex items-center justify-center font-black text-[9px] text-black">10</div>
-          <div className="w-5 h-5 bg-red-rival rounded-md flex items-center justify-center font-black text-[9px] text-black">10</div>
-          <div className="w-5 h-5 bg-yellow-gold rounded-md flex items-center justify-center font-black text-[9px] text-black">10</div>
+      <div className="flex items-center gap-2 select-none">
+        <div 
+          className="flex text-lg tracking-tighter font-extrabold" 
+          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+        >
+          <span className="text-cyan-neon">10</span>
+          <span className="text-red-rival">10</span>
+          <span className="text-yellow-gold">10</span>
         </div>
-        <span className="text-white text-[11px] font-black tracking-[0.18em] hidden xs:inline">
-          {t("appTitle")}
+        <span className="text-white/40 text-[8px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
+          ARCHERY
         </span>
       </div>
 

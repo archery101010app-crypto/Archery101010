@@ -10,7 +10,8 @@ import {
   deleteLocalEvent, 
   generateResilientId, 
   addToSyncQueue, 
-  CalendarEvent 
+  CalendarEvent,
+  getLocalMacrocycles
 } from "@/lib/db/indexedDB";
 import { 
   ArrowLeft, 
@@ -40,6 +41,8 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [attendanceRate, setAttendanceRate] = useState(0);
+  const [macrocycles, setMacrocycles] = useState<any[]>([]);
+  const [selectedMacrocycleId, setSelectedMacrocycleId] = useState<string>("ALL");
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -52,7 +55,7 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
   const [description, setDescription] = useState("");
   const [eventType, setEventType] = useState<"competition" | "training" | "meeting" | "other">("training");
 
-  // Load Sessions and Events on Mount
+  // Load Sessions, Events and Macrocycles on Mount
   useEffect(() => {
     async function loadData() {
       const sessionList = await getLocalSessions();
@@ -60,9 +63,26 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
       
       const eventList = await getLocalEvents();
       setEvents(eventList);
+
+      const macroList = await getLocalMacrocycles();
+      setMacrocycles(macroList);
     }
     loadData();
   }, []);
+
+  const getPhaseOnDate = (dateStr: string) => {
+    const filteredMacros = selectedMacrocycleId === "ALL" 
+      ? macrocycles 
+      : macrocycles.filter(m => m.id === selectedMacrocycleId);
+
+    for (const macro of filteredMacros) {
+      const phase = macro.phases?.find((p: any) => dateStr >= p.startDate && dateStr <= p.endDate);
+      if (phase) {
+        return { phase, macroName: macro.name };
+      }
+    }
+    return null;
+  };
 
   // Compute attendance stats based on current month sessions
   useEffect(() => {
@@ -384,6 +404,29 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
         </button>
       </div>
 
+      {/* Macrocycle Filter */}
+      {macrocycles.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <span className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+            {language === "es" ? "Plan Macrociclo:" : "Macrocycle Plan:"}
+          </span>
+          <select
+            value={selectedMacrocycleId}
+            onChange={(e) => setSelectedMacrocycleId(e.target.value)}
+            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-[10px] uppercase font-bold outline-none focus:border-cyan-neon max-w-[200px]"
+          >
+            <option value="ALL">
+              {language === "es" ? "Todos los Planes" : "All Plans"}
+            </option>
+            {macrocycles.map((mac) => (
+              <option key={mac.id} value={mac.id}>
+                {mac.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Grid calendar */}
       <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-4">
         {/* Days of week header */}
@@ -404,13 +447,27 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
               month === new Date().getMonth() &&
               year === new Date().getFullYear();
 
+            const cellDateStr = cell.isCurrentMonth
+              ? `${year}-${String(month + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`
+              : "";
+            const activePhaseInfo = cell.isCurrentMonth ? getPhaseOnDate(cellDateStr) : null;
+
+            const customStyle = activePhaseInfo
+              ? {
+                  backgroundColor: `${activePhaseInfo.phase.color}15`,
+                  borderColor: `${activePhaseInfo.phase.color}35`,
+                  color: activePhaseInfo.phase.color
+                }
+              : {};
+
             return (
               <div
                 key={idx}
+                style={customStyle}
                 className={`aspect-square rounded-2xl flex flex-col items-center justify-between py-1.5 relative text-xs font-bold transition-all border ${
                   !cell.isCurrentMonth
                     ? "text-gray-dim/20 border-transparent pointer-events-none"
-                    : cell.hasSession
+                    : cell.hasSession && !activePhaseInfo
                     ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-glow-cyan/5"
                     : "text-white/80 hover:bg-neutral-900/80 border-white/[0.03]"
                 } ${isToday ? "border-cyan-neon shadow-glow-cyan bg-cyan-neon/10" : ""}`}
@@ -418,22 +475,80 @@ export default function CalendarView({ user, onBack }: CalendarViewProps) {
                 <span>{cell.day}</span>
                 
                 {/* Visual dots for events */}
-                <div className="flex gap-0.5 justify-center w-full min-h-[4px]">
-                  {cell.dayEvents.slice(0, 3).map((ev, i) => (
-                    <span 
-                      key={ev.id} 
-                      className={`w-1 h-1 rounded-full ${getEventDotColor(ev.type)}`} 
-                    />
-                  ))}
-                  {cell.hasSession && (
-                    <span className="w-1 h-1 rounded-full bg-yellow-gold" title="Práctica" />
+                <div className="flex flex-col items-center gap-0.5 w-full">
+                  {activePhaseInfo && (
+                    <span className="text-[7px] font-black uppercase tracking-wider scale-90 opacity-80 leading-none truncate max-w-[90%] mb-0.5">
+                      {activePhaseInfo.phase.name}
+                    </span>
                   )}
+                  <div className="flex gap-0.5 justify-center w-full min-h-[4px]">
+                    {cell.dayEvents.slice(0, 3).map((ev, i) => (
+                      <span 
+                        key={ev.id} 
+                        className={`w-1 h-1 rounded-full ${getEventDotColor(ev.type)}`} 
+                      />
+                    ))}
+                    {cell.hasSession && (
+                      <span className="w-1 h-1 rounded-full bg-yellow-gold" title="Práctica" />
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Fase Actual details block */}
+      {(() => {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const activePhaseInfo = getPhaseOnDate(todayStr);
+        if (!activePhaseInfo) return null;
+
+        const { phase, macroName } = activePhaseInfo;
+        return (
+          <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 flex flex-col gap-3 shadow-xl relative overflow-hidden">
+            <div 
+              style={{ backgroundColor: phase.color }}
+              className="absolute left-0 top-0 bottom-0 w-[4px]"
+            />
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[8px] font-black uppercase text-cyan-neon tracking-widest block">
+                  {language === "es" ? "Fase Activa Hoy" : "Active Phase Today"}
+                </span>
+                <h4 className="text-sm font-black text-white uppercase mt-0.5">{phase.name}</h4>
+                <span className="text-[9px] text-white/50 block mt-0.5">
+                  Plan: {macroName}
+                </span>
+              </div>
+              <span 
+                style={{ color: phase.color, borderColor: `${phase.color}30`, backgroundColor: `${phase.color}15` }}
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase"
+              >
+                {phase.startDate} al {phase.endDate}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 bg-neutral-950/40 p-3 rounded-2xl border border-white/5 mt-1">
+              <div>
+                <span className="text-[8px] text-white/30 font-black uppercase tracking-wider block">Sesiones Semanales</span>
+                <span className="text-xs font-bold text-white mt-0.5 block">{phase.weeklySessionGoal} sesiones</span>
+              </div>
+              <div>
+                <span className="text-[8px] text-white/30 font-black uppercase tracking-wider block">Volumen de Flechas</span>
+                <span className="text-xs font-bold text-cyan-neon mt-0.5 block">{phase.weeklyArrowGoal} flechas</span>
+              </div>
+            </div>
+
+            {phase.notes && (
+              <p className="text-[10px] text-white/50 leading-relaxed italic border-t border-white/[0.03] pt-2.5 mt-0.5">
+                "{phase.notes}"
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Event list */}
       <div className="flex flex-col gap-3">

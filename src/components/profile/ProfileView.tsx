@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile, updateProfile, transferCoachRole, logoutUser, getLoggedUser } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -14,6 +14,7 @@ interface ProfileViewProps {
   onBack: () => void;
   onLogout: () => void;
   onProfileUpdated: (updatedUser: UserProfile) => void;
+  onNavigate?: (screen: any) => void;
 }
 
 const COUNTRIES = [
@@ -25,7 +26,7 @@ const COUNTRIES = [
   { code: "US", name: "United States", flag: "🇺🇸" }
 ];
 
-export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }: ProfileViewProps) {
+export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, onNavigate }: ProfileViewProps) {
   const { t } = useLanguage();
   
   // Section edit toggles
@@ -72,6 +73,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
 
   // DEV Simulate PRO flag state
   const [devSimulatePro, setDevSimulatePro] = useState(user.plan === "PRO");
+  // DEV Simulate Superadmin flag state
+  const [devSimulateSuperAdmin, setDevSimulateSuperAdmin] = useState(user.role === "superadmin");
 
   // Load toggles from settings
   useEffect(() => {
@@ -198,6 +201,19 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
           origin: { y: 0.6 }
         });
       }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDevSuperAdminToggle = async () => {
+    const nextRole = devSimulateSuperAdmin ? "archer" : "superadmin";
+    setDevSimulateSuperAdmin(!devSimulateSuperAdmin);
+    try {
+      const updated = await updateProfile(user.uid, {
+        role: nextRole
+      });
+      onProfileUpdated(updated);
     } catch (e) {
       console.error(e);
     }
@@ -824,10 +840,31 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
         </div>
       )}
 
+      {/* Superadmin Panel Direct Link */}
+      {user.role === "superadmin" && onNavigate && (
+        <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 flex flex-col gap-2.5">
+          <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+            <Shield size={14} className="text-purple-400" />
+            <span>Panel de Administración</span>
+          </h3>
+          <p className="text-[10px] text-white/50 leading-relaxed">
+            Tienes privilegios de Super Administrador para gestionar usuarios, publicidad y ajustes.
+          </p>
+          <button
+            onClick={() => onNavigate("ADMIN")}
+            className="w-full py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 font-bold text-xs uppercase cursor-pointer hover:bg-purple-500/20 transition active:scale-98"
+          >
+            Abrir Panel Admin
+          </button>
+        </div>
+      )}
+
       {/* DEV TOOLS Simulator PRO Toggle */}
-      <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-2 bg-neutral-950/40">
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-red-rival font-mono font-bold">{t("devMode")}</span>
+      <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-3 bg-neutral-950/40">
+        <span className="text-xs text-red-rival font-mono font-bold leading-none">{t("devMode")}</span>
+        
+        <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
+          <span className="text-[10px] text-white/60 font-mono">Simulate PRO Account</span>
           <button
             onClick={handleDevProToggle}
             className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
@@ -840,9 +877,21 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated }
             />
           </button>
         </div>
-        <p className="text-[9px] text-gray-dim font-mono leading-none">
-          Simula de inmediato el estado premium para auditoría visual en local.
-        </p>
+
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] text-white/60 font-mono">Simulate SuperAdmin Role</span>
+          <button
+            onClick={handleDevSuperAdminToggle}
+            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
+              devSimulateSuperAdmin ? "bg-red-rival" : "bg-gray-border"
+            }`}
+          >
+            <div
+              className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
+              style={{ left: devSimulateSuperAdmin ? "18px" : "2px" }}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Log out Action Button */}

@@ -21,6 +21,21 @@ export const calendarStore = localforage.createInstance({
   storeName: "calendar_events"
 });
 
+export const adCampaignsStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "ad_campaigns"
+});
+
+export const adImpressionsStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "ad_impressions"
+});
+
+export const macrocyclesStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "macrocycles_local"
+});
+
 // Types
 export interface SyncItem {
   id: string; // unique transaction id, e.g. "TXN-1716800..."
@@ -130,3 +145,25 @@ export async function getLocalSetting<T>(key: string, defaultValue: T): Promise<
 export async function saveLocalSetting<T>(key: string, value: T): Promise<void> {
   await settingsStore.setItem(key, value);
 }
+
+// Helper methods for Macrocycles
+export async function getLocalMacrocycles(): Promise<any[]> {
+  const list: any[] = [];
+  await macrocyclesStore.iterate((value: any) => {
+    list.push(value);
+  });
+  return list;
+}
+
+export async function saveLocalMacrocycle(id: string, macrocycleData: any): Promise<void> {
+  await macrocyclesStore.setItem(id, macrocycleData);
+}
+
+export async function getLocalMacrocycle(id: string): Promise<any | null> {
+  return await macrocyclesStore.getItem<any>(id);
+}
+
+export async function deleteLocalMacrocycle(id: string): Promise<void> {
+  await macrocyclesStore.removeItem(id);
+}
+

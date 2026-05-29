@@ -25,7 +25,7 @@ export interface UserProfile {
   clubName: string | null;
   clubLogo?: string; // index "0"-"4" or URL
   clubCountry?: string; // country code for club flag
-  role: "archer" | "coach" | "admin";
+  role: "archer" | "coach" | "admin" | "superadmin";
   plan: "FREE" | "PRO";
   isClubCreator: boolean;
   whatsappNumber?: string;
@@ -43,11 +43,12 @@ export async function loginUser(email: string): Promise<UserProfile> {
   let user = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
   if (!user) {
+    const isSuperAdminEmail = email.toLowerCase() === "admin@archery101010.com";
     // Return a default demo coach profile if no user was registered yet
     user = {
-      uid: "USR-DEMO-101010",
+      uid: isSuperAdminEmail ? "USR-SUPERADMIN" : "USR-DEMO-101010",
       email: email,
-      fullName: "Arquero Demo",
+      fullName: isSuperAdminEmail ? "Super Administrador" : "Arquero Demo",
       birthDate: "1995-05-15",
       country: "CR",
       gender: "M",
@@ -64,15 +65,15 @@ export async function loginUser(email: string): Promise<UserProfile> {
         dominantEye: "R",
         dominantHand: "R"
       },
-      clubId: "CLB-DEMO",
-      clubName: "Club Olímpico San José",
-      clubLogo: "0",
-      clubCountry: "CR",
-      role: "coach",
-      plan: "FREE",
-      isClubCreator: true,
-      whatsappNumber: "+50688888888",
-      clubInviteCode: "ARC-1010"
+      clubId: isSuperAdminEmail ? null : "CLB-DEMO",
+      clubName: isSuperAdminEmail ? null : "Club Olímpico San José",
+      clubLogo: isSuperAdminEmail ? undefined : "0",
+      clubCountry: isSuperAdminEmail ? undefined : "CR",
+      role: isSuperAdminEmail ? "superadmin" : "coach",
+      plan: isSuperAdminEmail ? "PRO" : "FREE",
+      isClubCreator: !isSuperAdminEmail,
+      whatsappNumber: isSuperAdminEmail ? undefined : "+50688888888",
+      clubInviteCode: isSuperAdminEmail ? undefined : "ARC-1010"
     };
     
     // Add to simulation database list
@@ -263,4 +264,8 @@ export async function transferCoachRole(newCoachUid: string): Promise<boolean> {
 
 export async function logoutUser(): Promise<void> {
   await saveLocalSetting("current_user", null);
+}
+
+export function isSuperAdmin(user: UserProfile | null): boolean {
+  return user?.role === "superadmin";
 }

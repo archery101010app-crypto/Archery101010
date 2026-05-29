@@ -17,8 +17,15 @@ import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
 
+// Ads & Admin Imports
+import BannerWidget from "@/components/ads/BannerWidget";
+import NotificationBar from "@/components/ads/NotificationBar";
+import AdPopupOverlay from "@/components/ads/AdPopupOverlay";
+import SuperAdminView from "@/components/admin/SuperAdminView";
+import { AdCampaign } from "@/lib/db/adTypes";
+
 // Screens that the authenticated user can access
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 
 export default function Home() {
@@ -30,6 +37,11 @@ export default function Home() {
   const [duelConfig, setDuelConfig] = useState<any | null>(null);
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
+
+  // Ads campaigns state
+  const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
+  const [activeBanner, setActiveBanner] = useState<AdCampaign | null>(null);
+  const [activeNotification, setActiveNotification] = useState<AdCampaign | null>(null);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -45,6 +57,31 @@ export default function Home() {
     }
     checkAuth();
   }, []);
+
+  // Check active ad campaigns on screen or user change
+  useEffect(() => {
+    async function checkAds() {
+      if (!user || user.plan === "PRO" || currentScreen === "ADMIN") {
+        setActivePopup(null);
+        setActiveBanner(null);
+        setActiveNotification(null);
+        return;
+      }
+      try {
+        const { getNextPopup, getActiveBannerCampaign, getActiveNotificationBar } = await import("@/lib/adManager");
+        const popup = await getNextPopup(currentScreen, user.role, user.plan);
+        const banner = await getActiveBannerCampaign(currentScreen, user.role, user.plan);
+        const notif = await getActiveNotificationBar(currentScreen, user.role, user.plan);
+
+        setActivePopup(popup);
+        setActiveBanner(banner);
+        setActiveNotification(notif);
+      } catch (err) {
+        console.error("Error checking active ads:", err);
+      }
+    }
+    checkAds();
+  }, [currentScreen, user]);
 
   // Load persistent font size from IndexedDB on mount
   useEffect(() => {
@@ -126,14 +163,41 @@ export default function Home() {
     );
   }
 
+  // Redirect to full screen SuperAdmin panel
+  if (currentScreen === "ADMIN") {
+    return (
+      <SuperAdminView 
+        user={user} 
+        onBack={() => setCurrentScreen("PROFILE")} 
+      />
+    );
+  }
+
+  // Calculate dynamic main padding top based on active ads
+  const hasBanner = activeBanner !== null;
+  const hasNotification = activeNotification !== null;
+  
+  let mainPaddingTopClass = "pt-16";
+  if (hasBanner && hasNotification) {
+    mainPaddingTopClass = "pt-[148px]";
+  } else if (hasBanner) {
+    mainPaddingTopClass = "pt-[120px]";
+  } else if (hasNotification) {
+    mainPaddingTopClass = "pt-[92px]";
+  }
+
   // Authenticated application flow
   return (
     <div className="flex-1 flex flex-col min-h-full">
       {/* Top Header common to all screens */}
       <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={setCoachViewMode} />
 
+      {/* Ads widgets */}
+      <BannerWidget campaign={activeBanner} onSlideClick={() => {}} />
+      <NotificationBar campaign={activeNotification} onClose={() => setActiveNotification(null)} />
+
       {/* Screen Render Router */}
-      <main className="flex-1 overflow-y-auto pb-24 px-4 pt-16">
+      <main className={`flex-1 overflow-y-auto pb-24 px-4 ${mainPaddingTopClass}`}>
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
@@ -205,9 +269,19 @@ export default function Home() {
             onBack={() => setCurrentScreen("HOME")}
             onLogout={handleLogout}
             onProfileUpdated={(updated) => setUser(updated)}
+            onNavigate={setCurrentScreen}
           />
         )}
       </main>
+
+      {/* Popup Overlay */}
+      {activePopup && (
+        <AdPopupOverlay 
+          campaign={activePopup} 
+          onClose={() => setActivePopup(null)} 
+          userId={user.uid} 
+        />
+      )}
 
       {/* Floating Bottom Navigation */}
       <FloatingNav

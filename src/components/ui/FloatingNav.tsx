@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-import { Home, Target, History, Calendar, User, Users } from "lucide-react";
+import { Home, Target, History, Calendar, User, Users, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 interface FloatingNavProps {
   activeScreen: Screen;
@@ -16,6 +16,7 @@ interface FloatingNavProps {
 
 export default function FloatingNav({ activeScreen, onScreenChange, user, coachViewMode = false }: FloatingNavProps) {
   const isCoach = user?.role === "coach" && coachViewMode;
+  const isSuper = user?.role === "superadmin";
 
   const navItems = [
     { id: "HOME" as Screen, icon: Home, label: "Home" },
@@ -28,6 +29,10 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
     { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
     { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
   ];
+
+  if (isSuper) {
+    navItems.push({ id: "ADMIN" as Screen, icon: Shield, label: "Admin" });
+  }
 
   // Deduplicate (in case HOME appears twice for coach) by keeping unique ids per label
   const uniqueItems = navItems.filter((item, idx, arr) => 
