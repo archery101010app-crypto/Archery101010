@@ -50,13 +50,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [currentArrowIdx, setCurrentArrowIdx] = useState(0);
   const [impacts, setImpacts] = useState<ShotImpact[]>([]);
 
-  // Touch drag states for Diana
-  const [tempImpact, setTempImpact] = useState<ShotImpact | null>(null);
-  const [isDraggingTarget, setIsDraggingTarget] = useState(false);
+  // Diana zoom state
+  const [isDianaZoomed, setIsDianaZoomed] = useState(false);
 
   // Exit & Zoom states
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
-  const [isZoomed, setIsZoomed] = useState(false);
   const [fontSize, setFontSize] = useState("normal");
 
   // Volume Confirmation States
@@ -71,7 +69,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
-  const zoomedDianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Load settings and restore draft if applicable on mount
@@ -278,18 +275,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     setCurrentEndIdx(targetEnd);
     setCurrentArrowIdx(targetArrow);
 
-    setEnds((prevEnds) => {
-      const newEnds = [...prevEnds];
-      const end = { ...newEnds[targetEnd] };
-      const arrows = [...end.arrows];
-      
-      // Clear corresponding impact and tempImpact
-      setImpacts((prev) => prev.filter((imp) => !(imp.endIdx === targetEnd && imp.arrowIdx === targetArrow)));
-      setTempImpact(null);
+    // Clear the impact marker independently (no nested setState)
+    setImpacts((prev) =>
+      prev.filter((imp) => !(imp.endIdx === targetEnd && imp.arrowIdx === targetArrow))
+    );
 
-      arrows[targetArrow] = "";
-      end.arrows = arrows;
-      newEnds[targetEnd] = end;
+    // Clear the score value in ends
+    setEnds((prevEnds) => {
+      const newEnds = prevEnds.map((e, eIdx) => {
+        if (eIdx !== targetEnd) return e;
+        const arrows = [...e.arrows];
+        arrows[targetArrow] = "";
+        return { ...e, arrows };
+      });
       return newEnds;
     });
   };
@@ -342,11 +340,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return { x: clampedX, y: clampedY, value };
   };
 
-  // Touch drag state handlers
-  const handleStartDrag = (
-    e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>,
-    fromZoom = false
-  ) => {
+  // Diana touch/click handler: first tap zooms in, second tap registers arrow
+  const handleDianaClick = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
     if (currentEndIdx >= config.endsCount) return;
 
     // Check if current end is already full of arrows
@@ -357,59 +352,27 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       return;
     }
 
-    const svg = fromZoom ? zoomedDianaRef.current : dianaRef.current;
-    const coords = getCoordinatesFromEvent(e, svg);
-    if (coords) {
-      setTempImpact({
-        endIdx: currentEndIdx,
-        arrowIdx: currentArrowIdx,
-        x: coords.x,
-        y: coords.y,
-        value: coords.value
-      });
-      setIsDraggingTarget(true);
+    if (!isDianaZoomed) {
+      // First tap: Zoom in
+      if (e.cancelable) e.preventDefault();
+      setIsDianaZoomed(true);
+    } else {
+      // Second tap (when zoomed): Register impact immediately
+      if (e.cancelable) e.preventDefault();
+      const coords = getCoordinatesFromEvent(e, dianaRef.current);
+      if (coords) {
+        const newImpact = {
+          endIdx: currentEndIdx,
+          arrowIdx: currentArrowIdx,
+          x: coords.x,
+          y: coords.y,
+          value: coords.value
+        };
+        setImpacts((prev) => [...prev, newImpact]);
+        handleScoreInput(coords.value);
+        setIsDianaZoomed(false);
+      }
     }
-  };
-
-  const handleDrag = (
-    e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>,
-    fromZoom = false
-  ) => {
-    if (!isDraggingTarget) return;
-    
-    // Prevent default touch gestures (scrolling) while placing target arrows
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-
-    const svg = fromZoom ? zoomedDianaRef.current : dianaRef.current;
-    const coords = getCoordinatesFromEvent(e, svg);
-    if (coords) {
-      setTempImpact({
-        endIdx: currentEndIdx,
-        arrowIdx: currentArrowIdx,
-        x: coords.x,
-        y: coords.y,
-        value: coords.value
-      });
-    }
-  };
-
-  const handleEndDrag = () => {
-    setIsDraggingTarget(false);
-  };
-
-  const handleConfirmImpact = () => {
-    if (!tempImpact) return;
-    
-    // Save impact marker coordinates
-    setImpacts((prev) => [...prev, tempImpact]);
-    
-    // Register the score
-    handleScoreInput(tempImpact.value);
-    
-    // Clear temp impact for next shot
-    setTempImpact(null);
   };
 
   const handleSaveDraft = async () => {
@@ -746,28 +709,58 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       <div className="flex-1 flex flex-col justify-center min-h-[300px]">
         {mode === "TARGET" ? (
           // TARGET MODE (Diana SVG)
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 flex flex-col gap-4 relative">
+            
+            {/* Backdrop overlay when zoomed */}
+            {isDianaZoomed && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsDianaZoomed(false)}
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+              />
+            )}
+
+            {/* Instruction Banner when zoomed */}
+            {isDianaZoomed && (
+              <div className="fixed top-12 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+                <div className="bg-neutral-900/90 border border-cyan-neon/30 backdrop-blur-md px-4 py-2 rounded-full shadow-glow-cyan text-center">
+                  <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block leading-none">
+                    Diana Ampliada
+                  </span>
+                  <span className="text-[9px] text-gray-300 mt-1 block leading-none">
+                    Toca para registrar · Fuera para cancelar
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-center items-center py-2 relative">
               {/* Zoom Button to enlarge target */}
               <button
-                onClick={() => setIsZoomed(true)}
-                className="absolute top-2 right-6 p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-cyan-neon hover:text-white cursor-pointer z-10 shadow-lg"
+                onClick={() => setIsDianaZoomed(!isDianaZoomed)}
+                className={`absolute top-2 right-6 p-2 rounded-xl border cursor-pointer z-50 shadow-lg transition-all duration-300 ${
+                  isDianaZoomed 
+                    ? "bg-cyan-neon border-cyan-neon text-black shadow-glow-cyan" 
+                    : "bg-neutral-900 border-neutral-800 text-cyan-neon hover:text-white"
+                }`}
                 title="Agrandar Diana para Precisión"
               >
                 <Maximize2 size={16} />
               </button>
 
-              <div className="relative">
-                <svg
+              <div className="relative overflow-visible">
+                <motion.svg
                   ref={dianaRef}
-                  onMouseDown={(e) => handleStartDrag(e, false)}
-                  onMouseMove={(e) => handleDrag(e, false)}
-                  onMouseUp={handleEndDrag}
-                  onTouchStart={(e) => handleStartDrag(e, false)}
-                  onTouchMove={(e) => handleDrag(e, false)}
-                  onTouchEnd={handleEndDrag}
+                  onMouseDown={handleDianaClick}
+                  onTouchStart={handleDianaClick}
+                  animate={{ scale: isDianaZoomed ? 2.2 : 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   viewBox="0 0 100 100"
-                  className="w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative"
+                  className={`w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative transition-all duration-300 ${
+                    isDianaZoomed ? "z-50" : "z-10"
+                  }`}
                 >
                   {/* SVG Concetriques rings rings */}
                   <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.2]" />
@@ -794,125 +787,46 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           x2="50"
                           y2="50"
                           stroke="#FFF200"
-                          strokeWidth="0.4"
+                          strokeWidth="0.3"
                           strokeDasharray="1 1"
-                          opacity="0.6"
+                          opacity="0.5"
                         />
                         {/* Bullet point */}
-                        <circle cx={imp.x} cy={imp.y} r="1.6" className="fill-yellow-gold stroke-black stroke-[0.4px] shadow-lg" />
-                        {/* Small text with index */}
+                        <circle cx={imp.x} cy={imp.y} r="2.8" fill="rgba(0,0,0,0.55)" />
+                        <circle cx={imp.x} cy={imp.y} r="2" className="fill-yellow-gold stroke-black stroke-[0.4px]" />
+                        {/* Show arrow VALUE (X, 10, 9...) on top */}
                         <text
                           x={imp.x}
-                          y={imp.y + 0.65}
+                          y={imp.y + 0.75}
                           textAnchor="middle"
-                          fontSize="1.6"
+                          fontSize="1.8"
                           fontWeight="bold"
                           fill="black"
                         >
-                          {imp.arrowIdx + 1}
+                          {imp.value}
                         </text>
                       </g>
                     ))}
-
-                  {/* Render temporal drag marker */}
-                  {tempImpact && (
-                    <g className="animate-pulse">
-                      <line
-                        x1={tempImpact.x}
-                        y1={tempImpact.y}
-                        x2="50"
-                        y2="50"
-                        stroke="#00E5FF"
-                        strokeWidth="0.4"
-                        strokeDasharray="1 1"
-                        opacity="0.8"
-                      />
-                      <circle
-                        cx={tempImpact.x}
-                        cy={tempImpact.y}
-                        r="3"
-                        fill="none"
-                        stroke="#00E5FF"
-                        strokeWidth="0.4"
-                      />
-                      <circle
-                        cx={tempImpact.x}
-                        cy={tempImpact.y}
-                        r="1.6"
-                        className="fill-cyan-neon stroke-black stroke-[0.4px] shadow-lg"
-                      />
-                      <text
-                        x={tempImpact.x}
-                        y={tempImpact.y + 0.65}
-                        textAnchor="middle"
-                        fontSize="1.6"
-                        fontWeight="black"
-                        fill="black"
-                      >
-                        {currentArrowIdx + 1}
-                      </text>
-                    </g>
-                  )}
-                </svg>
-
-                {/* Precision Magnifier (Lupa flotante estilo iOS) */}
-                {isDraggingTarget && tempImpact && (
-                  <div className="absolute top-[-90px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 bg-neutral-950/95 backdrop-blur-md p-1.5 rounded-full border border-cyan-neon shadow-2xl">
-                    <svg
-                      viewBox={`${tempImpact.x - 12} ${tempImpact.y - 12} 24 24`}
-                      className="w-20 h-20 rounded-full bg-black overflow-hidden pointer-events-none"
-                    >
-                      <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      
-                      <circle cx={tempImpact.x} cy={tempImpact.y} r="0.8" fill="#00E5FF" stroke="black" strokeWidth="0.2" />
-                      <line x1={tempImpact.x} y1={tempImpact.y} x2="50" y2="50" stroke="#00E5FF" strokeWidth="0.1" strokeDasharray="0.3 0.3" />
-                    </svg>
-                    <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase px-1 leading-none mt-0.5">
-                      {tempImpact.value}
-                    </span>
-                  </div>
-                )}
+                </motion.svg>
               </div>
             </div>
 
-            {/* Action buttons (Confirm, Undo & Miss) */}
-            <div className="flex flex-col gap-2.5 px-4">
-              {tempImpact && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  onClick={handleConfirmImpact}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Target size={14} />
-                  <span>Confirmar Impacto ({tempImpact.value})</span>
-                </motion.button>
-              )}
+            {/* Action buttons (Undo & Miss) */}
+            <div className="flex flex-col gap-2.5 px-4 z-10">
               <div className="flex justify-center items-center gap-3">
                 <button
                   onClick={handleBackspace}
                   disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
-                  className="flex-1 py-2.5 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  className="flex-1 py-3 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                 >
                   <Undo2 size={13} />
                   <span>Deshacer</span>
                 </button>
                 <button
                   onClick={() => {
-                    setTempImpact(null);
                     handleScoreInput("M");
                   }}
-                  className="flex-1 py-2.5 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
+                  className="flex-1 py-3 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
                 >
                   Fallo (Miss)
                 </button>
@@ -1077,7 +991,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <div className="flex justify-between items-center gap-4 mt-4">
           <button
             onClick={() => {
-              setTempImpact(null);
               handleBackspace();
             }}
             className="flex-1 py-3 rounded-xl border border-gray-border text-gray-dim font-bold text-xs flex items-center justify-center gap-1 hover:text-white transition cursor-pointer"
@@ -1086,7 +999,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </button>
           <button
             onClick={() => {
-              setTempImpact(null);
               handleConfirmEnd();
             }}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan cursor-pointer"
@@ -1202,145 +1114,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </button>
               </div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL: Diana SVG Zoom Mode */}
-      <AnimatePresence>
-        {isZoomed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6"
-          >
-            {/* Close Zoom button */}
-            <button
-              onClick={() => setIsZoomed(false)}
-              className="absolute top-6 right-6 py-2 px-4 rounded-xl bg-neutral-900 border border-neutral-800 text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
-            >
-              Cerrar Zoom ✕
-            </button>
-            
-            <div className="flex flex-col items-center gap-4 text-center w-full">
-              <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
-                Zoom Diana de Precisión
-              </span>
-              <p className="text-[10px] text-gray-dim leading-none">
-                End {currentEndIdx + 1} · Flecha {currentArrowIdx + 1} de {config.arrowsPerEnd}
-              </p>
-              {/* Zoomed Target SVG */}
-              <div className="relative">
-                <svg
-                  ref={zoomedDianaRef}
-                  onMouseDown={(e) => handleStartDrag(e, true)}
-                  onMouseMove={(e) => handleDrag(e, true)}
-                  onMouseUp={handleEndDrag}
-                  onTouchStart={(e) => handleStartDrag(e, true)}
-                  onTouchMove={(e) => handleDrag(e, true)}
-                  onTouchEnd={handleEndDrag}
-                  viewBox="0 0 100 100"
-                  className="w-full max-w-[320px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative"
-                >
-                  <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.15]" />
-                  
-                  {impacts
-                    .filter((imp) => imp.endIdx === currentEndIdx)
-                    .map((imp, idx) => (
-                      <g key={idx}>
-                        <line x1={imp.x} y1={imp.y} x2="50" y2="50" stroke="#FFF200" strokeWidth="0.4" strokeDasharray="1 1" opacity="0.6" />
-                        <circle cx={imp.x} cy={imp.y} r="1.6" className="fill-yellow-gold stroke-black stroke-[0.4px] shadow-lg" />
-                        <text x={imp.x} y={imp.y + 0.65} textAnchor="middle" fontSize="1.6" fontWeight="bold" fill="black">
-                          {imp.arrowIdx + 1}
-                        </text>
-                      </g>
-                    ))}
-
-                  {/* Render temporal drag marker */}
-                  {tempImpact && (
-                    <g className="animate-pulse">
-                      <line x1={tempImpact.x} y1={tempImpact.y} x2="50" y2="50" stroke="#00E5FF" strokeWidth="0.4" strokeDasharray="1 1" opacity="0.8" />
-                      <circle cx={tempImpact.x} cy={tempImpact.y} r="3" fill="none" stroke="#00E5FF" strokeWidth="0.4" />
-                      <circle cx={tempImpact.x} cy={tempImpact.y} r="1.6" className="fill-cyan-neon stroke-black stroke-[0.4px] shadow-lg" />
-                      <text x={tempImpact.x} y={tempImpact.y + 0.65} textAnchor="middle" fontSize="1.6" fontWeight="black" fill="black">
-                        {currentArrowIdx + 1}
-                      </text>
-                    </g>
-                  )}
-                </svg>
-
-                {/* Zoom Magnifier overlay */}
-                {isDraggingTarget && tempImpact && (
-                  <div className="absolute top-[-90px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 bg-neutral-950/95 backdrop-blur-md p-1.5 rounded-full border border-cyan-neon shadow-2xl">
-                    <svg
-                      viewBox={`${tempImpact.x - 12} ${tempImpact.y - 12} 24 24`}
-                      className="w-20 h-20 rounded-full bg-black overflow-hidden pointer-events-none"
-                    >
-                      <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.1]" />
-                      
-                      <circle cx={tempImpact.x} cy={tempImpact.y} r="0.8" fill="#00E5FF" stroke="black" strokeWidth="0.2" />
-                      <line x1={tempImpact.x} y1={tempImpact.y} x2="50" y2="50" stroke="#00E5FF" strokeWidth="0.1" strokeDasharray="0.3 0.3" />
-                    </svg>
-                    <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase px-1 leading-none mt-0.5">
-                      {tempImpact.value}
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex flex-col gap-2.5 mt-2 w-full max-w-[320px]">
-                {tempImpact && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    onClick={handleConfirmImpact}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Target size={14} />
-                    <span>Confirmar Impacto ({tempImpact.value})</span>
-                  </motion.button>
-                )}
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleBackspace}
-                    disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
-                    className="flex-1 py-2.5 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Deshacer
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTempImpact(null);
-                      handleScoreInput("M");
-                    }}
-                    className="flex-1 py-2.5 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
-                  >
-                    Registrar Miss
-                  </button>
-                </div>
-              </div>         </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -23,12 +23,15 @@ import {
 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 
+import CoachPortalView from "../coach/CoachPortalView";
+
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 interface DashboardViewProps {
   user: UserProfile;
   coachViewMode?: boolean;
   onNavigate: (screen: Screen, tab?: "SESSIONS" | "VOLUME") => void;
+  onUserUpdate?: (updated: UserProfile) => void;
 }
 
 const COUNTRIES = [
@@ -40,7 +43,7 @@ const COUNTRIES = [
   { code: "US", name: "United States", flag: "🇺🇸" }
 ];
 
-export default function DashboardView({ user, coachViewMode = false, onNavigate }: DashboardViewProps) {
+export default function DashboardView({ user, coachViewMode = false, onNavigate, onUserUpdate }: DashboardViewProps) {
   const { language, t } = useLanguage();
   const [sessions, setSessions] = useState<any[]>([]);
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
@@ -190,155 +193,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate 
   const clubCountryName = COUNTRIES.find(c => c.code === user.clubCountry)?.name || COUNTRIES.find(c => c.code === user.country)?.name || "Costa Rica";
 
   if (user.role === "coach" && coachViewMode) {
-    const presentCount = Object.values(attendance).filter(Boolean).length;
-
     return (
-      <motion.div
-        variants={containerVariants}
-        initial="initial"
-        animate="animate"
-        className="flex flex-col gap-4 py-4"
-      >
-        <div className="flex flex-col mb-1">
-          <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
-            <span>CONSOLA COACH</span>
-            <span className="text-cyan-neon text-xs font-black bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20 shadow-glow-cyan animate-pulse">
-              {user.clubName || "Club"}
-            </span>
-          </h2>
-          <p className="text-xs text-gray-dim mt-0.5">
-            Planificación y Control Grupal · {clubFlag} {clubCountryName}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
-            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Atletas Activos</span>
-            <span className="text-2xl font-black text-white">{athletes.length}</span>
-          </div>
-          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
-            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Volumen Club</span>
-            <span className="text-2xl font-black text-cyan-neon">14,280</span>
-          </div>
-          <div className="bg-neutral-900/60 p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-20">
-            <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider">Asistencias Hoy</span>
-            <span className="text-2xl font-black text-yellow-gold">{presentCount}</span>
-          </div>
-        </div>
-
-        <motion.div
-          variants={cardVariants}
-          className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex flex-col gap-3"
-        >
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-white text-xs font-black uppercase tracking-wide">Asistencia Grupal de Hoy</h3>
-              <p className="text-[9px] text-gray-dim mt-0.5">
-                {new Date().toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "short"
-                })}
-              </p>
-            </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black">
-              {presentCount} / {athletes.length} presentes
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-2 mt-1">
-            {athletes.map((ath) => {
-              const isPresent = !!attendance[ath.uid];
-              return (
-                <div
-                  key={ath.uid}
-                  onClick={() => toggleAttendance(ath.uid)}
-                  className={`flex justify-between items-center p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    isPresent
-                      ? "border-cyan-neon/20 bg-cyan-neon/5"
-                      : "border-white/[0.03] bg-neutral-950/20"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-[10px] text-gray-dim">
-                      {ath.fullName.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-white text-xs font-bold leading-tight">{ath.fullName}</span>
-                      <span className="text-[9px] text-gray-dim mt-0.5">{ath.bowConfig.type}</span>
-                    </div>
-                  </div>
-                  <button type="button" className="text-gray-dim">
-                    {isPresent ? (
-                      <CheckCircle2 size={16} className="text-cyan-neon shadow-glow-cyan" />
-                    ) : (
-                      <div className="w-4 h-4 rounded border border-gray-border" />
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        <motion.div
-          variants={cardVariants}
-          className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex flex-col gap-3"
-        >
-          <div className="flex justify-between items-center">
-            <h3 className="text-white text-xs font-black uppercase tracking-wide">Macrociclos & Metas Club</h3>
-            <span className="text-[9px] text-yellow-gold font-bold">Fase Activa</span>
-          </div>
-
-          <div className="flex flex-col gap-1.5 mt-1">
-            <div className="flex justify-between text-[10px]">
-              <span className="text-gray-dim">Volumen Acumulado del Club:</span>
-              <span className="text-white font-extrabold">3,480 / 5,000 flechas</span>
-            </div>
-            <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
-              <div className="bg-cyan-neon h-full rounded-full" style={{ width: "70%" }} />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5 mt-2">
-            <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">Cronograma de Fases</span>
-            <div className="grid grid-cols-4 gap-1.5 mt-1 relative">
-              {[
-                { name: "Física", active: false, done: true },
-                { name: "Volumen", active: true, done: false },
-                { name: "Puesta Punto", active: false, done: false },
-                { name: "Competitiva", active: false, done: false }
-              ].map((phase, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-1.5">
-                  <div className={`w-full h-1.5 rounded-full ${
-                    phase.active 
-                      ? "bg-cyan-neon shadow-glow-cyan animate-pulse" 
-                      : phase.done 
-                      ? "bg-cyan-brand/40" 
-                      : "bg-neutral-800"
-                  }`} />
-                  <span className={`text-[8px] font-black uppercase text-center leading-none ${
-                    phase.active ? "text-cyan-neon font-black" : "text-gray-dim"
-                  }`}>
-                    {phase.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.button
-          variants={cardVariants}
-          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => onNavigate("CALENDAR")}
-          className="w-full py-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center gap-1.5 mt-2"
-        >
-          <Calendar size={16} />
-          <span>Programar Control Grupal</span>
-        </motion.button>
-      </motion.div>
+      <CoachPortalView
+        user={user}
+        onNavigate={onNavigate}
+        onUserUpdate={onUserUpdate}
+      />
     );
   }
 

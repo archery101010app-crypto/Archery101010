@@ -89,13 +89,14 @@ export default function SpotifyFloatingPlayer() {
     setActivePlaylistId(id);
     setIsPlaying(true);
     setIsMiniBarActive(true);
+    setIsOpen(false); // collapse to mini-bar after selecting
     await saveLocalSetting("spotify_active_id", id);
   };
 
   return (
     <>
-      {/* 1. Green Spotify Floating Action Button (Draggable) */}
-      {!isOpen && (
+      {/* 1. Green Spotify Floating Action Button (Draggable) — only when mini-bar is NOT active */}
+      {!isOpen && !isMiniBarActive && (
         <motion.div
           drag
           dragMomentum={false}
@@ -213,7 +214,11 @@ export default function SpotifyFloatingPlayer() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => {
+                    // Closing panel: activate mini-bar if we had a playlist playing
+                    setIsMiniBarActive(true);
+                    setIsOpen(false);
+                  }}
                   className="p-2 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-white cursor-pointer transition"
                 >
                   <X size={16} />

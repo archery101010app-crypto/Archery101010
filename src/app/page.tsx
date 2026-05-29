@@ -143,6 +143,7 @@ export default function Home() {
               else setInitialHistoryTab("SESSIONS");
               setCurrentScreen(screen);
             }}
+            onUserUpdate={setUser}
           />
         )}
         {currentScreen === "TARGET" && (
@@ -209,7 +210,16 @@ export default function Home() {
       </main>
 
       {/* Floating Bottom Navigation */}
-      <FloatingNav activeScreen={currentScreen} onScreenChange={setCurrentScreen} />
+      <FloatingNav
+        activeScreen={currentScreen}
+        onScreenChange={(screen) => {
+          // Block coaches from accessing personal scoring sessions while in coach mode
+          if (screen === "TARGET" && user?.role === "coach" && coachViewMode) return;
+          setCurrentScreen(screen);
+        }}
+        user={user}
+        coachViewMode={coachViewMode}
+      />
 
       {/* Spotify Floating Player */}
       <SpotifyFloatingPlayer />

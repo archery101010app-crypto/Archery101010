@@ -47,11 +47,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [winner, setWinner] = useState<"USER" | "RIVAL" | "TIE" | null>(null);
   const [endSummary, setEndSummary] = useState<string | null>(null);
 
-  // Diana dragging states
+  // Diana zoom & coordinates
   const [cursorPos, setCursorPos] = useState({ x: 100, y: 100 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDianaZoomed, setIsDianaZoomed] = useState(false);
   const targetRef = useRef<SVGSVGElement | null>(null);
-  const [zoomCirclePos, setZoomCirclePos] = useState({ x: 0, y: 0 });
 
   // Pre-selected color palette
   const userColor = "cyan-neon";
@@ -101,60 +100,58 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     return 0; // Miss
   };
 
-  // Handle Dragging Target
-  const handleTargetTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+  // Diana touch/click handler: first tap zooms in, second tap registers arrow immediately
+  const handleDianaClick = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
     if (!targetRef.current || rivalThinking || duelFinished) return;
-    setIsDragging(true);
-    updateCursorPos(e);
-  };
 
-  const handleTargetTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
-    if (!isDragging || !targetRef.current) return;
-    updateCursorPos(e);
-  };
+    // Check if user has already shot all arrows in this end
+    if (isShootOff && userShootOffShot !== null) return;
+    if (!isShootOff && userTiros[currentEnd].length === 3) return;
 
-  const handleTargetTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  const updateCursorPos = (e: React.TouchEvent | React.MouseEvent) => {
-    if (!targetRef.current) return;
-    const rect = targetRef.current.getBoundingClientRect();
-    let clientX = 0;
-    let clientY = 0;
-
-    if ("touches" in e) {
-      if (e.touches.length === 0) return;
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
+    if (!isDianaZoomed) {
+      // First tap: zoom in
+      if (e.cancelable) e.preventDefault();
+      setIsDianaZoomed(true);
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
+      // Second tap: register
+      if (e.cancelable) e.preventDefault();
+      
+      const rect = targetRef.current.getBoundingClientRect();
+      let clientX = 0;
+      let clientY = 0;
 
-    // Relative SVG coords (100, 100 is center, size is 200)
-    const relativeX = ((clientX - rect.left) / rect.width) * 200;
-    const relativeY = ((clientY - rect.top) / rect.height) * 200;
+      if ("touches" in e) {
+        if (e.touches.length === 0) return;
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
 
-    // Limit radius to Diana border
-    const dx = relativeX - 100;
-    const dy = relativeY - 100;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist <= 98) {
-      setCursorPos({ x: relativeX, y: relativeY });
-      setZoomCirclePos({ x: clientX - rect.left, y: clientY - rect.top });
-    } else {
-      // Projected coordinates on target border
-      const angle = Math.atan2(dy, dx);
-      setCursorPos({
-        x: 100 + Math.cos(angle) * 98,
-        y: 100 + Math.sin(angle) * 98
-      });
-      setZoomCirclePos({
-        x: (rect.width / 2) + Math.cos(angle) * (rect.width / 2) * 0.98,
-        y: (rect.height / 2) + Math.sin(angle) * (rect.height / 2) * 0.98
-      });
+      // Relative SVG coords (100, 100 is center, size is 200)
+      const relativeX = ((clientX - rect.left) / rect.width) * 200;
+      const relativeY = ((clientY - rect.top) / rect.height) * 200;
+
+      // Limit radius to Diana border
+      const dx = relativeX - 100;
+      const dy = relativeY - 100;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      let finalX = relativeX;
+      let finalY = relativeY;
+
+      if (dist > 98) {
+        const angle = Math.atan2(dy, dx);
+        finalX = 100 + Math.cos(angle) * 98;
+        finalY = 100 + Math.sin(angle) * 98;
+      }
+
+      setCursorPos({ x: finalX, y: finalY });
+      setIsDianaZoomed(false);
+
+      // Register immediately!
+      handleConfirmShot(finalX, finalY);
     }
   };
 
@@ -186,10 +183,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   // Confirm arrow score
-  const handleConfirmShot = () => {
+  const handleConfirmShot = (coordX?: number, coordY?: number) => {
     if (rivalThinking || duelFinished) return;
 
-    const score = calculateScoreFromCoords(cursorPos.x, cursorPos.y);
+    const targetX = coordX !== undefined ? coordX : cursorPos.x;
+    const targetY = coordY !== undefined ? coordY : cursorPos.y;
+    const score = calculateScoreFromCoords(targetX, targetY);
 
     if (isShootOff) {
       setUserShootOffShot(score);
@@ -595,12 +594,37 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         )}
       </div>
 
-      {/* Target Arena (Diana & Drag cursor) */}
+      {/* Target Arena (Diana with Scale Zoom) */}
       {!duelFinished && (
-        <div className="flex-1 flex flex-col justify-center items-center gap-3 z-10">
+        <div className="flex-1 flex flex-col justify-center items-center gap-3 z-10 relative">
           
+          {/* Backdrop overlay when zoomed */}
+          {isDianaZoomed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDianaZoomed(false)}
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40"
+            />
+          )}
+
+          {/* Instruction Banner when zoomed */}
+          {isDianaZoomed && (
+            <div className="fixed top-12 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+              <div className="bg-neutral-900/90 border border-purple-500/30 backdrop-blur-md px-4 py-2 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.15)] text-center">
+                <span className="text-[10px] text-purple-400 font-black tracking-widest uppercase block leading-none">
+                  Diana Ampliada
+                </span>
+                <span className="text-[9px] text-gray-300 mt-1 block leading-none">
+                  Toca para registrar · Fuera para cancelar
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Zoom coordinate info & value */}
-          <div className="flex gap-4 items-center justify-center bg-black/40 px-4 py-1.5 rounded-full border border-white/5 text-[10px] font-bold">
+          <div className="flex gap-4 items-center justify-center bg-black/40 px-4 py-1.5 rounded-full border border-white/5 text-[10px] font-bold z-10">
             <span className="text-gray-dim">Puntuación Estimada:</span>
             <span className="text-yellow-gold font-extrabold text-xs">
               🎯 {calculateScoreFromCoords(cursorPos.x, cursorPos.y)} Ptos
@@ -610,16 +634,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           {/* Interactive target SVG */}
           <div className="relative w-full max-w-[250px] aspect-square bg-neutral-950/30 rounded-full border border-white/5 flex items-center justify-center shadow-2xl overflow-visible">
             
-            <svg
+            <motion.svg
               ref={targetRef}
               viewBox="0 0 200 200"
-              className="w-full h-full cursor-crosshair select-none"
-              onMouseDown={handleTargetTouchStart}
-              onMouseMove={handleTargetTouchMove}
-              onMouseUp={handleTargetTouchEnd}
-              onTouchStart={handleTargetTouchStart}
-              onTouchMove={handleTargetTouchMove}
-              onTouchEnd={handleTargetTouchEnd}
+              onMouseDown={handleDianaClick}
+              onTouchStart={handleDianaClick}
+              animate={{ scale: isDianaZoomed ? 2.2 : 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className={`w-full h-full cursor-crosshair select-none overflow-visible relative transition-all duration-300 ${
+                isDianaZoomed ? "z-50" : "z-10"
+              }`}
             >
               {/* White rings (1 y 2) */}
               <circle cx="100" cy="100" r="90" fill="#FFFFFF" stroke="#000000" strokeWidth="0.5" />
@@ -653,43 +677,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {/* Crosshair on cursor */}
               <line x1={cursorPos.x - 6} y1={cursorPos.y} x2={cursorPos.x + 6} y2={cursorPos.y} stroke="white" strokeWidth="0.5" />
               <line x1={cursorPos.x} y1={cursorPos.y - 6} x2={cursorPos.x} y2={cursorPos.y + 6} stroke="white" strokeWidth="0.5" />
-            </svg>
-
-            {/* Target precision magnification magnifying glass */}
-            {isDragging && (
-              <div
-                className="absolute w-14 h-14 rounded-full border border-purple-400 bg-neutral-900 pointer-events-none overflow-hidden flex items-center justify-center shadow-2xl z-20"
-                style={{
-                  left: `${zoomCirclePos.x - 28}px`,
-                  top: `${zoomCirclePos.y - 68}px`,
-                }}
-              >
-                {/* Simulated zoom representation */}
-                <div 
-                  className="w-28 h-28 scale-150 relative"
-                  style={{
-                    transform: `translate(${-cursorPos.x * 0.7 + 14}px, ${-cursorPos.y * 0.7 + 14}px) scale(2)`
-                  }}
-                >
-                  <div className="w-14 h-14 rounded-full bg-[#FFF200] border border-black absolute left-[43%] top-[43%]" />
-                  <div className="w-4 h-4 rounded-full bg-purple-400 absolute" style={{ left: `${cursorPos.x * 0.5}%`, top: `${cursorPos.y * 0.5}%` }} />
-                </div>
-                {/* Center dot indicator */}
-                <div className="absolute w-1.5 h-1.5 rounded-full bg-purple-400 border border-white" />
-              </div>
-            )}
+            </motion.svg>
           </div>
 
-          <span className="text-[8px] text-gray-dim font-bold uppercase text-center mt-1">
-            Arrastra el dedo sobre la diana para apuntar con precisión
+          <span className="text-[8px] text-gray-dim font-bold uppercase text-center mt-1 z-10">
+            Toca la diana para ampliarla · Toca de nuevo para registrar
           </span>
         </div>
       )}
 
-      {/* Action Buttons (Confirm & Undo) */}
+      {/* Action Buttons (Undo only, Confirm is automatic) */}
       {!duelFinished && (
-        <div className="flex gap-3 px-1 z-10 mt-auto">
-          {/* Undo Button */}
+        <div className="flex px-1 z-10 mt-auto">
           <button
             onClick={handleUndo}
             disabled={
@@ -697,24 +696,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               (isShootOff && userShootOffShot === null) || 
               (!isShootOff && userTiros[currentEnd].length === 0)
             }
-            className="w-16 h-12 rounded-2xl bg-neutral-900 border border-white/5 text-gray-dim hover:text-red-rival flex items-center justify-center cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed"
+            className="w-full h-12 rounded-2xl bg-neutral-900 border border-white/5 text-gray-dim hover:text-red-rival flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed text-xs font-black uppercase tracking-wider"
             title="Deshacer Tiro"
           >
-            <RotateCcw size={16} />
-          </button>
-
-          {/* Confirm Button */}
-          <button
-            onClick={handleConfirmShot}
-            disabled={
-              rivalThinking || 
-              (isShootOff && userShootOffShot !== null) || 
-              (!isShootOff && userTiros[currentEnd].length === 3)
-            }
-            className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(168,85,247,0.15)] cursor-pointer hover:brightness-105 active:scale-98 transition disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <Check size={14} />
-            <span>Confirmar Flecha</span>
+            <RotateCcw size={14} />
+            <span>Deshacer Último Tiro</span>
           </button>
         </div>
       )}
