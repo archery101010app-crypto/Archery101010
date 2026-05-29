@@ -53,6 +53,7 @@
 }
 
 :root {
+  color-scheme: dark;
   --background: #000000;
   --foreground: #ffffff;
 }

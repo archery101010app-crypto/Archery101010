@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${outfit.variable} h-full antialiased dark`}>
+    <html lang="es" className={`${outfit.variable} h-full antialiased dark`} style={{ colorScheme: "dark" }}>
       <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none">
         <ServiceWorkerRegister />
         <LanguageProvider>
