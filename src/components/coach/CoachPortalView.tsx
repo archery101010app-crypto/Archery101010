@@ -314,7 +314,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+              className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${
                 active 
                   ? "bg-neutral-900 border border-white/10 text-cyan-neon shadow-[0_0_12px_rgba(0,229,255,0.05)]" 
                   : "text-gray-dim hover:text-white"

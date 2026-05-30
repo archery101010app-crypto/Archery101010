@@ -36,6 +36,16 @@ export const macrocyclesStore = localforage.createInstance({
   storeName: "macrocycles_local"
 });
 
+export const athleteStarsStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "athlete_stars"
+});
+
+export const starHistoryStore = localforage.createInstance({
+  name: "Archery101010",
+  storeName: "star_history"
+});
+
 // Types
 export interface SyncItem {
   id: string; // unique transaction id, e.g. "TXN-1716800..."

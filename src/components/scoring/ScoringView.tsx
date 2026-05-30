@@ -496,6 +496,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         colors: ["#00E5FF", "#FFF200", "#FF3B30", "#00C853"]
       });
 
+      try {
+        const { checkAndAwardStar } = await import("@/lib/starsManager");
+        await checkAndAwardStar(
+          user.uid,
+          user.fullName,
+          config.bowType,
+          config.distance,
+          halfEnds,
+          config.arrowsPerEnd,
+          scoreB1,
+          sessionId
+        );
+      } catch (starErr) {
+        console.error("Error checking star achievements on partial block:", starErr);
+      }
+
       runSync();
       onSessionSaved();
     } catch (err) {
@@ -576,6 +592,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         origin: { y: 0.8 },
         colors: ["#00E5FF", "#FFF200", "#FF3B30", "#00C853"]
       });
+
+      try {
+        const { checkAndAwardStar } = await import("@/lib/starsManager");
+        await checkAndAwardStar(
+          user.uid,
+          user.fullName,
+          config.bowType,
+          config.distance,
+          config.endsCount,
+          config.arrowsPerEnd,
+          finalScore,
+          sessionId
+        );
+      } catch (starErr) {
+        console.error("Error checking star achievements on full block:", starErr);
+      }
 
       runSync();
       onSessionSaved();

@@ -29,6 +29,7 @@ export default function AdminCampaignsTab() {
   const [slideIntervalSeconds, setSlideIntervalSeconds] = useState(5);
   const [targetScreens, setTargetScreens] = useState<string[]>(["HOME"]);
   const [targetRoles, setTargetRoles] = useState<("archer" | "coach")[]>(["archer", "coach"]);
+  const [targetPlans, setTargetPlans] = useState<("FREE" | "PRO")[]>(["FREE"]);
 
   useEffect(() => {
     async function loadCampaigns() {
@@ -69,6 +70,7 @@ export default function AdminCampaignsTab() {
     setSlideIntervalSeconds(5);
     setTargetScreens(["HOME", "TARGET", "HISTORY", "CALENDAR", "PROFILE"]);
     setTargetRoles(["archer", "coach"]);
+    setTargetPlans(["FREE"]);
     setStep(1);
     setShowCreateModal(true);
   };
@@ -86,6 +88,7 @@ export default function AdminCampaignsTab() {
     setSlideIntervalSeconds(campaign.slideIntervalSeconds);
     setTargetScreens(campaign.targetScreens);
     setTargetRoles(campaign.targetRoles);
+    setTargetPlans(campaign.targetPlans || ["FREE"]);
     setStep(1);
     setShowCreateModal(true);
   };
@@ -159,6 +162,7 @@ export default function AdminCampaignsTab() {
       slideIntervalSeconds,
       targetScreens,
       targetRoles,
+      targetPlans,
       totalImpressions: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalImpressions || 0 : 0,
       totalClicks: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalClicks || 0 : 0,
       createdAt: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.createdAt || nowStr : nowStr,
@@ -264,18 +268,32 @@ export default function AdminCampaignsTab() {
   return (
     <div className="flex flex-col gap-5 w-full p-4 md:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center w-full">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 w-full border-b border-white/5 pb-4">
         <div>
           <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">Campañas de Publicidad</h2>
-          <p className="text-xs text-white/50">Crea y administra anuncios de patrocinadores para cuentas gratuitas.</p>
+          <p className="text-xs text-white/50">Crea y administra anuncios de patrocinadores para cuentas gratuitas y PRO.</p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="py-2.5 px-4 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-1.5 shadow-glow-cyan cursor-pointer transition hover:scale-102"
-        >
-          <Plus size={14} />
-          <span>Nueva Campaña</span>
-        </button>
+        <div className="flex flex-wrap gap-2.5">
+          <button
+            onClick={async () => {
+              if (confirm("¿Estás seguro de que deseas reiniciar el historial de visualizaciones de anuncios en este dispositivo? Esto limpiará el registro local de límites diarios y frecuencias para que vuelvas a ver los popups y notificaciones de inmediato.")) {
+                const { adImpressionsStore } = await import("@/lib/db/indexedDB");
+                await adImpressionsStore.clear();
+                alert("¡Historial de visualizaciones e impresiones de anuncios limpiado con éxito!");
+              }
+            }}
+            className="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
+          >
+            <span>Limpiar Impresiones</span>
+          </button>
+          <button
+            onClick={handleOpenCreateModal}
+            className="py-2.5 px-4 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-1.5 shadow-glow-cyan cursor-pointer transition hover:scale-102"
+          >
+            <Plus size={14} />
+            <span>Nueva Campaña</span>
+          </button>
+        </div>
       </div>
 
       {/* Campaign List */}
@@ -365,6 +383,12 @@ export default function AdminCampaignsTab() {
                   <span>Roles:</span>
                   <span className="font-bold text-white/80 uppercase text-[9px]">
                     {camp.targetRoles.map(r => r === "archer" ? "Arq" : "Coach").join(", ")}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-white/40">
+                  <span>Planes:</span>
+                  <span className="font-bold text-white/80 uppercase text-[9px]">
+                    {(camp.targetPlans || ["FREE"]).join(", ")}
                   </span>
                 </div>
               </div>
@@ -479,15 +503,13 @@ export default function AdminCampaignsTab() {
                 <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
                   <div className="flex justify-between items-center">
                     <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">Edición de Slides ({slides.length})</span>
-                    {type !== "notification_bar" && (
-                      <button
-                        type="button"
-                        onClick={handleAddSlide}
-                        className="text-[9px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
-                      >
-                        + Agregar Slide
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddSlide}
+                      className="text-[9px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
+                    >
+                      + Agregar Slide
+                    </button>
                   </div>
 
                   {slides.map((slide, idx) => (
@@ -623,7 +645,7 @@ export default function AdminCampaignsTab() {
                         placeholder="0 = Solo abrir app"
                       />
                     </div>
-                    {type === "banner_widget" && (
+                    {(type === "banner_widget" || type === "notification_bar") && (
                       <div className="flex flex-col gap-1 col-span-2">
                         <label className="text-[9px] text-white/50 uppercase font-bold">Intervalo de Transición (Segundos)</label>
                         <input
@@ -717,6 +739,40 @@ export default function AdminCampaignsTab() {
                           />
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] text-white/50 uppercase font-black tracking-widest">Planes de Suscripción Objetivos</label>
+                    <div className="flex gap-3 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
+                      {["FREE", "PRO"].map((plan) => {
+                        const active = targetPlans.includes(plan as any);
+                        return (
+                          <div
+                            key={plan}
+                            onClick={() => {
+                              if (active) {
+                                setTargetPlans(targetPlans.filter((p) => p !== plan));
+                              } else {
+                                setTargetPlans([...targetPlans, plan as any]);
+                              }
+                            }}
+                            className={`flex-1 flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition ${
+                              active
+                                ? "bg-cyan-brand/10 border-cyan-neon text-white"
+                                : "bg-neutral-900 border-white/5 text-white/50"
+                            }`}
+                          >
+                            <span className="text-xs font-bold uppercase">{plan === "FREE" ? "Gratuito (FREE)" : "Premium (PRO)"}</span>
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              readOnly
+                              className="w-3.5 h-3.5 accent-cyan-neon"
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

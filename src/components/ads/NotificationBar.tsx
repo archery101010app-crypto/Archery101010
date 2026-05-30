@@ -8,54 +8,83 @@ import { AdCampaign } from "@/lib/db/adTypes";
 interface NotificationBarProps {
   campaign: AdCampaign | null;
   onClose: () => void;
-  positionTop?: number;
 }
 
-export default function NotificationBar({ campaign, onClose, positionTop }: NotificationBarProps) {
+export default function NotificationBar({ campaign, onClose }: NotificationBarProps) {
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
 
+  // Reset state when a new campaign loads
   useEffect(() => {
     setIsVisible(true);
+    setActiveSlideIndex(0);
   }, [campaign]);
+
+  // Handle slide transitions for multiple slides
+  useEffect(() => {
+    if (!campaign || !isVisible || campaign.slides.length <= 1) return;
+
+    const intervalSeconds = campaign.slideIntervalSeconds || 5;
+    const interval = setInterval(() => {
+      setActiveSlideIndex((prev) => (prev + 1) % campaign.slides.length);
+    }, intervalSeconds * 1000);
+
+    return () => clearInterval(interval);
+  }, [campaign, isVisible]);
 
   if (!campaign || !isVisible) return null;
 
-  const currentSlide = campaign.slides[0];
+  const currentSlide = campaign.slides[activeSlideIndex];
   if (!currentSlide) return null;
 
+  // Handle tap-to-close behavior: clicking anywhere on the bar (except close button)
+  // will open the link in a new tab AND close the notification bar so it doesn't block options.
   const handleBarClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest(".close-btn")) return;
 
-    window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
+    // Open target link
+    if (currentSlide.linkUrl) {
+      window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
+    }
+    
+    // Close immediately to expose underlying UI
+    setIsVisible(false);
+    onClose();
   };
 
   const bgStyle = currentSlide.backgroundColor 
     ? { backgroundColor: currentSlide.backgroundColor }
-    : { backgroundImage: "linear-gradient(to right, #00BFFF, #00E5FF)" }; // default cyan-brand to cyan-neon
-
-  const topVal = positionTop ?? 64; // Default to 64px (top-16)
+    : { backgroundImage: "linear-gradient(to right, #00BFFF, #00E5FF)" }; // default cyan gradient
 
   return (
     <AnimatePresence>
       <div 
-        style={{ top: `${topVal}px` }}
-        className="fixed left-0 right-0 z-20 h-7 w-full flex justify-center pointer-events-none"
+        className="fixed top-0 left-0 right-0 z-50 h-7 w-full flex justify-center"
       >
         <motion.div
           initial={{ y: -30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -30, opacity: 0 }}
           style={bgStyle}
-          className="w-full max-w-5xl h-full shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-between px-4 pointer-events-auto cursor-pointer"
+          className="w-full max-w-5xl h-full shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-between px-4 cursor-pointer relative"
           onClick={handleBarClick}
         >
-          {/* Main content - Marquee if text is long, else regular centered */}
+          {/* Main content - slide transition */}
           <div className="flex-1 overflow-hidden relative h-full flex items-center">
-            <div className="text-[10px] font-black text-black select-none tracking-wide whitespace-nowrap flex items-center gap-1.5 animate-[marquee_20s_linear_infinite] hover:[animation-play-state:paused]">
-              <span>{currentSlide.title || "Anuncio Importante"}</span>
-              <ExternalLink size={10} className="inline opacity-80" />
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeSlideIndex}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.2 }}
+                className="text-[10px] font-black text-black select-none tracking-wide whitespace-nowrap flex items-center gap-1.5 animate-[marquee_25s_linear_infinite] hover:[animation-play-state:paused]"
+              >
+                <span>{currentSlide.title || "Anuncio Importante"}</span>
+                {currentSlide.linkUrl && <ExternalLink size={10} className="inline opacity-80" />}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Close button */}

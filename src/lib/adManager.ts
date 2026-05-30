@@ -7,7 +7,7 @@ export async function getNextPopup(
   userRole: string,
   userPlan: string
 ): Promise<AdCampaign | null> {
-  if (userPlan === "PRO") return null;
+  console.log(`[AdManager Debug] getNextPopup triggered for screen: ${currentScreen}, role: ${userRole}, plan: ${userPlan}`);
 
   try {
     const campaigns: AdCampaign[] = [];
@@ -15,13 +15,33 @@ export async function getNextPopup(
       campaigns.push(value);
     });
 
+    console.log(`[AdManager Debug] Loaded ${campaigns.length} campaigns from IndexedDB.`);
+
     const activePopups = campaigns.filter(
-      (c) =>
-        c.type === "popup" &&
-        c.status === "active" &&
-        c.targetScreens.includes(currentScreen) &&
-        c.targetRoles.includes(userRole as any)
+      (c) => {
+        const isPopup = c.type === "popup";
+        const isActive = c.status === "active";
+        const isTargetScreen = c.targetScreens.includes(currentScreen);
+        const isTargetRole = c.targetRoles.includes(userRole as any);
+        const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
+        const isTargetPlan = plans.includes(userPlan as any);
+        
+        const matches = isPopup && isActive && isTargetScreen && isTargetRole && isTargetPlan;
+        
+        if (!matches && isPopup) {
+          console.log(`[AdManager Debug] Campaign "${c.name}" (${c.id}) filtered out. Reason(s): ` + 
+            `[Active: ${isActive} (status: ${c.status})], ` +
+            `[Screen Match: ${isTargetScreen} (targets: ${c.targetScreens.join(",")})], ` +
+            `[Role Match: ${isTargetRole} (targets: ${c.targetRoles.join(",")})], ` +
+            `[Plan Match: ${isTargetPlan} (targets: ${plans.join(",")}, user has: ${userPlan})]`
+          );
+        }
+        
+        return matches;
+      }
     );
+
+    console.log(`[AdManager Debug] Found ${activePopups.length} matching active popups after filters.`);
 
     if (activePopups.length === 0) return null;
 
@@ -36,23 +56,26 @@ export async function getNextPopup(
       if (impression) {
         // Check max impressions limit per day
         if (impression.count >= campaign.maxImpressionsPerDay) {
+          console.log(`[AdManager Debug] Campaign "${campaign.name}" skipped: max impressions reached (${impression.count}/${campaign.maxImpressionsPerDay})`);
           continue;
         }
 
         // Check frequency in minutes
         const elapsedMinutes = (now - impression.lastShownAt) / 60000;
         if (campaign.frequencyMinutes > 0 && elapsedMinutes < campaign.frequencyMinutes) {
+          console.log(`[AdManager Debug] Campaign "${campaign.name}" skipped: frequency limit not met yet. Elapsed: ${elapsedMinutes.toFixed(1)}m, Required: ${campaign.frequencyMinutes}m`);
           continue;
         }
       }
 
-      // If campaign matches and passes limits, return it
+      console.log(`[AdManager Debug] Campaign "${campaign.name}" (${campaign.id}) SELECTED to show!`);
       return campaign;
     }
   } catch (error) {
-    console.error("Error determining next popup ad:", error);
+    console.error("[AdManager Debug] Error determining next popup ad:", error);
   }
 
+  console.log(`[AdManager Debug] No eligible popup found to display.`);
   return null;
 }
 
@@ -62,8 +85,6 @@ export async function getActiveBannerCampaign(
   userRole: string,
   userPlan: string
 ): Promise<AdCampaign | null> {
-  if (userPlan === "PRO") return null;
-
   try {
     const campaigns: AdCampaign[] = [];
     await adCampaignsStore.iterate((value: AdCampaign) => {
@@ -71,11 +92,16 @@ export async function getActiveBannerCampaign(
     });
 
     const activeBanner = campaigns.find(
-      (c) =>
-        c.type === "banner_widget" &&
-        c.status === "active" &&
-        c.targetScreens.includes(currentScreen) &&
-        c.targetRoles.includes(userRole as any)
+      (c) => {
+        const isBanner = c.type === "banner_widget";
+        const isActive = c.status === "active";
+        const isTargetScreen = c.targetScreens.includes(currentScreen);
+        const isTargetRole = c.targetRoles.includes(userRole as any);
+        const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
+        const isTargetPlan = plans.includes(userPlan as any);
+        
+        return isBanner && isActive && isTargetScreen && isTargetRole && isTargetPlan;
+      }
     );
 
     return activeBanner || null;
@@ -91,8 +117,6 @@ export async function getActiveNotificationBar(
   userRole: string,
   userPlan: string
 ): Promise<AdCampaign | null> {
-  if (userPlan === "PRO") return null;
-
   try {
     const campaigns: AdCampaign[] = [];
     await adCampaignsStore.iterate((value: AdCampaign) => {
@@ -100,11 +124,16 @@ export async function getActiveNotificationBar(
     });
 
     const activeBar = campaigns.find(
-      (c) =>
-        c.type === "notification_bar" &&
-        c.status === "active" &&
-        c.targetScreens.includes(currentScreen) &&
-        c.targetRoles.includes(userRole as any)
+      (c) => {
+        const isBar = c.type === "notification_bar";
+        const isActive = c.status === "active";
+        const isTargetScreen = c.targetScreens.includes(currentScreen);
+        const isTargetRole = c.targetRoles.includes(userRole as any);
+        const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
+        const isTargetPlan = plans.includes(userPlan as any);
+        
+        return isBar && isActive && isTargetScreen && isTargetRole && isTargetPlan;
+      }
     );
 
     return activeBar || null;

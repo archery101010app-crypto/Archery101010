@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Award, Share2, Filter, BarChart3 } from "lucide-react";
 
@@ -11,6 +11,33 @@ interface CoachSessionsTabProps {
 
 export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTabProps) {
   const [filterType, setFilterType] = useState<string>("ALL");
+  const [starRanking, setStarRanking] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadStars() {
+      try {
+        const { athleteStarsStore } = await import("@/lib/db/indexedDB");
+        const list: any[] = [];
+        await athleteStarsStore.iterate((value: any) => {
+          if (athletes.some((a) => a.uid === value.userId)) {
+            list.push(value);
+          }
+        });
+        
+        list.sort((a, b) => {
+          if (b.highestStarLevel !== a.highestStarLevel) {
+            return b.highestStarLevel - a.highestStarLevel;
+          }
+          return b.highestScore - a.highestScore;
+        });
+        
+        setStarRanking(list);
+      } catch (err) {
+        console.error("Error loading star ranking:", err);
+      }
+    }
+    loadStars();
+  }, [athletes, sessions]);
 
   const athleteSessions = sessions.filter(s => !s.isDuel);
 
@@ -100,6 +127,61 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           </div>
         </div>
       )}
+
+      {/* Ranking de Estrellas WA */}
+      <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
+        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-yellow-gold text-sm">★</span>
+          Clasificación de Estrellas WA 720
+        </h4>
+
+        {starRanking.length === 0 ? (
+          <div className="text-center text-[10px] text-gray-dim py-4 border border-dashed border-white/5 rounded-xl">
+            Aún ningún arquero del roster ha ganado una Estrella WA 720.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {starRanking.map((rank, idx) => (
+              <div 
+                key={rank.userId}
+                className="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0E12]/80 border border-white/5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-black text-white/50 w-4 text-center">
+                    #{idx + 1}
+                  </span>
+                  
+                  {/* Star Badge representation */}
+                  <div 
+                    className="w-7 h-7 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
+                    style={{ 
+                      borderColor: rank.starColor,
+                      color: rank.starColor,
+                      backgroundColor: `${rank.starColor}15`
+                    }}
+                    title={rank.starName}
+                  >
+                    ★
+                  </div>
+
+                  <div className="flex flex-col">
+                    <span className="text-white text-xs font-extrabold">{rank.userName}</span>
+                    <span className="text-[8px] text-gray-dim uppercase font-bold">
+                      {rank.starName} · {rank.bowType}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-xs font-black text-cyan-neon block">
+                    {rank.highestScore} <span className="text-[8px] text-gray-dim">/ 720</span>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="flex justify-between items-center mt-1">

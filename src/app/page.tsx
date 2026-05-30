@@ -17,6 +17,8 @@ import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
 
+import { motion, AnimatePresence } from "framer-motion";
+
 // Ads & Admin Imports
 import BannerWidget from "@/components/ads/BannerWidget";
 import NotificationBar from "@/components/ads/NotificationBar";
@@ -38,6 +40,7 @@ export default function Home() {
   const [duelConfig, setDuelConfig] = useState<any | null>(null);
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
+  const [unlockedStar, setUnlockedStar] = useState<any | null>(null);
 
   // Ads campaigns state
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
@@ -119,35 +122,61 @@ export default function Home() {
       }
     };
 
+    const handleStarUnlocked = (e: any) => {
+      setUnlockedStar(e.detail);
+      // Trigger canvas-confetti burst dynamically
+      import("canvas-confetti")
+        .then((module) => {
+          const confetti = module.default;
+          confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 }
+          });
+        })
+        .catch((err) => console.error("Confetti loading failed:", err));
+    };
+
     window.addEventListener("current-user-updated", handleUserUpdate);
     window.addEventListener("local-db-change", handleDbChange);
+    window.addEventListener("star-unlocked", handleStarUnlocked);
 
     return () => {
       window.removeEventListener("current-user-updated", handleUserUpdate);
       window.removeEventListener("local-db-change", handleDbChange);
+      window.removeEventListener("star-unlocked", handleStarUnlocked);
     };
   }, []);
 
-  // Load persistent font size from IndexedDB on mount
+  // Load persistent font size and theme contrast from IndexedDB on mount
   useEffect(() => {
-    async function loadFontSize() {
-      if (!user) return;
+    async function loadFontSizeAndTheme() {
       try {
         const { getLocalSetting } = await import("@/lib/db/indexedDB");
-        const savedSize = await getLocalSetting<string>("user_font_size", "medium");
+        const savedSize = await getLocalSetting<string>("user_font_size", "large");
         const root = document.documentElement;
+        
+        // Scale root font size
         if (savedSize === "small") {
-          root.style.fontSize = "14px";
-        } else if (savedSize === "large") {
+          root.style.fontSize = "16px";
+        } else if (savedSize === "medium") {
           root.style.fontSize = "18px";
         } else {
-          root.style.fontSize = "16px";
+          root.style.fontSize = "20px";
+        }
+
+        // Apply theme contrast
+        const savedTheme = await getLocalSetting<string>("app_theme", "dark");
+        if (savedTheme === "light") {
+          root.classList.add("light-contrast");
+        } else {
+          root.classList.remove("light-contrast");
         }
       } catch (e) {
-        console.error("Error loading font size settings", e);
+        console.error("Error loading font size and theme settings", e);
       }
     }
-    loadFontSize();
+    loadFontSizeAndTheme();
   }, [user]);
 
   // Prevent accidental reload during active scoring sessions or matchplay duels
@@ -221,15 +250,10 @@ export default function Home() {
   // Calculate dynamic main padding top based on active ads.
   // We subtract 16px to account for the view's internal py-4 padding.
   const hasBanner = activeBanner !== null;
-  const hasNotification = activeNotification !== null;
   
   let mainPaddingTopClass = "pt-[52px]"; // 64px Header - 12px small buffer. Content starts exactly below Header.
-  if (hasBanner && hasNotification) {
-    mainPaddingTopClass = "pt-[156px]"; // 64px Header + 80px Banner + 28px Notification - 16px view padding
-  } else if (hasBanner) {
+  if (hasBanner) {
     mainPaddingTopClass = "pt-[128px]"; // 64px Header + 80px Banner - 16px view padding
-  } else if (hasNotification) {
-    mainPaddingTopClass = "pt-[76px]"; // 64px Header + 28px Notification - 16px view padding
   }
 
   // Authenticated application flow
@@ -243,7 +267,6 @@ export default function Home() {
       <NotificationBar 
         campaign={activeNotification} 
         onClose={() => setActiveNotification(null)} 
-        positionTop={activeBanner ? 144 : 64} // 64px Header + 80px Banner height = 144px
       />
 
       {/* Screen Render Router */}
@@ -347,6 +370,75 @@ export default function Home() {
 
       {/* Spotify Floating Player */}
       <SpotifyFloatingPlayer />
+
+      {/* Star Unlock Celebrate Overlay Modal */}
+      <AnimatePresence>
+        {unlockedStar && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-950 border border-yellow-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(255,229,0,0.15)] overflow-hidden"
+            >
+              {/* Animated rays or backdrop glow */}
+              <div 
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{ background: `radial-gradient(circle, ${unlockedStar.star.color} 0%, transparent 70%)` }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center">
+                {/* Colored Glowing Star Icon */}
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.2, 1],
+                    rotate: [0, 15, -15, 0]
+                  }}
+                  transition={{ 
+                    duration: 1.5,
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                  }}
+                  className="w-20 h-20 flex items-center justify-center rounded-full bg-neutral-900 border border-white/10 shadow-lg text-4xl mb-4"
+                  style={{ color: unlockedStar.star.color }}
+                >
+                  ★
+                </motion.div>
+
+                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
+                  ¡NUEVA MARCA HISTÓRICA!
+                </span>
+                <h3 className="text-white text-lg font-black uppercase tracking-wide">
+                  {unlockedStar.star.name}
+                </h3>
+                
+                <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3 w-full">
+                  <span className="text-[9px] text-gray-dim uppercase font-bold block">
+                    Puntuación Registrada
+                  </span>
+                  <span className="text-2xl font-black text-white block mt-0.5">
+                    {unlockedStar.score} <span className="text-xs text-gray-dim">/ 720</span>
+                  </span>
+                  <span className="text-[9px] text-cyan-neon/70 uppercase font-black tracking-wider block mt-1">
+                    {unlockedStar.bowType} · {unlockedStar.distance}m (72 flechas)
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-dim leading-relaxed px-2">
+                  ¡Felicitaciones {unlockedStar.userName}! Has logrado superar la marca mínima de {unlockedStar.star.minScore} puntos y desbloquear esta prestigiosa Estrella WA.
+                </p>
+
+                <button
+                  onClick={() => setUnlockedStar(null)}
+                  className="mt-6 w-full py-3 bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition"
+                >
+                  ¡Excelente! Aceptar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

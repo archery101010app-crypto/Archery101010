@@ -8,6 +8,7 @@ import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, 
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
+import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -59,7 +60,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [waNotif, setWaNotif] = useState(true);
   
   // Font Size Accessibility State
-  const [fontSize, setFontSize] = useState("medium");
+  const [fontSize, setFontSize] = useState("large");
+
+  // Athlete Star State
+  const [maxStar, setMaxStar] = useState<any | null>(null);
 
   // Coach WhatsApp notice field
   const [clubWhatsApp, setClubWhatsApp] = useState(user.whatsappNumber || "");
@@ -76,20 +80,29 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // DEV Simulate Superadmin flag state
   const [devSimulateSuperAdmin, setDevSimulateSuperAdmin] = useState(user.role === "superadmin");
 
-  // Load toggles from settings
+  // Load toggles and star data from settings
   useEffect(() => {
     async function loadToggles() {
       const push = await getLocalSetting("notif_push", true);
       const email = await getLocalSetting("notif_email", true);
       const wa = await getLocalSetting("notif_wa", true);
-      const size = await getLocalSetting<string>("user_font_size", "medium");
+      const size = await getLocalSetting<string>("user_font_size", "large");
       setPushNotif(push);
       setEmailNotif(email);
       setWaNotif(wa);
       setFontSize(size);
+
+      // Load star achievement
+      try {
+        const { athleteStarsStore } = await import("@/lib/db/indexedDB");
+        const doc = await athleteStarsStore.getItem<any>(user.uid);
+        setMaxStar(doc);
+      } catch (err) {
+        console.error("Error loading athlete star in profile:", err);
+      }
     }
     loadToggles();
-  }, []);
+  }, [user]);
 
   const handleFontSizeChange = async (size: string) => {
     setFontSize(size);
@@ -98,11 +111,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     // Apply font size directly to root element
     const root = document.documentElement;
     if (size === "small") {
-      root.style.fontSize = "14px";
-    } else if (size === "large") {
+      root.style.fontSize = "16px";
+    } else if (size === "medium") {
       root.style.fontSize = "18px";
     } else {
-      root.style.fontSize = "16px";
+      root.style.fontSize = "20px";
     }
   };
 
@@ -658,6 +671,93 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             </button>
           </div>
         </div>
+      </div>
+
+      {/* SECTION 3.8: World Archery 720 Stars */}
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-yellow-gold text-lg">★</span>
+          Estrellas World Archery 720
+        </h4>
+
+        {maxStar ? (
+          <div className="flex flex-col gap-3">
+            {/* Medalla estrella activa */}
+            <div className="flex items-center gap-3.5 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
+              <div 
+                className="w-12 h-12 rounded-full border flex items-center justify-center text-xl font-black shadow-md shrink-0 animate-pulse"
+                style={{ 
+                  borderColor: maxStar.starColor,
+                  color: maxStar.starColor,
+                  backgroundColor: `${maxStar.starColor}15`
+                }}
+              >
+                ★
+              </div>
+              <div className="flex flex-col overflow-hidden">
+                <span className="text-white text-xs font-black uppercase tracking-wide truncate">
+                  {maxStar.starName}
+                </span>
+                <span className="text-[9px] text-gray-dim mt-0.5 font-bold uppercase">
+                  Marca récord: {maxStar.highestScore} pts ({maxStar.bowType})
+                </span>
+              </div>
+            </div>
+
+            {/* Progreso a la siguiente meta */}
+            {(() => {
+              const bow = maxStar.bowType;
+              const tiers = bow === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+              const currentLevel = maxStar.highestStarLevel;
+              
+              if (currentLevel >= 8) {
+                return (
+                  <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] text-center text-cyan-neon font-black uppercase tracking-wider">
+                    🏆 ¡Has alcanzado la Estrella máxima (Diamante)! 🏆
+                  </div>
+                );
+              }
+              
+              const nextStar = tiers[currentLevel]; // level is 1-indexed, so tiers[currentLevel] is level + 1
+              const prevMin = tiers[currentLevel - 1].minScore;
+              const highestScore = maxStar.highestScore;
+              const targetMin = nextStar.minScore;
+              
+              const percent = Math.min(100, Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100));
+              
+              return (
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <div className="flex justify-between text-[9px] text-gray-dim font-black uppercase tracking-wider">
+                    <span>Siguiente: {nextStar.name}</span>
+                    <span className="text-white">{highestScore} / {targetMin} pts</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5 relative">
+                    <div 
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${percent}%`,
+                        backgroundColor: nextStar.color,
+                        boxShadow: `0 0 10px ${nextStar.color}`
+                      }}
+                    />
+                  </div>
+                  <span className="text-[8px] text-gray-dim leading-none">
+                    Faltan {targetMin - highestScore} puntos para subir de nivel de estrella.
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5 py-1">
+            <p className="text-[10px] text-gray-dim leading-snug">
+              Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de World Archery.
+            </p>
+            <div className="bg-neutral-950/40 p-3 rounded-2xl border border-dashed border-white/10 text-center text-[9px] text-gray-dim font-bold uppercase">
+              Sin estrellas desbloqueadas
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SECTION 4.5: Accessibility Settings (Font Size) */}

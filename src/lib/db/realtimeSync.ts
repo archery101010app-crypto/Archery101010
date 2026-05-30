@@ -5,7 +5,9 @@ import {
   calendarStore,
   macrocyclesStore,
   sessionsStore,
-  settingsStore
+  settingsStore,
+  athleteStarsStore,
+  starHistoryStore
 } from "./indexedDB";
 import { UserProfile } from "@/lib/authService";
 
@@ -130,6 +132,34 @@ export function startRealtimeSync(currentUserUid: string | null) {
     }
   });
   activeUnsubscribes.push(sessionsUnsub);
+
+  // 6. Sync Athlete Stars Collection
+  const starsUnsub = onSnapshot(collection(db, "athlete_stars"), async (snapshot) => {
+    try {
+      await athleteStarsStore.clear();
+      for (const doc of snapshot.docs) {
+        await athleteStarsStore.setItem(doc.id, doc.data());
+      }
+      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "athlete_stars" } }));
+    } catch (err) {
+      console.error("Error in real-time athlete_stars sync:", err);
+    }
+  });
+  activeUnsubscribes.push(starsUnsub);
+
+  // 7. Sync Star History Collection
+  const starHistoryUnsub = onSnapshot(collection(db, "star_history"), async (snapshot) => {
+    try {
+      await starHistoryStore.clear();
+      for (const doc of snapshot.docs) {
+        await starHistoryStore.setItem(doc.id, doc.data());
+      }
+      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "star_history" } }));
+    } catch (err) {
+      console.error("Error in real-time star_history sync:", err);
+    }
+  });
+  activeUnsubscribes.push(starHistoryUnsub);
 }
 
 /**

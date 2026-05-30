@@ -167,3 +167,109 @@ body {
 #clock_fs[data-fase="over"] {
   background: radial-gradient(circle at center, #3b0b0b 0%, #1a0404 100%);
 }
+
+/* --- Light Contrast / White Background Mode Overrides --- */
+.light-contrast {
+  color-scheme: light;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+.light-contrast body,
+.light-contrast .iphone-frame,
+.light-contrast .bg-black-oled,
+.light-contrast .bg-black {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.light-contrast .ambient-bg {
+  background: radial-gradient(circle at 20% 30%, rgba(0, 154, 216, 0.06) 0%, transparent 40%),
+              radial-gradient(circle at 80% 70%, rgba(255, 229, 0, 0.04) 0%, transparent 45%),
+              #f8fafc !important;
+}
+
+.light-contrast .bg-neutral-900\/40,
+.light-contrast .bg-neutral-900\/80,
+.light-contrast .bg-neutral-950\/40,
+.light-contrast .bg-neutral-950\/60,
+.light-contrast .bg-neutral-900,
+.light-contrast .bg-neutral-950,
+.light-contrast .bg-black\/40,
+.light-contrast .bg-black\/60,
+.light-contrast .bg-black\/80,
+.light-contrast .bg-\[\#0A0A0C\],
+.light-contrast .bg-\[\#0E0E12\],
+.light-contrast .bg-\[\#0F0F12\],
+.light-contrast .bg-neutral-950\/60 {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+.light-contrast text,
+.light-contrast .text-white,
+.light-contrast .text-white\/80,
+.light-contrast .text-white\/70,
+.light-contrast .text-white\/60,
+.light-contrast .text-white\/50,
+.light-contrast .text-white\/40,
+.light-contrast .text-white\/30,
+.light-contrast .text-white\/20,
+.light-contrast .text-white\/10,
+.light-contrast .text-gray-dim,
+.light-contrast .text-gray-400,
+.light-contrast .text-gray-200,
+.light-contrast .text-slate-300 {
+  color: #0f172a !important;
+}
+
+.light-contrast text {
+  fill: #0f172a !important;
+}
+
+.light-contrast .text-white\/50,
+.light-contrast .text-white\/40,
+.light-contrast .text-white\/30,
+.light-contrast .text-gray-dim {
+  color: #475569 !important; /* Slate 600 */
+}
+
+.light-contrast .border-white\/10,
+.light-contrast .border-white\/5,
+.light-contrast .border-white\/15,
+.light-contrast .border-gray-border\/40,
+.light-contrast .border-gray-border\/60,
+.light-contrast .border-gray-border {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Maintain dark OLED theme for the Header to preserve the branding! */
+.light-contrast header,
+.light-contrast header * {
+  background-color: transparent;
+  color: #ffffff !important;
+}
+.light-contrast header {
+  background-color: rgba(0, 0, 0, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.light-contrast header .text-white\/40 {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+.light-contrast header .text-white\/50 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+.light-contrast header .bg-neutral-950 {
+  background-color: #0a0a0a !important;
+}
+.light-contrast header .bg-neutral-900\/60 {
+  background-color: rgba(23, 23, 23, 0.6) !important;
+}
+.light-contrast header .border-gray-border {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+.light-contrast header .bg-cyan-neon {
+  background-color: #00BFFF !important;
+  color: #000000 !important;
+}

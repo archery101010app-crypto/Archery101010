@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
+import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -35,6 +36,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
   // Coach notes state
   const [notes, setNotes] = useState<Array<{ id: string; date: number; content: string }>>([]);
   const [newNoteText, setNewNoteText] = useState("");
+  const [maxStar, setMaxStar] = useState<any | null>(null);
 
   useEffect(() => {
     if (!athlete) return;
@@ -44,7 +46,17 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
       const savedNotes = await getLocalSetting<any[]>(key, []);
       setNotes(savedNotes);
     }
+    async function loadAthleteStar() {
+      try {
+        const { athleteStarsStore } = await import("@/lib/db/indexedDB");
+        const doc = await athleteStarsStore.getItem<any>(athleteUid);
+        setMaxStar(doc);
+      } catch (err) {
+        console.error("Error loading athlete star in coach sheet:", err);
+      }
+    }
     loadCoachNotes();
+    loadAthleteStar();
     setActiveTab("PERFIL"); // reset to profile tab on open
     setExpandedSessionId(null);
   }, [athlete]);
@@ -175,6 +187,81 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
           {/* TAB 1: PERFIL */}
           {activeTab === "PERFIL" && (
             <div className="flex flex-col gap-4">
+              {/* World Archery Stars */}
+              <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
+                <span className="text-[10px] text-yellow-gold font-black tracking-wider uppercase flex items-center gap-1">
+                  ★ Estrellas World Archery 720
+                </span>
+                {maxStar ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2.5 bg-neutral-950/40 p-2.5 rounded-xl border border-white/5">
+                      <div 
+                        className="w-10 h-10 rounded-full border flex items-center justify-center text-lg font-black shrink-0"
+                        style={{ 
+                          borderColor: maxStar.starColor,
+                          color: maxStar.starColor,
+                          backgroundColor: `${maxStar.starColor}15`
+                        }}
+                      >
+                        ★
+                      </div>
+                      <div className="flex flex-col overflow-hidden">
+                        <span className="text-white text-xs font-black uppercase tracking-wide truncate">
+                          {maxStar.starName}
+                        </span>
+                        <span className="text-[8px] text-gray-dim mt-0.5 font-bold">
+                          Récord 720: {maxStar.highestScore} pts
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress indicator */}
+                    {(() => {
+                      const bow = maxStar.bowType;
+                      const tiers = bow === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+                      const currentLevel = maxStar.highestStarLevel;
+                      
+                      if (currentLevel >= 8) {
+                        return (
+                          <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2 rounded-xl text-[9px] text-center text-cyan-neon font-black uppercase">
+                            ⭐ Estrella Máxima Alcanzada ⭐
+                          </div>
+                        );
+                      }
+                      
+                      const nextStar = tiers[currentLevel];
+                      const prevMin = tiers[currentLevel - 1].minScore;
+                      const highestScore = maxStar.highestScore;
+                      const targetMin = nextStar.minScore;
+                      const percent = Math.min(100, Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100));
+                      
+                      return (
+                        <div className="flex flex-col gap-1 mt-0.5">
+                          <div className="flex justify-between text-[8px] text-gray-dim font-black uppercase">
+                            <span>Siguiente Meta: {nextStar.name}</span>
+                            <span className="text-white">{highestScore} / {targetMin} pts</span>
+                          </div>
+                          <div className="w-full h-2 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
+                            <div 
+                              className="h-full rounded-full"
+                              style={{ 
+                                width: `${percent}%`,
+                                backgroundColor: nextStar.color,
+                                boxShadow: `0 0 8px ${nextStar.color}`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center bg-neutral-950/40 p-3.5 rounded-xl border border-dashed border-white/10 text-[9px] text-gray-dim font-bold uppercase">
+                    Sin estrellas WA ganadas
+                  </div>
+                )}
+              </div>
+
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
                 <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase">Configuración de Arco</span>
                 <div className="grid grid-cols-2 gap-4">

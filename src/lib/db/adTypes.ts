@@ -21,6 +21,7 @@ export interface AdCampaign {
   slideIntervalSeconds: number;
   targetScreens: string[];
   targetRoles: ("archer" | "coach")[];
+  targetPlans?: ("FREE" | "PRO")[];
   totalImpressions: number;
   totalClicks: number;
   createdAt: string;
