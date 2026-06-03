@@ -279,3 +279,21 @@ body {
   background-color: #00BFFF !important;
   color: #000000 !important;
 }
+
+/* --- Google Translate custom styles to hide clunky top banners & maintain premium SaaS look --- */
+.skiptranslate,
+iframe.skiptranslate,
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+body {
+  top: 0px !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
