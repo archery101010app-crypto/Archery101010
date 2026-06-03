@@ -9,9 +9,10 @@ interface BannerWidgetProps {
   campaign: AdCampaign | null;
   onSlideClick: (slideId: string, linkUrl: string) => void;
   onClose?: () => void;
+  showCloseButton?: boolean;
 }
 
-export default function BannerWidget({ campaign, onSlideClick, onClose }: BannerWidgetProps) {
+export default function BannerWidget({ campaign, onSlideClick, onClose, showCloseButton = true }: BannerWidgetProps) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [direction, setDirection] = useState(0); // -1 for left, 1 for right
 
@@ -164,15 +165,17 @@ export default function BannerWidget({ campaign, onSlideClick, onClose }: Banner
           )}
 
           {/* Close button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onClose) onClose();
-            }}
-            className="close-btn p-1.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-white/10"
-          >
-            <X size={14} />
-          </button>
+          {showCloseButton && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onClose) onClose();
+              }}
+              className="close-btn p-1.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-white/10"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
     </motion.div>

@@ -631,3 +631,58 @@ Panel exclusivo para el **administrador del sistema** que permite gestionar usua
      }
    };
    ```
+
+---
+
+## 🚀 Novedades, Mejoras y Correcciones Críticas (Fase 14)
+
+En esta fase se implementaron mejoras visuales premium, separación avanzada de roles organizacionales, adaptación responsiva multidispositivo y la resolución de 6 vulnerabilidades o fallos críticos identificados en auditoría.
+
+### 1. 👥 Gestión Avanzada de Roles en Clubes (Team Admin vs Coach)
+Para flexibilizar la estructura de los equipos y permitir que personas no técnicas o atletas lideren clubes sin forzarlos a actuar como entrenadores, se reformuló el sistema de roles:
+* **Nuevos Roles:**
+  * `team_admin`: Administrador de Club. Puede editar el perfil del club (nombre, bandera del país, logotipo SVG), ver el roster de miembros y promover o demoler roles. No tiene acceso a la Consola de Entrenador ni a las métricas del equipo a menos que active el rol dual.
+  * `team_admin_coach`: Rol Dual. Combina los permisos de administración del club y la visualización de estadísticas, asistencia diaria, macrociclos y control de entrenamientos.
+* **Flujo de Onboarding Dual:** Durante el paso 3 del registro, si el usuario crea un club nuevo, se le otorga por defecto el rol de `team_admin`. Se incluye un control tipo checkbox ("Actuar también como Coach") que le permite activar la doble personalidad (`team_admin_coach`) desde su creación.
+* **Consola de Roster en Perfil:** En la sección de configuración del Perfil (Settings), el administrador puede ver el roster completo de miembros del club y promover arqueros (`archer`) a entrenadores (`coach`), o degradar entrenadores de regreso a arqueros síncronamente con guardado offline-first e IndexedDB.
+* **Auto-Promoción:** El Team Admin puede activar o desactivar su propia funcionalidad de coach en cualquier momento mediante un switch en su panel de administración, habilitando o deshabilitando dinámicamente el switch de visualización "Mi Equipo" en el Header.
+
+### 2. 🥇 Rebranding "Estrellas 101010"
+Se eliminaron todas las leyendas relacionadas con marcas de terceros en el sistema de logros y estrellas para registrar la propiedad intelectual de la marca:
+* **Renombramiento de Insignias:** Reemplazados todos los términos "World Archery Star", "Estrellas WA 720" o "Estrella FITA" por **"Estrellas 101010"** en el panel de perfil del arquero, la ficha técnica del atleta, el ranking del club de la consola de coach, y en el modal emergente de desbloqueo.
+* **Preservación del Estándar Técnico:** Las rondas de puntuación y configuraciones de tiro oficiales de World Archery (ej. `WA 720`, `WA 600`, `WA 300`) conservan sus nombres técnicos por tratarse de estándares olímpicos normalizados.
+
+### 3. 📱 Contenedor Adaptativo Responsivo (iPad / Tablet / PC)
+Para superar la restricción fija de anchura telefónica en dispositivos medianos y grandes, se rediseñó el simulador de dispositivo:
+* **iPads y Tablets:** En viewports entre `768px` y `1024px`, el marco físico del iPhone (notch, bordes redondeados y barra home) se oculta automáticamente. La aplicación se ensancha de forma fluida hasta un ancho máximo adaptado de `768px` centrado, optimizando la visibilidad del dashboard, las dianas SVG y los gráficos.
+* **Ordenadores de Escritorio (PC):** En pantallas superiores a `1024px`, la aplicación se centra en un ancho controlado de `1024px` ocupando todo el alto disponible, dando una sensación limpia y premium de aplicación web de escritorio.
+
+### 4. 📢 Píldora de Publicidad Flotante y Configurable (`NotificationBar`)
+Se rediseñó el banner de notificación publicitaria de ancho completo para convertirlo en una píldora estética flotante:
+* **Estética de Píldora:** Diseñado como cápsula ovalada flotante con bordes `rounded-full` centrada horizontalmente en `top-4`, con sombra profunda y animaciones de entrada Framer Motion.
+* **Configuración de Estilos:** Se expandió la base de datos `AdCampaign` permitiendo definir:
+  * **Pill Style:** `solid` (color plano), `glass` (fondo oscuro difuminado con desenfoque de fondo y borde cristal), o `gradient` (degradado premium usando colores de marca cyan a rojo).
+  * **Custom Height & Font Size:** Altura de píldora y tamaño de letra configurables por el administrador.
+* **Cierre Inmediato (Tap-to-Close):** Presionar en cualquier área de la píldora abre el enlace de la campaña en una pestaña nueva y cierra la notificación de inmediato, garantizando que no obstruya los controles de navegación.
+
+### 5. 🎬 Pantalla de Entrada Animada (`IntroScreen`)
+Se integró una intro animada fluida de 6.7 segundos al cargar la aplicación por primera vez:
+* **Fases de la Animación:**
+  1. *Fase de Campo:* Imagen de un campo de tiro con gradiente circular.
+  2. *Fase de Arco Recurvo:* Imagen y descripción HUD en cian neón.
+  3. *Fase de Arco Compuesto:* Imagen y descripción en rojo rival.
+  4. *Fase de Barebow:* Imagen y descripción en amarillo oro.
+  5. *Fase de Branding:* Collage de logotipos olímpicos vectoriales SVG, el logo principal `101010 ARCHERY v1.1` con tipografía oficial Good Times, y el renderizado animado de la firma manuscrita cursiva del creador, Rodrigo Saborío.
+* **Usabilidad:** Incluye un botón "Saltar" en la esquina superior para evadir la animación y cargar la pantalla principal instantáneamente si el usuario lo prefiere.
+
+### 6. 🛠️ Solución a las 6 Vulnerabilidades de Auditoría Críticas
+Se implementaron soluciones robustas para corregir los fallos funcionales identificados:
+1. **Mitigación de Bucle Infinito en Sync Manager (`skippedIds`):** Ante errores persistentes de Firestore (como denegaciones de reglas de seguridad o autenticación vencida), el `syncManager.ts` marcaba las escrituras como fallidas pero las reintentaba indefinidamente bloqueando el hilo principal del navegador. Se implementó una colección `skippedIds` en memoria que descarta transacciones problemáticas tras varios fallos, permitiendo que la cola continúe fluyendo con elementos posteriores.
+2. **Pruebas de Publicidad para Cuentas PRO (Super Admins):** Se omitieron los filtros de plan para usuarios que poseen el rol `"superadmin"`. Esto les permite probar campañas visuales directamente en producción aunque su cuenta tenga la insignia PRO (que bloquea anuncios por defecto).
+3. **Reconexión Automática por Foco (`visibilitychange`):** Para evitar los retardos de reconexión del SDK de Firestore cuando el dispositivo vuelve de un estado de suspensión o bloqueo, se añadió un listener que detecta el regreso al foco activo y ejecuta secuencialmente `disableNetwork` y `enableNetwork`, forzando la recuperación de conexión en milisegundos.
+4. **Área Segura y Soporte de Muesca (Notch Support):** Modificada la hoja de estilos general y componentes Header/NotificationBar para utilizar variables CSS seguras `env(safe-area-inset-top)`. Esto empuja dinámicamente el Header y las píldoras publicitarias hacia abajo en terminales iPhone/Android que operan en modo standalone de PWA, evitando que la barra de estado solape los elementos interactivos.
+5. **Escala de Fuentes Incrementada:** Aumentados los tamaños base de fuente de accesibilidad para mejorar la legibilidad en campo a:
+  * Pequeño: `18px`
+  * Mediano: `20px`
+  * Grande (Por defecto): `22px`
+6. **Métricas de Anuncios Sincronizadas:** Modificadas las funciones del motor publicitario para inyectar transacciones a la cola de sincronización de IndexedDB (`addToSyncQueue`) en tiempo real cuando ocurre una impresión o clic. Esto asegura que las analíticas de anuncios se sincronicen de inmediato con Firestore en segundo plano sin impactar la latencia.

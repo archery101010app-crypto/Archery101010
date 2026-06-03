@@ -7,6 +7,7 @@ import RegisterView from "@/components/auth/RegisterView";
 import DashboardView from "@/components/dashboard/DashboardView";
 import FloatingNav from "@/components/ui/FloatingNav";
 import Header from "@/components/ui/Header";
+import IntroScreen from "@/components/ui/IntroScreen";
 
 import SessionConfigView from "@/components/scoring/SessionConfigView";
 import ScoringView from "@/components/scoring/ScoringView";
@@ -41,6 +42,7 @@ export default function Home() {
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
   const [unlockedStar, setUnlockedStar] = useState<any | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   // Ads campaigns state
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
@@ -238,6 +240,10 @@ export default function Home() {
     setSessionConfig(null);
   };
 
+  if (showIntro) {
+    return <IntroScreen onComplete={() => setShowIntro(false)} />;
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-black-oled text-cyan-neon font-black text-lg tracking-widest animate-pulse">
@@ -284,7 +290,16 @@ export default function Home() {
       <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={setCoachViewMode} />
 
       {/* Ads widgets */}
-      <BannerWidget campaign={activeBanner} onSlideClick={() => {}} />
+      <AnimatePresence>
+        {activeBanner && (
+          <BannerWidget 
+            campaign={activeBanner} 
+            onSlideClick={() => {}} 
+            onClose={() => setActiveBanner(null)} 
+            showCloseButton={user?.plan === "PRO"}
+          />
+        )}
+      </AnimatePresence>
       <NotificationBar 
         campaign={activeNotification} 
         onClose={() => setActiveNotification(null)} 
@@ -292,7 +307,7 @@ export default function Home() {
 
       {/* Screen Render Router */}
       <main 
-        className="flex-1 overflow-y-auto pb-24 px-4" 
+        className="flex-1 overflow-y-auto pb-24 px-4 transition-[padding-top] duration-300 ease-in-out" 
         style={{ paddingTop: paddingTopStyle }}
       >
         {currentScreen === "HOME" && (
