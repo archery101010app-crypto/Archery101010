@@ -26,6 +26,9 @@ export interface AdCampaign {
   totalClicks: number;
   createdAt: string;
   updatedAt: string;
+  fontSize?: "small" | "medium" | "large";
+  pillStyle?: "solid" | "glass" | "gradient";
+  customHeight?: number;
 }
 
 export interface AdImpression {

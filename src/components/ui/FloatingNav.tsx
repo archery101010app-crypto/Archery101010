@@ -15,7 +15,7 @@ interface FloatingNavProps {
 }
 
 export default function FloatingNav({ activeScreen, onScreenChange, user, coachViewMode = false }: FloatingNavProps) {
-  const isCoach = user?.role === "coach" && coachViewMode;
+  const isCoach = (user?.role === "coach" || user?.role === "team_admin_coach") && coachViewMode;
   const isSuper = user?.role === "superadmin";
 
   const navItems = [

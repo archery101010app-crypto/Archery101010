@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Herr+Von+Muellerhoff&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 /* Good Times display font for the 101010 logotype (Loaded from CDN) */
@@ -121,21 +122,26 @@ body {
   pointer-events: none;
 }
 
-/* Responsive simulation: full-screen on mobile */
-@media (max-width: 640px) {
+/* Responsive simulation: full-screen or tablet layout on screens up to 1024px */
+@media (max-width: 1024px) {
   .iphone-frame-wrapper {
     padding: 0 !important;
     background: #000000 !important;
   }
   .iphone-frame {
     width: 100% !important;
+    max-width: 768px !important; /* Adapt cleanly to tablets and iPads without stretching */
     height: 100vh !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
   }
+  .iphone-content-area {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
   .iphone-notch, .iphone-home-indicator {
-    display: none;
+    display: none !important;
   }
 }
 

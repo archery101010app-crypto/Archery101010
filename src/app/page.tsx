@@ -74,7 +74,7 @@ export default function Home() {
   // Check active ad campaigns on screen, user, or local database change
   useEffect(() => {
     async function checkAds() {
-      if (!user || user.plan === "PRO" || currentScreen === "ADMIN") {
+      if (!user || (user.plan === "PRO" && user.role !== "superadmin") || currentScreen === "ADMIN") {
         setActivePopup(null);
         setActiveBanner(null);
         setActiveNotification(null);
@@ -107,6 +107,30 @@ export default function Home() {
       stopRealtimeSync();
     };
   }, [user]);
+
+  // Listen to visibilitychange to force Firestore network reconnection
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        console.log("[Firebase Reconnect] Tab focused. Reconnecting Firestore...");
+        try {
+          const { db, disableNetwork, enableNetwork } = await import("@/lib/firebase");
+          await disableNetwork(db);
+          await enableNetwork(db);
+          console.log("[Firebase Reconnect] Firestore reconnected successfully.");
+          const { runSync } = await import("@/lib/db/syncManager");
+          runSync();
+        } catch (err) {
+          console.error("[Firebase Reconnect] Error during reconnect:", err);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   // Listen to database changes and user updates in real-time
   useEffect(() => {
@@ -158,11 +182,11 @@ export default function Home() {
         
         // Scale root font size
         if (savedSize === "small") {
-          root.style.fontSize = "16px";
-        } else if (savedSize === "medium") {
           root.style.fontSize = "18px";
-        } else {
+        } else if (savedSize === "medium") {
           root.style.fontSize = "20px";
+        } else {
+          root.style.fontSize = "22px";
         }
 
         // Apply theme contrast
@@ -247,14 +271,11 @@ export default function Home() {
     );
   }
 
-  // Calculate dynamic main padding top based on active ads.
-  // We subtract 16px to account for the view's internal py-4 padding.
+  // Calculate dynamic main padding top based on active ads and safe areas.
   const hasBanner = activeBanner !== null;
-  
-  let mainPaddingTopClass = "pt-[52px]"; // 64px Header - 12px small buffer. Content starts exactly below Header.
-  if (hasBanner) {
-    mainPaddingTopClass = "pt-[128px]"; // 64px Header + 80px Banner - 16px view padding
-  }
+  const paddingTopStyle = hasBanner
+    ? "calc(8rem + env(safe-area-inset-top))"
+    : "calc(3.25rem + env(safe-area-inset-top))";
 
   // Authenticated application flow
   return (
@@ -270,7 +291,10 @@ export default function Home() {
       />
 
       {/* Screen Render Router */}
-      <main className={`flex-1 overflow-y-auto pb-24 px-4 ${mainPaddingTopClass}`}>
+      <main 
+        className="flex-1 overflow-y-auto pb-24 px-4" 
+        style={{ paddingTop: paddingTopStyle }}
+      >
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
@@ -425,7 +449,7 @@ export default function Home() {
                 </div>
 
                 <p className="text-xs text-gray-dim leading-relaxed px-2">
-                  ¡Felicitaciones {unlockedStar.userName}! Has logrado superar la marca mínima de {unlockedStar.star.minScore} puntos y desbloquear esta prestigiosa Estrella WA.
+                  ¡Felicitaciones {unlockedStar.userName}! Has logrado superar la marca mínima de {unlockedStar.star.minScore} puntos y desbloquear esta prestigiosa Estrella 101010.
                 </p>
 
                 <button

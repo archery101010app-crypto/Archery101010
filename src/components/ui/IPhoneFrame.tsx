@@ -24,7 +24,7 @@ export default function IPhoneFrame({ children }: { children: React.ReactNode })
         <div className="iphone-notch" />
 
         {/* Content Area */}
-        <div className="flex-1 w-full overflow-y-auto overflow-x-hidden relative pt-6 pb-8 flex flex-col bg-black-oled">
+        <div className="iphone-content-area flex-1 w-full overflow-y-auto overflow-x-hidden relative pt-6 pb-8 flex flex-col bg-black-oled">
           {children}
         </div>
 

@@ -80,6 +80,132 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // DEV Simulate Superadmin flag state
   const [devSimulateSuperAdmin, setDevSimulateSuperAdmin] = useState(user.role === "superadmin");
 
+  // Club roster states
+  const [clubMembers, setClubMembers] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    async function loadClubMembers() {
+      if (user.clubId) {
+        const { getLocalSetting } = await import("@/lib/db/indexedDB");
+        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const members = list.filter((u) => u.clubId === user.clubId);
+        setClubMembers(members);
+      }
+    }
+    loadClubMembers();
+  }, [user.clubId, user.role]);
+
+  const handlePromoteToCoach = async (memberUid: string) => {
+    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
+    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const idx = list.findIndex((u) => u.uid === memberUid);
+    if (idx !== -1) {
+      const currentMember = list[idx];
+      let nextRole: UserProfile["role"] = "coach";
+      if (currentMember.role === "team_admin") {
+        nextRole = "team_admin_coach";
+      }
+      const updatedUser = {
+        ...currentMember,
+        role: nextRole
+      };
+      list[idx] = updatedUser;
+      await saveLocalSetting("simulated_users", list);
+
+      // Push to Firestore Sync Queue
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "UPDATE",
+        payloadId: memberUid,
+        payload: updatedUser,
+        timestamp: Date.now()
+      });
+
+      // Update local state
+      setClubMembers(list.filter((u) => u.clubId === user.clubId));
+      
+      // If it is the current user, notify
+      if (memberUid === user.uid) {
+        await saveLocalSetting("current_user", updatedUser);
+        onProfileUpdated(updatedUser);
+        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
+      }
+    }
+  };
+
+  const handleDemoteToArcher = async (memberUid: string) => {
+    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
+    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const idx = list.findIndex((u) => u.uid === memberUid);
+    if (idx !== -1) {
+      const currentMember = list[idx];
+      let nextRole: UserProfile["role"] = "archer";
+      if (currentMember.role === "team_admin_coach") {
+        nextRole = "team_admin";
+      }
+      const updatedUser = {
+        ...currentMember,
+        role: nextRole
+      };
+      list[idx] = updatedUser;
+      await saveLocalSetting("simulated_users", list);
+
+      // Push to Firestore Sync Queue
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "UPDATE",
+        payloadId: memberUid,
+        payload: updatedUser,
+        timestamp: Date.now()
+      });
+
+      // Update local state
+      setClubMembers(list.filter((u) => u.clubId === user.clubId));
+
+      // If it is the current user, notify
+      if (memberUid === user.uid) {
+        await saveLocalSetting("current_user", updatedUser);
+        onProfileUpdated(updatedUser);
+        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
+      }
+    }
+  };
+
+  const handleToggleAdminCoachSelf = async () => {
+    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
+    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const idx = list.findIndex((u) => u.uid === user.uid);
+    if (idx !== -1) {
+      const nextRole: UserProfile["role"] = user.role === "team_admin" ? "team_admin_coach" : "team_admin";
+      const updatedUser = {
+        ...list[idx],
+        role: nextRole
+      };
+      list[idx] = updatedUser;
+      await saveLocalSetting("simulated_users", list);
+
+      // Push to Firestore Sync Queue
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "UPDATE",
+        payloadId: user.uid,
+        payload: updatedUser,
+        timestamp: Date.now()
+      });
+
+      // Update current user
+      await saveLocalSetting("current_user", updatedUser);
+      onProfileUpdated(updatedUser);
+      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
+      
+      // Update local state
+      setClubMembers(list.filter((u) => u.clubId === user.clubId));
+    }
+  };
+
   // Load toggles and star data from settings
   useEffect(() => {
     async function loadToggles() {
@@ -673,11 +799,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       </div>
 
-      {/* SECTION 3.8: World Archery 720 Stars */}
+      {/* SECTION 3.8: Estrellas 101010 720 */}
       <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
           <span className="text-yellow-gold text-lg">★</span>
-          Estrellas World Archery 720
+          Estrellas 101010 (720)
         </h4>
 
         {maxStar ? (
@@ -751,7 +877,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         ) : (
           <div className="flex flex-col gap-2.5 py-1">
             <p className="text-[10px] text-gray-dim leading-snug">
-              Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de World Archery.
+              Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de 101010.
             </p>
             <div className="bg-neutral-950/40 p-3 rounded-2xl border border-dashed border-white/10 text-center text-[9px] text-gray-dim font-bold uppercase">
               Sin estrellas desbloqueadas
@@ -793,8 +919,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       </div>
 
-      {/* SECTION 5: Coach management (Visible only to coaches) */}
-      {user.role === "coach" && user.clubId && (
+      {/* SECTION 5: Coach/Admin management */}
+      {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && user.clubId && (
         <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("clubManage")}</h4>
@@ -928,6 +1054,78 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 </button>
               </div>
             </div>
+
+            {/* Act as Coach switcher for Team Admin */}
+            {(user.role === "team_admin" || user.role === "team_admin_coach" || user.isClubCreator) && (
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-neutral-950/60 border border-white/5 mt-1">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-white font-extrabold uppercase">Actuar como Coach</span>
+                  <span className="text-[8px] text-gray-dim mt-0.5 leading-snug">Habilita el panel de coach y la vista de atletas.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={user.role === "team_admin_coach" || user.role === "coach"}
+                  onChange={handleToggleAdminCoachSelf}
+                  className="w-4 h-4 accent-cyan-neon cursor-pointer"
+                />
+              </div>
+            )}
+
+            {/* Club Members Roster Section */}
+            {user.clubId && (user.role === "team_admin" || user.role === "team_admin_coach" || user.isClubCreator) && (
+              <div className="flex flex-col gap-2.5 border-t border-white/[0.03] pt-4 mt-2">
+                <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">Miembros del Roster ({clubMembers.length})</span>
+                
+                <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                  {clubMembers.map((member) => {
+                    const isSelf = member.uid === user.uid;
+                    const isMemberCoach = member.role === "coach" || member.role === "team_admin_coach";
+                    
+                    return (
+                      <div key={member.uid} className="flex items-center justify-between p-2 rounded-xl bg-neutral-950/60 border border-white/5">
+                        <div className="flex flex-col min-w-0 pr-2 pl-2">
+                          <span className="text-[10px] font-black text-white truncate">
+                            {member.fullName} {isSelf && <span className="text-cyan-neon font-normal text-[8px]">(Tú)</span>}
+                          </span>
+                          <span className="text-[8px] text-gray-dim uppercase mt-0.5 font-bold">
+                            {member.role === "team_admin_coach" 
+                              ? "Admin / Coach" 
+                              : member.role === "team_admin" 
+                                ? "Administrador" 
+                                : member.role === "coach" 
+                                  ? "Coach" 
+                                  : "Atleta"}
+                          </span>
+                        </div>
+
+                        <div className="flex gap-1.5 shrink-0 pr-2">
+                          {!isMemberCoach ? (
+                            <button
+                              type="button"
+                              onClick={() => handlePromoteToCoach(member.uid)}
+                              className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:bg-cyan-neon/20 text-cyan-neon font-black text-[9px] uppercase tracking-wider rounded-lg transition active:scale-95"
+                            >
+                              Hacer Coach
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isSelf && member.role === "team_admin_coach"} // cannot demote self from coach if it's the admin this way (use the toggle instead)
+                              onClick={() => handleDemoteToArcher(member.uid)}
+                              className={`px-2 py-1 bg-yellow-gold/10 border border-yellow-gold/20 hover:bg-yellow-gold/20 text-yellow-gold font-black text-[9px] uppercase tracking-wider rounded-lg transition active:scale-95 ${
+                                isSelf && member.role === "team_admin_coach" ? "opacity-50 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              Quitar Coach
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Transfer role */}
             <button

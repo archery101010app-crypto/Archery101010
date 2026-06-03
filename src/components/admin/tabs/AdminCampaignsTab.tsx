@@ -30,6 +30,9 @@ export default function AdminCampaignsTab() {
   const [targetScreens, setTargetScreens] = useState<string[]>(["HOME"]);
   const [targetRoles, setTargetRoles] = useState<("archer" | "coach")[]>(["archer", "coach"]);
   const [targetPlans, setTargetPlans] = useState<("FREE" | "PRO")[]>(["FREE"]);
+  const [fontSize, setFontSize] = useState<AdCampaign["fontSize"]>("medium");
+  const [pillStyle, setPillStyle] = useState<AdCampaign["pillStyle"]>("solid");
+  const [customHeight, setCustomHeight] = useState<number>(32);
 
   useEffect(() => {
     async function loadCampaigns() {
@@ -71,6 +74,9 @@ export default function AdminCampaignsTab() {
     setTargetScreens(["HOME", "TARGET", "HISTORY", "CALENDAR", "PROFILE"]);
     setTargetRoles(["archer", "coach"]);
     setTargetPlans(["FREE"]);
+    setFontSize("medium");
+    setPillStyle("solid");
+    setCustomHeight(32);
     setStep(1);
     setShowCreateModal(true);
   };
@@ -89,6 +95,9 @@ export default function AdminCampaignsTab() {
     setTargetScreens(campaign.targetScreens);
     setTargetRoles(campaign.targetRoles);
     setTargetPlans(campaign.targetPlans || ["FREE"]);
+    setFontSize(campaign.fontSize || "medium");
+    setPillStyle(campaign.pillStyle || "solid");
+    setCustomHeight(campaign.customHeight || 32);
     setStep(1);
     setShowCreateModal(true);
   };
@@ -166,7 +175,10 @@ export default function AdminCampaignsTab() {
       totalImpressions: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalImpressions || 0 : 0,
       totalClicks: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalClicks || 0 : 0,
       createdAt: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.createdAt || nowStr : nowStr,
-      updatedAt: nowStr
+      updatedAt: nowStr,
+      fontSize: type === "notification_bar" ? fontSize : undefined,
+      pillStyle: type === "notification_bar" ? pillStyle : undefined,
+      customHeight: type === "notification_bar" ? customHeight : undefined
     };
 
     // Save locally
@@ -686,6 +698,58 @@ export default function AdminCampaignsTab() {
                       />
                     </div>
                   )}
+
+                  {type === "notification_bar" && (
+                    <div className="flex flex-col gap-3 bg-neutral-950/40 p-4 border border-white/5 rounded-2xl">
+                      <span className="text-[9px] text-cyan-neon font-black uppercase tracking-widest block">Estilo de Píldora Superior</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: "solid", label: "Sólido" },
+                          { id: "glass", label: "Cristal" },
+                          { id: "gradient", label: "Gradiente" }
+                        ].map((style) => (
+                          <button
+                            key={style.id}
+                            type="button"
+                            onClick={() => setPillStyle(style.id as any)}
+                            className={`py-1.5 rounded-lg border text-[10px] font-bold transition ${
+                              pillStyle === style.id
+                                ? "bg-cyan-brand/10 border-cyan-neon text-white"
+                                : "bg-neutral-900 border-white/5 text-white/50"
+                            }`}
+                          >
+                            {style.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-white/50 uppercase font-bold">Tamaño de Fuente</label>
+                          <select
+                            value={fontSize}
+                            onChange={(e) => setFontSize(e.target.value as any)}
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs outline-none"
+                          >
+                            <option value="small">Pequeño (9px)</option>
+                            <option value="medium">Mediano (11px)</option>
+                            <option value="large">Grande (13px)</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-white/50 uppercase font-bold">Altura (px)</label>
+                          <input
+                            type="number"
+                            value={customHeight}
+                            onChange={(e) => setCustomHeight(Number(e.target.value))}
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs outline-none"
+                            min={24}
+                            max={60}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -817,11 +881,19 @@ export default function AdminCampaignsTab() {
                     {/* Mockup for Notification Bar */}
                     {type === "notification_bar" && (
                       <div 
-                        style={slides[0]?.backgroundColor ? { backgroundColor: slides[0]?.backgroundColor } : { backgroundImage: "linear-gradient(to right, #00BFFF, #00E5FF)" }}
-                        className="w-full h-6 rounded-lg relative flex items-center justify-between px-3 overflow-hidden text-black font-black text-[8px]"
+                        style={{
+                          height: `${customHeight}px`,
+                          fontSize: fontSize === "small" ? "8px" : fontSize === "large" ? "12px" : "10px",
+                          ...(pillStyle === "gradient" 
+                            ? { backgroundImage: "linear-gradient(to right, #00BFFF, #FF007F)", color: "#fff" } 
+                            : pillStyle === "glass"
+                              ? { backgroundColor: "rgba(10, 10, 12, 0.75)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }
+                              : { backgroundColor: slides[0]?.backgroundColor || "#00BFFF", color: "#000" })
+                        }}
+                        className="w-full max-w-xs rounded-full relative flex items-center justify-between px-3 overflow-hidden font-black text-center"
                       >
                         <span className="truncate">{slides[0]?.title || "Notificación de Alerta de Publicidad..."}</span>
-                        <span>✕</span>
+                        <span className="text-[8px] opacity-60">✕</span>
                       </div>
                     )}
                   </div>

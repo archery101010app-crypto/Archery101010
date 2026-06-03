@@ -94,7 +94,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
   useEffect(() => {
     async function loadAthletes() {
-      if (user.role === "coach" && user.clubId) {
+      if ((user.role === "coach" || user.role === "team_admin_coach") && user.clubId) {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
         let clubArchers = list.filter(u => u.clubId === user.clubId && u.role === "archer");
         
@@ -192,7 +192,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   const clubFlag = COUNTRIES.find(c => c.code === user.clubCountry)?.flag || COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
   const clubCountryName = COUNTRIES.find(c => c.code === user.clubCountry)?.name || COUNTRIES.find(c => c.code === user.country)?.name || "Costa Rica";
 
-  if (user.role === "coach" && coachViewMode) {
+  if ((user.role === "coach" || user.role === "team_admin_coach") && coachViewMode) {
     return (
       <CoachPortalView
         user={user}
@@ -404,7 +404,17 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </span>
             <span className="text-[8px] text-gray-dim truncate flex items-center gap-1 mt-0.5">
               <span>{clubFlag}</span>
-              <span>{user.role === "coach" ? "Entrenador" : "Miembro"}</span>
+              <span>
+                {user.role === "coach" 
+                  ? "Coach" 
+                  : user.role === "team_admin" 
+                    ? "Administrador" 
+                    : user.role === "team_admin_coach" 
+                      ? "Admin / Coach" 
+                      : user.role === "superadmin" 
+                        ? "Super Admin" 
+                        : "Miembro"}
+              </span>
             </span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/5 group-hover:border-cyan-neon/20 transition-all">

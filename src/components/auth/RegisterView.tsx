@@ -46,6 +46,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [clubLogo, setClubLogo] = useState("0");
   const [customLogoUrl, setCustomLogoUrl] = useState("");
   const [isCustomLogo, setIsCustomLogo] = useState(false);
+  const [actAsCoach, setActAsCoach] = useState(true);
 
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">("Barebow");
   const [bowBrand, setBowBrand] = useState("");
@@ -140,6 +141,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         clubName: clubOption === "CREATE" ? clubName : null,
         clubLogo: clubOption === "CREATE" ? (isCustomLogo ? customLogoUrl : clubLogo) : undefined,
         clubCountry: clubOption === "CREATE" ? clubCountry : undefined,
+        actAsCoach: clubOption === "CREATE" ? actAsCoach : undefined,
         bowConfig: {
           type: bowType,
           brand: bowBrand,
@@ -461,6 +463,25 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3 py-2.5 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
                       />
                     )}
+                  </div>
+
+                  {/* Coach toggle checkbox */}
+                  <div className="flex items-start gap-2.5 mt-2 bg-neutral-955 p-3 rounded-xl border border-white/5">
+                    <input
+                      type="checkbox"
+                      id="actAsCoach"
+                      checked={actAsCoach}
+                      onChange={(e) => setActAsCoach(e.target.checked)}
+                      className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 w-4 h-4 mt-0.5 cursor-pointer accent-cyan-neon"
+                    />
+                    <div className="flex flex-col cursor-pointer select-none" onClick={() => setActAsCoach(!actAsCoach)}>
+                      <label htmlFor="actAsCoach" className="text-[10px] text-white font-black uppercase cursor-pointer">
+                        Actuar también como Coach
+                      </label>
+                      <span className="text-[8px] text-gray-dim mt-0.5 leading-snug">
+                        Si se activa, podrás monitorear métricas, planificar calendarios y registrar notas para todos los arqueros que se unan a tu club.
+                      </span>
+                    </div>
                   </div>
 
                   <div className="p-3 bg-cyan-neon/5 border border-cyan-neon/20 rounded-xl text-[10px] text-cyan-neon font-medium leading-relaxed">

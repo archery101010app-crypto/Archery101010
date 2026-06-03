@@ -190,7 +190,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
               {/* World Archery Stars */}
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
                 <span className="text-[10px] text-yellow-gold font-black tracking-wider uppercase flex items-center gap-1">
-                  ★ Estrellas World Archery 720
+                  ★ Estrellas 101010 720
                 </span>
                 {maxStar ? (
                   <div className="flex flex-col gap-3">
@@ -257,7 +257,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
                   </div>
                 ) : (
                   <div className="text-center bg-neutral-950/40 p-3.5 rounded-xl border border-dashed border-white/10 text-[9px] text-gray-dim font-bold uppercase">
-                    Sin estrellas WA ganadas
+                    Sin estrellas 101010 ganadas
                   </div>
                 )}
               </div>

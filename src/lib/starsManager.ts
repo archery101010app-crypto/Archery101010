@@ -65,7 +65,7 @@ export interface StarHistoryDoc {
 }
 
 /**
- * Evaluates a completed practice session and awards a World Archery Star if eligible.
+ * Evaluates a completed practice session and awards a 101010 Star if eligible.
  */
 export async function checkAndAwardStar(
   userId: string,

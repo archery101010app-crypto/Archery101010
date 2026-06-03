@@ -60,7 +60,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-5 flex items-center justify-between z-40">
+    <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-5 flex items-center justify-between z-40">
       {/* Brand logo compact */}
       <div className="flex items-center gap-2 select-none">
         <div className="flex items-baseline gap-1">
@@ -84,7 +84,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       {/* Sync Wifi Button, Theme Selector, View Switcher & Language Selector */}
       <div className="flex items-center gap-3">
         {/* Coach View Switcher Toggle */}
-        {user && user.role === "coach" && onToggleCoachViewMode && (
+        {user && (user.role === "coach" || user.role === "team_admin_coach") && onToggleCoachViewMode && (
           <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">
             <button
               onClick={() => onToggleCoachViewMode(false)}

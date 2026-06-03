@@ -37,49 +37,87 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
   const currentSlide = campaign.slides[activeSlideIndex];
   if (!currentSlide) return null;
 
-  // Handle tap-to-close behavior: clicking anywhere on the bar (except close button)
-  // will open the link in a new tab AND close the notification bar so it doesn't block options.
+  // Handle tap-to-close behavior
   const handleBarClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest(".close-btn")) return;
+
+    // Record click
+    import("@/lib/adManager").then(({ recordClick }) => {
+      recordClick(campaign.id, currentSlide.id);
+    });
 
     // Open target link
     if (currentSlide.linkUrl) {
       window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
     }
     
-    // Close immediately to expose underlying UI
+    // Close immediately
     setIsVisible(false);
     onClose();
   };
 
-  const bgStyle = currentSlide.backgroundColor 
-    ? { backgroundColor: currentSlide.backgroundColor }
-    : { backgroundImage: "linear-gradient(to right, #00BFFF, #00E5FF)" }; // default cyan gradient
+  // Record impression on load
+  useEffect(() => {
+    import("@/lib/adManager").then(({ recordImpression }) => {
+      recordImpression(campaign.id, "anonymous-visitor");
+    });
+  }, [campaign.id, activeSlideIndex]);
+
+  // Get style configurations
+  const heightVal = campaign.customHeight || 32;
+  const pillStyle = campaign.pillStyle || "solid";
+  const sizeClass = campaign.fontSize === "small" 
+    ? "text-[9px]" 
+    : campaign.fontSize === "large" 
+      ? "text-[13px]" 
+      : "text-[11px]"; // default medium
+
+  // Default color is the branding color (cyan-neon) if solid and no custom color
+  const defaultBg = "#00BFFF"; // Cyan oficial
+
+  let styleObj: React.CSSProperties = {
+    height: `${heightVal}px`,
+  };
+
+  let classNameVal = "max-w-xs sm:max-w-md md:max-w-xl h-full shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center justify-between px-4 cursor-pointer rounded-full border transition duration-200 ";
+
+  if (pillStyle === "glass") {
+    classNameVal += "bg-neutral-950/75 backdrop-blur-md border-white/10 text-white hover:bg-neutral-900/80";
+  } else if (pillStyle === "gradient") {
+    // Beautiful premium gradient using brand colors
+    styleObj.backgroundImage = "linear-gradient(135deg, #00BFFF 0%, #FF007F 100%)"; // Cyan to Red Rival
+    classNameVal += "border-white/20 text-white hover:brightness-110";
+  } else {
+    // Solid style
+    styleObj.backgroundColor = currentSlide.backgroundColor || defaultBg;
+    classNameVal += "border-transparent text-black font-extrabold hover:brightness-110";
+  }
 
   return (
     <AnimatePresence>
       <div 
-        className="fixed top-0 left-0 right-0 z-50 h-7 w-full flex justify-center"
+        className="fixed left-1/2 -translate-x-1/2 z-[100] flex justify-center w-auto px-4"
+        style={{ top: "calc(0.5rem + env(safe-area-inset-top))" }}
       >
         <motion.div
-          initial={{ y: -30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -30, opacity: 0 }}
-          style={bgStyle}
-          className="w-full max-w-5xl h-full shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-between px-4 cursor-pointer relative"
+          initial={{ y: -50, opacity: 0, scale: 0.9 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: -50, opacity: 0, scale: 0.9 }}
+          style={styleObj}
+          className={classNameVal}
           onClick={handleBarClick}
         >
           {/* Main content - slide transition */}
-          <div className="flex-1 overflow-hidden relative h-full flex items-center">
+          <div className="flex-1 overflow-hidden relative h-full flex items-center pr-2">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeSlideIndex}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="text-[10px] font-black text-black select-none tracking-wide whitespace-nowrap flex items-center gap-1.5 animate-[marquee_25s_linear_infinite] hover:[animation-play-state:paused]"
+                className={`${sizeClass} font-black select-none tracking-wide flex items-center gap-1.5`}
               >
                 <span>{currentSlide.title || "Anuncio Importante"}</span>
                 {currentSlide.linkUrl && <ExternalLink size={10} className="inline opacity-80" />}
@@ -94,19 +132,11 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
               setIsVisible(false);
               onClose();
             }}
-            className="close-btn p-0.5 rounded-full hover:bg-black/10 text-black/60 hover:text-black transition duration-200 cursor-pointer flex items-center justify-center ml-2"
+            className="close-btn p-1 rounded-full bg-black/10 hover:bg-black/20 text-current hover:scale-105 transition duration-200 cursor-pointer flex items-center justify-center"
           >
-            <X size={12} />
+            <X size={10} />
           </button>
         </motion.div>
-
-        {/* Global style for marquee keyframes */}
-        <style jsx global>{`
-          @keyframes marquee {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-          }
-        `}</style>
       </div>
     </AnimatePresence>
   );

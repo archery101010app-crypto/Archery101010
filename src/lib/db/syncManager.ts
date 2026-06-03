@@ -38,11 +38,17 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
 
   try {
     let queue = await getSyncQueue();
+    const skippedIds = new Set<string>();
     
     while (queue.length > 0) {
+      const item = queue.find((i) => !skippedIds.has(i.id));
+      if (!item) {
+        // No more items can be processed in this run
+        break;
+      }
+
       if (onProgressUpdate) onProgressUpdate(queue.length, `Subiendo ${queue.length} pendiente(s)...`);
       
-      const item = queue[0];
       const docRef = doc(db, item.collection, item.payloadId);
 
       try {
@@ -52,7 +58,7 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
         } else if (item.operation === "UPDATE") {
           await withTimeout(updateDoc(docRef, { ...item.payload, updatedAt: Date.now() }), NETWORK_TIMEOUT_MS);
         } else if (item.operation === "DELETE") {
-          await withTimeout(withTimeout(deleteDoc(docRef), NETWORK_TIMEOUT_MS), NETWORK_TIMEOUT_MS);
+          await withTimeout(deleteDoc(docRef), NETWORK_TIMEOUT_MS);
         }
 
         // Success: Remove item from queue
@@ -65,6 +71,9 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
           status: "failed",
           attempts: item.attempts + 1
         });
+
+        // Skip it for this run to avoid infinite loop
+        skippedIds.add(item.id);
         
         // Network failure: break queue loop to retry later, avoiding locking the thread on repeated timeouts
         if (err.message === "NETWORK_TIMEOUT" || !navigator.onLine) {

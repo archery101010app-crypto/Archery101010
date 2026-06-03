@@ -26,7 +26,7 @@ export interface UserProfile {
   clubName: string | null;
   clubLogo?: string; // index "0"-"4" or URL
   clubCountry?: string; // country code for club flag
-  role: "archer" | "coach" | "admin" | "superadmin";
+  role: "archer" | "coach" | "team_admin" | "team_admin_coach" | "superadmin";
   plan: "FREE" | "PRO";
   isClubCreator: boolean;
   whatsappNumber?: string;
@@ -148,7 +148,9 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   return user;
 }
 
-export async function registerUser(profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode"> & { password?: string }): Promise<UserProfile> {
+export async function registerUser(
+  profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode"> & { password?: string; actAsCoach?: boolean }
+): Promise<UserProfile> {
   const uid = generateResilientId("USR");
   
   // Rule 8: Es coach si es mayor de edad (>=18 años) y es el que se registra de primero en un club que crea
@@ -163,47 +165,50 @@ export async function registerUser(profileData: Omit<UserProfile, "uid" | "role"
 
   const isAdult = age >= 18;
   
-  let finalRole: "archer" | "coach" = "archer";
+  let finalRole: UserProfile["role"] = "archer";
   let isCreator = false;
   let inviteCode = "";
   let clubLogo = profileData.clubLogo || "0";
   let clubCountry = profileData.clubCountry || profileData.country;
 
+  // Extract actAsCoach to avoid adding it to the final UserProfile object
+  const { actAsCoach, ...userFields } = profileData;
+
   if (profileData.clubId === "CREATE_NEW" && isAdult) {
-    finalRole = "coach";
+    finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
     isCreator = true;
-    profileData.clubId = generateResilientId("CLB");
+    userFields.clubId = generateResilientId("CLB");
     inviteCode = `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
     // If minor, they cannot create a club, default to independent archer
-    profileData.clubId = null;
-    profileData.clubName = null;
+    userFields.clubId = null;
+    userFields.clubName = null;
     finalRole = "archer";
   } else if (profileData.clubId && profileData.clubId !== "NONE") {
     // Joining an existing club via invite code
     finalRole = "archer";
     const invite = profileData.clubId; // the invite code entered
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const clubCoach = usersList.find((u) => u.role === "coach" && u.clubInviteCode === invite);
+    const clubCoach = usersList.find((u) => (u.role === "coach" || u.role === "team_admin_coach") && u.clubInviteCode === invite);
     if (clubCoach) {
-      profileData.clubId = clubCoach.clubId;
-      profileData.clubName = clubCoach.clubName;
+      userFields.clubId = clubCoach.clubId;
+      userFields.clubName = clubCoach.clubName;
       clubLogo = clubCoach.clubLogo || "0";
       clubCountry = clubCoach.clubCountry || clubCoach.country;
     } else {
       // fallback
-      profileData.clubId = "CLB-JOINED";
-      profileData.clubName = "Club Unido";
+      userFields.clubId = "CLB-JOINED";
+      userFields.clubName = "Club Unido";
     }
   } else {
     // Independent
-    profileData.clubId = null;
-    profileData.clubName = null;
+    userFields.clubId = null;
+    userFields.clubName = null;
     finalRole = "archer";
   }
 
   const newProfile: UserProfile = {
-    ...profileData,
+    ...userFields,
     uid,
     role: finalRole,
     plan: "FREE", // default register is free tier
@@ -243,9 +248,9 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   if (index !== -1) {
     let updatedUser = { ...usersList[index], ...updates };
 
-    // Propagation: If Coach updates club name, country or logo, cascade to all club members
+    // Propagation: If Coach/Admin updates club name, country or logo, cascade to all club members
     if (
-      updatedUser.role === "coach" && 
+      (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") && 
       updatedUser.clubId && 
       (updates.clubName !== undefined || updates.clubLogo !== undefined || updates.clubCountry !== undefined)
     ) {
@@ -274,7 +279,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     if (currentLogged && currentLogged.uid === uid) {
       // Refresh current user cache with all propagated changes too
       currentLogged = { ...currentLogged, ...updates };
-      if (updatedUser.role === "coach") {
+      if (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") {
         currentLogged.clubLogo = updatedUser.clubLogo;
         currentLogged.clubCountry = updatedUser.clubCountry;
         currentLogged.clubName = updatedUser.clubName;

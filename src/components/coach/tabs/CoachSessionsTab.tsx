@@ -128,16 +128,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         </div>
       )}
 
-      {/* Ranking de Estrellas WA */}
+      {/* Ranking de Estrellas 101010 */}
       <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
           <span className="text-yellow-gold text-sm">★</span>
-          Clasificación de Estrellas WA 720
+          Clasificación de Estrellas 101010 (720)
         </h4>
 
         {starRanking.length === 0 ? (
           <div className="text-center text-[10px] text-gray-dim py-4 border border-dashed border-white/5 rounded-xl">
-            Aún ningún arquero del roster ha ganado una Estrella WA 720.
+            Aún ningún arquero del roster ha ganado una Estrella 101010 (720).
           </div>
         ) : (
           <div className="flex flex-col gap-2">

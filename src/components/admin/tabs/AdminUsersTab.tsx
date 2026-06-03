@@ -52,8 +52,8 @@ export default function AdminUsersTab() {
 
     try {
       const { updateProfile } = await import("@/lib/authService");
-      const roles: ("archer" | "coach" | "admin" | "superadmin")[] = ["archer", "coach", "admin", "superadmin"];
-      const currentIndex = roles.indexOf(userToUpdate.role as any);
+      const roles: UserProfile["role"][] = ["archer", "coach", "team_admin", "superadmin"];
+      const currentIndex = roles.indexOf(userToUpdate.role);
       const nextIndex = (currentIndex + 1) % roles.length;
       const newRole = roles[nextIndex];
 
@@ -74,7 +74,7 @@ export default function AdminUsersTab() {
       roleFilter === "ALL" || 
       (roleFilter === "COACH" && u.role === "coach") ||
       (roleFilter === "ARCHER" && u.role === "archer") ||
-      (roleFilter === "ADMIN" && (u.role === "admin" || u.role === "superadmin"));
+      (roleFilter === "ADMIN" && (u.role === "team_admin" || u.role === "team_admin_coach" || u.role === "superadmin"));
 
     const matchesPlan = 
       planFilter === "ALL" || 

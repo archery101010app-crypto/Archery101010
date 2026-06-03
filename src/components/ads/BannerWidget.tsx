@@ -8,22 +8,21 @@ import { AdCampaign } from "@/lib/db/adTypes";
 interface BannerWidgetProps {
   campaign: AdCampaign | null;
   onSlideClick: (slideId: string, linkUrl: string) => void;
+  onClose?: () => void;
 }
 
-export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetProps) {
+export default function BannerWidget({ campaign, onSlideClick, onClose }: BannerWidgetProps) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
   const [direction, setDirection] = useState(0); // -1 for left, 1 for right
 
-  // Reset visibility when campaign changes
+  // Reset active slide index when campaign changes
   useEffect(() => {
-    setIsVisible(true);
     setActiveSlideIndex(0);
   }, [campaign]);
 
   // Auto transition
   useEffect(() => {
-    if (!campaign || !isVisible || campaign.slides.length <= 1) return;
+    if (!campaign || campaign.slides.length <= 1) return;
 
     const intervalSeconds = campaign.slideIntervalSeconds || 5;
     const interval = setInterval(() => {
@@ -32,9 +31,9 @@ export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetPro
     }, intervalSeconds * 1000);
 
     return () => clearInterval(interval);
-  }, [campaign, isVisible]);
+  }, [campaign]);
 
-  if (!campaign || !isVisible) return null;
+  if (!campaign) return null;
 
   const slides = campaign.slides;
   const currentSlide = slides[activeSlideIndex];
@@ -79,11 +78,13 @@ export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetPro
   };
 
   return (
-    <div className="fixed top-16 left-0 right-0 z-30 h-20 w-full px-0 md:px-4 flex justify-center pointer-events-none">
-      <motion.div
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: -50, opacity: 0 }}
+    <motion.div
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -50, opacity: 0 }}
+      className="fixed top-16 left-0 right-0 z-30 h-20 w-full px-0 md:px-4 flex justify-center pointer-events-none"
+    >
+      <div
         className="w-full max-w-5xl h-full bg-[#0E0E12] border-b md:border border-white/10 md:rounded-2xl overflow-hidden relative shadow-[0_4px_20px_rgba(0,0,0,0.4)] flex items-center pointer-events-auto cursor-pointer"
         onClick={handleBannerClick}
       >
@@ -166,14 +167,14 @@ export default function BannerWidget({ campaign, onSlideClick }: BannerWidgetPro
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setIsVisible(false);
+              if (onClose) onClose();
             }}
             className="close-btn p-1.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-white/10"
           >
             <X size={14} />
           </button>
         </div>
-      </motion.div>
-    </div>
+      </div>
+    </motion.div>
   );
 }

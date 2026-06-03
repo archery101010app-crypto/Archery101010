@@ -1,13 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
 import "./globals.css";
 import IPhoneFrame from "@/components/ui/IPhoneFrame";
-
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
-  variable: "--font-outfit",
-});
 
 export const metadata: Metadata = {
   title: "Archery 101010 - SaaS Premium de Tiro con Arco",
@@ -36,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${outfit.variable} h-full antialiased dark`} style={{ colorScheme: "dark" }}>
+    <html lang="es" className="h-full antialiased dark" style={{ colorScheme: "dark" }}>
       <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none">
         <ServiceWorkerRegister />
         <LanguageProvider>

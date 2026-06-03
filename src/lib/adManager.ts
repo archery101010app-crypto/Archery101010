@@ -24,7 +24,7 @@ export async function getNextPopup(
         const isTargetScreen = c.targetScreens.includes(currentScreen);
         const isTargetRole = c.targetRoles.includes(userRole as any);
         const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
-        const isTargetPlan = plans.includes(userPlan as any);
+        const isTargetPlan = userRole === "superadmin" || plans.includes(userPlan as any);
         
         const matches = isPopup && isActive && isTargetScreen && isTargetRole && isTargetPlan;
         
@@ -98,7 +98,7 @@ export async function getActiveBannerCampaign(
         const isTargetScreen = c.targetScreens.includes(currentScreen);
         const isTargetRole = c.targetRoles.includes(userRole as any);
         const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
-        const isTargetPlan = plans.includes(userPlan as any);
+        const isTargetPlan = userRole === "superadmin" || plans.includes(userPlan as any);
         
         return isBanner && isActive && isTargetScreen && isTargetRole && isTargetPlan;
       }
@@ -130,7 +130,7 @@ export async function getActiveNotificationBar(
         const isTargetScreen = c.targetScreens.includes(currentScreen);
         const isTargetRole = c.targetRoles.includes(userRole as any);
         const plans = c.targetPlans && c.targetPlans.length > 0 ? c.targetPlans : ["FREE"];
-        const isTargetPlan = plans.includes(userPlan as any);
+        const isTargetPlan = userRole === "superadmin" || plans.includes(userPlan as any);
         
         return isBar && isActive && isTargetScreen && isTargetRole && isTargetPlan;
       }
@@ -170,10 +170,25 @@ export async function recordImpression(campaignId: string, visitorId: string): P
     // Also update campaign statistics
     const campaign = await adCampaignsStore.getItem<AdCampaign>(campaignId);
     if (campaign) {
-      await adCampaignsStore.setItem(campaignId, {
+      const updatedCampaign = {
         ...campaign,
         totalImpressions: (campaign.totalImpressions || 0) + 1,
         updatedAt: new Date().toISOString(),
+      };
+      await adCampaignsStore.setItem(campaignId, updatedCampaign);
+
+      // Enqueue sync item to Firestore
+      const { addToSyncQueue } = await import("@/lib/db/indexedDB");
+      await addToSyncQueue({
+        id: generateResilientId("TX-AD"),
+        collection: "ad_campaigns",
+        operation: "UPDATE",
+        payloadId: campaignId,
+        payload: {
+          totalImpressions: updatedCampaign.totalImpressions,
+          updatedAt: updatedCampaign.updatedAt
+        },
+        timestamp: Date.now()
       });
     }
   } catch (error) {
@@ -186,10 +201,25 @@ export async function recordClick(campaignId: string, slideId: string): Promise<
   try {
     const campaign = await adCampaignsStore.getItem<AdCampaign>(campaignId);
     if (campaign) {
-      await adCampaignsStore.setItem(campaignId, {
+      const updatedCampaign = {
         ...campaign,
         totalClicks: (campaign.totalClicks || 0) + 1,
         updatedAt: new Date().toISOString(),
+      };
+      await adCampaignsStore.setItem(campaignId, updatedCampaign);
+
+      // Enqueue sync item to Firestore
+      const { addToSyncQueue } = await import("@/lib/db/indexedDB");
+      await addToSyncQueue({
+        id: generateResilientId("TX-AD"),
+        collection: "ad_campaigns",
+        operation: "UPDATE",
+        payloadId: campaignId,
+        payload: {
+          totalClicks: updatedCampaign.totalClicks,
+          updatedAt: updatedCampaign.updatedAt
+        },
+        timestamp: Date.now()
       });
     }
   } catch (error) {
