@@ -14,7 +14,7 @@ interface HeaderProps {
 }
 
 export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const { pendingCount, syncStatus, isSyncing, triggerSync } = useSync();
   const [showStatusTooltip, setShowStatusTooltip] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -109,25 +109,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
           </div>
         )}
 
-        {/* Compact i18n selector */}
-        <div className="flex bg-neutral-900/60 p-0.5 rounded-full border border-gray-border">
-          <button
-            onClick={() => setLanguage("es")}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
-              language === "es" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
-            }`}
-          >
-            ES
-          </button>
-          <button
-            onClick={() => setLanguage("en")}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
-              language === "en" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
-            }`}
-          >
-            EN
-          </button>
-        </div>
+
 
         {/* Contrast Toggle Button */}
         <motion.button

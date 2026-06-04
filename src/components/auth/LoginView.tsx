@@ -12,7 +12,7 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess, onNavigateToRegister }: LoginViewProps) {
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -111,31 +111,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
   return (
     <div className="flex-1 flex flex-col justify-between px-6 pt-12 pb-6 min-h-full">
-      {/* Top Bar with Language Selector */}
-      <div className="flex justify-end items-center mb-6">
-        <div className="flex bg-neutral-900/60 p-0.5 rounded-full border border-gray-border">
-          <button
-            onClick={() => setLanguage("es")}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
-              language === "es"
-                ? "bg-cyan-neon/10 border border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                : "bg-transparent border border-transparent text-gray-dim hover:text-white"
-            }`}
-          >
-            ES
-          </button>
-          <button
-            onClick={() => setLanguage("en")}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
-              language === "en"
-                ? "bg-cyan-neon/10 border border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                : "bg-transparent border border-transparent text-gray-dim hover:text-white"
-            }`}
-          >
-            EN
-          </button>
-        </div>
-      </div>
+
 
       {/* Brand logo section */}
       <div className="flex flex-col items-center justify-center my-auto py-6">
