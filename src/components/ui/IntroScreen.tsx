@@ -11,7 +11,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    // Show the minimal branding animation for 6 seconds, then trigger exit transition
+    // Show the branding animation for 6 seconds, then trigger exit transition
     const timerExit = setTimeout(() => {
       setIsExiting(true);
       const timerComplete = setTimeout(onComplete, 700);
@@ -40,7 +40,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         Saltar
       </button>
 
-      {/* Top Tagline in Good Times font, a bit larger */}
+      {/* Top Tagline in Good Times font */}
       <motion.div
         initial={{ y: -15, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -55,44 +55,41 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </motion.div>
 
-      {/* Central Clean Logo & Logotype */}
-      <div className="relative flex flex-col items-center justify-center w-full flex-1 my-4">
-        {/* Main Logo & Text Overlay (Strictly minimal, no HUD, no orbits, no grids) */}
-        <div className="relative z-10 flex flex-col items-center gap-6">
-          {/* Main Logo Icon */}
+      {/* Central HUD with concentric circles and large logo */}
+      <div className="relative flex items-center justify-center w-full flex-1 my-4">
+        {/* Concentric HUD Rings (Returned) */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute w-64 h-64 rounded-full border border-dashed border-cyan-neon/15 flex items-center justify-center pointer-events-none"
+        >
+          <div className="w-56 h-56 rounded-full border border-dotted border-red-rival/10" />
+        </motion.div>
+
+        <motion.div
+          animate={{ rotate: -360 }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="absolute w-48 h-48 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none"
+        />
+
+        {/* Central glowing backdrop light */}
+        <div className="absolute w-32 h-32 rounded-full bg-cyan-neon/5 blur-xl pointer-events-none" />
+
+        {/* Centered Large Main Logo */}
+        <div className="relative z-10 flex flex-col items-center justify-center">
           <motion.img
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.2 }}
+            initial={{ scale: 0.7, rotate: -45, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 70, damping: 14, delay: 0.2 }}
             src="/images/logo1.png"
             alt="Archery 101010 Logo Icon"
-            className="w-20 h-20 object-contain drop-shadow-[0_0_20px_rgba(0,191,255,0.3)]"
+            className="w-32 h-32 object-contain drop-shadow-[0_0_25px_rgba(0,191,255,0.45)]"
           />
-
-          {/* 10 10 10 Logotype */}
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.4, type: "spring", stiffness: 90 }}
-            className="flex flex-baseline gap-1"
-          >
-            <div 
-              className="flex text-5xl tracking-tighter font-extrabold" 
-              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-            >
-              <span className="text-cyan-neon">10</span>
-              <span className="text-red-rival">10</span>
-              <span className="text-yellow-gold">10</span>
-            </div>
-            <span className="text-cyan-neon/60 text-xs font-black tracking-wider pl-0.5 align-super">
-              v1.1
-            </span>
-          </motion.div>
         </div>
       </div>
 
-      {/* Bottom Slogan */}
-      <div className="w-full flex flex-col items-center justify-center min-h-[50px]">
+      {/* Bottom Slogan with curved tricolor line (Returned) */}
+      <div className="w-full flex flex-col items-center justify-center min-h-[80px]">
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -102,6 +99,34 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         >
           Your Archery App
         </motion.h1>
+
+        {/* Dynamic tricolor underline stroke */}
+        <div className="w-48 h-6 relative overflow-hidden mt-1">
+          <svg
+            width="100%"
+            height="100%"
+            viewBox="0 0 200 20"
+            className="absolute inset-0 pointer-events-none opacity-80"
+          >
+            <motion.path
+              d="M 15,5 Q 100,14 185,5"
+              fill="none"
+              stroke="url(#slogan-gradient)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 1.5, ease: "easeInOut", delay: 1.0 }}
+            />
+            <defs>
+              <linearGradient id="slogan-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#00BFFF" /> {/* Cyan */}
+                <stop offset="50%" stopColor="#FF0000" /> {/* Red */}
+                <stop offset="100%" stopColor="#FFE500" /> {/* Yellow */}
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
       </div>
     </div>
   );
