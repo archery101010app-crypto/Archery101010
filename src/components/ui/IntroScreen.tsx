@@ -28,7 +28,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
 
   return (
     <div
-      className={`absolute inset-0 z-[60] bg-black flex flex-col items-center justify-between py-16 px-6 overflow-hidden transition-opacity duration-700 ${
+      className={`absolute inset-0 z-[60] bg-black flex flex-col items-center justify-between py-16 px-0 overflow-hidden transition-opacity duration-700 ${
         isExiting ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
@@ -40,12 +40,12 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         Saltar
       </button>
 
-      {/* Top Tagline in Good Times font */}
+      {/* Top Tagline in Good Times font - bounded in px-6 for spacing */}
       <motion.div
         initial={{ y: -15, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="text-center"
+        className="text-center px-6"
       >
         <span 
           className="text-xs sm:text-sm text-cyan-neon font-black tracking-[0.25em] uppercase block"
@@ -55,8 +55,8 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </motion.div>
 
-      {/* Central HUD with concentric circles and giant logo */}
-      <div className="relative flex items-center justify-center w-full flex-1 my-4">
+      {/* Central HUD with concentric circles and giant full-width logo */}
+      <div className="relative flex items-center justify-center w-full flex-1 my-4 px-0">
         {/* Concentric HUD Rings */}
         <motion.div
           animate={{ rotate: 360 }}
@@ -72,29 +72,29 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
           className="absolute w-56 h-56 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none"
         />
 
-        {/* Central glowing backdrop light (Increased for white text contrast) */}
-        <div className="absolute w-64 h-64 rounded-full bg-cyan-neon/5 blur-3xl pointer-events-none" />
-        <div className="absolute w-48 h-48 rounded-full bg-white/[0.04] blur-2xl pointer-events-none" />
+        {/* Central glowing backdrop light */}
+        <div className="absolute w-72 h-72 rounded-full bg-cyan-neon/5 blur-3xl pointer-events-none" />
+        <div className="absolute w-60 h-60 rounded-full bg-white/[0.03] blur-2xl pointer-events-none" />
 
-        {/* Centered Giant Main Logo (Protrudes outside the circles, dynamic zoom-in, no rotation) */}
-        <div className="relative z-10 flex items-center justify-center w-full max-w-[350px]">
+        {/* Centered Giant Logo (Occupies the entire screen width, dynamic zoom-in, no rotation) */}
+        <div className="relative z-10 flex items-center justify-center w-full px-0">
           <motion.img
             initial={{ scale: 0.05, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ 
               duration: 1.5, 
-              ease: [0.34, 1.56, 0.64, 1], // Custom back-out overshoot curve for dramatic entrance
+              ease: [0.34, 1.56, 0.64, 1], // Custom overshoot pop-in curve
               delay: 0.2 
             }}
-            src="/images/logo3.png"
+            src="/images/logo_final.png"
             alt="Archery 101010 Logo"
-            className="w-[340px] h-[340px] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.18)] drop-shadow-[0_0_35px_rgba(0,191,255,0.35)]"
+            className="w-full h-auto max-h-[380px] object-contain drop-shadow-[0_0_30px_rgba(0,191,255,0.4)]"
           />
         </div>
       </div>
 
-      {/* Bottom Slogan with curved tricolor line */}
-      <div className="w-full flex flex-col items-center justify-center min-h-[80px]">
+      {/* Bottom Slogan - bounded in px-6 for spacing */}
+      <div className="w-full flex flex-col items-center justify-center min-h-[80px] px-6">
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
