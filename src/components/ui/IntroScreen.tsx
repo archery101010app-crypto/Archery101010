@@ -55,7 +55,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </motion.div>
 
-      {/* Central HUD with concentric circles and extra-large logo */}
+      {/* Central HUD with concentric circles and giant logo */}
       <div className="relative flex items-center justify-center w-full flex-1 my-4">
         {/* Concentric HUD Rings */}
         <motion.div
@@ -72,11 +72,12 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
           className="absolute w-56 h-56 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none"
         />
 
-        {/* Central glowing backdrop light */}
-        <div className="absolute w-48 h-48 rounded-full bg-cyan-neon/5 blur-2xl pointer-events-none" />
+        {/* Central glowing backdrop light (Increased for white text contrast) */}
+        <div className="absolute w-64 h-64 rounded-full bg-cyan-neon/5 blur-3xl pointer-events-none" />
+        <div className="absolute w-48 h-48 rounded-full bg-white/[0.04] blur-2xl pointer-events-none" />
 
-        {/* Centered Extra-Large Main Logo (Protrudes outside the circles, dynamic zoom-in) */}
-        <div className="relative z-10 flex flex-col items-center justify-center">
+        {/* Centered Giant Main Logo (Protrudes outside the circles, dynamic zoom-in, no rotation) */}
+        <div className="relative z-10 flex items-center justify-center w-full max-w-[350px]">
           <motion.img
             initial={{ scale: 0.05, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -85,9 +86,9 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
               ease: [0.34, 1.56, 0.64, 1], // Custom back-out overshoot curve for dramatic entrance
               delay: 0.2 
             }}
-            src="/images/logo1.png"
-            alt="Archery 101010 Logo Icon"
-            className="w-80 h-80 object-contain drop-shadow-[0_0_35px_rgba(0,191,255,0.5)]"
+            src="/images/logo3.png"
+            alt="Archery 101010 Logo"
+            className="w-[340px] h-[340px] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.18)] drop-shadow-[0_0_35px_rgba(0,191,255,0.35)]"
           />
         </div>
       </div>
