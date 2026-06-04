@@ -86,7 +86,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
               ease: [0.34, 1.56, 0.64, 1], // Custom overshoot pop-in curve
               delay: 0.2 
             }}
-            src="/images/logo_final.png"
+            src="/images/logo_final.png?v=3"
             alt="Archery 101010 Logo"
             className="w-full h-auto max-h-[380px] object-contain drop-shadow-[0_0_30px_rgba(0,191,255,0.4)]"
           />
