@@ -55,40 +55,40 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </span>
       </motion.div>
 
-      {/* Central HUD with concentric circles and large logo */}
+      {/* Central HUD with concentric circles and extra-large logo */}
       <div className="relative flex items-center justify-center w-full flex-1 my-4">
-        {/* Concentric HUD Rings (Returned) */}
+        {/* Concentric HUD Rings */}
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute w-64 h-64 rounded-full border border-dashed border-cyan-neon/15 flex items-center justify-center pointer-events-none"
+          className="absolute w-72 h-72 rounded-full border border-dashed border-cyan-neon/15 flex items-center justify-center pointer-events-none"
         >
-          <div className="w-56 h-56 rounded-full border border-dotted border-red-rival/10" />
+          <div className="w-64 h-64 rounded-full border border-dotted border-red-rival/10" />
         </motion.div>
 
         <motion.div
           animate={{ rotate: -360 }}
           transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-          className="absolute w-48 h-48 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none"
+          className="absolute w-56 h-56 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none"
         />
 
         {/* Central glowing backdrop light */}
-        <div className="absolute w-32 h-32 rounded-full bg-cyan-neon/5 blur-xl pointer-events-none" />
+        <div className="absolute w-44 h-44 rounded-full bg-cyan-neon/5 blur-xl pointer-events-none" />
 
-        {/* Centered Large Main Logo */}
+        {/* Centered Large Main Logo (Zoom-in towards the screen, no rotation) */}
         <div className="relative z-10 flex flex-col items-center justify-center">
           <motion.img
-            initial={{ scale: 0.7, rotate: -45, opacity: 0 }}
-            animate={{ scale: 1, rotate: 0, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 70, damping: 14, delay: 0.2 }}
+            initial={{ scale: 0.1, opacity: 0 }}
+            animate={{ scale: [0.1, 1.12, 1], opacity: 1 }}
+            transition={{ duration: 1.1, ease: "easeOut", delay: 0.2 }}
             src="/images/logo1.png"
             alt="Archery 101010 Logo Icon"
-            className="w-32 h-32 object-contain drop-shadow-[0_0_25px_rgba(0,191,255,0.45)]"
+            className="w-52 h-52 object-contain drop-shadow-[0_0_30px_rgba(0,191,255,0.45)]"
           />
         </div>
       </div>
 
-      {/* Bottom Slogan with curved tricolor line (Returned) */}
+      {/* Bottom Slogan with curved tricolor line */}
       <div className="w-full flex flex-col items-center justify-center min-h-[80px]">
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
