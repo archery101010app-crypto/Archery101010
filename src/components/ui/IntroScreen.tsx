@@ -73,17 +73,21 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         />
 
         {/* Central glowing backdrop light */}
-        <div className="absolute w-44 h-44 rounded-full bg-cyan-neon/5 blur-xl pointer-events-none" />
+        <div className="absolute w-48 h-48 rounded-full bg-cyan-neon/5 blur-2xl pointer-events-none" />
 
-        {/* Centered Large Main Logo (Zoom-in towards the screen, no rotation) */}
+        {/* Centered Extra-Large Main Logo (Protrudes outside the circles, dynamic zoom-in) */}
         <div className="relative z-10 flex flex-col items-center justify-center">
           <motion.img
-            initial={{ scale: 0.1, opacity: 0 }}
-            animate={{ scale: [0.1, 1.12, 1], opacity: 1 }}
-            transition={{ duration: 1.1, ease: "easeOut", delay: 0.2 }}
+            initial={{ scale: 0.05, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ 
+              duration: 1.5, 
+              ease: [0.34, 1.56, 0.64, 1], // Custom back-out overshoot curve for dramatic entrance
+              delay: 0.2 
+            }}
             src="/images/logo1.png"
             alt="Archery 101010 Logo Icon"
-            className="w-52 h-52 object-contain drop-shadow-[0_0_30px_rgba(0,191,255,0.45)]"
+            className="w-80 h-80 object-contain drop-shadow-[0_0_35px_rgba(0,191,255,0.5)]"
           />
         </div>
       </div>
