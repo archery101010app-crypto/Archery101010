@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "test": "archery101010-tst",
+    "prod": "archery101010-prd"
+  }
+}

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy:test": "next build && firebase deploy -P test",
+    "deploy:prod": "next build && firebase deploy -P prod"
   },
   "dependencies": {
     "@paypal/react-paypal-js": "^9.2.0",
