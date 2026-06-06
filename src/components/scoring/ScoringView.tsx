@@ -89,6 +89,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     value: ""
   });
   const [estaScrolleando, setEstaScrolleando] = useState(false);
+  const [animatingValue, setAnimatingValue] = useState<{ value: string; id: number } | null>(null);
+
+  // Auto-clear shot value pop animation after 800ms
+  useEffect(() => {
+    if (!animatingValue) return;
+    const timer = setTimeout(() => {
+      setAnimatingValue(null);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [animatingValue]);
 
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -389,6 +399,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     setImpacts((prev) => [...prev, newImpact]);
     handleScoreInput(value);
+
+    // Trigger pop animation
+    setAnimatingValue({ value, id: Date.now() });
 
     // Haptic feedback
     if (navigator.vibrate) {
@@ -936,6 +949,68 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         {mode === "TARGET" ? (
           // TARGET MODE (Diana SVG)
           <div className="flex-1 flex flex-col gap-4 relative">
+            {/* Floating Animated Shot Value Badge */}
+            <AnimatePresence>
+              {animatingValue && (
+                <motion.div
+                  key={animatingValue.id}
+                  initial={{ scale: 0.3, opacity: 0, y: 10 }}
+                  animate={{ scale: [1, 1.4, 1], opacity: [0, 1, 1, 0], y: [0, -30, -50] }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "45%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 9999,
+                    pointerEvents: "none"
+                  }}
+                  className={`px-6 py-4 rounded-3xl border-2 font-black text-4xl shadow-2xl flex items-center justify-center ${
+                    animatingValue.value === "X" || animatingValue.value === "10" || animatingValue.value === "9"
+                      ? "bg-yellow-gold border-yellow-gold text-black shadow-[0_0_30px_rgba(255,242,0,0.5)]"
+                      : animatingValue.value === "8" || animatingValue.value === "7"
+                      ? "bg-red-500 border-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+                      : animatingValue.value === "6" || animatingValue.value === "5"
+                      ? "bg-blue-500 border-blue-500 text-white shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                      : animatingValue.value === "4" || animatingValue.value === "3"
+                      ? "bg-neutral-900 border-neutral-700 text-white shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+                      : "bg-red-rival border-red-rival text-white shadow-[0_0_30px_rgba(255,59,48,0.5)]"
+                  }`}
+                >
+                  {animatingValue.value}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Parciales del End Activo */}
+            <div className="flex justify-center items-center gap-2.5 py-1.5 px-4 bg-neutral-900/30 rounded-2xl border border-white/5 mx-4">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">
+                Parciales:
+              </span>
+              <div className="flex gap-1.5">
+                {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
+                  const isCellEditing = currentArrowIdx === arrowIdx;
+                  return (
+                    <div
+                      key={arrowIdx}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs border transition-all ${getArrowColorClass(
+                        a
+                      )} ${
+                        isCellEditing
+                          ? "border-cyan-neon ring-1 ring-cyan-neon shadow-glow-cyan bg-cyan-neon/5"
+                          : ""
+                      }`}
+                    >
+                      {a || "—"}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="ml-auto px-2.5 py-1 rounded-lg bg-neutral-950 border border-white/5 font-extrabold text-[10px] text-cyan-neon">
+                Suma: {calculateEndTotal(currentEndIdx)} pts
+              </div>
+            </div>
             
             <div className="flex justify-center items-center py-2 relative">
               <div className="relative overflow-visible">
