@@ -1,16 +1,33 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 export default function IPhoneFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [showSimulator, setShowSimulator] = useState(false);
 
-  // If the route starts with /admin, we bypass the iPhone simulator and render full desktop screen
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setShowSimulator(params.get("simulator") === "true");
+    }
+  }, []);
+
   const isAdminRoute = pathname?.startsWith("/admin");
 
-  if (isAdminRoute) {
-    return <div className="min-h-screen bg-black-oled text-white">{children}</div>;
+  if (isAdminRoute || !showSimulator) {
+    return (
+      <div className="min-h-screen w-full flex flex-col bg-black-oled relative">
+        {/* Ambient background */}
+        <div className="ambient-bg" />
+
+        {/* Responsive Content Area */}
+        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col relative px-4 sm:px-6 md:px-8">
+          {children}
+        </div>
+      </div>
+    );
   }
 
   return (
