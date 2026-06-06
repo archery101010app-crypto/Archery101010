@@ -7,6 +7,7 @@ import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilient
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight } from "lucide-react";
+import { DIANA_PRESETS } from "../scoring/ScoringView";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -597,31 +598,40 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <Target size={14} className="text-cyan-neon" />
                   {t("impactsMap")}
                 </h4>
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-full max-w-[220px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
-                >
-                  <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.15]" />
+                {(() => {
+                  const isCompoundTarget = selectedSession.bowType === "Compound" && 
+                    (selectedSession.distance === 50 || selectedSession.format?.includes("WA 720"));
+                  const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
+                  const presetRings = DIANA_PRESETS[presetType];
                   
-                  {selectedSession.impacts.map((imp: any, idx: number) => (
-                    <g key={idx}>
-                      <circle cx={imp.x} cy={imp.y} r="1.4" className="fill-yellow-gold stroke-black stroke-[0.3px]" />
-                      <text x={imp.x} y={imp.y + 0.5} textAnchor="middle" fontSize="1.3" fontWeight="black" fill="black">
-                        {imp.value === "X" ? "X" : imp.value}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
+                  return (
+                    <svg
+                      viewBox="0 0 100 100"
+                      className="w-full max-w-[220px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
+                    >
+                      {presetRings.map((ring, index) => (
+                        <circle
+                          key={index}
+                          cx="50"
+                          cy="50"
+                          r={ring.r}
+                          fill={ring.fill}
+                          stroke={ring.stroke}
+                          strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+                        />
+                      ))}
+                      
+                      {selectedSession.impacts.map((imp: any, idx: number) => (
+                        <g key={idx}>
+                          <circle cx={imp.x} cy={imp.y} r="1.4" className="fill-yellow-gold stroke-black stroke-[0.3px]" />
+                          <text x={imp.x} y={imp.y + 0.5} textAnchor="middle" fontSize="1.3" fontWeight="black" fill="black">
+                            {imp.value === "X" ? "X" : imp.value}
+                          </text>
+                        </g>
+                      ))}
+                    </svg>
+                  );
+                })()}
               </div>
             )}
 

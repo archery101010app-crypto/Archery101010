@@ -20,6 +20,7 @@ import {
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
+import { DIANA_PRESETS } from "../scoring/ScoringView";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -375,26 +376,34 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
                               <div className="flex flex-col items-center gap-2">
                                 <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
                                 <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
-                                  <svg viewBox="0 0 100 100" className="w-full h-full">
-                                    <circle cx="50" cy="50" r="48" fill="white" stroke="#ccc" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="43.2" fill="white" stroke="#ccc" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="38.4" fill="black" stroke="#555" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="33.6" fill="black" stroke="#555" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="28.8" fill="#1E88E5" stroke="#1565C0" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="24" fill="#1E88E5" stroke="#1565C0" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="19.2" fill="#E53935" stroke="#C62828" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="14.4" fill="#E53935" stroke="#C62828" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="9.6" fill="#FDD835" stroke="#F57F17" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="4.8" fill="#FDD835" stroke="#F57F17" strokeWidth="0.1" />
-                                    <circle cx="50" cy="50" r="1.5" fill="#FDD835" stroke="#F57F17" strokeWidth="0.1" />
+                                  {(() => {
+                                    const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
+                                    const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
+                                    const presetRings = DIANA_PRESETS[presetType];
                                     
-                                    {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
-                                      <g key={iIdx}>
-                                        <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
-                                        <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
-                                      </g>
-                                    ))}
-                                  </svg>
+                                    return (
+                                      <svg viewBox="0 0 100 100" className="w-full h-full">
+                                        {presetRings.map((ring, index) => (
+                                          <circle
+                                            key={index}
+                                            cx="50"
+                                            cy="50"
+                                            r={ring.r}
+                                            fill={ring.fill}
+                                            stroke={ring.stroke}
+                                            strokeWidth={ring.v === "X" ? 0.1 : 0.1}
+                                          />
+                                        ))}
+                                        
+                                        {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
+                                          <g key={iIdx}>
+                                            <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
+                                            <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
+                                          </g>
+                                        ))}
+                                      </svg>
+                                    );
+                                  })()}
                                 </div>
                               </div>
 

@@ -30,9 +30,70 @@ interface ShotImpact {
   value: string;
 }
 
+export interface RingConfig {
+  r: number;       // relative radius (0 to 50)
+  v: string;       // value (X, 10, 9, 8...)
+  fill: string;    // background color
+  stroke: string;  // border color
+  lbl?: string;    // label
+}
+
+export const DIANA_PRESETS: Record<string, RingConfig[]> = {
+  WA_10_122: [
+    { r: 48, v: "1", fill: "#FFFFFF", stroke: "#E2E8F0" },
+    { r: 43.2, v: "2", fill: "#FFFFFF", stroke: "#E2E8F0" },
+    { r: 38.4, v: "3", fill: "#000000", stroke: "#404040" },
+    { r: 33.6, v: "4", fill: "#000000", stroke: "#404040" },
+    { r: 28.8, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 24, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 19.2, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 14.4, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 9.6, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ],
+  WA_6c: [
+    { r: 48, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 28.8, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 19.2, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 9.6, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 3.0, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ]
+};
+
 export default function ScoringView({ user, config, onBack, onSessionSaved }: ScoringViewProps) {
   const { t } = useLanguage();
   const isBlockFormat = config.format === "WA 600" || config.format === "WA 720";
+
+  const isCompoundTarget = config.bowType === "Compound" && (config.distance === 50 || config.format === "WA 720");
+  const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
+  const presetRings = DIANA_PRESETS[presetType];
+
+  // Touch magnifier states & refs
+  interface LupaState {
+    active: boolean;
+    x: number;
+    y: number;
+    clientX: number;
+    clientY: number;
+    value: string;
+  }
+
+  const [lupaState, setLupaState] = useState<LupaState>({
+    active: false,
+    x: 50,
+    y: 50,
+    clientX: 0,
+    clientY: 0,
+    value: ""
+  });
+  const [estaScrolleando, setEstaScrolleando] = useState(false);
+
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const lupaTimer = useRef<NodeJS.Timeout | null>(null);
+  const estaScrolleandoRef = useRef(false);
 
   // Mode state: Target (Diana) vs Keyboard (Teclado)
   const [mode, setMode] = useState<"TARGET" | "KEYBOARD">("TARGET");
@@ -50,10 +111,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [currentArrowIdx, setCurrentArrowIdx] = useState(0);
   const [impacts, setImpacts] = useState<ShotImpact[]>([]);
 
-  // Diana zoom state
-  const [isDianaZoomed, setIsDianaZoomed] = useState(false);
-
-  // Exit & Zoom states
+  // Exit states
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
   const [fontSize, setFontSize] = useState("normal");
 
@@ -292,26 +350,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   };
 
-  // Helper to convert client/touch coordinates to relative SVG percent coordinates
-  const getCoordinatesFromEvent = (
-    e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>,
-    svgElement: SVGSVGElement | null
-  ) => {
+  // Helper to convert client coordinates to relative SVG percent coordinates
+  const getCoordsFromClient = (clientX: number, clientY: number) => {
+    const svgElement = dianaRef.current;
     if (!svgElement) return null;
 
     const rect = svgElement.getBoundingClientRect();
-    let clientX = 0;
-    let clientY = 0;
-
-    if ("touches" in e) {
-      if (e.touches.length === 0) return null;
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
     const pctX = ((clientX - rect.left) / rect.width) * 100;
     const pctY = ((clientY - rect.top) / rect.height) * 100;
 
@@ -324,56 +368,180 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const dy = clampedY - 50;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    let value = "M";
-    if (distance < 2.5) value = "X";
-    else if (distance < 5) value = "10";
-    else if (distance < 10) value = "9";
-    else if (distance < 15) value = "8";
-    else if (distance < 20) value = "7";
-    else if (distance < 25) value = "6";
-    else if (distance < 30) value = "5";
-    else if (distance < 35) value = "4";
-    else if (distance < 40) value = "3";
-    else if (distance < 45) value = "2";
-    else if (distance < 50) value = "1";
+    // Dynamic scoring based on presetRings
+    const sortedRings = [...presetRings].sort((a, b) => a.r - b.r);
+    const matchingRing = sortedRings.find((ring) => distance <= ring.r);
+    const value = matchingRing ? matchingRing.v : "M";
 
     return { x: clampedX, y: clampedY, value };
   };
 
-  // Diana touch/click handler: first tap zooms in, second tap registers arrow
-  const handleDianaClick = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
+  const registerShot = (x: number, y: number, value: string) => {
     if (currentEndIdx >= config.endsCount) return;
 
-    // Check if current end is already full of arrows
-    const currentArrows = ends[currentEndIdx]?.arrows || [];
-    const actualShots = currentArrows.filter(a => a !== "").length;
-    if (actualShots >= config.arrowsPerEnd) {
-      alert("Este End ya está completo. Confírmalo para pasar al siguiente.");
-      return;
-    }
+    const newImpact: ShotImpact = {
+      endIdx: currentEndIdx,
+      arrowIdx: currentArrowIdx,
+      x,
+      y,
+      value
+    };
 
-    if (!isDianaZoomed) {
-      // First tap: Zoom in
-      if (e.cancelable) e.preventDefault();
-      setIsDianaZoomed(true);
-    } else {
-      // Second tap (when zoomed): Register impact immediately
-      if (e.cancelable) e.preventDefault();
-      const coords = getCoordinatesFromEvent(e, dianaRef.current);
-      if (coords) {
-        const newImpact = {
-          endIdx: currentEndIdx,
-          arrowIdx: currentArrowIdx,
-          x: coords.x,
-          y: coords.y,
-          value: coords.value
-        };
-        setImpacts((prev) => [...prev, newImpact]);
-        handleScoreInput(coords.value);
-        setIsDianaZoomed(false);
-      }
+    setImpacts((prev) => [...prev, newImpact]);
+    handleScoreInput(value);
+
+    // Haptic feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
     }
   };
+
+  const lupaStateRef = useRef(lupaState);
+  useEffect(() => {
+    lupaStateRef.current = lupaState;
+  }, [lupaState]);
+
+  useEffect(() => {
+    const diana = dianaRef.current;
+    if (!diana) return;
+
+    const onStart = (clientX: number, clientY: number, isTouch: boolean) => {
+      const currentArrows = ends[currentEndIdx]?.arrows || [];
+      const actualShots = currentArrows.filter(a => a !== "").length;
+      if (currentEndIdx >= config.endsCount || actualShots >= config.arrowsPerEnd) {
+        return;
+      }
+
+      touchStartX.current = clientX;
+      touchStartY.current = clientY;
+      estaScrolleandoRef.current = false;
+
+      const coords = getCoordsFromClient(clientX, clientY);
+      if (!coords) return;
+
+      if (lupaTimer.current) clearTimeout(lupaTimer.current);
+
+      lupaTimer.current = setTimeout(() => {
+        if (!estaScrolleandoRef.current) {
+          setLupaState({
+            active: true,
+            x: coords.x,
+            y: coords.y,
+            clientX,
+            clientY,
+            value: coords.value
+          });
+          if (navigator.vibrate) {
+            navigator.vibrate(20);
+          }
+        }
+      }, 220);
+    };
+
+    const onMove = (clientX: number, clientY: number, e: Event) => {
+      const dx = clientX - touchStartX.current;
+      const dy = clientY - touchStartY.current;
+
+      if (!lupaStateRef.current.active && Math.sqrt(dx * dx + dy * dy) > 10) {
+        estaScrolleandoRef.current = true;
+        if (lupaTimer.current) {
+          clearTimeout(lupaTimer.current);
+          lupaTimer.current = null;
+        }
+      }
+
+      if (lupaStateRef.current.active || lupaTimer.current) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+
+        const coords = getCoordsFromClient(clientX, clientY);
+        if (coords) {
+          setLupaState(prev => {
+            if (!prev.active) return prev;
+            return {
+              ...prev,
+              x: coords.x,
+              y: coords.y,
+              clientX,
+              clientY,
+              value: coords.value
+            };
+          });
+        }
+      }
+    };
+
+    const onEnd = (clientX: number, clientY: number, e: Event) => {
+      if (lupaTimer.current) {
+        clearTimeout(lupaTimer.current);
+        lupaTimer.current = null;
+      }
+
+      const active = lupaStateRef.current.active;
+      const x = lupaStateRef.current.x;
+      const y = lupaStateRef.current.y;
+      const value = lupaStateRef.current.value;
+
+      if (active) {
+        registerShot(x, y, value);
+        setLupaState({ active: false, x: 50, y: 50, clientX: 0, clientY: 0, value: "" });
+        if (e.cancelable) e.preventDefault();
+      } else if (!estaScrolleandoRef.current) {
+        const coords = getCoordsFromClient(clientX, clientY);
+        if (coords) {
+          registerShot(coords.x, coords.y, coords.value);
+        }
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    // Touch Event Handlers
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      onStart(touch.clientX, touch.clientY, true);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      onMove(touch.clientX, touch.clientY, e);
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touch = e.changedTouches[0];
+      onEnd(touch.clientX, touch.clientY, e);
+    };
+
+    // Mouse Event Handlers
+    const handleMouseDown = (e: MouseEvent) => {
+      onStart(e.clientX, e.clientY, false);
+      
+      const handleMouseMove = (mvEvent: MouseEvent) => {
+        onMove(mvEvent.clientX, mvEvent.clientY, mvEvent);
+      };
+
+      const handleMouseUp = (upEvent: MouseEvent) => {
+        onEnd(upEvent.clientX, upEvent.clientY, upEvent);
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    };
+
+    diana.addEventListener("touchstart", handleTouchStart, { passive: false });
+    diana.addEventListener("touchmove", handleTouchMove, { passive: false });
+    diana.addEventListener("touchend", handleTouchEnd, { passive: false });
+    diana.addEventListener("mousedown", handleMouseDown);
+
+    return () => {
+      diana.removeEventListener("touchstart", handleTouchStart);
+      diana.removeEventListener("touchmove", handleTouchMove);
+      diana.removeEventListener("touchend", handleTouchEnd);
+      diana.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, [currentEndIdx, currentArrowIdx, ends, config, presetRings]);
 
   const handleSaveDraft = async () => {
     const sessionId = config.draftId || generateResilientId("SES");
@@ -635,6 +803,32 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return "bg-white text-black border-white/20"; // 1-2 rings
   };
 
+  // Centroid and Dispersion calculations for the current End
+  const currentEndImpacts = impacts.filter((imp) => imp.endIdx === currentEndIdx);
+  const N = currentEndImpacts.length;
+
+  let centroid = null;
+  let dispersion = null;
+
+  if (N >= 1) {
+    const sumX = currentEndImpacts.reduce((sum, imp) => sum + imp.x, 0);
+    const sumY = currentEndImpacts.reduce((sum, imp) => sum + imp.y, 0);
+    const meanX = sumX / N;
+    const meanY = sumY / N;
+    centroid = { x: meanX, y: meanY };
+
+    if (N >= 2) {
+      const sumSqDiffX = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.x - meanX, 2), 0);
+      const sumSqDiffY = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.y - meanY, 2), 0);
+      const sigmaX = Math.sqrt(sumSqDiffX / (N - 1));
+      const sigmaY = Math.sqrt(sumSqDiffY / (N - 1));
+      dispersion = {
+        rx: Math.max(1.8, sigmaX),
+        ry: Math.max(1.8, sigmaY)
+      };
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 min-h-full">
       {/* Top Config info Header */}
@@ -743,70 +937,48 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           // TARGET MODE (Diana SVG)
           <div className="flex-1 flex flex-col gap-4 relative">
             
-            {/* Backdrop overlay when zoomed */}
-            {isDianaZoomed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsDianaZoomed(false)}
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
-              />
-            )}
-
-            {/* Instruction Banner when zoomed */}
-            {isDianaZoomed && (
-              <div className="fixed top-12 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
-                <div className="bg-neutral-900/90 border border-cyan-neon/30 backdrop-blur-md px-4 py-2 rounded-full shadow-glow-cyan text-center">
-                  <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block leading-none">
-                    Diana Ampliada
-                  </span>
-                  <span className="text-[9px] text-gray-300 mt-1 block leading-none">
-                    Toca para registrar · Fuera para cancelar
-                  </span>
-                </div>
-              </div>
-            )}
-
             <div className="flex justify-center items-center py-2 relative">
-              {/* Zoom Button to enlarge target */}
-              <button
-                onClick={() => setIsDianaZoomed(!isDianaZoomed)}
-                className={`absolute top-2 right-6 p-2 rounded-xl border cursor-pointer z-50 shadow-lg transition-all duration-300 ${
-                  isDianaZoomed 
-                    ? "bg-cyan-neon border-cyan-neon text-black shadow-glow-cyan" 
-                    : "bg-neutral-900 border-neutral-800 text-cyan-neon hover:text-white"
-                }`}
-                title="Agrandar Diana para Precisión"
-              >
-                <Maximize2 size={16} />
-              </button>
-
               <div className="relative overflow-visible">
-                <motion.svg
+                <svg
                   ref={dianaRef}
-                  onMouseDown={handleDianaClick}
-                  onTouchStart={handleDianaClick}
-                  animate={{ scale: isDianaZoomed ? 2.2 : 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   viewBox="0 0 100 100"
-                  className={`w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative transition-all duration-300 ${
-                    isDianaZoomed ? "z-50" : "z-10"
-                  }`}
+                  className="w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative z-10"
                 >
-                  {/* SVG Concetriques rings rings */}
-                  <circle cx="50" cy="50" r="48" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="43.2" className="fill-white stroke-neutral-200 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="38.4" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="33.6" className="fill-black stroke-neutral-700 stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="28.8" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="24" className="fill-[#1E88E5] stroke-[#1565C0] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="19.2" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="14.4" className="fill-[#E53935] stroke-[#C62828] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="9.6" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="4.8" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.2]" />
-                  <circle cx="50" cy="50" r="1.5" className="fill-[#FDD835] stroke-[#F57F17] stroke-[0.15]" />
-                  
+                  {/* Concentric rings rendered dynamically */}
+                  {presetRings.map((ring, index) => (
+                    <circle
+                      key={index}
+                      cx="50"
+                      cy="50"
+                      r={ring.r}
+                      fill={ring.fill}
+                      stroke={ring.stroke}
+                      strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+                    />
+                  ))}
+
+                  {/* Centroid & Dispersion */}
+                  {centroid && (
+                    <g>
+                      <line x1={centroid.x - 2} y1={centroid.y} x2={centroid.x + 2} y2={centroid.y} stroke="#00E5FF" strokeWidth="0.4" />
+                      <line x1={centroid.x} y1={centroid.y - 2} x2={centroid.x} y2={centroid.y + 2} stroke="#00E5FF" strokeWidth="0.4" />
+                      <circle cx={centroid.x} cy={centroid.y} r="0.6" fill="#00E5FF" />
+                    </g>
+                  )}
+                  {centroid && dispersion && (
+                    <ellipse
+                      cx={centroid.x}
+                      cy={centroid.y}
+                      rx={dispersion.rx}
+                      ry={dispersion.ry}
+                      fill="rgba(0, 229, 255, 0.08)"
+                      stroke="#00E5FF"
+                      strokeWidth="0.35"
+                      strokeDasharray="1.5 1.5"
+                      className="animate-pulse"
+                    />
+                  )}
+
                   {/* Render coordinate markers on the diana SVG */}
                   {impacts
                     .filter((imp) => imp.endIdx === currentEndIdx)
@@ -839,7 +1011,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                         </text>
                       </g>
                     ))}
-                </motion.svg>
+                </svg>
               </div>
             </div>
 
@@ -1244,6 +1416,88 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         )}
       </AnimatePresence>
+
+      {/* Touch Magnifier Circle Overlay */}
+      {lupaState.active && (
+        <div
+          style={{
+            position: "fixed",
+            left: lupaState.clientX - 65,
+            top: lupaState.clientY - 145,
+            width: 130,
+            height: 130,
+            pointerEvents: "none",
+            zIndex: 99999
+          }}
+          className="rounded-full border-2 border-cyan-neon bg-black shadow-[0_0_15px_rgba(0,229,255,0.4)] overflow-hidden flex items-center justify-center"
+        >
+          <svg
+            viewBox={`${lupaState.x - 12} ${lupaState.y - 12} 24 24`}
+            className="w-full h-full bg-black"
+          >
+            {presetRings.map((ring, index) => (
+              <circle
+                key={index}
+                cx="50"
+                cy="50"
+                r={ring.r}
+                fill={ring.fill}
+                stroke={ring.stroke}
+                strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+              />
+            ))}
+
+            {centroid && (
+              <g>
+                <line x1={centroid.x - 2} y1={centroid.y} x2={centroid.x + 2} y2={centroid.y} stroke="#00E5FF" strokeWidth="0.4" />
+                <line x1={centroid.x} y1={centroid.y - 2} x2={centroid.x} y2={centroid.y + 2} stroke="#00E5FF" strokeWidth="0.4" />
+                <circle cx={centroid.x} cy={centroid.y} r="0.6" fill="#00E5FF" />
+              </g>
+            )}
+            {centroid && dispersion && (
+              <ellipse
+                cx={centroid.x}
+                cy={centroid.y}
+                rx={dispersion.rx}
+                ry={dispersion.ry}
+                fill="rgba(0, 229, 255, 0.05)"
+                stroke="#00E5FF"
+                strokeWidth="0.35"
+                strokeDasharray="1.5 1.5"
+              />
+            )}
+
+            {impacts
+              .filter((imp) => imp.endIdx === currentEndIdx)
+              .map((imp, idx) => (
+                <g key={idx}>
+                  <circle cx={imp.x} cy={imp.y} r="1.4" fill="rgba(0,0,0,0.6)" />
+                  <circle cx={imp.x} cy={imp.y} r="1.0" className="fill-yellow-gold stroke-black stroke-[0.2px]" />
+                  <text
+                    x={imp.x}
+                    y={imp.y + 0.35}
+                    textAnchor="middle"
+                    fontSize="0.9"
+                    fontWeight="bold"
+                    fill="black"
+                  >
+                    {imp.value}
+                  </text>
+                </g>
+              ))}
+          </svg>
+
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-4 h-0.5 bg-cyan-neon shadow-glow-cyan" />
+            <div className="h-4 w-0.5 bg-cyan-neon shadow-glow-cyan absolute" />
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-neon border border-black absolute" />
+          </div>
+
+          <div className="absolute bottom-1 bg-black/80 border border-cyan-neon/30 px-2 py-0.5 rounded-md text-[9px] font-black text-cyan-neon uppercase tracking-wider">
+            {lupaState.value}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
