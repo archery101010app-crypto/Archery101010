@@ -6,6 +6,26 @@ export const metadata: Metadata = {
   title: "Archery 101010 - SaaS Premium de Tiro con Arco",
   description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/images/logo_final.png",
+  },
+  openGraph: {
+    title: "Archery 101010 - SaaS Premium de Tiro con Arco",
+    description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
+    url: "https://archery101010-prd.web.app",
+    siteName: "Archery 101010",
+    images: [
+      {
+        url: "https://archery101010-prd.web.app/images/logo_final.png",
+        width: 800,
+        height: 200,
+        alt: "Archery 101010 Logo",
+      }
+    ],
+    locale: "es_ES",
+    type: "website",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

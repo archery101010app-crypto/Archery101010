@@ -803,7 +803,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
           <span className="text-yellow-gold text-lg">★</span>
-          Estrellas 101010 (720)
+          {t("starsShelfTitle")}
         </h4>
 
         {maxStar ? (
@@ -815,7 +815,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 style={{ 
                   borderColor: maxStar.starColor,
                   color: maxStar.starColor,
-                  backgroundColor: `${maxStar.starColor}15`
+                  backgroundColor: `${maxStar.starColor}15`,
+                  boxShadow: `0 0 15px ${maxStar.starColor}35`
                 }}
               >
                 ★
@@ -825,7 +826,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   {maxStar.starName}
                 </span>
                 <span className="text-[9px] text-gray-dim mt-0.5 font-bold uppercase">
-                  Marca récord: {maxStar.highestScore} pts ({maxStar.bowType})
+                  {t("recordLabel")} {maxStar.highestScore} pts ({maxStar.bowType})
                 </span>
               </div>
             </div>
@@ -839,7 +840,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               if (currentLevel >= 8) {
                 return (
                   <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] text-center text-cyan-neon font-black uppercase tracking-wider">
-                    🏆 ¡Has alcanzado la Estrella máxima (Diamante)! 🏆
+                    {t("maxStarAchieved")}
                   </div>
                 );
               }
@@ -854,7 +855,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               return (
                 <div className="flex flex-col gap-1.5 mt-1">
                   <div className="flex justify-between text-[9px] text-gray-dim font-black uppercase tracking-wider">
-                    <span>Siguiente: {nextStar.name}</span>
+                    <span>{t("nextLabel")} {nextStar.name}</span>
                     <span className="text-white">{highestScore} / {targetMin} pts</span>
                   </div>
                   <div className="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5 relative">
@@ -868,7 +869,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     />
                   </div>
                   <span className="text-[8px] text-gray-dim leading-none">
-                    Faltan {targetMin - highestScore} puntos para subir de nivel de estrella.
+                    Faltan {targetMin - highestScore} {t("pointsToNextStar")}
                   </span>
                 </div>
               );
@@ -877,13 +878,60 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         ) : (
           <div className="flex flex-col gap-2.5 py-1">
             <p className="text-[10px] text-gray-dim leading-snug">
-              Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de 101010.
+              {t("lockedStarNotice")}
             </p>
-            <div className="bg-neutral-950/40 p-3 rounded-2xl border border-dashed border-white/10 text-center text-[9px] text-gray-dim font-bold uppercase">
-              Sin estrellas desbloqueadas
-            </div>
           </div>
         )}
+
+        {/* Vitrina completa de 8 Estrellas (Bloqueadas/Desbloqueadas) */}
+        {(() => {
+          const bowTypeForStars = user.bowConfig.type === "Compound" ? "Compound" : "Recurve";
+          const starsList = bowTypeForStars === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+          const highestLevel = maxStar ? maxStar.highestStarLevel : 0;
+          
+          return (
+            <div className="grid grid-cols-4 gap-3.5 mt-3 pt-3 border-t border-white/[0.04]">
+              {starsList.map((star) => {
+                const isUnlocked = star.level <= highestLevel;
+                return (
+                  <div key={star.level} className="flex flex-col items-center gap-1 text-center group">
+                    <div 
+                      className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-black transition-all duration-300 relative ${
+                        isUnlocked 
+                          ? "shadow-[0_0_10px_rgba(255,255,255,0.05)]" 
+                          : "grayscale opacity-35 bg-neutral-950 border-neutral-850"
+                      }`}
+                      style={{
+                        borderColor: isUnlocked ? star.color : '#2d2d2d',
+                        color: isUnlocked ? star.color : '#3d3d3d',
+                        backgroundColor: isUnlocked ? `${star.color}12` : 'rgba(0,0,0,0.2)',
+                        boxShadow: isUnlocked ? `0 0 12px ${star.color}25` : undefined
+                      }}
+                      title={`${star.name}: ${star.minScore}+ pts`}
+                    >
+                      ★
+                      {!isUnlocked && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                          <span className="text-[8px] opacity-70">🔒</span>
+                        </div>
+                      )}
+                    </div>
+                    <span 
+                      className={`text-[8px] font-black truncate max-w-[55px] uppercase tracking-wider leading-none mt-1 ${
+                        isUnlocked ? "text-white/80" : "text-gray-dim"
+                      }`}
+                    >
+                      {star.name.replace("Estrella de ", "").replace("Estrella ", "")}
+                    </span>
+                    <span className="text-[7px] text-gray-dim/80 font-bold leading-none">
+                      {star.minScore}+
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* SECTION 4.5: Accessibility Settings (Font Size) */}

@@ -22,6 +22,7 @@ import {
   Plus
 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
+import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 
 import CoachPortalView from "../coach/CoachPortalView";
 
@@ -219,10 +220,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           )}
         </h2>
         <p className="text-xs text-gray-dim mt-0.5 flex items-center gap-1">
-          <span>Hola, {user.fullName} · {user.bowConfig.type} ·</span>
+          <span>{t("helloLabel")}{user.fullName} · {user.bowConfig.type} ·</span>
           <span className="flex items-center gap-0.5">
             <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3.5 h-3.5" />
-            <span className="underline decoration-cyan-neon/30">{user.clubName || "Independiente"}</span>
+            <span className="underline decoration-cyan-neon/30">{user.clubName || t("independentLabel")}</span>
             <span>{clubFlag}</span>
           </span>
         </p>
@@ -234,45 +235,89 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           onClick={() => onNavigate("HISTORY")}
           className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 relative overflow-hidden group flex justify-between items-center"
         >
-          <div className="flex flex-col gap-1.5 z-10">
-            <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase flex items-center gap-1">
-              <Target size={12} className="text-cyan-neon" />
-              {t("lastSession")}
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold text-white">{stats.lastScore}</span>
-              <span className="text-xs text-gray-dim">/ {stats.lastMax}</span>
-            </div>
-            <span className="text-xs text-yellow-gold font-bold">{lastPercentage}% precisión</span>
-          </div>
+          {(() => {
+            // Check if last session is WA 720 and if star earned
+            const lastSessionStarInfo = (() => {
+              if (sessions.length === 0) return null;
+              const last = sessions[0];
+              const totalArrows = ((last.endsCount || 0) * (last.arrowsPerEnd || 0));
+              const isWA720 = totalArrows === 72 && (
+                (user.bowConfig.type === "Recurve" && last.distance === 70) ||
+                (user.bowConfig.type === "Compound" && last.distance === 50)
+              );
+              
+              if (!isWA720) {
+                return { status: "not_eligible", text: t("notEligibleStar"), color: "#6b7280" };
+              }
+              
+              if (last.score >= 500) {
+                const stars = user.bowConfig.type === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+                const qualified = stars.filter((s: any) => last.score >= s.minScore);
+                if (qualified.length > 0) {
+                  const sessionStar = qualified[qualified.length - 1];
+                  return { 
+                    status: "earned", 
+                    text: `${t("starUnlocked")}: ${sessionStar.name}`,
+                    color: sessionStar.color 
+                  };
+                }
+              }
+              
+              return { status: "not_reached", text: t("starNotReached"), color: "#ef4444" };
+            })();
 
-          <div className="relative w-28 h-20 flex items-center justify-center">
-            <svg className="w-24 h-24 transform -rotate-90">
-              <circle
-                cx="48"
-                cy="48"
-                r="38"
-                className="stroke-neutral-800"
-                strokeWidth="6"
-                fill="none"
-              />
-              <motion.circle
-                cx="48"
-                cy="48"
-                r="38"
-                className="stroke-cyan-neon"
-                strokeWidth="6"
-                fill="none"
-                strokeDasharray="239"
-                initial={{ strokeDashoffset: 239 }}
-                animate={{ strokeDashoffset: 239 - (239 * lastPercentage) / 100 }}
-                transition={{ duration: 1.2, ease: "easeInOut" }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center flex-col pt-1">
-              <span className="text-sm font-black text-white">{lastPercentage}%</span>
-            </div>
-          </div>
+            return (
+              <>
+                <div className="flex flex-col gap-1.5 z-10">
+                  <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase flex items-center gap-1">
+                    <Target size={12} className="text-cyan-neon" />
+                    {t("lastSession")}
+                  </span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-extrabold text-white">{stats.lastScore}</span>
+                    <span className="text-xs text-gray-dim">/ {stats.lastMax}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-yellow-gold font-bold">{lastPercentage}% {t("precisionLabel")}</span>
+                    {lastSessionStarInfo && (
+                      <span className="text-[9px] font-bold flex items-center gap-0.5 mt-1" style={{ color: lastSessionStarInfo.color }}>
+                        <span className="text-[10px]">★</span>
+                        <span>{lastSessionStarInfo.text}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 96 96" className="w-24 h-24 transform -rotate-90">
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="38"
+                      className="stroke-neutral-800"
+                      strokeWidth="6"
+                      fill="none"
+                    />
+                    <motion.circle
+                      cx="48"
+                      cy="48"
+                      r="38"
+                      className="stroke-cyan-neon"
+                      strokeWidth="6"
+                      fill="none"
+                      strokeDasharray="239"
+                      initial={{ strokeDashoffset: 239 }}
+                      animate={{ strokeDashoffset: 239 - (239 * lastPercentage) / 100 }}
+                      transition={{ duration: 1.2, ease: "easeInOut" }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-sm font-black text-white">{lastPercentage}%</span>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
           
           <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
@@ -283,13 +328,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-yellow-gold/20 flex flex-col justify-between aspect-square relative shadow-[0_0_12px_rgba(255,242,0,0.03)] cursor-pointer hover:border-yellow-gold/50 transition-all duration-300 group"
         >
           <span className="text-[9px] text-yellow-gold font-black tracking-wider uppercase leading-snug">
-            Volumen Total
+            {t("totalVolume")}
           </span>
           <div className="flex flex-col gap-0.5">
             <span className="text-2xl font-black text-white tracking-tight leading-none">
               {stats.totalArrows}
             </span>
-            <span className="text-[9px] text-gray-dim font-bold">flechas</span>
+            <span className="text-[9px] text-gray-dim font-bold">{t("arrowsLabel")}</span>
           </div>
           <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
@@ -332,18 +377,18 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   {t("proBadge")}
                 </span>
               </div>
-              <span className="text-[9px] text-gray-dim font-bold uppercase leading-none">PRO Anal.</span>
-              <span className="text-[9px] text-white/40 leading-tight">Acceso bloqueado</span>
+              <span className="text-[9px] text-gray-dim font-bold uppercase leading-none">{t("proStats")}</span>
+              <span className="text-[9px] text-white/40 leading-tight">{t("blockedAccess")}</span>
             </>
           ) : (
             <>
               <span className="text-[9px] text-yellow-gold font-bold tracking-wider uppercase leading-snug flex items-center gap-0.5">
                 <Sparkles size={10} />
-                PRO Anal.
+                {t("proStats")}
               </span>
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-black text-cyan-neon">98.5% PB</span>
-                <span className="text-[9px] text-gray-dim leading-none">Optimizado</span>
+                <span className="text-[9px] text-gray-dim leading-none">{t("optimized")}</span>
               </div>
             </>
           )}
@@ -400,7 +445,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </span>
           <div className="flex flex-col gap-0.5 overflow-hidden">
             <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
-              {user.clubName || "Mi Club"}
+              {user.clubName || t("myClub")}
             </span>
             <span className="text-[8px] text-gray-dim truncate flex items-center gap-1 mt-0.5">
               <span>{clubFlag}</span>
@@ -408,12 +453,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 {user.role === "coach" 
                   ? "Coach" 
                   : user.role === "team_admin" 
-                    ? "Administrador" 
+                    ? t("roleAdmin") 
                     : user.role === "team_admin_coach" 
                       ? "Admin / Coach" 
                       : user.role === "superadmin" 
                         ? "Super Admin" 
-                        : "Miembro"}
+                        : t("roleMember")}
               </span>
             </span>
           </div>
@@ -437,13 +482,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-505 bg-red-500"></span>
               </span>
-              En Vivo · Arena Competitiva
+              {t("liveArenaTitle")}
             </span>
             <h3 className="text-white text-base font-black uppercase tracking-wide mt-1">
-              ⚔️ Duelos de Eliminación
+              {t("duelsTitle")}
             </h3>
             <p className="text-[10px] text-gray-dim leading-snug mt-0.5">
-              Reta a otros arqueros a duelos en vivo (Set System o Acumulado) y pon a prueba tu precisión bajo presión.
+              {t("duelsDesc")}
             </p>
           </div>
 

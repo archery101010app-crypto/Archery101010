@@ -168,7 +168,32 @@ export const translations = {
     totalUsers: "Usuarios Totales",
     proSubscribers: "Suscritos a PRO",
     monthlyRevenue: "Ingresos Mensuales",
-    activeSessions: "Sesiones Activas"
+    activeSessions: "Sesiones Activas",
+
+    // New additions for Dashboard and stars
+    proStats: "Análisis PRO",
+    totalVolume: "Volumen Total",
+    arrowsLabel: "flechas",
+    helloLabel: "Hola, ",
+    independentLabel: "Independiente",
+    precisionLabel: "precisión",
+    blockedAccess: "Acceso bloqueado",
+    optimized: "Optimizado",
+    myClub: "Mi Club",
+    roleAdmin: "Administrador",
+    roleMember: "Miembro",
+    liveArenaTitle: "En Vivo · Arena Competitiva",
+    duelsTitle: "⚔️ Duelos de Eliminación",
+    duelsDesc: "Reta a otros arqueros a duelos en vivo (Set System o Acumulado) y pon a prueba tu precisión bajo presión.",
+    notEligibleStar: "No elegible para Estrella (Requiere WA 720)",
+    starUnlocked: "Estrella ganada",
+    starNotReached: "Estrella no alcanzada (< 500 pts)",
+    starsShelfTitle: "Estrellas 101010 (720)",
+    lockedStarNotice: "Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de 101010.",
+    recordLabel: "Récord:",
+    nextLabel: "Siguiente:",
+    maxStarAchieved: "🏆 ¡Has alcanzado la Estrella máxima (Diamante)! 🏆",
+    pointsToNextStar: "puntos para subir de nivel de estrella."
   },
   en: {
     // General
@@ -339,7 +364,32 @@ export const translations = {
     totalUsers: "Total Users",
     proSubscribers: "PRO Subscribers",
     monthlyRevenue: "Monthly Revenue",
-    activeSessions: "Active Sessions"
+    activeSessions: "Active Sessions",
+
+    // New additions for Dashboard and stars
+    proStats: "PRO Stats",
+    totalVolume: "Total Volume",
+    arrowsLabel: "arrows",
+    helloLabel: "Hello, ",
+    independentLabel: "Independent",
+    precisionLabel: "accuracy",
+    blockedAccess: "Access blocked",
+    optimized: "Optimized",
+    myClub: "My Club",
+    roleAdmin: "Administrator",
+    roleMember: "Member",
+    liveArenaTitle: "Live · Competitive Arena",
+    duelsTitle: "⚔️ Elimination Duels",
+    duelsDesc: "Challenge other archers to live duels (Set System or Cumulative) and test your precision under pressure.",
+    notEligibleStar: "Not eligible for Star (Requires WA 720)",
+    starUnlocked: "Star earned",
+    starNotReached: "Star not reached (< 500 pts)",
+    starsShelfTitle: "101010 Stars (720)",
+    lockedStarNotice: "Complete an official WA 720 shooting session (72 arrows) at the regulatory distance (Recurve at 70m or Compound at 50m) with a minimum score of 500 to earn your first 101010 star.",
+    recordLabel: "Record:",
+    nextLabel: "Next:",
+    maxStarAchieved: "🏆 You have reached the maximum Star (Diamond)! 🏆",
+    pointsToNextStar: "points needed to upgrade your star level."
   }
 };
 
