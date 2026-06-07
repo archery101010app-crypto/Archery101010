@@ -32,6 +32,14 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
     return () => clearInterval(interval);
   }, [campaign, isVisible]);
 
+  // Record impression on load
+  useEffect(() => {
+    if (!campaign) return;
+    import("@/lib/adManager").then(({ recordImpression }) => {
+      recordImpression(campaign.id, "anonymous-visitor");
+    });
+  }, [campaign?.id, activeSlideIndex]);
+
   if (!campaign || !isVisible) return null;
 
   const currentSlide = campaign.slides[activeSlideIndex];
@@ -56,13 +64,6 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
     setIsVisible(false);
     onClose();
   };
-
-  // Record impression on load
-  useEffect(() => {
-    import("@/lib/adManager").then(({ recordImpression }) => {
-      recordImpression(campaign.id, "anonymous-visitor");
-    });
-  }, [campaign.id, activeSlideIndex]);
 
   // Get style configurations
   const heightVal = campaign.customHeight || 32;

@@ -101,8 +101,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     setLoading(true);
     setError("");
     try {
-      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+      const isLocalhost = typeof window !== "undefined" && 
+                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
 
       let email = "";
       let displayName = "";

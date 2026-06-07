@@ -24,8 +24,10 @@ export function startRealtimeSync(currentUserUid: string | null) {
   if (typeof window === "undefined") return;
 
   // Check if the api key is the mock placeholder to prevent console warnings on mock environments
-  const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                         process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+  const isLocalhost = typeof window !== "undefined" && 
+                      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                         process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
   
   if (isMockFirebase) {
     console.log("Mock Firebase configuration detected. Real-time sync disabled.");

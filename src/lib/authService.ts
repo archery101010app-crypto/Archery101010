@@ -70,8 +70,10 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   if (typeof navigator !== "undefined" && navigator.onLine) {
     try {
       // Check if the api key is the mock placeholder to prevent hanging on mock environments
-      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+      const isLocalhost = typeof window !== "undefined" && 
+                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
       
       if (!isMockFirebase) {
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
@@ -425,8 +427,10 @@ export async function loginSocialUser(email: string, displayName: string): Promi
   // 1. Try to fetch from Firestore if online
   if (typeof navigator !== "undefined" && navigator.onLine) {
     try {
-      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+      const isLocalhost = typeof window !== "undefined" && 
+                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
       
       if (!isMockFirebase) {
         const q = query(collection(db, "users"), where("email", "==", targetEmail));

@@ -142,6 +142,19 @@ export default function Home() {
             }).catch((err) => console.warn("Failed to load push notifications helper", err));
           }
         }
+
+        // Clean up all mock/demo users from simulated_users to avoid listing or retaining them
+        try {
+          const { getLocalSetting, saveLocalSetting } = await import("@/lib/db/indexedDB");
+          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const cleanedUsers = localUsers.filter(u => !isDemoUser(u));
+          if (localUsers.length !== cleanedUsers.length) {
+            await saveLocalSetting("simulated_users", cleanedUsers);
+            console.log("[Auth Startup] Cleaned mock/demo users from local database:", localUsers.length - cleanedUsers.length, "removed.");
+          }
+        } catch (e) {
+          console.error("Error cleaning up local simulated users:", e);
+        }
       } catch (e) {
         console.error("Error reading authentication", e);
       } finally {
