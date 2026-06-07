@@ -417,3 +417,89 @@ export async function logoutUser(): Promise<void> {
 export function isSuperAdmin(user: UserProfile | null): boolean {
   return user?.role === "superadmin";
 }
+
+export async function loginSocialUser(email: string, displayName: string): Promise<UserProfile> {
+  const targetEmail = email.trim().toLowerCase();
+  let user: UserProfile | undefined = undefined;
+
+  // 1. Try to fetch from Firestore if online
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    try {
+      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+      
+      if (!isMockFirebase) {
+        const q = query(collection(db, "users"), where("email", "==", targetEmail));
+        const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
+        if (!querySnapshot.empty) {
+          user = querySnapshot.docs[0].data() as UserProfile;
+          
+          // Save/update in local simulated list
+          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const idx = localUsers.findIndex((u) => u.uid === user!.uid);
+          if (idx !== -1) {
+            localUsers[idx] = user;
+          } else {
+            localUsers.push(user);
+          }
+          await saveLocalSetting("simulated_users", localUsers);
+        }
+      }
+    } catch (err) {
+      console.warn("Firestore user fetch failed, falling back to local database:", err);
+    }
+  }
+
+  // 2. Fallback to local IndexedDB store
+  if (!user) {
+    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    user = usersList.find((u) => u.email.toLowerCase() === targetEmail);
+  }
+
+  // 3. Create default profile if user doesn't exist anywhere
+  if (!user) {
+    user = {
+      uid: generateResilientId("USR"),
+      email: targetEmail,
+      fullName: displayName || "Usuario Social",
+      birthDate: "1995-05-15",
+      country: "CR",
+      gender: "M",
+      bowConfig: {
+        type: "Barebow",
+        brand: "Hoyt",
+        model: "Satori",
+        poundage: 35,
+        defaultDistance: 18
+      },
+      physicalData: {
+        height: 175,
+        weight: 70,
+        dominantEye: "R",
+        dominantHand: "R"
+      },
+      clubId: null,
+      clubName: null,
+      role: "archer",
+      plan: "FREE",
+      isClubCreator: false
+    };
+
+    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    usersList.push(user);
+    await saveLocalSetting("simulated_users", usersList);
+
+    // Queue new user profile to Firestore sync queue
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "INSERT",
+      payloadId: user.uid,
+      payload: user,
+      timestamp: Date.now()
+    });
+  }
+
+  await saveLocalSetting("current_user", user);
+  return user;
+}

@@ -95,15 +95,51 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     }
   };
 
-  const handleSocialLogin = async (provider: string) => {
+  const handleSocialLogin = async (providerName: string) => {
     setLoading(true);
+    setError("");
     try {
-      // Simulated social auth using a dummy email matching the provider
-      const email = provider === "google" ? "google-user@archery101010.com" : "facebook-user@archery101010.com";
-      const user = await loginUser(email);
+      const isMockFirebase = !process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
+
+      let email = "";
+      let displayName = "";
+
+      if (!isMockFirebase) {
+        const { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } = await import("firebase/auth");
+        const { auth } = await import("@/lib/firebase");
+        
+        const provider = providerName === "google" 
+          ? new GoogleAuthProvider() 
+          : new FacebookAuthProvider();
+          
+        const result = await signInWithPopup(auth, provider);
+        email = result.user.email || "";
+        displayName = result.user.displayName || "";
+      } else {
+        // Fallback simulated logic for developer local testing
+        email = providerName === "google" ? "google-user@archery101010.com" : "facebook-user@archery101010.com";
+        displayName = providerName === "google" ? "Google User" : "Facebook User";
+      }
+
+      if (!email) {
+        throw new Error("No se pudo obtener el correo de la cuenta social.");
+      }
+
+      const { loginSocialUser } = await import("@/lib/authService");
+      const user = await loginSocialUser(email, displayName);
       onLoginSuccess(user);
     } catch (err: any) {
-      setError("Error en autenticación social");
+      console.error("Error en autenticación social:", err);
+      let msg = "Error en autenticación social.";
+      if (err.code === "auth/popup-closed-by-user") {
+        msg = "Inicio de sesión cancelado por el usuario.";
+      } else if (err.code === "auth/configuration-not-found" || err.code === "auth/operation-not-allowed") {
+        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está activado en la consola de Firebase. Por favor regístrate normalmente.`;
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

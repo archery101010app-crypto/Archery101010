@@ -111,11 +111,17 @@ export default function Home() {
 
       try {
         const loggedUser = await getLoggedUser();
-        setUser(loggedUser);
-        if (loggedUser) {
-          import("@/lib/pushNotifications").then(({ registerPushSilent }) => {
-            registerPushSilent(loggedUser.uid);
-          }).catch((err) => console.warn("Failed to load push notifications helper", err));
+        if (loggedUser && (loggedUser.fullName === "Arquero Demo" || loggedUser.fullName === "google-user" || loggedUser.fullName === "facebook-user")) {
+          const { logoutUser } = await import("@/lib/authService");
+          await logoutUser();
+          setUser(null);
+        } else {
+          setUser(loggedUser);
+          if (loggedUser) {
+            import("@/lib/pushNotifications").then(({ registerPushSilent }) => {
+              registerPushSilent(loggedUser.uid);
+            }).catch((err) => console.warn("Failed to load push notifications helper", err));
+          }
         }
       } catch (e) {
         console.error("Error reading authentication", e);
