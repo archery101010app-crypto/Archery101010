@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy } from "lucide-react";
+import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
+import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic } from "@/lib/soundUtils";
 
 const COUNTRIES = [
   { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
@@ -81,6 +82,23 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [showRules, setShowRules] = useState(!config.currentEnd);
   const [endSummary, setEndSummary] = useState<string | null>(null);
 
+  // Ready Check States
+  const [isReadyCheckActive, setIsReadyCheckActive] = useState<boolean>(true);
+  const [isUserReady, setIsUserReady] = useState<boolean>(false);
+  const [isRivalReady, setIsRivalReady] = useState<boolean>(false);
+  const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
+
+  // Walkie-Talkie States
+  const [isWalkieTalkieActive, setIsWalkieTalkieActive] = useState<boolean>(false);
+  const [walkieWaveAnim, setWalkieWaveAnim] = useState<number[]>([10, 10, 10, 10]);
+  const [isRivalSpeaking, setIsRivalSpeaking] = useState<boolean>(false);
+  const [walkieText, setWalkieText] = useState<string | null>(null);
+  const [microphoneAllowed, setMicrophoneAllowed] = useState<boolean>(false);
+
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
+  const audioAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micAnimFrameId = useRef<number | null>(null);
+
   // UX animation and thinking states
   const [rivalThinking, setRivalThinking] = useState(false);
   const [cursorPos, setCursorPos] = useState({ x: 50, y: 50 });
@@ -114,7 +132,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // Turn Countdown Timer effect
   useEffect(() => {
-    if (duelFinished || rivalThinking || endSummary || showRules || isShootOff || validationPhase !== "IDLE") {
+    if (duelFinished || rivalThinking || endSummary || showRules || isShootOff || validationPhase !== "IDLE" || isReadyCheckActive) {
       return;
     }
 
@@ -122,23 +140,32 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          // Play 3 End Beeps (Señal de Alto WA)
+          playWABeepEnd();
           // Auto register a Miss (M) on timer expiration
           handleScoreInput("M");
           return 30;
         }
-        return prev - 1;
+
+        // Sound warning for last 5 seconds (5, 4, 3, 2, 1)
+        const nextSec = prev - 1;
+        if (nextSec <= 5 && nextSec > 0) {
+          playWABeepWarning();
+        }
+
+        return nextSec;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [duelFinished, rivalThinking, endSummary, showRules, isShootOff, currentArrow, currentEnd, validationPhase]);
+  }, [duelFinished, rivalThinking, endSummary, showRules, isShootOff, currentArrow, currentEnd, validationPhase, isReadyCheckActive]);
 
   // Reset timer on user's turn
   useEffect(() => {
-    if (!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE") {
+    if (!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE" && !isReadyCheckActive) {
       setTimeLeft(30);
     }
-  }, [rivalThinking, currentArrow, currentEnd, duelFinished, endSummary, showRules, validationPhase]);
+  }, [rivalThinking, currentArrow, currentEnd, duelFinished, endSummary, showRules, validationPhase, isReadyCheckActive]);
 
   // Automated draft saving on state changes
   useEffect(() => {
@@ -201,6 +228,227 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     user,
     config
   ]);
+
+  // Rival Ready Simulation
+  useEffect(() => {
+    if (isReadyCheckActive && !isRivalReady && !duelFinished) {
+      const delay = 800 + Math.random() * 1400;
+      const timer = setTimeout(() => {
+        setIsRivalReady(true);
+        if (navigator.vibrate) {
+          navigator.vibrate(15);
+        }
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [isReadyCheckActive, isRivalReady, duelFinished]);
+
+  // Countdown when both ready
+  useEffect(() => {
+    if (isReadyCheckActive && isUserReady && isRivalReady && !duelFinished) {
+      setReadyCountdown(3);
+    }
+  }, [isReadyCheckActive, isUserReady, isRivalReady, duelFinished]);
+
+  useEffect(() => {
+    if (readyCountdown === null) return;
+
+    if (readyCountdown > 0) {
+      const timer = setTimeout(() => {
+        setReadyCountdown(readyCountdown - 1);
+        if (navigator.vibrate) {
+          navigator.vibrate(20);
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsReadyCheckActive(false);
+      setReadyCountdown(null);
+      // Play Olympic beep (1 beep starting the shot)!
+      playWABeepStart();
+      // Occasionally trigger oponent speech at the start of shot
+      speakRivalPhraseOnTurnStart();
+    }
+  }, [readyCountdown]);
+
+  // Walkie-Talkie mic handler
+  const startMicrophoneAnalysis = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      microphoneStreamRef.current = stream;
+      setMicrophoneAllowed(true);
+
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 32;
+      source.connect(analyser);
+      audioAnalyserRef.current = analyser;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const updateWave = () => {
+        if (!audioAnalyserRef.current) return;
+        analyser.getByteFrequencyData(dataArray);
+        
+        const newWaves = Array.from(dataArray)
+          .slice(0, 4)
+          .map((v) => Math.max(10, Math.min(50, (v / 255) * 45 + 10)));
+          
+        setWalkieWaveAnim(newWaves.length ? newWaves : [10, 10, 10, 10]);
+        micAnimFrameId.current = requestAnimationFrame(updateWave);
+      };
+
+      updateWave();
+    } catch (e) {
+      console.warn("Microphone access denied:", e);
+      setMicrophoneAllowed(false);
+      simulateStaticWave();
+    }
+  };
+
+  const simulateStaticWave = () => {
+    const update = () => {
+      setWalkieWaveAnim([
+        Math.random() * 20 + 10,
+        Math.random() * 30 + 10,
+        Math.random() * 25 + 10,
+        Math.random() * 15 + 10
+      ]);
+      micAnimFrameId.current = requestAnimationFrame(update);
+    };
+    update();
+  };
+
+  const stopMicrophoneAnalysis = () => {
+    if (micAnimFrameId.current) {
+      cancelAnimationFrame(micAnimFrameId.current);
+      micAnimFrameId.current = null;
+    }
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((track) => track.stop());
+      microphoneStreamRef.current = null;
+    }
+    audioAnalyserRef.current = null;
+    setWalkieWaveAnim([10, 10, 10, 10]);
+  };
+
+  useEffect(() => {
+    if (isWalkieTalkieActive) {
+      startMicrophoneAnalysis();
+    } else {
+      stopMicrophoneAnalysis();
+    }
+    return () => {
+      stopMicrophoneAnalysis();
+    };
+  }, [isWalkieTalkieActive]);
+
+  // Voice synthesis (Text-to-Speech)
+  const speakRivalPhrase = (text: string) => {
+    playRadioStatic();
+    setWalkieText(text);
+    setIsRivalSpeaking(true);
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "es-ES";
+      
+      const voices = window.speechSynthesis.getVoices();
+      const isFemale = ["Daniela", "Laura"].some(n => config.rival.fullName.includes(n));
+      const spanishVoices = voices.filter(v => v.lang.startsWith("es"));
+      
+      if (spanishVoices.length > 0) {
+        const selectedVoice = spanishVoices.find(v => {
+          const nameLower = v.name.toLowerCase();
+          if (isFemale) {
+            return nameLower.includes("sabina") || nameLower.includes("helena") || nameLower.includes("female") || nameLower.includes("mujer") || nameLower.includes("google");
+          } else {
+            return nameLower.includes("julio") || nameLower.includes("pablo") || nameLower.includes("male") || nameLower.includes("hombre");
+          }
+        }) || spanishVoices[0];
+        utterance.voice = selectedVoice;
+      }
+      
+      utterance.rate = 1.05;
+      utterance.pitch = isFemale ? 1.15 : 0.95;
+      
+      utterance.onend = () => {
+        setIsRivalSpeaking(false);
+        playRadioStatic();
+        setTimeout(() => setWalkieText(null), 2500);
+      };
+      
+      utterance.onerror = () => {
+        setIsRivalSpeaking(false);
+        setTimeout(() => setWalkieText(null), 2500);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => {
+        setIsRivalSpeaking(false);
+        playRadioStatic();
+        setTimeout(() => setWalkieText(null), 2500);
+      }, 3000);
+    }
+  };
+
+  const speakRivalPhraseOnTurnStart = () => {
+    if (!isWalkieTalkieActive) return;
+    if (Math.random() > 0.3) return; // 30% chance
+
+    const phrases = [
+      "¡Venga! A ver qué tal tiras esta flecha.",
+      "Mucha concentración en esta línea.",
+      "El viento está un poco inestable hoy, ¿eh?",
+      "¡Buen tiro! Mantén el ritmo.",
+      "Siento un poco de presión en la línea de tiro.",
+      "Tu turno. ¡Apunta bien!"
+    ];
+    speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+  };
+
+  const speakRivalPhraseOnShot = (score: number) => {
+    if (!isWalkieTalkieActive) return;
+
+    setTimeout(() => {
+      if (score === 10) {
+        const phrases = [
+          "¡Impresionante! ¡Qué centro!",
+          "¡Un diez perfecto! Qué gran tiro.",
+          "Vaya tiro en el amarillo. Me pones presión.",
+          "¡Bien hecho! Excelente ejecución."
+        ];
+        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+      } else if (score <= 6) {
+        const phrases = [
+          "Una flecha difícil, el viento debió moverla.",
+          "No te preocupes, el próximo tiro será mejor.",
+          "Tranquilo, sacúdete ese tiro y concéntrate.",
+          "Eso dolió, ¡recuperemos en la siguiente!"
+        ];
+        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+      }
+    }, 1000);
+  };
+
+  const speakRivalPhraseOnMatchEnd = (userWon: boolean | null) => {
+    if (!isWalkieTalkieActive) return;
+
+    setTimeout(() => {
+      if (userWon === true) {
+        speakRivalPhrase("¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!");
+      } else if (userWon === false) {
+        speakRivalPhrase("¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego.");
+      } else {
+        speakRivalPhrase("¡Un empate increíble! Vaya nivel de competencia.");
+      }
+    }, 1500);
+  };
 
   // Helper values to parse string scores into numeric values
   const getValNumeric = (val: string | number): number => {
@@ -403,6 +651,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       value
     };
     setImpacts((prev) => [...prev, newImpact]);
+    
+    // Speak on user shot
+    speakRivalPhraseOnShot(numericValue);
 
     if (isShootOff) {
       setUserShootOffShot(numericValue);
@@ -520,9 +771,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setWinner("USER");
           setDuelFinished(true);
           triggerConfetti();
+          speakRivalPhraseOnMatchEnd(true);
         } else if (rivalShootOffShot > userShootOffShot) {
           setWinner("RIVAL");
           setDuelFinished(true);
+          speakRivalPhraseOnMatchEnd(false);
         } else {
           alert("¡Empate en flecha de desempate! Se dispara otra flecha.");
           setUserShootOffShot(null);
@@ -557,6 +810,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       // Check if end is complete (3 arrows each)
       if (nextArrow === 3) {
         evaluateEndCompletion(userEndShots, updatedRival[currentEnd]);
+      } else {
+        // Activate Ready Check for the next arrow!
+        setIsUserReady(false);
+        setIsRivalReady(false);
+        setIsReadyCheckActive(true);
       }
     }, delay);
   };
@@ -655,6 +913,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         setWinner(finalWinner);
         setDuelFinished(true);
         if (finalWinner === "USER") triggerConfetti();
+        speakRivalPhraseOnMatchEnd(finalWinner === "USER");
       }
     }
   }, [userSetPoints, rivalSetPoints, endSummary]);
@@ -667,6 +926,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setRivalPhoto(null);
     setCurrentEnd((prev) => prev + 1);
     setCurrentArrow(0);
+    setIsUserReady(false);
+    setIsRivalReady(false);
+    setIsReadyCheckActive(true);
   };
 
   const getCumulativeTotal = (tiros: (string | number)[][]): number => {
@@ -920,8 +1182,100 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         )}
       </div>
 
+      {/* Ready Check Panel */}
+      {isReadyCheckActive && !duelFinished && (
+        <div className="flex-1 flex flex-col justify-center items-center py-6 px-4 z-10 relative bg-neutral-900/30 border border-white/5 rounded-3xl min-h-[300px] text-center shadow-inner overflow-hidden my-auto">
+          <div className="absolute inset-0 bg-radial-glow opacity-5 pointer-events-none" />
+          
+          <div className="relative z-10 flex flex-col items-center gap-4 w-full max-w-[280px]">
+            {/* Header / Subtitle */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-purple-400 font-black tracking-widest uppercase block animate-pulse">
+                LÍNEA DE TIRO
+              </span>
+              <h3 className="text-white text-base font-black uppercase tracking-wide">
+                Preparación de Flecha {currentArrow + 1}
+              </h3>
+              <p className="text-[9px] text-gray-dim uppercase font-bold">
+                Ambos arqueros deben reportarse listos
+              </p>
+            </div>
+
+            {/* Duelists status cards */}
+            <div className="grid grid-cols-2 gap-3 w-full my-3">
+              {/* User ready box */}
+              <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
+                isUserReady 
+                  ? "bg-cyan-neon/5 border-cyan-neon/30 text-cyan-neon font-black" 
+                  : "bg-neutral-900/60 border-white/5 text-gray-dim"
+              }`}>
+                <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
+                  {user.fullName.substring(0, 2).toUpperCase()}
+                  {isUserReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+                </div>
+                <span className="text-[10px] font-bold truncate max-w-full">Tú</span>
+                <span className="text-[9px] font-black uppercase tracking-wider">
+                  {isUserReady ? "Listo" : "Espera..."}
+                </span>
+              </div>
+
+              {/* Rival ready box */}
+              <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
+                isRivalReady 
+                  ? "bg-purple-500/5 border-purple-500/30 text-purple-400 font-black" 
+                  : "bg-neutral-900/60 border-white/5 text-gray-dim animate-pulse"
+              }`}>
+                <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
+                  {config.rival.fullName.substring(0, 2).toUpperCase()}
+                  {isRivalReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+                </div>
+                <span className="text-[10px] font-bold truncate max-w-full">{config.rival.fullName}</span>
+                <span className="text-[9px] font-black uppercase tracking-wider">
+                  {isRivalReady ? "Listo" : "Pensando..."}
+                </span>
+              </div>
+            </div>
+
+            {/* Countdown Overlay or Ready CTA */}
+            {readyCountdown !== null ? (
+              <div className="flex flex-col items-center justify-center my-2">
+                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase mb-1">
+                  COMIENZO EN
+                </span>
+                <motion.div
+                  key={readyCountdown}
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1.2, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                  className="text-4xl font-black text-white font-mono"
+                >
+                  {readyCountdown > 0 ? readyCountdown : "🎯"}
+                </motion.div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsUserReady(true);
+                  if (navigator.vibrate) {
+                    navigator.vibrate(30);
+                  }
+                }}
+                disabled={isUserReady}
+                className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 ${
+                  isUserReady
+                    ? "bg-neutral-900 border border-white/5 text-gray-dim cursor-default"
+                    : "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-105 active:scale-98 cursor-pointer"
+                }`}
+              >
+                {isUserReady ? "Esperando al Rival..." : "¡Listo en Línea! 🏹"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Mode Selector Toggle */}
-      {!duelFinished && (
+      {!duelFinished && !isReadyCheckActive && (
         <div className="flex bg-neutral-900 border border-white/10 p-0.5 rounded-xl max-w-[200px] mx-auto z-10 relative">
           <button
             onClick={() => setMode("TARGET")}
@@ -947,7 +1301,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       )}
 
       {/* Target Arena (Diana Mode) */}
-      {!duelFinished && mode === "TARGET" && (
+      {!duelFinished && !isReadyCheckActive && mode === "TARGET" && (
         <div className="flex-1 flex flex-col justify-center items-center gap-3 z-10 relative">
           
           {/* Backdrop overlay when zoomed */}
@@ -1060,7 +1414,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       )}
 
       {/* Keyboard Mode Arena */}
-      {!duelFinished && mode === "KEYBOARD" && (
+      {!duelFinished && !isReadyCheckActive && mode === "KEYBOARD" && (
         <div className="flex-1 flex flex-col gap-3 justify-between z-10 relative">
           
           {/* Side-by-side match progress table */}
@@ -1273,6 +1627,85 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         </div>
       )}
 
+      {/* Walkie-Talkie Floating Controller */}
+      {!duelFinished && (
+        <div className="fixed bottom-24 right-5 z-[80] flex flex-col items-end gap-2.5 pointer-events-auto">
+          {/* Audio Bubble Overlay */}
+          <AnimatePresence>
+            {walkieText && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: 10 }}
+                className="bg-neutral-950 border border-purple-500/30 p-3 rounded-2xl max-w-[200px] shadow-2xl relative"
+              >
+                {/* Triangular arrow point */}
+                <div className="absolute right-5 -bottom-1.5 w-3 h-3 bg-neutral-950 border-r border-b border-purple-500/30 rotate-45" />
+                
+                <span className="text-[8px] text-purple-400 font-black tracking-widest uppercase block mb-1">
+                  📻 CANAL DE VOZ · RIVAL
+                </span>
+                <p className="text-[10px] text-white leading-snug font-bold">
+                  "{walkieText}"
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Micro Walkie-Talkie Button */}
+          <div className="flex items-center gap-2">
+            <AnimatePresence>
+              {isWalkieTalkieActive && (
+                <motion.span
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="text-[8px] bg-neutral-950/85 backdrop-blur border border-cyan-neon/30 text-cyan-neon font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow"
+                >
+                  {isRivalSpeaking ? "🎙️ Transmitiendo..." : "📻 Walkie ON"}
+                </motion.span>
+              )}
+            </AnimatePresence>
+
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => {
+                setIsWalkieTalkieActive(!isWalkieTalkieActive);
+                if (navigator.vibrate) {
+                  navigator.vibrate(40);
+                }
+              }}
+              className={`w-12 h-12 rounded-full flex items-center justify-center border cursor-pointer shadow-xl relative overflow-hidden transition-all duration-300 ${
+                isWalkieTalkieActive
+                  ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon shadow-[0_0_20px_rgba(0,229,255,0.15)]"
+                  : "bg-neutral-900 border-white/10 text-gray-dim hover:text-white"
+              }`}
+            >
+              {/* Dynamic waveform visualization inside button */}
+              {isWalkieTalkieActive ? (
+                <div className="flex items-end gap-0.5 h-4 justify-center">
+                  {walkieWaveAnim.map((height, idx) => (
+                    <motion.div
+                      key={idx}
+                      animate={{ height }}
+                      className="w-0.75 bg-cyan-neon rounded-full"
+                      style={{ height: `${height}px` }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Mic size={18} />
+              )}
+
+              {/* Status active pulsing dot */}
+              {isWalkieTalkieActive && (
+                <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full bg-cyan-neon animate-ping" />
+              )}
+            </motion.button>
+          </div>
+        </div>
+      )}
+
       {/* Photo Validation Modal Overlay */}
       <AnimatePresence>
         {validationPhase !== "IDLE" && (
@@ -1317,6 +1750,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];

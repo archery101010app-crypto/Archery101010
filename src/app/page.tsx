@@ -52,6 +52,50 @@ export default function Home() {
   const [activeNotification, setActiveNotification] = useState<AdCampaign | null>(null);
   const [dbVersion, setDbVersion] = useState(0);
 
+  // Pull-to-refresh states
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
+  
+  const touchStartRef = React.useRef(0);
+  const mainRef = React.useRef<HTMLElement | null>(null);
+  const bypassBeforeUnloadRef = React.useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    if (mainRef.current && mainRef.current.scrollTop === 0) {
+      touchStartRef.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (!isPulling) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - touchStartRef.current;
+    if (diff > 0) {
+      // Clamped pull distance with elastic square root feel
+      const elasticDiff = Math.min(80, Math.pow(diff, 0.85));
+      setPullDistance(elasticDiff);
+      
+      if (diff > 10 && e.cancelable) {
+        e.preventDefault();
+      }
+    } else {
+      setPullDistance(0);
+      setIsPulling(false);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isPulling) return;
+    setIsPulling(false);
+    if (pullDistance > 55) {
+      setShowRefreshConfirm(true);
+    } else {
+      setPullDistance(0);
+    }
+  };
+
   // Check authentication status and initialize database on mount
   useEffect(() => {
     async function initApp() {
@@ -287,6 +331,7 @@ export default function Home() {
   // Prevent accidental reload whenever a user session is active
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (bypassBeforeUnloadRef.current) return;
       e.preventDefault();
       e.returnValue = "¿Seguro que deseas salir o recargar la página?";
       return "¿Seguro que deseas salir o recargar la página?";
@@ -406,11 +451,37 @@ export default function Home() {
         onClose={() => setActiveNotification(null)} 
       />
 
-      {/* Screen Render Router */}
+      {/* Screen Router Container */}
       <main 
-        className="flex-1 overflow-y-auto pb-24 px-4 transition-[padding-top] duration-300 ease-in-out" 
+        ref={mainRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 overflow-y-auto pb-24 px-4 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
+        {/* Pull-to-refresh Indicator */}
+        {pullDistance > 0 && (
+          <div 
+            className="w-full flex justify-center py-2 overflow-hidden bg-black-oled/40 transition-all duration-75 relative z-[30]"
+            style={{ 
+              height: `${pullDistance}px`, 
+              opacity: Math.min(1, pullDistance / 50) 
+            }}
+          >
+            <div 
+              className="w-8 h-8 rounded-full bg-neutral-900 border border-white/10 flex items-center justify-center shadow-lg relative transition-all"
+              style={{ 
+                transform: `rotate(${pullDistance * 4.5}deg) scale(${Math.min(1, pullDistance / 55)})`,
+                borderColor: pullDistance > 55 ? "rgba(0, 229, 255, 0.4)" : "rgba(255, 255, 255, 0.1)"
+              }}
+            >
+              <span className={`text-xs ${pullDistance > 55 ? "text-cyan-neon animate-pulse font-black" : "text-gray-dim"}`}>
+                🎯
+              </span>
+            </div>
+          </div>
+        )}
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
@@ -686,6 +757,62 @@ export default function Home() {
                     </div>
                   </>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Refresh Confirmation Modal */}
+      <AnimatePresence>
+        {showRefreshConfirm && (
+          <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-[320px] bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_30px_rgba(0,229,255,0.1)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
+              
+              <div className="w-12 h-12 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon mx-auto mt-2 animate-spin [animation-duration:8s]">
+                🎯
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase">
+                  Confirmación de Recarga
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  ¿Recargar Aplicación?
+                </h3>
+              </div>
+
+              <p className="text-[11px] text-gray-dim leading-relaxed">
+                ¿Seguro que deseas volver a cargar la aplicación? Se mantendrán tus borradores locales en IndexedDB, pero se reiniciará la vista activa en pantalla.
+              </p>
+
+              <div className="flex flex-col gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    bypassBeforeUnloadRef.current = true;
+                    setShowRefreshConfirm(false);
+                    setPullDistance(0);
+                    window.location.reload();
+                  }}
+                  className="w-full py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-110 transition shadow-glow-cyan"
+                >
+                  Sí, Recargar Pantalla
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRefreshConfirm(false);
+                    setPullDistance(0);
+                  }}
+                  className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                >
+                  Cancelar
+                </button>
               </div>
             </motion.div>
           </div>
