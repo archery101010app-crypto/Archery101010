@@ -863,8 +863,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         </div>
 
-        {/* Tab Selection Mode buttons */}
-        <div className="flex bg-neutral-900 p-0.5 rounded-full border border-gray-border">
+        {/* Tab Selection Mode buttons with pulsing neon cyan glow */}
+        <motion.div
+          animate={{
+            borderColor: ["rgba(63, 63, 70, 0.4)", "rgba(0, 229, 255, 0.7)", "rgba(63, 63, 70, 0.4)"],
+            boxShadow: [
+              "0 0 0 rgba(0, 229, 255, 0)",
+              "0 0 10px rgba(0, 229, 255, 0.3)",
+              "0 0 0 rgba(0, 229, 255, 0)"
+            ]
+          }}
+          transition={{
+            duration: 2.5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="flex bg-neutral-900 p-0.5 rounded-full border"
+        >
           <button
             onClick={() => setMode("TARGET")}
             className={`p-2 rounded-full cursor-pointer transition ${
@@ -881,7 +896,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           >
             <Keyboard size={16} />
           </button>
-        </div>
+        </motion.div>
       </div>
 
       {/* Floating clock controller integration */}
@@ -983,23 +998,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               )}
             </AnimatePresence>
 
-            {/* Parciales del End Activo */}
-            <div className="flex justify-center items-center gap-2.5 py-1.5 px-4 bg-neutral-900/30 rounded-2xl border border-white/5 mx-4">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">
-                Parciales:
+            {/* Parciales del End Activo (Optimizado) */}
+            <div className="flex justify-center items-center gap-3 py-2 px-4 bg-neutral-900/40 rounded-2xl border border-white/10 mx-4 shadow-inner">
+              <span className="text-[10px] text-cyan-neon font-black uppercase tracking-widest">
+                ACTUAL:
               </span>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
                   const isCellEditing = currentArrowIdx === arrowIdx;
                   return (
                     <div
                       key={arrowIdx}
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs border transition-all ${getArrowColorClass(
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm border-2 transition-all ${getArrowColorClass(
                         a
                       )} ${
                         isCellEditing
-                          ? "border-cyan-neon ring-1 ring-cyan-neon shadow-glow-cyan bg-cyan-neon/5"
-                          : ""
+                          ? "border-cyan-neon ring-2 ring-cyan-neon/30 shadow-glow-cyan bg-cyan-neon/10 scale-105"
+                          : "border-white/5"
                       }`}
                     >
                       {a || "—"}
@@ -1007,7 +1022,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   );
                 })}
               </div>
-              <div className="ml-auto px-2.5 py-1 rounded-lg bg-neutral-950 border border-white/5 font-extrabold text-[10px] text-cyan-neon">
+              <div className="ml-auto px-3 py-1.5 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11px] text-cyan-neon shadow-sm">
                 Suma: {calculateEndTotal(currentEndIdx)} pts
               </div>
             </div>
@@ -1087,6 +1102,45 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       </g>
                     ))}
                 </svg>
+              </div>
+            </div>
+
+            {/* Historial de Ends Scrollable en Diana */}
+            <div className="flex flex-col gap-1.5 px-4 z-10">
+              <div className="flex justify-between items-center text-[9px] font-black uppercase text-gray-dim tracking-widest px-1">
+                <span>Historial de Tiradas (Ends)</span>
+                <span className="text-cyan-neon font-bold">Total: {calculateTotalScore()} pts</span>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                {ends.map((e, idx) => {
+                  const isCompleted = e.arrows.every(a => a !== "" && a !== undefined);
+                  const total = calculateEndTotal(idx);
+                  const isCurrent = idx === currentEndIdx;
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      onClick={() => {
+                        if (idx <= currentEndIdx) {
+                          setCurrentEndIdx(idx);
+                          setCurrentArrowIdx(0);
+                        }
+                      }}
+                      className={`flex flex-col items-center justify-center p-2 rounded-xl border min-w-[58px] cursor-pointer transition-all ${
+                        isCurrent 
+                          ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan" 
+                          : isCompleted 
+                            ? "border-neutral-800 bg-neutral-900/60 text-white hover:border-neutral-700" 
+                            : "border-neutral-900/35 bg-neutral-950/45 text-gray-dim"
+                      }`}
+                    >
+                      <span className="text-[8px] uppercase font-black tracking-wider opacity-60">End {idx + 1}</span>
+                      <span className="text-xs font-black mt-0.5">
+                        {isCompleted || (idx === currentEndIdx && total > 0) ? total : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

@@ -43,6 +43,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [unlockedStar, setUnlockedStar] = useState<any | null>(null);
   const [showIntro, setShowIntro] = useState(true);
+  const [activeDraft, setActiveDraft] = useState<any | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Ads campaigns state
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
@@ -108,6 +110,28 @@ export default function Home() {
     return () => {
       stopRealtimeSync();
     };
+  }, [user]);
+
+  // Check for active session draft in IndexedDB when user is loaded
+  useEffect(() => {
+    async function checkForDrafts() {
+      if (!user) {
+        setActiveDraft(null);
+        return;
+      }
+      try {
+        const { getLocalSessions } = await import("@/lib/db/indexedDB");
+        const localSessions = await getLocalSessions();
+        const draft = localSessions.find((s) => s.userId === user.uid && s.isDraft === true);
+        if (draft) {
+          console.log("[Persistence] Active draft found:", draft);
+          setActiveDraft(draft);
+        }
+      } catch (err) {
+        console.error("Error checking for drafts:", err);
+      }
+    }
+    checkForDrafts();
   }, [user]);
 
   // Listen to visibilitychange to force Firestore network reconnection
@@ -238,6 +262,30 @@ export default function Home() {
     setUser(null);
     setAuthScreen("LOGIN");
     setSessionConfig(null);
+  };
+
+  const resumeSession = (draft: any) => {
+    const configToLoad = {
+      ...draft,
+      draftId: draft.id // ensure draftId is set
+    };
+    setSessionConfig(configToLoad);
+    setCurrentScreen("TARGET");
+    setActiveDraft(null);
+  };
+
+  const handleDiscardDraft = async () => {
+    if (activeDraft) {
+      try {
+        const { deleteLocalSession } = await import("@/lib/db/indexedDB");
+        await deleteLocalSession(activeDraft.id);
+        console.log("[Persistence] Draft discarded:", activeDraft.id);
+        setActiveDraft(null);
+        setShowDiscardConfirm(false);
+      } catch (err) {
+        console.error("Error discarding draft:", err);
+      }
+    }
   };
 
   if (showIntro) {
@@ -473,6 +521,118 @@ export default function Home() {
                 >
                   ¡Excelente! Aceptar
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Active Session Recovery Modal */}
+      <AnimatePresence>
+        {activeDraft && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-950 border border-cyan-neon/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(0,229,255,0.15)] overflow-hidden"
+            >
+              {/* Radial gradient background light */}
+              <div 
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{ background: "radial-gradient(circle, #00E5FF 0%, transparent 70%)" }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center">
+                {/* Glowing Target icon */}
+                <div className="w-16 h-16 flex items-center justify-center rounded-full bg-neutral-900 border border-cyan-neon/20 shadow-lg text-3xl mb-4 text-cyan-neon animate-pulse">
+                  🎯
+                </div>
+
+                {!showDiscardConfirm ? (
+                  <>
+                    <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
+                      ¡SESIÓN PENDIENTE DETECTADA!
+                    </span>
+                    <h3 className="text-white text-lg font-black uppercase tracking-wide">
+                      ¿Reanudar Entrenamiento?
+                    </h3>
+                    
+                    <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3 w-full text-left">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
+                        <span className="text-[10px] text-gray-dim uppercase font-bold">Formato WA</span>
+                        <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance}m</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
+                        <span className="text-[10px] text-gray-dim uppercase font-bold">Puntuación</span>
+                        <span className="text-xs font-black text-cyan-neon">{activeDraft.score} pts</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
+                        <span className="text-[10px] text-gray-dim uppercase font-bold">Progreso</span>
+                        <span className="text-xs font-black text-white">
+                          {(() => {
+                            const shotCount = activeDraft.ends.reduce((sum: number, e: any) => sum + e.arrows.filter((a: string) => a !== "").length, 0);
+                            const total = activeDraft.endsCount * activeDraft.arrowsPerEnd;
+                            return `${shotCount} / ${total} flechas`;
+                          })()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-gray-dim uppercase font-bold">Guardado</span>
+                        <span className="text-[10px] text-gray-dim font-medium">
+                          {new Date(activeDraft.timestamp).toLocaleDateString()} {new Date(activeDraft.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-dim leading-relaxed px-2">
+                      Tienes un borrador de sesión guardado. ¿Deseas continuar registrando tus tiros donde lo dejaste?
+                    </p>
+
+                    <div className="mt-6 flex flex-col gap-2 w-full">
+                      <button
+                        onClick={() => resumeSession(activeDraft)}
+                        className="w-full py-3 bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition"
+                      >
+                        Reanudar Entrenamiento
+                      </button>
+                      <button
+                        onClick={() => setShowDiscardConfirm(true)}
+                        className="w-full py-3 bg-neutral-900 border border-white/10 text-red-rival font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-neutral-800 transition"
+                      >
+                        Descartar Borrador
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[10px] text-red-rival font-black tracking-widest uppercase block mb-1">
+                      ⚠️ CONFIRMACIÓN DE DESCARTE
+                    </span>
+                    <h3 className="text-white text-lg font-black uppercase tracking-wide">
+                      ¿Descartar Borrador?
+                    </h3>
+                    
+                    <p className="text-xs text-gray-dim leading-relaxed px-2 my-4">
+                      Esta action es irreversible y se perderán todos los tiros registrados en esta sesión de entrenamiento. ¿Estás completamente seguro?
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-2 w-full">
+                      <button
+                        onClick={handleDiscardDraft}
+                        className="w-full py-3 bg-red-rival text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-red-700 transition"
+                      >
+                        Sí, Descartar Permanentemente
+                      </button>
+                      <button
+                        onClick={() => setShowDiscardConfirm(false)}
+                        className="w-full py-3 bg-neutral-900 border border-white/10 text-gray-dim font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition"
+                      >
+                        No, Volver Atrás
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

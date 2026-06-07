@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
+import { getLocalSessions, getLocalSetting, saveLocalSetting, athleteStarsStore } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Trophy, 
@@ -50,6 +50,11 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
 
+  const [athleteStar, setAthleteStar] = useState<any | null>(null);
+  const [isStarsDrawerOpen, setIsStarsDrawerOpen] = useState(false);
+  const [activeStarTab, setActiveStarTab] = useState<"Recurve" | "Compound">("Recurve");
+  const [selectedDetailStar, setSelectedDetailStar] = useState<any | null>(null);
+
   const [stats, setStats] = useState({
     lastScore: 275,
     lastMax: 300,
@@ -58,6 +63,26 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     bestMax: 300,
     bestDate: 0
   });
+
+  // Load athlete highest star status
+  useEffect(() => {
+    async function loadAthleteStar() {
+      try {
+        const starDoc = await athleteStarsStore.getItem<any>(user.uid);
+        setAthleteStar(starDoc);
+        
+        // Default star tab based on user bow configuration
+        if (user.bowConfig?.type === "Compound") {
+          setActiveStarTab("Compound");
+        } else {
+          setActiveStarTab("Recurve");
+        }
+      } catch (err) {
+        console.error("Error loading athlete star doc:", err);
+      }
+    }
+    loadAthleteStar();
+  }, [user]);
 
   useEffect(() => {
     async function loadStats() {
@@ -509,6 +534,298 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       >
         🎯 {t("newSession")}
       </motion.button>
+
+      {/* Floating stars tab on the left edge */}
+      <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40]">
+        <button
+          onClick={() => setIsStarsDrawerOpen(true)}
+          className="flex flex-col items-center justify-center gap-2 py-4 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 md:w-9 select-none"
+        >
+          <motion.span
+            animate={{ scale: [1, 1.25, 1], rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            className="text-lg text-black font-extrabold"
+          >
+            ★
+          </motion.span>
+          <span 
+            className="text-[8.5px] font-black tracking-[0.2em] uppercase" 
+            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+          >
+            Estrellas 101010
+          </span>
+        </button>
+      </div>
+
+      {/* Drawer Backdrop and Drawer Container */}
+      <AnimatePresence>
+        {isStarsDrawerOpen && (
+          <>
+            <div 
+              onClick={() => setIsStarsDrawerOpen(false)}
+              className="fixed inset-0 z-[45] bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed top-0 left-0 h-full w-[340px] sm:w-[380px] max-w-[90vw] bg-neutral-950/95 border-r border-yellow-gold/25 shadow-[8px_0_30px_rgba(0,0,0,0.8)] z-[50] flex flex-col pt-[calc(4.5rem+env(safe-area-inset-top))] pb-6 text-left"
+            >
+              {/* Header */}
+              <div className="px-5 pb-4 border-b border-white/5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-white text-sm font-black uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="text-yellow-gold">★</span>
+                    <span>Estrellas 101010</span>
+                  </h3>
+                  <p className="text-[9px] text-gray-dim uppercase tracking-wider mt-0.5">
+                    Reglamento Oficial WA 720
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsStarsDrawerOpen(false)}
+                  className="p-1.5 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 text-gray-dim hover:text-white transition cursor-pointer text-xs font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+                <p className="text-[10px] text-gray-dim leading-relaxed">
+                  Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70m o Compuesto 50m) con un puntaje mínimo de 500 para ganar estrellas.
+                </p>
+
+                {/* Bow type tabs */}
+                <div className="flex bg-neutral-905 p-0.5 rounded-lg border border-white/5 w-full bg-neutral-900">
+                  <button
+                    onClick={() => setActiveStarTab("Recurve")}
+                    className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition ${
+                      activeStarTab === "Recurve"
+                        ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
+                        : "text-gray-dim hover:text-white"
+                    }`}
+                  >
+                    Recurvo (70m)
+                  </button>
+                  <button
+                    onClick={() => setActiveStarTab("Compound")}
+                    className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition ${
+                      activeStarTab === "Compound"
+                        ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
+                        : "text-gray-dim hover:text-white"
+                    }`}
+                  >
+                    Compuesto (50m)
+                  </button>
+                </div>
+
+                {/* Stars List */}
+                <div className="flex flex-col gap-2.5">
+                  {(() => {
+                    const list = activeStarTab === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+                    const unlockedLevel = athleteStar && athleteStar.bowType === activeStarTab
+                      ? athleteStar.highestStarLevel
+                      : 0;
+
+                    return list.map((star) => {
+                      const isUnlocked = unlockedLevel >= star.level;
+                      return (
+                        <div
+                          key={star.level}
+                          onClick={() => setSelectedDetailStar({ star, bowType: activeStarTab, isUnlocked })}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
+                            isUnlocked
+                              ? "bg-neutral-900/50 border-white/10 hover:border-yellow-gold/30 hover:bg-neutral-900"
+                              : "bg-neutral-950/20 border-white/5 opacity-55 hover:opacity-80"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Glowing Star Icon */}
+                            <div 
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center border text-lg transition-transform group-hover:scale-105 ${
+                                isUnlocked 
+                                  ? "bg-neutral-900 border-white/5 shadow-md" 
+                                  : "bg-neutral-950 border-white/5"
+                              }`}
+                              style={{ color: star.color, textShadow: isUnlocked ? `0 0 10px ${star.color}` : "none" }}
+                            >
+                              ★
+                            </div>
+                            <div className="flex flex-col text-left">
+                              <span className="text-xs font-black text-white group-hover:text-yellow-gold transition-colors">
+                                {star.name}
+                              </span>
+                              <span className="text-[9px] text-gray-dim font-bold mt-0.5">
+                                Mínimo: {star.minScore} pts
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Right Indicator */}
+                          <div>
+                            {isUnlocked ? (
+                              <span 
+                                className="text-[8px] font-black px-2 py-0.5 rounded-full border"
+                                style={{ 
+                                  borderColor: `${star.color}30`, 
+                                  backgroundColor: `${star.color}10`, 
+                                  color: star.color 
+                                }}
+                              >
+                                LOGRADO
+                              </span>
+                            ) : (
+                              <div className="text-[10px] text-gray-dim bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase">
+                                🔒
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Detail Star Modal Overlay */}
+      <AnimatePresence>
+        {selectedDetailStar && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-950 border border-yellow-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(255,229,0,0.15)] overflow-hidden"
+            >
+              <div 
+                className="absolute inset-0 opacity-15 pointer-events-none"
+                style={{ background: `radial-gradient(circle, ${selectedDetailStar.star.color} 0%, transparent 70%)` }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center">
+                {/* Large Glowing Star Icon */}
+                <motion.div
+                  animate={selectedDetailStar.isUnlocked ? { 
+                    scale: [1, 1.15, 1],
+                    rotate: [0, 10, -10, 0]
+                  } : {}}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-24 h-24 flex items-center justify-center rounded-2xl bg-neutral-900 border border-white/5 shadow-2xl text-5xl mb-4 relative"
+                  style={{ 
+                    color: selectedDetailStar.star.color, 
+                    textShadow: `0 0 20px ${selectedDetailStar.star.color}`
+                  }}
+                >
+                  ★
+                  {!selectedDetailStar.isUnlocked && (
+                    <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 px-1.5 py-0.5 rounded-lg text-xs leading-none">
+                      🔒
+                    </div>
+                  )}
+                </motion.div>
+
+                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase block mb-1">
+                  REGLAMENTO OFICIAL WA
+                </span>
+                <h3 className="text-white text-lg font-black uppercase tracking-wide">
+                  {selectedDetailStar.star.name}
+                </h3>
+                
+                <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span className="text-[10px] text-gray-dim uppercase font-bold">Modalidad</span>
+                    <span className="text-xs font-black text-white">
+                      {selectedDetailStar.bowType === "Recurve" ? "Arco Recurvo" : "Arco Compuesto"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span className="text-[10px] text-gray-dim uppercase font-bold">Distancia Oficial</span>
+                    <span className="text-xs font-black text-white">
+                      {selectedDetailStar.bowType === "Recurve" ? "70 metros" : "50 metros"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span className="text-[10px] text-gray-dim uppercase font-bold">Marca Mínima</span>
+                    <span className="text-xs font-black text-white">{selectedDetailStar.star.minScore} / 720 pts</span>
+                  </div>
+                  <div className="flex flex-col pt-1">
+                    <div className="flex justify-between items-center text-[10px] text-gray-dim font-bold mb-1">
+                      <span>Progreso de Puntuación</span>
+                      <span className="text-white font-extrabold">
+                        {athleteStar && athleteStar.bowType === selectedDetailStar.bowType
+                          ? `${athleteStar.highestScore} pts`
+                          : "Sin Récord"
+                        }
+                      </span>
+                    </div>
+                    {/* Progress bar towards this star */}
+                    {(() => {
+                      const userBest = athleteStar && athleteStar.bowType === selectedDetailStar.bowType
+                        ? athleteStar.highestScore
+                        : 0;
+                      const percentage = Math.min(100, Math.round((userBest / selectedDetailStar.star.minScore) * 100));
+                      const pointsNeeded = selectedDetailStar.star.minScore - userBest;
+
+                      return (
+                        <div className="flex flex-col gap-1">
+                          <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
+                            <div 
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${percentage}%`,
+                                backgroundColor: selectedDetailStar.star.color,
+                                boxShadow: `0 0 6px ${selectedDetailStar.star.color}`
+                              }}
+                            />
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-dim mt-0.5">
+                            {selectedDetailStar.isUnlocked 
+                              ? "✓ ¡Estrella obtenida y superada!" 
+                              : pointsNeeded > 0 
+                                ? `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`
+                                : "✓ ¡Estrella lograda!"
+                            }
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-gray-dim leading-relaxed px-2">
+                  {selectedDetailStar.star.description || `Logrado con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
+                </p>
+
+                <div className="mt-6 flex flex-col gap-2 w-full">
+                  <button
+                    onClick={() => {
+                      setSelectedDetailStar(null);
+                      setIsStarsDrawerOpen(false);
+                      onNavigate("TARGET");
+                    }}
+                    className="w-full py-3 bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition"
+                  >
+                    🎯 Entrenar para Lograrlo
+                  </button>
+                  <button
+                    onClick={() => setSelectedDetailStar(null)}
+                    className="w-full py-3 bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition"
+                  >
+                    Volver al Listado
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
