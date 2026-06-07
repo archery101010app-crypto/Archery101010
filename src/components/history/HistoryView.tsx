@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight } from "lucide-react";
@@ -46,7 +46,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
   // Filter application trigger
   useEffect(() => {
-    let result = [...sessions];
+    let result = [...sessions].filter(s => s.deletedByArcher !== true);
 
     // 1. Date range filter
     const now = Date.now();
@@ -81,20 +81,28 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
   const handleDelete = async (id: string) => {
     try {
-      // 1. Remove local
-      await deleteLocalSession(id);
-      
-      // 2. Queue deletion in sync queue
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "sessions",
-        operation: "DELETE",
-        payloadId: id,
-        payload: null,
-        timestamp: Date.now()
-      });
+      const session = await getLocalSession(id);
+      if (!session) return;
 
-      // 3. Trigger sync in background
+      if (session.isDraft) {
+        // Borrado físico para borradores locales
+        await deleteLocalSession(id);
+      } else {
+        // Borrado lógico (suave) para sesiones completadas
+        const updatedSession = { ...session, deletedByArcher: true };
+        await saveLocalSession(id, updatedSession);
+        
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "UPDATE",
+          payloadId: id,
+          payload: updatedSession,
+          timestamp: Date.now()
+        });
+      }
+
+      // Trigger sync in background
       runSync();
 
       setSelectedSession(null);
@@ -136,6 +144,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     let volume = 0;
 
     sessions.forEach((s) => {
+      if (s.deletedByArcher) return;
       const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
       total += arrows;
       
@@ -416,12 +425,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             </h4>
             
             <div className="flex flex-col gap-2">
-              {sessions.length === 0 ? (
+              {sessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
                 <div className="text-center py-8 text-gray-dim text-xs">
                   No hay sesiones para calcular volumen.
                 </div>
               ) : (
-                sessions.map((s) => {
+                sessions.filter(s => s.deletedByArcher !== true).map((s) => {
                   const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
                   return (
                     <div

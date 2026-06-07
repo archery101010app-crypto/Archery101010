@@ -124,6 +124,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Exit states
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
   const [fontSize, setFontSize] = useState("normal");
+  const [showNextEndConfirm, setShowNextEndConfirm] = useState(false);
 
   // Volume Confirmation States
   const [isConfirmingVolume, setIsConfirmingVolume] = useState(false);
@@ -299,13 +300,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
-  const handleConfirmEnd = () => {
+  const executeConfirmEnd = () => {
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
       newEnds[currentEndIdx].note = endNote;
       return newEnds;
     });
     setEndNote("");
+    setShowNextEndConfirm(false);
 
     if (currentEndIdx < config.endsCount - 1) {
       setCurrentEndIdx(currentEndIdx + 1);
@@ -316,6 +318,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
+  const handleConfirmEnd = () => {
+    setShowNextEndConfirm(true);
+  };
+
   const handleBackspace = () => {
     let targetArrow = currentArrowIdx;
     let targetEnd = currentEndIdx;
@@ -324,19 +330,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (currentEndIdx >= config.endsCount) {
       targetEnd = config.endsCount - 1;
       targetArrow = config.arrowsPerEnd - 1;
-    } else if (currentArrowIdx > 0) {
-      targetArrow = currentArrowIdx - 1;
-    } else if (currentEndIdx > 0) {
-      targetEnd = currentEndIdx - 1;
-      targetArrow = config.arrowsPerEnd - 1;
     } else {
-      // Si estamos en la primera celda y tiene valor, lo borramos
-      const firstArrow = ends[0]?.arrows[0];
-      if (firstArrow && firstArrow !== "") {
-        targetEnd = 0;
-        targetArrow = 0;
+      // Verificamos si la celda actual tiene valor
+      const currentValue = ends[currentEndIdx]?.arrows[currentArrowIdx];
+      if (currentValue !== undefined && currentValue !== "") {
+        // Si no está vacía, borramos el valor actual sin mover el cursor
+        targetEnd = currentEndIdx;
+        targetArrow = currentArrowIdx;
       } else {
-        return; // already at first cell and empty
+        // Si está vacía, retrocedemos y borramos la celda anterior
+        if (currentArrowIdx > 0) {
+          targetArrow = currentArrowIdx - 1;
+        } else if (currentEndIdx > 0) {
+          targetEnd = currentEndIdx - 1;
+          targetArrow = config.arrowsPerEnd - 1;
+        } else {
+          return; // ya estamos en la primera celda vacía
+        }
       }
     }
 
@@ -1539,6 +1549,62 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
                 >
                   Regresar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: Confirm End Transition */}
+      <AnimatePresence>
+        {showNextEndConfirm && (
+          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
+              <div>
+                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
+                  End {currentEndIdx + 1} Completado
+                </span>
+                <h3 className="text-white text-base font-black uppercase mt-1">
+                  Confirmar Resultados
+                </h3>
+              </div>
+
+              {/* End Arrows Summary Card */}
+              <div className="flex flex-col gap-2 bg-neutral-950/60 p-4 rounded-2xl border border-white/5">
+                <div className="flex justify-center gap-1.5">
+                  {ends[currentEndIdx]?.arrows.map((a, idx) => (
+                    <div
+                      key={idx}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border text-xs ${getArrowColorClass(
+                        a
+                      )}`}
+                    >
+                      {a || "—"}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs font-black text-cyan-neon mt-1">
+                  Suma del End: {calculateEndTotal(currentEndIdx)} pts
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-dim leading-normal">
+                Verifica tus impactos antes de continuar. No podrás modificar este End tras avanzar.
+              </p>
+
+              <div className="flex flex-col gap-2 mt-2">
+                <button
+                  onClick={executeConfirmEnd}
+                  className="w-full py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                >
+                  {currentEndIdx < config.endsCount - 1 ? `Confirmar e Ir a End ${currentEndIdx + 2}` : "Confirmar y Finalizar"}
+                </button>
+                <button
+                  onClick={() => setShowNextEndConfirm(false)}
+                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+                >
+                  Modificar Tiros
                 </button>
               </div>
             </div>

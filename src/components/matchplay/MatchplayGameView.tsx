@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, RotateCcw, Check, Sparkles, AlertCircle, HelpCircle } from "lucide-react";
+import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
@@ -19,185 +19,399 @@ const COUNTRIES = [
 
 interface MatchplayGameViewProps {
   user: UserProfile;
-  config: any; // { id, bowType, distance, system, rival: { uid, fullName, country, clubName, clubLogo, clubCountry, rating } }
+  config: any; // { id, bowType, distance, system, rival: { uid, fullName, country, clubName, clubLogo, clubCountry, rating }, ...draftsStates }
   onBack: () => void;
   onDuelSaved: () => void;
 }
 
+export interface ShotImpact {
+  endIdx: number;
+  arrowIdx: number;
+  x: number;
+  y: number;
+  value: string;
+}
+
+const presetRings = [
+  { r: 48, v: "1", fill: "#FFFFFF", stroke: "#E2E8F0" },
+  { r: 43.2, v: "2", fill: "#FFFFFF", stroke: "#E2E8F0" },
+  { r: 38.4, v: "3", fill: "#000000", stroke: "#404040" },
+  { r: 33.6, v: "4", fill: "#000000", stroke: "#404040" },
+  { r: 28.8, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
+  { r: 24, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+  { r: 19.2, v: "7", fill: "#E53935", stroke: "#C62828" },
+  { r: 14.4, v: "8", fill: "#E53935", stroke: "#C62828" },
+  { r: 9.6, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+  { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+  { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+];
+
 export default function MatchplayGameView({ user, config, onBack, onDuelSaved }: MatchplayGameViewProps) {
   const isCompound = config.system === "cumulative";
   
-  // Game states
-  const [currentEnd, setCurrentEnd] = useState(0);
-  const [currentArrow, setCurrentArrow] = useState(0); // 0, 1, 2
-  const [userTiros, setUserTiros] = useState<number[][]>([[], [], [], [], []]);
-  const [rivalTiros, setRivalTiros] = useState<number[][]>([[], [], [], [], []]);
-  
-  const [userSetPoints, setUserSetPoints] = useState(0);
-  const [rivalSetPoints, setRivalSetPoints] = useState(0);
+  // Game states (initialized from config in case of resuming a draft)
+  const [currentEnd, setCurrentEnd] = useState<number>(config.currentEnd ?? 0);
+  const [currentArrow, setCurrentArrow] = useState<number>(config.currentArrow ?? 0); // 0, 1, 2
+  const [userTiros, setUserTiros] = useState<(string | number)[][]>(config.userTiros ?? [[], [], [], [], []]);
+  const [rivalTiros, setRivalTiros] = useState<(string | number)[][]>(config.rivalTiros ?? [[], [], [], [], []]);
+  const [userSetPoints, setUserSetPoints] = useState<number>(config.userSetPoints ?? 0);
+  const [rivalSetPoints, setRivalSetPoints] = useState<number>(config.rivalSetPoints ?? 0);
 
-  // Shoot-off states
-  const [isShootOff, setIsShootOff] = useState(false);
-  const [userShootOffShot, setUserShootOffShot] = useState<number | null>(null);
-  const [rivalShootOffShot, setRivalShootOffShot] = useState<number | null>(null);
+  const [isShootOff, setIsShootOff] = useState<boolean>(config.isShootOff ?? false);
+  const [userShootOffShot, setUserShootOffShot] = useState<number | null>(config.userShootOffShot ?? null);
+  const [rivalShootOffShot, setRivalShootOffShot] = useState<number | null>(config.rivalShootOffShot ?? null);
   
-  // UX states
-  const [rivalThinking, setRivalThinking] = useState(false);
-  const [duelFinished, setDuelFinished] = useState(false);
-  const [winner, setWinner] = useState<"USER" | "RIVAL" | "TIE" | null>(null);
+  const [duelFinished, setDuelFinished] = useState<boolean>(config.duelFinished ?? false);
+  const [winner, setWinner] = useState<"USER" | "RIVAL" | "TIE" | null>(config.winner ?? null);
+  const [impacts, setImpacts] = useState<ShotImpact[]>(config.impacts ?? []);
+
+  // Scoring input mode: TARGET (diana) vs KEYBOARD (teclado)
+  const [mode, setMode] = useState<"TARGET" | "KEYBOARD">("TARGET");
+
+  // Timer: 30s per user arrow
+  const [timeLeft, setTimeLeft] = useState(30);
+
+  // Photo Validation States
+  const [validationPhase, setValidationPhase] = useState<"IDLE" | "UPLOAD" | "REVIEW">("IDLE");
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [rivalPhoto, setRivalPhoto] = useState<string | null>(null);
+  const [endSummaryMsg, setEndSummaryMsg] = useState<string | null>(null);
+
+  // General overlays
+  const [showRules, setShowRules] = useState(!config.currentEnd);
   const [endSummary, setEndSummary] = useState<string | null>(null);
 
-  // Diana zoom & coordinates
-  const [cursorPos, setCursorPos] = useState({ x: 100, y: 100 });
+  // UX animation and thinking states
+  const [rivalThinking, setRivalThinking] = useState(false);
+  const [cursorPos, setCursorPos] = useState({ x: 50, y: 50 });
   const [isDianaZoomed, setIsDianaZoomed] = useState(false);
-  const targetRef = useRef<SVGSVGElement | null>(null);
+  
+  // Magnifier (Lupa) tactile states
+  const [lupaState, setLupaState] = useState({
+    active: false,
+    x: 50,
+    y: 50,
+    clientX: 0,
+    clientY: 0,
+    value: ""
+  });
 
-  // Pre-selected color palette
-  const userColor = "cyan-neon";
-  const rivalColor = "red-rival";
+  const dianaRef = useRef<SVGSVGElement | null>(null);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const estaScrolleandoRef = useRef(false);
+  const lupaTimer = useRef<NodeJS.Timeout | null>(null);
+  const lupaStateRef = useRef(lupaState);
 
-  // Animation variants
-  const containerVariants: any = {
-    initial: { opacity: 0 },
-    animate: { opacity: 1 }
-  };
+  useEffect(() => {
+    lupaStateRef.current = lupaState;
+  }, [lupaState]);
 
   const popVariants: any = {
     initial: { scale: 0.9, opacity: 0 },
     animate: { scale: 1, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 20 } }
   };
 
-  // Convert coordinate on SVG Diana to score
-  const calculateScoreFromCoords = (x: number, y: number): number => {
-    const dx = x - 100;
-    const dy = y - 100;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Radii of ring zones (diameter is 200, radius is 100)
-    // 10 ring: <= 9
-    // 9 ring: <= 18
-    // 8 ring: <= 27
-    // 7 ring: <= 36
-    // 6 ring: <= 45
-    // 5 ring: <= 54
-    // 4 ring: <= 63
-    // 3 ring: <= 72
-    // 2 ring: <= 81
-    // 1 ring: <= 90
-    // Miss: > 90
-
-    if (distance <= 4.5) return 10; // X10 inner
-    if (distance <= 9) return 10;
-    if (distance <= 18) return 9;
-    if (distance <= 27) return 8;
-    if (distance <= 36) return 7;
-    if (distance <= 45) return 6;
-    if (distance <= 54) return 5;
-    if (distance <= 63) return 4;
-    if (distance <= 72) return 3;
-    if (distance <= 81) return 2;
-    if (distance <= 90) return 1;
-    return 0; // Miss
-  };
-
-  // Diana touch/click handler: first tap zooms in, second tap registers arrow immediately
-  const handleDianaClick = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-    if (!targetRef.current || rivalThinking || duelFinished) return;
-
-    // Check if user has already shot all arrows in this end
-    if (isShootOff && userShootOffShot !== null) return;
-    if (!isShootOff && userTiros[currentEnd].length === 3) return;
-
-    if (!isDianaZoomed) {
-      // First tap: zoom in
-      if (e.cancelable) e.preventDefault();
-      setIsDianaZoomed(true);
-    } else {
-      // Second tap: register
-      if (e.cancelable) e.preventDefault();
-      
-      const rect = targetRef.current.getBoundingClientRect();
-      let clientX = 0;
-      let clientY = 0;
-
-      if ("touches" in e) {
-        if (e.touches.length === 0) return;
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-      } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      }
-
-      // Relative SVG coords (100, 100 is center, size is 200)
-      const relativeX = ((clientX - rect.left) / rect.width) * 200;
-      const relativeY = ((clientY - rect.top) / rect.height) * 200;
-
-      // Limit radius to Diana border
-      const dx = relativeX - 100;
-      const dy = relativeY - 100;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      let finalX = relativeX;
-      let finalY = relativeY;
-
-      if (dist > 98) {
-        const angle = Math.atan2(dy, dx);
-        finalX = 100 + Math.cos(angle) * 98;
-        finalY = 100 + Math.sin(angle) * 98;
-      }
-
-      setCursorPos({ x: finalX, y: finalY });
-      setIsDianaZoomed(false);
-
-      // Register immediately!
-      handleConfirmShot(finalX, finalY);
-    }
-  };
-
-  // Undo last shot of the current end
-  const handleUndo = () => {
-    if (rivalThinking || duelFinished) return;
-
-    if (isShootOff) {
-      setUserShootOffShot(null);
+  // Turn Countdown Timer effect
+  useEffect(() => {
+    if (duelFinished || rivalThinking || endSummary || showRules || isShootOff || validationPhase !== "IDLE") {
       return;
     }
 
-    // Find current active arrow index
-    const shotsCount = userTiros[currentEnd].length;
-    if (shotsCount === 0) return;
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Auto register a Miss (M) on timer expiration
+          handleScoreInput("M");
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
-    // Remove last shot
-    const updatedTiros = [...userTiros];
-    updatedTiros[currentEnd] = updatedTiros[currentEnd].slice(0, -1);
-    setUserTiros(updatedTiros);
-    setCurrentArrow(shotsCount - 1);
+    return () => clearInterval(timer);
+  }, [duelFinished, rivalThinking, endSummary, showRules, isShootOff, currentArrow, currentEnd, validationPhase]);
 
-    // Also remove the rival's corresponding shot
-    const updatedRivalTiros = [...rivalTiros];
-    if (updatedRivalTiros[currentEnd].length > updatedTiros[currentEnd].length) {
-      updatedRivalTiros[currentEnd] = updatedRivalTiros[currentEnd].slice(0, updatedTiros[currentEnd].length);
-      setRivalTiros(updatedRivalTiros);
+  // Reset timer on user's turn
+  useEffect(() => {
+    if (!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE") {
+      setTimeLeft(30);
     }
+  }, [rivalThinking, currentArrow, currentEnd, duelFinished, endSummary, showRules, validationPhase]);
+
+  // Automated draft saving on state changes
+  useEffect(() => {
+    if (duelFinished) return;
+
+    // Check if there are any shots entered to avoid saving empty drafts
+    const hasShots = userTiros.some(end => end.length > 0) || rivalTiros.some(end => end.length > 0);
+    if (!hasShots) return;
+
+    const draftSession = {
+      uid: config.id,
+      userUid: user.uid,
+      userName: user.fullName,
+      timestamp: Date.now(),
+      practiceType: "Control",
+      bowConfig: { type: config.bowType, brand: user.bowConfig.brand, model: user.bowConfig.model, poundage: user.bowConfig.poundage },
+      endsCount: userTiros.filter(e => e.length > 0).length,
+      arrowsPerEnd: 3,
+      distance: config.distance,
+      score: userTiros.flat().reduce((sum: number, b) => sum + getValNumeric(b), 0) + (userShootOffShot || 0),
+      maxScore: userTiros.filter(e => e.length > 0).length * 30 + (userShootOffShot !== null ? 10 : 0),
+      warmupArrows: 0,
+      isDuel: true,
+      isDraft: true,
+      opponent: config.rival.fullName,
+      opponentCountry: config.rival.country,
+      opponentClubName: config.rival.clubName,
+      opponentClubLogo: config.rival.clubLogo,
+      
+      // Full game states for rehydration
+      config: config,
+      currentEnd,
+      currentArrow,
+      userTiros,
+      rivalTiros,
+      userSetPoints,
+      rivalSetPoints,
+      isShootOff,
+      userShootOffShot,
+      rivalShootOffShot,
+      duelFinished,
+      impacts
+    };
+
+    saveLocalSession(config.id, draftSession).catch((err) => {
+      console.error("Error auto-saving duel draft:", err);
+    });
+  }, [
+    userTiros,
+    rivalTiros,
+    currentEnd,
+    currentArrow,
+    userSetPoints,
+    rivalSetPoints,
+    isShootOff,
+    userShootOffShot,
+    rivalShootOffShot,
+    duelFinished,
+    impacts,
+    user,
+    config
+  ]);
+
+  // Helper values to parse string scores into numeric values
+  const getValNumeric = (val: string | number): number => {
+    if (val === "X" || val === 10) return 10;
+    if (val === "M" || val === 0 || val === "") return 0;
+    return Number(val);
   };
 
-  // Confirm arrow score
-  const handleConfirmShot = (coordX?: number, coordY?: number) => {
-    if (rivalThinking || duelFinished) return;
+  // Convert coordinate on SVG target grid to score value
+  const getCoordsFromClient = (clientX: number, clientY: number) => {
+    const svgElement = dianaRef.current;
+    if (!svgElement) return null;
 
-    const targetX = coordX !== undefined ? coordX : cursorPos.x;
-    const targetY = coordY !== undefined ? coordY : cursorPos.y;
-    const score = calculateScoreFromCoords(targetX, targetY);
+    const rect = svgElement.getBoundingClientRect();
+    const pctX = ((clientX - rect.left) / rect.width) * 100;
+    const pctY = ((clientY - rect.top) / rect.height) * 100;
+
+    // Clamp coordinates inside diana bounds (0 to 100)
+    const clampedX = Math.max(0, Math.min(100, pctX));
+    const clampedY = Math.max(0, Math.min(100, pctY));
+
+    // Calculate score value based on distance from center (50, 50)
+    const dx = clampedX - 50;
+    const dy = clampedY - 50;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Find the corresponding ring
+    const sortedRings = [...presetRings].sort((a, b) => a.r - b.r);
+    const matchingRing = sortedRings.find((ring) => distance <= ring.r);
+    const value = matchingRing ? matchingRing.v : "M";
+
+    return { x: clampedX, y: clampedY, value };
+  };
+
+  // Calculate coordinates for keyboard values to plot them on target
+  const getCoordinatesForScore = (val: string) => {
+    // Offset Y coordinates relative to center (50, 50)
+    if (val === "X") return { x: 50, y: 50 };
+    if (val === "10") return { x: 50, y: 53 };
+    if (val === "9") return { x: 50, y: 57 };
+    if (val === "8") return { x: 50, y: 62 };
+    if (val === "7") return { x: 50, y: 67 };
+    if (val === "6") return { x: 50, y: 72 };
+    if (val === "5") return { x: 50, y: 77 };
+    if (val === "4") return { x: 50, y: 82 };
+    if (val === "3") return { x: 50, y: 87 };
+    if (val === "2") return { x: 50, y: 91 };
+    if (val === "1") return { x: 50, y: 95 };
+    return { x: 50, y: 99 }; // Miss (M)
+  };
+
+  // Attaches touch events for sliding magnifier zoom on target SVG
+  useEffect(() => {
+    const diana = dianaRef.current;
+    if (!diana || mode !== "TARGET" || rivalThinking || duelFinished || validationPhase !== "IDLE") return;
+
+    const onStart = (clientX: number, clientY: number) => {
+      if (isShootOff && userShootOffShot !== null) return;
+      if (!isShootOff && userTiros[currentEnd].length >= 3) return;
+
+      touchStartX.current = clientX;
+      touchStartY.current = clientY;
+      estaScrolleandoRef.current = false;
+
+      const coords = getCoordsFromClient(clientX, clientY);
+      if (!coords) return;
+
+      if (lupaTimer.current) clearTimeout(lupaTimer.current);
+
+      lupaTimer.current = setTimeout(() => {
+        if (!estaScrolleandoRef.current) {
+          setLupaState({
+            active: true,
+            x: coords.x,
+            y: coords.y,
+            clientX,
+            clientY,
+            value: coords.value
+          });
+          if (navigator.vibrate) {
+            navigator.vibrate(20);
+          }
+        }
+      }, 220);
+    };
+
+    const onMove = (clientX: number, clientY: number, e: Event) => {
+      const dx = clientX - touchStartX.current;
+      const dy = clientY - touchStartY.current;
+
+      if (!lupaStateRef.current.active && Math.sqrt(dx * dx + dy * dy) > 10) {
+        estaScrolleandoRef.current = true;
+        if (lupaTimer.current) {
+          clearTimeout(lupaTimer.current);
+          lupaTimer.current = null;
+        }
+      }
+
+      if (lupaStateRef.current.active || lupaTimer.current) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+
+        const coords = getCoordsFromClient(clientX, clientY);
+        if (coords) {
+          setLupaState(prev => {
+            if (!prev.active) return prev;
+            return {
+              ...prev,
+              x: coords.x,
+              y: coords.y,
+              clientX,
+              clientY,
+              value: coords.value
+            };
+          });
+        }
+      }
+    };
+
+    const onEnd = (clientX: number, clientY: number, e: Event) => {
+      if (lupaTimer.current) {
+        clearTimeout(lupaTimer.current);
+        lupaTimer.current = null;
+      }
+
+      const active = lupaStateRef.current.active;
+      const x = lupaStateRef.current.x;
+      const y = lupaStateRef.current.y;
+      const value = lupaStateRef.current.value;
+
+      if (active) {
+        registerShot(x, y, value);
+        setLupaState({ active: false, x: 50, y: 50, clientX: 0, clientY: 0, value: "" });
+        if (e.cancelable) e.preventDefault();
+      } else if (!estaScrolleandoRef.current) {
+        const coords = getCoordsFromClient(clientX, clientY);
+        if (coords) {
+          registerShot(coords.x, coords.y, coords.value);
+        }
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      onStart(e.touches[0].clientX, e.touches[0].clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      onMove(e.touches[0].clientX, e.touches[0].clientY, e);
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.changedTouches.length === 0) return;
+      onEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e);
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      onStart(e.clientX, e.clientY);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      onMove(e.clientX, e.clientY, e);
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      onEnd(e.clientX, e.clientY, e);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    diana.addEventListener("touchstart", handleTouchStart, { passive: false });
+    diana.addEventListener("touchmove", handleTouchMove, { passive: false });
+    diana.addEventListener("touchend", handleTouchEnd, { passive: false });
+    diana.addEventListener("mousedown", handleMouseDown);
+
+    return () => {
+      diana.removeEventListener("touchstart", handleTouchStart);
+      diana.removeEventListener("touchmove", handleTouchMove);
+      diana.removeEventListener("touchend", handleTouchEnd);
+      diana.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [mode, currentEnd, currentArrow, isShootOff, userShootOffShot, userTiros, rivalThinking, duelFinished, validationPhase]);
+
+  const registerShot = (x: number, y: number, value: string) => {
+    const numericValue = getValNumeric(value);
+
+    // Save impact coordinates
+    const newImpact: ShotImpact = {
+      endIdx: currentEnd,
+      arrowIdx: isShootOff ? 99 : userTiros[currentEnd].length,
+      x,
+      y,
+      value
+    };
+    setImpacts((prev) => [...prev, newImpact]);
 
     if (isShootOff) {
-      setUserShootOffShot(score);
+      setUserShootOffShot(numericValue);
       simulateRivalShootOff();
       return;
     }
 
     const updatedTiros = [...userTiros];
-    const currentEndShots = [...updatedTiros[currentEnd], score];
+    const currentEndShots = [...updatedTiros[currentEnd], value];
     updatedTiros[currentEnd] = currentEndShots;
     setUserTiros(updatedTiros);
 
@@ -205,15 +419,87 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     const nextArrow = currentArrow + 1;
     setCurrentArrow(nextArrow);
 
+    // Haptic vibration feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
+    }
+
     // Trigger simulated rival shot
     simulateRivalShot(nextArrow, currentEndShots);
+  };
+
+  // Keyboard button click handler
+  const handleScoreInput = (value: string) => {
+    if (rivalThinking || duelFinished || validationPhase !== "IDLE") return;
+    if (isShootOff && userShootOffShot !== null) return;
+    if (!isShootOff && userTiros[currentEnd].length >= 3) return;
+
+    const coords = getCoordinatesForScore(value);
+    registerShot(coords.x, coords.y, value);
+  };
+
+  // Undo button / backspace key handler
+  const handleUndo = () => {
+    if (rivalThinking || duelFinished || validationPhase !== "IDLE") return;
+
+    if (isShootOff) {
+      setUserShootOffShot(null);
+      return;
+    }
+
+    const shotsCount = userTiros[currentEnd].length;
+    if (shotsCount === 0) return;
+
+    // Remove last impact point
+    setImpacts((prev) => prev.filter(imp => !(imp.endIdx === currentEnd && imp.arrowIdx === shotsCount - 1)));
+
+    // Remove last shot
+    const updatedTiros = [...userTiros];
+    updatedTiros[currentEnd] = updatedTiros[currentEnd].slice(0, -1);
+    setUserTiros(updatedTiros);
+    setCurrentArrow(shotsCount - 1);
+
+    // Also remove rival corresponding shot
+    const updatedRivalTiros = [...rivalTiros];
+    if (updatedRivalTiros[currentEnd].length > updatedTiros[currentEnd].length) {
+      updatedRivalTiros[currentEnd] = updatedRivalTiros[currentEnd].slice(0, updatedTiros[currentEnd].length);
+      setRivalTiros(updatedRivalTiros);
+    }
+  };
+
+  const handleBackspace = () => {
+    handleUndo();
+  };
+
+  // Calculate Centroid & Dispersion of user's active set impacts
+  const getCentroidAndDispersion = () => {
+    const imps = impacts.filter(imp => imp.endIdx === currentEnd);
+    if (imps.length === 0) return null;
+
+    let sumX = 0;
+    let sumY = 0;
+    imps.forEach(imp => {
+      sumX += imp.x;
+      sumY += imp.y;
+    });
+    const cx = sumX / imps.length;
+    const cy = sumY / imps.length;
+
+    let sumDist = 0;
+    imps.forEach(imp => {
+      const dx = imp.x - cx;
+      const dy = imp.y - cy;
+      sumDist += Math.sqrt(dx * dx + dy * dy);
+    });
+    const dispersion = sumDist / imps.length;
+
+    return { cx, cy, dispersion };
   };
 
   // Simulate rival shoot-off arrow
   const simulateRivalShootOff = () => {
     setRivalThinking(true);
     setTimeout(() => {
-      // Simulate shot based on rating
       const rand = Math.random();
       let score = 9;
       if (config.rival.rating >= 9.3) {
@@ -238,7 +524,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setWinner("RIVAL");
           setDuelFinished(true);
         } else {
-          // Double tie in shoot-off, shoot again
           alert("¡Empate en flecha de desempate! Se dispara otra flecha.");
           setUserShootOffShot(null);
           setRivalShootOffShot(null);
@@ -248,28 +533,24 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   }, [isShootOff, userShootOffShot, rivalShootOffShot]);
 
   // Simulate rival shot
-  const simulateRivalShot = (nextArrow: number, userEndShots: number[]) => {
+  const simulateRivalShot = (nextArrow: number, userEndShots: (string | number)[]) => {
     setRivalThinking(true);
-    
-    // Simulate thinking duration
     const delay = 1200 + Math.random() * 1200;
     setTimeout(() => {
       const updatedRival = [...rivalTiros];
-      
-      // Calculate probability based on rival skill rating
-      const ratingVal = config.rival.rating; // e.g. 9.4
+      const ratingVal = config.rival.rating;
       const rand = Math.random();
       
-      let rivalScore = 9;
+      let rivalScore = "9";
       if (ratingVal >= 9.4) {
-        rivalScore = rand > 0.45 ? 10 : rand > 0.08 ? 9 : 8;
+        rivalScore = rand > 0.45 ? "10" : rand > 0.08 ? "9" : "8";
       } else if (ratingVal >= 9.0) {
-        rivalScore = rand > 0.65 ? 10 : rand > 0.25 ? 9 : rand > 0.05 ? 8 : 7;
+        rivalScore = rand > 0.65 ? "10" : rand > 0.25 ? "9" : rand > 0.05 ? "8" : "7";
       } else {
-        rivalScore = rand > 0.8 ? 10 : rand > 0.45 ? 9 : rand > 0.15 ? 8 : 7;
+        rivalScore = rand > 0.8 ? "10" : rand > 0.45 ? "9" : rand > 0.15 ? "8" : "7";
       }
 
-      updatedRival[currentEnd] = [...updatedRival[currentEnd], rivalScore];
+      updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), rivalScore];
       setRivalTiros(updatedRival);
       setRivalThinking(false);
 
@@ -280,9 +561,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }, delay);
   };
 
-  const evaluateEndCompletion = (userEndShots: number[], rivalEndShots: number[]) => {
-    const userSum = userEndShots.reduce((a, b) => a + b, 0);
-    const rivalSum = rivalEndShots.reduce((a, b) => a + b, 0);
+  // Simulate rival upload delay
+  const simulateRivalUpload = () => {
+    setTimeout(() => {
+      setRivalPhoto("rival_done");
+    }, 1500);
+  };
+
+  // Evaluate points after end completion
+  const evaluateEndCompletion = (userEndShots: (string | number)[], rivalEndShots: (string | number)[]) => {
+    const userSum = userEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+    const rivalSum = rivalEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
 
     let summaryMsg = "";
     
@@ -296,7 +585,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         summaryMsg = `Ronda empatada a ${userSum} puntos`;
       }
     } else {
-      // Set recurve logic
+      // Set recurve set system logic
       if (userSum > rivalSum) {
         setUserSetPoints((prev) => prev + 2);
         summaryMsg = `¡Ganaste el Set! +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`;
@@ -310,14 +599,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }
     }
 
-    setEndSummary(summaryMsg);
+    setEndSummaryMsg(summaryMsg);
+    setUserPhoto(null);
+    setRivalPhoto(null);
+    setValidationPhase("UPLOAD"); // Start photo validation flow!
   };
 
   // Evaluate set/match winner after points update
   useEffect(() => {
     if (endSummary === null) return;
 
-    // Check if match ended
     const nextEnd = currentEnd + 1;
     let matchOver = false;
     let finalWinner: "USER" | "RIVAL" | "TIE" | null = null;
@@ -337,7 +628,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         }
       }
     } else {
-      // Set System (first to 6 wins)
       if (userSetPoints >= 6 && userSetPoints > rivalSetPoints) {
         matchOver = true;
         finalWinner = "USER";
@@ -345,7 +635,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         matchOver = true;
         finalWinner = "RIVAL";
       } else if (nextEnd === 5) {
-        // Max 5 sets, if no one has 6 points or it's a tie
         if (userSetPoints === rivalSetPoints) {
           finalWinner = "TIE";
         } else if (userSetPoints > rivalSetPoints) {
@@ -372,12 +661,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   const handleNextEnd = () => {
     setEndSummary(null);
+    setEndSummaryMsg(null);
+    setValidationPhase("IDLE");
+    setUserPhoto(null);
+    setRivalPhoto(null);
     setCurrentEnd((prev) => prev + 1);
     setCurrentArrow(0);
   };
 
-  const getCumulativeTotal = (tiros: number[][]): number => {
-    return tiros.reduce((sum, end) => sum + end.reduce((a, b) => a + b, 0), 0);
+  const getCumulativeTotal = (tiros: (string | number)[][]): number => {
+    return tiros.reduce((sum: number, end) => sum + end.reduce((endSum: number, b) => endSum + getValNumeric(b), 0), 0);
   };
 
   const triggerConfetti = () => {
@@ -388,12 +681,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     });
   };
 
-  // Save duel session and update local volume
+  // Save completed duel session to IndexedDB
   const handleSaveAndExit = async () => {
-    // Generate arrows quantity
     const totalUserArrows = userTiros.flat().length + (userShootOffShot !== null ? 1 : 0);
-    const userTotalScore = userTiros.flat().reduce((a, b) => a + b, 0) + (userShootOffShot || 0);
-
+    const userTotalScore = userTiros.flat().reduce((sum: number, b) => sum + getValNumeric(b), 0) + (userShootOffShot || 0);
     const duelId = config.id || generateResilientId("DUE");
 
     const newSession = {
@@ -401,7 +692,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       userUid: user.uid,
       userName: user.fullName,
       timestamp: Date.now(),
-      practiceType: "Control", // count as control/volume practice
+      practiceType: "Control",
       bowConfig: { type: config.bowType, brand: user.bowConfig.brand, model: user.bowConfig.model, poundage: user.bowConfig.poundage },
       endsCount: userTiros.filter(e => e.length > 0).length,
       arrowsPerEnd: 3,
@@ -410,6 +701,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       maxScore: userTiros.filter(e => e.length > 0).length * 30 + (userShootOffShot !== null ? 10 : 0),
       warmupArrows: 0,
       isDuel: true,
+      isDraft: false, // Mark completed to distinguish from drafts!
       opponent: config.rival.fullName,
       opponentCountry: config.rival.country,
       opponentClubName: config.rival.clubName,
@@ -428,6 +720,19 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   const currentRivalName = config.rival.fullName;
   const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "🇲🇽";
+  const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
+
+  // Confirm and go back warning if match in progress
+  const handleBackWithConfirm = () => {
+    if (duelFinished) {
+      onBack();
+      return;
+    }
+    const confirmExit = window.confirm("¿Seguro que quieres salir? El progreso del duelo se guardará automáticamente como borrador.");
+    if (confirmExit) {
+      onBack();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4 py-3 min-h-full relative overflow-hidden select-none">
@@ -439,10 +744,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       {/* Arena Header Status bar */}
       <div className="flex items-center justify-between border-b border-white/[0.05] pb-2 z-10">
         <button
-          onClick={onBack}
-          disabled={rivalThinking || (currentEnd > 0 && !duelFinished)}
+          onClick={handleBackWithConfirm}
+          disabled={rivalThinking}
           className={`p-2 rounded-xl bg-neutral-900/60 backdrop-blur-md border border-white/10 text-gray-dim hover:text-white transition ${
-            rivalThinking || (currentEnd > 0 && !duelFinished) ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
+            rivalThinking ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
           }`}
         >
           <ArrowLeft size={14} />
@@ -450,7 +755,19 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         <span className="text-[10px] text-purple-400 font-black tracking-widest uppercase">
           {isShootOff ? "Flecha Desempate" : `Set ${currentEnd + 1} de 5`}
         </span>
-        <div className="w-8" />
+        
+        {/* Countdown timer */}
+        <div className="w-10 flex justify-end">
+          {!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE" && (
+            <span className={`text-xs font-mono font-black border px-2 py-0.5 rounded-full ${
+              timeLeft <= 10
+                ? "text-red-500 border-red-500/30 bg-red-500/10 animate-pulse"
+                : "text-cyan-neon border-cyan-neon/30 bg-cyan-neon/10"
+            }`}>
+              {timeLeft}s
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Duelist panels and live scoreboard */}
@@ -459,19 +776,25 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         {/* Score grid */}
         <div className="grid grid-cols-5 items-center gap-1">
           {/* Athlete (User) Panel */}
-          <div className="col-span-2 flex flex-col items-center gap-1.5 text-center">
-            <div className="w-10 h-10 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-xs shadow-glow-cyan">
-              {user.fullName.substring(0, 2).toUpperCase()}
+          <div className="col-span-2 flex flex-col items-center gap-1 text-center">
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-cyan-neon/5 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-sm shadow-glow-cyan relative">
+                {user.fullName.substring(0, 2).toUpperCase()}
+              </div>
+              <span className="absolute -bottom-1 -right-1 text-[11px] drop-shadow-md bg-neutral-950/80 px-0.5 rounded">{userFlag}</span>
             </div>
-            <span className="text-[11px] text-white font-extrabold truncate max-w-[85px]">
+            <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               Tú ({config.bowType})
+            </span>
+            <span className="text-[9px] text-gray-dim flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
+              <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3 h-3 shrink-0" />
+              <span className="truncate">{user.clubName || "Independiente"}</span>
             </span>
           </div>
 
           {/* Central score digits */}
           <div className="col-span-1 flex flex-col items-center justify-center">
             {isCompound ? (
-              // Cumulative points compound score
               <div className="flex justify-center items-baseline gap-1 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
                 <span className="text-xl font-black text-cyan-neon">
                   {getCumulativeTotal(userTiros) + (userShootOffShot || 0)}
@@ -482,7 +805,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 </span>
               </div>
             ) : (
-              // Set recurve set system score
               <div className="flex justify-center items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
                 <span className="text-2xl font-black text-cyan-neon text-glow-cyan">
                   {userSetPoints}
@@ -499,15 +821,19 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </div>
 
           {/* Rival Panel */}
-          <div className="col-span-2 flex flex-col items-center gap-1.5 text-center">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-red-rival/10 border border-red-rival/30 flex items-center justify-center text-red-rival font-black text-xs shadow-glow-red">
+          <div className="col-span-2 flex flex-col items-center gap-1 text-center">
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-red-rival/5 border border-red-rival/30 flex items-center justify-center text-red-rival font-black text-sm shadow-glow-red relative">
                 {currentRivalName.substring(0, 2).toUpperCase()}
               </div>
-              <span className="absolute bottom-0 right-0 text-[10px]">{currentRivalFlag}</span>
+              <span className="absolute -bottom-1 -right-1 text-[11px] drop-shadow-md bg-neutral-950/80 px-0.5 rounded">{currentRivalFlag}</span>
             </div>
-            <span className="text-[11px] text-white font-extrabold truncate max-w-[85px]">
+            <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               {currentRivalName}
+            </span>
+            <span className="text-[9px] text-gray-dim flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
+              <ClubLogoIcon logo={config.rival.clubLogo || "0"} className="w-3 h-3 shrink-0" />
+              <span className="truncate">{config.rival.clubName || "Club Rival"}</span>
             </span>
           </div>
         </div>
@@ -536,8 +862,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </div>
         )}
 
-        {/* Live arrow-by-arrow scoring list for current end */}
-        {!isShootOff && (
+        {/* Live arrow-by-arrow scoring list for current end (only if in TARGET mode) */}
+        {!isShootOff && mode === "TARGET" && (
           <div className="border-t border-white/[0.03] pt-3 flex flex-col gap-2">
             <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider text-center">
               Flechas End Actual
@@ -546,7 +872,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {/* User shots */}
               <div className="flex justify-end gap-1.5">
                 {[0, 1, 2].map((idx) => {
-                  const val = userTiros[currentEnd][idx];
+                  const val = userTiros[currentEnd]?.[idx];
                   return (
                     <div
                       key={idx}
@@ -565,8 +891,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {/* Rival shots */}
               <div className="flex justify-start gap-1.5">
                 {[0, 1, 2].map((idx) => {
-                  const val = rivalTiros[currentEnd][idx];
-                  const isLoading = idx === userTiros[currentEnd].length - 1 && rivalThinking;
+                  const val = rivalTiros[currentEnd]?.[idx];
+                  const isLoading = idx === (userTiros[currentEnd]?.length ?? 0) - 1 && rivalThinking;
                   return (
                     <div
                       key={idx}
@@ -594,8 +920,34 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         )}
       </div>
 
-      {/* Target Arena (Diana with Scale Zoom) */}
+      {/* Mode Selector Toggle */}
       {!duelFinished && (
+        <div className="flex bg-neutral-900 border border-white/10 p-0.5 rounded-xl max-w-[200px] mx-auto z-10 relative">
+          <button
+            onClick={() => setMode("TARGET")}
+            className={`flex-1 py-1 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
+              mode === "TARGET"
+                ? "bg-cyan-neon text-black shadow-glow-cyan"
+                : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Diana
+          </button>
+          <button
+            onClick={() => setMode("KEYBOARD")}
+            className={`flex-1 py-1 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
+              mode === "KEYBOARD"
+                ? "bg-cyan-neon text-black shadow-glow-cyan"
+                : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Teclado
+          </button>
+        </div>
+      )}
+
+      {/* Target Arena (Diana Mode) */}
+      {!duelFinished && mode === "TARGET" && (
         <div className="flex-1 flex flex-col justify-center items-center gap-3 z-10 relative">
           
           {/* Backdrop overlay when zoomed */}
@@ -617,7 +969,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   Diana Ampliada
                 </span>
                 <span className="text-[9px] text-gray-300 mt-1 block leading-none">
-                  Toca para registrar · Fuera para cancelar
+                  Arrastra o toca para precisar · Suelta para registrar
                 </span>
               </div>
             </div>
@@ -627,74 +979,249 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="flex gap-4 items-center justify-center bg-black/40 px-4 py-1.5 rounded-full border border-white/5 text-[10px] font-bold z-10">
             <span className="text-gray-dim">Puntuación Estimada:</span>
             <span className="text-yellow-gold font-extrabold text-xs">
-              🎯 {calculateScoreFromCoords(cursorPos.x, cursorPos.y)} Ptos
+              🎯 {getCoordsFromClient(cursorPos.x, cursorPos.y)?.value || "M"} Ptos
             </span>
           </div>
 
-          {/* Interactive target SVG */}
+          {/* Interactive target SVG (100x100 base) */}
           <div className="relative w-full max-w-[250px] aspect-square bg-neutral-950/30 rounded-full border border-white/5 flex items-center justify-center shadow-2xl overflow-visible">
             
             <motion.svg
-              ref={targetRef}
-              viewBox="0 0 200 200"
-              onMouseDown={handleDianaClick}
-              onTouchStart={handleDianaClick}
+              ref={dianaRef}
+              viewBox="0 0 100 100"
               animate={{ scale: isDianaZoomed ? 2.2 : 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
               className={`w-full h-full cursor-crosshair select-none overflow-visible relative transition-all duration-300 ${
                 isDianaZoomed ? "z-50" : "z-10"
               }`}
             >
-              {/* White rings (1 y 2) */}
-              <circle cx="100" cy="100" r="90" fill="#FFFFFF" stroke="#000000" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="81" fill="#FFFFFF" stroke="#000000" strokeWidth="0.5" />
-              
-              {/* Black rings (3 y 4) */}
-              <circle cx="100" cy="100" r="72" fill="#000000" stroke="#FFFFFF" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="63" fill="#000000" stroke="#FFFFFF" strokeWidth="0.5" />
-              
-              {/* Blue rings (5 y 6) */}
-              <circle cx="100" cy="100" r="54" fill="#00E5FF" stroke="#000000" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="45" fill="#00E5FF" stroke="#000000" strokeWidth="0.5" />
-              
-              {/* Red rings (7 y 8) */}
-              <circle cx="100" cy="100" r="36" fill="#FF1E27" stroke="#000000" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="27" fill="#FF1E27" stroke="#000000" strokeWidth="0.5" />
-              
-              {/* Gold rings (9, 10 y X10) */}
-              <circle cx="100" cy="100" r="18" fill="#FFF200" stroke="#000000" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="9" fill="#FFF200" stroke="#000000" strokeWidth="0.5" />
-              <circle cx="100" cy="100" r="4.5" fill="#FFF200" stroke="#000000" strokeWidth="0.3" />
+              {/* Draw rings */}
+              {[...presetRings].sort((a, b) => b.r - a.r).map((ring, idx) => (
+                <circle
+                  key={idx}
+                  cx="50"
+                  cy="50"
+                  r={ring.r}
+                  fill={ring.fill}
+                  stroke={ring.stroke}
+                  strokeWidth="0.3"
+                />
+              ))}
 
               {/* Cursor Point */}
               <circle
                 cx={cursorPos.x}
                 cy={cursorPos.y}
-                r="3"
-                className="fill-purple-400 stroke-white stroke-[0.8px] shadow-glow-purple pointer-events-none"
+                r="1.5"
+                className="fill-purple-400 stroke-white stroke-[0.4px] shadow-glow-purple pointer-events-none"
               />
               
               {/* Crosshair on cursor */}
-              <line x1={cursorPos.x - 6} y1={cursorPos.y} x2={cursorPos.x + 6} y2={cursorPos.y} stroke="white" strokeWidth="0.5" />
-              <line x1={cursorPos.x} y1={cursorPos.y - 6} x2={cursorPos.x} y2={cursorPos.y + 6} stroke="white" strokeWidth="0.5" />
+              <line x1={cursorPos.x - 3} y1={cursorPos.y} x2={cursorPos.x + 3} y2={cursorPos.y} stroke="white" strokeWidth="0.25" />
+              <line x1={cursorPos.x} y1={cursorPos.y - 3} x2={cursorPos.x} y2={cursorPos.y + 3} stroke="white" strokeWidth="0.25" />
+              
+              {/* Centroid and Dispersion group */}
+              {(() => {
+                const stats = getCentroidAndDispersion();
+                if (!stats || stats.dispersion === 0) return null;
+                return (
+                  <>
+                    <circle cx={stats.cx} cy={stats.cy} r="0.8" fill="#FFC107" stroke="#FFF" strokeWidth="0.2" />
+                    <circle
+                      cx={stats.cx}
+                      cy={stats.cy}
+                      r={stats.dispersion}
+                      fill="rgba(255, 193, 7, 0.12)"
+                      stroke="#FFC107"
+                      strokeWidth="0.3"
+                      strokeDasharray="1,1"
+                    />
+                  </>
+                );
+              })()}
+
+              {/* User Impact points */}
+              {impacts.filter(imp => imp.endIdx === currentEnd).map((imp, idx) => (
+                <circle
+                  key={idx}
+                  cx={imp.x}
+                  cy={imp.y}
+                  r="1.2"
+                  className="fill-cyan-neon stroke-white stroke-[0.3px]"
+                />
+              ))}
             </motion.svg>
           </div>
 
           <span className="text-[8px] text-gray-dim font-bold uppercase text-center mt-1 z-10">
-            Toca la diana para ampliarla · Toca de nuevo para registrar
+            Desliza sobre la diana para ampliarla · Suelta para registrar
           </span>
         </div>
       )}
 
+      {/* Keyboard Mode Arena */}
+      {!duelFinished && mode === "KEYBOARD" && (
+        <div className="flex-1 flex flex-col gap-3 justify-between z-10 relative">
+          
+          {/* Side-by-side match progress table */}
+          <div className="w-full max-w-[320px] mx-auto overflow-y-auto border border-white/10 rounded-2xl bg-neutral-950/40 max-h-[140px] z-10 relative">
+            <table className="w-full text-left text-[11px] border-collapse">
+              <thead>
+                <tr className="bg-neutral-900/80 text-gray-dim font-bold uppercase text-[8px] tracking-wider border-b border-white/10 text-center">
+                  <th className="py-2 px-1">Set</th>
+                  <th className="py-2 px-1">Tus Tiros</th>
+                  <th className="py-2 px-1">Tú</th>
+                  <th className="py-2 px-1">Rival</th>
+                  <th className="py-2 px-1">Tiros Rival</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[0, 1, 2, 3, 4].map((idx) => {
+                  const isCurrent = currentEnd === idx;
+                  
+                  const userEnd = userTiros[idx] || [];
+                  const rivalEnd = rivalTiros[idx] || [];
+                  
+                  const userSum = userEnd.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+                  const rivalSum = rivalEnd.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+
+                  if (idx > currentEnd && userEnd.length === 0 && rivalEnd.length === 0) return null;
+
+                  return (
+                    <tr
+                      key={idx}
+                      className={`border-b border-white/5 transition text-center ${
+                        isCurrent ? "bg-cyan-neon/5 border-cyan-neon/20" : ""
+                      }`}
+                    >
+                      <td className="py-2 px-1 font-bold text-gray-dim">{idx + 1}</td>
+                      
+                      {/* User shots */}
+                      <td className="py-2 px-1">
+                        <div className="flex justify-center gap-1">
+                          {[0, 1, 2].map((arrowIdx) => {
+                            const val = userEnd[arrowIdx];
+                            const isEditing = isCurrent && currentArrow === arrowIdx && mode === "KEYBOARD";
+                            return (
+                              <span
+                                key={arrowIdx}
+                                className={`w-5 h-5 rounded flex items-center justify-center font-bold text-[9px] border ${
+                                  val !== undefined
+                                    ? "bg-cyan-neon/10 border-cyan-neon/40 text-cyan-neon shadow-glow-cyan"
+                                    : isEditing
+                                    ? "border-cyan-neon ring-1 ring-cyan-neon animate-pulse"
+                                    : "bg-neutral-900 border-white/5 text-gray-600"
+                                }`}
+                              >
+                                {val !== undefined ? val : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+
+                      {/* User Total */}
+                      <td className="py-2 px-1 font-extrabold text-cyan-neon">
+                        {userEnd.length > 0 ? userSum : "—"}
+                      </td>
+
+                      {/* Rival Total */}
+                      <td className="py-2 px-1 font-extrabold text-red-rival">
+                        {rivalEnd.length > 0 ? rivalSum : "—"}
+                      </td>
+
+                      {/* Rival shots */}
+                      <td className="py-2 px-1">
+                        <div className="flex justify-center gap-1">
+                          {[0, 1, 2].map((arrowIdx) => {
+                            const val = rivalEnd[arrowIdx];
+                            const isLoading = isCurrent && arrowIdx === userEnd.length - 1 && rivalThinking;
+                            return (
+                              <span
+                                key={arrowIdx}
+                                className={`w-5 h-5 rounded flex items-center justify-center font-bold text-[9px] border ${
+                                  val !== undefined
+                                    ? "bg-red-rival/10 border-red-rival/40 text-red-rival shadow-glow-red"
+                                    : isLoading
+                                    ? "border-purple-400 animate-spin bg-purple-500/5"
+                                    : "bg-neutral-900 border-white/5 text-gray-600"
+                                }`}
+                              >
+                                {val !== undefined ? val : isLoading ? "●" : ""}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Keypad Buttons 4x4 */}
+          <div className="grid grid-cols-4 gap-2 mt-2 w-full max-w-[320px] mx-auto">
+            {/* Max points */}
+            {["X", "10", "9"].map((key) => (
+              <button
+                key={key}
+                onClick={() => handleScoreInput(key)}
+                className="py-3.5 rounded-xl border-2 border-yellow-gold text-yellow-gold font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,242,0,0.15)] hover:bg-yellow-gold/10 active:scale-95 transition"
+              >
+                {key}
+              </button>
+            ))}
+            {/* Backspace */}
+            <button
+              onClick={handleBackspace}
+              className="py-3.5 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-sm flex items-center justify-center cursor-pointer hover:text-white hover:bg-neutral-850 active:scale-95 transition"
+            >
+              ⌫
+            </button>
+
+            {/* Standard points 8-5 */}
+            {["8", "7", "6", "5"].map((key) => (
+              <button
+                key={key}
+                onClick={() => handleScoreInput(key)}
+                className="py-3.5 rounded-xl border border-cyan-brand/60 text-white font-bold text-sm flex items-center justify-center cursor-pointer hover:border-cyan-neon hover:bg-cyan-neon/5 active:scale-95 transition"
+              >
+                {key}
+              </button>
+            ))}
+
+            {/* Standard points 4-1 */}
+            {["4", "3", "2", "1"].map((key) => (
+              <button
+                key={key}
+                onClick={() => handleScoreInput(key)}
+                className="py-3.5 rounded-xl border border-cyan-brand/60 text-white font-bold text-sm flex items-center justify-center cursor-pointer hover:border-cyan-neon hover:bg-cyan-neon/5 active:scale-95 transition"
+              >
+                {key}
+              </button>
+            ))}
+
+            {/* Miss */}
+            <button
+              onClick={() => handleScoreInput("M")}
+              className="col-span-4 py-3.5 rounded-xl border border-red-rival/40 text-red-rival font-extrabold text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-red-rival/10 active:scale-95 transition"
+            >
+              Miss (M)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons (Undo only, Confirm is automatic) */}
-      {!duelFinished && (
+      {!duelFinished && mode === "TARGET" && (
         <div className="flex px-1 z-10 mt-auto">
           <button
             onClick={handleUndo}
             disabled={
               rivalThinking || 
               (isShootOff && userShootOffShot === null) || 
-              (!isShootOff && userTiros[currentEnd].length === 0)
+              (!isShootOff && (userTiros[currentEnd]?.length ?? 0) === 0)
             }
             className="w-full h-12 rounded-2xl bg-neutral-900 border border-white/5 text-gray-dim hover:text-red-rival flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed text-xs font-black uppercase tracking-wider"
             title="Deshacer Tiro"
@@ -704,6 +1231,232 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </button>
         </div>
       )}
+
+      {/* Target Zoom Lupa Hovering box */}
+      {lupaState.active && (
+        <div
+          className="fixed pointer-events-none z-[99999] border-2 border-yellow-gold/60 rounded-full overflow-hidden shadow-[0_0_20px_rgba(255,242,0,0.4)] bg-neutral-950"
+          style={{
+            left: lupaState.clientX - 65,
+            top: lupaState.clientY - 145,
+            width: "130px",
+            height: "130px"
+          }}
+        >
+          <svg
+            viewBox={`${lupaState.x - 12} ${lupaState.y - 12} 24 24`}
+            className="w-full h-full"
+          >
+            {[...presetRings].sort((a, b) => b.r - a.r).map((ring, idx) => (
+              <circle
+                key={idx}
+                cx="50"
+                cy="50"
+                r={ring.r}
+                fill={ring.fill}
+                stroke={ring.stroke}
+                strokeWidth="0.2"
+              />
+            ))}
+            <circle
+              cx={lupaState.x}
+              cy={lupaState.y}
+              r="0.5"
+              className="fill-purple-400 stroke-white stroke-[0.1px]"
+            />
+            <line x1={lupaState.x - 2} y1={lupaState.y} x2={lupaState.x + 2} y2={lupaState.y} stroke="white" strokeWidth="0.1" />
+            <line x1={lupaState.x} y1={lupaState.y - 2} x2={lupaState.x} y2={lupaState.y + 2} stroke="white" strokeWidth="0.1" />
+          </svg>
+          <div className="absolute bottom-1.5 inset-x-0 text-[10px] font-black text-center text-yellow-gold drop-shadow-[0_1px_2px_rgba(0,0,0,1)] uppercase leading-none">
+            {lupaState.value}
+          </div>
+        </div>
+      )}
+
+      {/* Photo Validation Modal Overlay */}
+      <AnimatePresence>
+        {validationPhase !== "IDLE" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              variants={popVariants}
+              initial="initial"
+              animate="animate"
+              exit="initial"
+              className="w-full max-w-[340px] bg-neutral-950 border border-purple-500/30 p-5 rounded-[32px] flex flex-col gap-4 shadow-2xl relative overflow-hidden"
+            >
+              {/* Header effect */}
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 to-cyan-neon" />
+
+              <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                <div>
+                  <h3 className="text-white text-xs font-black uppercase tracking-wider">
+                    Validación de Diana - Set {currentEnd + 1}
+                  </h3>
+                  <p className="text-[8px] text-gray-dim uppercase tracking-widest font-bold">
+                    Revisión de Impactos del Turno
+                  </p>
+                </div>
+                <span className="text-[10px] text-cyan-neon font-mono font-bold bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+                  {config.distance}m
+                </span>
+              </div>
+
+              {validationPhase === "UPLOAD" && (
+                <div className="flex flex-col gap-3.5">
+                  <p className="text-[10px] text-gray-dim leading-relaxed">
+                    Sube una foto de tu diana de este set para que tu rival verifique tus puntuaciones.
+                  </p>
+
+                  {/* Upload box */}
+                  <label className="border border-dashed border-white/10 hover:border-purple-400/40 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-neutral-900/40 min-h-[110px] relative overflow-hidden group transition-all">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const url = URL.createObjectURL(file);
+                          setUserPhoto(url);
+                          simulateRivalUpload();
+                        }
+                      }}
+                    />
+                    
+                    {userPhoto ? (
+                      <img src={userPhoto} alt="Tu diana" className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <>
+                        <span className="text-2xl group-hover:scale-110 transition">📸</span>
+                        <span className="text-[10px] text-white font-bold uppercase tracking-wider">Tomar o subir foto</span>
+                        <span className="text-[8px] text-gray-dim">JPG, PNG hasta 5MB</span>
+                      </>
+                    )}
+                  </label>
+
+                  {/* Status Indicator */}
+                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[9px] font-bold">
+                    <span className="text-gray-dim">Tu Estado:</span>
+                    <span className={userPhoto ? "text-cyan-neon animate-pulse" : "text-yellow-gold"}>
+                      {userPhoto ? "✓ Foto Subida" : "⌛ Pendiente de foto"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[9px] font-bold">
+                    <span className="text-gray-dim">Estado del Rival:</span>
+                    <span className={rivalPhoto ? "text-cyan-neon" : "text-yellow-gold flex items-center gap-1"}>
+                      {rivalPhoto ? "✓ Foto Subida" : (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 border border-yellow-gold border-t-transparent animate-spin rounded-full" />
+                          <span>Esperando rival...</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setValidationPhase("REVIEW")}
+                    disabled={!userPhoto || !rivalPhoto}
+                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-neutral-900 disabled:text-gray-dim disabled:border border-white/5 text-white font-bold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center gap-1.5 font-black"
+                  >
+                    <span>Revisar Diana Rival</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              )}
+
+              {validationPhase === "REVIEW" && (
+                <div className="flex flex-col gap-3.5">
+                  <p className="text-[10px] text-gray-dim leading-relaxed">
+                    Compara los impactos declarados por <span className="text-white font-bold">{config.rival.fullName}</span> en la diana virtual con su foto real.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 items-center">
+                    <div className="flex flex-col gap-1 text-center">
+                      <span className="text-[8px] text-gray-dim uppercase font-bold">Foto del Rival</span>
+                      <div className="w-full aspect-square rounded-xl bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden relative">
+                        <div className="absolute inset-0 bg-neutral-950 flex items-center justify-center">
+                          <svg viewBox="0 0 100 100" className="w-full h-full p-2">
+                            {[...presetRings].sort((a, b) => b.r - a.r).map((ring, idx) => (
+                              <circle
+                                key={idx}
+                                cx="50"
+                                cy="50"
+                                r={ring.r}
+                                fill={ring.fill}
+                                stroke={ring.stroke}
+                                strokeWidth="0.2"
+                              />
+                            ))}
+                            
+                            {/* Render rival simulated impacts */}
+                            {(rivalTiros[currentEnd] || []).map((val, idx) => {
+                              const coords = getCoordinatesForScore(String(val));
+                              // Jitter slightly for natural realism
+                              const jX = coords.x + (idx - 1) * 2;
+                              const jY = coords.y + (idx % 2 === 0 ? 1 : -1) * 1.5;
+                              return (
+                                <circle
+                                  key={idx}
+                                  cx={jX}
+                                  cy={jY}
+                                  r="2"
+                                  fill="#E53935"
+                                  stroke="#FFFFFF"
+                                  strokeWidth="0.4"
+                                />
+                              );
+                            })}
+                          </svg>
+                        </div>
+                        <span className="absolute bottom-1 right-1 text-[8px] bg-red-rival/80 text-white font-black px-1 py-0.2 rounded uppercase">
+                          DIANA RIVAL
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[8px] text-gray-dim uppercase font-bold">Impactos Registrados</span>
+                      <div className="bg-neutral-900/60 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
+                        {(rivalTiros[currentEnd] || []).map((val, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-xs">
+                            <span className="text-gray-dim">Flecha {idx + 1}:</span>
+                            <span className="text-white font-black">{val} Pts</span>
+                          </div>
+                        ))}
+                        <div className="h-[1px] bg-white/5 my-1" />
+                        <div className="flex justify-between items-center text-xs font-bold text-red-rival">
+                          <span>Total End:</span>
+                          <span>{(rivalTiros[currentEnd] || []).reduce((sum: number, b) => sum + getValNumeric(b), 0)} Pts</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[8px] text-yellow-gold font-bold leading-tight">
+                    ⚠ Las fotos de validación se eliminarán de forma segura al finalizar el duelo para ahorrar almacenamiento.
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      setValidationPhase("IDLE");
+                      setEndSummary(endSummaryMsg);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 text-center shadow-glow-cyan"
+                  >
+                    Aceptar y Validar
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* End Complete popup card overlay */}
       <AnimatePresence>
@@ -733,7 +1486,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </p>
               <button
                 onClick={handleNextEnd}
-                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition font-black"
               >
                 Siguiente Set
               </button>
@@ -757,7 +1510,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               animate="animate"
               className="w-full max-w-[350px] bg-neutral-950 border border-purple-500/20 p-6 rounded-[36px] flex flex-col items-center text-center gap-5 shadow-2xl relative overflow-hidden"
             >
-              {/* Glowing header line */}
               <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500" />
 
               <div className="w-16 h-16 rounded-full bg-neutral-900 border border-purple-500/30 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(168,85,247,0.15)] mt-2">
@@ -785,13 +1537,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.03]">
                   <span className="text-gray-dim">Tu Puntuación Total:</span>
                   <span className="text-cyan-neon font-black">
-                    {userTiros.flat().reduce((a, b) => a + b, 0)} pts
+                    {userTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.03]">
                   <span className="text-gray-dim">Puntuación Rival:</span>
                   <span className="text-red-rival font-black">
-                    {rivalTiros.flat().reduce((a, b) => a + b, 0)} pts
+                    {rivalTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1">
@@ -804,12 +1556,69 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               <button
                 onClick={handleSaveAndExit}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_20px_rgba(168,85,247,0.2)] text-center"
+                className="w-full py-3.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_20px_rgba(168,85,247,0.2)] text-center font-black"
               >
                 Guardar y Volver a Dashboard
               </button>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rules Modal Overlay */}
+      <AnimatePresence>
+        {showRules && (
+          <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              variants={popVariants}
+              initial="initial"
+              animate="animate"
+              className="w-full max-w-[340px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-neon" />
+              
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto mt-2">
+                <HelpCircle size={24} />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] text-purple-400 font-black tracking-widest uppercase">
+                  Reglamento de la Arena
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  Reglas Oficiales 1v1
+                </h3>
+              </div>
+
+              <div className="flex flex-col gap-3 text-left text-[11px] text-gray-dim mt-2">
+                <div className="flex gap-2">
+                  <span className="text-purple-400 font-bold shrink-0">⏱</span>
+                  <p>
+                    <strong className="text-white font-bold">Límite de tiempo:</strong> Tienes 30 segundos por flecha. Si expira el tiempo se anotará un Fallo (Miss) automático.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-purple-400 font-bold shrink-0">📸</span>
+                  <p>
+                    <strong className="text-white font-bold">Validación fotográfica:</strong> Al final de cada set, ambos subirán una foto del blanco virtual para validación.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-purple-400 font-bold shrink-0">🧹</span>
+                  <p>
+                    <strong className="text-white font-bold">Limpieza automática:</strong> Las fotos de validación se eliminarán del almacenamiento al finalizar el duelo.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowRules(false)}
+                className="w-full py-3 mt-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition shadow-[0_0_15px_rgba(168,85,247,0.2)]"
+              >
+                Comprendido y Listo
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

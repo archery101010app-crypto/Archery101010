@@ -277,6 +277,46 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     }
   };
 
+  const handleRestoreSession = async (sessionId: string) => {
+    try {
+      const { getLocalSession, saveLocalSession, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+      const { runSync } = await import("@/lib/db/syncManager");
+      
+      const session = await getLocalSession(sessionId);
+      if (session) {
+        const restoredSession = {
+          ...session,
+          deletedByArcher: false,
+          restoredByCoach: true
+        };
+        
+        // Update locally
+        await saveLocalSession(sessionId, restoredSession);
+        
+        // Queue sync UPDATE
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "UPDATE",
+          payloadId: sessionId,
+          payload: restoredSession,
+          timestamp: Date.now()
+        });
+        
+        // Refresh local sessions list in coach view
+        const list = await getLocalSessions();
+        setSessions(list);
+        
+        // Trigger sync
+        runSync();
+        
+        alert("Sesión restituida correctamente. Se ha notificado al arquero.");
+      }
+    } catch (err) {
+      console.error("Error restoring session:", err);
+    }
+  };
+
   // Get active session list for Overview
   const getRecentActivities = () => {
     return sessions
@@ -378,6 +418,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             athlete={selectedAthlete}
             onClose={() => setSelectedAthlete(null)}
             sessions={sessions}
+            onRestoreSession={handleRestoreSession}
           />
         )}
       </AnimatePresence>

@@ -134,6 +134,61 @@ export default function Home() {
     checkForDrafts();
   }, [user]);
 
+  // Check for restored sessions by coach to show notification
+  useEffect(() => {
+    if (!user) return;
+    const userUid = user.uid;
+    
+    async function checkForRestoredSessions() {
+      try {
+        const { getLocalSessions, saveLocalSession, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+        const { runSync } = await import("@/lib/db/syncManager");
+        const list = await getLocalSessions();
+        
+        // Find sessions restored by coach that belong to this user
+        const restored = list.filter(s => s.userId === userUid && s.restoredByCoach === true);
+        
+        for (const session of restored) {
+          // Notify the user
+          alert(`Tu coach ha restituido tu entrenamiento de ${session.format} (${session.distance}m) del ${new Date(session.timestamp).toLocaleDateString()}.`);
+          
+          // Clear restoredByCoach flag so the alert doesn't show again
+          const updatedSession = { ...session, restoredByCoach: false };
+          await saveLocalSession(session.id, updatedSession);
+          
+          // Sync update to Firestore
+          await addToSyncQueue({
+            id: generateResilientId("TXN"),
+            collection: "sessions",
+            operation: "UPDATE",
+            payloadId: session.id,
+            payload: updatedSession,
+            timestamp: Date.now()
+          });
+        }
+        
+        if (restored.length > 0) {
+          runSync();
+        }
+      } catch (err) {
+        console.error("Error checking for restored sessions:", err);
+      }
+    }
+
+    checkForRestoredSessions();
+    
+    const handleDbChange = (e: any) => {
+      if (e.detail?.store === "sessions_local") {
+        checkForRestoredSessions();
+      }
+    };
+    
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
+  }, [user]);
+
   // Listen to visibilitychange to force Firestore network reconnection
   useEffect(() => {
     const handleVisibilityChange = async () => {

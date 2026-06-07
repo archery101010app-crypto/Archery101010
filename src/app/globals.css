@@ -200,38 +200,35 @@ body {
               #f8fafc !important;
 }
 
-.light-contrast .bg-neutral-900\/40,
-.light-contrast .bg-neutral-900\/80,
-.light-contrast .bg-neutral-950\/40,
-.light-contrast .bg-neutral-950\/60,
-.light-contrast .bg-neutral-900,
-.light-contrast .bg-neutral-950,
-.light-contrast .bg-black\/40,
-.light-contrast .bg-black\/60,
-.light-contrast .bg-black\/80,
-.light-contrast .bg-\[\#0A0A0C\],
-.light-contrast .bg-\[\#0E0E12\],
-.light-contrast .bg-\[\#0F0F12\],
-.light-contrast .bg-neutral-950\/60 {
+/* Wildcard background overrides for Tailwind backgrounds (cards, sections, panels, tables) */
+.light-contrast [class*="bg-neutral-"],
+.light-contrast [class*="bg-zinc-"],
+.light-contrast [class*="bg-slate-"],
+.light-contrast [class*="bg-stone-"],
+.light-contrast [class*="bg-gray-"],
+.light-contrast [class*="bg-black/"],
+.light-contrast [class*="bg-white/"],
+.light-contrast .bg-neutral-900\/80 {
   background-color: #ffffff !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
+  border-color: rgba(15, 23, 42, 0.18) !important;
   color: #0f172a !important;
 }
 
+/* Text overrides - force maximum contrast */
 .light-contrast text,
-.light-contrast .text-white,
+.light-contrast [class*="text-white"],
+.light-contrast [class*="text-slate-300"],
+.light-contrast [class*="text-slate-400"],
+.light-contrast [class*="text-zinc-"],
+.light-contrast [class*="text-neutral-"],
+.light-contrast [class*="text-gray-dim"],
+.light-contrast [class*="text-gray-400"],
+.light-contrast [class*="text-gray-300"],
+.light-contrast [class*="text-gray-200"],
+.light-contrast .text-gray-dim,
 .light-contrast .text-white\/80,
 .light-contrast .text-white\/70,
-.light-contrast .text-white\/60,
-.light-contrast .text-white\/50,
-.light-contrast .text-white\/40,
-.light-contrast .text-white\/30,
-.light-contrast .text-white\/20,
-.light-contrast .text-white\/10,
-.light-contrast .text-gray-dim,
-.light-contrast .text-gray-400,
-.light-contrast .text-gray-200,
-.light-contrast .text-slate-300 {
+.light-contrast .text-white\/60 {
   color: #0f172a !important;
 }
 
@@ -239,20 +236,32 @@ body {
   fill: #0f172a !important;
 }
 
-.light-contrast .text-white\/50,
+/* Secondary descriptions, timestamps, subtitles text */
+.light-contrast [class*="text-white/50"],
+.light-contrast [class*="text-white/40"],
+.light-contrast [class*="text-white/30"],
+.light-contrast [class*="text-white/20"],
+.light-contrast [class*="text-slate-400"],
+.light-contrast [class*="text-zinc-400"],
+.light-contrast [class*="text-neutral-400"],
 .light-contrast .text-white\/40,
-.light-contrast .text-white\/30,
+.light-contrast .text-white\/50,
 .light-contrast .text-gray-dim {
-  color: #475569 !important; /* Slate 600 */
+  color: #334155 !important; /* Slate 700 - high contrast secondary */
 }
 
+/* Border overrides - maximum visibility */
+.light-contrast [class*="border-white"],
+.light-contrast [class*="border-neutral-"],
+.light-contrast [class*="border-zinc-"],
+.light-contrast [class*="border-slate-"],
+.light-contrast [class*="border-gray-"],
 .light-contrast .border-white\/10,
 .light-contrast .border-white\/5,
 .light-contrast .border-white\/15,
 .light-contrast .border-gray-border\/40,
-.light-contrast .border-gray-border\/60,
 .light-contrast .border-gray-border {
-  border-color: rgba(15, 23, 42, 0.12) !important;
+  border-color: rgba(15, 23, 42, 0.22) !important;
 }
 
 /* Maintain dark OLED theme for the Header to preserve the branding! */

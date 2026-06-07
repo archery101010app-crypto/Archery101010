@@ -64,6 +64,24 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     bestDate: 0
   });
 
+  const [volumePeriod, setVolumePeriod] = useState<"TOTAL" | "YEAR" | "MONTH" | "WEEK">("TOTAL");
+
+  const getVolumeCount = (period: "TOTAL" | "YEAR" | "MONTH" | "WEEK") => {
+    let total = 0;
+    const now = Date.now();
+    let limit = 0;
+    if (period === "YEAR") limit = now - 365 * 24 * 60 * 60 * 1000;
+    else if (period === "MONTH") limit = now - 30 * 24 * 60 * 60 * 1000;
+    else if (period === "WEEK") limit = now - 7 * 24 * 60 * 60 * 1000;
+
+    sessions.forEach((s) => {
+      if (period === "TOTAL" || s.timestamp >= limit) {
+        total += ((s.endsCount || 0) * (s.arrowsPerEnd || 0)) + (s.warmupArrows || 0);
+      }
+    });
+    return total;
+  };
+
   // Load athlete highest star status
   useEffect(() => {
     async function loadAthleteStar() {
@@ -87,15 +105,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   useEffect(() => {
     async function loadStats() {
       const localSess = await getLocalSessions();
-      setSessions(localSess);
+      const activeSess = localSess.filter(s => s.deletedByArcher !== true);
+      setSessions(activeSess);
       
-      if (localSess.length > 0) {
+      if (activeSess.length > 0) {
         let totalArrows = 0;
         let best = 0;
         let bestMax = 300;
         let bestDate = 0;
         
-        localSess.forEach((s) => {
+        activeSess.forEach((s) => {
           totalArrows += ((s.endsCount || 0) * (s.arrowsPerEnd || 0)) + (s.warmupArrows || 0);
           if ((s.score || 0) >= best) {
             best = s.score;
@@ -104,7 +123,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           }
         });
 
-        const last = localSess[0];
+        const last = activeSess[0];
         setStats({
           lastScore: last.score || 0,
           lastMax: last.maxScore || 300,
@@ -235,23 +254,36 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-4 py-4"
     >
-      <div className="flex flex-col mb-1">
-        <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
-          <span>{t("dashHome")}</span>
-          {user.plan === "PRO" && (
-            <span className="text-yellow-gold text-xs font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow animate-pulse">
-              {t("proBadge")}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-col">
+          <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
+            <span>{t("dashHome")}</span>
+            {user.plan === "PRO" && (
+              <span className="text-yellow-gold text-xs font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow animate-pulse">
+                {t("proBadge")}
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-gray-dim mt-0.5">
+            {t("helloLabel")}{user.fullName} · {user.bowConfig.type}
+          </p>
+        </div>
+
+        {/* Club & Country Badge */}
+        <div className="flex items-center gap-2.5 bg-neutral-900/80 border border-white/10 rounded-2xl px-3 py-1.5 shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:border-cyan-neon/30 transition-all duration-300">
+          <div className="w-8 h-8 rounded-xl bg-neutral-950 border border-white/5 flex items-center justify-center relative shrink-0 shadow-inner group">
+            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
+            <span className="absolute -bottom-1.5 -right-1.5 text-sm drop-shadow-md">{clubFlag}</span>
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-[10px] font-black text-white leading-none truncate max-w-[120px]">
+              {user.clubName || t("independentLabel")}
             </span>
-          )}
-        </h2>
-        <p className="text-xs text-gray-dim mt-0.5 flex items-center gap-1">
-          <span>{t("helloLabel")}{user.fullName} · {user.bowConfig.type} ·</span>
-          <span className="flex items-center gap-0.5">
-            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3.5 h-3.5" />
-            <span className="underline decoration-cyan-neon/30">{user.clubName || t("independentLabel")}</span>
-            <span>{clubFlag}</span>
-          </span>
-        </p>
+            <span className="text-[8px] text-cyan-neon font-bold mt-1.5 uppercase tracking-wider leading-none">
+              {clubCountryName}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -350,17 +382,42 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY", "VOLUME")}
-          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-3 border border-yellow-gold/20 flex flex-col justify-between aspect-square relative shadow-[0_0_12px_rgba(255,242,0,0.03)] cursor-pointer hover:border-yellow-gold/50 transition-all duration-300 group"
+          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl p-2.5 border border-yellow-gold/20 flex flex-col justify-between aspect-square relative shadow-[0_0_12px_rgba(255,242,0,0.03)] cursor-pointer hover:border-yellow-gold/50 transition-all duration-300 group"
         >
           <span className="text-[9px] text-yellow-gold font-black tracking-wider uppercase leading-snug">
             {t("totalVolume")}
           </span>
+          
           <div className="flex flex-col gap-0.5">
             <span className="text-2xl font-black text-white tracking-tight leading-none">
-              {stats.totalArrows}
+              {getVolumeCount(volumePeriod)}
             </span>
             <span className="text-[9px] text-gray-dim font-bold">{t("arrowsLabel")}</span>
           </div>
+
+          {/* Premium Period Selector */}
+          <div className="flex bg-neutral-950/80 p-0.5 rounded-lg border border-white/5 w-full" onClick={(e) => e.stopPropagation()}>
+            {(["TOTAL", "YEAR", "MONTH", "WEEK"] as const).map((p) => {
+              const labels = { TOTAL: "TOT", YEAR: "AÑO", MONTH: "MES", WEEK: "SEM" };
+              return (
+                <button
+                  key={p}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVolumePeriod(p);
+                  }}
+                  className={`flex-1 py-0.5 rounded-md text-[7.5px] font-black uppercase transition-all ${
+                    volumePeriod === p
+                      ? "bg-yellow-gold text-black shadow-glow-yellow"
+                      : "text-gray-dim hover:text-white"
+                  }`}
+                >
+                  {labels[p]}
+                </button>
+              );
+            })}
+          </div>
+
           <ArrowUpRight size={12} className="absolute top-3 right-3 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
 

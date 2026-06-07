@@ -26,11 +26,12 @@ interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
   onClose: () => void;
   sessions: any[];
+  onRestoreSession?: (sessionId: string) => void;
 }
 
 type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "DUELOS" | "TENDENCIAS" | "NOTAS";
 
-export default function AthleteDetailSheet({ athlete, onClose, sessions }: AthleteDetailSheetProps) {
+export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession }: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   
@@ -329,121 +330,242 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions }: Athle
 
           {/* TAB 2: SESIONES */}
           {activeTab === "SESIONES" && (
-            <div className="flex flex-col gap-3">
-              {athleteSessions.length === 0 ? (
-                <p className="text-[11px] text-gray-dim text-center py-6">Este atleta no tiene sesiones registradas.</p>
-              ) : (
-                athleteSessions.map((sess) => {
-                  const isExpanded = expandedSessionId === sess.id;
-                  const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short"
-                  });
+            <div className="flex flex-col gap-4">
+              {/* Sesiones Activas */}
+              <div className="flex flex-col gap-3">
+                <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider pl-1">Sesiones Activas</span>
+                {athleteSessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
+                  <p className="text-[11px] text-gray-dim text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
+                    Este atleta no tiene sesiones activas registradas.
+                  </p>
+                ) : (
+                  athleteSessions.filter(s => s.deletedByArcher !== true).map((sess) => {
+                    const isExpanded = expandedSessionId === sess.id;
+                    const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short"
+                    });
 
-                  return (
-                    <div
-                      key={sess.id}
-                      className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300"
-                    >
+                    return (
                       <div
-                        onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                        className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/60 transition"
+                        key={sess.id}
+                        className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300"
                       >
-                        <div className="flex flex-col">
-                          <span className="text-[11px] text-white font-extrabold uppercase">{sess.practiceType} · {sess.format}</span>
-                          <span className="text-[9px] text-gray-dim mt-0.5">{dateStr} · {sess.distance}m</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex flex-col text-right">
-                            <span className="text-sm font-black text-cyan-neon">{sess.score}</span>
-                            <span className="text-[8px] text-gray-dim">/ {sess.maxScore || 300} pts</span>
+                        <div
+                          onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
+                          className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/60 transition"
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-[11px] text-white font-extrabold uppercase">{sess.practiceType} · {sess.format}</span>
+                            <span className="text-[9px] text-gray-dim mt-0.5">{dateStr} · {sess.distance}m</span>
                           </div>
-                          {isExpanded ? <ChevronUp size={14} className="text-gray-dim" /> : <ChevronDown size={14} className="text-gray-dim" />}
-                        </div>
-                      </div>
-
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: "auto" }}
-                            exit={{ height: 0 }}
-                            className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
-                          >
-                            <div className="p-4 flex flex-col gap-4">
-                              {/* Reconstructed Diana View */}
-                              <div className="flex flex-col items-center gap-2">
-                                <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
-                                <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
-                                  {(() => {
-                                    const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
-                                    const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
-                                    const presetRings = DIANA_PRESETS[presetType];
-                                    
-                                    return (
-                                      <svg viewBox="0 0 100 100" className="w-full h-full">
-                                        {presetRings.map((ring, index) => (
-                                          <circle
-                                            key={index}
-                                            cx="50"
-                                            cy="50"
-                                            r={ring.r}
-                                            fill={ring.fill}
-                                            stroke={ring.stroke}
-                                            strokeWidth={ring.v === "X" ? 0.1 : 0.1}
-                                          />
-                                        ))}
-                                        
-                                        {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
-                                          <g key={iIdx}>
-                                            <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
-                                            <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
-                                          </g>
-                                        ))}
-                                      </svg>
-                                    );
-                                  })()}
-                                </div>
-                              </div>
-
-                              {/* Ends values list */}
-                              {sess.ends && (
-                                <div className="flex flex-col gap-1.5">
-                                  <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Desglose de Flechas por End</span>
-                                  <div className="flex flex-col gap-1">
-                                    {sess.ends.map((end: any, idx: number) => (
-                                      <div key={idx} className="flex justify-between items-center text-[10px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                        <span className="text-gray-dim font-bold">End {idx + 1}</span>
-                                        <div className="flex gap-1">
-                                          {end.arrows.map((arr: string, aIdx: number) => (
-                                            <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[9px] text-white">
-                                              {arr || "—"}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Session Notes */}
-                              {sess.sessionNote && (
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Comentarios del Arquero</span>
-                                  <div className="p-3 bg-neutral-900/50 rounded-xl border border-white/5 text-[11px] text-white italic">
-                                    "{sess.sessionNote}"
-                                  </div>
-                                </div>
-                              )}
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col text-right">
+                              <span className="text-sm font-black text-cyan-neon">{sess.score}</span>
+                              <span className="text-[8px] text-gray-dim">/ {sess.maxScore || 300} pts</span>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })
+                            {isExpanded ? <ChevronUp size={14} className="text-gray-dim" /> : <ChevronDown size={14} className="text-gray-dim" />}
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: "auto" }}
+                              exit={{ height: 0 }}
+                              className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
+                            >
+                              <div className="p-4 flex flex-col gap-4">
+                                <div className="flex flex-col items-center gap-2">
+                                  <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
+                                  <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                    {(() => {
+                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
+                                      const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
+                                      const presetRings = DIANA_PRESETS[presetType];
+                                      
+                                      return (
+                                        <svg viewBox="0 0 100 100" className="w-full h-full">
+                                          {presetRings.map((ring, index) => (
+                                            <circle
+                                              key={index}
+                                              cx="50"
+                                              cy="50"
+                                              r={ring.r}
+                                              fill={ring.fill}
+                                              stroke={ring.stroke}
+                                              strokeWidth={0.1}
+                                            />
+                                          ))}
+                                          {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
+                                            <g key={iIdx}>
+                                              <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
+                                              <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
+                                            </g>
+                                          ))}
+                                        </svg>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+
+                                {sess.ends && (
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Desglose de Flechas por End</span>
+                                    <div className="flex flex-col gap-1">
+                                      {sess.ends.map((end: any, idx: number) => (
+                                        <div key={idx} className="flex justify-between items-center text-[10px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
+                                          <span className="text-gray-dim font-bold">End {idx + 1}</span>
+                                          <div className="flex gap-1">
+                                            {end.arrows.map((arr: string, aIdx: number) => (
+                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[9px] text-white">
+                                                {arr || "—"}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {sess.sessionNote && (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Comentarios del Arquero</span>
+                                    <div className="p-3 bg-neutral-900/50 rounded-xl border border-white/5 text-[11px] text-white italic">
+                                      "{sess.sessionNote}"
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Sesiones Eliminadas por el Arquero */}
+              {athleteSessions.filter(s => s.deletedByArcher === true).length > 0 && (
+                <div className="flex flex-col gap-3 mt-2 border-t border-white/[0.05] pt-4">
+                  <span className="text-[9px] text-red-500 font-black uppercase tracking-wider pl-1">Sesiones Eliminadas por el Arquero</span>
+                  {athleteSessions.filter(s => s.deletedByArcher === true).map((sess) => {
+                    const isExpanded = expandedSessionId === sess.id;
+                    const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short"
+                    });
+
+                    return (
+                      <div
+                        key={sess.id}
+                        className="bg-neutral-950/40 rounded-2xl border border-red-950/20 overflow-hidden transition-all duration-305"
+                      >
+                        <div
+                          onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
+                          className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/30 transition"
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-[11px] text-white/80 font-extrabold uppercase flex items-center gap-1.5">
+                              <span>{sess.practiceType} · {sess.format}</span>
+                              <span className="text-[7.5px] bg-red-rival/10 border border-red-rival/20 text-red-rival px-1 rounded-full font-black uppercase leading-none py-0.5">ELIMINADA</span>
+                            </span>
+                            <span className="text-[9px] text-gray-dim mt-0.5">{dateStr} · {sess.distance}m</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col text-right">
+                              <span className="text-sm font-black text-gray-dim">{sess.score}</span>
+                              <span className="text-[8px] text-gray-dim">/ {sess.maxScore || 300} pts</span>
+                            </div>
+                            {onRestoreSession && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRestoreSession(sess.id);
+                                }}
+                                className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                              >
+                                Restituir
+                              </button>
+                            )}
+                            {isExpanded ? <ChevronUp size={14} className="text-gray-dim" /> : <ChevronDown size={14} className="text-gray-dim" />}
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: "auto" }}
+                              exit={{ height: 0 }}
+                              className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
+                            >
+                              <div className="p-4 flex flex-col gap-4">
+                                <div className="flex flex-col items-center gap-2">
+                                  <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
+                                  <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                    {(() => {
+                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
+                                      const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
+                                      const presetRings = DIANA_PRESETS[presetType];
+                                      
+                                      return (
+                                        <svg viewBox="0 0 100 100" className="w-full h-full">
+                                          {presetRings.map((ring, index) => (
+                                            <circle
+                                              key={index}
+                                              cx="50"
+                                              cy="50"
+                                              r={ring.r}
+                                              fill={ring.fill}
+                                              stroke={ring.stroke}
+                                              strokeWidth={0.1}
+                                            />
+                                          ))}
+                                          {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
+                                            <g key={iIdx}>
+                                              <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
+                                              <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
+                                            </g>
+                                          ))}
+                                        </svg>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+
+                                {sess.ends && (
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Desglose de Flechas</span>
+                                    <div className="flex flex-col gap-1">
+                                      {sess.ends.map((end: any, idx: number) => (
+                                        <div key={idx} className="flex justify-between items-center text-[10px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
+                                          <span className="text-gray-dim font-bold">End {idx + 1}</span>
+                                          <div className="flex gap-1">
+                                            {end.arrows.map((arr: string, aIdx: number) => (
+                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[9px] text-white">
+                                                {arr || "—"}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

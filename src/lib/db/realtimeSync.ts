@@ -7,7 +7,8 @@ import {
   sessionsStore,
   settingsStore,
   athleteStarsStore,
-  starHistoryStore
+  starHistoryStore,
+  getSyncQueue
 } from "./indexedDB";
 import { UserProfile } from "@/lib/authService";
 
@@ -120,10 +121,44 @@ export function startRealtimeSync(currentUserUid: string | null) {
   // 5. Sync Sessions Collection
   const sessionsUnsub = onSnapshot(collection(db, "sessions"), async (snapshot) => {
     try {
+      // Obtener todos los elementos en la cola de sincronización para identificar inserciones y eliminaciones pendientes
+      const queue = await getSyncQueue();
+      const pendingDeletes = new Set(
+        queue.filter(item => item.collection === "sessions" && item.operation === "DELETE").map(item => item.payloadId)
+      );
+      const pendingInserts = new Map(
+        queue.filter(item => item.collection === "sessions" && item.operation === "INSERT").map(item => [item.payloadId, item.payload])
+      );
+
+      // Cargar en memoria todas las sesiones locales que sean borradores (drafts) para preservarlas
+      const localDrafts: any[] = [];
+      await sessionsStore.iterate((value: any, key: string) => {
+        if (value && value.isDraft) {
+          localDrafts.push({ key, value });
+        }
+      });
+
+      // Ahora limpiamos el almacén local
       await sessionsStore.clear();
 
+      // Restaurar los borradores locales
+      for (const draft of localDrafts) {
+        await sessionsStore.setItem(draft.key, draft.value);
+      }
+
+      // Restaurar las sesiones pendientes de subida (inserts)
+      for (const [id, payload] of pendingInserts.entries()) {
+        await sessionsStore.setItem(id, payload);
+      }
+
+      // Escribir los documentos provenientes de Firestore (omitiendo aquellos con borrado pendiente)
       for (const doc of snapshot.docs) {
-        await sessionsStore.setItem(doc.id, doc.data());
+        if (!pendingDeletes.has(doc.id)) {
+          // Aseguramos que doc.id quede guardado dentro de las propiedades del objeto (evita errores de borrado posterior)
+          const data = doc.data();
+          const docWithId = { ...data, id: doc.id };
+          await sessionsStore.setItem(doc.id, docWithId);
+        }
       }
 
       window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "sessions_local" } }));
