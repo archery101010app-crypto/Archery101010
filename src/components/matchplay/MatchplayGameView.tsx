@@ -193,7 +193,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       userName: user.fullName,
       timestamp: Date.now(),
       practiceType: "Control",
-      bowConfig: { type: config.bowType, brand: user.bowConfig.brand, model: user.bowConfig.model, poundage: user.bowConfig.poundage },
+      bowConfig: { 
+        type: config.bowType, 
+        brand: user?.bowConfig?.brand || "Generic", 
+        model: user?.bowConfig?.model || "Model", 
+        poundage: user?.bowConfig?.poundage || 35 
+      },
       endsCount: userTiros.filter(e => e.length > 0).length,
       arrowsPerEnd: 3,
       distance: config.distance,
@@ -980,7 +985,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       userName: user.fullName,
       timestamp: Date.now(),
       practiceType: "Control",
-      bowConfig: { type: config.bowType, brand: user.bowConfig.brand, model: user.bowConfig.model, poundage: user.bowConfig.poundage },
+      bowConfig: { 
+        type: config.bowType, 
+        brand: user?.bowConfig?.brand || "Generic", 
+        model: user?.bowConfig?.model || "Model", 
+        poundage: user?.bowConfig?.poundage || 35 
+      },
       endsCount: userTiros.filter(e => e.length > 0).length,
       arrowsPerEnd: 3,
       distance: config.distance,

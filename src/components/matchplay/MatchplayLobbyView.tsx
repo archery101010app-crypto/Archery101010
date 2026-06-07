@@ -93,8 +93,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
 
   // Custom configuration for custom created room
-  const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig.type);
-  const [customDistance, setCustomDistance] = useState<number>(user.bowConfig.defaultDistance || 70);
+  const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
+  const [customDistance, setCustomDistance] = useState<number>(user?.bowConfig?.defaultDistance || 70);
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
 
   const handleDeleteDraft = async (id: string) => {
@@ -587,7 +587,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="flex items-center gap-1.5">
                       <span className="text-white text-xs font-bold">vs {dr.opponent}</span>
                       <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-cyan-neon font-extrabold uppercase">
-                        {dr.bowConfig.type}
+                        {dr.bowConfig?.type || "Barebow"}
                       </span>
                     </div>
                     <span className="text-[9px] text-gray-dim truncate mt-0.5">
@@ -658,7 +658,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       <div className="flex items-center gap-1.5">
                         <span className="text-white text-xs font-bold">vs {h.opponent} {flag}</span>
                         <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase">
-                          {h.bowConfig.type}
+                          {h.bowConfig?.type || "Barebow"}
                         </span>
                       </div>
                       <span className="text-[9px] text-gray-dim mt-0.5">

@@ -51,6 +51,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const isAdminInput = normalizedEmail === "admin101010" || 
+                       normalizedEmail === "admin@archery101010.com" || 
+                       normalizedEmail === "admin101010@archery101010.com";
+
+  const targetEmail = isAdminInput ? "admin@archery101010.com" : normalizedEmail;
+
+  if (isAdminInput) {
+    if (password !== "Rod@admin26") {
+      throw new Error("Contraseña incorrecta. Solo el administrador puede iniciar sesión aquí.");
+    }
+  }
+
   let user: UserProfile | undefined = undefined;
 
   // 1. Try to fetch from Firestore if online to enable real-time multi-device sync
@@ -61,7 +74,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
                              process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key");
       
       if (!isMockFirebase) {
-        const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()));
+        const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
           user = querySnapshot.docs[0].data() as UserProfile;
@@ -85,49 +98,82 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   // 2. Fallback to local IndexedDB store if offline or not found in Firestore
   if (!user) {
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    user = usersList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    user = usersList.find((u) => u.email.toLowerCase() === targetEmail);
   }
 
-  // 3. If user exists, validate password if set
+  // 3. If user exists, validate password
   if (user) {
+    if (isAdminInput && password !== "Rod@admin26") {
+      throw new Error("Contraseña incorrecta. Solo el administrador puede iniciar sesión aquí.");
+    }
     if (user.password && password && user.password !== password) {
       throw new Error("Contraseña incorrecta. Por favor intenta de nuevo.");
     }
   } else {
-    // 4. Create default profile if user doesn't exist anywhere
-    const isSuperAdminEmail = email.toLowerCase() === "admin@archery101010.com" || email.toLowerCase() === "admin2@archery101010.com";
-    
-    user = {
-      uid: isSuperAdminEmail ? `USR-SUPERADMIN-${email.split("@")[0].toUpperCase()}` : generateResilientId("USR"),
-      email: email,
-      fullName: isSuperAdminEmail ? `Super Admin ${email.split("@")[0].toUpperCase()}` : "Arquero Demo",
-      birthDate: "1995-05-15",
-      country: "CR",
-      gender: "M",
-      bowConfig: {
-        type: "Barebow",
-        brand: "Hoyt",
-        model: "Satori",
-        poundage: 40,
-        defaultDistance: 18
-      },
-      physicalData: {
-        height: 180,
-        weight: 75,
-        dominantEye: "R",
-        dominantHand: "R"
-      },
-      clubId: isSuperAdminEmail ? null : "CLB-DEMO",
-      clubName: isSuperAdminEmail ? null : "Club Olímpico San José",
-      clubLogo: isSuperAdminEmail ? undefined : "0",
-      clubCountry: isSuperAdminEmail ? undefined : "CR",
-      role: isSuperAdminEmail ? "superadmin" : "coach",
-      plan: isSuperAdminEmail ? "PRO" : "FREE",
-      isClubCreator: !isSuperAdminEmail,
-      whatsappNumber: isSuperAdminEmail ? undefined : "+50688888888",
-      clubInviteCode: isSuperAdminEmail ? undefined : "ARC-1010",
-      password: password || undefined // Save whatever password they used on their first login
-    };
+    // 4. Create default profile depending on the input type
+    if (isAdminInput) {
+      user = {
+        uid: "USR-SUPERADMIN-ADMIN101010",
+        email: "admin@archery101010.com",
+        fullName: "Admin101010",
+        birthDate: "1990-01-01",
+        country: "CR",
+        gender: "M",
+        bowConfig: {
+          type: "Barebow",
+          brand: "Hoyt",
+          model: "Satori",
+          poundage: 40,
+          defaultDistance: 18
+        },
+        physicalData: {
+          height: 180,
+          weight: 75,
+          dominantEye: "R",
+          dominantHand: "R"
+        },
+        clubId: null,
+        clubName: null,
+        role: "superadmin",
+        plan: "PRO",
+        isClubCreator: false,
+        password: "Rod@admin26"
+      };
+    } else {
+      const isSocialLogin = targetEmail.includes("google-user") || targetEmail.includes("facebook-user");
+      if (isSocialLogin) {
+        const providerName = targetEmail.includes("google") ? "Google User" : "Facebook User";
+        user = {
+          uid: generateResilientId("USR"),
+          email: targetEmail,
+          fullName: providerName,
+          birthDate: "1995-05-15",
+          country: "CR",
+          gender: "M",
+          bowConfig: {
+            type: "Barebow",
+            brand: "Hoyt",
+            model: "Satori",
+            poundage: 35,
+            defaultDistance: 18
+          },
+          physicalData: {
+            height: 175,
+            weight: 70,
+            dominantEye: "R",
+            dominantHand: "R"
+          },
+          clubId: null,
+          clubName: null,
+          role: "archer",
+          plan: "FREE",
+          isClubCreator: false
+        };
+      } else {
+        // Enforce registration for normal users
+        throw new Error("El correo ingresado no está registrado. Por favor, ve a la opción 'Registrarse' para crear una cuenta.");
+      }
+    }
 
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
     usersList.push(user);

@@ -43,16 +43,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [country, setCountry] = useState(user.country);
   const [gender, setGender] = useState(user.gender);
 
-  const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig.type);
-  const [bowBrand, setBowBrand] = useState(user.bowConfig.brand);
-  const [bowModel, setBowModel] = useState(user.bowConfig.model);
-  const [poundage, setPoundage] = useState(user.bowConfig.poundage);
-  const [defaultDistance, setDefaultDistance] = useState(user.bowConfig.defaultDistance);
+  const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig?.type || "Barebow");
+  const [bowBrand, setBowBrand] = useState(user.bowConfig?.brand || "");
+  const [bowModel, setBowModel] = useState(user.bowConfig?.model || "");
+  const [poundage, setPoundage] = useState(user.bowConfig?.poundage || 35);
+  const [defaultDistance, setDefaultDistance] = useState(user.bowConfig?.defaultDistance || 18);
 
-  const [height, setHeight] = useState(user.physicalData.height);
-  const [weight, setWeight] = useState(user.physicalData.weight);
-  const [dominantEye, setDominantEye] = useState<"L" | "R">(user.physicalData.dominantEye);
-  const [dominantHand, setDominantHand] = useState<"L" | "R">(user.physicalData.dominantHand);
+  const [height, setHeight] = useState(user.physicalData?.height || 175);
+  const [weight, setWeight] = useState(user.physicalData?.weight || 70);
+  const [dominantEye, setDominantEye] = useState<"L" | "R">(user.physicalData?.dominantEye || "R");
+  const [dominantHand, setDominantHand] = useState<"L" | "R">(user.physicalData?.dominantHand || "R");
 
   // Notification Toggles
   const [pushNotif, setPushNotif] = useState(true);
@@ -676,19 +676,19 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <div className="flex flex-col gap-2 mt-1">
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Tipo de arco:</span>
-              <span className="text-white font-bold">{user.bowConfig.type}</span>
+              <span className="text-white font-bold">{user.bowConfig?.type || "N/A"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Marca/Modelo:</span>
-              <span className="text-white font-bold">{user.bowConfig.brand} {user.bowConfig.model}</span>
+              <span className="text-white font-bold">{user.bowConfig?.brand || "Generic"} {user.bowConfig?.model || "Model"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Poundaje:</span>
-              <span className="text-white font-bold">{user.bowConfig.poundage} lbs</span>
+              <span className="text-white font-bold">{user.bowConfig?.poundage || 0} lbs</span>
             </div>
             <div className="flex justify-between text-xs py-1">
               <span className="text-gray-dim">Distancia predeterminada:</span>
-              <span className="text-white font-bold">{user.bowConfig.defaultDistance}m</span>
+              <span className="text-white font-bold">{user.bowConfig?.defaultDistance || 0}m</span>
             </div>
           </div>
         )}
@@ -901,7 +901,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         {/* Vitrina completa de 8 Estrellas (Bloqueadas/Desbloqueadas) */}
         {(() => {
-          const bowTypeForStars = user.bowConfig.type === "Compound" ? "Compound" : "Recurve";
+          const bowTypeForStars = user?.bowConfig?.type === "Compound" ? "Compound" : "Recurve";
           const starsList = bowTypeForStars === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
           const highestLevel = maxStar ? maxStar.highestStarLevel : 0;
           
@@ -1222,39 +1222,41 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       )}
 
       {/* DEV TOOLS Simulator PRO Toggle */}
-      <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-3 bg-neutral-950/40">
-        <span className="text-xs text-red-rival font-mono font-bold leading-none">{t("devMode")}</span>
-        
-        <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
-          <span className="text-[10px] text-white/60 font-mono">Simulate PRO Account</span>
-          <button
-            onClick={handleDevProToggle}
-            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-              devSimulatePro ? "bg-red-rival" : "bg-gray-border"
-            }`}
-          >
-            <div
-              className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-              style={{ left: devSimulatePro ? "18px" : "2px" }}
-            />
-          </button>
-        </div>
+      {user.role === "superadmin" && (
+        <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-3 bg-neutral-950/40">
+          <span className="text-xs text-red-rival font-mono font-bold leading-none">{t("devMode")}</span>
+          
+          <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
+            <span className="text-[10px] text-white/60 font-mono">Simulate PRO Account</span>
+            <button
+              onClick={handleDevProToggle}
+              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
+                devSimulatePro ? "bg-red-rival" : "bg-gray-border"
+              }`}
+            >
+              <div
+                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
+                style={{ left: devSimulatePro ? "18px" : "2px" }}
+              />
+            </button>
+          </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] text-white/60 font-mono">Simulate SuperAdmin Role</span>
-          <button
-            onClick={handleDevSuperAdminToggle}
-            className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-              devSimulateSuperAdmin ? "bg-red-rival" : "bg-gray-border"
-            }`}
-          >
-            <div
-              className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-              style={{ left: devSimulateSuperAdmin ? "18px" : "2px" }}
-            />
-          </button>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] text-white/60 font-mono">Simulate SuperAdmin Role</span>
+            <button
+              onClick={handleDevSuperAdminToggle}
+              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
+                devSimulateSuperAdmin ? "bg-red-rival" : "bg-gray-border"
+              }`}
+            >
+              <div
+                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
+                style={{ left: devSimulateSuperAdmin ? "18px" : "2px" }}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Manual de Usuario Button */}
       <button

@@ -25,8 +25,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<"WA 300" | "WA 600" | "WA 720" | "Libre">("WA 300");
-  const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig.type || "Barebow");
-  const [distance, setDistance] = useState(user.bowConfig.defaultDistance || 18);
+  const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
+  const [distance, setDistance] = useState(user?.bowConfig?.defaultDistance || 18);
   const [autoScore, setAutoScore] = useState(false);
   const [includeNotes, setIncludeNotes] = useState(true);
   const [endsCount, setEndsCount] = useState(10);

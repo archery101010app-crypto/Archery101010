@@ -265,7 +265,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             )}
           </h2>
           <p className="text-xs text-gray-dim mt-0.5">
-            {t("helloLabel")}{user.fullName} · {user.bowConfig.type}
+            {t("helloLabel")}{user.fullName} · {user?.bowConfig?.type || "Barebow"}
           </p>
         </div>
 
@@ -298,7 +298,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               if (sessions.length === 0) return null;
               const last = sessions[0];
               const totalArrows = ((last.endsCount || 0) * (last.arrowsPerEnd || 0));
-              const isWA720 = totalArrows === 72 && (
+              const isWA720 = totalArrows === 72 && user?.bowConfig && (
                 (user.bowConfig.type === "Recurve" && last.distance === 70) ||
                 (user.bowConfig.type === "Compound" && last.distance === 50)
               );
@@ -308,7 +308,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               }
               
               if (last.score >= 500) {
-                const stars = user.bowConfig.type === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+                const stars = user?.bowConfig?.type === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
                 const qualified = stars.filter((s: any) => last.score >= s.minScore);
                 if (qualified.length > 0) {
                   const sessionStar = qualified[qualified.length - 1];
