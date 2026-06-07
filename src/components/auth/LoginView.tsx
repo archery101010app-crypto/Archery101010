@@ -98,6 +98,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   };
 
   const handleSocialLogin = async (providerName: string) => {
+    if (providerName === "facebook") {
+      setError("El inicio de sesión con Facebook no está disponible temporalmente.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
