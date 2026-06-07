@@ -1,22 +1,26 @@
 # Documentación Completa y Consolidada: Archery 101010
 
+**Versión Actual: v2.1.1** · Última actualización: Junio 2026
+
 Este documento reúne todas las especificaciones visuales, técnicas y funcionales del proyecto **Archery 101010**. Ha sido diseñado bajo la filosofía **SaaS Premium 2025** y desarrollado con un enfoque **Offline-First (Resiliencia y Sincronización)** y **Mobile-First**.
 
 ---
 
 ## 🛠️ Stack Tecnológico
 La aplicación se construyó utilizando las siguientes tecnologías modernas:
-1. **Framework:** Next.js (App Router) con TypeScript.
-2. **Estilos:** Tailwind CSS con configuración avanzada de modo oscuro y variables neón.
+1. **Framework:** Next.js 16 (App Router, Static Export) con TypeScript.
+2. **Estilos:** Tailwind CSS v4 con configuración avanzada de modo oscuro y variables neón.
 3. **Componentes UI:** shadcn/ui como sistema base de componentes accesibles y personalizables.
 4. **Animaciones:** Framer Motion para transiciones fluidas y microinteracciones de interfaz.
 5. **Base de Datos Local:** localForage (IndexedDB) para persistencia síncrona y almacenamiento offline.
-6. **Base de Datos en la Nube:** Firebase Firestore con suscripciones en tiempo real (`onSnapshot`).
+6. **Base de Datos en la Nube:** Firebase Firestore v12 con suscripciones en tiempo real (`onSnapshot`).
 7. **Autenticación:** Firebase Auth (Email/Password, Google, Facebook).
-8. **Notificaciones Push:** Firebase Cloud Messaging (FCM).
-9. **Email Transaccional:** Firebase Extensions (Trigger Email) o Resend/SendGrid vía API Routes.
-10. **WhatsApp (Opcional):** WhatsApp Cloud API (Meta) — tier gratuito de 1,000 conversaciones de servicio/mes para clubes pequeños; alternativa: enlaces `wa.me` directos para notificaciones manuales del entrenador.
-11. **Pagos:** PayPal SDK (JavaScript Client-Side + Webhooks Server-Side) para suscripciones Pro.
+8. **Notificaciones Push:** Firebase Cloud Messaging (FCM) — implementado v2.0.1. Service Worker dedicado en `public/firebase-messaging-sw.js`. Tokens FCM almacenados en `users/{uid}/fcmTokens`.
+9. **Email Transaccional:** Firebase Extensions (Trigger Email from Firestore) con SendGrid/Mailgun.
+10. **WhatsApp (Opcional):** WhatsApp Cloud API (Meta) — tier gratuito de 1,000 conversaciones de servicio/mes; alternativa: enlaces `wa.me` directos para notificaciones manuales del entrenador.
+11. **Pagos:** PayPal SDK (JavaScript Client-Side + Webhooks) para suscripciones Pro ($4.99/mes).
+12. **Service Worker:** Registrado en modo `SKIP_WAITING` automático para actualizaciones en caliente. Cache offline-first.
+13. **Manual de Usuario:** Disponible en `/manual/index.html` — HTML autocontenido con 15 módulos interactivos.
 
 ---
 
@@ -361,41 +365,42 @@ Pantalla completa de configuración personal accesible desde el botón "Profile"
 * **9.9. Cerrar Sesión:**
   * Botón: `bg-transparent border border-[#FF3B30]/40 text-[#FF3B30] rounded-xl w-full py-3 font-medium`. "Log Out" con icono de salida. Confirmación al tap.
 
-### 10. Dashboard del Entrenador (Coach View)
+### 10. Portal del Entrenador (Coach Portal) — IMPLEMENTADO
 
-El Dashboard del Entrenador implementa un **modelo de suscripción escalonado Free / PRO**, análogo al del arquero pero adaptado a las necesidades del preparador.
+El Portal Coach es accesible mediante el **toggle Atleta / Coach** en el header de la app. Solo visible para usuarios con `role: "coach"` o `role: "team_admin_coach"`. El componente principal es `CoachPortalView.tsx` con 5 sub-tabs:
 
-#### 10.1. Coach Free (Funcionalidades Base)
-* **Panel de Atletas (Izquierda):**
-  * Listado vertical scrollable de los atletas a cargo del entrenador.
-  * Cada tarjeta de atleta: `bg-[#1A1D20]/75 backdrop-blur-md rounded-2xl border border-white/10 p-4 mb-3`.
-    * Avatar circular `w-12 h-12 rounded-full border-2 border-[#00A2E8]`.
-    * Nombre en `text-base font-semibold text-white`.
-    * Tipo de arco en `text-xs text-[#8E8E93]` (ej: "Recurve · 70m").
-    * Insignia de rendimiento: chip `rounded-full px-2 py-0.5 text-xs font-medium`. Colores: Oro `bg-[#FFF200]/15 text-[#FFF200]` para rendimiento >90%, Cian `bg-[#00E5FF]/15 text-[#00E5FF]` para >75%, Gris `bg-[#2C2F33] text-[#8E8E93]` para <75%.
-    * Mini-onda SVG de progresión: `w-[80px] h-[24px]`, polyline cian mostrando tendencia de últimas 5 sesiones.
-    * Enlace "View Details →" en `text-xs text-[#00A2E8]`.
-  * Búsqueda rápida: Input en la parte superior con icono lupa en cian.
-* **Vista de Detalle del Atleta:**
-  * Historial de sesiones recientes, gráfico de progresión, calendario de asistencia del atleta.
-* **Planificador Semanal Básico (Derecha):**
-  * Calendario semanal: cuadrícula de 7 columnas (Lun-Dom) con celdas para entrenamientos simples.
-  * El entrenador puede crear eventos: tipo de práctica, distancia y hora.
-  * Los eventos se muestran como chips cian en la celda.
+#### 10.1. Estructura Real Implementada
 
-#### 10.2. Coach PRO (Funcionalidades Premium) 🔒
-* **Acceso a Macrociclos de Entrenamiento:**
-  * Todo el módulo de planificación de macrociclos (pantalla 15) está **exclusivamente disponible** para entrenadores con suscripción PRO.
-  * Botón de acción rápida: "Assign Macrocycle Plan" — `bg-gradient-to-br from-[#00A2E8] to-[#00E5FF] text-white rounded-full px-6 py-3 font-semibold`.
-  * Si el entrenador es **Free**, el botón aparece deshabilitado con overlay de candado 🔒 y badge "PRO". Al tocarlo, se despliega el modal de paywall.
-* **Analytics Avanzados del Equipo:**
-  * Promedio de scores, gráfico comparativo entre atletas, heatmap de asistencia colectiva.
-* **Exportación de Informes:**
-  * Botón "Export Report" (PDF/CSV) disponible solo en PRO.
+| Tab | Componente | Descripción |
+|---|---|---|
+| **OVERVIEW** | `CoachOverviewTab.tsx` | Resumen del equipo: asistencia del día, actividad reciente |
+| **ATHLETES** | `CoachAthletesTab.tsx` | Lista de arqueros con rendimiento individual y drawer de detalle |
+| **SESSIONS** | `CoachSessionsTab.tsx` | Revisión de sesiones del equipo + restaurar sesiones borradas |
+| **DUELS** | `CoachDuelsTab.tsx` | Historial de matchplays del equipo |
+| **MACROCYCLES** | `CoachMacrocycleTab.tsx` | Planificación periódica PRO (macrociclo/mesociclo/microciclo) |
 
-#### 10.3. Indicadores Visuales de Tier en Coach View
-* Badge visible en el header: "FREE" gris o "PRO ✦" amarillo con glow.
-* Banner de upgrade discreto para Free: "Unlock Macrocycles & Advanced Analytics → Upgrade to PRO" en `text-xs text-[#FFF200]`.
+#### 10.2. Gestión de Asistencia
+* El Coach marca asistencia diaria por atleta con toggle desde el panel Overview.
+* Se guarda en `localStorage` como `attendance_{clubId}_{YYYY-MM-DD}` y se sincroniza con Firestore.
+
+#### 10.3. Ficha Detallada del Atleta (`AthleteDetailSheet.tsx`)
+* Drawer deslizante (slide-up) con animación Framer Motion.
+* Contenido: gráfico de progresión SVG, diana de impactos acumulados, historial de sesiones completo con notas.
+* **Restaurar sesión:** El Coach puede restaurar sesiones que el arquero eliminó. Se actualiza `deletedByArcher: false, restoredByCoach: true` localmente y en Firestore vía cola de sincronización.
+
+#### 10.4. Demo de Atletas
+* Si el club no tiene atletas reales, se generan 3 atletas demo: Daniela Solano (Recurve), Carlos Ruiz (Compound), Sebastián Castro (Barebow) con sesiones simuladas.
+
+#### 10.5. Macrociclos de Entrenamiento (PRO 🔒)
+* Componente `CoachMacrocycleTab.tsx` (~51KB — módulo más complejo).
+* Estructura: Macrociclo → Mesociclos → Microciclos semanales.
+* Libre para users PRO. Plan FREE ve el panel bloqueado con paywall.
+
+#### 10.6. Indicadores Visuales
+* Toggle header **Atleta / Coach**: `bg-cyan-neon text-black` (activo) / `text-gray-dim` (inactivo).
+* Badge del club animado con `animate-pulse` en la consola Coach.
+
+
 
 ### 11. Matchplay (Duelos): Lobby
 * **Funciones:**

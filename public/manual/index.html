@@ -810,15 +810,13 @@
 
 <!-- ===== TOP HEADER ===== -->
 <header class="top-header">
-  <a href="#inicio" class="logo-wrap">
-    <div class="logo-blocks">
-      <span class="b1">101</span>
-      <span class="b2">010</span>
-      <span class="b3">101</span>
+  <a href="#inicio" class="logo-wrap" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:baseline;gap:1px;">
+      <span style="font-size:18px;font-weight:900;letter-spacing:-1px;color:#00E5FF;">10</span><span style="font-size:18px;font-weight:900;letter-spacing:-1px;color:#FF3B30;">10</span><span style="font-size:18px;font-weight:900;letter-spacing:-1px;color:#FFF200;">10</span>
     </div>
-    <span class="logo-text">ARCHERY</span>
+    <span style="color:rgba(255,255,255,0.4);font-size:9px;font-weight:800;letter-spacing:4px;text-transform:uppercase;padding-left:8px;border-left:1px solid rgba(255,255,255,0.1);">ARCHERY</span>
   </a>
-  <span class="header-badge">Manual v2.1.0</span>
+  <span class="header-badge">Manual v2.1.1</span>
   <button class="hamburger" id="menuBtn" aria-label="Menú">
     <span></span><span></span><span></span>
   </button>
@@ -890,6 +888,10 @@
     <span class="item-icon">📡</span> Offline-First & Sync
     <span class="item-num">14</span>
   </a>
+  <a href="#coach" class="sidebar-item" data-section="coach">
+    <span class="item-icon">👨‍🏫</span> Portal Coach
+    <span class="item-num">15</span>
+  </a>
 </nav>
 
 <!-- ===== MAIN ===== -->
@@ -898,10 +900,10 @@
 
     <!-- ===== 00. HERO ===== -->
     <section id="inicio" class="section-hero">
-      <div class="hero-logo-big">
-        <span class="block b1">101</span>
-        <span class="block b2">010</span>
-        <span class="block b3">101</span>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:clamp(52px,12vw,88px);font-weight:900;letter-spacing:-4px;line-height:1;display:inline-block;">
+          <span style="color:#00E5FF;">10</span><span style="color:#FF3B30;">10</span><span style="color:#FFF200;">10</span>
+        </div>
       </div>
       <p class="hero-archery">ARCHERY</p>
       <h1 class="hero-title">Manual de <span>Usuario</span></h1>
@@ -929,6 +931,7 @@
         <a href="#planes" class="toc-card"><div class="toc-icon">✦</div><div class="toc-num">12</div><div class="toc-name">Planes</div></a>
         <a href="#notificaciones" class="toc-card"><div class="toc-icon">🔔</div><div class="toc-num">13</div><div class="toc-name">Notificaciones</div></a>
         <a href="#offline" class="toc-card"><div class="toc-icon">📡</div><div class="toc-num">14</div><div class="toc-name">Offline-First</div></a>
+        <a href="#coach" class="toc-card"><div class="toc-icon">👨‍🏫</div><div class="toc-num">15</div><div class="toc-name">Portal Coach</div></a>
       </div>
     </section>
 
@@ -1905,18 +1908,178 @@
       </div>
     </section>
 
+    <!-- ===== 15. PORTAL COACH ===== -->
+    <section id="coach" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,242,0,0.08);border:1px solid rgba(255,242,0,0.3);">👨‍🏫</div>
+        <div>
+          <div class="section-num">Módulo 15</div>
+          <h2 class="section-title">Portal del Entrenador (Coach)</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Los usuarios con rol de Entrenador acceden a la <strong style="color:var(--white)">Consola Coach</strong> desde el header de la app (toggle Atleta / Coach). El portal ofrece 5 paneles especializados para gestionar el equipo completo.
+      </p>
+
+      <div class="callout info reveal">
+        <div class="callout-icon">🔀</div>
+        <div>
+          <div class="callout-title">¿Cómo cambio a modo Coach?</div>
+          <div class="callout-desc">En el header de la app verás un toggle <strong style="color:var(--white)">Atleta / Coach</strong>. Al seleccionar "Coach" accedes al portal completo del entrenador sin salir de la app. Puedes volver a vista Atleta en cualquier momento.</div>
+        </div>
+      </div>
+
+      <!-- TABS OVERVIEW -->
+      <h3 style="font-size:15px;font-weight:800;color:var(--white);margin:32px 0 16px;">5 Paneles del Portal Coach</h3>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card" style="border-color:rgba(0,229,255,0.2);">
+          <div class="fc-icon">📊</div>
+          <div class="fc-title">1 · Resumen (Overview)</div>
+          <div class="fc-desc">Vista general del equipo: asistencia del día, actividad reciente de todos los atletas, accesos rápidos y estado del club.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(0,229,255,0.2);">
+          <div class="fc-icon">👥</div>
+          <div class="fc-title">2 · Atletas</div>
+          <div class="fc-desc">Lista completa de arqueros del club con rendimiento individual. Toca cualquier atleta para ver su ficha detallada con historial, diana de impactos y progresión.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(0,229,255,0.2);">
+          <div class="fc-icon">🏅</div>
+          <div class="fc-title">3 · Controles (Sesiones)</div>
+          <div class="fc-desc">Revisión de todas las sesiones del equipo. El Coach puede ver el detalle de cada sesión y restaurar sesiones que el arquero haya eliminado accidentalmente.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.2);">
+          <div class="fc-icon">⚔️</div>
+          <div class="fc-title">4 · Duelos (Matchplay)</div>
+          <div class="fc-desc">Historial de matchplays de todos los atletas del club. Visualiza resultados, estadísticas de victorias/derrotas y evolución en duelos.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.3);background:rgba(255,242,0,0.04);">
+          <div class="fc-icon">✦</div>
+          <div class="fc-title">5 · Planes (Macrociclos) PRO</div>
+          <div class="fc-desc">Planificación periódica avanzada: macrociclos, mesociclos y microciclos. Asigna planes de entrenamiento a cada atleta. Requiere Plan PRO.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📋</div>
+          <div class="fc-title">Asistencia del Día</div>
+          <div class="fc-desc">Marca la asistencia de cada arquero con un tap desde el panel Overview. Se guarda con fecha y se sincroniza con la nube automáticamente.</div>
+        </div>
+      </div>
+
+      <!-- ATHLETE DETAIL -->
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin:32px 0 12px;">Ficha Detallada del Atleta</h3>
+      <p class="section-desc" style="margin-bottom:20px;">Al tocar un atleta en el panel "Atletas", se despliega un drawer deslizante con información completa:</p>
+      <div class="step-list reveal">
+        <div class="step-item">
+          <div class="step-num" style="background:rgba(255,242,0,0.1);border-color:rgba(255,242,0,0.3);color:var(--yellow);">📈</div>
+          <div class="step-content">
+            <div class="step-title">Gráfico de progresión</div>
+            <div class="step-desc">Curva de evolución de los últimos scores del atleta, con tendencia ascendente/descendente clara.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num" style="background:rgba(255,242,0,0.1);border-color:rgba(255,242,0,0.3);color:var(--yellow);">🎯</div>
+          <div class="step-content">
+            <div class="step-title">Diana de impactos acumulados</div>
+            <div class="step-desc">Vista de todos los impactos registrados superpuestos en una diana, para identificar patrones de agrupación y áreas de mejora.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num" style="background:rgba(255,242,0,0.1);border-color:rgba(255,242,0,0.3);color:var(--yellow);">📝</div>
+          <div class="step-content">
+            <div class="step-title">Historial de sesiones</div>
+            <div class="step-desc">Todas las sesiones del atleta con scores, fechas y notas. El Coach puede leer las notas de sesión para hacer seguimiento.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num" style="background:rgba(255,242,0,0.1);border-color:rgba(255,242,0,0.3);color:var(--yellow);">🔄</div>
+          <div class="step-content">
+            <div class="step-title">Restaurar sesión eliminada</div>
+            <div class="step-desc">Si un atleta borró una sesión por error, el Coach puede restaurarla desde la ficha. Se sincroniza y el atleta recibe notificación.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MACROCYCLES -->
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin:32px 0 12px;">Macrociclos de Entrenamiento (PRO 🔒)</h3>
+      <p class="section-desc" style="margin-bottom:16px;">El panel de Planes permite al Coach PRO diseñar y asignar periodización completa:</p>
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">📅</div>
+          <div class="fc-title">Macrociclo</div>
+          <div class="fc-desc">Plan general de varios meses (ej: "Pretemporada 2026"). Define el objetivo global, fechas de inicio y fin.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📆</div>
+          <div class="fc-title">Mesociclo</div>
+          <div class="fc-desc">Bloques de 3-6 semanas con objetivos específicos: volumen, intensidad, competición, recuperación.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🗓️</div>
+          <div class="fc-title">Microciclo Semanal</div>
+          <div class="fc-desc">Planificación semana a semana: días de entrenamiento, distancias, tipo de práctica y carga de trabajo.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📊</div>
+          <div class="fc-title">Asignación por Atleta</div>
+          <div class="fc-desc">El Coach asigna el macrociclo a uno o varios atletas del club. El atleta recibe una notificación push al instante.</div>
+        </div>
+      </div>
+
+      <div class="callout warn reveal">
+        <div class="callout-icon">✦</div>
+        <div>
+          <div class="callout-title">Requiere Plan PRO</div>
+          <div class="callout-desc">El módulo de Macrociclos está disponible únicamente para Entrenadores con Plan PRO activo. En el plan FREE, el panel aparece con un candado y un botón para hacer upgrade.</div>
+        </div>
+      </div>
+
+      <!-- ATTENDANCE -->
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin:32px 0 12px;">Gestión de Asistencia</h3>
+      <div class="step-list reveal">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Abre el panel Overview</div>
+            <div class="step-desc">Ve a Portal Coach → Resumen. Verás la lista de atletas del club con su estado de asistencia del día.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Toca el toggle de cada atleta</div>
+            <div class="step-desc">Un tap marca al atleta como "Presente" con color cian. Otro tap lo desmarca. Cambios guardados instantáneamente.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Historial automático</div>
+            <div class="step-desc">Cada registro de asistencia queda guardado con la fecha exacta. El arquero puede ver su propio historial desde su Calendario.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">📱</div>
+        <div>
+          <div class="callout-title">WhatsApp desde el portal</div>
+          <div class="callout-desc">El Coach puede configurar su número de WhatsApp en Perfil → Gestión del Club. Desde la ficha de cada atleta aparecerá un botón verde de WhatsApp que abre un mensaje pre-armado listo para enviar.</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== FOOTER ===== -->
     <footer class="manual-footer">
-      <div class="footer-logo">
-        <span style="color:var(--cyan-neon);border:2px solid var(--cyan-neon);border-radius:6px;padding:3px 8px;">101</span>
-        <span style="color:var(--red);border:2px solid var(--red);border-radius:6px;padding:3px 8px;">010</span>
-        <span style="color:var(--yellow);border:2px solid var(--yellow);border-radius:6px;padding:3px 8px;">101</span>
+      <div style="display:flex;gap:4px;justify-content:center;margin-bottom:12px;">
+        <span style="font-size:20px;font-weight:900;color:#00E5FF;">10</span><span style="font-size:20px;font-weight:900;color:#FF3B30;">10</span><span style="font-size:20px;font-weight:900;color:#FFF200;">10</span>
+        <span style="color:rgba(255,255,255,0.3);font-size:10px;font-weight:800;letter-spacing:4px;text-transform:uppercase;padding-left:10px;border-left:1px solid rgba(255,255,255,0.1);align-self:center;">ARCHERY</span>
       </div>
-      <div class="version-badge">v2.1.0 — Manual de Usuario</div>
+      <div class="version-badge">v2.1.1 — Manual de Usuario</div>
       <p style="margin-bottom:8px;">La app de tiro con arco más completa y avanzada del mundo.</p>
       <p>Copyright © 2026 Archery 101010. Todos los derechos reservados.</p>
       <p style="margin-top:8px;font-size:10px;color:rgba(142,142,147,0.5);">Construido con Next.js · TypeScript · Tailwind CSS · Firebase</p>
     </footer>
+
 
   </main>
 </div>
