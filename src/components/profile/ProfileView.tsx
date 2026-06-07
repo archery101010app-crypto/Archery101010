@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile, updateProfile, transferCoachRole, logoutUser, getLoggedUser } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -1255,6 +1255,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </button>
         </div>
       </div>
+
+      {/* Manual de Usuario Button */}
+      <button
+        onClick={() => window.open("/manual/", "_blank")}
+        className="w-full py-3.5 mt-2 rounded-full border border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+      >
+        <BookOpen size={16} />
+        <span>Manual de Usuario</span>
+      </button>
 
       {/* Log out Action Button */}
       <button

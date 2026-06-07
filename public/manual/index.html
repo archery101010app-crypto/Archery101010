@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>Manual de Usuario — Archery 101010</title>
+  <meta name="description" content="Manual visual interactivo de Archery 101010. Aprende a usar todas las funciones de la app de tiro con arco más completa." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #000000;
+      --surface: #0d0d0d;
+      --card: #111418;
+      --card2: #1A1D20;
+      --border: #2C2F33;
+      --cyan-neon: #00E5FF;
+      --cyan-base: #00A2E8;
+      --yellow: #FFF200;
+      --red: #FF3B30;
+      --green: #00C853;
+      --gray-dim: #8E8E93;
+      --white: #FFFFFF;
+      --sidebar-width: 260px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--black);
+      color: var(--white);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--cyan-base); }
+
+    /* ===== TOP HEADER ===== */
+    .top-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+    }
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .logo-blocks {
+      display: flex;
+      gap: 3px;
+    }
+    .logo-blocks span {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .logo-blocks .b1 { color: var(--cyan-neon); border: 1px solid var(--cyan-neon); }
+    .logo-blocks .b2 { color: var(--red); border: 1px solid var(--red); }
+    .logo-blocks .b3 { color: var(--yellow); border: 1px solid var(--yellow); }
+    .logo-text {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 4px;
+      color: var(--white);
+      text-transform: uppercase;
+    }
+    .header-badge {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--cyan-neon);
+      border: 1px solid var(--cyan-neon);
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 8px;
+      background: none;
+      border: none;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--white);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+
+    /* ===== LAYOUT ===== */
+    .layout {
+      display: flex;
+      padding-top: 56px;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: var(--sidebar-width);
+      position: fixed;
+      top: 56px;
+      left: 0;
+      bottom: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 20px 0 40px;
+      z-index: 900;
+      transition: transform 0.3s ease;
+    }
+    .sidebar-section-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--gray-dim);
+      text-transform: uppercase;
+      padding: 12px 20px 6px;
+    }
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+      text-decoration: none;
+      color: var(--gray-dim);
+      font-size: 12px;
+      font-weight: 500;
+      position: relative;
+    }
+    .sidebar-item:hover {
+      color: var(--white);
+      background: rgba(255,255,255,0.04);
+    }
+    .sidebar-item.active {
+      color: var(--cyan-neon);
+      border-left-color: var(--cyan-neon);
+      background: rgba(0,229,255,0.06);
+      font-weight: 700;
+    }
+    .sidebar-item .item-icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .sidebar-item .item-num {
+      position: absolute;
+      right: 16px;
+      font-size: 9px;
+      color: var(--border);
+      font-weight: 700;
+    }
+    .sidebar-item.active .item-num { color: rgba(0,229,255,0.4); }
+
+    /* ===== MAIN CONTENT ===== */
+    .main-content {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      padding: 0;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ===== SECTION HERO ===== */
+    .section-hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 40px;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 50%, rgba(0,162,232,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 50% at 80% 50%, rgba(255,242,0,0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-logo-big {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 30px;
+    }
+    .hero-logo-big .block {
+      font-size: 32px;
+      font-weight: 900;
+      padding: 6px 14px;
+      border-radius: 8px;
+      letter-spacing: 1px;
+    }
+    .hero-logo-big .b1 { color: var(--cyan-neon); border: 2px solid var(--cyan-neon); box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+    .hero-logo-big .b2 { color: var(--red); border: 2px solid var(--red); box-shadow: 0 0 20px rgba(255,59,48,0.3); }
+    .hero-logo-big .b3 { color: var(--yellow); border: 2px solid var(--yellow); box-shadow: 0 0 20px rgba(255,242,0,0.3); }
+    .hero-archery {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 10px;
+      color: var(--white);
+      text-transform: uppercase;
+      margin-bottom: 40px;
+    }
+    .hero-title {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .hero-title span { color: var(--cyan-neon); }
+    .hero-subtitle {
+      font-size: clamp(14px, 2vw, 18px);
+      color: var(--gray-dim);
+      max-width: 600px;
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+    .hero-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 50px;
+    }
+    .hero-chip {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: 1px solid;
+    }
+    .hero-chip.cyan { color: var(--cyan-neon); border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.08); }
+    .hero-chip.yellow { color: var(--yellow); border-color: rgba(255,242,0,0.4); background: rgba(255,242,0,0.08); }
+    .hero-chip.red { color: var(--red); border-color: rgba(255,59,48,0.4); background: rgba(255,59,48,0.08); }
+    .hero-chip.green { color: var(--green); border-color: rgba(0,200,83,0.4); background: rgba(0,200,83,0.08); }
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      width: 100%;
+      max-width: 800px;
+    }
+    .toc-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.25s;
+      text-align: left;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .toc-card:hover {
+      border-color: var(--cyan-base);
+      background: rgba(0,162,232,0.06);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .toc-card .toc-icon { font-size: 24px; margin-bottom: 8px; }
+    .toc-card .toc-num { font-size: 9px; font-weight: 700; color: var(--cyan-base); letter-spacing: 1px; margin-bottom: 4px; }
+    .toc-card .toc-name { font-size: 12px; font-weight: 700; color: var(--white); }
+
+    /* ===== CONTENT SECTIONS ===== */
+    .content-section {
+      padding: 80px 48px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      animation: fadeInUp 0.5s ease both;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .section-num {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--cyan-base);
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .section-icon-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: clamp(22px, 3vw, 36px);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.1;
+    }
+    .section-desc {
+      font-size: 14px;
+      color: var(--gray-dim);
+      max-width: 720px;
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+
+    /* ===== FEATURE GRID ===== */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 32px 0;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      transition: all 0.25s;
+    }
+    .feature-card:hover {
+      border-color: rgba(0,162,232,0.4);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .feature-card .fc-icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+    .feature-card .fc-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 8px;
+    }
+    .feature-card .fc-desc {
+      font-size: 12px;
+      color: var(--gray-dim);
+      line-height: 1.6;
+    }
+
+    /* ===== STEP LIST ===== */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .step-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0,229,255,0.12);
+      border: 1px solid rgba(0,229,255,0.3);
+      color: var(--cyan-neon);
+      font-size: 12px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-content .step-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+    .step-content .step-desc {
+      font-size: 12px;
+      color: var(--gray-dim);
+      line-height: 1.6;
+    }
+
+    /* ===== VISUAL MOCKUP DIANA ===== */
+    .mockup-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: flex-start;
+      margin: 32px 0;
+    }
+    .mockup-phone {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 20px;
+      max-width: 280px;
+      flex-shrink: 0;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .mockup-phone .phone-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .mockup-phone .phone-bar-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gray-dim);
+      letter-spacing: 1px;
+    }
+    .mockup-phone .phone-bar-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px rgba(0,200,83,0.5);
+    }
+    .diana-svg-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* ===== INFO CALLOUT ===== */
+    .callout {
+      border-radius: 16px;
+      padding: 20px 24px;
+      margin: 24px 0;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .callout.info { background: rgba(0,162,232,0.08); border: 1px solid rgba(0,162,232,0.25); }
+    .callout.warn { background: rgba(255,242,0,0.06); border: 1px solid rgba(255,242,0,0.25); }
+    .callout.tip { background: rgba(0,200,83,0.06); border: 1px solid rgba(0,200,83,0.25); }
+    .callout.danger { background: rgba(255,59,48,0.06); border: 1px solid rgba(255,59,48,0.25); }
+    .callout-icon { font-size: 22px; flex-shrink: 0; }
+    .callout-title { font-size: 13px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .callout-desc { font-size: 12px; color: var(--gray-dim); line-height: 1.6; }
+    .callout.info .callout-title { color: var(--cyan-neon); }
+    .callout.warn .callout-title { color: var(--yellow); }
+    .callout.tip .callout-title { color: var(--green); }
+    .callout.danger .callout-title { color: var(--red); }
+
+    /* ===== TABLE ===== */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .data-table th {
+      background: var(--card2);
+      padding: 12px 16px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gray-dim);
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--white);
+      border-bottom: 1px solid rgba(44,47,51,0.5);
+      background: var(--card);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge.cyan { color: var(--cyan-neon); background: rgba(0,229,255,0.1); }
+    .badge.yellow { color: var(--yellow); background: rgba(255,242,0,0.1); }
+    .badge.red { color: var(--red); background: rgba(255,59,48,0.1); }
+    .badge.green { color: var(--green); background: rgba(0,200,83,0.1); }
+    .badge.gray { color: var(--gray-dim); background: rgba(142,142,147,0.1); }
+
+    /* ===== KEYBOARD MOCKUP ===== */
+    .kbd-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-width: 320px;
+      margin: 20px 0;
+    }
+    .kbd-key {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: default;
+      transition: transform 0.1s;
+    }
+    .kbd-key.gold { color: var(--yellow); border: 2px solid rgba(255,242,0,0.5); background: rgba(255,242,0,0.08); box-shadow: 0 0 12px rgba(255,242,0,0.15); }
+    .kbd-key.std { color: var(--white); border: 1px solid rgba(0,162,232,0.4); background: transparent; }
+    .kbd-key.miss { color: var(--red); border: 1px solid rgba(255,59,48,0.35); }
+    .kbd-key.action { color: var(--white); background: linear-gradient(135deg, var(--cyan-base), var(--cyan-neon)); border: none; }
+    .kbd-key.back { color: var(--gray-dim); background: var(--card2); border: 1px solid var(--border); }
+
+    /* ===== ROLE CARDS ===== */
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .role-card {
+      border-radius: 20px;
+      padding: 24px;
+      text-align: center;
+      border: 1px solid;
+    }
+    .role-card.archer { border-color: rgba(0,229,255,0.3); background: rgba(0,229,255,0.05); }
+    .role-card.coach { border-color: rgba(255,242,0,0.3); background: rgba(255,242,0,0.05); }
+    .role-card.admin { border-color: rgba(255,59,48,0.3); background: rgba(255,59,48,0.05); }
+    .role-card .role-icon { font-size: 36px; margin-bottom: 12px; }
+    .role-card .role-title { font-size: 16px; font-weight: 900; margin-bottom: 8px; }
+    .role-card.archer .role-title { color: var(--cyan-neon); }
+    .role-card.coach .role-title { color: var(--yellow); }
+    .role-card.admin .role-title { color: var(--red); }
+    .role-card .role-perms { font-size: 11px; color: var(--gray-dim); line-height: 1.7; }
+
+    /* ===== PLAN COMPARISON ===== */
+    .plan-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 24px 0;
+      max-width: 640px;
+    }
+    .plan-card {
+      border-radius: 20px;
+      padding: 24px;
+      border: 1px solid;
+    }
+    .plan-card.free { border-color: var(--border); background: var(--card); }
+    .plan-card.pro { border-color: rgba(255,242,0,0.4); background: rgba(255,242,0,0.04); box-shadow: 0 0 24px rgba(255,242,0,0.06); }
+    .plan-title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
+    .plan-card.free .plan-title { color: var(--gray-dim); }
+    .plan-card.pro .plan-title { color: var(--yellow); }
+    .plan-price { font-size: 24px; font-weight: 900; color: var(--white); margin-bottom: 16px; }
+    .plan-feature-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .plan-feature-list li { font-size: 11px; color: var(--gray-dim); display: flex; gap: 8px; align-items: flex-start; }
+    .plan-feature-list li .check { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .plan-card.free .check { color: var(--gray-dim); }
+    .plan-card.pro .check { color: var(--green); }
+
+    /* ===== TIMER MOCKUP ===== */
+    .timer-display {
+      background: #0A0F1A;
+      border-radius: 24px;
+      padding: 40px 32px;
+      text-align: center;
+      max-width: 320px;
+      margin: 24px auto;
+      border: 1px solid rgba(0,162,232,0.2);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    .timer-phase { font-size: 11px; font-weight: 800; letter-spacing: 3px; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 8px; }
+    .timer-time { font-size: 80px; font-weight: 900; line-height: 1; color: var(--white); letter-spacing: -3px; margin-bottom: 20px; }
+    .timer-bar-track { width: 100%; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; margin-bottom: 24px; }
+    .timer-bar-fill { height: 100%; border-radius: 5px; background: var(--green); width: 65%; transition: width 1s linear; }
+    .timer-controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .timer-btn {
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .timer-btn.pause { background: rgba(255,242,0,0.85); color: #000; }
+    .timer-btn.reset { background: rgba(0,200,83,0.85); color: #fff; }
+    .timer-btn.mini { background: rgba(255,255,255,0.12); color: #fff; }
+    .timer-btn.stop { background: rgba(255,59,48,0.85); color: #fff; }
+
+    /* ===== AUDIO SIGNALS ===== */
+    .audio-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-radius: 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+    .audio-icon { font-size: 22px; flex-shrink: 0; }
+    .audio-content { flex: 1; }
+    .audio-title { font-size: 12px; font-weight: 700; color: var(--white); margin-bottom: 2px; }
+    .audio-desc { font-size: 11px; color: var(--gray-dim); }
+    .audio-badge { font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 20px; flex-shrink: 0; }
+    .audio-badge.entering { background: rgba(0,200,83,0.15); color: var(--green); }
+    .audio-badge.shooting { background: rgba(0,229,255,0.15); color: var(--cyan-neon); }
+    .audio-badge.finish { background: rgba(255,59,48,0.15); color: var(--red); }
+    .audio-badge.warn { background: rgba(255,242,0,0.15); color: var(--yellow); }
+
+    /* ===== SYNC DIAGRAM ===== */
+    .sync-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 480px;
+      margin: 24px 0;
+    }
+    .sync-node {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      position: relative;
+      z-index: 1;
+    }
+    .sync-node .sn-icon { font-size: 22px; flex-shrink: 0; }
+    .sync-node .sn-title { font-size: 13px; font-weight: 700; color: var(--white); }
+    .sync-node .sn-desc { font-size: 11px; color: var(--gray-dim); }
+    .sync-connector {
+      width: 3px;
+      height: 24px;
+      background: linear-gradient(to bottom, var(--cyan-base), transparent);
+      margin-left: 30px;
+    }
+
+    /* ===== MATCHPLAY MOCKUP ===== */
+    .matchplay-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      max-width: 480px;
+      margin: 24px 0;
+    }
+    .mp-side {
+      border-radius: 20px;
+      padding: 24px;
+      text-align: center;
+    }
+    .mp-side.player { background: rgba(0,162,232,0.08); border: 1px solid rgba(0,162,232,0.3); }
+    .mp-side.rival { background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.3); }
+    .mp-label { font-size: 9px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .mp-side.player .mp-label { color: var(--cyan-neon); }
+    .mp-side.rival .mp-label { color: var(--red); }
+    .mp-score { font-size: 48px; font-weight: 900; line-height: 1; }
+    .mp-side.player .mp-score { color: var(--cyan-neon); }
+    .mp-side.rival .mp-score { color: var(--red); }
+    .mp-set-pts { font-size: 11px; color: var(--gray-dim); margin-top: 6px; }
+
+    /* ===== NOTIFICATION CARDS ===== */
+    .notif-card {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 16px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+    .notif-card:hover { border-color: rgba(0,162,232,0.3); }
+    .notif-icon { font-size: 24px; flex-shrink: 0; }
+    .notif-title { font-size: 13px; font-weight: 700; color: var(--white); margin-bottom: 3px; }
+    .notif-body { font-size: 11px; color: var(--gray-dim); line-height: 1.5; }
+    .notif-time { font-size: 10px; color: rgba(142,142,147,0.6); margin-top: 4px; }
+
+    /* ===== FOOTER ===== */
+    .manual-footer {
+      text-align: center;
+      padding: 48px 24px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+    }
+    .manual-footer .footer-logo { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+    .manual-footer .footer-logo span { font-size: 14px; font-weight: 900; padding: 3px 8px; border-radius: 6px; }
+    .manual-footer p { font-size: 11px; color: var(--gray-dim); }
+    .version-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--cyan-neon);
+      border: 1px solid rgba(0,229,255,0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    /* ===== COLOR DOTS (DIANA) ===== */
+    .zone-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .zone-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .zone-chip .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ===== PILL TOGGLES ===== */
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+    .pill {
+      padding: 7px 18px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid;
+      cursor: default;
+    }
+    .pill.active { color: var(--cyan-neon); border-color: var(--cyan-neon); background: rgba(0,229,255,0.1); }
+    .pill.inactive { color: var(--gray-dim); border-color: var(--border); background: transparent; }
+
+    /* ===== DIVIDER ===== */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+    /* ===== SCROLL-REVEAL ===== */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main-content { margin-left: 0; }
+      .hamburger { display: flex; }
+      .content-section { padding: 60px 24px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .plan-grid { grid-template-columns: 1fr; }
+      .matchplay-split { grid-template-columns: 1fr; }
+      .toc-grid { grid-template-columns: repeat(2, 1fr); }
+      .hero-logo-big .block { font-size: 22px; }
+    }
+    @media (max-width: 480px) {
+      .content-section { padding: 48px 16px; }
+      .toc-grid { grid-template-columns: 1fr 1fr; }
+      .kbd-grid { max-width: 260px; }
+    }
+
+    /* ===== OVERLAY ===== */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 800;
+    }
+    .sidebar-overlay.active { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ===== TOP HEADER ===== -->
+<header class="top-header">
+  <a href="#inicio" class="logo-wrap">
+    <div class="logo-blocks">
+      <span class="b1">101</span>
+      <span class="b2">010</span>
+      <span class="b3">101</span>
+    </div>
+    <span class="logo-text">ARCHERY</span>
+  </a>
+  <span class="header-badge">Manual v2.1.0</span>
+  <button class="hamburger" id="menuBtn" aria-label="Menú">
+    <span></span><span></span><span></span>
+  </button>
+</header>
+
+<!-- ===== SIDEBAR ===== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-section-label">Inicio</div>
+  <a href="#inicio" class="sidebar-item active" data-section="inicio">
+    <span class="item-icon">🏹</span> Presentación
+    <span class="item-num">00</span>
+  </a>
+
+  <div class="sidebar-section-label">Módulos</div>
+  <a href="#login" class="sidebar-item" data-section="login">
+    <span class="item-icon">👤</span> Login & Registro
+    <span class="item-num">01</span>
+  </a>
+  <a href="#dashboard" class="sidebar-item" data-section="dashboard">
+    <span class="item-icon">📊</span> Dashboard
+    <span class="item-num">02</span>
+  </a>
+  <a href="#sesion" class="sidebar-item" data-section="sesion">
+    <span class="item-icon">⚙️</span> Configuración de Sesión
+    <span class="item-num">03</span>
+  </a>
+  <a href="#diana" class="sidebar-item" data-section="diana">
+    <span class="item-icon">🎯</span> Modo Diana
+    <span class="item-num">04</span>
+  </a>
+  <a href="#teclado" class="sidebar-item" data-section="teclado">
+    <span class="item-icon">⌨️</span> Modo Teclado
+    <span class="item-num">05</span>
+  </a>
+  <a href="#reloj" class="sidebar-item" data-section="reloj">
+    <span class="item-icon">⏱️</span> Reloj WA
+    <span class="item-num">06</span>
+  </a>
+  <a href="#historial" class="sidebar-item" data-section="historial">
+    <span class="item-icon">📋</span> Historial
+    <span class="item-num">07</span>
+  </a>
+  <a href="#calendario" class="sidebar-item" data-section="calendario">
+    <span class="item-icon">📅</span> Calendario
+    <span class="item-num">08</span>
+  </a>
+  <a href="#perfil" class="sidebar-item" data-section="perfil">
+    <span class="item-icon">🔧</span> Perfil & Ajustes
+    <span class="item-num">09</span>
+  </a>
+  <a href="#matchplay" class="sidebar-item" data-section="matchplay">
+    <span class="item-icon">⚔️</span> Matchplay (Duelos)
+    <span class="item-num">10</span>
+  </a>
+  <a href="#roles" class="sidebar-item" data-section="roles">
+    <span class="item-icon">🥇</span> Roles
+    <span class="item-num">11</span>
+  </a>
+  <a href="#planes" class="sidebar-item" data-section="planes">
+    <span class="item-icon">✦</span> Planes FREE & PRO
+    <span class="item-num">12</span>
+  </a>
+  <a href="#notificaciones" class="sidebar-item" data-section="notificaciones">
+    <span class="item-icon">🔔</span> Notificaciones
+    <span class="item-num">13</span>
+  </a>
+  <a href="#offline" class="sidebar-item" data-section="offline">
+    <span class="item-icon">📡</span> Offline-First & Sync
+    <span class="item-num">14</span>
+  </a>
+</nav>
+
+<!-- ===== MAIN ===== -->
+<div class="layout">
+  <main class="main-content">
+
+    <!-- ===== 00. HERO ===== -->
+    <section id="inicio" class="section-hero">
+      <div class="hero-logo-big">
+        <span class="block b1">101</span>
+        <span class="block b2">010</span>
+        <span class="block b3">101</span>
+      </div>
+      <p class="hero-archery">ARCHERY</p>
+      <h1 class="hero-title">Manual de <span>Usuario</span></h1>
+      <p class="hero-subtitle">
+        Guía visual completa para dominar todas las funciones de la app de tiro con arco más avanzada del mundo. Registro de sesiones, duelos en tiempo real, análisis de progresión y mucho más.
+      </p>
+      <div class="hero-chips">
+        <span class="hero-chip cyan">🎯 Scoring Táctil</span>
+        <span class="hero-chip yellow">⚔️ Matchplay en Vivo</span>
+        <span class="hero-chip red">⏱️ Reloj WA Oficial</span>
+        <span class="hero-chip green">📡 Offline-First</span>
+        <span class="hero-chip cyan">🔔 Push Notifications</span>
+        <span class="hero-chip yellow">✦ Plan PRO</span>
+      </div>
+      <div class="toc-grid">
+        <a href="#login" class="toc-card"><div class="toc-icon">👤</div><div class="toc-num">01</div><div class="toc-name">Login & Registro</div></a>
+        <a href="#dashboard" class="toc-card"><div class="toc-icon">📊</div><div class="toc-num">02</div><div class="toc-name">Dashboard</div></a>
+        <a href="#sesion" class="toc-card"><div class="toc-icon">⚙️</div><div class="toc-num">03</div><div class="toc-name">Configuración</div></a>
+        <a href="#diana" class="toc-card"><div class="toc-icon">🎯</div><div class="toc-num">04</div><div class="toc-name">Modo Diana</div></a>
+        <a href="#teclado" class="toc-card"><div class="toc-icon">⌨️</div><div class="toc-num">05</div><div class="toc-name">Modo Teclado</div></a>
+        <a href="#reloj" class="toc-card"><div class="toc-icon">⏱️</div><div class="toc-num">06</div><div class="toc-name">Reloj WA</div></a>
+        <a href="#historial" class="toc-card"><div class="toc-icon">📋</div><div class="toc-num">07</div><div class="toc-name">Historial</div></a>
+        <a href="#matchplay" class="toc-card"><div class="toc-icon">⚔️</div><div class="toc-num">10</div><div class="toc-name">Matchplay</div></a>
+        <a href="#roles" class="toc-card"><div class="toc-icon">🥇</div><div class="toc-num">11</div><div class="toc-name">Roles</div></a>
+        <a href="#planes" class="toc-card"><div class="toc-icon">✦</div><div class="toc-num">12</div><div class="toc-name">Planes</div></a>
+        <a href="#notificaciones" class="toc-card"><div class="toc-icon">🔔</div><div class="toc-num">13</div><div class="toc-name">Notificaciones</div></a>
+        <a href="#offline" class="toc-card"><div class="toc-icon">📡</div><div class="toc-num">14</div><div class="toc-name">Offline-First</div></a>
+      </div>
+    </section>
+
+    <!-- ===== 01. LOGIN & REGISTRO ===== -->
+    <section id="login" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);">👤</div>
+        <div>
+          <div class="section-num">Módulo 01</div>
+          <h2 class="section-title">Login & Registro</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Accede a tu cuenta con Email, Google o Facebook. El proceso de registro de nuevo usuario consta de 5 pasos guiados para configurar tu perfil completo desde el primer momento.
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">📧</div>
+          <div class="fc-title">Email / Contraseña</div>
+          <div class="fc-desc">Ingresa con tu correo y contraseña registrados. Soporta recuperación de contraseña vía email.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔵</div>
+          <div class="fc-title">Login con Google</div>
+          <div class="fc-desc">Un tap y entras. Si es tu primer acceso, se abre el flujo de registro automáticamente.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔷</div>
+          <div class="fc-title">Login con Facebook</div>
+          <div class="fc-desc">Autenticación rápida con tu cuenta de Facebook, misma experiencia sin fricciones.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🌐</div>
+          <div class="fc-title">Selector de Idioma</div>
+          <div class="fc-desc">Cambia entre Español e Inglés desde la pantalla de Login. La preferencia se guarda automáticamente.</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:16px;font-weight:800;color:var(--white);margin:32px 0 16px;">Pasos del Registro (Nuevo Usuario)</h3>
+      <div class="step-list reveal">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Datos de Cuenta</div>
+            <div class="step-desc">Email, contraseña y confirmación de contraseña. Validación instantánea de fortaleza de contraseña.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Datos Personales</div>
+            <div class="step-desc">Nombre completo, fecha de nacimiento, país y género. La edad determina si puedes ser Entrenador.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Club</div>
+            <div class="step-desc">Crear un nuevo club (si eres mayor de 18 años, serás Entrenador automáticamente), unirte con código de invitación, o registrarte como arquero independiente.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Configuración del Arco</div>
+            <div class="step-desc">Tipo de arco (Recurve, Compound o Barebow), marca, modelo, poundaje y distancia predeterminada.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">Datos Físicos</div>
+            <div class="step-desc">Altura, peso, ojo dominante y mano dominante. Útil para análisis de rendimiento y recomendaciones.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout info reveal">
+        <div class="callout-icon">ℹ️</div>
+        <div>
+          <div class="callout-title">Primer usuario del club = Entrenador</div>
+          <div class="callout-desc">Si creas un nuevo club y tienes 18 años o más, automáticamente te conviertes en Entrenador (Coach) de ese club. Los siguientes miembros que se unan con el código de invitación serán Arqueros por defecto.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 02. DASHBOARD ===== -->
+    <section id="dashboard" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,242,0,0.08);border:1px solid rgba(255,242,0,0.3);">📊</div>
+        <div>
+          <div class="section-num">Módulo 02</div>
+          <h2 class="section-title">Dashboard Principal</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        La pantalla de inicio te da una vista rápida e inteligente de tu rendimiento con un diseño tipo Bento Grid. Cada tarjeta es interactiva y está diseñada para que sepas de un vistazo cómo estás progresando.
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🏹</div>
+          <div class="fc-title">Última Sesión</div>
+          <div class="fc-desc">Score gigante con velocímetro SVG animado que muestra tu porcentaje de precisión en la sesión más reciente.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">⭐</div>
+          <div class="fc-title">Puntos Totales</div>
+          <div class="fc-desc">Acumulado histórico de todos tus tiros. Con borde degradado dorado para destacar tu logro global.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🏆</div>
+          <div class="fc-title">Mejor Sesión</div>
+          <div class="fc-desc">Tu récord personal. Onda SVG animada en cian que representa visualmente tu mejor marca.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📈</div>
+          <div class="fc-title">Gráfico de Progresión</div>
+          <div class="fc-desc">Curva lineal interactiva con puntos de datos. Ve tu evolución a lo largo del tiempo y detecta tendencias.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔒</div>
+          <div class="fc-title">Análisis Avanzado PRO</div>
+          <div class="fc-desc">Exclusivo para Plan PRO. Estadísticas profundas, comparativas y exportación de informes.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🎵</div>
+          <div class="fc-title">Spotify (FREE)</div>
+          <div class="fc-desc">Integración con Spotify para escuchar música durante el entrenamiento. Disponible para todos los usuarios.</div>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">💡</div>
+        <div>
+          <div class="callout-title">Navegación Flotante</div>
+          <div class="callout-desc">El menú de navegación es una cápsula flotante en la parte inferior de la pantalla con cinco accesos: <strong style="color:var(--white)">Home · Sesión · Historial · Calendario · Perfil</strong>. El ítem activo se ilumina en cian con un punto de luz debajo.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 03. SESION ===== -->
+    <section id="sesion" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,162,232,0.1);border:1px solid rgba(0,162,232,0.3);">⚙️</div>
+        <div>
+          <div class="section-num">Módulo 03</div>
+          <h2 class="section-title">Configuración de Sesión</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Antes de comenzar a registrar, configura los parámetros de tu sesión. Cada opción se persiste para la próxima vez que inicies.
+      </p>
+
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin-bottom:12px;">Tipo de Práctica</h3>
+      <div class="pill-row reveal">
+        <span class="pill active">Control</span>
+        <span class="pill inactive">Práctica</span>
+        <span class="pill inactive">Volumen</span>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🏹</div>
+          <div class="fc-title">Tipo de Arco</div>
+          <div class="fc-desc">Recurve, Compound o Barebow. Pre-seleccionado según tu perfil, pero puedes cambiarlo para cada sesión específica.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🎯</div>
+          <div class="fc-title">Formato WA</div>
+          <div class="fc-desc">WA 300, WA 720, WA 70m 144 flechas, etc. El sistema carga automáticamente los ends y flechas del formato elegido.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📏</div>
+          <div class="fc-title">Distancia</div>
+          <div class="fc-desc">Presets rápidos: 18m, 30m, 50m, 60m, 70m, 90m. Puedes escribir una distancia personalizada.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔄</div>
+          <div class="fc-title">Auto-Score</div>
+          <div class="fc-desc">Con el toggle activo, la app avanza automáticamente al siguiente end al completar las flechas del actual.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📝</div>
+          <div class="fc-title">Incluir Notas</div>
+          <div class="fc-desc">Activa este toggle para poder escribir notas por end y una nota general al finalizar la sesión.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🎯</div>
+          <div class="fc-title">Modo de Entrada</div>
+          <div class="fc-desc">Elige entre Modo Diana (táctil interactivo) o Modo Teclado (numérico rápido) para registrar tus flechas.</div>
+        </div>
+      </div>
+
+      <div class="callout info reveal">
+        <div class="callout-icon">⚙️</div>
+        <div>
+          <div class="callout-title">Configuración inteligente</div>
+          <div class="callout-desc">Al seleccionar un formato oficial (ej: WA 300), la app configura automáticamente el número de ends (10), flechas por end (3) y distancia recomendada (18m indoor). Puedes sobreescribir cualquier valor.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 04. DIANA ===== -->
+    <section id="diana" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,242,0,0.08);border:1px solid rgba(255,242,0,0.3);">🎯</div>
+        <div>
+          <div class="section-num">Módulo 04</div>
+          <h2 class="section-title">Modo Diana</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        La diana vectorial interactiva ocupa la parte superior de la pantalla. Toca directamente donde impactó tu flecha y la app registra la puntuación automáticamente según la zona.
+      </p>
+
+      <div class="mockup-container reveal">
+        <div class="mockup-phone">
+          <div class="phone-bar">
+            <span class="phone-bar-title">End 3 · Flecha 2/3</span>
+            <div class="phone-bar-dot"></div>
+          </div>
+          <div class="diana-svg-container">
+            <svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+              <!-- Diana reglamentaria WA -->
+              <circle cx="110" cy="110" r="108" fill="#fff" stroke="#ccc" stroke-width="1"/>
+              <circle cx="110" cy="110" r="97" fill="#fff" stroke="#ddd" stroke-width="1"/>
+              <circle cx="110" cy="110" r="86" fill="#1a6bb5" stroke="#ccc" stroke-width="1"/>
+              <circle cx="110" cy="110" r="75" fill="#1a6bb5" stroke="#ccc" stroke-width="1"/>
+              <circle cx="110" cy="110" r="64" fill="#cc0000" stroke="#ccc" stroke-width="1"/>
+              <circle cx="110" cy="110" r="53" fill="#cc0000" stroke="#ccc" stroke-width="1"/>
+              <circle cx="110" cy="110" r="42" fill="#FFD700" stroke="#999" stroke-width="1"/>
+              <circle cx="110" cy="110" r="31" fill="#FFD700" stroke="#999" stroke-width="1"/>
+              <circle cx="110" cy="110" r="21" fill="#FFD700" stroke="#999" stroke-width="1"/>
+              <circle cx="110" cy="110" r="11" fill="#FFD700" stroke="#999" stroke-width="1"/>
+              <!-- Impactos de ejemplo -->
+              <circle cx="98" cy="105" r="6" fill="#00E5FF" stroke="white" stroke-width="1.5"/>
+              <text x="98" y="109" text-anchor="middle" font-size="7" font-weight="900" fill="black">10</text>
+              <line x1="98" y1="111" x2="110" y2="110" stroke="rgba(0,229,255,0.4)" stroke-width="1" stroke-dasharray="2 2"/>
+              <circle cx="116" cy="93" r="6" fill="#FFF200" stroke="white" stroke-width="1.5"/>
+              <text x="116" y="97" text-anchor="middle" font-size="7" font-weight="900" fill="black">X</text>
+              <line x1="116" y1="99" x2="110" y2="110" stroke="rgba(255,242,0,0.4)" stroke-width="1" stroke-dasharray="2 2"/>
+              <!-- Zoom indicator -->
+              <circle cx="110" cy="110" r="3" fill="white" opacity="0.5"/>
+            </svg>
+          </div>
+          <div style="display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
+            <span style="background:rgba(255,242,0,0.15);color:var(--yellow);padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;">X</span>
+            <span style="background:rgba(255,242,0,0.15);color:var(--yellow);padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;">10</span>
+            <span style="background:rgba(142,142,147,0.15);color:var(--gray-dim);padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;">—</span>
+          </div>
+          <div style="text-align:center;margin-top:8px;font-size:22px;font-weight:900;color:var(--yellow);">20 pts</div>
+        </div>
+
+        <div style="flex:1;min-width:200px;">
+          <h3 style="font-size:14px;font-weight:800;color:var(--white);margin-bottom:16px;">Zonas de Puntuación WA</h3>
+          <div class="zone-row">
+            <div class="zone-chip" style="background:rgba(255,242,0,0.1);color:var(--yellow);border:1px solid rgba(255,242,0,0.3);">
+              <div class="dot" style="background:#FFD700;"></div> X / 10 / 9
+            </div>
+            <div class="zone-chip" style="background:rgba(255,59,48,0.1);color:var(--red);border:1px solid rgba(255,59,48,0.3);">
+              <div class="dot" style="background:#cc0000;"></div> 8 / 7
+            </div>
+            <div class="zone-chip" style="background:rgba(0,162,232,0.1);color:var(--cyan-base);border:1px solid rgba(0,162,232,0.3);">
+              <div class="dot" style="background:#1a6bb5;"></div> 6 / 5
+            </div>
+            <div class="zone-chip" style="background:rgba(200,200,200,0.1);color:var(--white);border:1px solid var(--border);">
+              <div class="dot" style="background:#aaa;"></div> 4 / 3
+            </div>
+            <div class="zone-chip" style="background:rgba(255,255,255,0.05);color:var(--gray-dim);border:1px solid var(--border);">
+              <div class="dot" style="background:#fff;"></div> 2 / 1
+            </div>
+            <div class="zone-chip" style="background:rgba(255,59,48,0.08);color:var(--red);border:1px solid rgba(255,59,48,0.2);">
+              <div class="dot" style="background:var(--red);"></div> M (Miss)
+            </div>
+          </div>
+
+          <div class="step-list" style="margin-top:20px;">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <div class="step-title">Toca la diana</div>
+                <div class="step-desc">Presiona exactamente donde impactó tu flecha. La app detecta la zona y registra la puntuación.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <div class="step-title">Aparece el marcador</div>
+                <div class="step-desc">Un punto con el número de la flecha aparece en la posición exacta del impacto con una línea al centro.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <div class="step-title">Lupa de precisión</div>
+                <div class="step-desc">Al mantener presionado, se activa una lupa que amplía la zona para registrar impactos de alta precisión.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">4</div>
+              <div class="step-content">
+                <div class="step-title">Confirmar End</div>
+                <div class="step-desc">Al registrar todas las flechas del end, confirmas el score y avanzas al siguiente end automáticamente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">💡</div>
+        <div>
+          <div class="callout-title">Fondo negro = Miss</div>
+          <div class="callout-desc">Cualquier toque fuera de los anillos de la diana (en el área negra exterior) se registra automáticamente como <strong style="color:var(--red)">Miss (M)</strong>.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 05. TECLADO ===== -->
+    <section id="teclado" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);">⌨️</div>
+        <div>
+          <div class="section-num">Módulo 05</div>
+          <h2 class="section-title">Modo Teclado</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        El modo más rápido para registrar puntuaciones. Ideal para tiro rápido o cuando prefieres velocidad sobre posicionamiento visual. Tabla de ends en la parte superior y teclado numérico en la parte inferior.
+      </p>
+
+      <div class="mockup-container reveal">
+        <div>
+          <h3 style="font-size:13px;font-weight:800;color:var(--white);margin-bottom:12px;">Teclado de Puntuación</h3>
+          <div class="kbd-grid">
+            <div class="kbd-key gold">X</div>
+            <div class="kbd-key gold">10</div>
+            <div class="kbd-key gold">9</div>
+            <div class="kbd-key std">8</div>
+            <div class="kbd-key std">7</div>
+            <div class="kbd-key std">6</div>
+            <div class="kbd-key std">5</div>
+            <div class="kbd-key std">4</div>
+            <div class="kbd-key std">3</div>
+            <div class="kbd-key std">2</div>
+            <div class="kbd-key std">1</div>
+            <div class="kbd-key miss">M</div>
+            <div class="kbd-key back">⌫</div>
+            <div class="kbd-key action" style="grid-column: span 3;">↵ Enter</div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <h3 style="font-size:13px;font-weight:800;color:var(--white);margin-bottom:12px;">Cómo funciona</h3>
+          <div class="step-list">
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <div class="step-title">Cursor activo (barra cian)</div>
+                <div class="step-desc">Una barra vertical cian indica la celda activa en la tabla. Los taps del teclado llenan esa celda.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <div class="step-title">X, 10, 9 en dorado</div>
+                <div class="step-desc">Las puntuaciones máximas están destacadas en amarillo neón para localización rápida bajo presión.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <div class="step-title">Confirma con Enter</div>
+                <div class="step-desc">Al presionar ↵ se confirma la flecha y el cursor avanza automáticamente a la siguiente celda.</div>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-num">4</div>
+              <div class="step-content">
+                <div class="step-title">Tabla en tiempo real</div>
+                <div class="step-desc">El total del end y el acumulado se calculan y actualizan instantáneamente con cada flecha registrada.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 06. RELOJ WA ===== -->
+    <section id="reloj" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,162,232,0.1);border:1px solid rgba(0,162,232,0.3);">⏱️</div>
+        <div>
+          <div class="section-num">Módulo 06</div>
+          <h2 class="section-title">Reloj WA (Timer de Competición)</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Cronómetro oficial basado en las reglas de World Archery. Dos fases configurables (Preparación + Tiro) con señales acústicas reglamentarias generadas en tiempo real por la Web Audio API.
+      </p>
+
+      <div class="mockup-container reveal">
+        <div class="timer-display">
+          <div class="timer-phase">⏱ Tiempo de Tiro</div>
+          <div class="timer-time">1:24</div>
+          <div class="timer-bar-track">
+            <div class="timer-bar-fill"></div>
+          </div>
+          <div class="timer-controls">
+            <button class="timer-btn pause">⏸ Pausar</button>
+            <button class="timer-btn reset">↻ Reiniciar</button>
+            <button class="timer-btn mini">⊟ Mini</button>
+            <button class="timer-btn stop">■ Cerrar</button>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:220px;">
+          <h3 style="font-size:14px;font-weight:800;color:var(--white);margin-bottom:16px;">Señales Acústicas WA</h3>
+          <div class="audio-row">
+            <div class="audio-icon">🟢🟢</div>
+            <div class="audio-content">
+              <div class="audio-title">2 pitidos largos</div>
+              <div class="audio-desc">Entrada al arco. Inicio de la fase de preparación (660Hz, 1.0s c/u)</div>
+            </div>
+            <div class="audio-badge entering">Entrada</div>
+          </div>
+          <div class="audio-row">
+            <div class="audio-icon">🔵</div>
+            <div class="audio-content">
+              <div class="audio-title">1 pitido largo</div>
+              <div class="audio-desc">¡Iniciar tiro! Transición a la fase de tiro (880Hz, 1.2s)</div>
+            </div>
+            <div class="audio-badge shooting">Tiro</div>
+          </div>
+          <div class="audio-row">
+            <div class="audio-icon">⚠️</div>
+            <div class="audio-content">
+              <div class="audio-title">Pitido de aviso</div>
+              <div class="audio-desc">A 30 segundos restantes y últimos 3s de preparación (550Hz)</div>
+            </div>
+            <div class="audio-badge warn">Aviso</div>
+          </div>
+          <div class="audio-row">
+            <div class="audio-icon">🔴🔴🔴</div>
+            <div class="audio-content">
+              <div class="audio-title">3 pitidos cortos</div>
+              <div class="audio-desc">Tiempo agotado. Fin del tiempo de tiro (440Hz, 0.9s c/u)</div>
+            </div>
+            <div class="audio-badge finish">Fin</div>
+          </div>
+          <div class="callout warn" style="margin-top:16px;">
+            <div class="callout-icon">🗣️</div>
+            <div>
+              <div class="callout-title">Cuenta regresiva por voz</div>
+              <div class="callout-desc">En los últimos 10 segundos de tiro, la app anuncia en voz el número restante (10, 9, 8... 1) en el idioma configurado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin:32px 0 12px;">FAB Flotante (Acceso Rápido)</h3>
+      <p class="section-desc" style="margin-bottom:16px;">El reloj se activa desde un botón flotante circular posicionado encima de la navegación. Cuando el reloj está corriendo, el FAB se vuelve verde y muestra el tiempo restante en formato compacto.</p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🔵</div>
+          <div class="fc-title">FAB Inactivo</div>
+          <div class="fc-desc">Color cian con animación de pulso parpadeante invitando al usuario a configurar el reloj.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🟢</div>
+          <div class="fc-title">FAB Activo</div>
+          <div class="fc-desc">Color verde. Muestra el tiempo restante en la fase actual. Al tocar, reabre el overlay completo.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📉</div>
+          <div class="fc-title">Modo Mini</div>
+          <div class="fc-desc">Minimiza el reloj a un banner compacto sin detener el timer. Puedes seguir registrando puntos.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔇</div>
+          <div class="fc-title">Sin Reloj</div>
+          <div class="fc-desc">Opción para practicar sin cronómetro. El FAB desaparece y la sesión transcurre sin límite de tiempo.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 07. HISTORIAL ===== -->
+    <section id="historial" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.3);">📋</div>
+        <div>
+          <div class="section-num">Módulo 07</div>
+          <h2 class="section-title">Historial de Sesiones</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Consulta todas tus sesiones pasadas con filtros avanzados. Cada sesión muestra score total, precisión, formato, tipo de práctica y un mini-gráfico de la distribución de puntos por end.
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🔍</div>
+          <div class="fc-title">Filtros Avanzados</div>
+          <div class="fc-desc">Filtra por rango de fechas (7 días, mes, todo), tipo de práctica, formato WA y tipo de arco.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📊</div>
+          <div class="fc-title">Vista de Detalle</div>
+          <div class="fc-desc">Al tocar una sesión: desglose completo por end con flechas individuales, mapa de impactos y notas.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🏆</div>
+          <div class="fc-title">Personal Best</div>
+          <div class="fc-desc">Las sesiones récord se marcan con un badge dorado "🏆 Personal Best" automáticamente.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📤</div>
+          <div class="fc-title">Compartir / Exportar</div>
+          <div class="fc-desc">Comparte tu sesión como imagen. También disponible: gráfico de distribución por zonas.</div>
+        </div>
+      </div>
+
+      <div class="callout warn reveal">
+        <div class="callout-icon">⚠️</div>
+        <div>
+          <div class="callout-title">Eliminar sesiones</div>
+          <div class="callout-desc">Para eliminar una sesión del historial, se requiere doble confirmación para evitar borrados accidentales. Esta acción es irreversible.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 08. CALENDARIO ===== -->
+    <section id="calendario" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,162,232,0.08);border:1px solid rgba(0,162,232,0.3);">📅</div>
+        <div>
+          <div class="section-num">Módulo 08</div>
+          <h2 class="section-title">Calendario & Asistencia</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Visualiza tu consistencia de entrenamiento en un calendario mensual. Los días de sesión aparecen destacados en cian con una mini-diana. Tu entrenador también puede ver tu asistencia.
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">📆</div>
+          <div class="fc-title">Vista Mensual</div>
+          <div class="fc-desc">Navega mes a mes con flechas. Los días entrenados tienen fondo cian y una mini-diana en la esquina.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📊</div>
+          <div class="fc-title">% de Asistencia</div>
+          <div class="fc-desc">Medidor circular animado SVG con tu porcentaje mensual. Verde = excelente, amarillo = bueno, gris = bajo.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">👨‍🏫</div>
+          <div class="fc-title">Visible para el Coach</div>
+          <div class="fc-desc">Tu entrenador puede revisar tu calendario de asistencia para evaluar tu constancia y planificar.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 09. PERFIL ===== -->
+    <section id="perfil" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(142,142,147,0.1);border:1px solid rgba(142,142,147,0.3);">🔧</div>
+        <div>
+          <div class="section-num">Módulo 09</div>
+          <h2 class="section-title">Perfil & Ajustes</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Gestiona todos los aspectos de tu cuenta, tu equipo y tus preferencias desde una sola pantalla organizada en secciones editables.
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🖼️</div>
+          <div class="fc-title">Foto de Perfil</div>
+          <div class="fc-desc">Toca el avatar para seleccionar una imagen desde tu galería de fotos y personalizarla.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📝</div>
+          <div class="fc-title">Datos Personales</div>
+          <div class="fc-desc">Edita tu nombre, fecha de nacimiento, país y género en cualquier momento.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🏹</div>
+          <div class="fc-title">Configuración del Arco</div>
+          <div class="fc-desc">Actualiza el tipo de arco, marca, modelo, poundaje y distancia predeterminada.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📐</div>
+          <div class="fc-title">Datos Físicos</div>
+          <div class="fc-desc">Altura, peso, ojo dominante y mano dominante para análisis biomecánico.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔔</div>
+          <div class="fc-title">Notificaciones</div>
+          <div class="fc-desc">Activa/desactiva Push, Email y WhatsApp individualmente según tus preferencias.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">👥</div>
+          <div class="fc-title">Gestión de Club (Coach)</div>
+          <div class="fc-desc">Solo para Entrenadores: transfiere el rol de Coach, comparte el código del club y configura WhatsApp.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 10. MATCHPLAY ===== -->
+    <section id="matchplay" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,59,48,0.08);border:1px solid rgba(255,59,48,0.3);">⚔️</div>
+        <div>
+          <div class="section-num">Módulo 10</div>
+          <h2 class="section-title">Matchplay — Duelos en Vivo</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Reta a otros arqueros registrados a un duelo en tiempo real. El Matchplay soporta los dos sistemas reglamentarios de World Archery: Set System (Recurvo) y Cumulative System (Compuesto).
+      </p>
+
+      <div class="matchplay-split reveal">
+        <div class="mp-side player">
+          <div class="mp-label">Tú</div>
+          <div class="mp-score">148</div>
+          <div class="mp-set-pts">Set Points: 4</div>
+        </div>
+        <div class="mp-side rival">
+          <div class="mp-label">Rival</div>
+          <div class="mp-score">146</div>
+          <div class="mp-set-pts">Set Points: 2</div>
+        </div>
+      </div>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card">
+          <div class="fc-icon">🏠</div>
+          <div class="fc-title">Crear Sala</div>
+          <div class="fc-desc">Genera una sala con código de invitación único. Define arco, distancia y número de ends antes de iniciar.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🚪</div>
+          <div class="fc-title">Unirse a Sala</div>
+          <div class="fc-desc">Ingresa el código de la sala del rival para unirte al duelo. También puedes unirte desde las salas públicas.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🏅</div>
+          <div class="fc-title">Set System (Recurvo)</div>
+          <div class="fc-desc">Ganador del end = 2 pts de set. Empate = 1 pt. Primer arquero en llegar a 6 puntos de set gana el match.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🎯</div>
+          <div class="fc-title">Cumulative (Compuesto)</div>
+          <div class="fc-desc">Sistema acumulativo: el arquero con mayor puntuación total al final de todos los ends gana.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🎙️</div>
+          <div class="fc-title">Canal de Audio</div>
+          <div class="fc-desc">Walkie-talkie integrado para comunicarte con tu rival durante el duelo en tiempo real.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">⏱️</div>
+          <div class="fc-title">Duelo en Tiempo Real</div>
+          <div class="fc-desc">Ves los impactos y scores del rival actualizándose en tiempo real. El reloj WA corre sincronizado.</div>
+        </div>
+      </div>
+
+      <div class="callout info reveal">
+        <div class="callout-icon">🔔</div>
+        <div>
+          <div class="callout-title">Notificación de Reto</div>
+          <div class="callout-desc">Cuando alguien te reta a un duelo, recibes una notificación push aunque tengas la app cerrada o en segundo plano. Puedes aceptar o rechazar el reto desde la notificación.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 11. ROLES ===== -->
+    <section id="roles" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,242,0,0.08);border:1px solid rgba(255,242,0,0.3);">🥇</div>
+        <div>
+          <div class="section-num">Módulo 11</div>
+          <h2 class="section-title">Roles del Sistema</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Archery 101010 maneja tres roles principales, cada uno con acceso diferenciado a las funciones de la plataforma.
+      </p>
+
+      <div class="role-grid reveal">
+        <div class="role-card archer">
+          <div class="role-icon">🏹</div>
+          <div class="role-title">Arquero</div>
+          <div class="role-perms">
+            ✅ Registrar sesiones<br/>
+            ✅ Ver historial propio<br/>
+            ✅ Matchplay (duelos)<br/>
+            ✅ Calendario personal<br/>
+            ✅ Plan FREE y PRO
+          </div>
+        </div>
+        <div class="role-card coach">
+          <div class="role-icon">👨‍🏫</div>
+          <div class="role-title">Entrenador (Coach)</div>
+          <div class="role-perms">
+            ✅ Todo lo de Arquero<br/>
+            ✅ Ver equipo del club<br/>
+            ✅ Planificador semanal<br/>
+            ✅ Asistencia del atleta<br/>
+            ✅ Macrociclos (PRO)
+          </div>
+        </div>
+        <div class="role-card admin">
+          <div class="role-icon">🛡️</div>
+          <div class="role-title">Administrador</div>
+          <div class="role-perms">
+            ✅ Panel de administración<br/>
+            ✅ Gestión de usuarios<br/>
+            ✅ Suscripciones globales<br/>
+            ✅ Analytics de plataforma<br/>
+            ✅ Configuración del sistema
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin:32px 0 12px;">¿Cómo me convierto en Entrenador?</h3>
+      <div class="step-list reveal">
+        <div class="step-item">
+          <div class="step-num">✓</div>
+          <div class="step-content">
+            <div class="step-title">Tienes 18 años o más</div>
+            <div class="step-desc">La fecha de nacimiento que registras determina si eres mayor de edad.</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">✓</div>
+          <div class="step-content">
+            <div class="step-title">Eres el primero en crear el club</div>
+            <div class="step-desc">Al crear un nuevo club en el paso 3 del registro, automáticamente te asignas el rol de Coach de ese club.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout info reveal">
+        <div class="callout-icon">🔄</div>
+        <div>
+          <div class="callout-title">Transferir el rol de Coach</div>
+          <div class="callout-desc">El Entrenador puede transferir su rol a otro miembro mayor de edad desde <strong style="color:var(--white)">Perfil → Gestión del Club → Transferir rol de Coach</strong>. Al transferir, el ex-Coach pasa a ser Arquero.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 12. PLANES ===== -->
+    <section id="planes" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(255,242,0,0.08);border:1px solid rgba(255,242,0,0.3);">✦</div>
+        <div>
+          <div class="section-num">Módulo 12</div>
+          <h2 class="section-title">Planes FREE & PRO</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        La app es completamente funcional en el plan gratuito. El plan PRO desbloquea herramientas avanzadas de análisis, planificación y tuning para arqueros y entrenadores que buscan el siguiente nivel.
+      </p>
+
+      <div class="plan-grid reveal">
+        <div class="plan-card free">
+          <div class="plan-title">FREE</div>
+          <div class="plan-price">$0 <span style="font-size:14px;color:var(--gray-dim);font-weight:400;">/ mes</span></div>
+          <ul class="plan-feature-list">
+            <li><span class="check">✓</span> Scoring táctil (Diana + Teclado)</li>
+            <li><span class="check">✓</span> Historial ilimitado de sesiones</li>
+            <li><span class="check">✓</span> Reloj WA completo</li>
+            <li><span class="check">✓</span> Matchplay (duelos)</li>
+            <li><span class="check">✓</span> Calendario de asistencia</li>
+            <li><span class="check">✓</span> Integración Spotify</li>
+            <li><span class="check">✓</span> Notificaciones push</li>
+            <li><span class="check" style="color:rgba(142,142,147,0.4)">✗</span> Macrociclos de entrenamiento</li>
+            <li><span class="check" style="color:rgba(142,142,147,0.4)">✗</span> Spine Matching (Tuning)</li>
+            <li><span class="check" style="color:rgba(142,142,147,0.4)">✗</span> Analytics avanzados</li>
+          </ul>
+        </div>
+        <div class="plan-card pro">
+          <div class="plan-title">PRO ✦</div>
+          <div class="plan-price">$4.99 <span style="font-size:14px;color:var(--gray-dim);font-weight:400;">/ mes</span></div>
+          <ul class="plan-feature-list">
+            <li><span class="check">✓</span> Todo el plan FREE incluido</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Macrociclos de entrenamiento</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Spine Matching & Tuning</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Analytics avanzados</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Exportación de informes PDF/CSV</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Guías de ejercicios premium</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Dashboard del Coach PRO</li>
+            <li><span class="check" style="color:var(--green);">✓</span> Soporte prioritario</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">💳</div>
+        <div>
+          <div class="callout-title">Pago con PayPal</div>
+          <div class="callout-desc">El upgrade al plan PRO se realiza de forma segura a través de PayPal. Puedes cancelar en cualquier momento desde tu perfil sin penalizaciones.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 13. NOTIFICACIONES ===== -->
+    <section id="notificaciones" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.3);">🔔</div>
+        <div>
+          <div class="section-num">Módulo 13</div>
+          <h2 class="section-title">Notificaciones</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Archery 101010 te mantiene conectado con tu progreso y tu equipo a través de tres canales de notificación configurables individualmente.
+      </p>
+
+      <h3 style="font-size:14px;font-weight:800;color:var(--white);margin-bottom:16px;">Ejemplos de Notificaciones Push</h3>
+      <div class="reveal">
+        <div class="notif-card">
+          <div class="notif-icon">🎯</div>
+          <div>
+            <div class="notif-title">Recordatorio de Entrenamiento</div>
+            <div class="notif-body">Tienes una sesión en 1 hora: Control · 70m — Club San José Archery</div>
+            <div class="notif-time">Hace 2 min</div>
+          </div>
+        </div>
+        <div class="notif-card">
+          <div class="notif-icon">⚔️</div>
+          <div>
+            <div class="notif-title">Resultado de Matchplay</div>
+            <div class="notif-body">¡Ganaste el duelo contra Carlos M. (285 - 270)! Set Points: 6-2</div>
+            <div class="notif-time">Hace 15 min</div>
+          </div>
+        </div>
+        <div class="notif-card">
+          <div class="notif-icon">🔥</div>
+          <div>
+            <div class="notif-title">Racha de 7 días</div>
+            <div class="notif-body">¡7 días seguidos de entrenamiento! Estás en racha — ¡sigue así!</div>
+            <div class="notif-time">Ayer</div>
+          </div>
+        </div>
+        <div class="notif-card">
+          <div class="notif-icon">📋</div>
+          <div>
+            <div class="notif-title">Nuevo Plan Asignado</div>
+            <div class="notif-body">Coach Ana García te asignó un nuevo macrociclo de 12 semanas: "Precompetición 2026"</div>
+            <div class="notif-time">Hace 2 días</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-grid reveal" style="margin-top:24px;">
+        <div class="feature-card">
+          <div class="fc-icon">📱</div>
+          <div class="fc-title">Push (FCM)</div>
+          <div class="fc-desc">Notificaciones nativas en tu dispositivo vía Firebase Cloud Messaging. Funciona aunque la app esté cerrada.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📧</div>
+          <div class="fc-title">Email</div>
+          <div class="fc-desc">Resúmenes semanales, confirmaciones de suscripción y recordatorios de entrenamiento por correo electrónico.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">💬</div>
+          <div class="fc-title">WhatsApp</div>
+          <div class="fc-desc">El Coach puede configurar su número para enviarte mensajes de recordatorio de entrenamiento via WhatsApp.</div>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">⚙️</div>
+        <div>
+          <div class="callout-title">Control total desde Perfil</div>
+          <div class="callout-desc">Ve a <strong style="color:var(--white)">Perfil → Notificaciones</strong> para activar o desactivar cada canal (Push, Email, WhatsApp) de forma independiente en cualquier momento.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 14. OFFLINE-FIRST ===== -->
+    <section id="offline" class="content-section">
+      <div class="section-header">
+        <div class="section-icon-wrap" style="background:rgba(0,162,232,0.1);border:1px solid rgba(0,162,232,0.3);">📡</div>
+        <div>
+          <div class="section-num">Módulo 14</div>
+          <h2 class="section-title">Offline-First & Sincronización</h2>
+        </div>
+      </div>
+      <p class="section-desc">
+        Archery 101010 funciona perfectamente sin conexión a internet. Toda la información se guarda primero en tu dispositivo y se sincroniza con la nube automáticamente cuando recuperas señal.
+      </p>
+
+      <div class="sync-flow reveal">
+        <div class="sync-node">
+          <div class="sn-icon">👆</div>
+          <div>
+            <div class="sn-title">1. Acción del usuario</div>
+            <div class="sn-desc">Guardas una sesión, editas un dato o borras un registro.</div>
+          </div>
+        </div>
+        <div class="sync-connector"></div>
+        <div class="sync-node">
+          <div class="sn-icon">💾</div>
+          <div>
+            <div class="sn-title">2. Guardado local instantáneo</div>
+            <div class="sn-desc">Se escribe en IndexedDB (local) al instante. La pantalla se actualiza sin esperar red.</div>
+          </div>
+        </div>
+        <div class="sync-connector"></div>
+        <div class="sync-node">
+          <div class="sn-icon">📋</div>
+          <div>
+            <div class="sn-title">3. Cola de sincronización</div>
+            <div class="sn-desc">La operación se encola localmente para ser enviada a Firebase Firestore.</div>
+          </div>
+        </div>
+        <div class="sync-connector"></div>
+        <div class="sync-node">
+          <div class="sn-icon">☁️</div>
+          <div>
+            <div class="sn-title">4. Subida en segundo plano</div>
+            <div class="sn-desc">La app envía los datos a la nube silenciosamente sin bloquear tu uso. Timeout de 15 segundos por operación.</div>
+          </div>
+        </div>
+        <div class="sync-connector"></div>
+        <div class="sync-node" style="border-color:rgba(0,200,83,0.4);background:rgba(0,200,83,0.05);">
+          <div class="sn-icon">✅</div>
+          <div>
+            <div class="sn-title">5. Sincronizado</div>
+            <div class="sn-desc">El indicador del header cambia a verde. Todos tus datos están en la nube.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-grid reveal" style="margin-top:32px;">
+        <div class="feature-card">
+          <div class="fc-icon">📶</div>
+          <div class="fc-title">Indicador de Sync</div>
+          <div class="fc-desc">El header muestra en tiempo real cuántos elementos están pendientes de subir. Tócalo para forzar sincronización manual.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔁</div>
+          <div class="fc-title">Reintentos Automáticos</div>
+          <div class="fc-desc">Si una operación falla por mala conexión, la app la reintenta automáticamente sin que tengas que hacer nada.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">👁️</div>
+          <div class="fc-title">Reconexión Inteligente</div>
+          <div class="fc-desc">Al abrir la app tras estar en segundo plano, fuerza reconexión instantánea a Firebase para no perder cambios remotos.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔄</div>
+          <div class="fc-title">Service Worker</div>
+          <div class="fc-desc">Detecta nuevas versiones de la app automáticamente y actualiza sin que tengas que refrescar manualmente.</div>
+        </div>
+      </div>
+
+      <div class="callout tip reveal">
+        <div class="callout-icon">🏹</div>
+        <div>
+          <div class="callout-title">Entrena en el campo sin señal</div>
+          <div class="callout-desc">Puedes registrar sesiones completas en zonas sin cobertura. Al recuperar señal (WiFi o datos móviles), todo se sincroniza automáticamente. Tus datos nunca se pierden.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="manual-footer">
+      <div class="footer-logo">
+        <span style="color:var(--cyan-neon);border:2px solid var(--cyan-neon);border-radius:6px;padding:3px 8px;">101</span>
+        <span style="color:var(--red);border:2px solid var(--red);border-radius:6px;padding:3px 8px;">010</span>
+        <span style="color:var(--yellow);border:2px solid var(--yellow);border-radius:6px;padding:3px 8px;">101</span>
+      </div>
+      <div class="version-badge">v2.1.0 — Manual de Usuario</div>
+      <p style="margin-bottom:8px;">La app de tiro con arco más completa y avanzada del mundo.</p>
+      <p>Copyright © 2026 Archery 101010. Todos los derechos reservados.</p>
+      <p style="margin-top:8px;font-size:10px;color:rgba(142,142,147,0.5);">Construido con Next.js · TypeScript · Tailwind CSS · Firebase</p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // ===== SIDEBAR TOGGLE =====
+  const menuBtn = document.getElementById('menuBtn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  menuBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  });
+
+  // ===== ACTIVE SIDEBAR LINK =====
+  const sidebarLinks = document.querySelectorAll('.sidebar-item');
+
+  function setActiveLink(sectionId) {
+    sidebarLinks.forEach(link => {
+      link.classList.toggle('active', link.dataset.section === sectionId);
+    });
+  }
+
+  // IntersectionObserver for active section
+  const sections = document.querySelectorAll('section[id]');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        setActiveLink(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+
+  sections.forEach(section => observer.observe(section));
+
+  // Close sidebar on mobile when link clicked
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+      }
+    });
+  });
+
+  // ===== SCROLL REVEAL =====
+  const revealElements = document.querySelectorAll('.reveal');
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.08 });
+  revealElements.forEach(el => revealObserver.observe(el));
+
+  // ===== TIMER BAR ANIMATION =====
+  let timerBarValue = 65;
+  let timerBarDir = -1;
+  const timerBar = document.querySelector('.timer-bar-fill');
+  const timerTime = document.querySelector('.timer-time');
+
+  if (timerBar && timerTime) {
+    let seconds = 84;
+    setInterval(() => {
+      seconds = Math.max(0, seconds - 1);
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      timerTime.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+      timerBar.style.width = ((seconds / 120) * 100) + '%';
+
+      // Color change on warning
+      if (seconds <= 30) {
+        timerBar.style.background = seconds <= 10 ? 'var(--red)' : 'var(--yellow)';
+        timerTime.style.color = seconds <= 10 ? 'var(--red)' : 'var(--yellow)';
+      }
+      if (seconds === 0) {
+        seconds = 120;
+        timerBar.style.background = 'var(--green)';
+        timerTime.style.color = 'var(--white)';
+      }
+    }, 1000);
+  }
+
+  // ===== TOC CARD HOVER =====
+  document.querySelectorAll('.toc-card').forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      card.style.borderColor = 'var(--cyan-neon)';
+      card.style.boxShadow = '0 0 20px rgba(0,229,255,0.15)';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.borderColor = '';
+      card.style.boxShadow = '';
+    });
+  });
+</script>
+
+</body>
+</html>
