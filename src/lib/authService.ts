@@ -106,8 +106,10 @@ export async function loginUser(email: string, password?: string): Promise<UserP
     if (isAdminInput && password !== "Rod@admin26") {
       throw new Error("Contraseña incorrecta. Solo el administrador puede iniciar sesión aquí.");
     }
-    if (user.password && password && user.password !== password) {
-      throw new Error("Contraseña incorrecta. Por favor intenta de nuevo.");
+    if (user.password) {
+      if (!password || user.password !== password) {
+        throw new Error("Contraseña incorrecta. Por favor intenta de nuevo.");
+      }
     }
   } else {
     // 4. Create default profile depending on the input type
