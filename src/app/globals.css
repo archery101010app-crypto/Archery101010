@@ -53,6 +53,10 @@
   }
 }
 
+html {
+  overscroll-behavior-y: contain;
+}
+
 :root {
   color-scheme: dark;
   --background: #000000;
@@ -66,6 +70,7 @@ body {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
+  overscroll-behavior-y: contain;
 }
 
 /* --- Ambient mesh background (Desktop) --- */

@@ -229,24 +229,22 @@ export default function Home() {
     loadFontSizeAndTheme();
   }, [user]);
 
-  // Prevent accidental reload during active scoring sessions or matchplay duels
+  // Prevent accidental reload whenever a user session is active
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = "Los datos no guardados se perderán. ¿Deseas salir?";
-      return "Los datos no guardados se perderán. ¿Deseas salir?";
+      e.returnValue = "¿Seguro que deseas salir o recargar la página?";
+      return "¿Seguro que deseas salir o recargar la página?";
     };
 
-    const isSessionActive = (currentScreen === "TARGET" && sessionConfig !== null) || currentScreen === "MATCHPLAY_ARENA";
-
-    if (isSessionActive) {
+    if (user !== null) {
       window.addEventListener("beforeunload", handleBeforeUnload);
     }
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [currentScreen, sessionConfig]);
+  }, [user]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
