@@ -114,6 +114,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     value: ""
   });
 
+  // Animated value popping up after each shot
+  const [animatingValue, setAnimatingValue] = useState<{ value: string; id: number } | null>(null);
+
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -166,6 +169,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       setTimeLeft(30);
     }
   }, [rivalThinking, currentArrow, currentEnd, duelFinished, endSummary, showRules, validationPhase, isReadyCheckActive]);
+
+  // Clear animating shot value after 900ms
+  useEffect(() => {
+    if (!animatingValue) return;
+    const timer = setTimeout(() => {
+      setAnimatingValue(null);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [animatingValue]);
 
   // Automated draft saving on state changes
   useEffect(() => {
@@ -637,10 +649,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [mode, currentEnd, currentArrow, isShootOff, userShootOffShot, userTiros, rivalThinking, duelFinished, validationPhase]);
+  }, [mode, currentEnd, currentArrow, isShootOff, userShootOffShot, userTiros, rivalThinking, duelFinished, validationPhase, isReadyCheckActive]);
 
   const registerShot = (x: number, y: number, value: string) => {
     const numericValue = getValNumeric(value);
+
+    // Trigger floating score animation
+    setAnimatingValue({ value, id: Date.now() });
 
     // Save impact coordinates
     const newImpact: ShotImpact = {
@@ -752,11 +767,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setRivalThinking(true);
     setTimeout(() => {
       const rand = Math.random();
+      const ratingVal = config.rival.rating;
       let score = 9;
-      if (config.rival.rating >= 9.3) {
-        score = rand > 0.4 ? 10 : rand > 0.05 ? 9 : 8;
-      } else {
-        score = rand > 0.6 ? 10 : rand > 0.2 ? 9 : rand > 0.05 ? 8 : 7;
+      
+      if (ratingVal >= 9.5) { // Olympic
+        score = rand > 0.35 ? 10 : rand > 0.05 ? 9 : 8;
+      } else if (ratingVal >= 9.0) { // High
+        score = rand > 0.6 ? 10 : rand > 0.15 ? 9 : rand > 0.03 ? 8 : 7;
+      } else if (ratingVal >= 8.0) { // Medium
+        score = rand > 0.8 ? 10 : rand > 0.35 ? 9 : rand > 0.1 ? 8 : 7;
+      } else { // Rookie
+        score = rand > 0.9 ? 10 : rand > 0.6 ? 9 : rand > 0.25 ? 8 : rand > 0.1 ? 7 : 6;
       }
       setRivalShootOffShot(score);
       setRivalThinking(false);
@@ -795,12 +816,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       const rand = Math.random();
       
       let rivalScore = "9";
-      if (ratingVal >= 9.4) {
-        rivalScore = rand > 0.45 ? "10" : rand > 0.08 ? "9" : "8";
-      } else if (ratingVal >= 9.0) {
-        rivalScore = rand > 0.65 ? "10" : rand > 0.25 ? "9" : rand > 0.05 ? "8" : "7";
-      } else {
-        rivalScore = rand > 0.8 ? "10" : rand > 0.45 ? "9" : rand > 0.15 ? "8" : "7";
+      if (ratingVal >= 9.5) { // Olympic
+        rivalScore = rand > 0.35 ? "10" : rand > 0.05 ? "9" : "8";
+      } else if (ratingVal >= 9.0) { // High
+        rivalScore = rand > 0.6 ? "10" : rand > 0.15 ? "9" : rand > 0.03 ? "8" : "7";
+      } else if (ratingVal >= 8.0) { // Medium
+        rivalScore = rand > 0.8 ? "10" : rand > 0.35 ? "9" : rand > 0.1 ? "8" : rand > 0.02 ? "7" : "6";
+      } else { // Rookie
+        rivalScore = rand > 0.9 ? "10" : rand > 0.6 ? "9" : rand > 0.25 ? "8" : rand > 0.1 ? "7" : rand > 0.02 ? "6" : "5";
       }
 
       updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), rivalScore];
@@ -1304,6 +1327,40 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       {!duelFinished && !isReadyCheckActive && mode === "TARGET" && (
         <div className="flex-1 flex flex-col justify-center items-center gap-3 z-10 relative">
           
+          {/* Floating Animated Shot Value Badge */}
+          <AnimatePresence>
+            {animatingValue && (
+              <motion.div
+                key={animatingValue.id}
+                initial={{ scale: 0.3, opacity: 0, y: 10 }}
+                animate={{ scale: [1, 1.4, 1], opacity: [0, 1, 1, 0], y: [0, -30, -50] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "45%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 9999,
+                  pointerEvents: "none"
+                }}
+                className={`px-6 py-4 rounded-3xl border-2 font-black text-4xl shadow-2xl flex items-center justify-center ${
+                  animatingValue.value === "X" || animatingValue.value === "10" || animatingValue.value === "9"
+                    ? "bg-yellow-gold border-yellow-gold text-black shadow-[0_0_30px_rgba(255,242,0,0.5)]"
+                    : animatingValue.value === "8" || animatingValue.value === "7"
+                    ? "bg-red-500 border-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+                    : animatingValue.value === "6" || animatingValue.value === "5"
+                    ? "bg-blue-500 border-blue-500 text-white shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                    : animatingValue.value === "4" || animatingValue.value === "3"
+                    ? "bg-neutral-900 border-neutral-700 text-white shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+                    : "bg-red-rival border-red-rival text-white shadow-[0_0_30px_rgba(255,59,48,0.5)]"
+                }`}
+              >
+                {animatingValue.value}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Backdrop overlay when zoomed */}
           {isDianaZoomed && (
             <motion.div
@@ -1396,13 +1453,34 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               {/* User Impact points */}
               {impacts.filter(imp => imp.endIdx === currentEnd).map((imp, idx) => (
-                <circle
-                  key={idx}
-                  cx={imp.x}
-                  cy={imp.y}
-                  r="1.2"
-                  className="fill-cyan-neon stroke-white stroke-[0.3px]"
-                />
+                <g key={idx}>
+                  {/* Connection line to center */}
+                  <line
+                    x1={imp.x}
+                    y1={imp.y}
+                    x2="50"
+                    y2="50"
+                    stroke="#FFF200"
+                    strokeWidth="0.3"
+                    strokeDasharray="1 1"
+                    opacity="0.5"
+                  />
+                  {/* Bullet point shadow */}
+                  <circle cx={imp.x} cy={imp.y} r="2.8" fill="rgba(0,0,0,0.55)" />
+                  {/* Yellow point */}
+                  <circle cx={imp.x} cy={imp.y} r="2" className="fill-yellow-gold stroke-black stroke-[0.4px]" />
+                  {/* Show arrow VALUE (X, 10, 9...) on top */}
+                  <text
+                    x={imp.x}
+                    y={imp.y + 0.75}
+                    textAnchor="middle"
+                    fontSize="1.8"
+                    fontWeight="bold"
+                    fill="black"
+                  >
+                    {imp.value}
+                  </text>
+                </g>
               ))}
             </motion.svg>
           </div>
@@ -1410,6 +1488,47 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <span className="text-[8px] text-gray-dim font-bold uppercase text-center mt-1 z-10">
             Desliza sobre la diana para ampliarla · Suelta para registrar
           </span>
+
+          {/* Historial de Ends/Sets Scrollable */}
+          <div className="w-full max-w-[320px] mx-auto flex flex-col gap-1.5 px-4 z-10 mt-1">
+            <span className="text-[8px] font-black uppercase text-gray-dim tracking-widest text-center">
+              Historial de Sets / Ends
+            </span>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none justify-center">
+              {[0, 1, 2, 3, 4].map((idx) => {
+                const userEnd = userTiros[idx] || [];
+                const rivalEnd = rivalTiros[idx] || [];
+                
+                const userSum = userEnd.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+                const rivalSum = rivalEnd.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+                
+                const isCompleted = userEnd.length === 3 && rivalEnd.length === 3;
+                const isCurrent = currentEnd === idx;
+                
+                if (idx > currentEnd && userEnd.length === 0 && rivalEnd.length === 0) return null;
+
+                return (
+                  <div 
+                    key={idx}
+                    className={`flex flex-col items-center justify-center p-2 rounded-xl border min-w-[65px] transition-all ${
+                      isCurrent 
+                        ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-[0_0_8px_rgba(0,229,255,0.1)]" 
+                        : isCompleted 
+                          ? "border-neutral-800 bg-neutral-900/60 text-white" 
+                          : "border-neutral-900/35 bg-neutral-950/45 text-gray-dim"
+                    }`}
+                  >
+                    <span className="text-[8.5px] uppercase font-black tracking-wider opacity-60">Set {idx + 1}</span>
+                    <div className="text-[10px] font-black mt-0.5 flex gap-1 items-center">
+                      <span className="text-cyan-neon">{userEnd.length > 0 ? userSum : "—"}</span>
+                      <span className="text-gray-dim text-[8px] font-normal">vs</span>
+                      <span className="text-red-rival">{rivalEnd.length > 0 ? rivalSum : "—"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1648,6 +1767,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <p className="text-[10px] text-white leading-snug font-bold">
                   "{walkieText}"
                 </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Live explanation tooltip when active */}
+          <AnimatePresence>
+            {isWalkieTalkieActive && !isRivalSpeaking && !walkieText && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, y: 5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: 5 }}
+                className="bg-neutral-950/95 border border-cyan-neon/20 p-2.5 rounded-xl max-w-[170px] shadow-2xl text-[9px] text-gray-300 leading-snug text-center mb-1 backdrop-blur"
+              >
+                <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">🎤 Canal Abierto</span>
+                Habla con manos libres. Tu voz se transmite continuamente sin botón de envío.
               </motion.div>
             )}
           </AnimatePresence>

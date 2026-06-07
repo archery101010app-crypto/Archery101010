@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users } from "lucide-react";
+import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
-import { getLocalSessions } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession } from "@/lib/db/indexedDB";
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -95,6 +95,24 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   // Custom configuration for custom created room
   const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig.type);
   const [customDistance, setCustomDistance] = useState<number>(user.bowConfig.defaultDistance || 70);
+  const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
+
+  const handleDeleteDraft = async (id: string) => {
+    if (!window.confirm("¿Seguro que deseas eliminar este duelo activo permanentemente?")) {
+      return;
+    }
+    try {
+      await deleteLocalSession(id);
+      // Reload list
+      const localSess = await getLocalSessions();
+      const duelSessions = localSess.filter(
+        (s) => s.isDuel === true && s.userUid === user.uid && s.deletedByArcher !== true
+      );
+      setDrafts(duelSessions.filter((s) => s.isDraft === true));
+    } catch (err) {
+      console.error("Error deleting draft:", err);
+    }
+  };
 
   // Fetch drafts and completed history from IndexedDB
   useEffect(() => {
@@ -162,19 +180,34 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   const handleCreateRoomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const botRatings = {
+      Rookie: 7.2,
+      Medium: 8.3,
+      High: 9.2,
+      Olympic: 9.8
+    };
+    
+    const botNames = {
+      Rookie: "Bot Novato 🟢",
+      Medium: "Arquero Medio 🔵",
+      High: "Alto Nivel 🟡",
+      Olympic: "Campeón Olímpico 🔴"
+    };
+
     const matchConfig = {
       id: `MATCH-${Date.now()}`,
       bowType: customBow,
       distance: customDistance,
       system: customBow === "Compound" ? "cumulative" : "set",
       rival: {
-        uid: "RIV-BOT-RANDOM",
-        fullName: "Arquero Fantasma",
+        uid: `RIV-BOT-${botLevel.toUpperCase()}`,
+        fullName: botNames[botLevel],
         country: "ES",
-        clubName: "Club Rival",
-        clubLogo: "0",
+        clubName: "101010 Academy",
+        clubLogo: "2",
         clubCountry: "ES",
-        rating: 9.0
+        rating: botRatings[botLevel]
       }
     };
     onStartDuel(matchConfig);
@@ -352,6 +385,21 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         <option value="70">70 metros</option>
                       </select>
                     </div>
+                  </div>
+                  
+                  {/* Bot Level Selector */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[8px] text-gray-dim font-bold uppercase">Nivel del Bot Oponente</span>
+                    <select
+                      value={botLevel}
+                      onChange={(e) => setBotLevel(e.target.value as any)}
+                      className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-purple-500/50 transition"
+                    >
+                      <option value="Rookie">Novato (Rookie Bot - 7.2 RMS)</option>
+                      <option value="Medium">Nivel Medio (Medium Archer Bot - 8.3 RMS)</option>
+                      <option value="High">Alto Nivel (High Level Bot - 9.2 RMS)</option>
+                      <option value="Olympic">Arquero Olímpico (Olympic Bot - 9.8 RMS)</option>
+                    </select>
                   </div>
                   <button
                     type="submit"
@@ -547,28 +595,37 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     </span>
                   </div>
                   
-                  <button
-                    onClick={() => {
-                      onStartDuel({
-                        ...dr.config,
-                        id: dr.uid,
-                        currentEnd: dr.currentEnd,
-                        currentArrow: dr.currentArrow,
-                        userTiros: dr.userTiros,
-                        rivalTiros: dr.rivalTiros,
-                        userSetPoints: dr.userSetPoints,
-                        rivalSetPoints: dr.rivalSetPoints,
-                        isShootOff: dr.isShootOff,
-                        userShootOffShot: dr.userShootOffShot,
-                        rivalShootOffShot: dr.rivalShootOffShot,
-                        duelFinished: dr.duelFinished,
-                        impacts: dr.impacts
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-full bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider cursor-pointer hover:brightness-110 transition active:scale-95 flex items-center gap-1 shadow-glow-cyan"
-                  >
-                    Reanudar
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleDeleteDraft(dr.uid)}
+                      className="p-2 rounded-full border border-white/10 hover:border-red-rival/30 text-gray-dim hover:text-red-rival cursor-pointer transition active:scale-95"
+                      title="Eliminar Duelo"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        onStartDuel({
+                          ...dr.config,
+                          id: dr.uid,
+                          currentEnd: dr.currentEnd,
+                          currentArrow: dr.currentArrow,
+                          userTiros: dr.userTiros,
+                          rivalTiros: dr.rivalTiros,
+                          userSetPoints: dr.userSetPoints,
+                          rivalSetPoints: dr.rivalSetPoints,
+                          isShootOff: dr.isShootOff,
+                          userShootOffShot: dr.userShootOffShot,
+                          rivalShootOffShot: dr.rivalShootOffShot,
+                          duelFinished: dr.duelFinished,
+                          impacts: dr.impacts
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-full bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider cursor-pointer hover:brightness-110 transition active:scale-95 flex items-center gap-1 shadow-glow-cyan"
+                    >
+                      Reanudar
+                    </button>
+                  </div>
                 </div>
               ))
             )}
