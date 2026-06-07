@@ -42,6 +42,7 @@ export const viewport: Viewport = {
 
 import ServiceWorkerRegister from "@/components/sw/ServiceWorkerRegister";
 import { LanguageProvider } from "@/lib/contexts/LanguageContext";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 
 export default function RootLayout({
   children,
@@ -53,7 +54,9 @@ export default function RootLayout({
       <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none">
         <ServiceWorkerRegister />
         <LanguageProvider>
-          <IPhoneFrame>{children}</IPhoneFrame>
+          <ErrorBoundary>
+            <IPhoneFrame>{children}</IPhoneFrame>
+          </ErrorBoundary>
         </LanguageProvider>
       </body>
     </html>

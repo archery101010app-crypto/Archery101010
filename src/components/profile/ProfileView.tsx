@@ -750,15 +750,21 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <div className="flex flex-col gap-2 mt-1">
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Estatura / Peso:</span>
-              <span className="text-white font-bold">{user.physicalData.height} cm / {user.physicalData.weight} kg</span>
+              <span className="text-white font-bold">
+                {user.physicalData?.height ?? "--"} cm / {user.physicalData?.weight ?? "--"} kg
+              </span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Ojo dominante:</span>
-              <span className="text-white font-bold">{user.physicalData.dominantEye === "L" ? "Izquierdo" : "Derecho"}</span>
+              <span className="text-white font-bold">
+                {user.physicalData?.dominantEye === "L" ? "Izquierdo" : user.physicalData?.dominantEye === "R" ? "Derecho" : "--"}
+              </span>
             </div>
             <div className="flex justify-between text-xs py-1">
               <span className="text-gray-dim">Mano dominante:</span>
-              <span className="text-white font-bold">{user.physicalData.dominantHand === "L" ? "Izquierda" : "Derecha"}</span>
+              <span className="text-white font-bold">
+                {user.physicalData?.dominantHand === "L" ? "Izquierda" : user.physicalData?.dominantHand === "R" ? "Derecha" : "--"}
+              </span>
             </div>
           </div>
         )}

@@ -111,7 +111,26 @@ export default function Home() {
 
       try {
         const loggedUser = await getLoggedUser();
-        if (loggedUser && (loggedUser.fullName === "Arquero Demo" || loggedUser.fullName === "google-user" || loggedUser.fullName === "facebook-user")) {
+        
+        // Helper to check for simulated/demo accounts
+        const isDemoUser = (u: any) => {
+          if (!u) return false;
+          const name = (u.fullName || "").toLowerCase();
+          const email = (u.email || "").toLowerCase();
+          const uid = (u.uid || "").toLowerCase();
+          return name.includes("demo") || 
+                 name.includes("google-user") || 
+                 name.includes("facebook-user") ||
+                 email.includes("demo") || 
+                 email.includes("google-user") || 
+                 email.includes("facebook-user") ||
+                 uid.includes("demo") ||
+                 uid.includes("google-user") ||
+                 uid.includes("facebook-user");
+        };
+
+        if (loggedUser && isDemoUser(loggedUser)) {
+          console.warn("[Auth Startup] Demo account detected. Forcing clean logout:", loggedUser.email);
           const { logoutUser } = await import("@/lib/authService");
           await logoutUser();
           setUser(null);
@@ -717,7 +736,12 @@ export default function Home() {
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] text-gray-dim uppercase font-bold">Guardado</span>
                         <span className="text-[10px] text-gray-dim font-medium">
-                          {new Date(activeDraft.timestamp).toLocaleDateString()} {new Date(activeDraft.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          {activeDraft.timestamp ? (
+                            (() => {
+                              const date = new Date(activeDraft.timestamp);
+                              return isNaN(date.getTime()) ? "Fecha N/A" : `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                            })()
+                          ) : "Fecha N/A"}
                         </span>
                       </div>
                     </div>

@@ -81,6 +81,12 @@ const RIVAL_LIST = [
   }
 ];
 
+const formatMatchDate = (timestamp: any) => {
+  if (!timestamp) return "Fecha N/A";
+  const date = new Date(timestamp);
+  return isNaN(date.getTime()) ? "Fecha N/A" : date.toLocaleDateString();
+};
+
 export default function MatchplayLobbyView({ user, onBack, onStartDuel }: MatchplayLobbyViewProps) {
   const [activeTab, setActiveTab] = useState<"SEARCH" | "DRAFTS" | "HISTORY">("SEARCH");
   const [drafts, setDrafts] = useState<any[]>([]);
@@ -662,7 +668,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         </span>
                       </div>
                       <span className="text-[9px] text-gray-dim mt-0.5">
-                        Puntos: {h.score} pts · {h.distance}m · {new Date(h.timestamp).toLocaleDateString()}
+                        Puntos: {h.score} pts · {h.distance}m · {formatMatchDate(h.timestamp)}
                       </span>
                     </div>
                     

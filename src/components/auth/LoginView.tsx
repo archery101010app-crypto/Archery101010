@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { loginUser } from "@/lib/authService";
+import { loginUser, loginSocialUser } from "@/lib/authService";
 import { Mail, Lock, AlertCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { auth } from "@/lib/firebase";
+import { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -106,9 +108,6 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       let displayName = "";
 
       if (!isMockFirebase) {
-        const { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } = await import("firebase/auth");
-        const { auth } = await import("@/lib/firebase");
-        
         const provider = providerName === "google" 
           ? new GoogleAuthProvider() 
           : new FacebookAuthProvider();
@@ -126,7 +125,6 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         throw new Error("No se pudo obtener el correo de la cuenta social.");
       }
 
-      const { loginSocialUser } = await import("@/lib/authService");
       const user = await loginSocialUser(email, displayName);
       onLoginSuccess(user);
     } catch (err: any) {
