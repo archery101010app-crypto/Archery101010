@@ -65,7 +65,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       <div className="flex items-center gap-2 select-none">
         <div className="flex items-baseline gap-1">
           <div 
-            className="flex text-lg tracking-tighter font-extrabold" 
+            className="flex text-lg tracking-tighter font-extrabold brand-logo-101010" 
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
             <span className="text-cyan-neon">10</span>
@@ -73,7 +73,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-yellow-gold">10</span>
           </div>
           <span className="text-cyan-neon/60 text-[10px] font-black tracking-wider pl-0.5">
-            v2.0.0
+            v2.0.1
           </span>
         </div>
         <span className="text-white/40 text-[9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">

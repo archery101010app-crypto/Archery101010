@@ -62,6 +62,7 @@ export default function Home() {
   const bypassBeforeUnloadRef = React.useRef(false);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length > 1) return; // Allow pinch-to-zoom
     if (mainRef.current && mainRef.current.scrollTop === 0) {
       touchStartRef.current = e.touches[0].clientY;
       setIsPulling(true);
@@ -69,6 +70,7 @@ export default function Home() {
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length > 1) return; // Allow pinch-to-zoom
     if (!isPulling) return;
     const currentY = e.touches[0].clientY;
     const diff = currentY - touchStartRef.current;
@@ -110,6 +112,11 @@ export default function Home() {
       try {
         const loggedUser = await getLoggedUser();
         setUser(loggedUser);
+        if (loggedUser) {
+          import("@/lib/pushNotifications").then(({ registerPushSilent }) => {
+            registerPushSilent(loggedUser.uid);
+          }).catch((err) => console.warn("Failed to load push notifications helper", err));
+        }
       } catch (e) {
         console.error("Error reading authentication", e);
       } finally {

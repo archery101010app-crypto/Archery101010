@@ -311,3 +311,14 @@ body {
   background-color: transparent !important;
   box-shadow: none !important;
 }
+
+/* Preserve 101010 branding colors on light theme in header */
+.light-contrast .brand-logo-101010 .text-cyan-neon {
+  color: var(--color-cyan-neon) !important;
+}
+.light-contrast .brand-logo-101010 .text-red-rival {
+  color: var(--color-red-rival) !important;
+}
+.light-contrast .brand-logo-101010 .text-yellow-gold {
+  color: var(--color-yellow-gold) !important;
+}

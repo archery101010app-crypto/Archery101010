@@ -386,6 +386,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     const nextVal = !currentVal;
     setVal(nextVal);
     await saveLocalSetting(key, nextVal);
+
+    if (key === "notif_push" && nextVal === true) {
+      try {
+        const { requestPushPermissionAndRegister } = await import("@/lib/pushNotifications");
+        const token = await requestPushPermissionAndRegister(user.uid);
+        if (token) {
+          alert("¡Notificaciones Push activadas con éxito! Recibirás alertas de duelos en este dispositivo.");
+        } else {
+          alert("No se pudieron activar las notificaciones push. Verifica los permisos de tu navegador.");
+          setVal(false);
+          await saveLocalSetting(key, false);
+        }
+      } catch (err) {
+        console.error("Error activating push notifications:", err);
+      }
+    }
   };
 
   const handleCoachTransfer = async () => {

@@ -607,11 +607,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 0) return;
+      if (e.touches.length > 1) return; // Allow pinch-to-zoom
       onStart(e.touches[0].clientX, e.touches[0].clientY);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 0) return;
+      if (e.touches.length > 1) return; // Allow pinch-to-zoom
       onMove(e.touches[0].clientX, e.touches[0].clientY, e);
     };
 
