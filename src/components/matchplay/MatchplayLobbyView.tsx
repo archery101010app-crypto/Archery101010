@@ -927,7 +927,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                 {/* Start Arena button */}
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     const matchConfig = {
                       id: generatedInvite.code,
                       bowType: generatedInvite.bowType,
@@ -944,27 +944,26 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       }
                     };
 
-                    try {
-                      await setDoc(doc(db, "active_duels", generatedInvite.code), {
-                        id: generatedInvite.code,
-                        bowType: generatedInvite.bowType,
-                        distance: generatedInvite.distance,
-                        creatorUid: user.uid,
-                        creatorName: user.fullName,
-                        creatorConnected: true,
-                        creatorConnectedAt: Date.now(),
-                        playerUid: "",
-                        playerName: "",
-                        playerConnected: false,
-                        playerConnectedAt: 0,
-                        creatorReady: false,
-                        playerReady: false,
-                        status: "waiting",
-                        updatedAt: Date.now()
-                      });
-                    } catch (err) {
+                    // Fire write asynchronously to avoid blocking the UI transition
+                    setDoc(doc(db, "active_duels", generatedInvite.code), {
+                      id: generatedInvite.code,
+                      bowType: generatedInvite.bowType,
+                      distance: generatedInvite.distance,
+                      creatorUid: user.uid,
+                      creatorName: user.fullName,
+                      creatorConnected: true,
+                      creatorConnectedAt: Date.now(),
+                      playerUid: "",
+                      playerName: "",
+                      playerConnected: false,
+                      playerConnectedAt: 0,
+                      creatorReady: false,
+                      playerReady: false,
+                      status: "waiting",
+                      updatedAt: Date.now()
+                    }).catch((err) => {
                       console.error("Error creating active duel in Firestore:", err);
-                    }
+                    });
 
                     setGeneratedInvite(null);
                     onStartDuel(matchConfig);
