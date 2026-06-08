@@ -32,6 +32,7 @@ export interface UserProfile {
   whatsappNumber?: string;
   clubInviteCode?: string;
   password?: string;
+  profileSetupCompleted?: boolean;
 }
 
 // Emulates real backend Firebase calls using local DB to support zero-config developer onboarding
@@ -141,7 +142,8 @@ export async function loginUser(email: string, password?: string): Promise<UserP
         role: "superadmin",
         plan: "PRO",
         isClubCreator: false,
-        password: "Rod@admin26"
+        password: "Rod@admin26",
+        profileSetupCompleted: true
       };
     } else {
       const isSocialLogin = targetEmail.includes("google-user") || targetEmail.includes("facebook-user");
@@ -171,7 +173,8 @@ export async function loginUser(email: string, password?: string): Promise<UserP
           clubName: null,
           role: "archer",
           plan: "FREE",
-          isClubCreator: false
+          isClubCreator: false,
+          profileSetupCompleted: false
         };
       } else {
         // Enforce registration for normal users
@@ -266,7 +269,8 @@ export async function registerUser(
     clubInviteCode: inviteCode,
     clubLogo,
     clubCountry,
-    password: profileData.password
+    password: profileData.password,
+    profileSetupCompleted: true
   };
 
   // Save to database lists
@@ -296,7 +300,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   let currentLogged = await getLoggedUser();
 
   if (index !== -1) {
-    let updatedUser = { ...usersList[index], ...updates };
+    let updatedUser = { ...usersList[index], ...updates, profileSetupCompleted: true };
 
     // Propagation: If Coach/Admin updates club name, country or logo, cascade to all club members
     if (
@@ -328,7 +332,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     
     if (currentLogged && currentLogged.uid === uid) {
       // Refresh current user cache with all propagated changes too
-      currentLogged = { ...currentLogged, ...updates };
+      currentLogged = { ...currentLogged, ...updates, profileSetupCompleted: true };
       if (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") {
         currentLogged.clubLogo = updatedUser.clubLogo;
         currentLogged.clubCountry = updatedUser.clubCountry;
@@ -340,7 +344,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   }
 
   if (currentLogged && currentLogged.uid === uid) {
-    const updated = { ...currentLogged, ...updates };
+    const updated = { ...currentLogged, ...updates, profileSetupCompleted: true };
     await saveLocalSetting("current_user", updated);
 
     // Queue update to Firestore sync queue
@@ -486,7 +490,8 @@ export async function loginSocialUser(email: string, displayName: string): Promi
       clubName: null,
       role: "archer",
       plan: "FREE",
-      isClubCreator: false
+      isClubCreator: false,
+      profileSetupCompleted: false
     };
 
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);

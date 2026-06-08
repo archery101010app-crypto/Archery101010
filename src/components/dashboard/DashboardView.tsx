@@ -56,13 +56,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   const [selectedDetailStar, setSelectedDetailStar] = useState<any | null>(null);
 
   const [stats, setStats] = useState({
-    lastScore: 275,
-    lastMax: 300,
+    lastScore: 0,
+    lastMax: 0,
     totalArrows: 0,
     bestScore: 0,
-    bestMax: 300,
+    bestMax: 0,
     bestDate: 0
   });
+
+  const needsSetup = user.profileSetupCompleted === false || 
+                     (!user.profileSetupCompleted && user.birthDate === "1995-05-15");
 
   const [volumePeriod, setVolumePeriod] = useState<"TOTAL" | "YEAR" | "MONTH" | "WEEK">("TOTAL");
 
@@ -123,7 +126,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           }
         });
 
-        const last = activeSess[0];
+        const sortedSess = [...activeSess].sort((a, b) => b.timestamp - a.timestamp);
+        const last = sortedSess[0];
         setStats({
           lastScore: last.score || 0,
           lastMax: last.maxScore || 300,
@@ -132,9 +136,30 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           bestMax: bestMax,
           bestDate: bestDate || last.timestamp || 0
         });
+      } else {
+        setStats({
+          lastScore: 0,
+          lastMax: 0,
+          totalArrows: 0,
+          bestScore: 0,
+          bestMax: 0,
+          bestDate: 0
+        });
       }
     }
     loadStats();
+
+    const handleDbChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.store === "sessions_local") {
+        loadStats();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -265,7 +290,17 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             )}
           </h2>
           <p className="text-xs text-gray-dim mt-0.5">
-            {t("helloLabel")}{user.fullName} · {user?.bowConfig?.type || "Barebow"}
+            {t("helloLabel")}{user.fullName} · {needsSetup ? (
+              <span 
+                onClick={() => onNavigate("PROFILE")} 
+                className="animate-pulse text-red-rival hover:text-red-400 font-extrabold cursor-pointer border-b border-dashed border-red-rival ml-1"
+                title={language === "es" ? "¡Configura tu perfil de arquero aquí!" : "Setup your archer profile here!"}
+              >
+                {user?.bowConfig?.type || "Barebow"} ({language === "es" ? "Configurar Perfil ⚠️" : "Setup Profile ⚠️"})
+              </span>
+            ) : (
+              <span>{user?.bowConfig?.type || "Barebow"}</span>
+            )}
           </p>
         </div>
 
@@ -289,92 +324,106 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="grid grid-cols-3 gap-3">
         <motion.div
           variants={cardVariants}
-          onClick={() => onNavigate("HISTORY")}
+          onClick={() => sessions.length === 0 ? onNavigate("TARGET") : onNavigate("HISTORY")}
           className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 relative overflow-hidden group flex justify-between items-center"
         >
-          {(() => {
-            // Check if last session is WA 720 and if star earned
-            const lastSessionStarInfo = (() => {
-              if (sessions.length === 0) return null;
-              const last = sessions[0];
-              const totalArrows = ((last.endsCount || 0) * (last.arrowsPerEnd || 0));
-              const isWA720 = totalArrows === 72 && user?.bowConfig && (
-                (user.bowConfig.type === "Recurve" && last.distance === 70) ||
-                (user.bowConfig.type === "Compound" && last.distance === 50)
-              );
-              
-              if (!isWA720) {
-                return { status: "not_eligible", text: t("notEligibleStar"), color: "#6b7280" };
-              }
-              
-              if (last.score >= 500) {
-                const stars = user?.bowConfig?.type === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
-                const qualified = stars.filter((s: any) => last.score >= s.minScore);
-                if (qualified.length > 0) {
-                  const sessionStar = qualified[qualified.length - 1];
-                  return { 
-                    status: "earned", 
-                    text: `${t("starUnlocked")}: ${sessionStar.name}`,
-                    color: sessionStar.color 
-                  };
+          {sessions.length === 0 ? (
+            <div className="flex flex-col gap-1 z-10 w-full text-center py-2">
+              <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase flex items-center justify-center gap-1">
+                <Target size={12} className="text-cyan-neon" />
+                {t("lastSession")}
+              </span>
+              <span className="text-lg font-black text-white mt-1">
+                {language === "es" ? "Sin datos" : "No data"}
+              </span>
+              <span className="text-xs text-cyan-neon font-bold animate-pulse mt-1">
+                {language === "es" ? "✨ Registra tu primera sesión aquí" : "✨ Log your first session here"}
+              </span>
+            </div>
+          ) : (
+            (() => {
+              // Check if last session is WA 720 and if star earned
+              const lastSessionStarInfo = (() => {
+                const last = sessions[0];
+                const totalArrows = ((last.endsCount || 0) * (last.arrowsPerEnd || 0));
+                const isWA720 = totalArrows === 72 && user?.bowConfig && (
+                  (user.bowConfig.type === "Recurve" && last.distance === 70) ||
+                  (user.bowConfig.type === "Compound" && last.distance === 50)
+                );
+                
+                if (!isWA720) {
+                  return { status: "not_eligible", text: t("notEligibleStar"), color: "#6b7280" };
                 }
-              }
-              
-              return { status: "not_reached", text: t("starNotReached"), color: "#ef4444" };
-            })();
+                
+                if (last.score >= 500) {
+                  const stars = user?.bowConfig?.type === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+                  const qualified = stars.filter((s: any) => last.score >= s.minScore);
+                  if (qualified.length > 0) {
+                    const sessionStar = qualified[qualified.length - 1];
+                    return { 
+                      status: "earned", 
+                      text: `${t("starUnlocked")}: ${sessionStar.name}`,
+                      color: sessionStar.color 
+                    };
+                  }
+                }
+                
+                return { status: "not_reached", text: t("starNotReached"), color: "#ef4444" };
+              })();
 
-            return (
-              <>
-                <div className="flex flex-col gap-1.5 z-10">
-                  <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase flex items-center gap-1">
-                    <Target size={12} className="text-cyan-neon" />
-                    {t("lastSession")}
-                  </span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-extrabold text-white">{stats.lastScore}</span>
-                    <span className="text-xs text-gray-dim">/ {stats.lastMax}</span>
+              return (
+                <>
+                  <div className="flex flex-col gap-1.5 z-10">
+                    <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase flex items-center gap-1">
+                      <Target size={12} className="text-cyan-neon" />
+                      {t("lastSession")}
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-extrabold text-white">{stats.lastScore}</span>
+                      <span className="text-xs text-gray-dim">/ {stats.lastMax}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-yellow-gold font-bold">{lastPercentage}% {t("precisionLabel")}</span>
+                      {lastSessionStarInfo && (
+                        <span className="text-[9px] font-bold flex items-center gap-0.5 mt-1" style={{ color: lastSessionStarInfo.color }}>
+                          <span className="text-[10px]">★</span>
+                          <span>{lastSessionStarInfo.text}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-yellow-gold font-bold">{lastPercentage}% {t("precisionLabel")}</span>
-                    {lastSessionStarInfo && (
-                      <span className="text-[9px] font-bold flex items-center gap-0.5 mt-1" style={{ color: lastSessionStarInfo.color }}>
-                        <span className="text-[10px]">★</span>
-                        <span>{lastSessionStarInfo.text}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
-                  <svg viewBox="0 0 96 96" className="w-24 h-24 transform -rotate-90">
-                    <circle
-                      cx="48"
-                      cy="48"
-                      r="38"
-                      className="stroke-neutral-800"
-                      strokeWidth="6"
-                      fill="none"
-                    />
-                    <motion.circle
-                      cx="48"
-                      cy="48"
-                      r="38"
-                      className="stroke-cyan-neon"
-                      strokeWidth="6"
-                      fill="none"
-                      strokeDasharray="239"
-                      initial={{ strokeDashoffset: 239 }}
-                      animate={{ strokeDashoffset: 239 - (239 * lastPercentage) / 100 }}
-                      transition={{ duration: 1.2, ease: "easeInOut" }}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center flex-col">
-                    <span className="text-sm font-black text-white">{lastPercentage}%</span>
+                  <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
+                    <svg viewBox="0 0 96 96" className="w-24 h-24 transform -rotate-90">
+                      <circle
+                        cx="48"
+                        cy="48"
+                        r="38"
+                        className="stroke-neutral-800"
+                        strokeWidth="6"
+                        fill="none"
+                      />
+                      <motion.circle
+                        cx="48"
+                        cy="48"
+                        r="38"
+                        className="stroke-cyan-neon"
+                        strokeWidth="6"
+                        fill="none"
+                        strokeDasharray="239"
+                        initial={{ strokeDashoffset: 239 }}
+                        animate={{ strokeDashoffset: 239 - (239 * lastPercentage) / 100 }}
+                        transition={{ duration: 1.2, ease: "easeInOut" }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                      <span className="text-sm font-black text-white">{lastPercentage}%</span>
+                    </div>
                   </div>
-                </div>
-              </>
-            );
-          })()}
+                </>
+              );
+            })()
+          )}
           
           <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>

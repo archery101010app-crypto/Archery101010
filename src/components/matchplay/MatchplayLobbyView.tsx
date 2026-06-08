@@ -5,7 +5,7 @@ import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
-import { getLocalSessions, deleteLocalSession } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -91,6 +91,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [activeTab, setActiveTab] = useState<"SEARCH" | "DRAFTS" | "HISTORY">("SEARCH");
   const [drafts, setDrafts] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [realUsers, setRealUsers] = useState<UserProfile[]>([]);
 
   const [bowFilter, setBowFilter] = useState<string>("ALL");
   const [distanceFilter, setDistanceFilter] = useState<string>("ALL");
@@ -141,6 +142,35 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     loadDuels();
   }, [user, activeTab]);
 
+  // Load real users and listen to database changes
+  useEffect(() => {
+    async function loadRealUsers() {
+      try {
+        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        // Exclude the current user
+        const others = list.filter((u) => u.uid !== user.uid);
+        setRealUsers(others);
+      } catch (err) {
+        console.error("Error loading real users for duels:", err);
+      }
+    }
+    
+    loadRealUsers();
+    
+    // Listen to changes in the database
+    const handleDbChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.store === "simulated_users") {
+        loadRealUsers();
+      }
+    };
+    
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
+  }, [user]);
+
   const containerVariants: any = {
     initial: { opacity: 0 },
     animate: { opacity: 1, transition: { staggerChildren: 0.05 } }
@@ -151,8 +181,18 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  // Filter rivals
-  const filteredRivals = RIVAL_LIST.filter((riv) => {
+  // Filter rivals using real registered users
+  const filteredRivals = realUsers.map((u) => ({
+    uid: u.uid,
+    fullName: u.fullName,
+    country: u.country || "CR",
+    clubName: u.clubName || "Independiente",
+    clubLogo: u.clubLogo || "0",
+    clubCountry: u.clubCountry || u.country || "CR",
+    bowConfig: u.bowConfig || { type: "Barebow" as const, brand: "Hoyt", model: "Satori", poundage: 35, defaultDistance: 18 },
+    rating: "9.0",
+    status: "online" as "online" | "busy"
+  })).filter((riv) => {
     const matchesSearch = riv.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           riv.clubName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
@@ -165,7 +205,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     return matchesSearch && matchesBow && matchesDist;
   });
 
-  const handleStartSimulatedDuel = (rival: typeof RIVAL_LIST[0]) => {
+  const handleStartSimulatedDuel = (rival: any) => {
     const matchConfig = {
       id: `MATCH-${Date.now()}`,
       bowType: rival.bowConfig.type,
