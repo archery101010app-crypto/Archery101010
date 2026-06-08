@@ -73,7 +73,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-yellow-gold">10</span>
           </div>
           <span className="text-cyan-neon/60 text-[10px] font-black tracking-wider pl-0.5">
-            v2.2.3
+            v2.2.6
           </span>
         </div>
         <span className="text-white/40 text-[9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
