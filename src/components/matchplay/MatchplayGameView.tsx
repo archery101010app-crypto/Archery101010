@@ -5,6 +5,8 @@ import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic } from "@/lib/soundUtils";
@@ -250,10 +252,121 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     config
   ]);
 
-  // Rival Ready Simulation
+  // Subscribe to real-time duel doc in Firestore for friend duels
+  useEffect(() => {
+    if (!isFriendDuel || !config.id) return;
+
+    const docRef = doc(db, "active_duels", config.id);
+    let lastConnectedState = false;
+
+    // Helper to update our own connection status in Firestore
+    const updateOurStatus = async (connected: boolean) => {
+      try {
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+            // We are creator
+            await setDoc(docRef, {
+              ...data,
+              creatorConnected: connected,
+              creatorConnectedAt: connected ? Date.now() : data.creatorConnectedAt,
+              updatedAt: Date.now()
+            });
+          } else {
+            // We are player
+            await setDoc(docRef, {
+              ...data,
+              playerConnected: connected,
+              playerConnectedAt: connected ? Date.now() : data.playerConnectedAt,
+              updatedAt: Date.now()
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error updating connection status in Firestore:", err);
+      }
+    };
+
+    updateOurStatus(true);
+
+    // Subscribe to Firestore changes
+    const unsubscribe = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        let connected = false;
+        let rivalReady = false;
+
+        if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+          // We are creator. Rival is player.
+          connected = data.playerConnected === true;
+          rivalReady = data.playerReady === true;
+          if (data.playerName && config.rival.fullName !== data.playerName) {
+            config.rival.fullName = data.playerName;
+          }
+        } else {
+          // We are player. Rival is creator.
+          connected = data.creatorConnected === true;
+          rivalReady = data.creatorReady === true;
+          if (data.creatorName && config.rival.fullName !== data.creatorName) {
+            config.rival.fullName = data.creatorName;
+          }
+        }
+
+        setIsRivalConnected(connected);
+        setIsRivalReady(rivalReady);
+
+        // Alert and vibrate on connection established
+        if (connected && !lastConnectedState) {
+          alert("¡Oponente conectado a la arena!");
+          if (navigator.vibrate) {
+            navigator.vibrate([30, 50, 30]);
+          }
+        }
+        lastConnectedState = connected;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      // Mark ourselves as offline when unmounting
+      updateOurStatus(false);
+    };
+  }, [isFriendDuel, config.id]);
+
+  // Helper to update our own ready state in Firestore
+  const updateOurReadyState = async (ready: boolean) => {
+    if (!isFriendDuel || !config.id) return;
+    try {
+      const docRef = doc(db, "active_duels", config.id);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+          // We are creator
+          await setDoc(docRef, {
+            ...data,
+            creatorReady: ready,
+            updatedAt: Date.now()
+          });
+        } else {
+          // We are player
+          await setDoc(docRef, {
+            ...data,
+            playerReady: ready,
+            updatedAt: Date.now()
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error updating ready state in Firestore:", err);
+    }
+  };
+
+  // Rival Ready Simulation (Only for Bots)
   useEffect(() => {
     if (isReadyCheckActive && !isRivalReady && !duelFinished) {
-      if (isFriendDuel && !isRivalConnected) return; // Wait until friend connects!
+      if (isFriendDuel) return; // Managed by Firestore subscription
 
       const delay = 800 + Math.random() * 1400;
       const timer = setTimeout(() => {
@@ -264,21 +377,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [isReadyCheckActive, isRivalReady, duelFinished, isFriendDuel, isRivalConnected]);
-
-  // Automatic rival connection simulation for friend duels
-  useEffect(() => {
-    if (isReadyCheckActive && isFriendDuel && !isRivalConnected && !duelFinished) {
-      const timer = setTimeout(() => {
-        setIsRivalConnected(true);
-        alert("¡Oponente conectado a la arena!");
-        if (navigator.vibrate) {
-          navigator.vibrate([30, 50, 30]);
-        }
-      }, 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [isReadyCheckActive, isFriendDuel, isRivalConnected, duelFinished]);
+  }, [isReadyCheckActive, isRivalReady, duelFinished, isFriendDuel]);
 
   // Countdown when both ready
   useEffect(() => {
@@ -865,6 +964,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         setIsUserReady(false);
         setIsRivalReady(false);
         setIsReadyCheckActive(true);
+        if (isFriendDuel) {
+          updateOurReadyState(false);
+        }
       }
     }, delay);
   };
@@ -979,6 +1081,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setIsUserReady(false);
     setIsRivalReady(false);
     setIsReadyCheckActive(true);
+    if (isFriendDuel) {
+      updateOurReadyState(false);
+    }
   };
 
   const getCumulativeTotal = (tiros: (string | number)[][]): number => {
@@ -1287,15 +1392,31 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsRivalConnected(true);
-                      if (navigator.vibrate) {
-                        navigator.vibrate([30, 50]);
+                    onClick={async () => {
+                      try {
+                        const docRef = doc(db, "active_duels", config.id);
+                        const snap = await getDoc(docRef);
+                        if (snap.exists()) {
+                          const data = snap.data();
+                          const connected = config.rival.uid === "RIV-FRIEND-PLAYER" 
+                            ? data.playerConnected === true 
+                            : data.creatorConnected === true;
+                          if (connected) {
+                            setIsRivalConnected(true);
+                            alert("¡Oponente conectado!");
+                          } else {
+                            alert("El oponente aún no ha ingresado al duelo.");
+                          }
+                        } else {
+                          alert("El código del duelo no se encuentra registrado.");
+                        }
+                      } catch (err) {
+                        alert("Error al verificar la conexión.");
                       }
                     }}
-                    className="mt-1 px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-500/40 text-red-300 font-extrabold text-[8px] uppercase tracking-wider border border-red-500/30 transition-all cursor-pointer"
+                    className="mt-1 px-2.5 py-1 rounded bg-neutral-900 border border-white/5 hover:bg-neutral-800 text-white font-extrabold text-[8px] uppercase tracking-wider transition-all cursor-pointer"
                   >
-                    Conectar
+                    Verificar
                   </button>
                 </div>
               ) : (
@@ -1338,6 +1459,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   setIsUserReady(true);
                   if (navigator.vibrate) {
                     navigator.vibrate(30);
+                  }
+                  if (isFriendDuel) {
+                    updateOurReadyState(true);
                   }
                 }}
                 disabled={isUserReady}

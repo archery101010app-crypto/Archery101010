@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -282,35 +284,53 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     onStartDuel(matchConfig);
   };
 
-  const handleJoinRoomSubmit = (e: React.FormEvent) => {
+  const handleJoinRoomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCode) return;
 
-    const code = joinCode.toUpperCase();
-    const isCompound = code.includes("C") || code.includes("COMPOUND");
-    const isBarebow = code.includes("B") || code.includes("BAREBOW");
-    const bowType = isCompound ? "Compound" : isBarebow ? "Barebow" : "Recurve";
+    const code = joinCode.toUpperCase().trim();
     
-    let distance = 70;
-    if (code.includes("18")) distance = 18;
-    else if (code.includes("50")) distance = 50;
+    try {
+      const docRef = doc(db, "active_duels", code);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        // Update document to connect player
+        await setDoc(docRef, {
+          ...data,
+          playerUid: user.uid,
+          playerName: user.fullName,
+          playerConnected: true,
+          playerConnectedAt: Date.now(),
+          status: "active",
+          updatedAt: Date.now()
+        });
 
-    const matchConfig = {
-      id: `MATCH-JOIN-${Date.now()}`,
-      bowType: bowType,
-      distance: distance,
-      system: bowType === "Compound" ? "cumulative" : "set",
-      rival: {
-        uid: "RIV-FRIEND-CREATOR",
-        fullName: "Anfitrión del Duelo",
-        country: "CR",
-        clubName: "Lobby Archery",
-        clubLogo: "1",
-        clubCountry: "CR",
-        rating: 9.2
+        const matchConfig = {
+          id: data.id,
+          bowType: data.bowType,
+          distance: data.distance,
+          system: data.bowType === "Compound" ? "cumulative" : "set",
+          rival: {
+            uid: "RIV-FRIEND-CREATOR",
+            fullName: data.creatorName || "Anfitrión del Duelo",
+            country: "CR",
+            clubName: "Lobby Archery",
+            clubLogo: "1",
+            clubCountry: "CR",
+            rating: 9.2
+          }
+        };
+        onStartDuel(matchConfig);
+      } else {
+        alert("El código de duelo no existe o es inválido.");
       }
-    };
-    onStartDuel(matchConfig);
+    } catch (err) {
+      console.error("Error joining duel in Firestore:", err);
+      alert("No se pudo conectar al duelo. Verifica tu conexión a internet.");
+    }
   };
 
   return (
@@ -907,7 +927,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                 {/* Start Arena button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const matchConfig = {
                       id: generatedInvite.code,
                       bowType: generatedInvite.bowType,
@@ -923,6 +943,29 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         rating: 9.0
                       }
                     };
+
+                    try {
+                      await setDoc(doc(db, "active_duels", generatedInvite.code), {
+                        id: generatedInvite.code,
+                        bowType: generatedInvite.bowType,
+                        distance: generatedInvite.distance,
+                        creatorUid: user.uid,
+                        creatorName: user.fullName,
+                        creatorConnected: true,
+                        creatorConnectedAt: Date.now(),
+                        playerUid: "",
+                        playerName: "",
+                        playerConnected: false,
+                        playerConnectedAt: 0,
+                        creatorReady: false,
+                        playerReady: false,
+                        status: "waiting",
+                        updatedAt: Date.now()
+                      });
+                    } catch (err) {
+                      console.error("Error creating active duel in Firestore:", err);
+                    }
+
                     setGeneratedInvite(null);
                     onStartDuel(matchConfig);
                   }}
