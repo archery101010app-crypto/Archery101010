@@ -88,6 +88,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [isRivalReady, setIsRivalReady] = useState<boolean>(false);
   const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
 
+  // Friend duel connection/readiness simulator
+  const isFriendDuel = config.rival.uid === "RIV-FRIEND-PLAYER" || config.rival.uid === "RIV-FRIEND-CREATOR";
+  const [isRivalConnected, setIsRivalConnected] = useState<boolean>(!isFriendDuel);
+
   // Walkie-Talkie States
   const [isWalkieTalkieActive, setIsWalkieTalkieActive] = useState<boolean>(false);
   const [walkieWaveAnim, setWalkieWaveAnim] = useState<number[]>([10, 10, 10, 10]);
@@ -249,6 +253,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // Rival Ready Simulation
   useEffect(() => {
     if (isReadyCheckActive && !isRivalReady && !duelFinished) {
+      if (isFriendDuel && !isRivalConnected) return; // Wait until friend connects!
+
       const delay = 800 + Math.random() * 1400;
       const timer = setTimeout(() => {
         setIsRivalReady(true);
@@ -258,7 +264,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [isReadyCheckActive, isRivalReady, duelFinished]);
+  }, [isReadyCheckActive, isRivalReady, duelFinished, isFriendDuel, isRivalConnected]);
+
+  // Automatic rival connection simulation for friend duels
+  useEffect(() => {
+    if (isReadyCheckActive && isFriendDuel && !isRivalConnected && !duelFinished) {
+      const timer = setTimeout(() => {
+        setIsRivalConnected(true);
+        alert("¡Oponente conectado a la arena!");
+        if (navigator.vibrate) {
+          navigator.vibrate([30, 50, 30]);
+        }
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [isReadyCheckActive, isFriendDuel, isRivalConnected, duelFinished]);
 
   // Countdown when both ready
   useEffect(() => {
@@ -1255,20 +1275,45 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </div>
 
               {/* Rival ready box */}
-              <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
-                isRivalReady 
-                  ? "bg-purple-500/5 border-purple-500/30 text-purple-400 font-black" 
-                  : "bg-neutral-900/60 border-white/5 text-gray-dim animate-pulse"
-              }`}>
-                <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
-                  {config.rival.fullName.substring(0, 2).toUpperCase()}
-                  {isRivalReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+              {isFriendDuel && !isRivalConnected ? (
+                <div className="p-3 rounded-2xl border bg-red-950/20 border-red-500/20 text-red-400 flex flex-col items-center gap-2 transition-all duration-200">
+                  <div className="w-10 h-10 rounded-full bg-neutral-950 border border-red-500/20 flex items-center justify-center text-xs font-black relative">
+                    {config.rival.fullName.substring(0, 2).toUpperCase()}
+                    <span className="absolute -bottom-1 -right-1 text-xs">❌</span>
+                  </div>
+                  <span className="text-[10px] font-bold truncate max-w-full">{config.rival.fullName}</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider animate-pulse">
+                    Desconectado
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRivalConnected(true);
+                      if (navigator.vibrate) {
+                        navigator.vibrate([30, 50]);
+                      }
+                    }}
+                    className="mt-1 px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-500/40 text-red-300 font-extrabold text-[8px] uppercase tracking-wider border border-red-500/30 transition-all cursor-pointer"
+                  >
+                    Conectar
+                  </button>
                 </div>
-                <span className="text-[10px] font-bold truncate max-w-full">{config.rival.fullName}</span>
-                <span className="text-[9px] font-black uppercase tracking-wider">
-                  {isRivalReady ? "Listo" : "Pensando..."}
-                </span>
-              </div>
+              ) : (
+                <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
+                  isRivalReady 
+                    ? "bg-purple-500/5 border-purple-500/30 text-purple-400 font-black" 
+                    : "bg-neutral-900/60 border-white/5 text-gray-dim animate-pulse"
+                }`}>
+                  <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
+                    {config.rival.fullName.substring(0, 2).toUpperCase()}
+                    {isRivalReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+                  </div>
+                  <span className="text-[10px] font-bold truncate max-w-full">{config.rival.fullName}</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider">
+                    {isRivalReady ? "Listo" : "Pensando..."}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Countdown Overlay or Ready CTA */}

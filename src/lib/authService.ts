@@ -1,4 +1,4 @@
-import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue } from "./db/indexedDB";
+import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
 import { db } from "./firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
@@ -197,6 +197,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
     });
   }
 
+  await migrateOfflineGuestData(user.uid);
   await saveLocalSetting("current_user", user);
   return user;
 }
@@ -509,6 +510,64 @@ export async function loginSocialUser(email: string, displayName: string): Promi
     });
   }
 
+  await migrateOfflineGuestData(user.uid);
   await saveLocalSetting("current_user", user);
   return user;
+}
+
+export async function loginGuestOffline(): Promise<UserProfile> {
+  const guest: UserProfile = {
+    uid: "USR-GUEST-OFFLINE",
+    email: "invitado@archery101010.com",
+    fullName: "Invitado Offline",
+    birthDate: "1995-05-15",
+    country: "CR",
+    gender: "M",
+    bowConfig: {
+      type: "Barebow",
+      brand: "Hoyt",
+      model: "Satori",
+      poundage: 35,
+      defaultDistance: 18
+    },
+    physicalData: {
+      height: 175,
+      weight: 70,
+      dominantEye: "R",
+      dominantHand: "R"
+    },
+    clubId: null,
+    clubName: null,
+    role: "archer",
+    plan: "FREE",
+    isClubCreator: false,
+    profileSetupCompleted: false
+  };
+
+  await saveLocalSetting("current_user", guest);
+  return guest;
+}
+
+export async function migrateOfflineGuestData(newUid: string): Promise<void> {
+  try {
+    const localSessions = await getLocalSessions();
+    const guestSessions = localSessions.filter(s => s.userUid === "USR-GUEST-OFFLINE");
+    
+    for (const session of guestSessions) {
+      const updatedSession = { ...session, userUid: newUid };
+      // Save updated session
+      await saveLocalSession(session.id, updatedSession);
+      // Queue sync
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "sessions",
+        operation: "INSERT",
+        payloadId: session.id,
+        payload: updatedSession,
+        timestamp: Date.now()
+      });
+    }
+  } catch (err) {
+    console.error("Error migrating guest offline data:", err);
+  }
 }

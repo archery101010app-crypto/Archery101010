@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { loginUser, loginSocialUser } from "@/lib/authService";
+import { loginUser, loginSocialUser, UserProfile } from "@/lib/authService";
 import { Mail, Lock, AlertCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
+import { getLocalSetting } from "@/lib/db/indexedDB";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -14,11 +15,16 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess, onNavigateToRegister }: LoginViewProps) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Connection and bypass states
+  const [isOnline, setIsOnline] = useState(true);
+  const [isSocialBypassAvailable, setIsSocialBypassAvailable] = useState(false);
+  const [bypassUser, setBypassUser] = useState<UserProfile | null>(null);
 
   // PWA states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -56,6 +62,76 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
   }, []);
+
+  // Track online status
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Check if typed email matches a local social account with no password
+  useEffect(() => {
+    async function checkSocialBypass() {
+      if (!isOnline && email) {
+        try {
+          const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const matched = usersList.find(
+            (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+          );
+          if (matched && !matched.password) {
+            setIsSocialBypassAvailable(true);
+            setBypassUser(matched);
+            return;
+          }
+        } catch (err) {
+          console.error("Error checking social bypass list:", err);
+        }
+      }
+      setIsSocialBypassAvailable(false);
+      setBypassUser(null);
+    }
+    checkSocialBypass();
+  }, [email, isOnline]);
+
+  const handleBypassLogin = async () => {
+    if (!bypassUser) return;
+    setLoading(true);
+    setError("");
+    try {
+      const { saveLocalSetting } = await import("@/lib/db/indexedDB");
+      await saveLocalSetting("current_user", bypassUser);
+      onLoginSuccess(bypassUser);
+    } catch (err: any) {
+      setError(err.message || "Error al ingresar en modo local.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { loginGuestOffline } = await import("@/lib/authService");
+      const guestUser = await loginGuestOffline();
+      onLoginSuccess(guestUser);
+    } catch (err: any) {
+      setError(err.message || "Error al ingresar como invitado.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInstallClick = async () => {
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -219,6 +295,19 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           </motion.div>
         )}
 
+        {!isOnline && (
+          <div className="bg-yellow-gold/10 border border-yellow-gold/30 rounded-2xl p-3.5 flex flex-col gap-1.5 shadow-[0_0_15px_rgba(255,229,0,0.05)]">
+            <span className="text-yellow-gold text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              ⚠️ {language === "es" ? "Modo Desconectado" : "Offline Mode"}
+            </span>
+            <p className="text-[10px] text-gray-dim leading-snug">
+              {language === "es" 
+                ? "No tienes conexión a internet. Puedes ingresar usando tus credenciales guardadas en este dispositivo o registrar tiros usando el modo Invitado." 
+                : "No internet connection detected. You can sign in using credentials saved on this device or log sessions using Guest Mode."}
+            </p>
+          </div>
+        )}
+
         <h2 className="text-white/80 font-bold text-center text-sm tracking-wider uppercase">
           {t("loginTitle")}
         </h2>
@@ -269,6 +358,19 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           >
             {loading ? t("loading") : t("loginBtn")}
           </motion.button>
+          
+          {isSocialBypassAvailable && (
+            <motion.button
+              whileHover={{ scale: 1.02, filter: "brightness(1.15)" }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={handleBypassLogin}
+              disabled={loading}
+              className="w-full py-3.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all duration-200 cursor-pointer flex justify-center items-center mt-2 border border-purple-400/20"
+            >
+              🔓 Ingresar en Modo Local (Sin Contraseña)
+            </motion.button>
+          )}
         </form>
 
         {/* Register link */}
@@ -308,6 +410,15 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
             </svg>
             <span>{t("facebookLogin")}</span>
+          </button>
+          
+          {/* Offline Guest Option */}
+          <button
+            type="button"
+            onClick={handleGuestLogin}
+            className="w-full py-3.5 rounded-xl bg-neutral-900/40 border border-dashed border-cyan-neon/20 hover:border-cyan-neon/50 text-cyan-neon font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer mt-1"
+          >
+            <span>⚡ Registrar Tiros como Invitado (Sin Conexión)</span>
           </button>
         </div>
       </div>
