@@ -1603,6 +1603,16 @@
           <div class="fc-title">Duelo en Tiempo Real</div>
           <div class="fc-desc">Ves los impactos y scores del rival actualizándose en tiempo real. El reloj WA corre sincronizado.</div>
         </div>
+        <div class="feature-card" style="border-color:rgba(0,229,255,0.4);background:rgba(0,229,255,0.02)">
+          <div class="fc-icon">📡</div>
+          <div class="fc-title">Conexión Real & Presencia</div>
+          <div class="fc-desc">Validación de presencia 100% real por Firestore. Muestra el estado conectado/desconectado, nombres reales y sincronización de preparación.</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📱</div>
+          <div class="fc-title">Invitación Abierta (QR/WhatsApp)</div>
+          <div class="fc-desc">Genera invitaciones rápidas mediante código QR estético o enlace directo para WhatsApp.</div>
+        </div>
       </div>
 
       <div class="callout info reveal">
@@ -1899,6 +1909,33 @@
         </div>
       </div>
 
+      <h3 style="font-size:15px;font-weight:800;color:var(--white);margin:32px 0 16px;">Mecanismo de Acceso y Login Offline</h3>
+      <p class="section-desc">
+        Si la aplicación detecta que el dispositivo no tiene conexión de red al iniciar o iniciar sesión, se activan de forma inteligente 4 escenarios de acceso adaptativo:
+      </p>
+
+      <div class="feature-grid reveal">
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.25);">
+          <div class="fc-icon">🔐</div>
+          <div class="fc-title">Escenario A: Sesión en Caché</div>
+          <div class="fc-desc">Si el usuario ya estaba logueado previamente en el dispositivo, la app omite la pantalla de inicio de sesión y entra directo al Dashboard principal de forma transparente.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.25);">
+          <div class="fc-icon">✉️</div>
+          <div class="fc-title">Escenario B: Credenciales Locales</div>
+          <div class="fc-desc">Si cerró sesión y no tiene internet, puede iniciar sesión con su correo y contraseña habituales validándose contra los datos locales guardados previamente en IndexedDB.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.25);">
+          <div class="fc-icon">🔓</div>
+          <div class="fc-title">Escenario C: Bypass Social</div>
+          <div class="fc-desc">Si su perfil es social (Google) y no posee contraseña local, al escribir su email offline la app le ofrecerá un botón para ingresar localmente sin contraseña.</div>
+        </div>
+        <div class="feature-card" style="border-color:rgba(255,242,0,0.25);">
+          <div class="fc-icon">⚡</div>
+          <div class="fc-title">Escenario D: Modo Invitado</div>
+          <div class="fc-desc">Si nunca se ha logueado en este dispositivo, la app le permite ingresar como "Invitado Offline" para guardar sus tiros localmente y migrarlos a su cuenta real al iniciar sesión online.</div>
+        </div>
+
       <div class="callout tip reveal">
         <div class="callout-icon">🏹</div>
         <div>
@@ -2074,7 +2111,7 @@
         <span style="font-size:20px;font-weight:900;color:#00E5FF;">10</span><span style="font-size:20px;font-weight:900;color:#FF3B30;">10</span><span style="font-size:20px;font-weight:900;color:#FFF200;">10</span>
         <span style="color:rgba(255,255,255,0.3);font-size:10px;font-weight:800;letter-spacing:4px;text-transform:uppercase;padding-left:10px;border-left:1px solid rgba(255,255,255,0.1);align-self:center;">ARCHERY</span>
       </div>
-      <div class="version-badge">v2.1.1 — Manual de Usuario</div>
+      <div class="version-badge">v2.3.0 — Manual de Usuario</div>
       <p style="margin-bottom:8px;">La app de tiro con arco más completa y avanzada del mundo.</p>
       <p>Copyright © 2026 Archery 101010. Todos los derechos reservados.</p>
       <p style="margin-top:8px;font-size:10px;color:rgba(142,142,147,0.5);">Construido con Next.js · TypeScript · Tailwind CSS · Firebase</p>

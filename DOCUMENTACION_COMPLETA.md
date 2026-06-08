@@ -1,6 +1,6 @@
 # Documentación Completa y Consolidada: Archery 101010
 
-**Versión Actual: v2.1.1** · Última actualización: Junio 2026
+**Versión Actual: v2.3.0** · Última actualización: Junio 2026
 
 Este documento reúne todas las especificaciones visuales, técnicas y funcionales del proyecto **Archery 101010**. Ha sido diseñado bajo la filosofía **SaaS Premium 2025** y desarrollado con un enfoque **Offline-First (Resiliencia y Sincronización)** y **Mobile-First**.
 
@@ -691,3 +691,24 @@ Se implementaron soluciones robustas para corregir los fallos funcionales identi
   * Mediano: `20px`
   * Grande (Por defecto): `22px`
 6. **Métricas de Anuncios Sincronizadas:** Modificadas las funciones del motor publicitario para inyectar transacciones a la cola de sincronización de IndexedDB (`addToSyncQueue`) en tiempo real cuando ocurre una impresión o clic. Esto asegura que las analíticas de anuncios se sincronicen de inmediato con Firestore en segundo plano sin impactar la latencia.
+
+### 7. 🚀 Novedades, Mejoras y Correcciones Críticas (Fase 15 - v2.3.0)
+En esta fase se incorporó soporte avanzado de accesibilidad offline con control adaptativo de login, validación de conexión 100% real para duelos PvP y refinamiento terminológico general de la interfaz.
+
+* **Validación de Conexión Real en Duelos PvP (v2.3.0):**
+  * Se eliminaron por completo las simulaciones y temporizadores automáticos de conexión de amigos en la arena.
+  * Los dispositivos ahora se enlazan mediante suscripciones en tiempo real (`onSnapshot`) a la colección `active_duels` de Firestore.
+  * El estado de presencia cambia de *"Desconectado"* (`❌`) a *"Conectado"* y se sincronizan dinámicamente sus nombres reales de perfil en el momento exacto en que el amigo ingresa con el código.
+  * Los botones *"Listo"* y la cuenta regresiva de comienzo se coordinan en ambos navegadores de forma paralela e instantánea.
+  * La desconexión por salida o cierre de pestaña se refleja inmediatamente en el oponente.
+* **Soporte de Acceso Offline Adaptativo (v2.2.9):**
+  * *Escenario A (Sesión activa):* Si el usuario ya posee sesión (`current_user`), accede directamente al Home mostrando advertencia WifiOff en el Header.
+  * *Escenario B (Login local):* Permite ingresar correo y contraseña válidos validando contra la copia local de IndexedDB (`simulated_users`) sin requerir internet.
+  * *Escenario C (Bypass social):* Si se registró mediante Google y no tiene contraseña, la app ofrece el botón *"🔓 Ingresar en Modo Local (Sin Contraseña)"*.
+  * *Escenario D (Modo Invitado):* Si no tiene cuenta local ni internet, accede mediante un perfil temporal (`USR-GUEST-OFFLINE`) y se migran automáticamente todas sus puntuaciones a su perfil real en su próximo inicio de sesión online.
+* **Refinamiento de Terminología (RMS → Flecha Promedio) (v2.2.8):**
+  * Se sustituyó por completo el término de nivelación matemática `"RMS"` por el concepto deportivo estándar de `"Flecha Promedio"` en todos los listados, niveles de bots, rankings y banners de juego para mayor facilidad de lectura del arquero.
+* **Highlight de Perfil Incompleto (v2.2.7):**
+  * Si el arquero no ha completado el Onboarding o la configuración de su tipo de arco, la etiqueta en el Home parpadea en color rojo con un emoji ⚠️. Al hacer clic, le redirige directamente al perfil para evitar el registro de puntuaciones inválidas.
+* **Invitaciones Abiertas (v2.2.8):**
+  * Se implementó un modal glassmorphic con diseño premium de Código QR (mockup CSS con línea de escáner láser cyan) y enlace directo autogenerado para compartir en un mensaje personalizado por WhatsApp.
