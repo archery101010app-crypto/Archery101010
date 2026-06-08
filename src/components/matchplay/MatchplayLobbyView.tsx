@@ -103,6 +103,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
   const [customDistance, setCustomDistance] = useState<number>(user?.bowConfig?.defaultDistance || 70);
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
+  const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("BOT");
+  const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
 
   const handleDeleteDraft = async (id: string) => {
     if (!window.confirm("¿Seguro que deseas eliminar este duelo activo permanentemente?")) {
@@ -227,6 +229,27 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const handleCreateRoomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (duelMode === "FRIEND") {
+      const codeSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+      const bowCode = customBow === "Compound" ? "C" : customBow === "Recurve" ? "R" : "B";
+      const generatedCode = `INV-${bowCode}${customDistance}-${codeSuffix}`;
+      
+      const shareUrl = typeof window !== "undefined" 
+        ? `${window.location.origin}?join=${generatedCode}`
+        : `https://archery101010.web.app?join=${generatedCode}`;
+
+      const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010! Formato: ${customBow} a ${customDistance}m. Ingresa el código "${generatedCode}" en la sección de Duelos, o haz clic en este enlace para unirte: ${shareUrl}`;
+
+      setGeneratedInvite({
+        code: generatedCode,
+        bowType: customBow,
+        distance: customDistance,
+        text: shareText
+      });
+      setIsCreatingRoom(false);
+      return;
+    }
+    
     const botRatings = {
       Rookie: 7.2,
       Medium: 8.3,
@@ -263,19 +286,27 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     e.preventDefault();
     if (!joinCode) return;
 
-    const isCompound = joinCode.toUpperCase().includes("C");
+    const code = joinCode.toUpperCase();
+    const isCompound = code.includes("C") || code.includes("COMPOUND");
+    const isBarebow = code.includes("B") || code.includes("BAREBOW");
+    const bowType = isCompound ? "Compound" : isBarebow ? "Barebow" : "Recurve";
+    
+    let distance = 70;
+    if (code.includes("18")) distance = 18;
+    else if (code.includes("50")) distance = 50;
+
     const matchConfig = {
       id: `MATCH-JOIN-${Date.now()}`,
-      bowType: isCompound ? "Compound" : "Recurve",
-      distance: isCompound ? 50 : 70,
-      system: isCompound ? "cumulative" : "set",
+      bowType: bowType,
+      distance: distance,
+      system: bowType === "Compound" ? "cumulative" : "set",
       rival: {
-        uid: "RIV-BOT-JOINED",
-        fullName: "Desafiante Incógnito",
-        country: "MX",
+        uid: "RIV-FRIEND-CREATOR",
+        fullName: "Anfitrión del Duelo",
+        country: "CR",
         clubName: "Lobby Archery",
         clubLogo: "1",
-        clubCountry: "MX",
+        clubCountry: "CR",
         rating: 9.2
       }
     };
@@ -318,8 +349,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           </p>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-[9px] text-gray-dim uppercase font-black">Tu Nivel</span>
-          <span className="text-lg font-black text-cyan-neon tracking-tight">9.0 RMS</span>
+          <span className="text-[9px] text-gray-dim uppercase font-black">Flecha Promedio</span>
+          <span className="text-lg font-black text-cyan-neon tracking-tight">9.0</span>
         </div>
       </div>
 
@@ -406,6 +437,35 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               >
                 <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración del Duelo</h4>
                 <form onSubmit={handleCreateRoomSubmit} className="flex flex-col gap-3">
+                  {/* Duel Mode Selector */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[8px] text-gray-dim font-bold uppercase">Modo de Duelo</span>
+                    <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-0.5 rounded-xl border border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => setDuelMode("BOT")}
+                        className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                          duelMode === "BOT"
+                            ? "bg-purple-600 text-white shadow-glow-purple"
+                            : "text-gray-dim hover:text-white"
+                        }`}
+                      >
+                        Entrenar con Bot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDuelMode("FRIEND")}
+                        className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                          duelMode === "FRIEND"
+                            ? "bg-purple-600 text-white shadow-glow-purple"
+                            : "text-gray-dim hover:text-white"
+                        }`}
+                      >
+                        Desafiar Amigo
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
                       <span className="text-[8px] text-gray-dim font-bold uppercase">Formato de Arco</span>
@@ -434,24 +494,30 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   </div>
                   
                   {/* Bot Level Selector */}
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[8px] text-gray-dim font-bold uppercase">Nivel del Bot Oponente</span>
-                    <select
-                      value={botLevel}
-                      onChange={(e) => setBotLevel(e.target.value as any)}
-                      className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-purple-500/50 transition"
-                    >
-                      <option value="Rookie">Novato (Rookie Bot - 7.2 RMS)</option>
-                      <option value="Medium">Nivel Medio (Medium Archer Bot - 8.3 RMS)</option>
-                      <option value="High">Alto Nivel (High Level Bot - 9.2 RMS)</option>
-                      <option value="Olympic">Arquero Olímpico (Olympic Bot - 9.8 RMS)</option>
-                    </select>
-                  </div>
+                  {duelMode === "BOT" ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[8px] text-gray-dim font-bold uppercase">Nivel del Bot Oponente</span>
+                      <select
+                        value={botLevel}
+                        onChange={(e) => setBotLevel(e.target.value as any)}
+                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-purple-500/50 transition"
+                      >
+                        <option value="Rookie">Novato (Rookie Bot - 7.2 Promedio)</option>
+                        <option value="Medium">Nivel Medio (Medium Archer Bot - 8.3 Promedio)</option>
+                        <option value="High">Alto Nivel (High Level Bot - 9.2 Promedio)</option>
+                        <option value="Olympic">Arquero Olímpico (Olympic Bot - 9.8 Promedio)</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="text-[9.5px] text-purple-300 leading-snug">
+                      ✨ Genera una invitación abierta con un código QR y enlace para compartir por WhatsApp con cualquier arquero real.
+                    </p>
+                  )}
                   <button
                     type="submit"
                     className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_15px_rgba(168,85,247,0.15)] text-center"
                   >
-                    Lanzar Duelo y Esperar Rival
+                    {duelMode === "BOT" ? "Lanzar Duelo y Esperar Rival" : "Generar Invitación Abierta"}
                   </button>
                 </form>
               </motion.div>
@@ -586,7 +652,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                         {/* Retar CTA */}
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-[9px] text-cyan-neon font-black tracking-tight">{riv.rating} RMS</span>
+                          <span className="text-[9px] text-cyan-neon font-black tracking-tight">{riv.rating} Prom.</span>
                           <button
                             onClick={() => handleStartSimulatedDuel(riv)}
                             disabled={riv.status === "busy"}
@@ -733,6 +799,149 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       
       {/* Bottom spacer */}
       <div className="h-6" />
+
+      {/* Generated Invite Modal */}
+      <AnimatePresence>
+        {generatedInvite && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-950 border border-purple-500/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden"
+            >
+              <div 
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{ background: `radial-gradient(circle, #a855f7 0%, transparent 70%)` }}
+              />
+
+              <div className="relative z-10 flex flex-col items-center">
+                <span className="text-[10px] text-purple-300 font-black tracking-widest uppercase block mb-1">
+                  Invitación Generada ✉️
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  Desafío 1v1 Amistoso
+                </h3>
+                <p className="text-[10px] text-gray-dim mt-0.5">
+                  Comparte este código o escanea para ingresar
+                </p>
+
+                {/* CSS QR Code Mockup */}
+                <div className="my-5 w-40 h-40 bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center relative shadow-[0_0_15px_rgba(168,85,247,0.1)] select-none">
+                  {/* Laser scan animation line */}
+                  <motion.div 
+                    animate={{ top: ["5%", "95%", "5%"] }}
+                    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute left-2 right-2 h-0.5 bg-cyan-neon/60 shadow-glow-cyan z-20"
+                  />
+                  {/* Grid mockup */}
+                  <div className="grid grid-cols-5 gap-2 opacity-75">
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm border border-neutral-950" />
+                    <div className="w-5.5 h-5.5 bg-white/20 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-cyan-neon rounded-sm flex items-center justify-center text-[10px]">🎯</div>
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/20 rounded-sm" />
+
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-purple-500 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+
+                    <div className="w-5.5 h-5.5 bg-white/20 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/30 rounded-sm" />
+
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/30 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-white rounded-sm" />
+                  </div>
+                </div>
+
+                {/* Display Invite Code */}
+                <div className="bg-neutral-900 border border-white/5 px-4 py-2.5 rounded-2xl w-full flex items-center justify-between gap-3 mb-4">
+                  <span className="text-white text-xs font-mono font-black tracking-wider uppercase">
+                    {generatedInvite.code}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedInvite.code);
+                      alert("¡Código de duelo copiado al portapapeles!");
+                    }}
+                    className="text-[9px] bg-white/5 border border-white/10 hover:border-cyan-neon text-cyan-neon font-black px-2.5 py-1 rounded-xl cursor-pointer transition active:scale-95 uppercase"
+                  >
+                    Copiar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 w-full mb-3">
+                  <button
+                    onClick={() => {
+                      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(generatedInvite.text)}`;
+                      window.open(waUrl, "_blank");
+                    }}
+                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1"
+                  >
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedInvite.text);
+                      alert("¡Enlace e invitación completa copiada al portapapeles!");
+                    }}
+                    className="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1 shadow-glow-purple"
+                  >
+                    <span>Copiar Enlace</span>
+                  </button>
+                </div>
+
+                {/* Start Arena button */}
+                <button
+                  onClick={() => {
+                    const matchConfig = {
+                      id: generatedInvite.code,
+                      bowType: generatedInvite.bowType,
+                      distance: generatedInvite.distance,
+                      system: generatedInvite.bowType === "Compound" ? "cumulative" : "set",
+                      rival: {
+                        uid: "RIV-FRIEND-PLAYER",
+                        fullName: "Desafiante Invitado",
+                        country: "CR",
+                        clubName: "Oponente Invitado",
+                        clubLogo: "0",
+                        clubCountry: "CR",
+                        rating: 9.0
+                      }
+                    };
+                    setGeneratedInvite(null);
+                    onStartDuel(matchConfig);
+                  }}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-110 active:scale-98 transition shadow-glow-cyan"
+                >
+                  🚀 Iniciar Arena de Duelo
+                </button>
+
+                <button
+                  onClick={() => setGeneratedInvite(null)}
+                  className="text-[9px] text-gray-dim hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
+                >
+                  Cancelar / Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
