@@ -168,13 +168,14 @@ export default function Home() {
  
   // Periodic user presence heartbeat to mark user as online in Firestore
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
+    const uid = user.uid;
 
     const updatePresence = async () => {
       try {
         const { doc, updateDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
-        const docRef = doc(db, "users", user.uid);
+        const docRef = doc(db, "users", uid);
         await updateDoc(docRef, {
           lastActiveAt: Date.now()
         });
@@ -187,11 +188,11 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.uid]);
 
   // Listen for real-time duel invitations directed to the logged-in user
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     const currentUid = user.uid;
 
     let unsubscribe: () => void = () => {};
@@ -227,7 +228,7 @@ export default function Home() {
     return () => {
       unsubscribe();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   // Check active ad campaigns on screen, user, or local database change
   useEffect(() => {
@@ -252,11 +253,11 @@ export default function Home() {
       }
     }
     checkAds();
-  }, [currentScreen, user, dbVersion]);
+  }, [currentScreen, user?.uid, user?.role, user?.plan, dbVersion]);
 
   // Start real-time Firestore synchronization when user is authenticated
   useEffect(() => {
-    if (user) {
+    if (user?.uid) {
       startRealtimeSync(user.uid);
     } else {
       stopRealtimeSync();
@@ -264,12 +265,12 @@ export default function Home() {
     return () => {
       stopRealtimeSync();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   // Check for active session draft in IndexedDB when user is loaded
   useEffect(() => {
     async function checkForDrafts() {
-      if (!user) {
+      if (!user?.uid) {
         setActiveDraft(null);
         return;
       }
@@ -286,11 +287,11 @@ export default function Home() {
       }
     }
     checkForDrafts();
-  }, [user]);
+  }, [user?.uid]);
 
   // Check for restored sessions by coach to show notification
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     const userUid = user.uid;
     
     async function checkForRestoredSessions() {
@@ -341,7 +342,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, [user]);
+  }, [user?.uid]);
 
   // Listen to visibilitychange to force Firestore network reconnection
   useEffect(() => {
@@ -436,7 +437,7 @@ export default function Home() {
       }
     }
     loadFontSizeAndTheme();
-  }, [user]);
+  }, [user?.uid]);
 
   // Prevent accidental reload whenever a user session is active
   useEffect(() => {
@@ -454,7 +455,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);

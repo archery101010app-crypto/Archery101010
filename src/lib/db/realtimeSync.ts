@@ -12,6 +12,43 @@ import {
 } from "./indexedDB";
 import { UserProfile } from "@/lib/authService";
 
+/**
+ * Helper to check if two user profiles are functionally different, ignoring transient synchronization timestamps.
+ */
+function isProfileFunctionallyDifferent(p1: UserProfile | null, p2: UserProfile | null): boolean {
+  if (!p1 || !p2) return p1 !== p2;
+
+  const keysToCompare: (keyof UserProfile)[] = [
+    "email",
+    "fullName",
+    "nickname",
+    "birthDate",
+    "country",
+    "city",
+    "gender",
+    "role",
+    "plan",
+    "clubId",
+    "clubName",
+    "clubLogo",
+    "clubCountry",
+    "isClubCreator",
+    "profileSetupCompleted",
+    "whatsappNumber"
+  ];
+
+  for (const key of keysToCompare) {
+    if (JSON.stringify(p1[key]) !== JSON.stringify(p2[key])) {
+      return true;
+    }
+  }
+
+  if (JSON.stringify(p1.bowConfig) !== JSON.stringify(p2.bowConfig)) return true;
+  if (JSON.stringify(p1.physicalData) !== JSON.stringify(p2.physicalData)) return true;
+
+  return false;
+}
+
 let activeUnsubscribes: (() => void)[] = [];
 
 /**
@@ -79,13 +116,28 @@ export function startRealtimeSync(currentUserUid: string | null) {
           if (updatedCurrentUser) {
             const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
             
-            // Verify if there are actual updates to avoid infinite rendering loops
-            if (JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser)) {
-              await settingsStore.setItem("current_user", updatedCurrentUser);
-              // Notify components to update user context in real-time
-              window.dispatchEvent(
-                new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
-              );
+            // Avoid overwriting a local user profile that has completed setup with a remote one that has not
+            const isLocalCompleted = localCurrent?.profileSetupCompleted === true;
+            const isRemoteCompleted = updatedCurrentUser.profileSetupCompleted === true;
+
+            if (isLocalCompleted && !isRemoteCompleted) {
+              console.log("[Sync] Local profile is completed, but remote is not. Skip overwrite to avoid reset.");
+            } else {
+              const hasFunctionalDifference = isProfileFunctionallyDifferent(localCurrent, updatedCurrentUser);
+              const hasAnyDifference = JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser);
+
+              if (hasFunctionalDifference) {
+                console.log("[Sync] Functional difference detected in user profile. Overwriting and dispatching update...");
+                await settingsStore.setItem("current_user", updatedCurrentUser);
+                // Notify components to update user context in real-time
+                window.dispatchEvent(
+                  new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
+                );
+              } else if (hasAnyDifference) {
+                // There are differences only in transient/subscription timestamps (like lastActiveAt or updatedAt)
+                // Overwrite IndexedDB silently to keep it fresh, but do NOT dispatch event to prevent rendering loop
+                await settingsStore.setItem("current_user", updatedCurrentUser);
+              }
             }
           }
         }
