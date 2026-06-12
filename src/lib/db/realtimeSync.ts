@@ -37,49 +37,68 @@ export function startRealtimeSync(currentUserUid: string | null) {
   console.log("Initializing real-time Firestore sync listeners...");
 
   // 1. Sync Users Collection
-  const usersUnsub = onSnapshot(collection(db, "users"), async (snapshot) => {
-    try {
-      const usersList: UserProfile[] = [];
-      snapshot.forEach((doc) => {
-        usersList.push(doc.data() as UserProfile);
-      });
+  const usersUnsub = onSnapshot(
+    collection(db, "users"),
+    async (snapshot) => {
+      try {
+        const usersList: UserProfile[] = [];
+        snapshot.forEach((doc) => {
+          usersList.push(doc.data() as UserProfile);
+        });
 
-      // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
-      const localUsers = await settingsStore.getItem<UserProfile[]>("simulated_users") || [];
-      const queue = await getSyncQueue();
-      const pendingUserUids = new Set(queue.filter(q => q.collection === "users").map(q => q.payloadId));
+        // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
+        const localUsers = await settingsStore.getItem<UserProfile[]>("simulated_users") || [];
+        const queue = await getSyncQueue();
+        const pendingUserUids = new Set(queue.filter(q => q.collection === "users").map(q => q.payloadId));
 
-      const mergedList = [...usersList];
-      for (const localU of localUsers) {
-        if (pendingUserUids.has(localU.uid) && !usersList.some(u => u.uid === localU.uid)) {
-          mergedList.push(localU);
-        }
-      }
-
-      await settingsStore.setItem("simulated_users", mergedList);
-
-      // Check if currently logged-in user profile has changed remotely
-      if (currentUserUid) {
-        const updatedCurrentUser = usersList.find((u) => u.uid === currentUserUid);
-        if (updatedCurrentUser) {
-          const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
-          
-          // Verify if there are actual updates to avoid infinite rendering loops
-          if (JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser)) {
-            await settingsStore.setItem("current_user", updatedCurrentUser);
-            // Notify components to update user context in real-time
-            window.dispatchEvent(
-              new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
-            );
+        // Rebuild merged list: prefer local user profile if it has a pending write in the queue
+        const mergedList: UserProfile[] = [];
+        
+        // Add remote users who do not have pending local edits
+        for (const remoteU of usersList) {
+          if (!pendingUserUids.has(remoteU.uid)) {
+            mergedList.push(remoteU);
           }
         }
-      }
+        
+        // Add local users who have pending edits, or who were not in the remote list
+        for (const localU of localUsers) {
+          if (pendingUserUids.has(localU.uid)) {
+            mergedList.push(localU);
+          } else if (!usersList.some(u => u.uid === localU.uid)) {
+            mergedList.push(localU);
+          }
+        }
 
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "simulated_users" } }));
-    } catch (err) {
-      console.error("Error in real-time users sync:", err);
+        await settingsStore.setItem("simulated_users", mergedList);
+
+        // Check if currently logged-in user profile has changed remotely
+        // Protect the current_user from being overwritten if there are pending local updates in the sync queue!
+        if (currentUserUid && !pendingUserUids.has(currentUserUid)) {
+          const updatedCurrentUser = usersList.find((u) => u.uid === currentUserUid);
+          if (updatedCurrentUser) {
+            const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
+            
+            // Verify if there are actual updates to avoid infinite rendering loops
+            if (JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser)) {
+              await settingsStore.setItem("current_user", updatedCurrentUser);
+              // Notify components to update user context in real-time
+              window.dispatchEvent(
+                new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
+              );
+            }
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "simulated_users" } }));
+      } catch (err) {
+        console.error("Error in real-time users sync:", err);
+      }
+    },
+    (err) => {
+      console.warn("Firestore users collection real-time listener failed/disabled:", err.message);
     }
-  });
+  );
   activeUnsubscribes.push(usersUnsub);
 
   // 2. Sync Ad Campaigns Collection

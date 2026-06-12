@@ -24,6 +24,19 @@ const COUNTRIES = [
   { code: "US", name: "United States", flag: "🇺🇸" }
 ];
 
+const isMockUser = (uid: string, email: string = "", fullName: string = "") => {
+  const u = uid.toLowerCase();
+  const e = email.toLowerCase();
+  const n = fullName.toLowerCase();
+  return u.startsWith("riv-") || 
+         u.startsWith("usr-d-") || 
+         u.includes("demo") || 
+         e.includes("demo") || 
+         n.includes("demo") || 
+         e.includes("club.com") || 
+         (e.includes("archery101010.com") && e !== "admin@archery101010.com" && e !== "invitado@archery101010.com");
+};
+
 // Active mock rivals for elimination duels
 const RIVAL_LIST = [
   {
@@ -301,6 +314,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const filteredRivals = realUsers.map((u) => ({
     uid: u.uid,
     fullName: u.fullName,
+    email: u.email || "",
     country: u.country || "CR",
     clubName: u.clubName || "Independiente",
     clubLogo: u.clubLogo || "0",
@@ -316,6 +330,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     status: (u.lastActiveAt && (Date.now() - u.lastActiveAt < 60000)) ? "online" as const : "offline" as const,
     lastActiveAt: u.lastActiveAt
   })).filter((riv) => {
+    // Exclude mock/demo users from the online list
+    if (isMockUser(riv.uid, riv.email, riv.fullName)) return false;
+
     const matchesSearch = riv.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           riv.clubName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
