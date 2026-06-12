@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { loginUser, loginSocialUser, UserProfile } from "@/lib/authService";
-import { Mail, Lock, AlertCircle, X } from "lucide-react";
+import { Mail, Lock, AlertCircle, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
@@ -18,6 +18,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const { language, t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -340,12 +341,19 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <Lock size={18} />
             </span>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholder")}
-              className="w-full bg-neutral-900/60 border border-cyan-brand text-white placeholder-gray-dim text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition-all duration-200 caret-yellow-gold"
+              className="w-full bg-neutral-900/60 border border-cyan-brand text-white placeholder-gray-dim text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition-all duration-200 caret-yellow-gold"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 text-gray-dim hover:text-white transition cursor-pointer"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           {/* Login button */}

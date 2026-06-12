@@ -131,6 +131,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [confirmedVolume, setConfirmedVolume] = useState(0);
   const [saveType, setSaveType] = useState<"full" | "partial">("full");
 
+  // Tally Counter State for Volume session
+  const [tallyCount, setTallyCount] = useState(0);
+
   // Notes state
   const [endNote, setEndNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
@@ -186,6 +189,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       setEnds(initialEnds);
     }
   }, [config]);
+
+  // Synchronize tallyCount when ends state is loaded or updated
+  useEffect(() => {
+    if (config.practiceType === "Volumen" && ends.length > 0) {
+      const shotCount = ends.reduce((sum, e) => sum + e.arrows.filter(a => a !== "").length, 0);
+      setTallyCount(shotCount);
+    }
+  }, [ends, config.practiceType]);
 
   // Autoguardado en caliente tras cada tiro o cambio de notas
   useEffect(() => {
@@ -852,6 +863,85 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   }
 
+  const playTallyClickSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1400, ctx.currentTime);
+      filter.Q.setValueAtTime(10, ctx.currentTime);
+      
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1000, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.04);
+      
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.005, ctx.currentTime + 0.04);
+      
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.05);
+    } catch (e) {
+      console.warn("AudioContext failed:", e);
+    }
+  };
+
+  const handleTallyIncrement = () => {
+    if (currentEndIdx >= config.endsCount) {
+      alert("Has alcanzado el límite de ends programados. Puedes finalizar el entrenamiento o agregar más ends.");
+      return;
+    }
+    
+    playTallyClickSound();
+    
+    const nextCount = tallyCount + 1;
+    setTallyCount(nextCount);
+    
+    const updatedEnds = [...ends];
+    const currentEnd = { ...updatedEnds[currentEndIdx] };
+    const currentArrows = [...currentEnd.arrows];
+    
+    currentArrows[currentArrowIdx] = "10";
+    currentEnd.arrows = currentArrows;
+    updatedEnds[currentEndIdx] = currentEnd;
+    setEnds(updatedEnds);
+    
+    let nextArrowIdx = currentArrowIdx + 1;
+    let nextEndIdx = currentEndIdx;
+    
+    if (nextArrowIdx >= config.arrowsPerEnd) {
+      nextArrowIdx = 0;
+      nextEndIdx = currentEndIdx + 1;
+    }
+    
+    setCurrentArrowIdx(nextArrowIdx);
+    setCurrentEndIdx(nextEndIdx);
+  };
+
+  const handleTallyReset = () => {
+    if (!confirm("¿Deseas reiniciar el contador de flechas a cero?")) return;
+    
+    playTallyClickSound();
+    setTallyCount(0);
+    setCurrentEndIdx(0);
+    setCurrentArrowIdx(0);
+    
+    const resetEnds = ends.map(e => ({
+      ...e,
+      arrows: Array(config.arrowsPerEnd).fill("")
+    }));
+    setEnds(resetEnds);
+  };
+
   return (
     <div className="flex flex-col gap-4 py-4 min-h-full">
       {/* Top Config info Header */}
@@ -970,8 +1060,133 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       </div>
 
       {/* SCORING COMPONENT MODES */}
-      <div className="flex-1 flex flex-col justify-center min-h-[300px]">
-        {mode === "TARGET" ? (
+      <div className="flex-1 flex flex-col justify-center min-h-[320px] py-4">
+        {config.practiceType === "Volumen" ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 py-6">
+            {/* Tally Counter Casing Container */}
+            <div className="relative flex flex-col items-center select-none">
+              
+              {/* Metal hanger loop at the top */}
+              <div className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-neutral-600 bg-transparent relative z-0 flex items-center justify-center">
+                <div className="w-10 h-6 rounded-t-full bg-neutral-900 border-2 border-neutral-800" />
+              </div>
+
+              {/* Reset Knob on the side (top right position) */}
+              <div className="absolute right-[-32px] top-[48px] z-10 flex items-center">
+                <div className="w-3 h-5 bg-neutral-700 border-y border-l border-neutral-600 rounded-l shadow" />
+                <button
+                  type="button"
+                  onClick={handleTallyReset}
+                  className="w-8 h-8 rounded-full bg-gradient-to-r from-neutral-500 via-neutral-400 to-neutral-600 border-2 border-neutral-500 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
+                  title="Reiniciar contador"
+                >
+                  <div className="w-3 h-3 rounded-full bg-neutral-700 border border-neutral-600 flex items-center justify-center font-bold text-[8px] text-white">
+                    R
+                  </div>
+                </button>
+              </div>
+
+              {/* Main counter circular case */}
+              <button
+                type="button"
+                onClick={handleTallyIncrement}
+                className="w-60 h-60 rounded-full bg-gradient-to-b from-neutral-500 via-neutral-700 to-neutral-900 border-[8px] border-neutral-600 flex flex-col items-center justify-center gap-2 relative z-10 cursor-pointer shadow-[0_20px_40px_rgba(0,0,0,0.6),inset_0_4px_12px_rgba(255,255,255,0.25)] hover:brightness-105 active:scale-[0.98] transition group"
+              >
+                {/* Shiny highlight reflection */}
+                <div className="absolute inset-2 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none" />
+
+                {/* Lever/Button at the top center of the case */}
+                <div className="absolute top-[12px] w-24 h-5 rounded bg-gradient-to-b from-neutral-400 to-neutral-600 border border-neutral-500 shadow-md group-active:translate-y-0.5 transition" />
+
+                {/* Display Window */}
+                <div className="w-40 bg-neutral-950 border-4 border-neutral-800 p-3.5 rounded-2xl shadow-inner mt-4 flex flex-col items-center gap-1.5 relative overflow-hidden">
+                  {/* Subtle inner reflection */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+                  
+                  {/* Label */}
+                  <span className="text-[8px] text-cyan-neon font-black tracking-widest uppercase">
+                    FLECHAS LANZADAS
+                  </span>
+
+                  {/* Digits Roller Board */}
+                  <div className="flex gap-1.5 mt-0.5">
+                    {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
+                      <div
+                        key={idx}
+                        className="w-7 h-10 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-900 border border-neutral-800 rounded flex items-center justify-center font-black text-2xl text-white font-mono shadow-[inset_0_2px_5px_rgba(0,0,0,0.8)] relative"
+                      >
+                        {/* Horizontal divider for roller visual look */}
+                        <div className="absolute inset-x-0 h-[1px] bg-neutral-800/40 top-1/2" />
+                        <span className="relative z-10">{digit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Big neon target ring details around counter to make it look premium */}
+                <div className="text-[10px] text-gray-dim font-bold tracking-wider uppercase mt-2 group-hover:text-cyan-neon transition">
+                  PULSAR PARA CONTAR
+                </div>
+              </button>
+            </div>
+
+            {/* Helper status text */}
+            <div className="flex flex-col items-center text-center gap-1">
+              <span className="text-xs text-gray-dim font-semibold">
+                End Actual: <span className="text-cyan-neon font-bold">#{currentEndIdx + 1}</span> · Flecha: <span className="text-cyan-neon font-bold">#{currentArrowIdx + 1}/{config.arrowsPerEnd}</span>
+              </span>
+              <span className="text-[10px] text-gray-dim italic">
+                (Las flechas se guardan automáticamente como impactos de puntaje "10")
+              </span>
+            </div>
+
+            {/* Quick action buttons */}
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={() => {
+                  if (tallyCount > 0) {
+                    if (confirm("¿Deseas restar una flecha?")) {
+                      playTallyClickSound();
+                      const nextCount = tallyCount - 1;
+                      setTallyCount(nextCount);
+
+                      const updatedEnds = [...ends];
+                      
+                      // Calculate previous indices
+                      let prevArrowIdx = currentArrowIdx - 1;
+                      let prevEndIdx = currentEndIdx;
+                      
+                      if (prevArrowIdx < 0) {
+                        prevEndIdx = Math.max(0, currentEndIdx - 1);
+                        prevArrowIdx = config.arrowsPerEnd - 1;
+                      }
+
+                      const targetEnd = { ...updatedEnds[prevEndIdx] };
+                      const targetArrows = [...targetEnd.arrows];
+                      targetArrows[prevArrowIdx] = "";
+                      targetEnd.arrows = targetArrows;
+                      updatedEnds[prevEndIdx] = targetEnd;
+                      setEnds(updatedEnds);
+
+                      setCurrentArrowIdx(prevArrowIdx);
+                      setCurrentEndIdx(prevEndIdx);
+                    }
+                  }
+                }}
+                disabled={tallyCount === 0}
+                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-red-rival/30 hover:bg-red-rival/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-white/5 text-red-rival text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
+              >
+                Restar Flecha (-1)
+              </button>
+              <button
+                onClick={handleConfirmEnd}
+                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
+              >
+                Confirmar End (# {currentEndIdx + 1})
+              </button>
+            </div>
+          </div>
+        ) : mode === "TARGET" ? (
           // TARGET MODE (Diana SVG)
           <div className="flex-1 flex flex-col gap-4 relative">
             {/* Floating Animated Shot Value Badge */}
@@ -1271,23 +1486,45 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 ⌫
               </button>
 
-              {/* Standard points 8-5 */}
-              {["8", "7", "6", "5"].map((key) => (
+              {/* Red points 8-7 */}
+              {["8", "7"].map((key) => (
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border border-cyan-brand/60 text-white font-bold text-sm flex items-center justify-center cursor-pointer hover:border-cyan-neon hover:bg-cyan-neon/5 active:scale-95 transition"
+                  className="py-3 rounded-xl border-2 border-red-rival text-red-rival font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.15)] hover:bg-red-rival/10 active:scale-95 transition"
                 >
                   {key}
                 </button>
               ))}
 
-              {/* Standard points 4-1 */}
-              {["4", "3", "2", "1"].map((key) => (
+              {/* Blue points 6-5 */}
+              {["6", "5"].map((key) => (
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border border-cyan-brand/60 text-white font-bold text-sm flex items-center justify-center cursor-pointer hover:border-cyan-neon hover:bg-cyan-neon/5 active:scale-95 transition"
+                  className="py-3 rounded-xl border-2 border-blue-500 text-blue-400 font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(59,130,246,0.15)] hover:bg-blue-500/10 active:scale-95 transition"
+                >
+                  {key}
+                </button>
+              ))}
+
+              {/* Dark points 4-3 */}
+              {["4", "3"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => handleScoreInput(key)}
+                  className="py-3 rounded-xl border-2 border-neutral-700 text-neutral-400 font-extrabold text-sm flex items-center justify-center cursor-pointer hover:bg-neutral-800/40 hover:text-white active:scale-95 transition"
+                >
+                  {key}
+                </button>
+              ))}
+
+              {/* White points 2-1 */}
+              {["2", "1"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => handleScoreInput(key)}
+                  className="py-3 rounded-xl border-2 border-white text-white font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:bg-white/10 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1296,7 +1533,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Miss */}
               <button
                 onClick={() => handleScoreInput("M")}
-                className="col-span-2 py-3 rounded-xl border border-red-rival/40 text-red-rival font-extrabold text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-red-rival/10 active:scale-95 transition"
+                className="col-span-2 py-3 rounded-xl border-2 border-neutral-500 text-neutral-400 font-extrabold text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-500/10 hover:text-neutral-200 active:scale-95 transition"
               >
                 Miss (M)
               </button>

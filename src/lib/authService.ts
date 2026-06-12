@@ -6,17 +6,19 @@ export interface UserProfile {
   uid: string;
   email: string;
   fullName: string;
+  nickname: string;
   birthDate: string;
   country: string;
+  city: string;
   gender: string;
-  bowConfig: {
+  bowConfig?: {
     type: "Recurve" | "Compound" | "Barebow";
     brand: string;
     model: string;
     poundage: number;
     defaultDistance: number;
   };
-  physicalData: {
+  physicalData?: {
     height: number;
     weight: number;
     dominantEye: "L" | "R";
@@ -121,8 +123,10 @@ export async function loginUser(email: string, password?: string): Promise<UserP
         uid: "USR-SUPERADMIN-ADMIN101010",
         email: "admin@archery101010.com",
         fullName: "Admin101010",
+        nickname: "admin",
         birthDate: "1990-01-01",
         country: "CR",
+        city: "San José",
         gender: "M",
         bowConfig: {
           type: "Barebow",
@@ -153,8 +157,10 @@ export async function loginUser(email: string, password?: string): Promise<UserP
           uid: generateResilientId("USR"),
           email: targetEmail,
           fullName: providerName,
+          nickname: "",
           birthDate: "1995-05-15",
           country: "CR",
+          city: "",
           gender: "M",
           bowConfig: {
             type: "Barebow",
@@ -271,7 +277,20 @@ export async function registerUser(
     clubLogo,
     clubCountry,
     password: profileData.password,
-    profileSetupCompleted: true
+    profileSetupCompleted: true,
+    bowConfig: profileData.bowConfig || {
+      type: "Barebow",
+      brand: "Hoyt",
+      model: "Satori",
+      poundage: 35,
+      defaultDistance: 18
+    },
+    physicalData: profileData.physicalData || {
+      height: 175,
+      weight: 70,
+      dominantEye: "R",
+      dominantHand: "R"
+    }
   };
 
   // Save to database lists
@@ -301,7 +320,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   let currentLogged = await getLoggedUser();
 
   if (index !== -1) {
-    let updatedUser = { ...usersList[index], ...updates, profileSetupCompleted: true };
+    const updatedUser = { ...usersList[index], ...updates, profileSetupCompleted: true };
 
     // Propagation: If Coach/Admin updates club name, country or logo, cascade to all club members
     if (
@@ -471,8 +490,10 @@ export async function loginSocialUser(email: string, displayName: string): Promi
       uid: generateResilientId("USR"),
       email: targetEmail,
       fullName: displayName || "Usuario Social",
+      nickname: "",
       birthDate: "1995-05-15",
       country: "CR",
+      city: "",
       gender: "M",
       bowConfig: {
         type: "Barebow",
@@ -520,8 +541,10 @@ export async function loginGuestOffline(): Promise<UserProfile> {
     uid: "USR-GUEST-OFFLINE",
     email: "invitado@archery101010.com",
     fullName: "Invitado Offline",
+    nickname: "invitado",
     birthDate: "1995-05-15",
     country: "CR",
+    city: "San José",
     gender: "M",
     bowConfig: {
       type: "Barebow",

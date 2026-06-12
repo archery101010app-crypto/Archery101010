@@ -113,7 +113,7 @@ export default function CoachOverviewTab({
                   </div>
                   <div className="flex flex-col">
                     <span className="text-white text-xs font-bold leading-tight">{ath.fullName}</span>
-                    <span className="text-[9px] text-gray-dim mt-0.5">{ath.bowConfig.type} · {ath.bowConfig.poundage}#</span>
+                    <span className="text-[9px] text-gray-dim mt-0.5">{ath.bowConfig?.type || "Recurve"} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
                   </div>
                 </div>
                 <div className="text-gray-dim">

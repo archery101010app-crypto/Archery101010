@@ -262,26 +262,20 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     // Helper to update our own connection status in Firestore
     const updateOurStatus = async (connected: boolean) => {
       try {
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          if (config.rival.uid === "RIV-FRIEND-PLAYER") {
-            // We are creator
-            await setDoc(docRef, {
-              ...data,
-              creatorConnected: connected,
-              creatorConnectedAt: connected ? Date.now() : data.creatorConnectedAt,
-              updatedAt: Date.now()
-            });
-          } else {
-            // We are player
-            await setDoc(docRef, {
-              ...data,
-              playerConnected: connected,
-              playerConnectedAt: connected ? Date.now() : data.playerConnectedAt,
-              updatedAt: Date.now()
-            });
-          }
+        if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+          // We are creator
+          await updateDoc(docRef, {
+            creatorConnected: connected,
+            creatorConnectedAt: connected ? Date.now() : Date.now(),
+            updatedAt: Date.now()
+          });
+        } else {
+          // We are player
+          await updateDoc(docRef, {
+            playerConnected: connected,
+            playerConnectedAt: connected ? Date.now() : Date.now(),
+            updatedAt: Date.now()
+          });
         }
       } catch (err) {
         console.error("Error updating connection status in Firestore:", err);
@@ -339,24 +333,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isFriendDuel || !config.id) return;
     try {
       const docRef = doc(db, "active_duels", config.id);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        if (config.rival.uid === "RIV-FRIEND-PLAYER") {
-          // We are creator
-          await setDoc(docRef, {
-            ...data,
-            creatorReady: ready,
-            updatedAt: Date.now()
-          });
-        } else {
-          // We are player
-          await setDoc(docRef, {
-            ...data,
-            playerReady: ready,
-            updatedAt: Date.now()
-          });
-        }
+      if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+        // We are creator
+        await updateDoc(docRef, {
+          creatorReady: ready,
+          updatedAt: Date.now()
+        });
+      } else {
+        // We are player
+        await updateDoc(docRef, {
+          playerReady: ready,
+          updatedAt: Date.now()
+        });
       }
     } catch (err) {
       console.error("Error updating ready state in Firestore:", err);

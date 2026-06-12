@@ -7,7 +7,7 @@ import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2 } fro
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -152,7 +152,35 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       try {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
         // Exclude the current user
-        const others = list.filter((u) => u.uid !== user.uid);
+        let others = list.filter((u) => u.uid !== user.uid);
+        if (others.length === 0) {
+          others = RIVAL_LIST.map((riv) => ({
+            uid: riv.uid,
+            email: `${riv.uid.toLowerCase()}@archery101010.com`,
+            fullName: riv.fullName,
+            birthDate: "1990-01-01",
+            country: riv.country,
+            gender: "M",
+            city: "San José",
+            bowConfig: {
+              type: riv.bowConfig.type as "Recurve" | "Compound" | "Barebow",
+              brand: riv.bowConfig.brand,
+              model: riv.bowConfig.model,
+              poundage: riv.bowConfig.poundage,
+              defaultDistance: riv.bowConfig.defaultDistance
+            },
+            physicalData: { height: 180, weight: 75, dominantEye: "R" as const, dominantHand: "R" as const },
+            clubId: "CLB-MOCK",
+            clubName: riv.clubName,
+            clubLogo: riv.clubLogo,
+            clubCountry: riv.clubCountry,
+            role: "archer",
+            plan: "FREE",
+            isClubCreator: false,
+            profileSetupCompleted: true,
+            nickname: riv.fullName.split(" ")[0].toLowerCase()
+          }));
+        }
         setRealUsers(others);
       } catch (err) {
         console.error("Error loading real users for duels:", err);
@@ -298,8 +326,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         const data = docSnap.data();
         
         // Update document to connect player
-        await setDoc(docRef, {
-          ...data,
+        await updateDoc(docRef, {
           playerUid: user.uid,
           playerName: user.fullName,
           playerConnected: true,

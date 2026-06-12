@@ -39,8 +39,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   // Form Fields
   const [fullName, setFullName] = useState(user.fullName);
+  const [nickname, setNickname] = useState(user.nickname || "");
   const [birthDate, setBirthDate] = useState(user.birthDate);
   const [country, setCountry] = useState(user.country);
+  const [city, setCity] = useState(user.city || "");
   const [gender, setGender] = useState(user.gender);
 
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig?.type || "Barebow");
@@ -249,7 +251,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     try {
       const updated = await updateProfile(user.uid, {
         fullName,
+        nickname,
         birthDate,
+        city,
         country,
         gender
       });
@@ -422,8 +426,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         uid: "USR-DEMO-MEMBER-ADULT",
         email: "coach.ayudante@archery101010.com",
         fullName: "Entrenador Asistente",
+        nickname: "ayudante",
         birthDate: "1990-01-01",
         country: "CR",
+        city: "San José",
         gender: "M",
         bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 44, defaultDistance: 70 },
         physicalData: { height: 185, weight: 80, dominantEye: "R", dominantHand: "R" },
@@ -553,19 +559,37 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         {editPersonal ? (
           <div className="flex flex-col gap-3 mt-1">
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-              placeholder={t("fullName")}
-            />
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none uppercase"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                placeholder={t("fullName")}
+              />
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                placeholder={t("nickname")}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none uppercase"
+              />
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                placeholder={t("city")}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={country}
@@ -594,8 +618,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <span className="text-white font-bold">{user.fullName}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
+              <span className="text-gray-dim">Apodo:</span>
+              <span className="text-white font-bold">{user.nickname || "-"}</span>
+            </div>
+            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Nacimiento:</span>
               <span className="text-white font-bold">{user.birthDate}</span>
+            </div>
+            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
+              <span className="text-gray-dim">Ciudad:</span>
+              <span className="text-white font-bold">{user.city || "-"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">País:</span>

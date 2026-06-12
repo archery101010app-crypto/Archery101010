@@ -29,7 +29,7 @@ export default function CoachAthletesTab({ athletes, onViewAthlete, sessions }: 
   const filteredAthletes = athletes.filter(ath => {
     const matchesSearch = ath.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           ath.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBow = bowFilter === "ALL" || ath.bowConfig.type === bowFilter;
+    const matchesBow = bowFilter === "ALL" || ath.bowConfig?.type === bowFilter;
     return matchesSearch && matchesBow;
   });
 
@@ -90,7 +90,7 @@ export default function CoachAthletesTab({ athletes, onViewAthlete, sessions }: 
                       {ath.fullName}
                     </span>
                     <span className="text-[9px] text-gray-dim mt-0.5">
-                      {ath.bowConfig.type} · {ath.bowConfig.poundage}# · {stats.count} prácticas
+                      {ath.bowConfig?.type || "Barebow"} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {stats.count} prácticas
                     </span>
                   </div>
                 </div>

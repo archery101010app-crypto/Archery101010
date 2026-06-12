@@ -166,17 +166,8 @@ body {
 }
 
 /* --- Overlay Clock colors --- */
-#clock_fs[data-fase="entrada"] {
-  background: radial-gradient(circle at center, #0c2f0c 0%, #041404 100%);
-}
-#clock_fs[data-fase="tiro"] {
-  background: radial-gradient(circle at center, #0b1526 0%, #03060c 100%);
-}
-#clock_fs[data-fase="warn"] {
-  background: radial-gradient(circle at center, #362203 0%, #170f01 100%);
-}
-#clock_fs[data-fase="over"] {
-  background: radial-gradient(circle at center, #3b0b0b 0%, #1a0404 100%);
+#clock_fs {
+  background: #000000 !important;
 }
 
 /* --- Light Contrast / White Background Mode Overrides --- */

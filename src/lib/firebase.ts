@@ -32,21 +32,13 @@ const firebaseConfigs = {
 };
 
 // Select configuration based on environment and current URL
-let activeConfig = firebaseConfigs.mock;
+let activeConfig = firebaseConfigs.prod; // Default to production
 
 if (typeof window !== "undefined") {
   const host = window.location.hostname;
-  if (host.includes("archery101010-tst") || host.includes("101010-tst")) {
-    activeConfig = firebaseConfigs.test;
-  } else if (
-    host.includes("archery101010-prd") || 
-    host.includes("101010-prd") || 
-    host === "archery101010.web.app" || 
-    host === "archery101010.firebaseapp.com"
-  ) {
-    activeConfig = firebaseConfigs.prod;
-  } else {
-    // If running locally but environment variables are set, use them
+  const isLocalhost = host === "localhost" || host === "127.0.0.1";
+  
+  if (isLocalhost) {
     const envKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (envKey && !envKey.includes("mock-api-key")) {
       activeConfig = {
@@ -57,7 +49,13 @@ if (typeof window !== "undefined") {
         messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:1234567890:web:abcdef123456"
       };
+    } else {
+      activeConfig = firebaseConfigs.mock;
     }
+  } else if (host.includes("archery101010-tst") || host.includes("101010-tst") || host.includes("tst")) {
+    activeConfig = firebaseConfigs.test;
+  } else {
+    activeConfig = firebaseConfigs.prod;
   }
 } else {
   // Server-side (SSR) fallback

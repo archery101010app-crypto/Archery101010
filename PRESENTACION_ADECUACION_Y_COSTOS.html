@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presentación: Lanzamiento desde Cero, Costos y Retorno - Archery 101010</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              black: '#0A0A0A',
+              card: '#141414',
+              cyan: '#00E5FF',
+              gold: '#FFBF00',
+              red: '#EF4444',
+              gray: '#8E8E93'
+            }
+          },
+          boxShadow: {
+            'glow-cyan': '0 0 20px rgba(0, 229, 255, 0.15)',
+            'glow-gold': '0 0 20px rgba(255, 191, 0, 0.15)',
+            'glow-red': '0 0 20px rgba(239, 68, 68, 0.15)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0A0A0A;
+      color: #F3F4F6;
+    }
+    .font-display {
+      font-family: 'Outfit', sans-serif;
+    }
+    .slide {
+      display: none;
+      min-height: calc(100vh - 140px);
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+    .slide.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Desktop constraint, mobile scrollable */
+    @media (min-width: 768px) {
+      body {
+        overflow: hidden;
+        height: 100vh;
+      }
+      .slide {
+        height: calc(100vh - 140px);
+      }
+    }
+    @media (max-width: 767px) {
+      body {
+        overflow-y: auto;
+      }
+      .slide {
+        min-height: auto;
+        padding-top: 2rem;
+        padding-bottom: 5rem;
+      }
+    }
+  </style>
+</head>
+<body class="flex flex-col justify-between min-h-screen md:h-screen">
+
+  <!-- Barra de progreso superior -->
+  <div class="w-full bg-neutral-900 h-1.5 fixed top-0 z-50">
+    <div id="progress-bar" class="bg-brand-cyan h-full w-0 transition-all duration-300"></div>
+  </div>
+
+  <!-- Contenedor Principal de Slides -->
+  <main class="flex-grow flex items-center justify-center px-4 md:px-12 py-6 md:py-10 relative">
+    
+    <!-- SLIDE 1: PORTADA -->
+    <section id="slide-1" class="slide active flex-col justify-center items-start max-w-5xl w-full">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest font-display">
+          Lanzamiento desde Cero
+        </span>
+        <span class="text-brand-gray text-xs">v2.3.0</span>
+      </div>
+      
+      <div class="border-l-4 border-brand-cyan pl-6 md:pl-8 mb-8">
+        <h1 class="text-5xl md:text-7xl font-black font-display tracking-tight text-white mb-4">
+          ARCHERY <span class="text-brand-cyan">101010</span>
+        </h1>
+        <p class="text-xl md:text-2xl font-bold font-display text-white/90">
+          Ecosistema Comercial "Cero Costo", Tiendas y Funcionamiento Offline
+        </p>
+      </div>
+      
+      <p class="text-base md:text-lg text-brand-gray max-w-3xl leading-relaxed mb-8">
+        Estrategia comercial y operativa para lanzar con imagen corporativa premium a costo cero. Cómo el software funciona offline en el campo de tiro y se sincroniza sin tarifas mensuales abusivas.
+      </p>
+
+      <div class="flex items-center gap-4 text-xs text-brand-gray">
+        <span>Preparado para: José Angel</span>
+        <span>•</span>
+        <span>Junio 2026</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: FILOSOFÍA CERO COSTO -->
+    <section id="slide-2" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-6 md:mb-8">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Estrategia de Arranque</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Filosofía "Cero Costo" Profesional</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6 w-full">
+        <!-- Identidad Profesional -->
+        <div class="bg-brand-card p-6 md:p-8 rounded-3xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between">
+          <div>
+            <h3 class="text-lg md:text-xl font-bold font-display text-brand-cyan mb-4">💎 Imagen Corporativa Premium</h3>
+            <p class="text-xs text-gray-300 leading-relaxed mb-4">
+              Iniciar con $0 USD de presupuesto operativo no significa lucir amateur. Podemos proyectar la imagen de una startup tecnológica madura configurando canales de comunicación y hosting bajo tu propio dominio corporativo.
+            </p>
+            <ul class="space-y-2 text-xs text-brand-gray">
+              <li>• Dominio limpio <strong>archery101010.com</strong> por solo $10/año.</li>
+              <li>• Correo oficial para clientes: <code>info@archery101010.com</code>.</li>
+              <li>• Canal de soporte verificado con WhatsApp Business.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Hosting y Escalabilidad gratis -->
+        <div class="bg-brand-card p-6 md:p-8 rounded-3xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between">
+          <div>
+            <h3 class="text-lg md:text-xl font-bold font-display text-brand-cyan mb-4">🚀 Servidores Gratuitos con Nombre Propio</h3>
+            <p class="text-xs text-gray-300 leading-relaxed mb-4">
+              Enlazar un dominio personalizado a plataformas de hosting modernas como **Firebase Hosting** o **Vercel** es **100% GRATIS** e incluye seguridad SSL ilimitada. 
+            </p>
+            <ul class="space-y-2 text-xs text-brand-gray">
+              <li>• Cero pago mensual por alojamiento web.</li>
+              <li>• Certificados de seguridad SSL (candado verde) automáticos y gratuitos.</li>
+              <li>• CDN global (servidor ultra-rápido) sin costo usando la capa gratuita de Cloudflare.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: SUITE DE HERRAMIENTAS $0 USD -->
+    <section id="slide-3" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-6">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Herramientas Recomendadas</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">La Suite para Startups a Costo Cero</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+        <!-- Zoho Mail -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-sm font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>📧</span> Zoho Mail / ImprovMX
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed mb-2">
+            Permiten hospedar correos corporativos en tu dominio de forma gratuita. Puedes tener hasta 5 correos (ej: ventas@, soporte@) sin pagar Google Workspace.
+          </p>
+          <span class="text-[10px] text-brand-cyan font-bold">Costo: $0 USD / mes</span>
+        </div>
+
+        <!-- WhatsApp Business -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-sm font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>💬</span> WhatsApp Business App
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed mb-2">
+            Instalando la aplicación oficial en un teléfono exclusivo. Te permite configurar respuestas automáticas, catálogos de planes y perfiles de marca gratis.
+          </p>
+          <span class="text-[10px] text-brand-cyan font-bold">Costo: $0 USD / mes</span>
+        </div>
+
+        <!-- Cloudflare CDN -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-sm font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>🛡️</span> Cloudflare (Plan Free)
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed mb-2">
+            Protege tus servidores contra ataques de denegación de servicio (DDoS), administra los DNS de tu dominio y acelera la carga en celulares de usuarios.
+          </p>
+          <span class="text-[10px] text-brand-cyan font-bold">Costo: $0 USD / mes</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: PROCEDIMIENTO OPERATIVO PASO A PASO -->
+    <section id="slide-4" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-4">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Roadmap Operativo</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Paso a Paso: Identidad y Servidores Gratis</h2>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full mt-2">
+        <!-- Paso 1 -->
+        <div class="bg-brand-card p-4 rounded-xl border border-white/5">
+          <div class="text-brand-cyan font-display font-black text-xl mb-1">01</div>
+          <h4 class="text-xs font-bold text-white uppercase mb-2">Comprar Dominio</h4>
+          <p class="text-[10px] text-brand-gray leading-relaxed">
+            Comprar <strong>archery101010.com</strong> en Namecheap o Cloudflare Registrar por <strong>$10 USD al año</strong>. Es el único ancla obligatorio.
+          </p>
+        </div>
+
+        <!-- Paso 2 -->
+        <div class="bg-brand-card p-4 rounded-xl border border-white/5">
+          <div class="text-brand-cyan font-display font-black text-xl mb-1">02</div>
+          <h4 class="text-xs font-bold text-white uppercase mb-2">Correo Gratis</h4>
+          <p class="text-[10px] text-brand-gray leading-relaxed">
+            Registrar cuenta en <strong>Zoho Mail Free</strong>. Vincular el dominio y crear casillas profesionales como <code>info@archery101010.com</code>.
+          </p>
+        </div>
+
+        <!-- Paso 3 -->
+        <div class="bg-brand-card p-4 rounded-xl border border-white/5">
+          <div class="text-brand-cyan font-display font-black text-xl mb-1">03</div>
+          <h4 class="text-xs font-bold text-white uppercase mb-2">WhatsApp Business</h4>
+          <p class="text-[10px] text-brand-gray leading-relaxed">
+            Descargar la app comercial, cargar logo, catálogo de planes y vincular correo y web oficiales para atención inmediata.
+          </p>
+        </div>
+
+        <!-- Paso 4 -->
+        <div class="bg-brand-card p-4 rounded-xl border border-white/5">
+          <div class="text-brand-cyan font-display font-black text-xl mb-1">04</div>
+          <h4 class="text-xs font-bold text-white uppercase mb-2">Enlazar Servidor</h4>
+          <p class="text-[10px] text-brand-gray leading-relaxed">
+            Vincular dominio en Firebase Hosting. Apuntar las IPs en Cloudflare DNS. Obtienes hosting y SSL gratis bajo tu propio nombre.
+          </p>
+        </div>
+
+        <!-- Paso 5 -->
+        <div class="bg-brand-card p-4 rounded-xl border border-white/5">
+          <div class="text-brand-cyan font-display font-black text-xl mb-1">05</div>
+          <h4 class="text-xs font-bold text-white uppercase mb-2">Base de Datos $0</h4>
+          <p class="text-[10px] text-brand-gray leading-relaxed">
+            Optimizar código en <code>realtimeSync.ts</code> y habilitar base local para no exceder las 50k lecturas gratis diarias.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: SIMULADOR INTERACTIVO OFFLINE-FIRST -->
+    <section id="slide-5" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-4">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Demostración Operativa</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Operación Offline-First en Campo</h2>
+        <p class="text-xs text-brand-gray">Prueba a cambiar el estado de la señal para ver cómo funciona el negocio en el campo de tiro:</p>
+      </div>
+
+      <!-- Simulator Layout -->
+      <div class="grid md:grid-cols-5 gap-6 items-stretch w-full mt-2">
+        <!-- Control Panel -->
+        <div class="md:col-span-2 bg-brand-card p-5 md:p-6 rounded-2xl border border-white/5 flex flex-col justify-between">
+          <div>
+            <h3 class="text-xs md:text-sm font-bold text-white uppercase tracking-wider mb-4">📡 Señal en Campo de Tiro</h3>
+            <div class="flex flex-col gap-3">
+              <button id="sim-offline-btn" class="w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-brand-red/30 bg-brand-red/10 text-brand-red shadow-glow-red">
+                ❌ Sin Señal (Modo Campo)
+              </button>
+              <button id="sim-online-btn" class="w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-white/5 bg-neutral-900 text-brand-gray hover:text-white hover:border-brand-cyan/20">
+                🌐 Con Señal (Retorno)
+              </button>
+            </div>
+          </div>
+          
+          <div class="mt-6 border-t border-white/5 pt-4 text-[10px] text-brand-gray leading-relaxed hidden md:block">
+            *Nuestra base de datos local (IndexedDB) retiene las flechas y puntuaciones de forma síncrona en el teléfono.
+          </div>
+        </div>
+
+        <!-- Display Panel -->
+        <div class="md:col-span-3 bg-brand-card p-5 md:p-6 rounded-2xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between relative overflow-hidden">
+          <div>
+            <div class="flex justify-between items-center mb-4">
+              <h3 id="sim-status-title" class="text-sm md:text-base font-bold text-brand-red">Entrenamiento Offline Activo</h3>
+              <span id="sim-status-badge" class="text-[9px] font-bold uppercase bg-brand-red/15 text-brand-red px-2 py-0.5 rounded border border-brand-red/20">Modo Local</span>
+            </div>
+            
+            <p id="sim-status-desc" class="text-xs text-gray-300 leading-relaxed min-h-[70px]">
+              El arquero está disparando y anotando. La app lee y escribe instantáneamente en la base de datos local del teléfono (IndexedDB). Velocidad instantánea (UX latencia cero) y consumo de datos del servidor: **$0.00 USD**.
+            </p>
+          </div>
+
+          <!-- Mini graphic representation -->
+          <div class="bg-black/60 p-4 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+            <div class="text-center">
+              <span class="text-lg">📱</span>
+              <span class="text-[8px] font-bold text-white block mt-0.5">Celular del Arquero</span>
+            </div>
+            <div class="flex-grow mx-4 border-t border-dashed border-neutral-700 h-0 flex items-center justify-center">
+              <span id="sim-flow-arrow" class="text-brand-red text-xs transition duration-300">❌ Bloqueado</span>
+            </div>
+            <div class="text-center">
+              <span class="text-lg">☁️</span>
+              <span class="text-[8px] font-bold text-white block mt-0.5">Base Firestore</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: REQUISITOS OBLIGATORIOS TIENDAS -->
+    <section id="slide-6" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-6">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Tiendas de Apps</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Requisitos Obligatorios para Publicación</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
+        <!-- Requisito 1 -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-base font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>⚖️</span> Políticas y Términos Legales
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed">
+            Es obligatorio para ambas tiendas contar con una URL pública con las Políticas de Privacidad y Términos de Servicio. Generados mediante plataformas online gratuitas bajo tu dominio corporativo.
+          </p>
+        </div>
+
+        <!-- Requisito 2 -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-base font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>⚙️</span> Eliminación de Cuenta y Datos
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed">
+            Las directivas exigen que si un usuario se registra en la app, debe contar con un botón dentro del perfil para borrar su cuenta y eliminar sus datos de la base de datos de manera definitiva.
+          </p>
+        </div>
+
+        <!-- Requisito 3 -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-base font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>🎨</span> Íconos y Splash Screen Adaptativos
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed">
+            Reemplazar los logos rectangulares por assets cuadrados e íconos adaptativos maskables en múltiples resoluciones (192px, 512px y 1024px) para evitar distorsiones en las tiendas de Android e iOS.
+          </p>
+        </div>
+
+        <!-- Requisito 4 -->
+        <div class="bg-brand-card p-5 rounded-2xl border border-white/5 hover:border-brand-cyan/30 transition duration-300">
+          <h3 class="text-base font-bold font-display text-white flex items-center gap-2 mb-2">
+            <span>🔒</span> Seguridad de Credenciales
+          </h3>
+          <p class="text-xs text-brand-gray leading-relaxed">
+            Eliminar del código expuesto todas las API Keys de Firebase y credenciales de administrador general, moviéndolas a variables de entorno (.env) seguras.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: COSTOS DE PUBLICACIÓN Y LICENCIAS -->
+    <section id="slide-7" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-6">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Presupuesto Inicial</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Costos de Tiendas y Licencias</h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 w-full">
+        <!-- Licencias de Tienda -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-cyan/20 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-cyan mb-3">🔑 Cuentas de Desarrollador</h3>
+            <ul class="text-xs text-brand-gray space-y-2 leading-relaxed">
+              <li class="flex justify-between border-b border-white/5 pb-2">
+                <span>Google Play (Único):</span>
+                <span class="text-white font-bold">$25 USD</span>
+              </li>
+              <li class="flex justify-between border-b border-white/5 pb-2">
+                <span>Apple Store (Anual):</span>
+                <span class="text-white font-bold">$99 USD</span>
+              </li>
+              <li class="flex justify-between pt-1">
+                <span>Total Año 1:</span>
+                <span class="text-brand-cyan font-bold">$124 USD</span>
+              </li>
+            </ul>
+          </div>
+          <p class="text-[10px] text-brand-gray mt-4">Obligatorios para poseer y gestionar las fichas bajo tu marca.</p>
+        </div>
+
+        <!-- Setup Administrativo -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-cyan/20 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-cyan mb-3">⚖️ Legal y Diseño</h3>
+            <ul class="text-xs text-brand-gray space-y-2 leading-relaxed">
+              <li class="flex justify-between border-b border-white/5 pb-2">
+                <span>Políticas de Privacidad:</span>
+                <span class="text-white font-bold">$0 USD (Free Gen)</span>
+              </li>
+              <li class="flex justify-between border-b border-white/5 pb-2">
+                <span>Diseños publicitario:</span>
+                <span class="text-white font-bold">$0 USD (Canva Free)</span>
+              </li>
+              <li class="flex justify-between pt-1">
+                <span>Total Único:</span>
+                <span class="text-brand-cyan font-bold">$0 USD</span>
+              </li>
+            </ul>
+          </div>
+          <p class="text-[10px] text-brand-gray mt-4">Utilizando plantillas legales estandarizadas y herramientas de diseño web gratuitas.</p>
+        </div>
+
+        <!-- Comisiones de Pasarela -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-gold/20 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-gold mb-3">💰 Comisión In-App Purchases</h3>
+            <p class="text-xs text-brand-gray leading-relaxed mb-4">
+              Apple y Google exigen el cobro de suscripciones por compras integradas nativas. <strong>Rechazarán PayPal o Stripe para membresías.</strong>
+            </p>
+            <div class="bg-black/50 p-2.5 rounded-xl border border-white/5 text-[11px] text-brand-gold font-bold text-center">
+              Comisión: 15% por cada venta
+            </div>
+          </div>
+          <p class="text-[10px] text-brand-gray mt-2">Bajo el programa de Pequeños Negocios (compras menores a $1M/año).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: PROYECCIÓN DE COSTOS -->
+    <section id="slide-8" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-4">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Análisis Financiero</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Evolución de Costos Firebase</h2>
+        <p class="text-xs text-brand-gray mt-1">Crecimiento estimado a razón de +1,000 usuarios registrados mensuales.</p>
+      </div>
+
+      <div class="overflow-x-auto w-full rounded-2xl border border-white/5 bg-brand-card">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-white/5 bg-black/40 text-brand-cyan font-display font-semibold">
+              <th class="p-3.5 text-center">Período</th>
+              <th class="p-3.5 text-center">Usuarios Registrados</th>
+              <th class="p-3.5 text-center">Activos Diarios (DAU)</th>
+              <th class="p-3.5 text-center text-brand-red">Costo Actual (Sin Filtros)</th>
+              <th class="p-3.5 text-center text-brand-cyan">Costo Optimizado (Con Filtros)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5 text-gray-300">
+            <tr>
+              <td class="p-3.5 font-bold text-center">Mes 1</td>
+              <td class="p-3.5 text-center">1,000</td>
+              <td class="p-3.5 text-center">250</td>
+              <td class="p-3.5 text-center text-brand-red font-semibold">$19 USD</td>
+              <td class="p-3.5 text-center text-brand-cyan font-semibold">$0 USD (Plan Gratis)</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-bold text-center">Mes 3</td>
+              <td class="p-3.5 text-center">3,000</td>
+              <td class="p-3.5 text-center">750</td>
+              <td class="p-3.5 text-center text-brand-red font-semibold">$170 USD</td>
+              <td class="p-3.5 text-center text-brand-cyan font-semibold">$3 USD</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-bold text-center">Mes 6</td>
+              <td class="p-3.5 text-center">6,000</td>
+              <td class="p-3.5 text-center">1,500</td>
+              <td class="p-3.5 text-center text-brand-red font-semibold">$851 USD</td>
+              <td class="p-3.5 text-center text-brand-cyan font-semibold">$7 USD</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-bold text-center">Mes 9</td>
+              <td class="p-3.5 text-center">9,000</td>
+              <td class="p-3.5 text-center">2,250</td>
+              <td class="p-3.5 text-center text-brand-red font-semibold">$2,280 USD</td>
+              <td class="p-3.5 text-center text-brand-cyan font-semibold">$11 USD</td>
+            </tr>
+            <tr class="bg-brand-cyan/5">
+              <td class="p-3.5 font-bold text-center text-white">Mes 12</td>
+              <td class="p-3.5 text-center text-white">12,000</td>
+              <td class="p-3.5 text-center text-white">3,000</td>
+              <td class="p-3.5 text-center text-brand-red font-extrabold">$4,134 USD</td>
+              <td class="p-3.5 text-center text-brand-cyan font-extrabold">$16 USD</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="p-3 rounded-xl border border-brand-red/20 bg-brand-red/5 text-brand-red">
+          ⚠️ <strong>Costo Anual Firebase Sin Optimizar:</strong> ~$18,000 USD.
+        </div>
+        <div class="p-3 rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 text-brand-cyan">
+          🚀 <strong>Costo Anual Firebase Optimizado:</strong> ~$70 USD. Ahorro inmediato de un 99.5%.
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 9: RETORNO DE INVERSIÓN (ROI) -->
+    <section id="slide-9" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-6">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Viabilidad Comercial</span>
+        <h2 class="text-2xl md:text-3xl font-extrabold font-display text-white mt-1">Estructura Financiera Neta (Mes 12)</h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 w-full">
+        <!-- Ingresos Brutos -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-white/5 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-cyan mb-2">💵 Ingreso Bruto</h3>
+            <p class="text-xs text-brand-gray mb-4">Basado en 12,000 usuarios con una conversión conservadora del 5% a la suscripción PRO:</p>
+            <div class="space-y-2">
+              <div class="flex justify-between border-b border-white/5 pb-1.5 text-xs">
+                <span>Membresías PRO:</span>
+                <span class="text-white font-bold">600 suscriptores</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-1.5 text-xs">
+                <span>Precio unitario:</span>
+                <span class="text-white font-bold">$4.99 USD / mes</span>
+              </div>
+              <div class="flex justify-between pt-1 text-sm font-bold text-brand-cyan">
+                <span>Total Bruto:</span>
+                <span>$2,994 USD / mes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gastos Prorrateados -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-white/5 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-red mb-2">💸 Costos de Operación</h3>
+            <p class="text-xs text-brand-gray mb-4">Gasto mensual de mantenimiento e infraestructura optimizada:</p>
+            <div class="space-y-2">
+              <div class="flex justify-between border-b border-white/5 pb-1.5 text-xs">
+                <span>Comisión Apple/Google (15%):</span>
+                <span class="text-white font-bold">-$449.10 USD</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-1.5 text-xs">
+                <span>Firebase Servidores (Optim):</span>
+                <span class="text-white font-bold">-$16.00 USD</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-1.5 text-xs">
+                <span>Licencia Apple ($99/12):</span>
+                <span class="text-white font-bold">-$8.25 USD</span>
+              </div>
+              <div class="flex justify-between pt-1 text-sm font-bold text-brand-red">
+                <span>Total Gastos:</span>
+                <span>-$473.35 USD</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ingreso Neto -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-brand-cyan mb-2">📈 Ganancia Neta</h3>
+            <p class="text-xs text-brand-gray mb-6">El margen neto de la aplicación se mantiene en niveles sumamente altos gracias al bajo costo de servidor:</p>
+            <div class="text-center bg-black/60 p-4 rounded-xl border border-white/5">
+              <span class="text-[10px] text-brand-gray uppercase tracking-widest block mb-1">Ingreso Neto Mensual</span>
+              <span class="text-2xl font-black text-brand-cyan">$2,520.65 USD</span>
+            </div>
+          </div>
+          <div class="text-[11px] text-center font-bold text-white bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
+            Margen de Ganancia Neto: 84.2%
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 10: PLAN DE ACCIÓN -->
+    <section id="slide-10" class="slide flex-col justify-center max-w-6xl w-full">
+      <div class="mb-8">
+        <span class="text-brand-cyan text-xs font-bold uppercase tracking-widest font-display">Hoja de Ruta</span>
+        <h2 class="text-3xl font-extrabold font-display text-white mt-1">Próximos Pasos de Negocio</h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 w-full">
+        <!-- Paso 1 -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-brand-cyan uppercase tracking-wider mb-2">Paso 1</div>
+            <h3 class="text-base font-bold font-display text-white mb-4">🔐 Seguridad y Entorno</h3>
+            <ul class="text-xs text-brand-gray space-y-2">
+              <li>• Ocultar API Keys en .env</li>
+              <li>• Quitar credenciales hardcoded</li>
+              <li>• Aplicar reglas Firestore restrictivas</li>
+            </ul>
+          </div>
+          <span class="text-[10px] text-brand-cyan bg-brand-cyan/10 px-2 py-1 rounded-full border border-brand-cyan/25 text-center mt-6 uppercase font-bold tracking-wider">Hacer de Inmediato</span>
+        </div>
+
+        <!-- Paso 2 -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-cyan/20 shadow-glow-cyan flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-brand-cyan uppercase tracking-wider mb-2">Paso 2</div>
+            <h3 class="text-base font-bold font-display text-white mb-4">⚡ Optimizar Consultas</h3>
+            <ul class="text-xs text-brand-gray space-y-2">
+              <li>• Filtrar onSnapshot por clubId</li>
+              <li>• Habilitar persistencia de caché local</li>
+              <li>• Resolver bug de calendario (events)</li>
+            </ul>
+          </div>
+          <span class="text-[10px] text-brand-cyan bg-brand-cyan/10 px-2 py-1 rounded-full border border-brand-cyan/25 text-center mt-6 uppercase font-bold tracking-wider">Hacer esta semana</span>
+        </div>
+
+        <!-- Paso 3 -->
+        <div class="bg-brand-card p-6 rounded-2xl border border-brand-gold/20 shadow-glow-gold flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-brand-gold uppercase tracking-wider mb-2">Paso 3</div>
+            <h3 class="text-base font-bold font-display text-white mb-4">🚀 Lanzamiento en Tiendas</h3>
+            <ul class="text-xs text-brand-gray space-y-2">
+              <li>• Subir a Google Play Store primero (TWA)</li>
+              <li>• Crear páginas de Políticas y Términos</li>
+              <li>• Envolver para iOS con Capacitor</li>
+            </ul>
+          </div>
+          <span class="text-[10px] text-brand-gold bg-brand-gold/10 px-2 py-1 rounded-full border border-brand-gold/25 text-center mt-6 uppercase font-bold tracking-wider">Próximas 3-4 semanas</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Barra de Navegación Inferior -->
+  <footer class="bg-black/80 backdrop-blur-md border-t border-white/5 px-6 md:px-12 py-4 flex items-center justify-between z-40">
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-brand-cyan"></span>
+      <span class="text-xs font-bold font-display tracking-widest text-white">ARCHERY 101010</span>
+    </div>
+    
+    <div class="flex items-center gap-6">
+      <span class="text-xs text-brand-gray" id="slide-indicator">Slide 1 de 10</span>
+      <div class="flex items-center gap-2">
+        <button id="prev-btn" class="p-2 rounded-xl bg-neutral-900 border border-white/5 text-brand-gray hover:text-white transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+        <button id="next-btn" class="p-2 rounded-xl bg-brand-cyan/15 border border-brand-cyan/25 text-brand-cyan hover:bg-brand-cyan/20 transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const indicator = document.getElementById('slide-indicator');
+    const progressBar = document.getElementById('progress-bar');
+    
+    let currentSlide = 1;
+    const totalSlides = slides.length;
+
+    function updateSlides() {
+      slides.forEach((slide, idx) => {
+        if (idx + 1 === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+      
+      // Update buttons
+      prevBtn.disabled = currentSlide === 1;
+      nextBtn.disabled = currentSlide === totalSlides;
+      
+      // Update indicator
+      indicator.textContent = `Slide ${currentSlide} de ${totalSlides}`;
+      
+      // Update progress bar
+      const pct = ((currentSlide) / totalSlides) * 100;
+      progressBar.style.width = `${pct}%`;
+    }
+
+    prevBtn.addEventListener('click', () => {
+      if (currentSlide > 1) {
+        currentSlide--;
+        updateSlides();
+      }
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (currentSlide < totalSlides) {
+        currentSlide++;
+        updateSlides();
+      }
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'Space') {
+        if (currentSlide < totalSlides) {
+          currentSlide++;
+          updateSlides();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (currentSlide > 1) {
+          currentSlide--;
+          updateSlides();
+        }
+      }
+    });
+
+    // Touch events for mobile swiping
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, false);
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+      const threshold = 50; // min distance
+      if (touchEndX < touchStartX - threshold) {
+        // Swiped left -> Next slide
+        if (currentSlide < totalSlides) {
+          currentSlide++;
+          updateSlides();
+        }
+      }
+      if (touchEndX > touchStartX + threshold) {
+        // Swiped right -> Prev slide
+        if (currentSlide > 1) {
+          currentSlide--;
+          updateSlides();
+        }
+      }
+    }
+
+    // Simulator Interactive Logic (Slide 5)
+    const btnOffline = document.getElementById('sim-offline-btn');
+    const btnOnline = document.getElementById('sim-online-btn');
+    const simTitle = document.getElementById('sim-status-title');
+    const simBadge = document.getElementById('sim-status-badge');
+    const simDesc = document.getElementById('sim-status-desc');
+    const simFlow = document.getElementById('sim-flow-arrow');
+
+    btnOffline.addEventListener('click', () => {
+      // Toggle styles
+      btnOffline.className = "w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-brand-red/30 bg-brand-red/10 text-brand-red shadow-glow-red";
+      btnOnline.className = "w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-white/5 bg-neutral-900 text-brand-gray hover:text-white hover:border-brand-cyan/20";
+      
+      // Update Texts
+      simTitle.textContent = "Entrenamiento Offline Activo";
+      simTitle.className = "text-base font-bold text-brand-red";
+      simBadge.textContent = "Modo Local";
+      simBadge.className = "text-[9px] font-bold uppercase bg-brand-red/15 text-brand-red px-2 py-0.5 rounded border border-brand-red/20";
+      simDesc.innerHTML = "El arquero está disparando y anotando en su teléfono. La app escribe de forma instantánea en la base de datos local (<strong>IndexedDB</strong>) sin internet. Velocidad de cero delay e inversión en base de datos: <strong>$0.00 USD</strong>.";
+      simFlow.textContent = "❌ Bloqueado";
+      simFlow.className = "text-brand-red text-xs transition duration-300";
+    });
+
+    btnOnline.addEventListener('click', () => {
+      // Toggle styles
+      btnOnline.className = "w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan shadow-glow-cyan";
+      btnOffline.className = "w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-white/5 bg-neutral-900 text-brand-gray hover:text-white hover:border-brand-red/20";
+      
+      // Update Texts
+      simTitle.textContent = "Sincronización en Segundo Plano";
+      simTitle.className = "text-base font-bold text-brand-cyan";
+      simBadge.textContent = "Modo Nube";
+      simBadge.className = "text-[9px] font-bold uppercase bg-brand-cyan/15 text-brand-cyan px-2 py-0.5 rounded border border-brand-cyan/20";
+      simDesc.innerHTML = "Al recuperar señal de red, la cola de sincronización sube automáticamente los registros a <strong>Firestore Cloud</strong> en segundo plano de manera secuencial y optimizada, permitiendo que el Coach de Tiro con Arco visualice las métricas de inmediato.";
+      simFlow.textContent = "⚡ Sincronizando...";
+      simFlow.className = "text-brand-cyan text-xs transition duration-300 animate-pulse";
+    });
+
+    // Initialize progress bar
+    updateSlides();
+  </script>
+</body>
+</html>

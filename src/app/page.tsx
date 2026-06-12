@@ -14,6 +14,7 @@ import ScoringView from "@/components/scoring/ScoringView";
 import HistoryView from "@/components/history/HistoryView";
 import CalendarView from "@/components/calendar/CalendarView";
 import ProfileView from "@/components/profile/ProfileView";
+import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
 import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
@@ -812,6 +813,14 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Blocking Profile Completion Modal */}
+      {user && (!user.nickname?.trim() || !user.fullName?.trim() || !user.birthDate || !user.city?.trim() || !user.country || !user.gender) && (
+        <ProfileCompletionModal
+          user={user}
+          onComplete={(updatedUser) => setUser(updatedUser)}
+        />
+      )}
 
       {/* Refresh Confirmation Modal */}
       <AnimatePresence>

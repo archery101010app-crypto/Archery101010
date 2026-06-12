@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Pause, Music, Plus, Globe, Check } from "lucide-react";
@@ -29,7 +28,6 @@ const SHARED_PLAYLISTS = [
 ];
 
 export default function SpotifyFloatingPlayer() {
-  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState("37i9dQZF1DX8t6r1AFlv2Y");
   const [userPlaylistUrl, setUserPlaylistUrl] = useState("");

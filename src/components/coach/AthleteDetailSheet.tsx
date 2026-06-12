@@ -150,7 +150,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               {athlete.fullName}
             </h3>
             <p className="text-[10px] text-gray-dim leading-none mt-0.5">
-              {athlete.bowConfig.type} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
+              {athlete.bowConfig?.type || "Barebow"} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
             </p>
           </div>
         </div>
@@ -269,19 +269,19 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-[9px] text-gray-dim block">Tipo de Arco</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig.type}</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.type || "—"}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-dim block">Potencia (Poundage)</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig.poundage} libras</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} libras` : "—"}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-dim block">Marca</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig.brand || "—"}</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.brand || "—"}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-dim block">Modelo</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig.model || "—"}</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.model || "—"}</span>
                   </div>
                 </div>
               </div>
@@ -382,7 +382,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
                                   <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
-                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
+                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig?.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
                                       const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
                                       const presetRings = DIANA_PRESETS[presetType];
                                       
@@ -510,7 +510,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
                                   <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
-                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
+                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig?.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
                                       const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
                                       const presetRings = DIANA_PRESETS[presetType];
                                       

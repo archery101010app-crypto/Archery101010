@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { useSync } from "@/hooks/useSync";
 import { UserProfile } from "@/lib/authService";
 import { Wifi, WifiOff, RefreshCw, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
+import { APP_VERSION } from "@/lib/version";
 
 interface HeaderProps {
   user: UserProfile;
@@ -14,7 +14,6 @@ interface HeaderProps {
 }
 
 export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
-  const { t } = useLanguage();
   const { pendingCount, syncStatus, isSyncing, triggerSync } = useSync();
   const [showStatusTooltip, setShowStatusTooltip] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -73,7 +72,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-yellow-gold">10</span>
           </div>
           <span className="text-cyan-neon/60 text-[10px] font-black tracking-wider pl-0.5">
-            v2.3.0
+            v{APP_VERSION}
           </span>
         </div>
         <span className="text-white/40 text-[9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">

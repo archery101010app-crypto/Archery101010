@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSessions, deleteLocalSession, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, Target, Settings, ChevronDown, Check, Trash2, RotateCcw } from "lucide-react";
+import { ArrowLeft, Target, ChevronDown, Trash2, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SessionConfigViewProps {
@@ -416,7 +416,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas."
                 )}
                 {practiceInfoType === "Volumen" && (
-                  "Acumulación de flechas de alta intensidad. Diseñado para fortalecer resistencia física y consistencia de anclaje. Se enfoca en registrar cantidad de flechas tiradas."
+                  "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión"
                 )}
               </p>
 

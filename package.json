@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "deploy:test": "next build && firebase deploy -P test",
-    "deploy:prod": "next build && firebase deploy -P prod"
+    "deploy:prod": "next build && firebase deploy -P prod",
+    "bump-version": "node scripts/increment-version.js"
   },
   "dependencies": {
     "@paypal/react-paypal-js": "^9.2.0",
