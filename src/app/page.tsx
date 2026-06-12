@@ -57,6 +57,7 @@ export default function Home() {
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
+  const [pendingInvitation, setPendingInvitation] = useState<any | null>(null);
   
   const touchStartRef = React.useRef(0);
   const mainRef = React.useRef<HTMLElement | null>(null);
@@ -164,6 +165,69 @@ export default function Home() {
     }
     initApp();
   }, []);
+ 
+  // Periodic user presence heartbeat to mark user as online in Firestore
+  useEffect(() => {
+    if (!user) return;
+
+    const updatePresence = async () => {
+      try {
+        const { doc, updateDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const docRef = doc(db, "users", user.uid);
+        await updateDoc(docRef, {
+          lastActiveAt: Date.now()
+        });
+      } catch (err) {
+        // Silently catch offline/network errors
+      }
+    };
+
+    updatePresence();
+    const interval = setInterval(updatePresence, 25000);
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Listen for real-time duel invitations directed to the logged-in user
+  useEffect(() => {
+    if (!user) return;
+    const currentUid = user.uid;
+
+    let unsubscribe: () => void = () => {};
+
+    async function initInviteListener() {
+      try {
+        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+
+        const q = query(
+          collection(db, "duel_invitations"),
+          where("receiverUid", "==", currentUid),
+          where("status", "==", "pending")
+        );
+
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          snapshot.forEach((snap) => {
+            const data = snap.data();
+            // Show pending invitation modal
+            setPendingInvitation({
+              id: snap.id,
+              ...data
+            });
+          });
+        });
+      } catch (err) {
+        console.error("Error setting up real-time duel invitation listener:", err);
+      }
+    }
+
+    initInviteListener();
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
 
   // Check active ad campaigns on screen, user, or local database change
   useEffect(() => {
@@ -871,6 +935,104 @@ export default function Home() {
                   className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
                 >
                   Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Invitation Challenge Modal */}
+      <AnimatePresence>
+        {pendingInvitation && (
+          <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-[340px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_50px_rgba(168,85,247,0.15)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 to-indigo-600" />
+              
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto mt-2 animate-pulse">
+                🏆
+              </div>
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  ¡Reto Recibido!
+                </h3>
+                <p className="text-xs text-gray-dim leading-relaxed">
+                  <strong>{pendingInvitation.senderName}</strong> te ha desafiado a un duelo de <strong>{pendingInvitation.bowType}</strong> a <strong>{pendingInvitation.distance}m</strong>.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5 mt-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      const { doc, updateDoc } = await import("firebase/firestore");
+                      const { db } = await import("@/lib/firebase");
+                      // Accept the challenge
+                      const inviteRef = doc(db, "duel_invitations", pendingInvitation.id);
+                      await updateDoc(inviteRef, { status: "accepted" });
+                      
+                      // Also join the duel room in Firestore
+                      const duelRef = doc(db, "active_duels", pendingInvitation.roomCode);
+                      await updateDoc(duelRef, {
+                        playerUid: user.uid,
+                        playerName: user.fullName,
+                        playerConnected: true,
+                        playerConnectedAt: Date.now(),
+                        status: "active",
+                        updatedAt: Date.now()
+                      });
+
+                      // Setup match configuration for Arena
+                      const matchConfig = {
+                        id: pendingInvitation.roomCode,
+                        bowType: pendingInvitation.bowType,
+                        distance: pendingInvitation.distance,
+                        system: pendingInvitation.bowType === "Compound" ? "cumulative" : "set",
+                        rival: {
+                          uid: pendingInvitation.senderUid,
+                          fullName: pendingInvitation.senderName,
+                          country: "CR",
+                          clubName: "Oponente en Línea",
+                          clubLogo: "0",
+                          clubCountry: "CR",
+                          rating: 9.0
+                        }
+                      };
+
+                      setPendingInvitation(null);
+                      setDuelConfig(matchConfig);
+                      setCurrentScreen("MATCHPLAY_ARENA");
+                    } catch (err) {
+                      console.error("Error accepting duel invite:", err);
+                      setPendingInvitation(null);
+                    }
+                  }}
+                  className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-purple hover:brightness-110 active:scale-95 transition"
+                >
+                  Aceptar Desafío
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { doc, updateDoc } = await import("firebase/firestore");
+                      const { db } = await import("@/lib/firebase");
+                      const inviteRef = doc(db, "duel_invitations", pendingInvitation.id);
+                      await updateDoc(inviteRef, { status: "rejected" });
+                    } catch (err) {
+                      console.error("Error rejecting duel invite:", err);
+                    } finally {
+                      setPendingInvitation(null);
+                    }
+                  }}
+                  className="w-full py-3 bg-neutral-900 border border-white/5 text-gray-dim font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition"
+                >
+                  Rechazar
                 </button>
               </div>
             </motion.div>

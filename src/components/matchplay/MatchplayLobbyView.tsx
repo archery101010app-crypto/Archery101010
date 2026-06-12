@@ -107,6 +107,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
   const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("BOT");
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
+  const [sentInvite, setSentInvite] = useState<any | null>(null);
+  const [inviteStatusMessage, setInviteStatusMessage] = useState("");
 
   const handleDeleteDraft = async (id: string) => {
     if (!window.confirm("¿Seguro que deseas eliminar este duelo activo permanentemente?")) {
@@ -152,35 +154,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       try {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
         // Exclude the current user
-        let others = list.filter((u) => u.uid !== user.uid);
-        if (others.length === 0) {
-          others = RIVAL_LIST.map((riv) => ({
-            uid: riv.uid,
-            email: `${riv.uid.toLowerCase()}@archery101010.com`,
-            fullName: riv.fullName,
-            birthDate: "1990-01-01",
-            country: riv.country,
-            gender: "M",
-            city: "San José",
-            bowConfig: {
-              type: riv.bowConfig.type as "Recurve" | "Compound" | "Barebow",
-              brand: riv.bowConfig.brand,
-              model: riv.bowConfig.model,
-              poundage: riv.bowConfig.poundage,
-              defaultDistance: riv.bowConfig.defaultDistance
-            },
-            physicalData: { height: 180, weight: 75, dominantEye: "R" as const, dominantHand: "R" as const },
-            clubId: "CLB-MOCK",
-            clubName: riv.clubName,
-            clubLogo: riv.clubLogo,
-            clubCountry: riv.clubCountry,
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false,
-            profileSetupCompleted: true,
-            nickname: riv.fullName.split(" ")[0].toLowerCase()
-          }));
-        }
+        const others = list.filter((u) => u.uid !== user.uid);
         setRealUsers(others);
       } catch (err) {
         console.error("Error loading real users for duels:", err);
@@ -203,6 +177,116 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     };
   }, [user]);
 
+  // Listen for invitation status updates
+  useEffect(() => {
+    if (!sentInvite) return;
+
+    let unsubscribe: () => void = () => {};
+
+    async function listenToInvite() {
+      try {
+        const { doc, onSnapshot, deleteDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+
+        const inviteRef = doc(db, "duel_invitations", sentInvite.id);
+        unsubscribe = onSnapshot(inviteRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.status === "accepted") {
+              // Challenger transitions to Arena
+              const matchConfig = {
+                id: data.roomCode,
+                bowType: data.bowType,
+                distance: data.distance,
+                system: data.bowType === "Compound" ? "cumulative" : "set",
+                rival: {
+                  uid: data.receiverUid,
+                  fullName: realUsers.find(u => u.uid === data.receiverUid)?.fullName || "Oponente en Línea",
+                  country: "CR",
+                  clubName: "Oponente",
+                  clubLogo: "0",
+                  clubCountry: "CR",
+                  rating: 9.0
+                }
+              };
+              
+              // Clean up invite
+              deleteDoc(inviteRef).catch(() => {});
+              
+              setSentInvite(null);
+              onStartDuel(matchConfig);
+            } else if (data.status === "rejected") {
+              setInviteStatusMessage("El oponente ha rechazado el reto.");
+              setTimeout(() => {
+                setSentInvite(null);
+              }, 3000);
+            }
+          }
+        });
+      } catch (err) {
+        console.error("Error listening to sent invite:", err);
+      }
+    }
+
+    listenToInvite();
+
+    return () => unsubscribe();
+  }, [sentInvite, realUsers]);
+
+  const handleChallengeRealUser = async (rival: any) => {
+    setInviteStatusMessage("Enviando reto...");
+    
+    // Generate matchplay code
+    const code = "MAT-" + Math.random().toString(36).substring(2, 5).toUpperCase() + "-" + Math.random().toString(36).substring(2, 5).toUpperCase();
+    
+    try {
+      const { collection, doc, setDoc } = await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase");
+
+      const inviteId = `INV-${Date.now()}`;
+      
+      const inviteData = {
+        senderUid: user.uid,
+        senderName: user.fullName,
+        receiverUid: rival.uid,
+        bowType: rival.bowConfig.type,
+        distance: rival.bowConfig.defaultDistance,
+        status: "pending",
+        roomCode: code,
+        createdAt: Date.now()
+      };
+
+      // Write invite to Firestore
+      await setDoc(doc(db, "duel_invitations", inviteId), inviteData);
+
+      // Write duel room to Firestore
+      await setDoc(doc(db, "active_duels", code), {
+        id: code,
+        bowType: rival.bowConfig.type,
+        distance: rival.bowConfig.defaultDistance,
+        creatorUid: user.uid,
+        creatorName: user.fullName,
+        creatorConnected: true,
+        creatorConnectedAt: Date.now(),
+        playerUid: rival.uid,
+        playerName: rival.fullName,
+        playerConnected: false,
+        playerConnectedAt: 0,
+        creatorReady: false,
+        playerReady: false,
+        status: "waiting",
+        updatedAt: Date.now()
+      });
+
+      setSentInvite({ id: inviteId, ...inviteData });
+      setInviteStatusMessage(`Esperando a que ${rival.fullName} acepte el reto...`);
+
+    } catch (err) {
+      console.error("Error creating real-time challenge:", err);
+      alert("Error al enviar el reto. Intenta de nuevo.");
+    }
+  };
+
   const containerVariants: any = {
     initial: { opacity: 0 },
     animate: { opacity: 1, transition: { staggerChildren: 0.05 } }
@@ -213,7 +297,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  // Filter rivals using real registered users
+  // Filter rivals: actual registered users who are currently online
   const filteredRivals = realUsers.map((u) => ({
     uid: u.uid,
     fullName: u.fullName,
@@ -221,9 +305,46 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     clubName: u.clubName || "Independiente",
     clubLogo: u.clubLogo || "0",
     clubCountry: u.clubCountry || u.country || "CR",
-    bowConfig: u.bowConfig || { type: "Barebow" as const, brand: "Hoyt", model: "Satori", poundage: 35, defaultDistance: 18 },
+    bowConfig: {
+      type: (u.bowConfig?.type || "Barebow") as "Recurve" | "Compound" | "Barebow",
+      brand: u.bowConfig?.brand || "Hoyt",
+      model: u.bowConfig?.model || "Satori",
+      poundage: u.bowConfig?.poundage || 35,
+      defaultDistance: u.bowConfig?.defaultDistance || 18
+    },
     rating: "9.0",
-    status: "online" as "online" | "busy"
+    status: (u.lastActiveAt && (Date.now() - u.lastActiveAt < 60000)) ? "online" as const : "offline" as const,
+    lastActiveAt: u.lastActiveAt
+  })).filter((riv) => {
+    const matchesSearch = riv.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          riv.clubName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
+    
+    let matchesDist = true;
+    if (distanceFilter !== "ALL") {
+      matchesDist = riv.bowConfig.defaultDistance === Number(distanceFilter);
+    }
+
+    return matchesSearch && matchesBow && matchesDist && riv.status === "online";
+  });
+
+  // Filter practice bots (simulated opponents)
+  const practiceBots = RIVAL_LIST.map((riv) => ({
+    uid: riv.uid,
+    fullName: riv.fullName,
+    country: riv.country,
+    clubName: riv.clubName,
+    clubLogo: riv.clubLogo,
+    clubCountry: riv.clubCountry,
+    bowConfig: {
+      type: riv.bowConfig.type as "Recurve" | "Compound" | "Barebow",
+      brand: riv.bowConfig.brand,
+      model: riv.bowConfig.model,
+      poundage: riv.bowConfig.poundage,
+      defaultDistance: riv.bowConfig.defaultDistance
+    },
+    rating: riv.rating,
+    status: "simulated" as const
   })).filter((riv) => {
     const matchesSearch = riv.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           riv.clubName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -639,86 +760,140 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           </div>
 
           {/* Rivals List */}
-          <div className="flex flex-col gap-2.5 flex-1">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-              <Users size={13} className="text-purple-400" />
-              Arqueros en Línea ({filteredRivals.length})
-            </h4>
+          <div className="flex flex-col gap-5 flex-1 pb-6">
+            
+            {/* Real Online Archers */}
+            <div className="flex flex-col gap-2.5">
+              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
+                Arqueros en Línea ({filteredRivals.length})
+              </h4>
 
-            <motion.div
-              variants={containerVariants}
-              initial="initial"
-              animate="animate"
-              className="flex flex-col gap-2.5"
-            >
-              <AnimatePresence>
-                {filteredRivals.length === 0 ? (
-                  <motion.div
-                    variants={cardVariants}
-                    className="bg-neutral-900/40 border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-2"
-                  >
-                    <ShieldAlert size={20} className="text-gray-dim" />
-                    <p className="text-[10px] text-gray-dim">No se encontraron oponentes con los filtros seleccionados.</p>
-                  </motion.div>
-                ) : (
-                  filteredRivals.map((riv) => {
-                    const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷";
-                    return (
-                      <motion.div
-                        key={riv.uid}
-                        variants={cardVariants}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-purple-500/25 hover:shadow-[0_0_12px_rgba(168,85,247,0.03)] transition-all duration-200"
-                      >
-                        <div className="flex items-center gap-3 w-[70%]">
-                          {/* Avatar with country flag */}
-                          <div className="relative shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-neutral-950 border border-neutral-800 flex items-center justify-center text-white font-black text-xs">
-                              {riv.fullName.substring(0, 2).toUpperCase()}
-                            </div>
-                            <span className="absolute bottom-0 right-0 text-[10px]">{flag}</span>
-                          </div>
-                          
-                          {/* Rival Details */}
-                          <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
-                              <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase shrink-0">
-                                {riv.bowConfig.type}
-                              </span>
+              <motion.div
+                variants={containerVariants}
+                initial="initial"
+                animate="animate"
+                className="flex flex-col gap-2.5"
+              >
+                <AnimatePresence>
+                  {filteredRivals.length === 0 ? (
+                    <motion.div
+                      variants={cardVariants}
+                      className="bg-neutral-900/20 border border-white/[0.03] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
+                    >
+                      <Users size={16} className="text-gray-dim/60" />
+                      <p className="text-[10px] text-gray-dim">No hay otros arqueros en línea en este momento.</p>
+                    </motion.div>
+                  ) : (
+                    filteredRivals.map((riv) => {
+                      const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷";
+                      return (
+                        <motion.div
+                          key={riv.uid}
+                          variants={cardVariants}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-purple-500/25 hover:shadow-[0_0_12px_rgba(168,85,247,0.03)] transition-all duration-200"
+                        >
+                          <div className="flex items-center gap-3 w-[70%]">
+                            <div className="relative shrink-0">
+                              <div className="w-10 h-10 rounded-full bg-neutral-950 border border-neutral-800 flex items-center justify-center text-white font-black text-xs">
+                                {riv.fullName.substring(0, 2).toUpperCase()}
+                              </div>
+                              <span className="absolute bottom-0 right-0 text-[10px]">{flag}</span>
                             </div>
                             
-                            <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim">
-                              <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
-                              <span className="truncate">{riv.clubName}</span>
-                              <span>·</span>
-                              <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                                <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase shrink-0">
+                                  {riv.bowConfig.type}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim">
+                                <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
+                                <span className="truncate">{riv.clubName}</span>
+                                <span>·</span>
+                                <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Retar CTA */}
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-[9px] text-cyan-neon font-black tracking-tight">{riv.rating} Prom.</span>
-                          <button
-                            onClick={() => handleStartSimulatedDuel(riv)}
-                            disabled={riv.status === "busy"}
-                            className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center gap-1 shrink-0 ${
-                              riv.status === "busy"
-                                ? "bg-neutral-950 text-gray-dim border border-white/5 cursor-not-allowed"
-                                : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-glow-purple border border-purple-400/20"
-                            }`}
-                          >
-                            <span>Retar</span>
-                            <Play size={8} className="fill-current" />
-                          </button>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className="text-[9px] text-cyan-neon font-black tracking-tight">Activo ahora</span>
+                            <button
+                              onClick={() => handleChallengeRealUser(riv)}
+                              className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan"
+                            >
+                              Retar
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+
+            {/* Simulated Practice Bots */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 text-gray-dim">
+                🤖 Oponentes de Práctica (Bots)
+              </h4>
+
+              <motion.div
+                variants={containerVariants}
+                initial="initial"
+                animate="animate"
+                className="flex flex-col gap-2.5"
+              >
+                {practiceBots.map((riv) => {
+                  const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷";
+                  return (
+                    <motion.div
+                      key={riv.uid}
+                      variants={cardVariants}
+                      className="bg-neutral-900/30 border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-white/10 transition-all duration-200 opacity-80"
+                    >
+                      <div className="flex items-center gap-3 w-[70%]">
+                        <div className="relative shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-neutral-950 border border-neutral-900 flex items-center justify-center text-gray-400 font-bold text-xs">
+                            {riv.fullName.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span className="absolute bottom-0 right-0 text-[10px] filter grayscale">{flag}</span>
                         </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </AnimatePresence>
-            </motion.div>
+                        
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-300 text-xs font-medium truncate">{riv.fullName}</span>
+                            <span className="text-[7px] px-1 py-0.2 rounded bg-neutral-950 text-gray-500 font-bold uppercase shrink-0">
+                              {riv.bowConfig.type}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim/75">
+                            <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 filter opacity-55" />
+                            <span className="truncate">{riv.clubName}</span>
+                            <span>·</span>
+                            <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[8px] text-gray-dim font-bold tracking-tight">RMS {riv.rating}</span>
+                        <button
+                          onClick={() => handleStartSimulatedDuel(riv)}
+                          className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-neutral-900 border border-white/10 text-gray-dim hover:text-white"
+                        >
+                          Entrenar
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </div>
+
           </div>
         </div>
       )}
@@ -1005,6 +1180,62 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   className="text-[9px] text-gray-dim hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
                 >
                   Cancelar / Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Challenger waiting overlay modal */}
+      <AnimatePresence>
+        {sentInvite && (
+          <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-[320px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_40px_rgba(168,85,247,0.1)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 to-indigo-600" />
+              
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto mt-2 animate-spin [animation-duration:3s]">
+                🎯
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[9px] text-purple-400 font-black tracking-widest uppercase">
+                  Desafío en Proceso
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  Retando Jugador
+                </h3>
+              </div>
+
+              <p className="text-[11px] text-gray-dim leading-relaxed px-2">
+                {inviteStatusMessage}
+              </p>
+
+              <div className="flex flex-col gap-2 mt-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const { doc, deleteDoc } = await import("firebase/firestore");
+                      const { db } = await import("@/lib/firebase");
+                      // Cancel the invitation in Firestore
+                      await deleteDoc(doc(db, "duel_invitations", sentInvite.id));
+                      
+                      // Also clean up the active duel room
+                      await deleteDoc(doc(db, "active_duels", sentInvite.roomCode));
+                    } catch (err) {
+                      console.error("Error cancelling duel invite:", err);
+                    } finally {
+                      setSentInvite(null);
+                    }
+                  }}
+                  className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                >
+                  Cancelar Desafío
                 </button>
               </div>
             </motion.div>

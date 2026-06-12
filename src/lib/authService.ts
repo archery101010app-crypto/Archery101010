@@ -35,6 +35,7 @@ export interface UserProfile {
   clubInviteCode?: string;
   password?: string;
   profileSetupCompleted?: boolean;
+  lastActiveAt?: number;
 }
 
 // Emulates real backend Firebase calls using local DB to support zero-config developer onboarding
@@ -315,9 +316,14 @@ export async function registerUser(
 
 export async function updateProfile(uid: string, updates: Partial<UserProfile>): Promise<UserProfile> {
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-  const index = usersList.findIndex((u) => u.uid === uid);
+  let index = usersList.findIndex((u) => u.uid === uid);
   
   let currentLogged = await getLoggedUser();
+
+  if (index === -1 && currentLogged && currentLogged.uid === uid) {
+    usersList.push(currentLogged);
+    index = usersList.length - 1;
+  }
 
   if (index !== -1) {
     const updatedUser = { ...usersList[index], ...updates, profileSetupCompleted: true };

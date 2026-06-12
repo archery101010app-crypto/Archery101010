@@ -44,8 +44,19 @@ export function startRealtimeSync(currentUserUid: string | null) {
         usersList.push(doc.data() as UserProfile);
       });
 
-      // Save to local simulated_users list
-      await settingsStore.setItem("simulated_users", usersList);
+      // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
+      const localUsers = await settingsStore.getItem<UserProfile[]>("simulated_users") || [];
+      const queue = await getSyncQueue();
+      const pendingUserUids = new Set(queue.filter(q => q.collection === "users").map(q => q.payloadId));
+
+      const mergedList = [...usersList];
+      for (const localU of localUsers) {
+        if (pendingUserUids.has(localU.uid) && !usersList.some(u => u.uid === localU.uid)) {
+          mergedList.push(localU);
+        }
+      }
+
+      await settingsStore.setItem("simulated_users", mergedList);
 
       // Check if currently logged-in user profile has changed remotely
       if (currentUserUid) {

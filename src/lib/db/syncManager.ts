@@ -56,7 +56,7 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
         if (item.operation === "INSERT") {
           await withTimeout(setDoc(docRef, { ...item.payload, updatedAt: Date.now() }), NETWORK_TIMEOUT_MS);
         } else if (item.operation === "UPDATE") {
-          await withTimeout(updateDoc(docRef, { ...item.payload, updatedAt: Date.now() }), NETWORK_TIMEOUT_MS);
+          await withTimeout(setDoc(docRef, { ...item.payload, updatedAt: Date.now() }, { merge: true }), NETWORK_TIMEOUT_MS);
         } else if (item.operation === "DELETE") {
           await withTimeout(deleteDoc(docRef), NETWORK_TIMEOUT_MS);
         }
