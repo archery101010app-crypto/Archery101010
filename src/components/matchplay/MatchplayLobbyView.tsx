@@ -310,8 +310,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   // Filter rivals: actual registered users who are currently online
   const filteredRivals = realUsers.map((u) => ({
-    uid: u.uid,
-    fullName: u.fullName,
+    uid: u.uid || "",
+    fullName: u.fullName || "",
     email: u.email || "",
     country: u.country || "CR",
     clubName: u.clubName || "Independiente",
@@ -325,14 +325,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       defaultDistance: u.bowConfig?.defaultDistance || 18
     },
     rating: "9.0",
-    status: (u.lastActiveAt && (Date.now() - u.lastActiveAt < 60000)) ? "online" as const : "offline" as const,
+    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 300000)) ? "online" as const : "offline" as const,
     lastActiveAt: u.lastActiveAt
   })).filter((riv) => {
     // Exclude mock/demo users from the online list
     if (isMockUser(riv.uid, riv.email, riv.fullName)) return false;
 
-    const matchesSearch = riv.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          riv.clubName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (riv.fullName || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+                          (riv.clubName || "").toLowerCase().includes((searchQuery || "").toLowerCase());
     const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
     
     let matchesDist = true;
