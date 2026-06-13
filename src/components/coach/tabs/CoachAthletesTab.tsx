@@ -27,8 +27,8 @@ export default function CoachAthletesTab({ athletes, onViewAthlete, sessions }: 
   };
 
   const filteredAthletes = athletes.filter(ath => {
-    const matchesSearch = ath.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          ath.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (ath.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (ath.email || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBow = bowFilter === "ALL" || ath.bowConfig?.type === bowFilter;
     return matchesSearch && matchesBow;
   });

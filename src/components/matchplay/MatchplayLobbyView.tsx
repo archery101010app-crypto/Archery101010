@@ -25,9 +25,9 @@ const COUNTRIES = [
 ];
 
 const isMockUser = (uid: string, email: string = "", fullName: string = "") => {
-  const u = uid.toLowerCase();
-  const e = email.toLowerCase();
-  const n = fullName.toLowerCase();
+  const u = (uid || "").toLowerCase();
+  const e = (email || "").toLowerCase();
+  const n = (fullName || "").toLowerCase();
   return u.startsWith("riv-") || 
          u.startsWith("usr-d-") || 
          u.includes("demo") || 

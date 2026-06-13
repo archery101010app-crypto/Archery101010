@@ -66,8 +66,8 @@ export default function AdminUsersTab() {
 
   const filteredUsers = users.filter((u) => {
     const matchesSearch = 
-      u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.clubName || "").toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesRole = 
