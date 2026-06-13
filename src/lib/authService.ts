@@ -99,7 +99,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
           
           // Save/update in local simulated list to keep it updated offline
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || u.email.toLowerCase() === remoteUser.email.toLowerCase());
+          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || (u.email || "").toLowerCase() === (remoteUser.email || "").toLowerCase());
           
           if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
             console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
@@ -125,7 +125,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   // 2. Fallback to local IndexedDB store if offline or not found in Firestore
   if (!user) {
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    user = usersList.find((u) => u.email.toLowerCase() === targetEmail);
+    user = usersList.find((u) => (u.email || "").toLowerCase() === targetEmail);
   }
 
   // 3. If user exists, validate password
@@ -491,7 +491,7 @@ export async function loginSocialUser(email: string, displayName: string): Promi
           
           // Save/update in local simulated list
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || u.email.toLowerCase() === remoteUser.email.toLowerCase());
+          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || (u.email || "").toLowerCase() === (remoteUser.email || "").toLowerCase());
           
           if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
             console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
@@ -517,7 +517,7 @@ export async function loginSocialUser(email: string, displayName: string): Promi
   // 2. Fallback to local IndexedDB store
   if (!user) {
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    user = usersList.find((u) => u.email.toLowerCase() === targetEmail);
+    user = usersList.find((u) => (u.email || "").toLowerCase() === targetEmail);
   }
 
   // 3. Create default profile if user doesn't exist anywhere

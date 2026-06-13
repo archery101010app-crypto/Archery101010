@@ -88,7 +88,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         try {
           const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
           const matched = usersList.find(
-            (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+            (u) => (u.email || "").toLowerCase() === email.trim().toLowerCase()
           );
           if (matched && !matched.password) {
             setIsSocialBypassAvailable(true);
