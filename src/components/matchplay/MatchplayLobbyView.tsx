@@ -32,9 +32,7 @@ const isMockUser = (uid: string, email: string = "", fullName: string = "") => {
          u.startsWith("usr-d-") || 
          u.includes("demo") || 
          e.includes("demo") || 
-         n.includes("demo") || 
-         e.includes("club.com") || 
-         (e.includes("archery101010.com") && e !== "admin@archery101010.com" && e !== "invitado@archery101010.com");
+         n.includes("demo");
 };
 
 // Active mock rivals for elimination duels
@@ -407,6 +405,27 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         : `https://archery101010.web.app?join=${generatedCode}`;
 
       const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010! Formato: ${customBow} a ${customDistance}m. Ingresa el código "${generatedCode}" en la sección de Duelos, o haz clic en este enlace para unirte: ${shareUrl}`;
+
+      // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
+      setDoc(doc(db, "active_duels", generatedCode), {
+        id: generatedCode,
+        bowType: customBow,
+        distance: customDistance,
+        creatorUid: user.uid,
+        creatorName: user.fullName,
+        creatorConnected: true,
+        creatorConnectedAt: Date.now(),
+        playerUid: "",
+        playerName: "",
+        playerConnected: false,
+        playerConnectedAt: 0,
+        creatorReady: false,
+        playerReady: false,
+        status: "waiting",
+        updatedAt: Date.now()
+      }).catch((err) => {
+        console.error("Error creating active duel in Firestore immediately:", err);
+      });
 
       setGeneratedInvite({
         code: generatedCode,
@@ -1162,27 +1181,6 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         rating: 9.0
                       }
                     };
-
-                    // Fire write asynchronously to avoid blocking the UI transition
-                    setDoc(doc(db, "active_duels", generatedInvite.code), {
-                      id: generatedInvite.code,
-                      bowType: generatedInvite.bowType,
-                      distance: generatedInvite.distance,
-                      creatorUid: user.uid,
-                      creatorName: user.fullName,
-                      creatorConnected: true,
-                      creatorConnectedAt: Date.now(),
-                      playerUid: "",
-                      playerName: "",
-                      playerConnected: false,
-                      playerConnectedAt: 0,
-                      creatorReady: false,
-                      playerReady: false,
-                      status: "waiting",
-                      updatedAt: Date.now()
-                    }).catch((err) => {
-                      console.error("Error creating active duel in Firestore:", err);
-                    });
 
                     setGeneratedInvite(null);
                     onStartDuel(matchConfig);

@@ -166,19 +166,19 @@ export default function Home() {
     initApp();
   }, []);
  
-  // Periodic user presence heartbeat to mark user as online in Firestore
+  // Periodic user presence heartbeat to mark user as online in Firestore (self-healing)
   useEffect(() => {
     if (!user?.uid) return;
     const uid = user.uid;
 
     const updatePresence = async () => {
       try {
-        const { doc, updateDoc } = await import("firebase/firestore");
+        const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
         const docRef = doc(db, "users", uid);
-        await updateDoc(docRef, {
+        await setDoc(docRef, {
           lastActiveAt: Date.now()
-        });
+        }, { merge: true });
       } catch (err) {
         // Silently catch offline/network errors
       }
@@ -188,6 +188,72 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
+  }, [user?.uid]);
+
+  // Listen for "?join=..." invite code in the URL on startup or login
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get("join");
+
+    if (joinCode) {
+      // Clear URL parameter so it doesn't try to join again if refreshed
+      const url = new URL(window.location.href);
+      url.searchParams.delete("join");
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+
+      const handleAutoJoin = async () => {
+        const code = joinCode.toUpperCase().trim();
+        try {
+          const { doc, getDoc, updateDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+
+          const docRef = doc(db, "active_duels", code);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+
+            // Connect the player to this room in Firestore
+            await updateDoc(docRef, {
+              playerUid: user.uid,
+              playerName: user.fullName,
+              playerConnected: true,
+              playerConnectedAt: Date.now(),
+              status: "active",
+              updatedAt: Date.now()
+            });
+
+            const matchConfig = {
+              id: data.id,
+              bowType: data.bowType,
+              distance: data.distance,
+              system: data.bowType === "Compound" ? "cumulative" : "set",
+              rival: {
+                uid: "RIV-FRIEND-CREATOR",
+                fullName: data.creatorName || "Anfitrión del Duelo",
+                country: data.creatorCountry || "CR",
+                clubName: "Lobby Archery",
+                clubLogo: "1",
+                clubCountry: "CR",
+                rating: 9.2
+              }
+            };
+
+            setDuelConfig(matchConfig);
+            setCurrentScreen("MATCHPLAY_ARENA");
+          } else {
+            alert(`El código de desafío "${code}" no existe o es inválido.`);
+          }
+        } catch (err) {
+          console.error("Error joining duel from URL parameter:", err);
+          alert("No se pudo conectar al desafío automáticamente. Intenta ingresar el código manual.");
+        }
+      };
+
+      handleAutoJoin();
+    }
   }, [user?.uid]);
 
   // Listen for real-time duel invitations directed to the logged-in user

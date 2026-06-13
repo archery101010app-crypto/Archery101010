@@ -54,6 +54,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   ]);
 }
 
+function isProfileValid(u: UserProfile | null | undefined): boolean {
+  if (!u) return false;
+  return !!(
+    u.nickname?.trim() &&
+    u.fullName?.trim() &&
+    u.birthDate &&
+    u.city?.trim() &&
+    u.country &&
+    u.gender
+  );
+}
+
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
   const normalizedEmail = email.trim().toLowerCase();
   const isAdminInput = normalizedEmail === "admin101010" || 
@@ -83,10 +95,19 @@ export async function loginUser(email: string, password?: string): Promise<UserP
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
-          user = querySnapshot.docs[0].data() as UserProfile;
+          const remoteUser = querySnapshot.docs[0].data() as UserProfile;
           
           // Save/update in local simulated list to keep it updated offline
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || u.email.toLowerCase() === remoteUser.email.toLowerCase());
+          
+          if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
+            console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
+            user = { ...remoteUser, ...localUser, profileSetupCompleted: true };
+          } else {
+            user = remoteUser;
+          }
+          
           const idx = localUsers.findIndex((u) => u.uid === user!.uid);
           if (idx !== -1) {
             localUsers[idx] = user;
@@ -466,10 +487,19 @@ export async function loginSocialUser(email: string, displayName: string): Promi
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
-          user = querySnapshot.docs[0].data() as UserProfile;
+          const remoteUser = querySnapshot.docs[0].data() as UserProfile;
           
           // Save/update in local simulated list
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || u.email.toLowerCase() === remoteUser.email.toLowerCase());
+          
+          if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
+            console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
+            user = { ...remoteUser, ...localUser, profileSetupCompleted: true };
+          } else {
+            user = remoteUser;
+          }
+          
           const idx = localUsers.findIndex((u) => u.uid === user!.uid);
           if (idx !== -1) {
             localUsers[idx] = user;

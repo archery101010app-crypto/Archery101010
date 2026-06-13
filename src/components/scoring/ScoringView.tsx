@@ -761,9 +761,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       bowType: config.bowType,
       distance: config.distance,
       format: config.format,
-      endsCount: config.endsCount,
+      endsCount: config.practiceType === "Volumen" ? ends.length : config.endsCount,
       arrowsPerEnd: config.arrowsPerEnd,
-      maxScore: config.maxScore,
+      maxScore: config.practiceType === "Volumen" ? ends.length * config.arrowsPerEnd * 10 : config.maxScore,
       score: finalScore,
       ends: ends,
       sessionNote: sessionNote,
@@ -896,7 +896,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleTallyIncrement = () => {
-    if (currentEndIdx >= config.endsCount) {
+    if (config.practiceType !== "Volumen" && currentEndIdx >= config.endsCount) {
       alert("Has alcanzado el límite de ends programados. Puedes finalizar el entrenamiento o agregar más ends.");
       return;
     }
@@ -906,7 +906,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const nextCount = tallyCount + 1;
     setTallyCount(nextCount);
     
-    const updatedEnds = [...ends];
+    let updatedEnds = [...ends];
+    
+    // Dynamically grow the array in volume mode if the current index is out of bounds
+    while (currentEndIdx >= updatedEnds.length) {
+      updatedEnds.push({
+        arrows: Array.from({ length: config.arrowsPerEnd || 3 }, () => ""),
+        note: ""
+      });
+    }
+    
     const currentEnd = { ...updatedEnds[currentEndIdx] };
     const currentArrows = [...currentEnd.arrows];
     
@@ -921,6 +930,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (nextArrowIdx >= config.arrowsPerEnd) {
       nextArrowIdx = 0;
       nextEndIdx = currentEndIdx + 1;
+    }
+    
+    // Ensure the next index also exists in volume mode
+    if (config.practiceType === "Volumen") {
+      while (nextEndIdx >= updatedEnds.length) {
+        updatedEnds.push({
+          arrows: Array.from({ length: config.arrowsPerEnd || 3 }, () => ""),
+          note: ""
+        });
+      }
     }
     
     setCurrentArrowIdx(nextArrowIdx);
@@ -1030,34 +1049,52 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       )}
 
       {/* Total score box */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
-        <div className="flex flex-col">
-          <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase">
-            Puntuación
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="text-2xl font-black text-white leading-tight">
-              {calculateTotalScore()} <span className="text-xs text-gray-dim">/ {config.maxScore}</span>
+      {config.practiceType === "Volumen" ? (
+        <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex justify-between items-center">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase">
+              Distancia
             </span>
-            {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
-              <button
-                onClick={handleFinishFirstBlockOnly}
-                className="text-[9px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer animate-pulse"
-              >
-                Finalizar en 1er Bloque
-              </button>
-            )}
+            <span className="text-2xl font-black text-white leading-tight">
+              {config.distance} <span className="text-xs text-gray-dim">metros</span>
+            </span>
+          </div>
+          <div className="text-right flex flex-col items-end">
+            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/20 shadow-glow-cyan/20">
+              Práctica de Volumen
+            </span>
           </div>
         </div>
-        <div className="text-right flex flex-col items-end">
-          <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
-            End {currentEndIdx + 1} / {config.endsCount}
-          </span>
-          <span className="text-xs text-gray-dim font-bold mt-1">
-            Flecha {currentArrowIdx + 1} / {config.arrowsPerEnd}
-          </span>
+      ) : (
+        <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase">
+              Puntuación
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-black text-white leading-tight">
+                {calculateTotalScore()} <span className="text-xs text-gray-dim">/ {config.maxScore}</span>
+              </span>
+              {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
+                <button
+                  onClick={handleFinishFirstBlockOnly}
+                  className="text-[9px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer animate-pulse"
+                >
+                  Finalizar en 1er Bloque
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="text-right flex flex-col items-end">
+            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+              End {currentEndIdx + 1} / {config.endsCount}
+            </span>
+            <span className="text-xs text-gray-dim font-bold mt-1">
+              Flecha {currentArrowIdx + 1} / {config.arrowsPerEnd}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* SCORING COMPONENT MODES */}
       <div className="flex-1 flex flex-col justify-center min-h-[320px] py-4">
@@ -1067,20 +1104,20 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             <div className="relative flex flex-col items-center select-none">
               
               {/* Metal hanger loop at the top */}
-              <div className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-neutral-600 bg-transparent relative z-0 flex items-center justify-center">
-                <div className="w-10 h-6 rounded-t-full bg-neutral-900 border-2 border-neutral-800" />
+              <div className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-zinc-400 bg-transparent relative z-0 flex items-center justify-center animate-pulse">
+                <div className="w-10 h-6 rounded-t-full bg-zinc-900 border-2 border-zinc-600 shadow-inner" />
               </div>
 
               {/* Reset Knob on the side (top right position) */}
               <div className="absolute right-[-32px] top-[48px] z-10 flex items-center">
-                <div className="w-3 h-5 bg-neutral-700 border-y border-l border-neutral-600 rounded-l shadow" />
+                <div className="w-3 h-5 bg-zinc-500 border-y border-l border-zinc-400 rounded-l shadow" />
                 <button
                   type="button"
                   onClick={handleTallyReset}
-                  className="w-8 h-8 rounded-full bg-gradient-to-r from-neutral-500 via-neutral-400 to-neutral-600 border-2 border-neutral-500 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
+                  className="w-8 h-8 rounded-full bg-gradient-to-r from-zinc-300 via-white to-zinc-500 border-2 border-zinc-400 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
                   title="Reiniciar contador"
                 >
-                  <div className="w-3 h-3 rounded-full bg-neutral-700 border border-neutral-600 flex items-center justify-center font-bold text-[8px] text-white">
+                  <div className="w-3 h-3 rounded-full bg-zinc-700 border border-zinc-500 flex items-center justify-center font-bold text-[8px] text-white">
                     R
                   </div>
                 </button>
@@ -1090,16 +1127,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 type="button"
                 onClick={handleTallyIncrement}
-                className="w-60 h-60 rounded-full bg-gradient-to-b from-neutral-500 via-neutral-700 to-neutral-900 border-[8px] border-neutral-600 flex flex-col items-center justify-center gap-2 relative z-10 cursor-pointer shadow-[0_20px_40px_rgba(0,0,0,0.6),inset_0_4px_12px_rgba(255,255,255,0.25)] hover:brightness-105 active:scale-[0.98] transition group"
+                className="w-60 h-60 rounded-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-200 via-zinc-400 to-zinc-600 border-[8px] border-zinc-300 flex flex-col items-center justify-center gap-2 relative z-10 cursor-pointer shadow-[0_25px_50px_rgba(0,0,0,0.7),inset_0_4px_12px_rgba(255,255,255,0.85)] hover:brightness-105 active:scale-[0.98] transition group"
               >
                 {/* Shiny highlight reflection */}
-                <div className="absolute inset-2 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none" />
+                <div className="absolute inset-2 rounded-full bg-gradient-to-tr from-white/20 via-white/5 to-transparent pointer-events-none" />
 
                 {/* Lever/Button at the top center of the case */}
-                <div className="absolute top-[12px] w-24 h-5 rounded bg-gradient-to-b from-neutral-400 to-neutral-600 border border-neutral-500 shadow-md group-active:translate-y-0.5 transition" />
+                <div className="absolute top-[12px] w-24 h-5 rounded bg-gradient-to-b from-zinc-100 via-zinc-300 to-zinc-500 border border-zinc-400 shadow-[0_3px_5px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.8)] group-active:translate-y-0.5 transition" />
 
                 {/* Display Window */}
-                <div className="w-40 bg-neutral-950 border-4 border-neutral-800 p-3.5 rounded-2xl shadow-inner mt-4 flex flex-col items-center gap-1.5 relative overflow-hidden">
+                <div className="w-40 bg-zinc-950 border-4 border-zinc-700 p-3.5 rounded-2xl shadow-[inset_0_4px_10px_rgba(0,0,0,0.95)] mt-4 flex flex-col items-center gap-1.5 relative overflow-hidden">
                   {/* Subtle inner reflection */}
                   <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
                   
@@ -1113,10 +1150,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
                       <div
                         key={idx}
-                        className="w-7 h-10 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-900 border border-neutral-800 rounded flex items-center justify-center font-black text-2xl text-white font-mono shadow-[inset_0_2px_5px_rgba(0,0,0,0.8)] relative"
+                        className="w-7 h-10 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-900 border border-zinc-800 rounded flex items-center justify-center font-black text-2xl text-white font-mono shadow-[inset_0_2px_5px_rgba(0,0,0,0.9)] relative"
                       >
                         {/* Horizontal divider for roller visual look */}
-                        <div className="absolute inset-x-0 h-[1px] bg-neutral-800/40 top-1/2" />
+                        <div className="absolute inset-x-0 h-[1px] bg-zinc-800/40 top-1/2" />
                         <span className="relative z-10">{digit}</span>
                       </div>
                     ))}
@@ -1124,7 +1161,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
 
                 {/* Big neon target ring details around counter to make it look premium */}
-                <div className="text-[10px] text-gray-dim font-bold tracking-wider uppercase mt-2 group-hover:text-cyan-neon transition">
+                <div className="text-[10px] text-zinc-900 font-black tracking-wider uppercase mt-2 group-hover:text-cyan-neon transition">
                   PULSAR PARA CONTAR
                 </div>
               </button>
@@ -1133,10 +1170,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             {/* Helper status text */}
             <div className="flex flex-col items-center text-center gap-1">
               <span className="text-xs text-gray-dim font-semibold">
-                End Actual: <span className="text-cyan-neon font-bold">#{currentEndIdx + 1}</span> · Flecha: <span className="text-cyan-neon font-bold">#{currentArrowIdx + 1}/{config.arrowsPerEnd}</span>
+                Distancia de Tiro: <span className="text-cyan-neon font-bold">{config.distance}m</span>
               </span>
               <span className="text-[10px] text-gray-dim italic">
-                (Las flechas se guardan automáticamente como impactos de puntaje "10")
+                (Registra cada tiro presionando el contador metálico)
               </span>
             </div>
 
@@ -1161,12 +1198,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                         prevArrowIdx = config.arrowsPerEnd - 1;
                       }
 
-                      const targetEnd = { ...updatedEnds[prevEndIdx] };
-                      const targetArrows = [...targetEnd.arrows];
-                      targetArrows[prevArrowIdx] = "";
-                      targetEnd.arrows = targetArrows;
-                      updatedEnds[prevEndIdx] = targetEnd;
-                      setEnds(updatedEnds);
+                      if (updatedEnds[prevEndIdx]) {
+                        const targetEnd = { ...updatedEnds[prevEndIdx] };
+                        const targetArrows = [...targetEnd.arrows];
+                        targetArrows[prevArrowIdx] = "";
+                        targetEnd.arrows = targetArrows;
+                        updatedEnds[prevEndIdx] = targetEnd;
+                        setEnds(updatedEnds);
+                      }
 
                       setCurrentArrowIdx(prevArrowIdx);
                       setCurrentEndIdx(prevEndIdx);
@@ -1179,10 +1218,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 Restar Flecha (-1)
               </button>
               <button
-                onClick={handleConfirmEnd}
-                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon text-[10px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
+                onClick={() => setIsFinishing(true)}
+                className="px-4 py-2 bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-cyan"
               >
-                Confirmar End (# {currentEndIdx + 1})
+                Finalizar Práctica
               </button>
             </div>
           </div>
@@ -1614,20 +1653,37 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </div>
 
               {/* Summary Stats box */}
-              <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
-                <div>
-                  <span className="text-[9px] text-gray-dim uppercase font-bold">Score Total</span>
-                  <p className="text-2xl font-black text-cyan-neon mt-0.5">
-                    {calculateTotalScore()}
-                  </p>
+              {config.practiceType === "Volumen" ? (
+                <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
+                  <div>
+                    <span className="text-[9px] text-gray-dim uppercase font-bold">Total Flechas</span>
+                    <p className="text-2xl font-black text-cyan-neon mt-0.5">
+                      {tallyCount}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-gray-dim uppercase font-bold">Distancia</span>
+                    <p className="text-2xl font-black text-yellow-gold mt-0.5">
+                      {config.distance}m
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[9px] text-gray-dim uppercase font-bold">Precisión</span>
-                  <p className="text-2xl font-black text-yellow-gold mt-0.5">
-                    {Math.round((calculateTotalScore() / config.maxScore) * 100)}%
-                  </p>
+              ) : (
+                <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
+                  <div>
+                    <span className="text-[9px] text-gray-dim uppercase font-bold">Score Total</span>
+                    <p className="text-2xl font-black text-cyan-neon mt-0.5">
+                      {calculateTotalScore()}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-gray-dim uppercase font-bold">Precisión</span>
+                    <p className="text-2xl font-black text-yellow-gold mt-0.5">
+                      {Math.round((calculateTotalScore() / config.maxScore) * 100)}%
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Bloques y Fatiga report (para WA600/720) */}
               {isBlockFormat && (
@@ -1748,7 +1804,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </div>
 
               <p className="text-xs text-gray-dim leading-relaxed">
-                Has registrado tiros en planilla y calentamiento. Confirma la cantidad exacta de flechas tiradas hoy para tus estadísticas de volumen:
+                {config.practiceType === "Volumen" 
+                  ? "Confirma la cantidad total de flechas lanzadas en esta práctica (incluyendo calentamiento si aplica):"
+                  : "Has registrado tiros en planilla y calentamiento. Confirma la cantidad exacta de flechas tiradas hoy para tus estadísticas de volumen:"
+                }
               </p>
 
               <div className="flex items-center justify-center bg-neutral-950 border border-neutral-800 rounded-2xl py-3 px-4 mt-2">

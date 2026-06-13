@@ -66,6 +66,13 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
       } catch (err: any) {
         console.error(`Failed to sync item ${item.id}:`, err);
         
+        // Dispatch event for UI listeners (e.g., wifi sync status button)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("firestore-sync-error", { detail: { error: err.message || String(err) } })
+          );
+        }
+
         // Update item with failure status and increment attempts
         await updateSyncItem(item.id, {
           status: "failed",

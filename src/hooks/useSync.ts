@@ -51,12 +51,24 @@ export function useSync() {
       checkQueue();
     };
 
+    const handleSyncError = (e: any) => {
+      const errMsg = e.detail?.error || "";
+      if (errMsg.includes("permission-denied") || errMsg.includes("insufficient permissions")) {
+        setSyncStatus("Sin permisos en la nube");
+      } else {
+        setSyncStatus("Error de Firestore");
+      }
+      setIsSyncing(false);
+    };
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("sync-queue-changed", handleQueueChange);
+    window.addEventListener("firestore-sync-error", handleSyncError);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("sync-queue-changed", handleQueueChange);
+      window.removeEventListener("firestore-sync-error", handleSyncError);
     };
   }, [checkQueue]);
 

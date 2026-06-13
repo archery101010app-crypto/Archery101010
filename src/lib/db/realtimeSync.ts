@@ -116,12 +116,24 @@ export function startRealtimeSync(currentUserUid: string | null) {
           if (updatedCurrentUser) {
             const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
             
-            // Avoid overwriting a local user profile that has completed setup with a remote one that has not
-            const isLocalCompleted = localCurrent?.profileSetupCompleted === true;
-            const isRemoteCompleted = updatedCurrentUser.profileSetupCompleted === true;
+            // Helper to check if a profile has all mandatory fields
+            const isProfileValid = (u: UserProfile | null | undefined): boolean => {
+              if (!u) return false;
+              return !!(
+                u.nickname?.trim() &&
+                u.fullName?.trim() &&
+                u.birthDate &&
+                u.city?.trim() &&
+                u.country &&
+                u.gender
+              );
+            };
 
-            if (isLocalCompleted && !isRemoteCompleted) {
-              console.log("[Sync] Local profile is completed, but remote is not. Skip overwrite to avoid reset.");
+            const isLocalValid = isProfileValid(localCurrent);
+            const isRemoteValid = isProfileValid(updatedCurrentUser);
+
+            if (isLocalValid && !isRemoteValid) {
+              console.warn("[Sync] Local profile is complete, but remote is missing mandatory fields. Skip overwrite to avoid reset loop.");
             } else {
               const hasFunctionalDifference = isProfileFunctionallyDifferent(localCurrent, updatedCurrentUser);
               const hasAnyDifference = JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser);
@@ -149,6 +161,11 @@ export function startRealtimeSync(currentUserUid: string | null) {
     },
     (err) => {
       console.warn("Firestore users collection real-time listener failed/disabled:", err.message);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("firestore-sync-error", { detail: { error: err.message } })
+        );
+      }
     }
   );
   activeUnsubscribes.push(usersUnsub);

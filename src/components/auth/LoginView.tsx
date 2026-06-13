@@ -247,7 +247,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-white/40 text-[10px] font-black tracking-[0.55em] uppercase text-center pl-1.5"
+          className="text-white text-[14px] font-black tracking-[0.55em] uppercase text-center pl-1.5"
         >
           ARCHERY
         </motion.span>
