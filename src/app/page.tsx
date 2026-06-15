@@ -173,12 +173,12 @@ export default function Home() {
 
     const updatePresence = async () => {
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
+        const { doc, updateDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
         const docRef = doc(db, "users", uid);
-        await setDoc(docRef, {
+        await updateDoc(docRef, {
           lastActiveAt: Date.now()
-        }, { merge: true });
+        });
       } catch (err) {
         // Silently catch offline/network errors
       }

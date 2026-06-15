@@ -331,6 +331,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     // Exclude mock/demo users from the online list
     if (isMockUser(riv.uid, riv.email, riv.fullName)) return false;
 
+    // Exclude the current user themselves
+    if (riv.uid === user.uid) return false;
+
+    // Exclude users without a valid name
+    if (!riv.fullName || !riv.fullName.trim()) return false;
+
     const matchesSearch = (riv.fullName || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
                           (riv.clubName || "").toLowerCase().includes((searchQuery || "").toLowerCase());
     const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;

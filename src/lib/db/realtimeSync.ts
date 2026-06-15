@@ -80,7 +80,13 @@ export function startRealtimeSync(currentUserUid: string | null) {
       try {
         const usersList: UserProfile[] = [];
         snapshot.forEach((doc) => {
-          usersList.push(doc.data() as UserProfile);
+          const data = doc.data() as UserProfile;
+          if (data) {
+            if (!data.uid) {
+              data.uid = doc.id;
+            }
+            usersList.push(data);
+          }
         });
 
         // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
