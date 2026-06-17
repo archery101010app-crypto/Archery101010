@@ -305,9 +305,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           break;
         case "ready-state":
           setIsRivalReady(msg.ready);
+          if (msg.ready) {
+            setIsUserReady(true);
+          }
           break;
         case "ready":
           setIsRivalReady(msg.ready);
+          if (msg.ready) {
+            setIsUserReady(true);
+          }
           break;
         case "shot": {
           setRivalTiros((prev) => {
@@ -441,7 +447,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           track.enabled = true;
 
           // Find the audio sender on the peer connection
-          const sender = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+          const sender = pc.getSenders().find(s => s.track?.kind === "audio" || s.dtmf !== null);
           if (sender) {
             console.log("[WebRTC] Replacing existing audio track with active mic track");
             await sender.replaceTrack(track);
@@ -518,22 +524,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       };
 
       // Setup audio transceiver first so the audio media channel exists in SDP
+      // We do NOT call acquireMicrophoneStream() here to prevent blocking the initial P2P connection
       try {
-        const stream = await acquireMicrophoneStream();
-        if (stream) {
-          stream.getTracks().forEach((track) => {
-            track.enabled = false; // Muted by default
-            pc.addTrack(track, stream);
-          });
-        } else {
-          pc.addTransceiver("audio", { direction: "sendrecv" });
-        }
-      } catch (micErr) {
-        console.warn("[WebRTC] Microphone setup fallback to transceiver:", micErr);
-        setMicrophoneAllowed(false);
-        try {
-          pc.addTransceiver("audio", { direction: "sendrecv" });
-        } catch (e) {}
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+      } catch (e) {
+        console.warn("[WebRTC] Failed to add transceiver:", e);
       }
 
       // Configure DataChannel
@@ -711,6 +706,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // VoIP call controls
   const dialCall = () => {
+    if (!isFriendDuel) {
+      alert("Las llamadas de voz VoIP solo están disponibles en duelos con arqueros reales en línea.");
+      return;
+    }
+    if (!isP2PActive) {
+      alert("Conexión directa P2P no activa aún. Por favor espera a que el oponente esté conectado.");
+      return;
+    }
     if (callStateRef.current !== "IDLE") return;
     setCallState("DIALING");
     sendDataMessage({ type: "dial" });
@@ -2121,6 +2124,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <button
                   onClick={() => {
                     setIsUserReady(true);
+                    setIsRivalReady(true);
                     if (navigator.vibrate) {
                       navigator.vibrate(30);
                     }
