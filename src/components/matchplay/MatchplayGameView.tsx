@@ -127,7 +127,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const audioAnalyserRef = useRef<AnalyserNode | null>(null);
   const micAnimFrameId = useRef<number | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteAudioRef = useRef<HTMLVideoElement | null>(null);
   const candidatesHandledRef = useRef<number>(0);
   const remoteCandidatesQueue = useRef<any[]>([]);
 
@@ -391,6 +391,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             setIsWalkieTalkieActive(true);
             setLocalAudioTrackActive(true);
             setCallDuration(0);
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.muted = false;
+              remoteAudioRef.current.volume = 1.0;
+              remoteAudioRef.current.play().catch(e => console.warn("[WebRTC] Play remote audio error:", e));
+            }
           }
           break;
         case "call-decline":
@@ -453,20 +458,43 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           const track = stream.getAudioTracks()[0];
           track.enabled = true;
 
-          // Find the audio sender on the peer connection
-          const sender = pc.getSenders().find(s => s.track?.kind === "audio" || s.dtmf !== null);
-          if (sender) {
-            console.log("[WebRTC] Replacing existing audio track with active mic track");
-            await sender.replaceTrack(track);
+          // Robust search for the audio transceiver
+          const audioTransceiver = pc.getTransceivers().find(
+            t => t.receiver && t.receiver.track && t.receiver.track.kind === "audio"
+          );
+
+          if (audioTransceiver) {
+            console.log("[WebRTC] Found audio transceiver, replacing track on its sender");
+            audioTransceiver.direction = "sendrecv";
+            await audioTransceiver.sender.replaceTrack(track);
           } else {
-            console.log("[WebRTC] Adding audio track to connection");
-            pc.addTrack(track, stream);
+            // Fallback to searching senders or adding track
+            const sender = pc.getSenders().find(s => s.track?.kind === "audio" || s.dtmf !== null);
+            if (sender) {
+              console.log("[WebRTC] Replacing track on fallback audio sender");
+              await sender.replaceTrack(track);
+            } else {
+              console.log("[WebRTC] Adding audio track to connection (no transceiver found)");
+              pc.addTrack(track, stream);
+            }
           }
         }
       } else {
-        // Mute local tracks
+        // Stop and release local audio tracks (turns off the device recording light and saves power)
         if (microphoneStreamRef.current) {
-          microphoneStreamRef.current.getTracks().forEach(t => t.enabled = false);
+          console.log("[WebRTC] Stopping local microphone tracks");
+          microphoneStreamRef.current.getTracks().forEach(t => t.stop());
+          microphoneStreamRef.current = null;
+        }
+        setMicrophoneAllowed(false);
+
+        // Remove track from the transceiver sender to stop transmitting silence
+        const audioTransceiver = pc.getTransceivers().find(
+          t => t.receiver && t.receiver.track && t.receiver.track.kind === "audio"
+        );
+        if (audioTransceiver && audioTransceiver.sender) {
+          console.log("[WebRTC] Removing track from audio transceiver sender (hangup)");
+          await audioTransceiver.sender.replaceTrack(null);
         }
       }
     } catch (e) {
@@ -520,9 +548,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       // Handle incoming remote audio stream track
       pc.ontrack = (event) => {
-        console.log("[WebRTC] Got remote stream track!");
-        if (remoteAudioRef.current && event.streams[0]) {
-          remoteAudioRef.current.srcObject = event.streams[0];
+        console.log("[WebRTC] Got remote stream track!", event.track);
+        if (remoteAudioRef.current) {
+          const stream = event.streams[0] || new MediaStream([event.track]);
+          remoteAudioRef.current.srcObject = stream;
+          remoteAudioRef.current.muted = false;
+          remoteAudioRef.current.volume = 1.0;
           // Explicitly play and handle autoplay policies
           remoteAudioRef.current.play().catch(err => {
             console.warn("[WebRTC] Autoplay prevented remote audio playback:", err);
@@ -741,6 +772,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setLocalAudioTrackActive(true);
     setCallDuration(0);
     sendDataMessage({ type: "call-accept" });
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = false;
+      remoteAudioRef.current.volume = 1.0;
+      remoteAudioRef.current.play().catch(e => console.warn("[WebRTC] Play remote audio error:", e));
+    }
   };
 
   const declineCall = () => {
@@ -3105,8 +3141,22 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         )}
       </AnimatePresence>
 
-      {/* Hidden audio element for WebRTC audio playback */}
-      <audio ref={remoteAudioRef} autoPlay className="hidden" />
+      {/* Hidden video element for WebRTC audio playback to force speakerphone routing by default */}
+      <video
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        muted={false}
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          opacity: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+          zIndex: -9999
+        }}
+      />
 
       {/* Rival Disconnect Modal overlay */}
       <AnimatePresence>
