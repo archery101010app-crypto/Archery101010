@@ -460,7 +460,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
           // Robust search for the audio transceiver
           const audioTransceiver = pc.getTransceivers().find(
-            t => t.receiver && t.receiver.track && t.receiver.track.kind === "audio"
+            t => t.receiver?.track?.kind === "audio"
           );
 
           if (audioTransceiver) {
@@ -490,7 +490,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
         // Remove track from the transceiver sender to stop transmitting silence
         const audioTransceiver = pc.getTransceivers().find(
-          t => t.receiver && t.receiver.track && t.receiver.track.kind === "audio"
+          t => t.receiver?.track?.kind === "audio"
         );
         if (audioTransceiver && audioTransceiver.sender) {
           console.log("[WebRTC] Removing track from audio transceiver sender (hangup)");
@@ -554,10 +554,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           remoteAudioRef.current.srcObject = stream;
           remoteAudioRef.current.muted = false;
           remoteAudioRef.current.volume = 1.0;
-          // Explicitly play and handle autoplay policies
-          remoteAudioRef.current.play().catch(err => {
-            console.warn("[WebRTC] Autoplay prevented remote audio playback:", err);
-          });
+          
+          // Only play if the VoIP call is currently active to prevent strict mobile autoplay policies
+          // from freezing the thread during initial lobby/game connection setup
+          if (callStateRef.current === "ACTIVE") {
+            remoteAudioRef.current.play().catch(err => {
+              console.warn("[WebRTC] Autoplay prevented remote audio playback ontrack:", err);
+            });
+          }
         }
       };
 
