@@ -46,6 +46,32 @@ export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Intercept global JS errors for production runtime debugging
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleError = (event: ErrorEvent) => {
+      // Ignore minor play/vibrate warnings or generic extension errors
+      if (event.message?.includes("play() failed") || event.message?.includes("extension")) return;
+      setGlobalError(`Error: ${event.message} at ${event.filename}:${event.lineno}`);
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : String(reason);
+      if (message.includes("play() failed") || message.includes("extension")) return;
+      setGlobalError(`Rejection: ${message}`);
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
 
   // Ads campaigns state
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
@@ -647,6 +673,22 @@ export default function Home() {
   // Authenticated application flow
   return (
     <div className="flex-1 flex flex-col min-h-full">
+      {/* Global JS Diagnostics Error Banner */}
+      {globalError && (
+        <div className="bg-red-950/90 border-b border-red-500/30 text-red-200 px-4 py-2 text-[10px] font-mono flex items-center justify-between gap-4 z-[9999] relative">
+          <div className="flex items-center gap-2">
+            <span className="text-red-500 animate-pulse font-black">⚠️ ERROR DE RUNTIME:</span>
+            <span className="truncate max-w-[70vw]">{globalError}</span>
+          </div>
+          <button 
+            onClick={() => setGlobalError(null)}
+            className="px-2 py-0.5 rounded bg-red-800 hover:bg-red-700 text-white font-bold text-[9px] uppercase tracking-wider cursor-pointer"
+          >
+            Ignorar
+          </button>
+        </div>
+      )}
+
       {/* Top Header common to all screens */}
       <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={setCoachViewMode} />
 

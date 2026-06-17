@@ -167,6 +167,38 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         // Exclude the current user
         const others = list.filter((u) => u.uid !== user.uid);
         setRealUsers(others);
+
+        // Fallback: Query live users from Firestore if online to populate the list immediately
+        try {
+          const isLocalhost = typeof window !== "undefined" && 
+                              (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+          const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                                 process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
+          
+          if (!isMockFirebase && navigator.onLine) {
+            const { collection, getDocs } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+            const querySnapshot = await getDocs(collection(db, "users"));
+            const usersList: UserProfile[] = [];
+            querySnapshot.forEach((doc) => {
+              const data = doc.data() as UserProfile;
+              if (data) {
+                if (!data.uid) data.uid = doc.id;
+                usersList.push(data);
+              }
+            });
+
+            if (usersList.length > 0) {
+              console.log("[Lobby] Loaded online archers directly from Firestore fallback:", usersList.length);
+              const { saveLocalSetting } = await import("@/lib/db/indexedDB");
+              await saveLocalSetting("simulated_users", usersList);
+              const updatedOthers = usersList.filter((u) => u.uid !== user.uid);
+              setRealUsers(updatedOthers);
+            }
+          }
+        } catch (fbErr) {
+          console.warn("[Lobby] Failed to query Firestore users fallback:", fbErr);
+        }
       } catch (err) {
         console.error("Error loading real users for duels:", err);
       }
