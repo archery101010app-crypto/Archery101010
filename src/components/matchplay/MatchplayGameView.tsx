@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic, startRingingSound, stopRingingSound } from "@/lib/soundUtils";
@@ -97,6 +97,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // Walkie-Talkie States
   const [isWalkieTalkieActive, setIsWalkieTalkieActive] = useState<boolean>(false);
   const [isIncomingCall, setIsIncomingCall] = useState<boolean>(false);
+  const [isRivalWalkieActive, setIsRivalWalkieActive] = useState<boolean>(false);
   const [walkieWaveAnim, setWalkieWaveAnim] = useState<number[]>([10, 10, 10, 10]);
   const [isRivalSpeaking, setIsRivalSpeaking] = useState<boolean>(false);
   const [walkieText, setWalkieText] = useState<string | null>(null);
@@ -108,6 +109,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const candidatesHandledRef = useRef<number>(0);
+  const remoteCandidatesQueue = useRef<any[]>([]);
 
   // UX animation and thinking states
   const [rivalThinking, setRivalThinking] = useState(false);
@@ -293,9 +295,114 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     });
   };
 
-  // WebRTC initialization
+  // WebRTC data channel messaging helper
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const [isP2PActive, setIsP2PActive] = useState<boolean>(false);
+  const isP2PActiveRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isP2PActiveRef.current = isP2PActive;
+  }, [isP2PActive]);
+
+  const sendDataMessage = (msg: any) => {
+    if (dataChannelRef.current && dataChannelRef.current.readyState === "open") {
+      try {
+        dataChannelRef.current.send(JSON.stringify(msg));
+        console.log("[WebRTC DataChannel] Sent:", msg);
+      } catch (e) {
+        console.error("Error sending WebRTC data message:", e);
+      }
+    }
+  };
+
+  // WebRTC DataChannel message handler
+  const handleDataMessage = (event: MessageEvent) => {
+    try {
+      const msg = JSON.parse(event.data);
+      console.log("[WebRTC DataChannel] Received:", msg);
+
+      switch (msg.type) {
+        case "ready":
+          setIsRivalReady(msg.ready);
+          break;
+        case "shot": {
+          const updatedRival = [...rivalTiros];
+          updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), msg.value];
+          setRivalTiros(updatedRival);
+          break;
+        }
+        case "undo": {
+          const updatedRival = [...rivalTiros];
+          if (updatedRival[currentEnd] && updatedRival[currentEnd].length > 0) {
+            updatedRival[currentEnd] = updatedRival[currentEnd].slice(0, -1);
+            setRivalTiros(updatedRival);
+          }
+          break;
+        }
+        case "shootoff":
+          setRivalShootOffShot(msg.value);
+          break;
+        case "undo-shootoff":
+          setRivalShootOffShot(null);
+          break;
+        case "photo":
+          setRivalPhoto(msg.photo);
+          break;
+        case "next-end":
+          setEndSummary(null);
+          setEndSummaryMsg(null);
+          setValidationPhase("IDLE");
+          setUserPhoto(null);
+          setRivalPhoto(null);
+          setCurrentEnd((prev) => prev + 1);
+          setCurrentArrow(0);
+          setIsUserReady(false);
+          setIsRivalReady(false);
+          setIsReadyCheckActive(true);
+          break;
+        case "walkie":
+          setIsRivalWalkieActive(msg.active);
+          setIsRivalSpeaking(msg.active);
+          if (msg.active) {
+            if (!isWalkieTalkieActive) {
+              setIsIncomingCall(true);
+              startRingingSound();
+            }
+          } else {
+            setIsIncomingCall(false);
+            stopRingingSound();
+          }
+          break;
+        case "exit":
+          setIsRivalConnected(false);
+          setIsP2PActive(false);
+          alert("El oponente ha salido de la arena.");
+          onBack();
+          break;
+      }
+    } catch (e) {
+      console.error("Error parsing WebRTC data message:", e);
+    }
+  };
+
+  // Acquire microphone stream
+  const acquireMicrophoneStream = async () => {
+    if (microphoneStreamRef.current) return microphoneStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      microphoneStreamRef.current = stream;
+      setMicrophoneAllowed(true);
+      return stream;
+    } catch (err) {
+      console.warn("[WebRTC] Microphone access denied:", err);
+      setMicrophoneAllowed(false);
+      return null;
+    }
+  };
+
+  // WebRTC initialization (P2P Connection)
   const initWebRTC = async (isCreator: boolean, data: any) => {
-    console.log("[WebRTC] Initializing connection. Offerer:", isCreator);
+    console.log("[WebRTC] Initializing P2P connection. Offerer:", isCreator);
     try {
       if (peerConnectionRef.current) return;
 
@@ -307,6 +414,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       });
       peerConnectionRef.current = pc;
       candidatesHandledRef.current = 0;
+      remoteCandidatesQueue.current = [];
+
+      // Connection state monitoring
+      pc.onconnectionstatechange = () => {
+        console.log("[WebRTC] Connection state changed to:", pc.connectionState);
+        if (pc.connectionState === "connected") {
+          setIsRivalConnected(true);
+        } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+          setIsRivalConnected(false);
+          setIsP2PActive(false);
+        }
+      };
 
       // Handle ICE Candidates
       pc.onicecandidate = async (event) => {
@@ -314,52 +433,60 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           const docRef = doc(db, "active_duels", config.id);
           const candidateJson = event.candidate.toJSON();
           try {
-            const snap = await getDoc(docRef);
-            if (snap.exists()) {
-              const duelData = snap.data();
-              if (isCreator) {
-                const currentList = duelData.creatorCandidates || [];
-                await updateDoc(docRef, {
-                  creatorCandidates: [...currentList, JSON.stringify(candidateJson)],
-                  updatedAt: Date.now()
-                });
-              } else {
-                const currentList = duelData.playerCandidates || [];
-                await updateDoc(docRef, {
-                  playerCandidates: [...currentList, JSON.stringify(candidateJson)],
-                  updatedAt: Date.now()
-                });
-              }
-            }
+            await updateDoc(docRef, {
+              [isCreator ? "creatorCandidates" : "playerCandidates"]: arrayUnion(JSON.stringify(candidateJson)),
+              updatedAt: Date.now()
+            });
+            console.log("[WebRTC] Wrote ICE candidate to Firestore");
           } catch (e) {
             console.error("Error writing ICE candidate:", e);
           }
         }
       };
 
-      // Handle incoming stream track
+      // Handle incoming remote audio stream track
       pc.ontrack = (event) => {
         console.log("[WebRTC] Got remote stream track!");
         if (remoteAudioRef.current && event.streams[0]) {
           remoteAudioRef.current.srcObject = event.streams[0];
+          // Explicitly play and handle autoplay policies
+          remoteAudioRef.current.play().catch(err => {
+            console.warn("[WebRTC] Autoplay prevented remote audio playback:", err);
+          });
         }
       };
 
-      // Get microphone stream
-      let localStream = microphoneStreamRef.current;
-      if (!localStream) {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        microphoneStreamRef.current = localStream;
-        setMicrophoneAllowed(true);
+      // Try to acquire mic stream on start, so audio is pre-configured (muted by default)
+      try {
+        const stream = await acquireMicrophoneStream();
+        if (stream) {
+          stream.getTracks().forEach((track) => {
+            track.enabled = isWalkieTalkieActive;
+            pc.addTrack(track, stream);
+          });
+        }
+      } catch (micErr) {
+        console.warn("[WebRTC] Microphone access denied. Proceeding with text-only data channel:", micErr);
+        setMicrophoneAllowed(false);
       }
 
-      localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, localStream!);
-      });
-
-      // Offer / Answer logic
+      // Configure DataChannel
       if (isCreator) {
-        // Creator acts as Offerer
+        // Offerer creates data channel
+        const dc = pc.createDataChannel("game-sync");
+        dataChannelRef.current = dc;
+        dc.onopen = () => {
+          console.log("[WebRTC DataChannel] Open!");
+          setIsP2PActive(true);
+          setIsRivalConnected(true);
+        };
+        dc.onclose = () => {
+          console.log("[WebRTC DataChannel] Closed!");
+          setIsP2PActive(false);
+          setIsRivalConnected(false);
+        };
+        dc.onmessage = handleDataMessage;
+
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
@@ -368,6 +495,23 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           webrtcOffer: JSON.stringify(offer),
           updatedAt: Date.now()
         });
+      } else {
+        // Answerer listens for data channel
+        pc.ondatachannel = (event) => {
+          const dc = event.channel;
+          dataChannelRef.current = dc;
+          dc.onopen = () => {
+            console.log("[WebRTC DataChannel] Open!");
+            setIsP2PActive(true);
+            setIsRivalConnected(true);
+          };
+          dc.onclose = () => {
+            console.log("[WebRTC DataChannel] Closed!");
+            setIsP2PActive(false);
+            setIsRivalConnected(false);
+          };
+          dc.onmessage = handleDataMessage;
+        };
       }
     } catch (err) {
       console.error("Error initializing WebRTC:", err);
@@ -386,6 +530,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           const answer = JSON.parse(data.webrtcAnswer);
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           console.log("[WebRTC] Creator set remote answer!");
+
+          // Process queued candidates
+          const queued = remoteCandidatesQueue.current;
+          remoteCandidatesQueue.current = [];
+          for (const candInit of queued) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candInit));
+              console.log("[WebRTC] Applied queued candidate");
+            } catch (e) {
+              console.error("[WebRTC] Error applying queued candidate:", e);
+            }
+          }
         }
 
         // Process Player Candidates
@@ -394,7 +550,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           if (data.playerCandidates.length > handledCount) {
             for (let i = handledCount; i < data.playerCandidates.length; i++) {
               const cand = JSON.parse(data.playerCandidates[i]);
-              await pc.addIceCandidate(new RTCIceCandidate(cand));
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(cand));
+                  console.log("[WebRTC] Added remote candidate directly");
+                } catch (e) {
+                  console.error("[WebRTC] Error adding remote candidate:", e);
+                }
+              } else {
+                console.log("[WebRTC] Queued remote candidate (remoteDescription not set)");
+                remoteCandidatesQueue.current.push(cand);
+              }
             }
             candidatesHandledRef.current = data.playerCandidates.length;
           }
@@ -414,6 +580,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             webrtcAnswer: JSON.stringify(answer),
             updatedAt: Date.now()
           });
+
+          // Process queued candidates
+          const queued = remoteCandidatesQueue.current;
+          remoteCandidatesQueue.current = [];
+          for (const candInit of queued) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candInit));
+              console.log("[WebRTC] Applied queued candidate");
+            } catch (e) {
+              console.error("[WebRTC] Error applying queued candidate:", e);
+            }
+          }
         }
 
         // Process Creator Candidates
@@ -422,7 +600,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           if (data.creatorCandidates.length > handledCount) {
             for (let i = handledCount; i < data.creatorCandidates.length; i++) {
               const cand = JSON.parse(data.creatorCandidates[i]);
-              await pc.addIceCandidate(new RTCIceCandidate(cand));
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(cand));
+                  console.log("[WebRTC] Added remote candidate directly");
+                } catch (e) {
+                  console.error("[WebRTC] Error adding remote candidate:", e);
+                }
+              } else {
+                console.log("[WebRTC] Queued remote candidate (remoteDescription not set)");
+                remoteCandidatesQueue.current.push(cand);
+              }
             }
             candidatesHandledRef.current = data.creatorCandidates.length;
           }
@@ -440,46 +628,36 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+    }
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
     }
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((track) => track.stop());
+      microphoneStreamRef.current = null;
+    }
     candidatesHandledRef.current = 0;
+    setIsP2PActive(false);
   };
 
   // Toggle Walkie-Talkie status
   const toggleWalkieTalkie = async () => {
+    if (isIncomingCall) {
+      setIsIncomingCall(false);
+      stopRingingSound();
+    }
+
     const nextActive = !isWalkieTalkieActive;
     setIsWalkieTalkieActive(nextActive);
 
-    if (isFriendDuel) {
-      try {
-        const docRef = doc(db, "active_duels", config.id);
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-        if (isCreator) {
-          await updateDoc(docRef, {
-            walkieActiveCreator: nextActive,
-            ...(!nextActive ? {
-              webrtcOffer: null,
-              webrtcAnswer: null,
-              creatorCandidates: [],
-              playerCandidates: []
-            } : {})
-          });
-        } else {
-          await updateDoc(docRef, {
-            walkieActivePlayer: nextActive,
-            ...(!nextActive ? {
-              webrtcOffer: null,
-              webrtcAnswer: null,
-              creatorCandidates: [],
-              playerCandidates: []
-            } : {})
-          });
-        }
-      } catch (e) {
-        console.error("Error toggling walkie status in Firestore:", e);
-      }
+    // If P2P is active, toggle mic track and send signal
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach(t => t.enabled = nextActive);
     }
+    sendDataMessage({ type: "walkie", active: nextActive });
   };
 
   // Subscribe to real-time duel doc in Firestore for friend duels
@@ -514,6 +692,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     updateOurStatus(true);
 
+    // Reset our ready states locally and on Firestore to guarantee fresh starts
+    setIsUserReady(false);
+    setIsRivalReady(false);
+    updateOurReadyState(false);
+
     // Bind beforeunload to handle abrupt page closes
     const handleBeforeUnload = () => {
       updateOurStatus(false);
@@ -536,47 +719,39 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       if (snap.exists()) {
         const data = snap.data();
         let connected = false;
-        let rivalReady = false;
 
         const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
         if (isCreator) {
           // We are creator. Rival is player.
           connected = data.playerConnected === true;
-          rivalReady = data.playerReady === true;
           if (data.playerName && config.rival.fullName !== data.playerName) {
             config.rival.fullName = data.playerName;
           }
-
-          // Sync rival tiros & photo
-          const rTiros = data.playerTiros || [[], [], [], [], []];
-          setRivalTiros((prev) => JSON.stringify(prev) !== JSON.stringify(rTiros) ? rTiros : prev);
-
-          const rPhoto = data.playerPhoto || null;
-          setRivalPhoto((prev) => prev !== rPhoto ? rPhoto : prev);
-
-          const rShootOff = data.playerShootOffShot !== undefined ? data.playerShootOffShot : null;
-          setRivalShootOffShot((prev) => prev !== rShootOff ? rShootOff : prev);
         } else {
           // We are player. Rival is creator.
           connected = data.creatorConnected === true;
-          rivalReady = data.creatorReady === true;
           if (data.creatorName && config.rival.fullName !== data.creatorName) {
             config.rival.fullName = data.creatorName;
           }
-
-          // Sync rival tiros & photo
-          const rTiros = data.creatorTiros || [[], [], [], [], []];
-          setRivalTiros((prev) => JSON.stringify(prev) !== JSON.stringify(rTiros) ? rTiros : prev);
-
-          const rPhoto = data.creatorPhoto || null;
-          setRivalPhoto((prev) => prev !== rPhoto ? rPhoto : prev);
-
-          const rShootOff = data.creatorShootOffShot !== undefined ? data.creatorShootOffShot : null;
-          setRivalShootOffShot((prev) => prev !== rShootOff ? rShootOff : prev);
         }
 
-        setIsRivalConnected(connected);
-        setIsRivalReady(rivalReady);
+        // Monitor connection status: only trust Firestore before WebRTC is active
+        if (!isP2PActiveRef.current) {
+          setIsRivalConnected(connected);
+        }
+
+        // Fallback for ready states before WebRTC is active
+        if (!isP2PActiveRef.current) {
+          if (isCreator) {
+            if (data.playerReady !== undefined) {
+              setIsRivalReady(data.playerReady === true);
+            }
+          } else {
+            if (data.creatorReady !== undefined) {
+              setIsRivalReady(data.creatorReady === true);
+            }
+          }
+        }
 
         // Alert and vibrate on connection established
         if (connected && !lastConnectedState) {
@@ -587,29 +762,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         }
         lastConnectedState = connected;
 
-        // Walkie-Talkie Signaling & Ringtone Logic
-        const rivalWalkieActive = isCreator ? data.walkieActivePlayer === true : data.walkieActiveCreator === true;
-
-        // Ringing check: if rival has walkie active but mine is inactive, I should hear the ringing sound
-        if (rivalWalkieActive && !isWalkieTalkieActive) {
-          setIsIncomingCall(true);
-          startRingingSound();
-        } else {
-          setIsIncomingCall(false);
-          stopRingingSound();
-        }
-
-        // WebRTC peer connection management
-        if (isWalkieTalkieActive && rivalWalkieActive) {
+        // Auto-start WebRTC once both Creator and Player are connected
+        const bothConnected = data.creatorConnected === true && data.playerConnected === true;
+        if (bothConnected) {
           if (!peerConnectionRef.current) {
             await initWebRTC(isCreator, data);
-          } else {
-            await handleSignalingUpdate(isCreator, data);
           }
-        } else {
-          if (peerConnectionRef.current) {
-            closeWebRTC();
-          }
+          await handleSignalingUpdate(isCreator, data);
         }
       }
     });
@@ -617,6 +776,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       unsubscribe();
+      // Send exit message to Remote Peer
+      sendDataMessage({ type: "exit" });
       // Mark ourselves as offline when unmounting
       updateOurStatus(false);
       // Clean up walkie status
@@ -633,7 +794,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       closeWebRTC();
       stopRingingSound();
     };
-  }, [isFriendDuel, config.id, isWalkieTalkieActive]);
+  }, [isFriendDuel, config.id]);
 
   // Helper to update our own ready state in Firestore
   const updateOurReadyState = async (ready: boolean) => {
@@ -705,9 +866,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // Walkie-Talkie mic handler
   const startMicrophoneAnalysis = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      microphoneStreamRef.current = stream;
-      setMicrophoneAllowed(true);
+      const stream = await acquireMicrophoneStream();
+      if (!stream) {
+        simulateStaticWave();
+        return;
+      }
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioContextClass();
@@ -734,8 +897,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       updateWave();
     } catch (e) {
-      console.warn("Microphone access denied:", e);
-      setMicrophoneAllowed(false);
+      console.warn("Microphone analysis failed:", e);
       simulateStaticWave();
     }
   };
@@ -757,10 +919,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (micAnimFrameId.current) {
       cancelAnimationFrame(micAnimFrameId.current);
       micAnimFrameId.current = null;
-    }
-    if (microphoneStreamRef.current) {
-      microphoneStreamRef.current.getTracks().forEach((track) => track.stop());
-      microphoneStreamRef.current = null;
     }
     audioAnalyserRef.current = null;
     setWalkieWaveAnim([10, 10, 10, 10]);
@@ -1094,19 +1252,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (isShootOff) {
       setUserShootOffShot(numericValue);
       if (isFriendDuel) {
-        const docRef = doc(db, "active_duels", config.id);
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-        if (isCreator) {
-          updateDoc(docRef, {
-            creatorShootOffShot: numericValue,
-            updatedAt: Date.now()
-          });
-        } else {
-          updateDoc(docRef, {
-            playerShootOffShot: numericValue,
-            updatedAt: Date.now()
-          });
-        }
+        sendDataMessage({ type: "shootoff", value: numericValue });
       } else {
         simulateRivalShootOff();
       }
@@ -1127,21 +1273,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       navigator.vibrate(40);
     }
 
-    // Trigger simulated rival shot or write to Firestore
+    // Trigger simulated rival shot or send via WebRTC
     if (isFriendDuel) {
-      const docRef = doc(db, "active_duels", config.id);
-      const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-      if (isCreator) {
-        updateDoc(docRef, {
-          creatorTiros: updatedTiros,
-          updatedAt: Date.now()
-        });
-      } else {
-        updateDoc(docRef, {
-          playerTiros: updatedTiros,
-          updatedAt: Date.now()
-        });
-      }
+      sendDataMessage({ type: "shot", value });
     } else {
       simulateRivalShot(nextArrow, currentEndShots);
     }
@@ -1164,12 +1298,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (isShootOff) {
       setUserShootOffShot(null);
       if (isFriendDuel) {
-        const docRef = doc(db, "active_duels", config.id);
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-        updateDoc(docRef, {
-          [isCreator ? "creatorShootOffShot" : "playerShootOffShot"]: null,
-          updatedAt: Date.now()
-        });
+        sendDataMessage({ type: "undo-shootoff" });
       }
       return;
     }
@@ -1187,19 +1316,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setCurrentArrow(shotsCount - 1);
 
     if (isFriendDuel) {
-      const docRef = doc(db, "active_duels", config.id);
-      const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-      if (isCreator) {
-        updateDoc(docRef, {
-          creatorTiros: updatedTiros,
-          updatedAt: Date.now()
-        });
-      } else {
-        updateDoc(docRef, {
-          playerTiros: updatedTiros,
-          updatedAt: Date.now()
-        });
-      }
+      sendDataMessage({ type: "undo" });
     } else {
       // Also remove rival corresponding shot
       const updatedRivalTiros = [...rivalTiros];
@@ -1438,6 +1555,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setIsRivalReady(false);
     setIsReadyCheckActive(true);
     if (isFriendDuel) {
+      sendDataMessage({ type: "next-end" });
       updateOurReadyState(false);
       // Clean photos in Firestore for the new end
       const docRef = doc(db, "active_duels", config.id);
@@ -1537,9 +1655,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         >
           <ArrowLeft size={14} />
         </button>
-        <span className="text-[10px] text-purple-400 font-black tracking-widest uppercase">
-          {isShootOff ? "Flecha Desempate" : `Set ${currentEnd + 1} de 5`}
-        </span>
+        <div className="flex items-center gap-1.5 bg-neutral-950/40 border border-white/5 py-1 px-2.5 rounded-full">
+          <span className="text-[9px] text-purple-400 font-black tracking-wider uppercase">
+            {isShootOff ? "Desempate" : `Set ${currentEnd + 1} de 5`}
+          </span>
+          {isFriendDuel && (
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${isP2PActive ? "bg-cyan-neon shadow-[0_0_8px_#00e5ff] animate-pulse" : "bg-red-500 animate-ping"}`}
+              title={isP2PActive ? "Conexión Directa P2P Activa (Coste $0)" : "Buscando conexión directa..."}
+            />
+          )}
+        </div>
         
         {/* Countdown timer */}
         <div className="w-10 flex justify-end">
@@ -1824,6 +1950,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     navigator.vibrate(30);
                   }
                   if (isFriendDuel) {
+                    sendDataMessage({ type: "ready", ready: true });
                     updateOurReadyState(true);
                   }
                 }}
@@ -2344,7 +2471,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       : "border-cyan-neon text-cyan-neon"
                   }`}
                 >
-                  {isRivalSpeaking ? "🎙️ Transmitiendo..." : isIncomingCall ? "📞 Llamada..." : "📻 Walkie ON"}
+                  {isWalkieTalkieActive && isRivalWalkieActive
+                    ? "🟢 En vivo"
+                    : isRivalSpeaking
+                    ? "🎙️ Transmitiendo..."
+                    : isIncomingCall
+                    ? "📞 Llamada..."
+                    : "📻 Walkie ON"}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -2446,12 +2579,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             setUserPhoto(base64);
 
                             if (isFriendDuel) {
-                              const docRef = doc(db, "active_duels", config.id);
-                              const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
-                              await updateDoc(docRef, {
-                                [isCreator ? "creatorPhoto" : "playerPhoto"]: base64,
-                                updatedAt: Date.now()
-                              });
+                              sendDataMessage({ type: "photo", photo: base64 });
                             } else {
                               simulateRivalUpload();
                             }
