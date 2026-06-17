@@ -143,3 +143,71 @@ export function playRadioStatic() {
     console.warn("[Sound] Failed to play radio static:", e);
   }
 }
+
+let ringInterval: any = null;
+let activeRingOscillators: { osc1: OscillatorNode; osc2: OscillatorNode; gainNode: GainNode }[] = [];
+
+/**
+ * Inicia el repique de llamada en bucle (tono dual oscilatorio 400Hz + 450Hz)
+ */
+export function startRingingSound() {
+  stopRingingSound();
+  try {
+    const ctx = getAudioContext();
+    const playRing = () => {
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(400, now);
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(450, now);
+
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.25, now + 0.05);
+      gainNode.gain.setValueAtTime(0.25, now + 1.2);
+      gainNode.gain.linearRampToValueAtTime(0, now + 1.3);
+
+      osc1.connect(gainNode);
+      osc2.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 1.3);
+      osc2.start(now);
+      osc2.stop(now + 1.3);
+
+      const item = { osc1, osc2, gainNode };
+      activeRingOscillators.push(item);
+      setTimeout(() => {
+        activeRingOscillators = activeRingOscillators.filter((i) => i !== item);
+      }, 1500);
+    };
+
+    playRing();
+    ringInterval = setInterval(playRing, 3000);
+  } catch (e) {
+    console.warn("[Sound] Failed to play ringing sound:", e);
+  }
+}
+
+/**
+ * Detiene el repique de llamada
+ */
+export function stopRingingSound() {
+  if (ringInterval) {
+    clearInterval(ringInterval);
+    ringInterval = null;
+  }
+  activeRingOscillators.forEach((item) => {
+    try {
+      item.osc1.stop();
+      item.osc2.stop();
+      item.gainNode.disconnect();
+    } catch (e) {}
+  });
+  activeRingOscillators = [];
+}
+
