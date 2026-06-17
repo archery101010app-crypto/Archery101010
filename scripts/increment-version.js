@@ -37,20 +37,3 @@ if (!fs.existsSync(versionTsDir)) {
 
 fs.writeFileSync(versionTsPath, `export const APP_VERSION = "${newVersion}";\n`, 'utf8');
 console.log(`Updated src/lib/version.ts with: export const APP_VERSION = "${newVersion}";`);
-
-// 4. Update public/sw.js cache name
-const swJsPath = path.join(__dirname, '../public/sw.js');
-if (fs.existsSync(swJsPath)) {
-  let swContent = fs.readFileSync(swJsPath, 'utf8');
-  const cacheNameRegex = /const CACHE_NAME = "archery-101010-cache-v[^"]+";/;
-  const newCacheName = `const CACHE_NAME = "archery-101010-cache-v${newVersion}";`;
-  if (cacheNameRegex.test(swContent)) {
-    swContent = swContent.replace(cacheNameRegex, newCacheName);
-    fs.writeFileSync(swJsPath, swContent, 'utf8');
-    console.log(`Updated public/sw.js with CACHE_NAME: ${newCacheName}`);
-  } else {
-    console.warn("Warning: CACHE_NAME pattern not found in public/sw.js");
-  }
-} else {
-  console.warn("Warning: public/sw.js not found, skipping cache name update");
-}
