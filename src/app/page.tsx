@@ -230,6 +230,7 @@ export default function Home() {
               bowType: data.bowType,
               distance: data.distance,
               system: data.bowType === "Compound" ? "cumulative" : "set",
+              isCreator: false,
               rival: {
                 uid: "RIV-FRIEND-CREATOR",
                 fullName: data.creatorName || "Anfitrión del Duelo",
@@ -1098,6 +1099,7 @@ export default function Home() {
                         bowType: pendingInvitation.bowType,
                         distance: pendingInvitation.distance,
                         system: pendingInvitation.bowType === "Compound" ? "cumulative" : "set",
+                        isCreator: false,
                         rival: {
                           uid: pendingInvitation.senderUid,
                           fullName: pendingInvitation.senderName,

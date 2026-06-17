@@ -210,6 +210,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 bowType: data.bowType,
                 distance: data.distance,
                 system: data.bowType === "Compound" ? "cumulative" : "set",
+                isCreator: true,
                 rival: {
                   uid: data.receiverUid,
                   fullName: realUsers.find(u => u.uid === data.receiverUid)?.fullName || "Oponente en Línea",
@@ -503,6 +504,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           bowType: data.bowType,
           distance: data.distance,
           system: data.bowType === "Compound" ? "cumulative" : "set",
+          isCreator: false,
           rival: {
             uid: "RIV-FRIEND-CREATOR",
             fullName: data.creatorName || "Anfitrión del Duelo",
@@ -1177,6 +1179,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       bowType: generatedInvite.bowType,
                       distance: generatedInvite.distance,
                       system: generatedInvite.bowType === "Compound" ? "cumulative" : "set",
+                      isCreator: true,
                       rival: {
                         uid: "RIV-FRIEND-PLAYER",
                         fullName: "Desafiante Invitado",

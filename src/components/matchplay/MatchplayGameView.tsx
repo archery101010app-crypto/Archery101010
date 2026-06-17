@@ -90,8 +90,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
 
   // Friend duel connection/readiness simulator
-  const isFriendDuel = config.rival.uid === "RIV-FRIEND-PLAYER" || config.rival.uid === "RIV-FRIEND-CREATOR";
+  const isFriendDuel = !config.rival.uid.startsWith("RIV-BOT-");
   const [isRivalConnected, setIsRivalConnected] = useState<boolean>(!isFriendDuel);
+
+  const [isCreatorRole, setIsCreatorRole] = useState<boolean>(config.isCreator === true || config.rival.uid === "RIV-FRIEND-PLAYER");
+  const isCreatorRoleRef = useRef<boolean>(config.isCreator === true || config.rival.uid === "RIV-FRIEND-PLAYER");
+
+  useEffect(() => {
+    isCreatorRoleRef.current = isCreatorRole;
+  }, [isCreatorRole]);
 
   // Phone/VoIP Call States
   const [callState, setCallState] = useState<"IDLE" | "DIALING" | "RINGING" | "ACTIVE">("IDLE");
@@ -816,7 +823,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     // Helper to update our own connection status in Firestore
     const updateOurStatus = async (connected: boolean) => {
       try {
-        if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+        if (isCreatorRoleRef.current) {
           // We are creator
           await updateDoc(docRef, {
             creatorConnected: connected,
@@ -848,7 +855,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       updateOurStatus(false);
       // Clean walkie on close
       try {
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
+        const isCreator = isCreatorRoleRef.current;
         updateDoc(docRef, {
           [isCreator ? "walkieActiveCreator" : "walkieActivePlayer"]: false,
           webrtcOffer: null,
@@ -866,7 +873,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         const data = snap.data();
         let connected = false;
 
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
+        const isCreator = isCreatorRoleRef.current;
         if (isCreator) {
           // We are creator. Rival is player.
           connected = data.playerConnected === true;
@@ -928,7 +935,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       updateOurStatus(false);
       // Clean up walkie status
       try {
-        const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
+        const isCreator = isCreatorRoleRef.current;
         updateDoc(docRef, {
           [isCreator ? "walkieActiveCreator" : "walkieActivePlayer"]: false,
           webrtcOffer: null,
@@ -947,7 +954,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isFriendDuel || !config.id) return;
     try {
       const docRef = doc(db, "active_duels", config.id);
-      if (config.rival.uid === "RIV-FRIEND-PLAYER") {
+      if (isCreatorRoleRef.current) {
         // We are creator
         await updateDoc(docRef, {
           creatorReady: ready,
@@ -1715,7 +1722,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       updateOurReadyState(false);
       // Clean photos in Firestore for the new end
       const docRef = doc(db, "active_duels", config.id);
-      const isCreator = config.rival.uid === "RIV-FRIEND-PLAYER";
+      const isCreator = isCreatorRole;
       updateDoc(docRef, {
         [isCreator ? "creatorPhoto" : "playerPhoto"]: null,
         updatedAt: Date.now()
@@ -2041,7 +2048,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         const snap = await getDoc(docRef);
                         if (snap.exists()) {
                           const data = snap.data();
-                          const connected = config.rival.uid === "RIV-FRIEND-PLAYER" 
+                          const connected = isCreatorRole 
                             ? data.playerConnected === true 
                             : data.creatorConnected === true;
                           if (connected) {
