@@ -326,7 +326,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       defaultDistance: u.bowConfig?.defaultDistance || 18
     },
     rating: "9.0",
-    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 45000)) ? "online" as const : "offline" as const,
+    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 180000)) ? "online" as const : "offline" as const,
     lastActiveAt: u.lastActiveAt
   })).filter((riv) => {
     // Exclude mock/demo users from the online list

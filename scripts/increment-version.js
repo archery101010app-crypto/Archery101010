@@ -37,3 +37,19 @@ if (!fs.existsSync(versionTsDir)) {
 
 fs.writeFileSync(versionTsPath, `export const APP_VERSION = "${newVersion}";\n`, 'utf8');
 console.log(`Updated src/lib/version.ts with: export const APP_VERSION = "${newVersion}";`);
+
+// 4. Update public/sw.js CACHE_NAME
+const swPath = path.join(__dirname, '../public/sw.js');
+if (fs.existsSync(swPath)) {
+  let swContent = fs.readFileSync(swPath, 'utf8');
+  const cacheRegex = /const\s+CACHE_NAME\s*=\s*["'`].*?["'`];/;
+  if (cacheRegex.test(swContent)) {
+    swContent = swContent.replace(cacheRegex, `const CACHE_NAME = "archery-101010-cache-v${newVersion}";`);
+    fs.writeFileSync(swPath, swContent, 'utf8');
+    console.log(`Updated public/sw.js CACHE_NAME to: "archery-101010-cache-v${newVersion}"`);
+  } else {
+    console.warn("Could not find CACHE_NAME definition in public/sw.js");
+  }
+} else {
+  console.warn("public/sw.js not found, skipping cache name bump");
+}
