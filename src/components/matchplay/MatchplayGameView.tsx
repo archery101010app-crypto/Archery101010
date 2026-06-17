@@ -71,9 +71,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // Scoring input mode: TARGET (diana) vs KEYBOARD (teclado)
   const [mode, setMode] = useState<"TARGET" | "KEYBOARD">("TARGET");
 
-  // Timer: 30s per user arrow
-  const [timeLeft, setTimeLeft] = useState(30);
-
   // Photo Validation States
   const [validationPhase, setValidationPhase] = useState<"IDLE" | "UPLOAD" | "REVIEW">("IDLE");
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
@@ -86,6 +83,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // Ready Check States
   const [isReadyCheckActive, setIsReadyCheckActive] = useState<boolean>(true);
+  const [isUserPresent, setIsUserPresent] = useState<boolean>(false);
+  const [isRivalPresent, setIsRivalPresent] = useState<boolean>(false);
   const [isUserReady, setIsUserReady] = useState<boolean>(false);
   const [isRivalReady, setIsRivalReady] = useState<boolean>(false);
   const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
@@ -94,14 +93,28 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const isFriendDuel = config.rival.uid === "RIV-FRIEND-PLAYER" || config.rival.uid === "RIV-FRIEND-CREATOR";
   const [isRivalConnected, setIsRivalConnected] = useState<boolean>(!isFriendDuel);
 
-  // Walkie-Talkie States
-  const [isWalkieTalkieActive, setIsWalkieTalkieActive] = useState<boolean>(false);
-  const [isIncomingCall, setIsIncomingCall] = useState<boolean>(false);
-  const [isRivalWalkieActive, setIsRivalWalkieActive] = useState<boolean>(false);
-  const [walkieWaveAnim, setWalkieWaveAnim] = useState<number[]>([10, 10, 10, 10]);
+  // Phone/VoIP Call States
+  const [callState, setCallState] = useState<"IDLE" | "DIALING" | "RINGING" | "ACTIVE">("IDLE");
+  const [callDuration, setCallDuration] = useState<number>(0);
   const [isRivalSpeaking, setIsRivalSpeaking] = useState<boolean>(false);
-  const [walkieText, setWalkieText] = useState<string | null>(null);
+  const [walkieWaveAnim, setWalkieWaveAnim] = useState<number[]>([10, 10, 10, 10]);
   const [microphoneAllowed, setMicrophoneAllowed] = useState<boolean>(false);
+
+  const [isWalkieTalkieActive, setIsWalkieTalkieActive] = useState<boolean>(false);
+  const [isRivalWalkieActive, setIsRivalWalkieActive] = useState<boolean>(false);
+  const [isIncomingCall, setIsIncomingCall] = useState<boolean>(false);
+  const [walkieText, setWalkieText] = useState<string | null>(null);
+
+  const currentEndRef = useRef<number>(0);
+  const callStateRef = useRef<"IDLE" | "DIALING" | "RINGING" | "ACTIVE">("IDLE");
+
+  useEffect(() => {
+    currentEndRef.current = currentEnd;
+  }, [currentEnd]);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
 
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const audioAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -145,42 +158,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     animate: { scale: 1, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 20 } }
   };
 
-  // Turn Countdown Timer effect
-  useEffect(() => {
-    if (duelFinished || rivalThinking || endSummary || showRules || isShootOff || validationPhase !== "IDLE" || isReadyCheckActive) {
-      return;
-    }
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Play 3 End Beeps (Señal de Alto WA)
-          playWABeepEnd();
-          // Auto register a Miss (M) on timer expiration
-          handleScoreInput("M");
-          return 30;
-        }
-
-        // Sound warning for last 5 seconds (5, 4, 3, 2, 1)
-        const nextSec = prev - 1;
-        if (nextSec <= 5 && nextSec > 0) {
-          playWABeepWarning();
-        }
-
-        return nextSec;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [duelFinished, rivalThinking, endSummary, showRules, isShootOff, currentArrow, currentEnd, validationPhase, isReadyCheckActive]);
-
-  // Reset timer on user's turn
-  useEffect(() => {
-    if (!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE" && !isReadyCheckActive) {
-      setTimeLeft(30);
-    }
-  }, [rivalThinking, currentArrow, currentEnd, duelFinished, endSummary, showRules, validationPhase, isReadyCheckActive]);
 
   // Clear animating shot value after 900ms
   useEffect(() => {
@@ -322,21 +300,33 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       console.log("[WebRTC DataChannel] Received:", msg);
 
       switch (msg.type) {
+        case "presence-state":
+          setIsRivalPresent(msg.present);
+          break;
+        case "ready-state":
+          setIsRivalReady(msg.ready);
+          break;
         case "ready":
           setIsRivalReady(msg.ready);
           break;
         case "shot": {
-          const updatedRival = [...rivalTiros];
-          updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), msg.value];
-          setRivalTiros(updatedRival);
+          setRivalTiros((prev) => {
+            const updatedRival = [...prev];
+            const cEnd = currentEndRef.current;
+            updatedRival[cEnd] = [...(updatedRival[cEnd] || []), msg.value];
+            return updatedRival;
+          });
           break;
         }
         case "undo": {
-          const updatedRival = [...rivalTiros];
-          if (updatedRival[currentEnd] && updatedRival[currentEnd].length > 0) {
-            updatedRival[currentEnd] = updatedRival[currentEnd].slice(0, -1);
-            setRivalTiros(updatedRival);
-          }
+          setRivalTiros((prev) => {
+            const updatedRival = [...prev];
+            const cEnd = currentEndRef.current;
+            if (updatedRival[cEnd] && updatedRival[cEnd].length > 0) {
+              updatedRival[cEnd] = updatedRival[cEnd].slice(0, -1);
+            }
+            return updatedRival;
+          });
           break;
         }
         case "shootoff":
@@ -356,6 +346,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setRivalPhoto(null);
           setCurrentEnd((prev) => prev + 1);
           setCurrentArrow(0);
+          setIsUserPresent(false);
+          setIsRivalPresent(false);
           setIsUserReady(false);
           setIsRivalReady(false);
           setIsReadyCheckActive(true);
@@ -371,6 +363,42 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           } else {
             setIsIncomingCall(false);
             stopRingingSound();
+          }
+          break;
+        case "dial":
+          if (callStateRef.current === "IDLE") {
+            setCallState("RINGING");
+            setIsIncomingCall(true);
+            startRingingSound();
+          }
+          break;
+        case "call-accept":
+          if (callStateRef.current === "DIALING") {
+            setCallState("ACTIVE");
+            setIsWalkieTalkieActive(true);
+            setLocalAudioTrackActive(true);
+            setCallDuration(0);
+          }
+          break;
+        case "call-decline":
+          if (callStateRef.current === "DIALING") {
+            setCallState("IDLE");
+            alert("El rival ha rechazado la llamada.");
+          }
+          break;
+        case "call-cancel":
+          if (callStateRef.current === "RINGING") {
+            setCallState("IDLE");
+            setIsIncomingCall(false);
+            stopRingingSound();
+          }
+          break;
+        case "call-hangup":
+          if (callStateRef.current === "ACTIVE") {
+            setCallState("IDLE");
+            setIsWalkieTalkieActive(false);
+            setLocalAudioTrackActive(false);
+            setCallDuration(0);
           }
           break;
         case "exit":
@@ -397,6 +425,39 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       console.warn("[WebRTC] Microphone access denied:", err);
       setMicrophoneAllowed(false);
       return null;
+    }
+  };
+
+  // Replace or add local audio track on peer connection
+  const setLocalAudioTrackActive = async (active: boolean) => {
+    try {
+      const pc = peerConnectionRef.current;
+      if (!pc) return;
+
+      if (active) {
+        const stream = await acquireMicrophoneStream();
+        if (stream) {
+          const track = stream.getAudioTracks()[0];
+          track.enabled = true;
+
+          // Find the audio sender on the peer connection
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+          if (sender) {
+            console.log("[WebRTC] Replacing existing audio track with active mic track");
+            await sender.replaceTrack(track);
+          } else {
+            console.log("[WebRTC] Adding audio track to connection");
+            pc.addTrack(track, stream);
+          }
+        }
+      } else {
+        // Mute local tracks
+        if (microphoneStreamRef.current) {
+          microphoneStreamRef.current.getTracks().forEach(t => t.enabled = false);
+        }
+      }
+    } catch (e) {
+      console.error("Error setting local audio track active:", e);
     }
   };
 
@@ -456,18 +517,23 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         }
       };
 
-      // Try to acquire mic stream on start, so audio is pre-configured (muted by default)
+      // Setup audio transceiver first so the audio media channel exists in SDP
       try {
         const stream = await acquireMicrophoneStream();
         if (stream) {
           stream.getTracks().forEach((track) => {
-            track.enabled = isWalkieTalkieActive;
+            track.enabled = false; // Muted by default
             pc.addTrack(track, stream);
           });
+        } else {
+          pc.addTransceiver("audio", { direction: "sendrecv" });
         }
       } catch (micErr) {
-        console.warn("[WebRTC] Microphone access denied. Proceeding with text-only data channel:", micErr);
+        console.warn("[WebRTC] Microphone setup fallback to transceiver:", micErr);
         setMicrophoneAllowed(false);
+        try {
+          pc.addTransceiver("audio", { direction: "sendrecv" });
+        } catch (e) {}
       }
 
       // Configure DataChannel
@@ -642,6 +708,83 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     candidatesHandledRef.current = 0;
     setIsP2PActive(false);
   };
+
+  // VoIP call controls
+  const dialCall = () => {
+    if (callStateRef.current !== "IDLE") return;
+    setCallState("DIALING");
+    sendDataMessage({ type: "dial" });
+  };
+
+  const cancelCall = () => {
+    if (callStateRef.current !== "DIALING") return;
+    setCallState("IDLE");
+    sendDataMessage({ type: "call-cancel" });
+  };
+
+  const acceptCall = () => {
+    if (callStateRef.current !== "RINGING") return;
+    setCallState("ACTIVE");
+    setIsIncomingCall(false);
+    setIsWalkieTalkieActive(true);
+    stopRingingSound();
+    setLocalAudioTrackActive(true);
+    setCallDuration(0);
+    sendDataMessage({ type: "call-accept" });
+  };
+
+  const declineCall = () => {
+    if (callStateRef.current !== "RINGING") return;
+    setCallState("IDLE");
+    setIsIncomingCall(false);
+    stopRingingSound();
+    sendDataMessage({ type: "call-decline" });
+  };
+
+  const hangupCall = () => {
+    if (callStateRef.current !== "ACTIVE") return;
+    setCallState("IDLE");
+    setIsWalkieTalkieActive(false);
+    setLocalAudioTrackActive(false);
+    setCallDuration(0);
+    sendDataMessage({ type: "call-hangup" });
+  };
+
+  const handleCallAction = () => {
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
+    }
+    if (callState === "ACTIVE") {
+      hangupCall();
+    } else if (callState === "DIALING") {
+      cancelCall();
+    } else if (callState === "RINGING") {
+      acceptCall();
+    } else {
+      dialCall();
+    }
+  };
+
+  const formatCallDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Call Duration Timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (callState === "ACTIVE") {
+      timer = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [callState]);
 
   // Toggle Walkie-Talkie status
   const toggleWalkieTalkie = async () => {
@@ -821,19 +964,27 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // Rival Ready Simulation (Only for Bots)
   useEffect(() => {
-    if (isReadyCheckActive && !isRivalReady && !duelFinished) {
-      if (isFriendDuel) return; // Managed by Firestore subscription
+    if (!isReadyCheckActive || duelFinished || isFriendDuel) return;
 
-      const delay = 800 + Math.random() * 1400;
+    // Simulate bot reporting "Estoy en la línea"
+    if (!isRivalPresent) {
+      const timer = setTimeout(() => {
+        setIsRivalPresent(true);
+      }, 600 + Math.random() * 800);
+      return () => clearTimeout(timer);
+    }
+
+    // Simulate bot clicking "Iniciar Tirada" once user is present
+    if (isRivalPresent && !isRivalReady && isUserPresent) {
       const timer = setTimeout(() => {
         setIsRivalReady(true);
         if (navigator.vibrate) {
           navigator.vibrate(15);
         }
-      }, delay);
+      }, 800 + Math.random() * 1000);
       return () => clearTimeout(timer);
     }
-  }, [isReadyCheckActive, isRivalReady, duelFinished, isFriendDuel]);
+  }, [isReadyCheckActive, isRivalPresent, isRivalReady, isUserPresent, duelFinished, isFriendDuel]);
 
   // Countdown when both ready
   useEffect(() => {
@@ -1551,6 +1702,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setRivalPhoto(null);
     setCurrentEnd((prev) => prev + 1);
     setCurrentArrow(0);
+    setIsUserPresent(false);
+    setIsRivalPresent(false);
     setIsUserReady(false);
     setIsRivalReady(false);
     setIsReadyCheckActive(true);
@@ -1667,18 +1820,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           )}
         </div>
         
-        {/* Countdown timer */}
-        <div className="w-10 flex justify-end">
-          {!rivalThinking && !duelFinished && !endSummary && !showRules && validationPhase === "IDLE" && (
-            <span className={`text-xs font-mono font-black border px-2 py-0.5 rounded-full ${
-              timeLeft <= 10
-                ? "text-red-500 border-red-500/30 bg-red-500/10 animate-pulse"
-                : "text-cyan-neon border-cyan-neon/30 bg-cyan-neon/10"
-            }`}>
-              {timeLeft}s
-            </span>
-          )}
-        </div>
+        {/* Countdown timer placeholder */}
+        <div className="w-10 flex justify-end" />
       </div>
 
       {/* Duelist panels and live scoreboard */}
@@ -1855,16 +1998,24 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {/* User ready box */}
               <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
                 isUserReady 
-                  ? "bg-cyan-neon/5 border-cyan-neon/30 text-cyan-neon font-black" 
+                  ? "bg-cyan-neon/10 border-cyan-neon/30 text-cyan-neon font-black" 
+                  : isUserPresent
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold"
                   : "bg-neutral-900/60 border-white/5 text-gray-dim"
               }`}>
                 <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
                   {user.fullName.substring(0, 2).toUpperCase()}
-                  {isUserReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+                  {isUserReady ? (
+                    <span className="absolute -bottom-1 -right-1 text-xs">🎯</span>
+                  ) : isUserPresent ? (
+                    <span className="absolute -bottom-1 -right-1 text-xs">🟢</span>
+                  ) : (
+                    <span className="absolute -bottom-1 -right-1 text-xs">⌛</span>
+                  )}
                 </div>
                 <span className="text-[10px] font-bold truncate max-w-full">Tú</span>
                 <span className="text-[9px] font-black uppercase tracking-wider">
-                  {isUserReady ? "Listo" : "Espera..."}
+                  {isUserReady ? "Listo" : isUserPresent ? "En la línea" : "Espera..."}
                 </span>
               </div>
 
@@ -1911,16 +2062,24 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               ) : (
                 <div className={`p-3 rounded-2xl border flex flex-col items-center gap-2 transition-all duration-200 ${
                   isRivalReady 
-                    ? "bg-purple-500/5 border-purple-500/30 text-purple-400 font-black" 
+                    ? "bg-purple-500/10 border-purple-500/30 text-purple-400 font-black" 
+                    : isRivalPresent
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold animate-pulse"
                     : "bg-neutral-900/60 border-white/5 text-gray-dim animate-pulse"
                 }`}>
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/5 flex items-center justify-center text-xs font-black relative">
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
-                    {isRivalReady && <span className="absolute -bottom-1 -right-1 text-xs">✅</span>}
+                    {isRivalReady ? (
+                      <span className="absolute -bottom-1 -right-1 text-xs">🎯</span>
+                    ) : isRivalPresent ? (
+                      <span className="absolute -bottom-1 -right-1 text-xs">🟢</span>
+                    ) : (
+                      <span className="absolute -bottom-1 -right-1 text-xs">⌛</span>
+                    )}
                   </div>
                   <span className="text-[10px] font-bold truncate max-w-full">{config.rival.fullName}</span>
                   <span className="text-[9px] font-black uppercase tracking-wider">
-                    {isRivalReady ? "Listo" : "Pensando..."}
+                    {isRivalReady ? "Listo" : isRivalPresent ? "En la línea" : "Espera..."}
                   </span>
                 </div>
               )}
@@ -1942,27 +2101,53 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   {readyCountdown > 0 ? readyCountdown : "🎯"}
                 </motion.div>
               </div>
-            ) : (
+            ) : !isUserPresent ? (
               <button
                 onClick={() => {
-                  setIsUserReady(true);
+                  setIsUserPresent(true);
                   if (navigator.vibrate) {
                     navigator.vibrate(30);
                   }
                   if (isFriendDuel) {
-                    sendDataMessage({ type: "ready", ready: true });
-                    updateOurReadyState(true);
+                    sendDataMessage({ type: "presence-state", present: true });
                   }
                 }}
-                disabled={isUserReady}
-                className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 ${
-                  isUserReady
-                    ? "bg-neutral-900 border border-white/5 text-gray-dim cursor-default"
-                    : "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-105 active:scale-98 cursor-pointer"
-                }`}
+                className="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 bg-gradient-to-r from-emerald-500 to-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:brightness-105 active:scale-98 cursor-pointer"
               >
-                {isUserReady ? "Esperando al Rival..." : "¡Listo en Línea! 🏹"}
+                Estoy en la Línea 🏹
               </button>
+            ) : !isUserReady ? (
+              <div className="w-full flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setIsUserReady(true);
+                    if (navigator.vibrate) {
+                      navigator.vibrate(30);
+                    }
+                    if (isFriendDuel) {
+                      sendDataMessage({ type: "ready-state", ready: true });
+                      updateOurReadyState(true);
+                    }
+                  }}
+                  disabled={!isRivalPresent}
+                  className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 ${
+                    isRivalPresent
+                      ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-105 active:scale-98 cursor-pointer"
+                      : "bg-neutral-900 border border-white/5 text-gray-dim cursor-not-allowed opacity-50"
+                  }`}
+                >
+                  Iniciar Tirada 🎯
+                </button>
+                {!isRivalPresent && (
+                  <span className="text-[8px] text-yellow-gold font-bold uppercase animate-pulse">
+                    Esperando a que el rival esté en la línea
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest bg-neutral-900 border border-white/5 text-gray-dim text-center">
+                Esperando al Rival...
+              </div>
             )}
           </div>
         </div>
@@ -2417,113 +2602,135 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         </div>
       )}
 
-      {/* Walkie-Talkie Floating Controller */}
+      {/* VoIP Floating Controller */}
       {!duelFinished && (
         <div className="fixed bottom-24 right-5 z-[80] flex flex-col items-end gap-2.5 pointer-events-auto">
-          {/* Audio Bubble Overlay */}
+          {/* Active Call UI badge/explanation */}
           <AnimatePresence>
-            {walkieText && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.85, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.85, y: 10 }}
-                className="bg-neutral-950 border border-purple-500/30 p-3 rounded-2xl max-w-[200px] shadow-2xl relative"
-              >
-                {/* Triangular arrow point */}
-                <div className="absolute right-5 -bottom-1.5 w-3 h-3 bg-neutral-950 border-r border-b border-purple-500/30 rotate-45" />
-                
-                <span className="text-[8px] text-purple-400 font-black tracking-widest uppercase block mb-1">
-                  📻 CANAL DE VOZ · RIVAL
-                </span>
-                <p className="text-[10px] text-white leading-snug font-bold">
-                  "{walkieText}"
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Live explanation tooltip when active */}
-          <AnimatePresence>
-            {isWalkieTalkieActive && !isRivalSpeaking && !walkieText && (
+            {callState === "ACTIVE" && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.85, y: 5 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.85, y: 5 }}
                 className="bg-neutral-950/95 border border-cyan-neon/20 p-2.5 rounded-xl max-w-[170px] shadow-2xl text-[9px] text-gray-300 leading-snug text-center mb-1 backdrop-blur"
               >
-                <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">🎤 Canal Abierto</span>
-                Habla con manos libres. Tu voz se transmite continuamente sin botón de envío.
+                <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">🎤 VoIP Activo</span>
+                Llamada de voz en vivo establecida ({formatCallDuration(callDuration)}).
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Micro Walkie-Talkie Button */}
           <div className="flex items-center gap-2">
             <AnimatePresence>
-              {(isWalkieTalkieActive || isIncomingCall) && (
+              {callState !== "IDLE" && (
                 <motion.span
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
                   className={`text-[8px] bg-neutral-950/85 backdrop-blur border font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow ${
-                    isIncomingCall
-                      ? "border-red-500 text-red-500 animate-pulse"
-                      : "border-cyan-neon text-cyan-neon"
+                    callState === "ACTIVE"
+                      ? "border-cyan-neon text-cyan-neon"
+                      : "border-yellow-gold text-yellow-gold animate-pulse"
                   }`}
                 >
-                  {isWalkieTalkieActive && isRivalWalkieActive
-                    ? "🟢 En vivo"
-                    : isRivalSpeaking
-                    ? "🎙️ Transmitiendo..."
-                    : isIncomingCall
-                    ? "📞 Llamada..."
-                    : "📻 Walkie ON"}
+                  {callState === "ACTIVE"
+                    ? `🟢 En línea · ${formatCallDuration(callDuration)}`
+                    : callState === "DIALING"
+                    ? "📞 Llamando..."
+                    : "🔔 Sonando..."}
                 </motion.span>
               )}
             </AnimatePresence>
 
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={() => {
-                toggleWalkieTalkie();
-                if (navigator.vibrate) {
-                  navigator.vibrate(40);
-                }
-              }}
+              onClick={handleCallAction}
               className={`w-12 h-12 rounded-full flex items-center justify-center border cursor-pointer shadow-xl relative overflow-hidden transition-all duration-300 ${
-                isWalkieTalkieActive
+                callState === "ACTIVE"
                   ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon shadow-[0_0_20px_rgba(0,229,255,0.15)]"
-                  : isIncomingCall
-                  ? "bg-red-500/10 border-red-500 text-red-500 animate-bounce shadow-[0_0_20px_rgba(239,68,68,0.15)]"
+                  : callState === "DIALING" || callState === "RINGING"
+                  ? "bg-yellow-gold/10 border-yellow-gold text-yellow-gold animate-pulse animate-bounce shadow-[0_0_20px_rgba(255,242,0,0.15)]"
                   : "bg-neutral-900 border-white/10 text-gray-dim hover:text-white"
               }`}
             >
-              {/* Dynamic waveform visualization inside button */}
-              {isWalkieTalkieActive ? (
-                <div className="flex items-end gap-0.5 h-4 justify-center">
-                  {walkieWaveAnim.map((height, idx) => (
-                    <motion.div
-                      key={idx}
-                      animate={{ height }}
-                      className="w-0.75 bg-cyan-neon rounded-full"
-                      style={{ height: `${height}px` }}
-                    />
-                  ))}
-                </div>
-              ) : isIncomingCall ? (
-                <Phone size={18} className="animate-pulse" />
+              {callState === "ACTIVE" ? (
+                <Phone size={18} className="rotate-[135deg] text-red-500" />
               ) : (
-                <Mic size={18} />
+                <Phone size={18} />
               )}
 
               {/* Status active pulsing dot */}
-              {isWalkieTalkieActive && (
+              {callState === "ACTIVE" && (
                 <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full bg-cyan-neon animate-ping" />
               )}
             </motion.button>
           </div>
         </div>
       )}
+
+      {/* VoIP Call Overlay Modal */}
+      <AnimatePresence>
+        {(callState === "RINGING" || callState === "DIALING") && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              variants={popVariants}
+              initial="initial"
+              animate="animate"
+              exit="initial"
+              className="w-full max-w-[300px] bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[32px] flex flex-col items-center text-center gap-5 shadow-2xl relative"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
+              
+              <div className="w-16 h-16 rounded-full bg-neutral-900 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon animate-pulse mt-2 shadow-[0_0_20px_rgba(0,229,255,0.2)]">
+                <Phone size={28} className="animate-bounce" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block animate-pulse">
+                  {callState === "RINGING" ? "Llamada Entrante" : "Llamando..."}
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  {config.rival.fullName}
+                </h3>
+                <p className="text-[9px] text-gray-dim uppercase font-bold">
+                  {callState === "RINGING" ? "Llamada manos libres por datos" : "Esperando respuesta..."}
+                </p>
+              </div>
+
+              <div className="flex w-full gap-3 mt-2">
+                {callState === "RINGING" ? (
+                  <>
+                    <button
+                      onClick={declineCall}
+                      className="flex-1 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 font-black text-xs uppercase tracking-wider transition active:scale-95"
+                    >
+                      Rechazar
+                    </button>
+                    <button
+                      onClick={acceptCall}
+                      className="flex-1 py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider transition active:scale-95 shadow-glow-cyan"
+                    >
+                      Contestar
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={cancelCall}
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider transition active:scale-95"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Photo Validation Modal Overlay */}
       <AnimatePresence>
@@ -2857,9 +3064,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               <div className="flex flex-col gap-3 text-left text-[11px] text-gray-dim mt-2">
                 <div className="flex gap-2">
-                  <span className="text-purple-400 font-bold shrink-0">⏱</span>
+                  <span className="text-purple-400 font-bold shrink-0">🏹</span>
                   <p>
-                    <strong className="text-white font-bold">Límite de tiempo:</strong> Tienes 30 segundos por flecha. Si expira el tiempo se anotará un Fallo (Miss) automático.
+                    <strong className="text-white font-bold">Tirada libre de tiempo:</strong> Guarda tu teléfono en el bolsillo, realiza tus disparos y anota tus puntuaciones directamente al llegar a la paca.
                   </p>
                 </div>
                 <div className="flex gap-2">
