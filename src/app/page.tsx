@@ -410,9 +410,12 @@ export default function Home() {
     };
   }, [user?.uid]);
 
-  // Listen to visibilitychange to force Firestore network reconnection
+  // Listen to visibilitychange to force Firestore network reconnection and update presence
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      if (!user?.uid) return;
+      const uid = user.uid;
+
       if (document.visibilityState === "visible") {
         console.log("[Firebase Reconnect] Tab focused. Reconnecting Firestore...");
         try {
@@ -422,8 +425,31 @@ export default function Home() {
           console.log("[Firebase Reconnect] Firestore reconnected successfully.");
           const { runSync } = await import("@/lib/db/syncManager");
           runSync();
+
+          // Set presence online immediately
+          const { doc, updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "users", uid), {
+            lastActiveAt: Date.now()
+          });
         } catch (err) {
           console.error("[Firebase Reconnect] Error during reconnect:", err);
+        }
+      } else if (document.visibilityState === "hidden") {
+        // Tab closed or minimized: set presence offline immediately
+        // BUT skip if the user is in the middle of a Matchplay duel
+        if (currentScreen === "MATCHPLAY_ARENA") {
+          console.log("[Presence] Tab hidden during active duel. Preserving online presence.");
+          return;
+        }
+        try {
+          const { db } = await import("@/lib/firebase");
+          const { doc, updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "users", uid), {
+            lastActiveAt: 0
+          });
+          console.log("[Presence] Tab hidden. Presence set to offline.");
+        } catch (err) {
+          // Silently catch errors
         }
       }
     };
@@ -432,7 +458,7 @@ export default function Home() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [user?.uid, currentScreen]);
 
   // Listen to database changes and user updates in real-time
   useEffect(() => {
@@ -533,7 +559,18 @@ export default function Home() {
     setCurrentScreen("HOME");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (user?.uid) {
+      try {
+        const { doc, updateDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        await updateDoc(doc(db, "users", user.uid), {
+          lastActiveAt: 0
+        });
+      } catch (err) {
+        console.warn("Failed to clean up presence on logout:", err);
+      }
+    }
     setUser(null);
     setAuthScreen("LOGIN");
     setSessionConfig(null);

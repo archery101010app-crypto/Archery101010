@@ -382,6 +382,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   };
 
   const handleLogoutClick = async () => {
+    const confirmLogout = window.confirm("¿Seguro que deseas cerrar sesión? Cualquier sesión activa, duelo o proceso que tengas abierto se cerrará.");
+    if (!confirmLogout) return;
+    
     await logoutUser();
     onLogout();
   };
