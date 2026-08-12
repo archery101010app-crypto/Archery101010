@@ -21,13 +21,14 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   const distanceMeters = 5;
   const temperatureCelsius = 20;
 
+  // Display Unit Toggle: FPS vs KMH
+  const [speedUnit, setSpeedUnit] = useState<"FPS" | "KMH">("FPS");
+
   // Audio Recording & Analysis state
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [releasePeakSec, setReleasePeakSec] = useState<number>(0.15);
   const [impactPeakSec, setImpactPeakSec] = useState<number>(0.24);
   const [audioLevel, setAudioLevel] = useState<number>(0);
-  const [recordingStatus, setRecordingStatus] = useState<"IDLE" | "LISTENING" | "ANALYZING" | "READY">("IDLE");
 
   // History logs
   const [shotHistory, setShotHistory] = useState<ShotResult[]>([]);
@@ -39,7 +40,6 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   const animFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Calculate current results dynamically
   const totalElapsed = Math.max(0.01, impactPeakSec - releasePeakSec);
@@ -69,85 +69,9 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     };
   }, []);
 
-  // Draw waveform on canvas whenever audioBuffer or peaks change
-  useEffect(() => {
-    if (!canvasRef.current || !audioBuffer) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    const data = audioBuffer.getChannelData(0);
-    const duration = audioBuffer.duration;
-
-    ctx.clearRect(0, 0, width, height);
-
-    // Draw background grid lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x < width; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-
-    // Draw Audio Waveform
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(0, 229, 255, 0.6)";
-    ctx.lineWidth = 1.5;
-
-    const step = Math.ceil(data.length / width);
-    const amp = height / 2;
-
-    for (let i = 0; i < width; i++) {
-      let min = 1.0;
-      let max = -1.0;
-      for (let j = 0; j < step; j++) {
-        const datum = data[i * step + j];
-        if (datum < min) min = datum;
-        if (datum > max) max = datum;
-      }
-      ctx.moveTo(i, (1 + min) * amp);
-      ctx.lineTo(i, (1 + max) * amp);
-    }
-    ctx.stroke();
-
-    // Draw Release Peak Line (Cyan)
-    const releaseX = (releasePeakSec / duration) * width;
-    ctx.strokeStyle = "#00E5FF";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(releaseX, 0);
-    ctx.lineTo(releaseX, height);
-    ctx.stroke();
-
-    ctx.fillStyle = "#00E5FF";
-    ctx.font = "bold 10px sans-serif";
-    ctx.fillText("🎯 Soltado (Arco)", releaseX + 4, 14);
-
-    // Draw Impact Peak Line (Yellow)
-    const impactX = (impactPeakSec / duration) * width;
-    ctx.strokeStyle = "#FFF200";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(impactX, 0);
-    ctx.lineTo(impactX, height);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = "#FFF200";
-    ctx.font = "bold 10px sans-serif";
-    ctx.fillText("🎯 Impacto (5m)", impactX + 4, height - 10);
-
-  }, [audioBuffer, releasePeakSec, impactPeakSec]);
-
   // Start Audio Recording / Listening
   const startRecording = async () => {
     try {
-      setRecordingStatus("LISTENING");
       setIsRecording(true);
       audioChunksRef.current = [];
 
@@ -192,14 +116,12 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       };
 
       mediaRecorder.onstop = async () => {
-        setRecordingStatus("ANALYZING");
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         const arrayBuffer = await blob.arrayBuffer();
         
         if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
           try {
             const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
-            setAudioBuffer(decodedBuffer);
 
             // Auto detect peaks
             const detected = detectAudioPeaks(decodedBuffer, distanceMeters, temperatureCelsius);
@@ -214,7 +136,6 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             console.error("Audio decoding error:", err);
           }
         }
-        setRecordingStatus("READY");
         setIsRecording(false);
       };
 
@@ -231,7 +152,6 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       console.error("Microphone access error:", err);
       alert("No se pudo acceder al micrófono. Por favor permite los permisos de audio en tu navegador.");
       setIsRecording(false);
-      setRecordingStatus("IDLE");
     }
   };
 
@@ -299,58 +219,87 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <h1 className="text-white font-black text-sm uppercase tracking-wider">Cronógrafo Acústico</h1>
             <span className="text-[9px] text-cyan-neon font-extrabold uppercase tracking-widest flex items-center gap-1">
               <Sparkles size={10} />
-              Prueba a 5 Metros (Target)
+              Prueba a 5m (Target Archery)
             </span>
           </div>
         </div>
       </div>
 
-      {/* Main Digital Speedometer Speed Dial Card */}
-      <div className="bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.08)]">
+      {/* Unified Master Speedometer & Recording Card */}
+      <div className="bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.08)] gap-4">
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
 
-        {/* Distance Badge */}
-        <div className="flex items-center gap-1.5 bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black px-3 py-1 rounded-full text-[10px] uppercase tracking-wider mb-2">
-          <Target size={12} />
-          <span>Distancia Fija: 5 Metros</span>
-        </div>
-
-        {/* Large Speed Number */}
-        <div className="flex items-baseline gap-2 my-1">
-          <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(0,229,255,0.35)]">
-            {Math.round(currentStats.speedFps)}
-          </span>
-          <span className="text-cyan-neon text-2xl font-black uppercase tracking-wider">FPS</span>
-        </div>
-
-        {/* Secondary Speed Metrics (m/s & km/h) */}
-        <div className="flex items-center gap-3 mt-2 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
-          <span className="text-white">{currentStats.speedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
-          <span className="text-gray-border">•</span>
-          <span className="text-white">{currentStats.speedKmh.toFixed(1)} <span className="text-gray-dim text-[10px]">km/h</span></span>
-        </div>
-
-        {/* Net Flight Time */}
-        <div className="w-full mt-4 pt-3 border-t border-white/5 flex justify-center items-center gap-2 text-xs font-bold text-gray-dim">
-          <span>Tiempo de Vuelo de la Flecha:</span>
-          <span className="text-cyan-neon font-black">{(currentStats.flightTimeSec * 1000).toFixed(1)} ms</span>
-        </div>
-      </div>
-
-      {/* Recording Section */}
-      <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mic size={16} className={isRecording ? "text-cyan-neon animate-pulse" : "text-gray-dim"} />
-            <span className="text-white text-xs font-black uppercase tracking-wider">Captura de Sonido</span>
+        {/* Distance Badge & Unit Switcher */}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-1.5 bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black px-3 py-1 rounded-full text-[10px] uppercase tracking-wider">
+            <Target size={12} />
+            <span>Distancia: 5 Metros</span>
           </div>
 
-          {/* Record Button */}
+          {/* Unit Toggle Option: FPS vs KM/H */}
+          <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setSpeedUnit("FPS")}
+              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                speedUnit === "FPS" 
+                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              FPS
+            </button>
+            <button
+              type="button"
+              onClick={() => setSpeedUnit("KMH")}
+              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                speedUnit === "KMH" 
+                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              KM/H
+            </button>
+          </div>
+        </div>
+
+        {/* Big Speed Number */}
+        <div className="flex items-baseline gap-2 my-2">
+          <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(0,229,255,0.35)]">
+            {speedUnit === "FPS" 
+              ? Math.round(currentStats.speedFps) 
+              : Math.round(currentStats.speedKmh)}
+          </span>
+          <span className="text-cyan-neon text-2xl font-black uppercase tracking-wider">
+            {speedUnit}
+          </span>
+        </div>
+
+        {/* Secondary Speed Info */}
+        <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
+          {speedUnit === "FPS" ? (
+            <>
+              <span className="text-white">{currentStats.speedKmh.toFixed(1)} <span className="text-gray-dim text-[10px]">km/h</span></span>
+              <span className="text-gray-border">•</span>
+              <span className="text-white">{currentStats.speedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
+            </>
+          ) : (
+            <>
+              <span className="text-white">{Math.round(currentStats.speedFps)} <span className="text-gray-dim text-[10px]">FPS</span></span>
+              <span className="text-gray-border">•</span>
+              <span className="text-white">{currentStats.speedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
+            </>
+          )}
+        </div>
+
+        {/* Concentrated Action Buttons Inside Card */}
+        <div className="flex flex-col gap-2.5 w-full mt-2 pt-4 border-t border-white/5">
+          {/* Main Button: Medir Velocidad */}
           <button
             type="button"
             disabled={isRecording}
             onClick={startRecording}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
+            className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
               isRecording 
                 ? "bg-red-500 text-white animate-pulse" 
                 : "bg-cyan-neon text-black hover:brightness-110"
@@ -358,39 +307,26 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           >
             {isRecording ? (
               <>
-                <Volume2 size={14} className="animate-spin" />
-                <span>Escuchando ({audioLevel}%)</span>
+                <Volume2 size={16} className="animate-spin" />
+                <span>Escuchando Disparo a 5m ({audioLevel}%)</span>
               </>
             ) : (
               <>
-                <Mic size={14} />
-                <span>Grabar Disparo (5m)</span>
+                <Mic size={16} />
+                <span>Medir Velocidad</span>
               </>
             )}
           </button>
-        </div>
 
-        {/* Audio Waveform Canvas */}
-        <div className="w-full h-28 bg-black-oled rounded-2xl border border-white/10 relative overflow-hidden flex items-center justify-center">
-          {audioBuffer ? (
-            <canvas ref={canvasRef} width={450} height={112} className="w-full h-full block" />
-          ) : (
-            <div className="flex flex-col items-center gap-1 text-center p-4">
-              <Mic size={22} className="text-gray-border animate-bounce" />
-              <span className="text-[11px] text-gray-dim font-bold">Colócate a 5m de la diana con el teléfono cerca del arco</span>
-              <span className="text-[9px] text-gray-border">Toca "Grabar Disparo" y efectúa el tiro</span>
-            </div>
-          )}
+          {/* Secondary Button: Guardar Tiro en Historial */}
+          <button
+            type="button"
+            onClick={handleSaveShot}
+            className="w-full py-3 rounded-2xl bg-neutral-900 border border-white/10 text-white font-bold text-xs uppercase tracking-wider cursor-pointer hover:bg-neutral-800 transition active:scale-95"
+          >
+            Guardar Tiro en Historial
+          </button>
         </div>
-
-        {/* Save Result Button */}
-        <button
-          type="button"
-          onClick={handleSaveShot}
-          className="w-full py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-110 transition shadow-glow-cyan active:scale-95"
-        >
-          Guardar Tiro en Historial
-        </button>
       </div>
 
       {/* Shot History Log Table */}
@@ -405,11 +341,15 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               <div key={s.id} className="flex items-center justify-between p-3 rounded-2xl bg-neutral-950/80 border border-white/5">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="text-cyan-neon text-base font-black">{Math.round(s.speedFps)} FPS</span>
-                    <span className="text-white/60 text-[10px] font-bold">({s.speedMps.toFixed(1)} m/s)</span>
+                    <span className="text-cyan-neon text-base font-black">
+                      {speedUnit === "FPS" ? `${Math.round(s.speedFps)} FPS` : `${Math.round(s.speedKmh)} KM/H`}
+                    </span>
+                    <span className="text-white/60 text-[10px] font-bold">
+                      ({s.speedMps.toFixed(1)} m/s / {speedUnit === "FPS" ? `${Math.round(s.speedKmh)} km/h` : `${Math.round(s.speedFps)} FPS`})
+                    </span>
                   </div>
                   <span className="text-[9px] text-gray-dim">
-                    Distancia: 5 Metros • Tiempo Vuelo: {(s.flightTimeSec * 1000).toFixed(1)}ms
+                    Distancia Fija: 5 Metros
                   </span>
                 </div>
 
