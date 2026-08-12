@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle } from "lucide-react";
+import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle, RefreshCw } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
@@ -75,6 +75,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [validationPhase, setValidationPhase] = useState<"IDLE" | "UPLOAD" | "REVIEW">("IDLE");
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [rivalPhoto, setRivalPhoto] = useState<string | null>(null);
+  const [rivalInputMode, setRivalInputMode] = useState<"TARGET" | "KEYBOARD">("TARGET");
+  const [rivalImpacts, setRivalImpacts] = useState<ShotImpact[]>([]);
+  const [reviewTab, setReviewTab] = useState<"PHOTO" | "TARGET">("PHOTO");
   const [endSummaryMsg, setEndSummaryMsg] = useState<string | null>(null);
 
   // General overlays
@@ -122,6 +125,34 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   useEffect(() => {
     callStateRef.current = callState;
   }, [callState]);
+
+  const gameStateRef = useRef({
+    userTiros,
+    currentEnd,
+    currentArrow,
+    validationPhase,
+    isUserReady,
+    isUserPresent,
+    userPhoto,
+    impacts,
+    mode,
+    userShootOffShot
+  });
+
+  useEffect(() => {
+    gameStateRef.current = {
+      userTiros,
+      currentEnd,
+      currentArrow,
+      validationPhase,
+      isUserReady,
+      isUserPresent,
+      userPhoto,
+      impacts,
+      mode,
+      userShootOffShot
+    };
+  }, [userTiros, currentEnd, currentArrow, validationPhase, isUserReady, isUserPresent, userPhoto, impacts, mode, userShootOffShot]);
 
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const audioAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -307,6 +338,40 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       console.log("[WebRTC DataChannel] Received:", msg);
 
       switch (msg.type) {
+        case "sync-state": {
+          console.log("[WebRTC Sync] Received full rival state sync:", msg);
+          if (msg.userTiros) {
+            setRivalTiros(msg.userTiros);
+          }
+          if (msg.impacts) {
+            setRivalImpacts(msg.impacts);
+          }
+          if (msg.mode) {
+            setRivalInputMode(msg.mode);
+          }
+          if (msg.userPhoto) {
+            setRivalPhoto(msg.userPhoto);
+          }
+          if (msg.isUserReady !== undefined) {
+            setIsRivalReady(msg.isUserReady);
+          }
+          if (msg.isUserPresent !== undefined) {
+            setIsRivalPresent(msg.isUserPresent);
+          }
+          if (msg.userShootOffShot !== undefined) {
+            setRivalShootOffShot(msg.userShootOffShot);
+          }
+          
+          const ourCurrentEnd = currentEndRef.current;
+          if (msg.currentEnd !== undefined && msg.currentEnd > ourCurrentEnd) {
+            setCurrentEnd(msg.currentEnd);
+            setCurrentArrow(msg.currentArrow ?? 0);
+            setValidationPhase(msg.validationPhase ?? "IDLE");
+            setEndSummary(null);
+            setEndSummaryMsg(null);
+          }
+          break;
+        }
         case "presence-state":
           setIsRivalPresent(msg.present);
           break;
@@ -329,6 +394,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             updatedRival[cEnd] = [...(updatedRival[cEnd] || []), msg.value];
             return updatedRival;
           });
+          if (msg.x !== undefined && msg.y !== undefined) {
+            setRivalImpacts((prev) => [
+              ...prev,
+              {
+                endIdx: currentEndRef.current,
+                arrowIdx: msg.arrowIdx ?? 0,
+                x: msg.x,
+                y: msg.y,
+                value: String(msg.value)
+              }
+            ]);
+          }
+          if (msg.mode) {
+            setRivalInputMode(msg.mode);
+          }
           break;
         }
         case "undo": {
@@ -340,6 +420,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             }
             return updatedRival;
           });
+          setRivalImpacts((prev) => {
+            const updated = [...prev];
+            const cEnd = currentEndRef.current;
+            const lastIdx = updated.map((imp, idx) => ({ imp, idx }))
+                                   .filter(x => x.imp.endIdx === cEnd)
+                                   .pop()?.idx;
+            if (lastIdx !== undefined) {
+              updated.splice(lastIdx, 1);
+            }
+            return updated;
+          });
           break;
         }
         case "shootoff":
@@ -350,6 +441,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           break;
         case "photo":
           setRivalPhoto(msg.photo);
+          if (msg.mode) {
+            setRivalInputMode(msg.mode);
+          }
           break;
         case "next-end":
           setEndSummary(null);
@@ -357,6 +451,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setValidationPhase("IDLE");
           setUserPhoto(null);
           setRivalPhoto(null);
+          setReviewTab("PHOTO");
+          setRivalInputMode("TARGET");
           setCurrentEnd((prev) => prev + 1);
           setCurrentArrow(0);
           setIsUserPresent(false);
@@ -502,6 +598,53 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   };
 
+  // Helper to create a silent audio track programmatically using Web Audio API
+  const createSilentAudioTrack = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return null;
+      const ctx = new AudioContextClass();
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 0;
+      const oscillator = ctx.createOscillator();
+      oscillator.connect(gainNode);
+      const dst = ctx.createMediaStreamDestination();
+      gainNode.connect(dst);
+      oscillator.start();
+      const track = dst.stream.getAudioTracks()[0];
+      if (track) {
+        // Store references so we can stop them on cleanup
+        (track as any)._dummySource = oscillator;
+        (track as any)._dummyCtx = ctx;
+      }
+      return track;
+    } catch (e) {
+      console.warn("[WebRTC] Failed to create silent audio track:", e);
+      return null;
+    }
+  };
+
+  const handleDataChannelOpen = () => {
+    console.log("[WebRTC DataChannel] Open! Sending sync-state...");
+    setIsP2PActive(true);
+    setIsRivalConnected(true);
+    
+    const state = gameStateRef.current;
+    sendDataMessage({
+      type: "sync-state",
+      userTiros: state.userTiros,
+      currentEnd: state.currentEnd,
+      currentArrow: state.currentArrow,
+      validationPhase: state.validationPhase,
+      isUserReady: state.isUserReady,
+      isUserPresent: state.isUserPresent,
+      userPhoto: state.userPhoto,
+      impacts: state.impacts.filter(imp => imp.endIdx <= state.currentEnd),
+      mode: state.mode,
+      userShootOffShot: state.userShootOffShot !== null ? state.userShootOffShot : undefined
+    });
+  };
+
   // WebRTC initialization (P2P Connection)
   const initWebRTC = async (isCreator: boolean, data: any) => {
     console.log("[WebRTC] Initializing P2P connection. Offerer:", isCreator);
@@ -511,7 +654,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:openrelay.metered.ca:80" },
+          {
+            urls: [
+              "turn:openrelay.metered.ca:80?transport=udp",
+              "turn:openrelay.metered.ca:80?transport=tcp",
+              "turn:openrelay.metered.ca:443?transport=tcp"
+            ],
+            username: "openrelayproject",
+            credential: "openrelayproject"
+          }
         ]
       });
       peerConnectionRef.current = pc;
@@ -565,12 +718,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         }
       };
 
-      // Setup audio transceiver first so the audio media channel exists in SDP
+      // Add silent audio track initially to negotiate "sendrecv" direction on both sides
       // We do NOT call acquireMicrophoneStream() here to prevent blocking the initial P2P connection
-      try {
-        pc.addTransceiver("audio", { direction: "sendrecv" });
-      } catch (e) {
-        console.warn("[WebRTC] Failed to add transceiver:", e);
+      const silentTrack = createSilentAudioTrack();
+      if (silentTrack) {
+        console.log("[WebRTC] Injecting initial silent audio track for full-duplex negotiation");
+        pc.addTrack(silentTrack, new MediaStream([silentTrack]));
+      } else {
+        try {
+          pc.addTransceiver("audio", { direction: "sendrecv" });
+        } catch (e) {
+          console.warn("[WebRTC] Failed to add transceiver:", e);
+        }
       }
 
       // Configure DataChannel
@@ -579,9 +738,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         const dc = pc.createDataChannel("game-sync");
         dataChannelRef.current = dc;
         dc.onopen = () => {
-          console.log("[WebRTC DataChannel] Open!");
-          setIsP2PActive(true);
-          setIsRivalConnected(true);
+          handleDataChannelOpen();
         };
         dc.onclose = () => {
           console.log("[WebRTC DataChannel] Closed!");
@@ -604,9 +761,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           const dc = event.channel;
           dataChannelRef.current = dc;
           dc.onopen = () => {
-            console.log("[WebRTC DataChannel] Open!");
-            setIsP2PActive(true);
-            setIsRivalConnected(true);
+            handleDataChannelOpen();
           };
           dc.onclose = () => {
             console.log("[WebRTC DataChannel] Closed!");
@@ -724,10 +879,85 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   };
 
-  // WebRTC close
+  const [disconnectSeconds, setDisconnectSeconds] = useState<number>(0);
+  const isReconnectingRef = useRef<boolean>(false);
+  const hasConnectedOnceRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (isRivalConnected) {
+      hasConnectedOnceRef.current = true;
+    }
+  }, [isRivalConnected]);
+
+  // Auto-increment disconnect seconds
+  useEffect(() => {
+    if (isFriendDuel && !isRivalConnected && !duelFinished && hasConnectedOnceRef.current) {
+      setDisconnectSeconds(0);
+      const timer = setInterval(() => {
+        setDisconnectSeconds((prev) => prev + 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else {
+      setDisconnectSeconds(0);
+    }
+  }, [isRivalConnected, isFriendDuel, duelFinished]);
+
+  // Auto-reconnect sequence
+  const triggerAutoReconnect = async () => {
+    if (isReconnectingRef.current) return;
+    isReconnectingRef.current = true;
+    console.log("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle...");
+    try {
+      closeWebRTC();
+      const docRef = doc(db, "active_duels", config.id);
+      const isCreator = isCreatorRoleRef.current;
+      await updateDoc(docRef, {
+        [isCreator ? "creatorConnected" : "playerConnected"]: true,
+        [isCreator ? "creatorConnectedAt" : "playerConnectedAt"]: Date.now(),
+        webrtcOffer: null,
+        webrtcAnswer: null,
+        creatorCandidates: [],
+        playerCandidates: [],
+        updatedAt: Date.now()
+      });
+      console.log("[WebRTC Auto-Reconnect] Firestore signaling fields reset. Renegotiating...");
+    } catch (err) {
+      console.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
+    } finally {
+      isReconnectingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!isFriendDuel || duelFinished || !hasConnectedOnceRef.current) return;
+
+    let interval: NodeJS.Timeout;
+    if (!isRivalConnected) {
+      triggerAutoReconnect();
+      interval = setInterval(() => {
+        console.log("[WebRTC Reconnect loop] Still disconnected. Retrying...");
+        triggerAutoReconnect();
+      }, 8000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRivalConnected, isFriendDuel, duelFinished]);
   const closeWebRTC = () => {
     console.log("[WebRTC] Closing peer connection.");
     if (peerConnectionRef.current) {
+      // Clean up any silent audio track context to prevent memory leaks or audio node issues
+      try {
+        peerConnectionRef.current.getSenders().forEach(sender => {
+          const track = sender.track;
+          if (track && (track as any)._dummySource) {
+            console.log("[WebRTC] Cleaning up dummy silent audio track source");
+            try { (track as any)._dummySource.stop(); } catch (e) {}
+            try { (track as any)._dummyCtx.close(); } catch (e) {}
+          }
+        });
+      } catch (e) {}
+
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
@@ -759,6 +989,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (callStateRef.current !== "IDLE") return;
     setCallState("DIALING");
     sendDataMessage({ type: "dial" });
+
+    // Unlock remote audio element on caller side during this click interaction
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = false;
+      remoteAudioRef.current.volume = 1.0;
+      remoteAudioRef.current.play().catch(e => console.log("[WebRTC] Unlocking remote audio on dial:", e));
+    }
   };
 
   const cancelCall = () => {
@@ -1476,7 +1713,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     // Trigger simulated rival shot or send via WebRTC
     if (isFriendDuel) {
-      sendDataMessage({ type: "shot", value });
+      sendDataMessage({
+        type: "shot",
+        value,
+        x,
+        y,
+        arrowIdx: isShootOff ? 99 : userTiros[currentEnd].length,
+        mode
+      });
     } else {
       simulateRivalShot(nextArrow, currentEndShots);
     }
@@ -1750,6 +1994,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setValidationPhase("IDLE");
     setUserPhoto(null);
     setRivalPhoto(null);
+    setReviewTab("PHOTO");
+    setRivalInputMode("TARGET");
     setCurrentEnd((prev) => prev + 1);
     setCurrentArrow(0);
     setIsUserPresent(false);
@@ -2837,7 +3083,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             setUserPhoto(base64);
 
                             if (isFriendDuel) {
-                              sendDataMessage({ type: "photo", photo: base64 });
+                              sendDataMessage({ type: "photo", photo: base64, mode });
                             } else {
                               simulateRivalUpload();
                             }
@@ -2899,44 +3145,99 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     Compara los impactos declarados por <span className="text-white font-bold">{config.rival.fullName}</span> en la diana virtual con su foto real.
                   </p>
 
+                  {/* Switcher pills - only show if the rival used TARGET mode */}
+                  {rivalInputMode === "TARGET" && (
+                    <div className="flex bg-neutral-950 p-0.5 rounded-xl border border-white/5 w-full">
+                      <button
+                        type="button"
+                        onClick={() => setReviewTab("PHOTO")}
+                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition ${
+                          reviewTab === "PHOTO"
+                            ? "bg-purple-600 text-white font-extrabold shadow-sm"
+                            : "text-gray-dim hover:text-white"
+                        }`}
+                      >
+                        📸 Foto Real
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReviewTab("TARGET")}
+                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition ${
+                          reviewTab === "TARGET"
+                            ? "bg-purple-600 text-white font-extrabold shadow-sm"
+                            : "text-gray-dim hover:text-white"
+                        }`}
+                      >
+                        🎯 Diana Interactiva
+                      </button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3 items-center">
                     <div className="flex flex-col gap-1 text-center">
-                      <span className="text-[8px] text-gray-dim uppercase font-bold">Foto del Rival</span>
+                      <span className="text-[8px] text-gray-dim uppercase font-bold">
+                        {rivalInputMode === "TARGET" && reviewTab === "TARGET" ? "Diana Interactiva" : "Foto del Rival"}
+                      </span>
                       <div className="w-full aspect-square rounded-xl bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden relative">
-                        <div className="absolute inset-0 bg-neutral-950 flex items-center justify-center">
-                          <svg viewBox="0 0 100 100" className="w-full h-full p-2">
-                            {[...presetRings].sort((a, b) => b.r - a.r).map((ring, idx) => (
-                              <circle
-                                key={idx}
-                                cx="50"
-                                cy="50"
-                                r={ring.r}
-                                fill={ring.fill}
-                                stroke={ring.stroke}
-                                strokeWidth="0.2"
-                              />
-                            ))}
-                            
-                            {/* Render rival simulated impacts */}
-                            {(rivalTiros[currentEnd] || []).map((val, idx) => {
-                              const coords = getCoordinatesForScore(String(val));
-                              // Jitter slightly for natural realism
-                              const jX = coords.x + (idx - 1) * 2;
-                              const jY = coords.y + (idx % 2 === 0 ? 1 : -1) * 1.5;
-                              return (
+                        {rivalInputMode === "KEYBOARD" || reviewTab === "PHOTO" ? (
+                          rivalPhoto && rivalPhoto !== "rival_done" ? (
+                            <img src={rivalPhoto} alt="Foto Campo Rival" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-neutral-900 flex flex-col items-center justify-center text-center p-3 relative">
+                              <span className="text-3xl mb-1">🎯</span>
+                              <span className="text-[10px] text-white font-extrabold uppercase">Foto de Campo</span>
+                              <span className="text-[8px] text-purple-400 font-bold uppercase mt-1">Duelo con Bot/Solo</span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="absolute inset-0 bg-neutral-950 flex items-center justify-center">
+                            <svg viewBox="0 0 100 100" className="w-full h-full p-2">
+                              {[...presetRings].sort((a, b) => b.r - a.r).map((ring, idx) => (
                                 <circle
                                   key={idx}
-                                  cx={jX}
-                                  cy={jY}
-                                  r="2"
-                                  fill="#E53935"
-                                  stroke="#FFFFFF"
-                                  strokeWidth="0.4"
+                                  cx="50"
+                                  cy="50"
+                                  r={ring.r}
+                                  fill={ring.fill}
+                                  stroke={ring.stroke}
+                                  strokeWidth="0.2"
                                 />
-                              );
-                            })}
-                          </svg>
-                        </div>
+                              ))}
+                              
+                              {/* Render rival actual impacts if available, otherwise simulated/jittered ones */}
+                              {rivalImpacts.filter(imp => imp.endIdx === currentEnd).length > 0 ? (
+                                rivalImpacts.filter(imp => imp.endIdx === currentEnd).map((imp, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={imp.x}
+                                    cy={imp.y}
+                                    r="2.2"
+                                    fill="#FF2E93"
+                                    stroke="#FFFFFF"
+                                    strokeWidth="0.5"
+                                  />
+                                ))
+                              ) : (
+                                (rivalTiros[currentEnd] || []).map((val, idx) => {
+                                  const coords = getCoordinatesForScore(String(val));
+                                  const jX = coords.x + (idx - 1) * 2;
+                                  const jY = coords.y + (idx % 2 === 0 ? 1 : -1) * 1.5;
+                                  return (
+                                    <circle
+                                      key={idx}
+                                      cx={jX}
+                                      cy={jY}
+                                      r="2"
+                                      fill="#E53935"
+                                      stroke="#FFFFFF"
+                                      strokeWidth="0.4"
+                                    />
+                                  );
+                                })
+                              )}
+                            </svg>
+                          </div>
+                        )}
                         <span className="absolute bottom-1 right-1 text-[8px] bg-red-rival/80 text-white font-black px-1 py-0.2 rounded uppercase">
                           DIANA RIVAL
                         </span>
@@ -3152,58 +3453,66 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         playsInline
         muted={false}
         style={{
-          position: "absolute",
-          width: "1px",
-          height: "1px",
-          opacity: 0,
-          overflow: "hidden",
+          position: "fixed",
+          bottom: "10px",
+          right: "10px",
+          width: "4px",
+          height: "4px",
+          opacity: 0.01,
           pointerEvents: "none",
-          zIndex: -9999
+          zIndex: -100
         }}
       />
 
-      {/* Rival Disconnect Modal overlay */}
+      {/* Pausa por Reconexión P2P Overlay */}
       <AnimatePresence>
-        {isFriendDuel && !isRivalConnected && !isReadyCheckActive && !duelFinished && (
+        {isFriendDuel && !isRivalConnected && !duelFinished && hasConnectedOnceRef.current && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-5"
+            className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-md flex items-center justify-center p-5"
           >
             <motion.div
               variants={popVariants}
               initial="initial"
               animate="animate"
               exit="initial"
-              className="w-full max-w-[320px] bg-neutral-950 border border-red-500/30 p-6 rounded-[32px] flex flex-col items-center text-center gap-5 shadow-2xl relative"
+              className="w-full max-w-[320px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[32px] flex flex-col items-center text-center gap-5 shadow-2xl relative"
             >
-              <div className="absolute top-0 inset-x-0 h-1 bg-red-500" />
-              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500">
-                <AlertTriangle size={22} className="animate-pulse" />
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 to-cyan-neon" />
+              
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <RefreshCw size={22} className="animate-spin text-cyan-neon" />
               </div>
+              
               <div className="flex flex-col gap-1">
                 <h3 className="text-white text-sm font-black uppercase tracking-wider">
-                  Rival Desconectado
+                  {!navigator.onLine ? "Sin Conexión a Internet" : "Pausa por Reconexión"}
                 </h3>
                 <p className="text-[10px] text-gray-dim leading-relaxed">
-                  Tu oponente se ha desconectado o ha salido de la eliminatoria. Puedes esperar a que regrese o finalizar el match en este momento.
+                  {!navigator.onLine
+                    ? "Tu dispositivo ha perdido la conexión a internet. Restableciendo enlace..."
+                    : `Esperando a que ${config.rival.fullName} se reconecte temporalmente. No se perderá la partida.`}
                 </p>
               </div>
-              <div className="flex flex-col w-full gap-2.5 mt-2">
-                <div className="w-full py-2.5 rounded-xl bg-neutral-900 border border-white/5 text-yellow-gold font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-yellow-500 animate-ping" />
-                  <span>Esperando reconexión...</span>
+
+              <div className="flex flex-col w-full gap-2.5 mt-1">
+                <div className="w-full py-2.5 rounded-xl bg-neutral-900 border border-white/5 text-cyan-neon font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse shadow-[0_0_8px_#00e5ff]" />
+                  <span>Reconectando ({disconnectSeconds}s)...</span>
                 </div>
                 
-                <button
-                  onClick={() => {
-                    onBack();
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
-                >
-                  Cerrar Match
-                </button>
+                {disconnectSeconds >= 30 && (
+                  <button
+                    onClick={() => {
+                      onBack();
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-400 font-bold text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                  >
+                    Abandonar y Cerrar Match
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

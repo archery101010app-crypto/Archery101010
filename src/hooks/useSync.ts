@@ -13,6 +13,11 @@ export function useSync() {
     try {
       const queue = await getSyncQueue();
       setPendingCount(queue.length);
+      
+      // Auto-retry synchronization in the background if items are pending and online
+      if (queue.length > 0 && navigator.onLine) {
+        runSync().catch((err) => console.error("Immediate background sync retry failed:", err));
+      }
     } catch (e) {
       console.error("Error reading sync queue length:", e);
     }

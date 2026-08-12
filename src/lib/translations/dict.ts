@@ -99,7 +99,7 @@ export const translations = {
     // Scoring
     newSession: "Nueva Sesión",
     practiceType: "Tipo de Práctica",
-    practiceControl: "Control",
+    practiceControl: "Control/Chequeo",
     practicePractice: "Práctica",
     practiceVolume: "Volumen",
     sessionFormat: "Formato WA",
@@ -297,7 +297,7 @@ export const translations = {
     // Scoring
     newSession: "New Session",
     practiceType: "Practice Type",
-    practiceControl: "Control",
+    practiceControl: "Control/Chequeo",
     practicePractice: "Practice",
     practiceVolume: "Volume",
     sessionFormat: "WA Format",

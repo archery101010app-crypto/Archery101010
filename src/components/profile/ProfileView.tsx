@@ -97,6 +97,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     loadClubMembers();
   }, [user.clubId, user.role]);
 
+  const handleSelectUserRole = async (targetRole: "archer" | "coach") => {
+    let nextRole: UserProfile["role"] = targetRole;
+    if (user.role === "team_admin" || user.role === "team_admin_coach") {
+      nextRole = targetRole === "coach" ? "team_admin_coach" : "team_admin";
+    } else if (user.role === "superadmin") {
+      nextRole = "superadmin";
+    }
+    const updatedUser: UserProfile = {
+      ...user,
+      role: nextRole
+    };
+    await updateProfile(user.uid, { role: nextRole });
+    onProfileUpdated(updatedUser);
+    window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
+  };
+
   const handlePromoteToCoach = async (memberUid: string) => {
     const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
     const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
@@ -495,6 +511,38 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {user.plan}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Role Selection Switcher Card */}
+      <div className="p-4 rounded-3xl bg-neutral-900/60 border border-white/5 flex items-center justify-between gap-3">
+        <div className="flex flex-col min-w-0">
+          <span className="text-white text-xs font-black uppercase tracking-wider">Rol de Cuenta</span>
+          <span className="text-[10px] text-gray-dim leading-snug">Selecciona si entrenas como Atleta o gestionas como Coach</span>
+        </div>
+        <div className="flex bg-neutral-950 p-1 rounded-2xl border border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleSelectUserRole("archer")}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+              user.role === "archer" || user.role === "team_admin"
+                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Atleta
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectUserRole("coach")}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+              user.role === "coach" || user.role === "team_admin_coach"
+                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                : "text-gray-dim hover:text-white"
+            }`}
+          >
+            Coach
+          </button>
         </div>
       </div>
 

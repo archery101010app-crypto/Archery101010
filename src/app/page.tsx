@@ -53,52 +53,10 @@ export default function Home() {
   const [activeNotification, setActiveNotification] = useState<AdCampaign | null>(null);
   const [dbVersion, setDbVersion] = useState(0);
 
-  // Pull-to-refresh states
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
   const [pendingInvitation, setPendingInvitation] = useState<any | null>(null);
   
-  const touchStartRef = React.useRef(0);
   const mainRef = React.useRef<HTMLElement | null>(null);
   const bypassBeforeUnloadRef = React.useRef(false);
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLElement>) => {
-    if (e.touches.length > 1) return; // Allow pinch-to-zoom
-    if (mainRef.current && mainRef.current.scrollTop === 0) {
-      touchStartRef.current = e.touches[0].clientY;
-      setIsPulling(true);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
-    if (e.touches.length > 1) return; // Allow pinch-to-zoom
-    if (!isPulling) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStartRef.current;
-    if (diff > 0) {
-      // Clamped pull distance with elastic square root feel
-      const elasticDiff = Math.min(80, Math.pow(diff, 0.85));
-      setPullDistance(elasticDiff);
-      
-      if (diff > 10 && e.cancelable) {
-        e.preventDefault();
-      }
-    } else {
-      setPullDistance(0);
-      setIsPulling(false);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!isPulling) return;
-    setIsPulling(false);
-    if (pullDistance > 55) {
-      setShowRefreshConfirm(true);
-    } else {
-      setPullDistance(0);
-    }
-  };
 
   // Check authentication status and initialize database on mount
   useEffect(() => {
@@ -173,12 +131,12 @@ export default function Home() {
 
     const updatePresence = async () => {
       try {
-        const { doc, updateDoc } = await import("firebase/firestore");
+        const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
         const docRef = doc(db, "users", uid);
-        await updateDoc(docRef, {
+        await setDoc(docRef, {
           lastActiveAt: Date.now()
-        });
+        }, { merge: true });
       } catch (err) {
         // Silently catch offline/network errors
       }
@@ -188,6 +146,37 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
+  }, [user?.uid]);
+
+  // Listen to visibilitychange to force instant cloud reconnection on wake/refocus
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        console.log("[Presence] App visible/focused. Forcing Firestore network reconnection...");
+        try {
+          const { disableNetwork, enableNetwork } = await import("@/lib/firebase");
+          const { db } = await import("@/lib/firebase");
+          await disableNetwork(db);
+          await enableNetwork(db);
+          console.log("[Presence] Firestore network re-enabled successfully.");
+          
+          // Trigger immediate sync queue process
+          const { runSync } = await import("@/lib/db/syncManager");
+          runSync().catch((err) => console.error("Auto sync on visibility change failed:", err));
+        } catch (err) {
+          console.error("Error toggling network on visibility change:", err);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
   }, [user?.uid]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
@@ -428,10 +417,10 @@ export default function Home() {
           runSync();
 
           // Set presence online immediately
-          const { doc, updateDoc } = await import("firebase/firestore");
-          await updateDoc(doc(db, "users", uid), {
+          const { doc, setDoc } = await import("firebase/firestore");
+          await setDoc(doc(db, "users", uid), {
             lastActiveAt: Date.now()
-          });
+          }, { merge: true });
         } catch (err) {
           console.error("[Firebase Reconnect] Error during reconnect:", err);
         }
@@ -444,10 +433,10 @@ export default function Home() {
         }
         try {
           const { db } = await import("@/lib/firebase");
-          const { doc, updateDoc } = await import("firebase/firestore");
-          await updateDoc(doc(db, "users", uid), {
+          const { doc, setDoc } = await import("firebase/firestore");
+          await setDoc(doc(db, "users", uid), {
             lastActiveAt: 0
-          });
+          }, { merge: true });
           console.log("[Presence] Tab hidden. Presence set to offline.");
         } catch (err) {
           // Silently catch errors
@@ -563,11 +552,11 @@ export default function Home() {
   const handleLogout = async () => {
     if (user?.uid) {
       try {
-        const { doc, updateDoc } = await import("firebase/firestore");
+        const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
-        await updateDoc(doc(db, "users", user.uid), {
+        await setDoc(doc(db, "users", user.uid), {
           lastActiveAt: 0
-        });
+        }, { merge: true });
       } catch (err) {
         console.warn("Failed to clean up presence on logout:", err);
       }
@@ -669,34 +658,9 @@ export default function Home() {
       {/* Screen Router Container */}
       <main 
         ref={mainRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-y-auto pb-24 px-4 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
-        {/* Pull-to-refresh Indicator */}
-        {pullDistance > 0 && (
-          <div 
-            className="w-full flex justify-center py-2 overflow-hidden bg-black-oled/40 transition-all duration-75 relative z-[30]"
-            style={{ 
-              height: `${pullDistance}px`, 
-              opacity: Math.min(1, pullDistance / 50) 
-            }}
-          >
-            <div 
-              className="w-8 h-8 rounded-full bg-neutral-900 border border-white/10 flex items-center justify-center shadow-lg relative transition-all"
-              style={{ 
-                transform: `rotate(${pullDistance * 4.5}deg) scale(${Math.min(1, pullDistance / 55)})`,
-                borderColor: pullDistance > 55 ? "rgba(0, 229, 255, 0.4)" : "rgba(255, 255, 255, 0.1)"
-              }}
-            >
-              <span className={`text-xs ${pullDistance > 55 ? "text-cyan-neon animate-pulse font-black" : "text-gray-dim"}`}>
-                🎯
-              </span>
-            </div>
-          </div>
-        )}
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
@@ -990,62 +954,6 @@ export default function Home() {
           onComplete={(updatedUser) => setUser(updatedUser)}
         />
       )}
-
-      {/* Refresh Confirmation Modal */}
-      <AnimatePresence>
-        {showRefreshConfirm && (
-          <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-[320px] bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_30px_rgba(0,229,255,0.1)] relative overflow-hidden"
-            >
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
-              
-              <div className="w-12 h-12 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon mx-auto mt-2 animate-spin [animation-duration:8s]">
-                🎯
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase">
-                  Confirmación de Recarga
-                </span>
-                <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  ¿Recargar Aplicación?
-                </h3>
-              </div>
-
-              <p className="text-[11px] text-gray-dim leading-relaxed">
-                ¿Seguro que deseas volver a cargar la aplicación? Se mantendrán tus borradores locales en IndexedDB, pero se reiniciará la vista activa en pantalla.
-              </p>
-
-              <div className="flex flex-col gap-2 mt-2">
-                <button
-                  onClick={() => {
-                    bypassBeforeUnloadRef.current = true;
-                    setShowRefreshConfirm(false);
-                    setPullDistance(0);
-                    window.location.reload();
-                  }}
-                  className="w-full py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-110 transition shadow-glow-cyan"
-                >
-                  Sí, Recargar Pantalla
-                </button>
-                <button
-                  onClick={() => {
-                    setShowRefreshConfirm(false);
-                    setPullDistance(0);
-                  }}
-                  className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Invitation Challenge Modal */}
       <AnimatePresence>

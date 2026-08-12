@@ -83,7 +83,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       {/* Sync Wifi Button, Theme Selector, View Switcher & Language Selector */}
       <div className="flex items-center gap-3">
         {/* Coach View Switcher Toggle */}
-        {user && (user.role === "coach" || user.role === "team_admin_coach") && onToggleCoachViewMode && (
+        {user && (user.role === "coach" || user.role === "team_admin_coach" || user.role === "team_admin" || user.role === "superadmin" || user.isClubCreator) && onToggleCoachViewMode && (
           <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">
             <button
               onClick={() => onToggleCoachViewMode(false)}

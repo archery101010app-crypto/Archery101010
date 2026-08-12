@@ -350,7 +350,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         {[
           { id: "OVERVIEW", label: "Resumen", icon: LayoutDashboard },
           { id: "ATHLETES", label: "Atletas", icon: Users },
-          { id: "SESSIONS", label: "Controles", icon: Award },
+          { id: "SESSIONS", label: "Controles/Chequeos", icon: Award },
           { id: "DUELS", label: "Duelos", icon: Trophy },
           { id: "MACROCYCLES", label: "Planes", icon: Sparkles }
         ].map((tab) => {

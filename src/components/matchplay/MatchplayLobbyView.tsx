@@ -120,6 +120,46 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
+  // Sincronización automática de presencia y cola en el lobby
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+
+    const updateLobbyPresence = async () => {
+      try {
+        const { doc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const docRef = doc(db, "users", uid);
+        await setDoc(docRef, {
+          lastActiveAt: Date.now()
+        }, { merge: true });
+        console.log("[Lobby Presence] Updated presence in Firestore.");
+      } catch (err) {
+        console.error("[Lobby Presence] Error updating presence:", err);
+      }
+    };
+
+    const triggerBgSync = () => {
+      import("@/lib/db/syncManager")
+        .then(({ runSync }) => {
+          runSync().catch((err) => console.error("[Lobby] Background sync failed:", err));
+        })
+        .catch((err) => console.error("[Lobby] Failed to import syncManager:", err));
+    };
+
+    // Run immediately on mount
+    updateLobbyPresence();
+    triggerBgSync();
+
+    // Set up intervals
+    const presenceInterval = setInterval(updateLobbyPresence, 20000); // presence every 20s
+    const syncInterval = setInterval(triggerBgSync, 15000); // bg sync every 15s
+
+    return () => {
+      clearInterval(presenceInterval);
+      clearInterval(syncInterval);
+    };
+  }, [user?.uid]);
 
   const handleDeleteDraft = async (id: string) => {
     if (!window.confirm("¿Seguro que deseas eliminar este duelo activo permanentemente?")) {
@@ -326,7 +366,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       defaultDistance: u.bowConfig?.defaultDistance || 18
     },
     rating: "9.0",
-    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 180000)) ? "online" as const : "offline" as const,
+    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 300000)) ? "online" as const : "offline" as const,
     lastActiveAt: u.lastActiveAt
   })).filter((riv) => {
     // Exclude mock/demo users from the online list

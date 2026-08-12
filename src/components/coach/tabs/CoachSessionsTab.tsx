@@ -185,7 +185,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
       {/* Filters */}
       <div className="flex justify-between items-center mt-1">
-        <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Historial de Controles</span>
+        <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Historial de Controles/Chequeos</span>
         <div className="flex gap-1.5">
           {["ALL", "Control", "Práctica", "Volumen"].map((type) => (
             <button
@@ -197,7 +197,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   : "bg-neutral-900 border border-white/5 text-gray-dim hover:text-white"
               }`}
             >
-              {type === "ALL" ? "Todos" : type}
+              {type === "ALL" ? "Todos" : type === "Control" ? "Control/Chequeo" : type}
             </button>
           ))}
         </div>
