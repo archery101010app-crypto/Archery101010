@@ -18,6 +18,7 @@ import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal"
 import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
+import AcousticChronographView from "@/components/tools/AcousticChronographView";
 
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -30,7 +31,7 @@ import { AdCampaign } from "@/lib/db/adTypes";
 import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
 
 // Screens that the authenticated user can access
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
 
 
 export default function Home() {
@@ -725,6 +726,12 @@ export default function Home() {
         )}
         {currentScreen === "CALENDAR" && (
           <CalendarView user={user} onBack={() => setCurrentScreen("HOME")} />
+        )}
+        {currentScreen === "CHRONOGRAPH" && (
+          <AcousticChronographView
+            user={user}
+            onBack={() => setCurrentScreen("HOME")}
+          />
         )}
         {currentScreen === "PROFILE" && (
           <ProfileView

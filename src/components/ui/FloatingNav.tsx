@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-import { Home, Target, History, Calendar, User, Users, Shield } from "lucide-react";
+import { Home, Target, History, Calendar, User, Users, Shield, Gauge, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
 
 interface FloatingNavProps {
   activeScreen: Screen;
@@ -26,6 +26,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
       ? { id: "HOME" as Screen, icon: Users, label: "Atletas" }
       : { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
     { id: "HISTORY" as Screen, icon: History, label: "Historial" },
+    { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
     { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
     { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
   ];
@@ -46,45 +47,62 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
           const Icon = item.icon;
           const isActive = activeScreen === item.id && item.label !== "Atletas";
 
-          return (
-            <button
-              key={item.label}
-              onClick={() => onScreenChange(item.id)}
-              className="relative flex flex-col items-center justify-center p-1.5 cursor-pointer outline-none group"
-            >
-              {/* Highlight active glow behind icon */}
-              {isActive && (
-                <motion.div
-                  layoutId="activeGlow"
-                  className="absolute inset-0 bg-cyan-neon/5 rounded-full blur-md"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
+            const isProBlocked = item.isPro && user?.plan === "FREE";
 
-              {/* Icon */}
-              <Icon
-                size={22}
-                className={`transition-colors duration-200 relative z-10 ${
-                  isActive
-                    ? "text-cyan-neon shadow-glow-cyan"
-                    : item.label === "Atletas"
-                    ? "text-purple-400 group-hover:text-purple-300"
-                    : "text-gray-dim group-hover:text-white"
-                }`}
-              />
+            return (
+              <button
+                key={item.label}
+                onClick={() => {
+                  if (isProBlocked) {
+                    onScreenChange("PROFILE");
+                  } else {
+                    onScreenChange(item.id);
+                  }
+                }}
+                className="relative flex flex-col items-center justify-center p-1.5 cursor-pointer outline-none group"
+              >
+                {/* Highlight active glow behind icon */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeGlow"
+                    className="absolute inset-0 bg-cyan-neon/5 rounded-full blur-md"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
 
-              {/* Active dot indicator */}
-              {isActive && (
-                <motion.div
-                  layoutId="activeDot"
-                  className="w-1.5 h-1.5 rounded-full bg-cyan-neon mt-1 shadow-glow-cyan"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              
-              {!isActive && <div className="w-1.5 h-1.5 mt-1 bg-transparent" />}
-            </button>
-          );
+                {/* Icon wrapper with PRO badge */}
+                <div className="relative">
+                  <Icon
+                    size={22}
+                    className={`transition-colors duration-200 relative z-10 ${
+                      isActive
+                        ? "text-cyan-neon shadow-glow-cyan"
+                        : item.label === "Atletas"
+                        ? "text-purple-400 group-hover:text-purple-300"
+                        : isProBlocked
+                        ? "text-yellow-gold/80 group-hover:text-yellow-gold"
+                        : "text-gray-dim group-hover:text-white"
+                    }`}
+                  />
+                  {item.isPro && (
+                    <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+                      PRO
+                    </span>
+                  )}
+                </div>
+
+                {/* Active dot indicator */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeDot"
+                    className="w-1.5 h-1.5 rounded-full bg-cyan-neon mt-1 shadow-glow-cyan"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                
+                {!isActive && <div className="w-1.5 h-1.5 mt-1 bg-transparent" />}
+              </button>
+            );
         })}
       </div>
     </div>
