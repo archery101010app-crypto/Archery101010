@@ -648,7 +648,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       </motion.button>
 
       {/* Floating stars tab on the left edge */}
-      <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40]">
+      <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40] scale-90 origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
           className="flex flex-col items-center justify-center gap-2 py-4 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 md:w-9 select-none"
@@ -683,7 +683,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="fixed top-0 left-0 h-full w-[340px] sm:w-[380px] max-w-[90vw] bg-neutral-950/95 border-r border-yellow-gold/25 shadow-[8px_0_30px_rgba(0,0,0,0.8)] z-[50] flex flex-col pt-[calc(4.5rem+env(safe-area-inset-top))] pb-6 text-left"
+              className="fixed top-0 left-0 h-full w-[306px] sm:w-[342px] max-w-[90vw] bg-neutral-950/95 border-r border-yellow-gold/25 shadow-[8px_0_30px_rgba(0,0,0,0.8)] z-[50] flex flex-col pt-[calc(4.5rem+env(safe-area-inset-top))] pb-6 text-left"
             >
               {/* Header */}
               <div className="px-5 pb-4 border-b border-white/5 flex items-center justify-between">
