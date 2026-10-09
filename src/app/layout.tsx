@@ -13,11 +13,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Archery 101010 - SaaS Premium de Tiro con Arco",
     description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
-    url: "https://archery101010-prd.web.app",
+    url: "https://archery101010-c0bb4.web.app",
     siteName: "Archery 101010",
     images: [
       {
-        url: "https://archery101010-prd.web.app/images/logo_final.png",
+        url: "https://archery101010-c0bb4.web.app/images/logo_final.png",
         width: 800,
         height: 200,
         alt: "Archery 101010 Logo",

@@ -6,20 +6,20 @@ import { getMessaging, isSupported } from "firebase/messaging";
 // Configurations for different environments (dynamically mapped at runtime)
 const firebaseConfigs = {
   test: {
-    apiKey: "AIzaSyDXsjd5FRo-WpE4-32hJnyZSvqlW-88I0E",
-    authDomain: "archery101010-tst.firebaseapp.com",
-    projectId: "archery101010-tst",
-    storageBucket: "archery101010-tst.firebasestorage.app",
-    messagingSenderId: "205974427894",
-    appId: "1:205974427894:web:16aee6e14fb8ad49f534d7"
+    apiKey: "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE",
+    authDomain: "archery101010-c0bb4.firebaseapp.com",
+    projectId: "archery101010-c0bb4",
+    storageBucket: "archery101010-c0bb4.firebasestorage.app",
+    messagingSenderId: "757910399585",
+    appId: "1:757910399585:web:3cbcf50a21971cdc5b5820"
   },
   prod: {
-    apiKey: "AIzaSyBYrK69NQRfuSR73HF_lJP22g1bw0LDPTo",
-    authDomain: "archery101010-prd.firebaseapp.com",
-    projectId: "archery101010-prd",
-    storageBucket: "archery101010-prd.firebasestorage.app",
-    messagingSenderId: "201321373574",
-    appId: "1:201321373574:web:f9c4aba8b9e86e5835d607"
+    apiKey: "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE",
+    authDomain: "archery101010-c0bb4.firebaseapp.com",
+    projectId: "archery101010-c0bb4",
+    storageBucket: "archery101010-c0bb4.firebasestorage.app",
+    messagingSenderId: "757910399585",
+    appId: "1:757910399585:web:3cbcf50a21971cdc5b5820"
   },
   mock: {
     apiKey: "mock-api-key-archery101010-2026",
@@ -43,11 +43,11 @@ if (typeof window !== "undefined") {
     if (envKey && !envKey.includes("mock-api-key")) {
       activeConfig = {
         apiKey: envKey,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010.firebaseapp.com",
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010",
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010.appspot.com",
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:1234567890:web:abcdef123456"
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.firebaseapp.com",
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010-c0bb4",
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010-c0bb4.firebasestorage.app",
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585",
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:757910399585:web:3cbcf50a21971cdc5b5820"
       };
     } else {
       activeConfig = firebaseConfigs.mock;
@@ -63,11 +63,11 @@ if (typeof window !== "undefined") {
   if (envKey && !envKey.includes("mock-api-key")) {
     activeConfig = {
       apiKey: envKey,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010.firebaseapp.com",
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010",
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010.appspot.com",
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:1234567890:web:abcdef123456"
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.firebaseapp.com",
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010-c0bb4",
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010-c0bb4.firebasestorage.app",
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585",
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:757910399585:web:3cbcf50a21971cdc5b5820"
     };
   }
 }

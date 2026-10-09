@@ -1,6 +1,7 @@
 {
   "projects": {
-    "test": "archery101010-tst",
-    "prod": "archery101010-prd"
+    "default": "archery101010-c0bb4",
+    "prod": "archery101010-c0bb4",
+    "test": "archery101010-c0bb4"
   }
 }
