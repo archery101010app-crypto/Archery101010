@@ -482,7 +482,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-3 shadow-xl">
         <div className="flex justify-between items-center">
           <span className="text-xs font-black uppercase tracking-wider text-white">
-            Historial de Mediciones a 18 Metros
+            Historial de Mediciones
           </span>
           <span className="text-[10px] text-gray-dim">
             {shotHistory.length} {shotHistory.length === 1 ? "tiro" : "tiros"}
