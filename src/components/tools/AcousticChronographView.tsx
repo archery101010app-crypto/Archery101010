@@ -278,45 +278,32 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <span>Volver</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-2xl bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon">
-            <Gauge size={20} />
-          </div>
-          <div className="flex flex-col items-end text-right">
-            <div 
-              className="flex items-baseline gap-1 select-none"
-              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-            >
-              <div className="flex text-xs sm:text-sm tracking-tighter font-extrabold">
-                <span className="text-cyan-neon">10</span>
-                <span className="text-red-rival">10</span>
-                <span className="text-yellow-gold">10</span>
-              </div>
-              <span className="text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                CHRONOGRAPH
-              </span>
-            </div>
-            <span className="text-[9px] text-cyan-neon font-extrabold uppercase tracking-widest">
-              18 Metros
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5 bg-neutral-950/80 border border-cyan-neon/20 px-3 py-1.5 rounded-2xl text-[10px] text-cyan-neon font-black uppercase tracking-wider">
+          <Target size={13} />
+          <span>18 Metros</span>
         </div>
       </div>
 
       {/* Centered Brand Title & Main Action Buttons */}
       <div className="flex flex-col gap-3">
-        <div className="py-1 text-center flex flex-col items-center justify-center select-none">
+        <div className="py-2 text-center flex flex-col items-center justify-center select-none">
+          {/* 10 10 10 Centrado Arriba */}
           <div 
-            className="flex items-center justify-center gap-1.5 text-2xl sm:text-3xl tracking-tighter font-extrabold"
+            className="flex items-center justify-center tracking-tighter font-extrabold text-3xl sm:text-4xl leading-none"
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
-            <span className="text-cyan-neon drop-shadow-[0_0_15px_rgba(0,191,255,0.4)]">10</span>
-            <span className="text-red-rival drop-shadow-[0_0_15px_rgba(255,0,0,0.3)]">10</span>
-            <span className="text-yellow-gold drop-shadow-[0_0_15px_rgba(255,229,0,0.3)]">10</span>
-            <span className="text-white text-base sm:text-xl font-black tracking-[0.2em] uppercase pl-1">
-              CHRONOGRAPH
-            </span>
+            <span className="text-cyan-neon drop-shadow-[0_0_15px_rgba(0,191,255,0.45)]">10</span>
+            <span className="text-red-rival drop-shadow-[0_0_15px_rgba(255,0,0,0.35)]">10</span>
+            <span className="text-yellow-gold drop-shadow-[0_0_15px_rgba(255,229,0,0.35)]">10</span>
           </div>
+
+          {/* CHRONOGRAPH Centrado Abajo */}
+          <span 
+            className="text-white text-xs sm:text-sm font-black tracking-[0.35em] sm:tracking-[0.45em] uppercase text-center mt-1.5 pl-1.5"
+            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          >
+            CHRONOGRAPH
+          </span>
         </div>
 
         {/* 2 ACTION BUTTONS: INSTRUCCIONES & CONFIGURAR FLECHA */}
