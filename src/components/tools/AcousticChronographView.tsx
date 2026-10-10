@@ -278,29 +278,45 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <span>Volver</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-2xl bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon">
             <Gauge size={20} />
           </div>
-          <div className="flex flex-col text-right">
-            <h1 className="text-white font-black text-sm uppercase tracking-wider flex items-center gap-1 justify-end">
-              <span>EchoChrono™</span>
-            </h1>
+          <div className="flex flex-col items-end text-right">
+            <div 
+              className="flex items-baseline gap-1 select-none"
+              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+            >
+              <div className="flex text-xs sm:text-sm tracking-tighter font-extrabold">
+                <span className="text-cyan-neon">10</span>
+                <span className="text-red-rival">10</span>
+                <span className="text-yellow-gold">10</span>
+              </div>
+              <span className="text-white text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                CHRONOGRAPH
+              </span>
+            </div>
             <span className="text-[9px] text-cyan-neon font-extrabold uppercase tracking-widest">
-              Cronógrafo a 18 Metros
+              18 Metros
             </span>
           </div>
         </div>
       </div>
 
-      {/* Hero Description & Main Action Buttons */}
+      {/* Centered Brand Title & Main Action Buttons */}
       <div className="flex flex-col gap-3">
-        <div className="px-1 text-center sm:text-left">
-          <h2 className="text-white text-lg font-black tracking-tight">EchoChrono™</h2>
-          <p className="text-xs text-white/50 font-medium">Cronógrafo Acústico Balístico</p>
-          <p className="text-[11px] text-gray-dim mt-0.5 leading-relaxed">
-            Mide la velocidad de salida de tu flecha con el micrófono de tu teléfono a una distancia de <strong className="text-white">18 metros</strong>.
-          </p>
+        <div className="py-1 text-center flex flex-col items-center justify-center select-none">
+          <div 
+            className="flex items-center justify-center gap-1.5 text-2xl sm:text-3xl tracking-tighter font-extrabold"
+            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          >
+            <span className="text-cyan-neon drop-shadow-[0_0_15px_rgba(0,191,255,0.4)]">10</span>
+            <span className="text-red-rival drop-shadow-[0_0_15px_rgba(255,0,0,0.3)]">10</span>
+            <span className="text-yellow-gold drop-shadow-[0_0_15px_rgba(255,229,0,0.3)]">10</span>
+            <span className="text-white text-base sm:text-xl font-black tracking-[0.2em] uppercase pl-1">
+              CHRONOGRAPH
+            </span>
+          </div>
         </div>
 
         {/* 2 ACTION BUTTONS: INSTRUCCIONES & CONFIGURAR FLECHA */}

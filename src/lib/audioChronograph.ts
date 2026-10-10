@@ -1,5 +1,5 @@
-// Acoustic Arrow Speed Chronograph Engine (EchoChrono™ Ballistic Model)
-// Calculates arrow launch velocity, kinetic energy and momentum based on acoustic time-of-flight at 20 yards.
+// Acoustic Arrow Speed Chronograph Engine (101010 Chronograph Ballistic Model)
+// Calculates arrow launch velocity, kinetic energy and momentum based on acoustic time-of-flight at 18 meters.
 
 export interface ShotResult {
   id: string;
