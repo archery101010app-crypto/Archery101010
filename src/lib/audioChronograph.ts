@@ -1,5 +1,5 @@
-// Acoustic Arrow Speed Chronograph Engine
-// Calculates arrow velocity based on acoustic time-of-flight between string release and target impact.
+// Acoustic Arrow Speed Chronograph Engine (EchoChrono™ Ballistic Model)
+// Calculates arrow launch velocity, kinetic energy and momentum based on acoustic time-of-flight at 20 yards.
 
 export interface ShotResult {
   id: string;
@@ -7,16 +7,30 @@ export interface ShotResult {
   distanceMeters: number;
   distanceYards: number;
   temperatureCelsius: number;
+  temperatureFahrenheit: number;
   arrowMassGrains?: number;
+  arrowLengthInches?: number;
   totalTimeSec: number;
   flightTimeSec: number;
   speedMps: number;
   speedFps: number;
   speedKmh: number;
+  launchSpeedFps: number;
+  launchSpeedMps: number;
+  launchSpeedKmh: number;
   kineticEnergyFtLbs?: number;
   momentumSlugFtSec?: number;
   releasePeakSec: number;
   impactPeakSec: number;
+  notes?: string;
+}
+
+export function fahrenheitToCelsius(f: number): number {
+  return Math.round(((f - 32) * 5 / 9) * 10) / 10;
+}
+
+export function celsiusToFahrenheit(c: number): number {
+  return Math.round((c * 9 / 5 + 32) * 10) / 10;
 }
 
 /**
@@ -27,22 +41,23 @@ export function calculateSpeedOfSound(temperatureCelsius: number = 20): number {
 }
 
 /**
- * Calculates arrow flight stats from total time between release and impact sound reception
- * @param totalTimeSec Elapsed time between string release click and impact sound reaching microphone at bow
- * @param distanceMeters Distance from shooter to target in meters
- * @param temperatureCelsius Ambient air temperature in °C
- * @param arrowMassGrains Optional arrow mass in grains (1 gram = 15.4324 grains)
+ * Calculates arrow flight stats & launch speed from total time between release and impact sound reception.
+ * Uses aerodynamic drag modeling over the specified distance (default 20 yards / 18.288 m).
  */
 export function calculateArrowSpeed(
   totalTimeSec: number,
-  distanceMeters: number,
+  distanceMeters: number = 18.288,
   temperatureCelsius: number = 20,
-  arrowMassGrains?: number
+  arrowMassGrains?: number,
+  arrowLengthInches?: number
 ): {
   flightTimeSec: number;
   speedMps: number;
   speedFps: number;
   speedKmh: number;
+  launchSpeedFps: number;
+  launchSpeedMps: number;
+  launchSpeedKmh: number;
   soundReturnTimeSec: number;
   kineticEnergyFtLbs?: number;
   momentumSlugFtSec?: number;
@@ -50,23 +65,33 @@ export function calculateArrowSpeed(
   const speedOfSound = calculateSpeedOfSound(temperatureCelsius);
   const soundReturnTimeSec = distanceMeters / speedOfSound;
 
-  // Net arrow flight time = total elapsed time - sound return delay from target to microphone
+  // Net arrow flight time = total elapsed time - sound return delay from target face to phone microphone
   const flightTimeSec = Math.max(0.01, totalTimeSec - soundReturnTimeSec);
 
-  // Average velocity = distance / flight time
+  // Average velocity over the course of flight
   const speedMps = distanceMeters / flightTimeSec;
   const speedFps = speedMps * 3.28084;
   const speedKmh = speedMps * 3.6;
+
+  // Aerodynamic drag correction for 20 yards to determine true Launch (Muzzle) Speed
+  // Standard carbon hunting/target arrows lose approx ~2.0% - 2.5% velocity over 20 yards
+  const massRatio = arrowMassGrains ? Math.max(0.7, Math.min(1.4, 400 / arrowMassGrains)) : 1.0;
+  const lengthRatio = arrowLengthInches ? Math.max(0.85, Math.min(1.2, arrowLengthInches / 28.5)) : 1.0;
+  const dragFactor = 0.021 * massRatio * lengthRatio;
+
+  const launchSpeedFps = speedFps * (1 + dragFactor);
+  const launchSpeedMps = launchSpeedFps / 3.28084;
+  const launchSpeedKmh = launchSpeedMps * 3.6;
 
   let kineticEnergyFtLbs: number | undefined = undefined;
   let momentumSlugFtSec: number | undefined = undefined;
 
   if (arrowMassGrains && arrowMassGrains > 0) {
     // Kinetic Energy (ft-lbs) = (mass_in_grains * velocity_in_fps^2) / 450240
-    kineticEnergyFtLbs = (arrowMassGrains * Math.pow(speedFps, 2)) / 450240;
+    kineticEnergyFtLbs = (arrowMassGrains * Math.pow(launchSpeedFps, 2)) / 450240;
     
     // Momentum = (mass_in_grains * velocity_in_fps) / 225120
-    momentumSlugFtSec = (arrowMassGrains * speedFps) / 225120;
+    momentumSlugFtSec = (arrowMassGrains * launchSpeedFps) / 225120;
   }
 
   return {
@@ -74,6 +99,9 @@ export function calculateArrowSpeed(
     speedMps,
     speedFps,
     speedKmh,
+    launchSpeedFps,
+    launchSpeedMps,
+    launchSpeedKmh,
     soundReturnTimeSec,
     kineticEnergyFtLbs,
     momentumSlugFtSec
@@ -86,32 +114,31 @@ export function calculateArrowSpeed(
  */
 export function detectAudioPeaks(
   audioBuffer: AudioBuffer,
-  distanceMeters: number,
+  distanceMeters: number = 18.288,
   temperatureCelsius: number = 20
 ): { releaseSec: number; impactSec: number; confidence: number } | null {
   const channelData = audioBuffer.getChannelData(0);
   const sampleRate = audioBuffer.sampleRate;
   const soundSpeed = calculateSpeedOfSound(temperatureCelsius);
 
-  // Theoretical minimum flight time assuming 350 fps (approx max bow speed ~ 100 m/s)
-  const minFlightTime = distanceMeters / 110; 
+  // Theoretical bounds for arrow speeds (120 fps to 360 fps)
+  const minFlightTime = distanceMeters / 115; // ~ 370 fps
   const soundReturnTime = distanceMeters / soundSpeed;
   const minTotalTime = minFlightTime + soundReturnTime;
 
-  // Theoretical maximum flight time assuming 120 fps (~ 36 m/s)
-  const maxFlightTime = distanceMeters / 30;
+  const maxFlightTime = distanceMeters / 35; // ~ 115 fps
   const maxTotalTime = maxFlightTime + soundReturnTime;
 
-  // Find absolute maximum peak for initial calibration threshold
+  // Find absolute maximum peak for baseline calibration
   let maxAmp = 0;
   for (let i = 0; i < channelData.length; i++) {
     const abs = Math.abs(channelData[i]);
     if (abs > maxAmp) maxAmp = abs;
   }
 
-  if (maxAmp < 0.05) return null; // Too quiet
+  if (maxAmp < 0.04) return null; // Too quiet, no shot sound
 
-  const threshold = maxAmp * 0.25;
+  const threshold = maxAmp * 0.28;
   const windowSize = Math.floor(sampleRate * 0.005); // 5ms window
 
   // Envelope array
@@ -124,7 +151,7 @@ export function detectAudioPeaks(
     envelope.push(sum / windowSize);
   }
 
-  // Find first peak above threshold (Release)
+  // Find first peak above threshold (String Release)
   let releaseIdx = -1;
   for (let k = 0; k < envelope.length; k++) {
     if (envelope[k] > threshold) {
@@ -137,7 +164,7 @@ export function detectAudioPeaks(
 
   const releaseSec = (releaseIdx * windowSize) / sampleRate;
 
-  // Search for second peak (Impact) within expected time window
+  // Search for second peak (Target Impact) within expected time window
   const minSearchIdx = releaseIdx + Math.floor((minTotalTime * sampleRate) / windowSize);
   const maxSearchIdx = Math.min(envelope.length - 1, releaseIdx + Math.floor((maxTotalTime * sampleRate) / windowSize));
 
@@ -145,16 +172,16 @@ export function detectAudioPeaks(
   let maxImpactVal = 0;
 
   for (let k = minSearchIdx; k <= maxSearchIdx; k++) {
-    if (envelope[k] > maxImpactVal && envelope[k] > maxAmp * 0.15) {
+    if (envelope[k] > maxImpactVal && envelope[k] > maxAmp * 0.18) {
       maxImpactVal = envelope[k];
       impactIdx = k;
     }
   }
 
-  // Fallback: if no peak within range, search anywhere after minSearchIdx
+  // Fallback: search anywhere after minSearchIdx if initial window had noise
   if (impactIdx === -1) {
     for (let k = minSearchIdx; k < envelope.length; k++) {
-      if (envelope[k] > maxImpactVal) {
+      if (envelope[k] > maxImpactVal && envelope[k] > maxAmp * 0.15) {
         maxImpactVal = envelope[k];
         impactIdx = k;
       }
@@ -162,11 +189,11 @@ export function detectAudioPeaks(
   }
 
   if (impactIdx === -1 || impactIdx <= releaseIdx) {
-    // Default estimated impact peak
-    const defaultTotalTime = (distanceMeters / 60) + soundReturnTime; // ~ 200 fps estimate
+    // Default estimated impact peak (~ 275 fps compound bow)
+    const defaultTotalTime = (distanceMeters / 83.8) + soundReturnTime;
     return {
       releaseSec: Math.max(0, releaseSec),
-      impactSec: Math.max(releaseSec + 0.1, releaseSec + defaultTotalTime),
+      impactSec: Math.max(releaseSec + 0.18, releaseSec + defaultTotalTime),
       confidence: 0.5
     };
   }
@@ -176,6 +203,6 @@ export function detectAudioPeaks(
   return {
     releaseSec,
     impactSec,
-    confidence: 0.85
+    confidence: 0.90
   };
 }
