@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, Mic, Gauge, Trash2, Sparkles, Volume2, Target,
   Info, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  RotateCcw, Save, Smartphone, ExternalLink, Zap
+  RotateCcw, Save, Smartphone, ExternalLink, Zap, BookOpen, Settings, X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
@@ -23,11 +23,11 @@ interface AcousticChronographViewProps {
 }
 
 export default function AcousticChronographView({ user, onBack }: AcousticChronographViewProps) {
-  // Distance: 20 Yards (60 ft / 18.288 m) as specified in EchoChrono
-  const distanceYards = 20;
-  const distanceMeters = 18.288;
+  // Official Distance: 18 Metros (18.0 m / approx 20 yards)
+  const distanceMeters = 18.0;
+  const distanceYards = 19.685;
 
-  // Input specifications states (Screenshot 4)
+  // Input specifications states
   const [arrowWeight, setArrowWeight] = useState<string>("420");
   const [arrowLength, setArrowLength] = useState<string>("28.5");
   const [temperature, setTemperature] = useState<string>("70");
@@ -36,16 +36,16 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   // Speed unit toggle: FPS vs KM/H
   const [speedUnit, setSpeedUnit] = useState<"FPS" | "KMH">("FPS");
 
-  // Setup Guide collapse toggle (Screenshot 2 & 3)
-  const [isGuideOpen, setIsGuideOpen] = useState(true);
+  // Modals for Instructions and Arrow Specs
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [showSpecsModal, setShowSpecsModal] = useState(false);
 
-  // Active Listening / Session State
-  const [isSessionActive, setIsSessionActive] = useState(false);
+  // Active Listening / Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastShotResult, setLastShotResult] = useState<ShotResult | null>(null);
 
-  // Tooltip states for info icons
+  // Tooltip helper
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   // History logs
@@ -59,6 +59,15 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Temperature calculations
+  const tempCelsius = tempUnit === "F" 
+    ? fahrenheitToCelsius(Number(temperature) || 70) 
+    : (Number(temperature) || 20);
+
+  const tempFahrenheit = tempUnit === "F" 
+    ? (Number(temperature) || 70) 
+    : celsiusToFahrenheit(Number(temperature) || 20);
+
   // Load saved specs & history from IndexedDB on mount
   useEffect(() => {
     async function loadInitialData() {
@@ -71,38 +80,31 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         if (savedSpecs.arrowLength) setArrowLength(String(savedSpecs.arrowLength));
         if (savedSpecs.temperature) setTemperature(String(savedSpecs.temperature));
         if (savedSpecs.tempUnit) setTempUnit(savedSpecs.tempUnit);
-      } else if (user.bowConfig) {
-        // Fallback defaults from user profile if available
-        if (user.bowConfig.poundage) {
-          // Approximate recommended arrow weight in grains (~ 7 grains per pound)
-          const approxWeight = Math.round(user.bowConfig.poundage * 7.5);
-          setArrowWeight(String(approxWeight));
-        }
+      } else if (user.bowConfig?.poundage) {
+        const approxWeight = Math.round(user.bowConfig.poundage * 7.5);
+        setArrowWeight(String(approxWeight));
       }
     }
     loadInitialData();
   }, [user]);
 
-  // Save specs when modified
+  // Save specs handler
   const handleSaveSpecs = async (w: string, l: string, t: string, u: "F" | "C") => {
     await saveLocalSetting("chronograph_specs", {
-      arrowWeight: Number(w) || 0,
-      arrowLength: Number(l) || 0,
-      temperature: Number(t) || 0,
+      arrowWeight: Number(w) || 420,
+      arrowLength: Number(l) || 28.5,
+      temperature: Number(t) || 70,
       tempUnit: u
     });
   };
 
-  // Convert temperature when unit is toggled
   const handleToggleTempUnit = () => {
     const nextUnit = tempUnit === "F" ? "C" : "F";
     const curVal = Number(temperature) || 0;
-    let converted = curVal;
-    if (tempUnit === "F") {
-      converted = fahrenheitToCelsius(curVal);
-    } else {
-      converted = celsiusToFahrenheit(curVal);
-    }
+    const converted = tempUnit === "F" 
+      ? fahrenheitToCelsius(curVal) 
+      : celsiusToFahrenheit(curVal);
+
     setTempUnit(nextUnit);
     setTemperature(String(converted));
     handleSaveSpecs(arrowWeight, arrowLength, String(converted), nextUnit);
@@ -118,15 +120,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     };
   }, []);
 
-  const tempCelsius = tempUnit === "F" 
-    ? fahrenheitToCelsius(Number(temperature) || 70) 
-    : (Number(temperature) || 20);
-
-  const tempFahrenheit = tempUnit === "F" 
-    ? (Number(temperature) || 70) 
-    : celsiusToFahrenheit(Number(temperature) || 20);
-
-  // Start Audio Recording / Listening for Shot
+  // Start Audio Recording / Listening for Shot at 18 Meters
   const startRecording = async () => {
     try {
       setIsRecording(true);
@@ -162,7 +156,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       };
       updateLevel();
 
-      // MediaRecorder for 3.2s shot window (ample time for release + 20yd flight + return sound)
+      // MediaRecorder for 3.2s shot window (ample time for release + 18m flight + return sound)
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
@@ -180,7 +174,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           try {
             const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
 
-            // Auto detect peaks using 20 yd ballistic acoustic parameters
+            // Auto detect peaks using 18m ballistic acoustic parameters
             const detected = detectAudioPeaks(decodedBuffer, distanceMeters, tempCelsius);
             
             const relSec = detected ? Math.round(detected.releaseSec * 1000) / 1000 : 0.20;
@@ -203,8 +197,8 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             const result: ShotResult = {
               id: `SHOT-${Date.now()}`,
               timestamp: Date.now(),
-              distanceMeters,
-              distanceYards,
+              distanceMeters: 18.0,
+              distanceYards: 19.685,
               temperatureCelsius: tempCelsius,
               temperatureFahrenheit: tempFahrenheit,
               arrowMassGrains: numWeight,
@@ -272,20 +266,6 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     await saveLocalSetting("chronograph_logs", updated);
   };
 
-  // Start new measurement session button handler (Screenshot 4)
-  const handleStartSession = () => {
-    if (!arrowWeight || Number(arrowWeight) <= 0) {
-      alert("Por favor ingresa el peso de la flecha en granos (gr).");
-      return;
-    }
-    if (!arrowLength || Number(arrowLength) <= 0) {
-      alert("Por favor ingresa la longitud de la flecha en pulgadas (in).");
-      return;
-    }
-    setIsSessionActive(true);
-    startRecording();
-  };
-
   return (
     <div className="flex flex-col gap-5 max-w-xl mx-auto pb-16 px-1">
       {/* Top Header */}
@@ -306,402 +286,144 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <h1 className="text-white font-black text-sm uppercase tracking-wider flex items-center gap-1 justify-end">
               <span>EchoChrono™</span>
             </h1>
-            <span className="text-[9px] text-orange-400 font-extrabold uppercase tracking-widest">
-              The Phone Chronograph
+            <span className="text-[9px] text-cyan-neon font-extrabold uppercase tracking-widest">
+              Cronógrafo a 18 Metros
             </span>
           </div>
         </div>
       </div>
 
-      {/* Hero Description */}
-      <div className="px-1 text-center sm:text-left">
-        <h2 className="text-white text-lg font-black tracking-tight">EchoChrono™</h2>
-        <p className="text-xs text-white/50 font-medium">The Phone Chronograph</p>
-        <p className="text-[11px] text-gray-dim mt-1 leading-relaxed">
-          Mide la velocidad de salida de tu arco con tu teléfono. Impulsado por acústica y nuestro motor balístico de precisión a 20 yardas.
-        </p>
-      </div>
-
-      {/* 1. PUBLIC PREVIEW CARD (Screenshot 1) */}
-      <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-2.5 relative overflow-hidden shadow-xl">
-        <div className="flex items-center gap-2 text-cyan-neon">
-          <Volume2 size={16} className="text-cyan-neon" />
-          <h3 className="text-xs font-black uppercase tracking-wider text-white">Vista Previa Pública</h3>
-        </div>
-        <p className="text-[11px] text-gray-dim leading-relaxed">
-          Considera esta función en fase de pruebas. Estamos mejorando la calibración acústica. Si conoces la velocidad real de tu flecha, una sesión parece desviada o si la app tiene dificultades para detectar los disparos, revisa que la distancia medida sea exacta a 20 yardas.
-        </p>
-      </div>
-
-      {/* 2. EXPECTED ACCURACY CARD (Screenshot 1) */}
-      <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-3 relative overflow-hidden shadow-xl">
-        <div className="flex items-center gap-2 text-green-400">
-          <CheckCircle2 size={16} className="text-green-400" />
-          <h3 className="text-xs font-black uppercase tracking-wider text-white">Precisión Esperada</h3>
-        </div>
-
-        <p className="text-[11px] text-gray-dim leading-relaxed">
-          Espera lecturas dentro de <strong>1–3 fps</strong> de la velocidad real cuando tu distancia esté medida con cinta métrica y tu posición coincida exactamente con la guía de configuración.
-        </p>
-
-        {/* Benchmarks List */}
-        <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-xs">
-          <span className="text-[9px] text-white/40 uppercase font-black tracking-widest block mb-1">
-            Comparativa contra cronógrafos de radar de alta gama:
-          </span>
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-gray-dim">• Dentro de 1 fps:</span>
-            <span className="text-white font-black font-mono">49% de sesiones</span>
-          </div>
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-gray-dim">• Dentro de 3 fps:</span>
-            <span className="text-white font-black font-mono">95% de sesiones</span>
-          </div>
-          <div className="flex items-center justify-between py-0.5">
-            <span className="text-gray-dim">• Dentro de 5 fps:</span>
-            <span className="text-white font-black font-mono">99% de sesiones</span>
-          </div>
-        </div>
-
-        {/* Warning Callout */}
-        <div className="bg-amber-500/10 border border-amber-500/25 p-3 rounded-2xl flex items-start gap-2.5">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-amber-200/90 leading-relaxed font-medium">
-            <strong>La configuración y las distancias son críticas.</strong> Un par de pulgadas de error es significativo (6" de error son ~5 fps de desviación). Por favor lee y sigue la guía de configuración a continuación.
+      {/* Hero Description & Main Action Buttons */}
+      <div className="flex flex-col gap-3">
+        <div className="px-1 text-center sm:text-left">
+          <h2 className="text-white text-lg font-black tracking-tight">EchoChrono™</h2>
+          <p className="text-xs text-white/50 font-medium">Cronógrafo Acústico Balístico</p>
+          <p className="text-[11px] text-gray-dim mt-0.5 leading-relaxed">
+            Mide la velocidad de salida de tu flecha con el micrófono de tu teléfono a una distancia de <strong className="text-white">18 metros</strong>.
           </p>
         </div>
-      </div>
 
-      {/* 3. SETUP GUIDE ACCORDION & VISUAL DIAGRAM (Screenshot 2 & 3) */}
-      <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-4 shadow-xl">
-        <button
-          type="button"
-          onClick={() => setIsGuideOpen(!isGuideOpen)}
-          className="flex justify-between items-center w-full cursor-pointer text-left"
-        >
-          <div className="flex flex-col">
-            <h3 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
-              <span>Guía de Configuración (Setup Guide)</span>
-            </h3>
-            <span className="text-[10px] text-gray-dim mt-0.5">
-              Coloca el teléfono exactamente a 20 yd (60 ft / 18.3 m) de la diana. Mide con cinta métrica.
-            </span>
-          </div>
-          <div className="p-1 rounded-full bg-white/5 text-gray-dim">
-            {isGuideOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </div>
-        </button>
-
-        <AnimatePresence>
-          {isGuideOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="flex flex-col gap-4 overflow-hidden pt-2 border-t border-white/5"
-            >
-              {/* Text Instructions */}
-              <div className="flex flex-col gap-3 text-xs leading-relaxed text-gray-dim">
-                <div>
-                  <h4 className="text-white font-bold text-xs">Ubicación</h4>
-                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px]">
-                    <li>Idealmente en exteriores, pero en interiores amplios funciona bien.</li>
-                    <li>Mínimo viento y ruido de fondo posible.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="text-white font-bold text-xs">Teléfono</h4>
-                  <ul className="list-disc list-inside mt-1 space-y-1 text-[11px]">
-                    <li>
-                      <strong className="text-white">Exactamente a 20 yd (60 ft / 18.3 m)</strong> de la diana, a la altura de tu flecha en apertura completa. <strong>Usa cinta métrica.</strong>
-                    </li>
-                    <li>Se recomienda un trípode para mantener una posición constante.</li>
-                    <li>
-                      <strong className="text-amber-400">Los telémetros no son lo suficientemente precisos.</strong> 6" de error son ~5 fps de diferencia en la lectura.
-                    </li>
-                    <li>Recomendamos cinta métrica de 30 m / 100 ft para evitar errores al encadenar cintas cortas.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="text-white font-bold text-xs">El Arquero (Tú)</h4>
-                  <ul className="list-disc list-inside mt-1 space-y-1 text-[11px]">
-                    <li>Párate de modo que el culatín abandone la cuerda parejo con el teléfono, a 15 cm (6") hacia el lateral.</li>
-                    <li>En apertura completa, el tope de cuerda debe estar justo sobre la línea de 20 yd, parejo con el teléfono.</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* VISUAL DIAGRAM SVG (Screenshot 3) */}
-              <div className="bg-[#050507] border border-white/10 rounded-2xl p-4 flex flex-col items-center relative overflow-hidden">
-                <span className="text-[9px] font-black uppercase text-white/40 tracking-widest self-start mb-2">
-                  Diagrama Oficial de Tiro
-                </span>
-
-                <svg viewBox="0 0 320 460" className="w-full max-w-sm h-auto select-none">
-                  {/* Top Target */}
-                  <rect x="60" y="20" width="200" height="18" rx="4" fill="#1C1C20" stroke="#333338" strokeWidth="1.5" />
-                  <line x1="70" y1="29" x2="250" y2="29" stroke="#555" strokeWidth="1" strokeDasharray="4 3" />
-                  <circle cx="160" cy="29" r="4" fill="#E65100" />
-                  <text x="160" y="14" fill="#FFFFFF" fontSize="10" fontWeight="900" textAnchor="middle" letterSpacing="2">
-                    TARGET
-                  </text>
-
-                  {/* Flight trajectory dashed line */}
-                  <line x1="160" y1="36" x2="160" y2="340" stroke="#00E5FF" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.6" />
-                  <polygon points="160,40 156,48 164,48" fill="#00E5FF" />
-
-                  {/* 20 yd distance dimension line on the right */}
-                  <line x1="240" y1="29" x2="240" y2="350" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
-                  <line x1="235" y1="29" x2="245" y2="29" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
-                  <line x1="235" y1="350" x2="245" y2="350" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
-
-                  {/* 20 yd text callout */}
-                  <text x="250" y="180" fill="#FFFFFF" fontSize="16" fontWeight="900">20 yd</text>
-                  <text x="250" y="196" fill="#888888" fontSize="10" fontWeight="700">60 ft · 18.3 m</text>
-                  <text x="250" y="210" fill="#666666" fontSize="8">diana al teléfono</text>
-                  <text x="250" y="226" fill="#E65100" fontSize="8" fontWeight="800">DISTANCIA EXACTA</text>
-                  <text x="250" y="238" fill="#E65100" fontSize="8" fontWeight="800">con cinta métrica</text>
-
-                  {/* 20 YD MEASURED LINE */}
-                  <line x1="20" y1="350" x2="300" y2="350" stroke="#555555" strokeWidth="1.2" strokeDasharray="5 4" />
-                  <text x="30" y="344" fill="#888888" fontSize="8" fontWeight="900" letterSpacing="1">
-                    LÍNEA MEDIDA DE 20 YD
-                  </text>
-
-                  {/* Arrow shaft at full draw */}
-                  <line x1="160" y1="290" x2="160" y2="390" stroke="#CCCCCC" strokeWidth="2.5" />
-                  {/* Arrow tip point */}
-                  <polygon points="160,285 157,294 163,294" fill="#999999" />
-                  {/* Bow grip box */}
-                  <rect x="153" y="315" width="14" height="22" rx="4" fill="#333338" stroke="#555" strokeWidth="1" />
-                  <text x="172" y="325" fill="#888" fontSize="8">bow grip</text>
-
-                  {/* Vanes / Nock */}
-                  <path d="M154,385 C154,395 160,402 160,402 C160,402 166,395 166,385 Z" fill="#E65100" />
-                  {/* String stop & nock exit point */}
-                  <circle cx="160" cy="350" r="7" fill="none" stroke="#E65100" strokeWidth="1.5" />
-                  <circle cx="160" cy="350" r="2.5" fill="#E65100" />
-
-                  {/* Phone Representation */}
-                  <rect x="205" y="336" width="18" height="30" rx="3" fill="#18181C" stroke="#00E5FF" strokeWidth="1.5" />
-                  <circle cx="214" cy="360" r="1.5" fill="#00E5FF" />
-                  <text x="214" y="378" fill="#FFFFFF" fontSize="8" fontWeight="bold" textAnchor="middle">Phone</text>
-
-                  {/* 15 cm / 6 in lateral gap */}
-                  <line x1="160" y1="330" x2="205" y2="330" stroke="#FFFFFF" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.5" />
-                  <text x="182" y="325" fill="#00E5FF" fontSize="7" fontWeight="bold" textAnchor="middle">6 in / 15 cm</text>
-
-                  {/* Explanatory callouts on left */}
-                  <text x="25" y="310" fill="#E65100" fontSize="8" fontWeight="bold">Tope de cuerda aquí</text>
-                  <text x="25" y="320" fill="#777" fontSize="7">en la línea de 20 yd</text>
-                  <line x1="95" y1="316" x2="150" y2="340" stroke="#E65100" strokeWidth="0.8" opacity="0.6" />
-
-                  <text x="25" y="380" fill="#E65100" fontSize="8" fontWeight="bold">El culatín sale aquí</text>
-                  <text x="25" y="390" fill="#777" fontSize="7">parejo con el teléfono</text>
-                  <line x1="95" y1="384" x2="152" y2="355" stroke="#E65100" strokeWidth="0.8" opacity="0.6" />
-
-                  <text x="160" y="440" fill="#555" fontSize="8" textAnchor="middle" fontStyle="italic">
-                    (flecha mostrada en apertura completa)
-                  </text>
-                </svg>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* 4. INPUT SPECIFICATIONS CARD (Screenshot 4) */}
-      <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-4 shadow-xl">
-        <span className="text-[9px] text-white/40 uppercase font-black tracking-widest flex items-center justify-between">
-          <span>Especificaciones de tu Flecha</span>
-          <span className="text-cyan-neon font-mono">20 YD BALLISTICS</span>
-        </span>
-
-        {/* Arrow Weight Field */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-white flex items-center justify-between">
-            <span>Arrow Weight (gr)</span>
-            <span className="text-[9px] text-gray-dim uppercase">Peso total en granos</span>
-          </label>
-          <input
-            type="number"
-            min={150}
-            max={900}
-            value={arrowWeight}
-            onChange={(e) => {
-              setArrowWeight(e.target.value);
-              handleSaveSpecs(e.target.value, arrowLength, temperature, tempUnit);
-            }}
-            placeholder="Total arrow weight in grains (ej. 420)"
-            className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon transition font-medium"
-          />
-        </div>
-
-        {/* Arrow Length Field */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>Arrow Length (nock-groove to tip, in)</span>
-              <button
-                type="button"
-                onClick={() => setActiveTooltip(activeTooltip === "length" ? null : "length")}
-                className="text-cyan-neon p-0.5 hover:text-white transition"
-              >
-                <Info size={14} />
-              </button>
-            </label>
-            <span className="text-[9px] text-gray-dim uppercase">Pulgadas</span>
-          </div>
-
-          {activeTooltip === "length" && (
-            <div className="bg-cyan-neon/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] text-cyan-200">
-              Mide la flecha desde el fondo de la ranura del culatín hasta el extremo de la punta de tiro en pulgadas.
-            </div>
-          )}
-
-          <input
-            type="number"
-            step="0.1"
-            min={18}
-            max={35}
-            value={arrowLength}
-            onChange={(e) => {
-              setArrowLength(e.target.value);
-              handleSaveSpecs(arrowWeight, e.target.value, temperature, tempUnit);
-            }}
-            placeholder="Nock groove to tip in inches (ej. 28.5)"
-            className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon transition font-medium"
-          />
-        </div>
-
-        {/* Temperature Field */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>Temperature ({tempUnit === "F" ? "°F" : "°C"})</span>
-              <button
-                type="button"
-                onClick={() => setActiveTooltip(activeTooltip === "temp" ? null : "temp")}
-                className="text-cyan-neon p-0.5 hover:text-white transition"
-              >
-                <Info size={14} />
-              </button>
-            </label>
-
-            {/* Toggle °F vs °C */}
-            <button
-              type="button"
-              onClick={handleToggleTempUnit}
-              className="text-[9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2.5 py-0.5 rounded-full hover:bg-cyan-neon/20 transition cursor-pointer"
-            >
-              Cambiar a {tempUnit === "F" ? "°C" : "°F"}
-            </button>
-          </div>
-
-          {activeTooltip === "temp" && (
-            <div className="bg-cyan-neon/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] text-cyan-200">
-              La temperatura del aire afecta directamente la velocidad del sonido (c = 331.3 + 0.606·T m/s), crucial para calcular el retorno acústico desde la diana a 20 yardas.
-            </div>
-          )}
-
-          <input
-            type="number"
-            step="1"
-            value={temperature}
-            onChange={(e) => {
-              setTemperature(e.target.value);
-              handleSaveSpecs(arrowWeight, arrowLength, e.target.value, tempUnit);
-            }}
-            placeholder={tempUnit === "F" ? "Air temperature in degrees Fahrenheit (ej. 70)" : "Temperatura en °C (ej. 21)"}
-            className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon transition font-medium"
-          />
-        </div>
-
-        {/* 5. START NEW SESSION BUTTON (Screenshot 4) */}
-        <div className="flex flex-col gap-2 mt-2">
+        {/* 2 ACTION BUTTONS: INSTRUCCIONES & CONFIGURAR FLECHA */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* BOTÓN 1: INSTRUCCIONES */}
           <button
             type="button"
-            disabled={isRecording}
-            onClick={handleStartSession}
-            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-xl transition active:scale-98 ${
-              isRecording 
-                ? "bg-red-500 text-white animate-pulse" 
-                : "bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-gold text-black hover:brightness-105"
-            }`}
+            onClick={() => setShowInstructionsModal(true)}
+            className="py-3 px-3.5 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800 border border-white/10 hover:border-cyan-neon/40 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-lg"
           >
-            {isRecording ? (
+            <BookOpen size={16} className="text-cyan-neon shrink-0" />
+            <span>Instrucciones (18m)</span>
+          </button>
+
+          {/* BOTÓN 2: CONFIGURAR FLECHA (GRAINS, LONGITUD, TEMP) */}
+          <button
+            type="button"
+            onClick={() => setShowSpecsModal(true)}
+            className="py-3 px-3.5 rounded-2xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 border border-orange-500/35 text-orange-300 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-lg"
+          >
+            <Settings size={16} className="text-orange-400 shrink-0" />
+            <span>Configurar Flecha</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Active Specs Bar Banner */}
+      <div className="bg-neutral-950/80 border border-white/5 rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full">
+            18 Metros
+          </span>
+          <span className="text-white/80 font-mono text-[11px]">
+            {arrowWeight} gr · {arrowLength}" · {temperature}°{tempUnit}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowSpecsModal(true)}
+          className="text-[10px] text-orange-400 hover:text-orange-300 font-bold uppercase underline cursor-pointer"
+        >
+          Editar
+        </button>
+      </div>
+
+      {/* MAIN SPEEDOMETER & MEASUREMENT CARD (A 18 METROS) */}
+      <div className="bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.08)] gap-4">
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
+
+        {/* Distance Badge & Unit Switcher */}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-1.5 bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black px-3 py-1 rounded-full text-[10px] uppercase tracking-wider">
+            <Target size={12} />
+            <span>Distancia: 18 Metros</span>
+          </div>
+
+          {/* Unit Toggle Option: FPS vs KM/H */}
+          <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setSpeedUnit("FPS")}
+              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                speedUnit === "FPS" 
+                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              FPS
+            </button>
+            <button
+              type="button"
+              onClick={() => setSpeedUnit("KMH")}
+              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                speedUnit === "KMH" 
+                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  : "text-gray-dim hover:text-white"
+              }`}
+            >
+              KM/H
+            </button>
+          </div>
+        </div>
+
+        {/* Big Speed Number */}
+        <div className="flex items-baseline gap-2 my-1">
+          <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(0,229,255,0.4)] font-mono">
+            {lastShotResult 
+              ? (speedUnit === "FPS" 
+                  ? Math.round(lastShotResult.launchSpeedFps) 
+                  : Math.round(lastShotResult.launchSpeedKmh))
+              : "---"}
+          </span>
+          <span className="text-cyan-neon text-2xl font-black uppercase tracking-wider">
+            {speedUnit}
+          </span>
+        </div>
+
+        {/* Secondary Speed Info or Status */}
+        {lastShotResult ? (
+          <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
+            {speedUnit === "FPS" ? (
               <>
-                <Volume2 size={16} className="animate-spin" />
-                <span>Escuchando Disparo ({audioLevel}% Mic)</span>
+                <span className="text-white">{lastShotResult.launchSpeedKmh.toFixed(1)} <span className="text-gray-dim text-[10px]">km/h</span></span>
+                <span className="text-gray-border">•</span>
+                <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
               </>
             ) : (
               <>
-                <span>Start New Session</span>
-                <ExternalLink size={14} />
+                <span className="text-white">{Math.round(lastShotResult.launchSpeedFps)} <span className="text-gray-dim text-[10px]">FPS</span></span>
+                <span className="text-gray-border">•</span>
+                <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
               </>
             )}
-          </button>
-          <span className="text-[10px] text-gray-dim text-center">
-            {isRecording 
-              ? "Dispara tu flecha ahora: detectando sonido de suelta e impacto..." 
-              : "Ingresa peso, longitud y temperatura para medir la velocidad de salida."}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-dim">
+            Presiona el botón de abajo y dispara hacia la diana a 18 metros
           </span>
-        </div>
-      </div>
+        )}
 
-      {/* 6. LIVE SHOT RESULT CARD (When shot is captured) */}
-      {lastShotResult && (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-neutral-950 border border-cyan-neon/40 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.12)] gap-4"
-        >
-          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
-
-          <div className="flex items-center justify-between w-full">
-            <span className="text-[9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-3 py-1 rounded-full">
-              Resultado de Medición a 20 yd
-            </span>
-
-            {/* Speed Unit Toggle */}
-            <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-white/10">
-              <button
-                type="button"
-                onClick={() => setSpeedUnit("FPS")}
-                className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase transition ${
-                  speedUnit === "FPS" ? "bg-cyan-neon text-black" : "text-gray-dim"
-                }`}
-              >
-                FPS
-              </button>
-              <button
-                type="button"
-                onClick={() => setSpeedUnit("KMH")}
-                className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase transition ${
-                  speedUnit === "KMH" ? "bg-cyan-neon text-black" : "text-gray-dim"
-                }`}
-              >
-                KM/H
-              </button>
-            </div>
-          </div>
-
-          {/* Big Launch Velocity */}
-          <div className="flex items-baseline gap-2 my-1">
-            <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(0,229,255,0.4)]">
-              {speedUnit === "FPS" 
-                ? Math.round(lastShotResult.launchSpeedFps) 
-                : Math.round(lastShotResult.launchSpeedKmh)}
-            </span>
-            <span className="text-cyan-neon text-2xl font-black uppercase tracking-wider">
-              {speedUnit}
-            </span>
-          </div>
-
-          {/* Ballistics Row: Kinetic Energy & Momentum */}
-          <div className="grid grid-cols-2 gap-3 w-full bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 text-xs">
+        {/* Ballistics Row: Kinetic Energy & Momentum */}
+        {lastShotResult && (
+          <div className="grid grid-cols-2 gap-3 w-full bg-neutral-900/60 p-3 rounded-2xl border border-white/5 text-xs">
             <div className="flex flex-col items-center">
               <span className="text-[8px] text-white/40 uppercase font-bold tracking-wider">Energía Cinética</span>
               <span className="text-white font-black text-sm mt-0.5">
@@ -715,32 +437,45 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               </span>
             </div>
           </div>
+        )}
 
-          {/* Timing details */}
-          <div className="text-[10px] text-white/40 flex items-center justify-center gap-3">
-            <span>Vuelo neto: {(lastShotResult.flightTimeSec * 1000).toFixed(0)} ms</span>
-            <span>•</span>
-            <span>Retorno sonido: {((lastShotResult.totalTimeSec - lastShotResult.flightTimeSec) * 1000).toFixed(0)} ms</span>
-            <span>•</span>
-            <span>Vel. Media: {Math.round(lastShotResult.speedFps)} fps</span>
-          </div>
-
+        {/* Big Action Button: Medir Velocidad */}
+        <div className="flex flex-col gap-2 w-full mt-2 pt-3 border-t border-white/5">
           <button
             type="button"
+            disabled={isRecording}
             onClick={startRecording}
-            className="w-full py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-2 cursor-pointer hover:brightness-110 active:scale-95 transition mt-1"
+            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
+              isRecording 
+                ? "bg-red-500 text-white animate-pulse" 
+                : "bg-cyan-neon text-black hover:brightness-110"
+            }`}
           >
-            <RotateCcw size={14} />
-            <span>Medir Otro Tiro</span>
+            {isRecording ? (
+              <>
+                <Volume2 size={18} className="animate-spin" />
+                <span>Escuchando Disparo a 18 Metros ({audioLevel}%)</span>
+              </>
+            ) : (
+              <>
+                <Mic size={18} />
+                <span>Medir Velocidad (Disparar a 18m)</span>
+              </>
+            )}
           </button>
-        </motion.div>
-      )}
+          <span className="text-[10px] text-gray-dim text-center">
+            {isRecording 
+              ? "¡Dispara ahora! El micrófono está detectando el sonido de la suelta y el impacto a 18m." 
+              : "Distancia reglamentaria: 18 metros medidos con cinta métrica."}
+          </span>
+        </div>
+      </div>
 
-      {/* 7. SESSION HISTORY (Screenshot 4) */}
+      {/* SESSION HISTORY A 18 METROS */}
       <div className="bg-neutral-950 border border-white/10 rounded-3xl p-5 flex flex-col gap-3 shadow-xl">
         <div className="flex justify-between items-center">
           <span className="text-xs font-black uppercase tracking-wider text-white">
-            Session History
+            Historial de Mediciones a 18 Metros
           </span>
           <span className="text-[10px] text-gray-dim">
             {shotHistory.length} {shotHistory.length === 1 ? "tiro" : "tiros"}
@@ -749,7 +484,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
         {shotHistory.length === 0 ? (
           <div className="py-8 text-center text-gray-dim text-xs leading-relaxed border border-dashed border-white/5 rounded-2xl">
-            No sessions yet. Start a new session to measure your arrow speed.
+            Aún no hay disparos registrados. Realiza tu primer tiro para calcular la velocidad de salida.
           </div>
         ) : (
           <div className="flex flex-col gap-2.5 max-h-72 overflow-y-auto pr-1">
@@ -769,6 +504,8 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                   </div>
 
                   <div className="flex items-center gap-2 text-[9px] text-gray-dim mt-0.5">
+                    <span>18m</span>
+                    <span>•</span>
                     <span>{s.arrowMassGrains || 420} gr</span>
                     <span>•</span>
                     <span>{s.arrowLengthInches || 28.5}"</span>
@@ -796,6 +533,296 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           </div>
         )}
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: INSTRUCCIONES DE USO A 18 METROS Y DIAGRAMA BALÍSTICO            */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showInstructionsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setShowInstructionsModal(false)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-lg shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto text-left"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon">
+                    <BookOpen size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                      Instrucciones de Uso
+                    </h3>
+                    <span className="text-[10px] text-cyan-neon font-bold">
+                      Distancia Oficial: 18 Metros (18m / 20yd)
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowInstructionsModal(false)}
+                  className="p-1 rounded-full text-white/40 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="flex flex-col gap-3 text-xs leading-relaxed text-gray-dim">
+                <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[10px]">1</span>
+                    <span>Medir la distancia exacta con cinta métrica</span>
+                  </h4>
+                  <p className="text-[11px] pl-6 text-white/70">
+                    Coloca el teléfono exactamente a <strong className="text-white">18 metros (18.0 m / 60 ft)</strong> de la cara de la diana. Usa cinta métrica (los telémetros no son exactos para el teléfono).
+                  </p>
+                </div>
+
+                <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[10px]">2</span>
+                    <span>Posición del Teléfono</span>
+                  </h4>
+                  <p className="text-[11px] pl-6 text-white/70">
+                    Coloca el teléfono a la altura de tu flecha en apertura completa (recomendado en trípode) y a <strong className="text-cyan-neon">15 cm (6")</strong> hacia un lado del vástago de la flecha.
+                  </p>
+                </div>
+
+                <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[10px]">3</span>
+                    <span>Alineación del Arquero</span>
+                  </h4>
+                  <p className="text-[11px] pl-6 text-white/70">
+                    Párate de modo que en apertura completa el culatín y el tope de cuerda queden alineados con la línea de 18 metros y parejos con el micrófono del teléfono.
+                  </p>
+                </div>
+
+                <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[10px]">4</span>
+                    <span>Disparo y Cálculo por Sonido</span>
+                  </h4>
+                  <p className="text-[11px] pl-6 text-white/70">
+                    Presiona el botón <strong className="text-white">"Medir Velocidad"</strong> y realiza el disparo dentro de los 3 segundos. El motor acústico captará el sonido de la suelta y el impacto a 18 metros para calcular la velocidad real.
+                  </p>
+                </div>
+              </div>
+
+              {/* DIAGRAMA OFICIAL A 18 METROS (SVG) */}
+              <div className="bg-[#050507] border border-white/10 rounded-2xl p-4 flex flex-col items-center relative overflow-hidden">
+                <span className="text-[9px] font-black uppercase text-white/40 tracking-widest self-start mb-2">
+                  Diagrama Oficial a 18 Metros
+                </span>
+
+                <svg viewBox="0 0 320 450" className="w-full max-w-sm h-auto select-none">
+                  {/* Target at top */}
+                  <rect x="60" y="20" width="200" height="18" rx="4" fill="#1C1C20" stroke="#333338" strokeWidth="1.5" />
+                  <line x1="70" y1="29" x2="250" y2="29" stroke="#555" strokeWidth="1" strokeDasharray="4 3" />
+                  <circle cx="160" cy="29" r="4" fill="#E65100" />
+                  <text x="160" y="14" fill="#FFFFFF" fontSize="10" fontWeight="900" textAnchor="middle" letterSpacing="2">
+                    DIANA (TARGET)
+                  </text>
+
+                  {/* Flight trajectory */}
+                  <line x1="160" y1="36" x2="160" y2="340" stroke="#00E5FF" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.6" />
+                  <polygon points="160,40 156,48 164,48" fill="#00E5FF" />
+
+                  {/* 18m distance dimension line */}
+                  <line x1="240" y1="29" x2="240" y2="350" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
+                  <line x1="235" y1="29" x2="245" y2="29" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
+                  <line x1="235" y1="350" x2="245" y2="350" stroke="#FFFFFF" strokeWidth="1" opacity="0.4" />
+
+                  {/* 18m text callout */}
+                  <text x="250" y="180" fill="#FFFFFF" fontSize="16" fontWeight="900">18 m</text>
+                  <text x="250" y="196" fill="#00E5FF" fontSize="10" fontWeight="700">18 Metros</text>
+                  <text x="250" y="210" fill="#888888" fontSize="8">60 ft · 20 yd</text>
+                  <text x="250" y="226" fill="#E65100" fontSize="8" fontWeight="800">DISTANCIA EXACTA</text>
+                  <text x="250" y="238" fill="#E65100" fontSize="8" fontWeight="800">con cinta métrica</text>
+
+                  {/* 18 METERS LINE */}
+                  <line x1="20" y1="350" x2="300" y2="350" stroke="#555555" strokeWidth="1.2" strokeDasharray="5 4" />
+                  <text x="30" y="344" fill="#888888" fontSize="8" fontWeight="900" letterSpacing="1">
+                    LÍNEA MEDIDA DE 18 METROS
+                  </text>
+
+                  {/* Arrow shaft at full draw */}
+                  <line x1="160" y1="290" x2="160" y2="390" stroke="#CCCCCC" strokeWidth="2.5" />
+                  <polygon points="160,285 157,294 163,294" fill="#999999" />
+                  <rect x="153" y="315" width="14" height="22" rx="4" fill="#333338" stroke="#555" strokeWidth="1" />
+                  <text x="172" y="325" fill="#888" fontSize="8">empuñadura arco</text>
+
+                  {/* Vanes & String stop */}
+                  <path d="M154,385 C154,395 160,402 160,402 C160,402 166,395 166,385 Z" fill="#E65100" />
+                  <circle cx="160" cy="350" r="7" fill="none" stroke="#E65100" strokeWidth="1.5" />
+                  <circle cx="160" cy="350" r="2.5" fill="#E65100" />
+
+                  {/* Phone */}
+                  <rect x="205" y="336" width="18" height="30" rx="3" fill="#18181C" stroke="#00E5FF" strokeWidth="1.5" />
+                  <circle cx="214" cy="360" r="1.5" fill="#00E5FF" />
+                  <text x="214" y="378" fill="#FFFFFF" fontSize="8" fontWeight="bold" textAnchor="middle">Teléfono</text>
+
+                  {/* 15 cm lateral gap */}
+                  <line x1="160" y1="330" x2="205" y2="330" stroke="#FFFFFF" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.5" />
+                  <text x="182" y="325" fill="#00E5FF" fontSize="7" fontWeight="bold" textAnchor="middle">15 cm (6")</text>
+
+                  {/* Callouts */}
+                  <text x="25" y="310" fill="#E65100" fontSize="8" fontWeight="bold">Tope de cuerda aquí</text>
+                  <text x="25" y="320" fill="#777" fontSize="7">en la línea de 18m</text>
+                  <line x1="95" y1="316" x2="150" y2="340" stroke="#E65100" strokeWidth="0.8" opacity="0.6" />
+
+                  <text x="25" y="380" fill="#E65100" fontSize="8" fontWeight="bold">El culatín sale aquí</text>
+                  <text x="25" y="390" fill="#777" fontSize="7">parejo con el teléfono</text>
+                  <line x1="95" y1="384" x2="152" y2="355" stroke="#E65100" strokeWidth="0.8" opacity="0.6" />
+
+                  <text x="160" y="430" fill="#555" fontSize="8" textAnchor="middle" fontStyle="italic">
+                    (flecha mostrada en apertura completa a 18 metros)
+                  </text>
+                </svg>
+              </div>
+
+              {/* Botón de Entendido */}
+              <button
+                type="button"
+                onClick={() => setShowInstructionsModal(false)}
+                className="w-full py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+              >
+                Entendido, Cerrar Instrucciones
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: CONFIGURAR FLECHA (CASILLAS DE ENTRADA: GRAINS, LONGITUD, TEMP)   */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showSpecsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setShowSpecsModal(false)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left"
+            >
+              <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400">
+                    <Settings size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                      Datos de la Flecha y Entorno
+                    </h3>
+                    <span className="text-[10px] text-gray-dim">
+                      Distancia configurada: 18 Metros
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSpecsModal(false)}
+                  className="p-1 rounded-full text-white/40 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3.5">
+                {/* 1. CASILLA: Arrow Weight (Grains) */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-between justify-between">
+                    <label className="text-xs font-bold text-white">
+                      Peso de la Flecha (Grains - gr)
+                    </label>
+                    <span className="text-[10px] text-orange-400 font-mono">Total en Grains</span>
+                  </div>
+                  <input
+                    type="number"
+                    min={150}
+                    max={950}
+                    value={arrowWeight}
+                    onChange={(e) => setArrowWeight(e.target.value)}
+                    placeholder="Total arrow weight in grains (ej. 420)"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
+                  />
+                  <span className="text-[9px] text-gray-dim">
+                    Peso completo de la flecha armada (tubo + punta + culatín + plumas). 1 gramo = 15.4 grains.
+                  </span>
+                </div>
+
+                {/* 2. CASILLA: Arrow Length (Inches) */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-between justify-between">
+                    <label className="text-xs font-bold text-white">
+                      Longitud de la Flecha (Pulgadas - in)
+                    </label>
+                    <span className="text-[10px] text-orange-400 font-mono">Ranura a punta</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min={18}
+                    max={36}
+                    value={arrowLength}
+                    onChange={(e) => setArrowLength(e.target.value)}
+                    placeholder="Nock groove to tip in inches (ej. 28.5)"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
+                  />
+                  <span className="text-[9px] text-gray-dim">
+                    Medida desde el fondo de la ranura del culatín hasta el extremo de la punta de tiro en pulgadas.
+                  </span>
+                </div>
+
+                {/* 3. CASILLA: Temperature (°F o °C) */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white">
+                      Temperatura Aproximada ({tempUnit === "F" ? "°F" : "°C"})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleToggleTempUnit}
+                      className="text-[9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full hover:bg-cyan-neon/20 transition cursor-pointer"
+                    >
+                      Cambiar a {tempUnit === "F" ? "°C" : "°F"}
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    step="1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(e.target.value)}
+                    placeholder={tempUnit === "F" ? "Temperatura en Fahrenheit (ej. 70)" : "Temperatura en Celsius (ej. 21)"}
+                    className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
+                  />
+                  <span className="text-[9px] text-gray-dim">
+                    La temperatura del aire determina la velocidad exacta del sonido a 18 metros.
+                  </span>
+                </div>
+
+                {/* Botón Guardar Especificaciones */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSaveSpecs(arrowWeight, arrowLength, temperature, tempUnit);
+                    setShowSpecsModal(false);
+                  }}
+                  className="w-full mt-2 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-lg cursor-pointer hover:brightness-105 active:scale-98 transition flex items-center justify-center gap-2"
+                >
+                  <Save size={15} />
+                  <span>Guardar Parámetros de Flecha</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

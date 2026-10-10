@@ -56,11 +56,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               <button
                 key={item.label}
                 onClick={() => {
-                  if (isProBlocked) {
-                    onScreenChange("PROFILE");
-                  } else {
-                    onScreenChange(item.id);
-                  }
+                  onScreenChange(item.id);
                 }}
                 className="relative flex flex-col items-center justify-center p-1.5 cursor-pointer outline-none group"
               >

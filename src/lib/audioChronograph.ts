@@ -46,7 +46,7 @@ export function calculateSpeedOfSound(temperatureCelsius: number = 20): number {
  */
 export function calculateArrowSpeed(
   totalTimeSec: number,
-  distanceMeters: number = 18.288,
+  distanceMeters: number = 18.0,
   temperatureCelsius: number = 20,
   arrowMassGrains?: number,
   arrowLengthInches?: number
@@ -114,7 +114,7 @@ export function calculateArrowSpeed(
  */
 export function detectAudioPeaks(
   audioBuffer: AudioBuffer,
-  distanceMeters: number = 18.288,
+  distanceMeters: number = 18.0,
   temperatureCelsius: number = 20
 ): { releaseSec: number; impactSec: number; confidence: number } | null {
   const channelData = audioBuffer.getChannelData(0);
