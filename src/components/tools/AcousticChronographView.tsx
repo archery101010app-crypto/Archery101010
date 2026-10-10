@@ -615,7 +615,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span>Disparo y Cálculo por Sonido</span>
                   </h4>
                   <p className="text-[11px] pl-6 text-white/70">
-                    Presiona el botón <strong className="text-white">"Medir Velocidad"</strong> y realiza el disparo dentro de los 3 segundos. El motor acústico captará el sonido de la suelta y el impacto a 18 metros.
+                    Presiona el botón <strong className="text-white">"Medir Velocidad"</strong> y realiza el disparo dentro de los 3 segundos.
                   </p>
                 </div>
               </div>
