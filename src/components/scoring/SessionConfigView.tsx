@@ -404,7 +404,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   Metodología de Práctica
                 </span>
                 <h3 className="text-white text-base font-black uppercase mt-1">
-                  Modo: {practiceInfoType}
+                  Modo: {practiceInfoType === "Control" ? t("practiceControl") : practiceInfoType}
                 </h3>
               </div>
 
