@@ -83,13 +83,13 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       {/* Sync Wifi Button, Theme Selector, View Switcher & Language Selector */}
       <div className="flex items-center gap-3">
         {/* Coach View Switcher Toggle */}
-        {user && (user.role === "coach" || user.role === "team_admin_coach" || user.role === "team_admin" || user.role === "superadmin" || user.isClubCreator) && onToggleCoachViewMode && (
+        {user && onToggleCoachViewMode && (
           <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">
             <button
               onClick={() => onToggleCoachViewMode(false)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                 !coachViewMode 
-                  ? "bg-cyan-neon text-black font-extrabold" 
+                  ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
@@ -97,9 +97,9 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                 coachViewMode 
-                  ? "bg-cyan-neon text-black font-extrabold" 
+                  ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan" 
                   : "text-gray-dim hover:text-white"
               }`}
             >

@@ -268,7 +268,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   const clubFlag = COUNTRIES.find(c => c.code === user.clubCountry)?.flag || COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
   const clubCountryName = COUNTRIES.find(c => c.code === user.clubCountry)?.name || COUNTRIES.find(c => c.code === user.country)?.name || "Costa Rica";
 
-  if ((user.role === "coach" || user.role === "team_admin_coach") && coachViewMode) {
+  if (coachViewMode) {
     return (
       <CoachPortalView
         user={user}

@@ -634,11 +634,18 @@ export default function Home() {
     ? "calc(8rem + env(safe-area-inset-top))"
     : "calc(3.25rem + env(safe-area-inset-top))";
 
+  const handleToggleCoachViewMode = (val: boolean) => {
+    setCoachViewMode(val);
+    if (val) {
+      setCurrentScreen("HOME");
+    }
+  };
+
   // Authenticated application flow
   return (
     <div className="flex-1 flex flex-col min-h-full">
       {/* Top Header common to all screens */}
-      <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={setCoachViewMode} />
+      <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={handleToggleCoachViewMode} />
 
       {/* Ads widgets */}
       <AnimatePresence>
@@ -757,8 +764,11 @@ export default function Home() {
       <FloatingNav
         activeScreen={currentScreen}
         onScreenChange={(screen) => {
-          // Block coaches from accessing personal scoring sessions while in coach mode
-          if (screen === "TARGET" && user?.role === "coach" && coachViewMode) return;
+          // Block coaches from personal scoring sheets, chronograph, and duels while in coach mode
+          if (coachViewMode && (screen === "TARGET" || screen === "CHRONOGRAPH" || screen === "MATCHPLAY_LOBBY" || screen === "MATCHPLAY_ARENA")) {
+            setCurrentScreen("HOME");
+            return;
+          }
           setCurrentScreen(screen);
         }}
         user={user}

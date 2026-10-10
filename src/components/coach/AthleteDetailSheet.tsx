@@ -29,7 +29,7 @@ interface AthleteDetailSheetProps {
   onRestoreSession?: (sessionId: string) => void;
 }
 
-type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "DUELOS" | "TENDENCIAS" | "NOTAS";
+type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
 export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession }: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
@@ -65,9 +65,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
 
   if (!athlete) return null;
 
-  // Filter athlete sessions and duels
+  // Filter athlete sessions (only shooting scores)
   const athleteSessions = sessions.filter(s => s.userId === athlete.uid && !s.isDuel);
-  const athleteDuels = sessions.filter(s => (s.userId === athlete.uid || s.userUid === athlete.uid) && s.isDuel);
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,13 +102,6 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
     return pbs;
   };
   const pbs = getPBs();
-
-  // Duel stats
-  const wins = athleteDuels.filter(d => d.outcome === "win").length;
-  const losses = athleteDuels.filter(d => d.outcome === "loss").length;
-  const ties = athleteDuels.filter(d => d.outcome === "tie").length;
-  const totalDuels = athleteDuels.length;
-  const winRate = totalDuels > 0 ? Math.round((wins / totalDuels) * 100) : 0;
 
   return (
     <motion.div
@@ -159,9 +151,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
         <div className="flex overflow-x-auto gap-2 px-5 py-2.5 shrink-0 border-b border-white/[0.03] no-scrollbar">
           {[
             { id: "PERFIL", label: "Perfil", icon: User },
-            { id: "SESIONES", label: "Sesiones", icon: History },
+            { id: "SESIONES", label: "Puntuaciones", icon: History },
             { id: "RECORDS", label: "Récords", icon: Award },
-            { id: "DUELOS", label: "Duelos", icon: Trophy },
             { id: "TENDENCIAS", label: "Tendencias", icon: LineChart },
             { id: "NOTAS", label: "Notas Coach", icon: MessageSquare }
           ].map(tab => {
@@ -595,77 +586,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
             </div>
           )}
 
-          {/* TAB 4: DUELOS */}
-          {activeTab === "DUELOS" && (
-            <div className="flex flex-col gap-4">
-              {/* Stats Panel */}
-              <div className="grid grid-cols-4 gap-2 text-center bg-neutral-900/40 p-3 rounded-2xl border border-white/5">
-                <div className="flex flex-col">
-                  <span className="text-[8px] text-gray-dim uppercase font-bold">Total</span>
-                  <span className="text-base font-black text-white">{totalDuels}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[8px] text-gray-dim uppercase font-bold">Ganados</span>
-                  <span className="text-base font-black text-cyan-neon">{wins}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[8px] text-gray-dim uppercase font-bold">Perdidos</span>
-                  <span className="text-base font-black text-red-rival">{losses}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[8px] text-gray-dim uppercase font-bold">W/L %</span>
-                  <span className="text-base font-black text-yellow-gold">{winRate}%</span>
-                </div>
-              </div>
-
-              {/* Dueling history */}
-              <div className="flex flex-col gap-2.5">
-                <span className="text-[9px] text-gray-dim uppercase font-black tracking-wider">Historial de Eliminaciones</span>
-                
-                {athleteDuels.length === 0 ? (
-                  <p className="text-[11px] text-gray-dim text-center py-4">No se han registrado duelos de competencia.</p>
-                ) : (
-                  athleteDuels.map((duel) => {
-                    const dateStr = new Date(duel.timestamp).toLocaleDateString(undefined, {
-                      day: "numeric",
-                      month: "short"
-                    });
-                    
-                    return (
-                      <div
-                        key={duel.uid || duel.id}
-                        className="bg-neutral-900/20 p-3.5 rounded-xl border border-white/[0.03] flex items-center justify-between"
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-gray-dim uppercase">
-                              {duel.distance}m
-                            </span>
-                            <span className="text-[10px] text-white font-extrabold">vs {duel.opponent}</span>
-                          </div>
-                          <span className="text-[8px] text-gray-dim">{dateStr} · {duel.opponentClubName || "Club rival"}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-white/90 font-extrabold">{duel.score} pts</span>
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            duel.outcome === "win"
-                              ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan"
-                              : duel.outcome === "loss"
-                              ? "bg-red-rival/15 text-red-rival border border-red-rival/20"
-                              : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/20"
-                          }`}>
-                            {duel.outcome === "win" ? "Ganó" : duel.outcome === "loss" ? "Perdió" : "Empate"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: TENDENCIAS */}
+          {/* TAB 4: TENDENCIAS */}
           {activeTab === "TENDENCIAS" && (
             <div className="flex flex-col gap-4">
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">

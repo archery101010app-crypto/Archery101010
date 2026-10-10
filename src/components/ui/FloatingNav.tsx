@@ -15,27 +15,30 @@ interface FloatingNavProps {
 }
 
 export default function FloatingNav({ activeScreen, onScreenChange, user, coachViewMode = false }: FloatingNavProps) {
-  const isCoach = (user?.role === "coach" || user?.role === "team_admin_coach") && coachViewMode;
+  const isCoach = coachViewMode;
   const isSuper = user?.role === "superadmin";
 
-  const navItems = [
-    { id: "HOME" as Screen, icon: Home, label: "Home" },
-    // If coach in coachViewMode: show Team icon that goes back to HOME (coach dashboard)
-    // If athlete: show Target (scoring session)
-    isCoach
-      ? { id: "HOME" as Screen, icon: Users, label: "Atletas" }
-      : { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
-    { id: "HISTORY" as Screen, icon: History, label: "Historial" },
-    { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
-    { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
-    { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
-  ];
+  // For coach: Director & stats receiver (no arrow counter, no duels, no scoring sheets)
+  const navItems = isCoach
+    ? [
+        { id: "HOME" as Screen, icon: Users, label: "Director" },
+        { id: "HISTORY" as Screen, icon: History, label: "Resultados" },
+        { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
+      ]
+    : [
+        { id: "HOME" as Screen, icon: Home, label: "Home" },
+        { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
+        { id: "HISTORY" as Screen, icon: History, label: "Historial" },
+        { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
+        { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
+      ];
 
   if (isSuper) {
     navItems.push({ id: "ADMIN" as Screen, icon: Shield, label: "Admin" });
   }
 
-  // Deduplicate (in case HOME appears twice for coach) by keeping unique ids per label
   const uniqueItems = navItems.filter((item, idx, arr) => 
     arr.findIndex(i => i.label === item.label) === idx
   );
@@ -45,7 +48,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
       <div className="bg-neutral-900/85 backdrop-blur-xl rounded-full border border-white/10 px-5 py-2.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeScreen === item.id && item.label !== "Atletas";
+          const isActive = activeScreen === item.id;
 
             const isProBlocked = item.isPro && user?.plan === "FREE";
 
@@ -77,8 +80,6 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                     className={`transition-colors duration-200 relative z-10 ${
                       isActive
                         ? "text-cyan-neon shadow-glow-cyan"
-                        : item.label === "Atletas"
-                        ? "text-purple-400 group-hover:text-purple-300"
                         : isProBlocked
                         ? "text-yellow-gold/80 group-hover:text-yellow-gold"
                         : "text-gray-dim group-hover:text-white"
