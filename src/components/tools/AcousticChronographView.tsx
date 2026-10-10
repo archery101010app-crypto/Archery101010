@@ -307,25 +307,29 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         </div>
 
         {/* 2 ACTION BUTTONS: INSTRUCCIONES & CONFIGURAR FLECHA */}
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-2">
           {/* BOTÓN 1: INSTRUCCIONES */}
           <button
             type="button"
             onClick={() => setShowInstructionsModal(true)}
-            className="py-3 px-3.5 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800 border border-white/10 hover:border-cyan-neon/40 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-lg"
+            className="py-2.5 px-2 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800 border border-white/10 hover:border-cyan-neon/40 text-white font-black transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center gap-1.5 text-center min-w-0"
           >
-            <BookOpen size={16} className="text-cyan-neon shrink-0" />
-            <span>Instrucciones (18m)</span>
+            <BookOpen size={13} className="text-cyan-neon shrink-0" />
+            <span className="text-[9.5px] min-[380px]:text-[10.5px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+              Instrucciones (18mts)
+            </span>
           </button>
 
           {/* BOTÓN 2: CONFIGURAR FLECHA (GRAINS, LONGITUD, TEMP) */}
           <button
             type="button"
             onClick={() => setShowSpecsModal(true)}
-            className="py-3 px-3.5 rounded-2xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 border border-orange-500/35 text-orange-300 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-lg"
+            className="py-2.5 px-2 rounded-2xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 border border-orange-500/35 text-orange-300 font-black transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center gap-1.5 text-center min-w-0"
           >
-            <Settings size={16} className="text-orange-400 shrink-0" />
-            <span>Configurar Flecha</span>
+            <Settings size={13} className="text-orange-400 shrink-0" />
+            <span className="text-[9.5px] min-[380px]:text-[10.5px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+              Configurar Flecha
+            </span>
           </button>
         </div>
       </div>
