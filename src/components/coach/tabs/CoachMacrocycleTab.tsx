@@ -5,7 +5,7 @@ import { UserProfile } from "@/lib/authService";
 import { 
   Lock, Sparkles, Plus, Calendar, CheckCircle2, ChevronRight, 
   Trash2, ArrowUp, ArrowDown, Users, User, ArrowLeft, Layout, 
-  Copy, Archive, Edit2, AlertCircle, Check, X
+  Copy, Archive, Edit2, AlertCircle, Check, X, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -18,6 +18,7 @@ import {
   saveLocalSetting
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
+import { syncCycleToMonthCalendar } from "@/lib/cycleCalendarSync";
 
 interface CoachMacrocycleTabProps {
   user: UserProfile;
@@ -48,7 +49,41 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [assignedAthleteIds, setAssignedAthleteIds] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
 
-  // Seed demo macrocycles on mount and listen to updates
+  // Month Sync Modal states
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [macroToSync, setMacroToSync] = useState<Macrocycle | null>(null);
+  const [syncYear, setSyncYear] = useState(new Date().getFullYear());
+  const [syncMonth, setSyncMonth] = useState(new Date().getMonth());
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleOpenSyncModal = (macro: Macrocycle) => {
+    setMacroToSync(macro);
+    setSyncYear(new Date().getFullYear());
+    setSyncMonth(new Date().getMonth());
+    setShowSyncModal(true);
+  };
+
+  const handleExecuteSync = async () => {
+    if (!macroToSync) return;
+    setIsSyncing(true);
+    try {
+      const summary = await syncCycleToMonthCalendar(macroToSync, syncYear, syncMonth, user);
+      setShowSyncModal(false);
+      alert(
+        `✓ ¡Calendario Sincronizado con Éxito!\n\n` +
+        `• Plan: ${summary.macrocycleName}\n` +
+        `• Mes: ${summary.monthName} ${summary.year}\n` +
+        `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+        `Tus arqueros ya pueden entrar a cada día en su calendario y ver la meta y el enfoque asignado.`
+      );
+    } catch (err) {
+      console.error("Error syncing cycle to calendar:", err);
+      alert("Hubo un error al sincronizar con el calendario.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   useEffect(() => {
     async function loadData() {
       // Load roster of athletes
@@ -536,9 +571,23 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                             </>
                           )}
                         </span>
-                        <span className="flex items-center text-cyan-neon font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform">
-                          Ver Detalles <ChevronRight size={12} />
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSyncModal(mac);
+                            }}
+                            className="px-2 py-1 rounded-xl bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30 text-[9px] font-black uppercase flex items-center gap-1 cursor-pointer transition shadow-glow-yellow/5"
+                            title="Sincronizar calendario del mes"
+                          >
+                            <RefreshCw size={10} />
+                            <span>Sincronizar</span>
+                          </button>
+                          <span className="flex items-center text-cyan-neon font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform">
+                            Ver Detalles <ChevronRight size={12} />
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -565,7 +614,15 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 <span>Volver a Planes</span>
               </button>
 
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenSyncModal(selectedMacro)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 text-yellow-gold border border-yellow-gold/35 text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition shadow-glow-yellow/10"
+                  title="Sincronizar con el Calendario de la App"
+                >
+                  <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                  <span>Sincronizar Calendario</span>
+                </button>
                 <button
                   onClick={() => handleOpenEdit(selectedMacro)}
                   className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition cursor-pointer border border-white/5"
@@ -1115,6 +1172,106 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Month Sync Modal */}
+      <AnimatePresence>
+        {showSyncModal && macroToSync && (() => {
+          const monthNames = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+          ];
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowSyncModal(false)} />
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left"
+              >
+                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-glow-yellow/10">
+                      <RefreshCw size={15} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                        Sincronizar Calendario
+                      </h3>
+                      <span className="text-[9px] text-gray-dim block">
+                        Plan: <strong className="text-white">{macroToSync.name}</strong>
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSyncModal(false)}
+                    className="p-1 rounded-full text-white/40 hover:text-white"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3 text-xs">
+                  <p className="text-[11px] text-white/70 leading-relaxed">
+                    Sincroniza automáticamente este ciclo con el calendario de la app. Los arqueros podrán entrar a cada día y ver las metas de flechas y el trabajo técnico asignado.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-white/40 uppercase font-bold">Mes a Sincronizar</label>
+                      <select
+                        value={syncMonth}
+                        onChange={(e) => setSyncMonth(Number(e.target.value))}
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon"
+                      >
+                        {monthNames.map((m, idx) => (
+                          <option key={idx} value={idx}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-white/40 uppercase font-bold">Año</label>
+                      <input
+                        type="number"
+                        value={syncYear}
+                        onChange={(e) => setSyncYear(Number(e.target.value))}
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Phases Preview */}
+                  <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
+                    <span className="text-[9px] text-white/40 uppercase font-bold">Fases que se asignarán</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {macroToSync.phases?.map((p) => (
+                        <span
+                          key={p.id}
+                          style={{ color: p.color, borderColor: `${p.color}30`, backgroundColor: `${p.color}15` }}
+                          className="text-[9px] font-bold px-2 py-0.5 border rounded-full uppercase"
+                        >
+                          {p.name} ({p.weeklyArrowGoal} flechas/sem)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSyncing}
+                    onClick={handleExecuteSync}
+                    className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow flex items-center justify-center gap-2 cursor-pointer hover:brightness-105 active:scale-98 transition disabled:opacity-40"
+                  >
+                    <Sparkles size={14} />
+                    <span>{isSyncing ? "Sincronizando..." : `Sincronizar ${monthNames[syncMonth]} ${syncYear}`}</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

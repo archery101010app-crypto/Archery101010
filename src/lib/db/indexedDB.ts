@@ -69,6 +69,18 @@ export interface CalendarEvent {
   clubId?: string;
   type: "competition" | "training" | "meeting" | "other";
   timestamp: number;
+  // Coach cycle assignment metadata
+  macrocycleId?: string;
+  phaseId?: string;
+  phaseName?: string;
+  phaseType?: string;
+  phaseColor?: string;
+  targetArrows?: number;
+  assignedAthleteIds?: string[];
+  focusPoints?: string[];
+  coachNotes?: string;
+  isRestDay?: boolean;
+  isCompleted?: boolean;
 }
 
 // Generate unique text-based IDs (prefix + timestamp + random chars)

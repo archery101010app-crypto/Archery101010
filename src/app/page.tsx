@@ -732,7 +732,12 @@ export default function Home() {
           />
         )}
         {currentScreen === "CALENDAR" && (
-          <CalendarView user={user} onBack={() => setCurrentScreen("HOME")} />
+          <CalendarView
+            user={user}
+            onBack={() => setCurrentScreen("HOME")}
+            onNavigate={(screen) => setCurrentScreen(screen)}
+            coachViewMode={coachViewMode}
+          />
         )}
         {currentScreen === "CHRONOGRAPH" && (
           <AcousticChronographView
