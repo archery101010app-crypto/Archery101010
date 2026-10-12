@@ -11,7 +11,7 @@ interface SessionConfigViewProps {
   onStartSession: (config: any) => void;
 }
 
-const DISTANCES = [18, 30, 50, 60, 70, 90];
+const DISTANCES = [18, 30, 50, 60, 70];
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
   const { language, t } = useLanguage();
@@ -26,7 +26,11 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<"WA 300" | "WA 600" | "WA 720" | "Libre">("WA 300");
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
-  const [distance, setDistance] = useState(user?.bowConfig?.defaultDistance || 18);
+  const [distance, setDistance] = useState(
+    user?.bowConfig?.defaultDistance && user.bowConfig.defaultDistance <= 70 
+      ? user.bowConfig.defaultDistance 
+      : 18
+  );
   const [autoScore, setAutoScore] = useState(false);
   const [includeNotes, setIncludeNotes] = useState(true);
   const [endsCount, setEndsCount] = useState(10);
@@ -241,21 +245,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         {/* Distance Chips presets */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">
-            {t("distance")} (m)
+            {t("distance")}
           </label>
-          <div className="grid grid-cols-6 gap-1.5">
+          <div className="grid grid-cols-5 gap-2 w-full">
             {DISTANCES.map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => setDistance(d)}
-                className={`py-2.5 rounded-xl border text-xs font-black transition-all duration-200 cursor-pointer ${
+                className={`py-3 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
                     : "border-white/10 bg-neutral-900/40 text-gray-dim hover:text-white"
                 }`}
               >
-                {d}
+                {d}m
               </button>
             ))}
           </div>
