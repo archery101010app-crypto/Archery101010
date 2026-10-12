@@ -3,36 +3,45 @@
 import React, { useState, useEffect } from "react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Pause, Music, Plus, Globe, Check } from "lucide-react";
+import { X, Play, Pause, Music, Plus, Globe, Check, ExternalLink } from "lucide-react";
 
-// Predefined shared playlists for the archery club
+// Predefined verified shared playlists for archery sessions
+const DEFAULT_PLAYLIST_ID = "37i9dQZF1DWZeKCadgRdKQ"; // Deep Focus
+
 const SHARED_PLAYLISTS = [
   {
-    id: "37i9dQZF1DX8t6r1AFlv2Y",
+    id: "37i9dQZF1DWZeKCadgRdKQ",
     name: "Focus Olímpico",
     creator: "Coach Carlos",
-    description: "Beats instrumentales para máxima concentración en el tiro.",
+    description: "Deep Focus: instrumental y beats envolventes para máxima concentración.",
   },
   {
-    id: "37i9dQZF1DXaImRpG78avv",
-    name: "Rhythm & Barebow",
+    id: "37i9dQZF1DWWQRwui0ExPn",
+    name: "Ritmo & Barebow",
     creator: "José Angel",
-    description: "Rifas de rock y beats electrónicos para ritmo de anclaje.",
+    description: "Lofi Beats: compás relajado y constante para ritmo y cadencia de tiro.",
   },
   {
-    id: "37i9dQZF1DWZqd5JICZI01",
-    name: "Compound Chill",
+    id: "37i9dQZF1DWXRqgorJj26U",
+    name: "Compound Energy",
     creator: "Laura Archer",
-    description: "Lo-Fi y música relajante para soltar tensión en el disparador.",
+    description: "Rock Classics: energía y potencia para eliminatorias y finales.",
   }
+];
+
+const OLD_INVALID_IDS = [
+  "37i9dQZF1DX8t6r1AFlv2Y",
+  "37i9dQZF1DXaImRpG78avv",
+  "37i9dQZF1DWZqd5JICZI01"
 ];
 
 export default function SpotifyFloatingPlayer() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activePlaylistId, setActivePlaylistId] = useState("37i9dQZF1DX8t6r1AFlv2Y");
+  const [activePlaylistId, setActivePlaylistId] = useState(DEFAULT_PLAYLIST_ID);
   const [userPlaylistUrl, setUserPlaylistUrl] = useState("");
   const [customPlaylists, setCustomPlaylists] = useState<Array<{id: string, name: string}>>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isEnabledByAdmin, setIsEnabledByAdmin] = useState(true);
   
   // UX improvements states
   const [isPlaying, setIsPlaying] = useState(false);
@@ -41,7 +50,17 @@ export default function SpotifyFloatingPlayer() {
   // Load active playlist and custom playlists on mount
   useEffect(() => {
     async function loadSpotifyConfig() {
-      const savedId = await getLocalSetting<string>("spotify_active_id", "37i9dQZF1DX8t6r1AFlv2Y");
+      // Check admin feature flag
+      const flag = await getLocalSetting<boolean>("flag_spotify_enabled", true);
+      setIsEnabledByAdmin(flag !== false);
+
+      let savedId = await getLocalSetting<string>("spotify_active_id", DEFAULT_PLAYLIST_ID);
+      // Migrate from old 404 dead IDs if previously saved
+      if (!savedId || OLD_INVALID_IDS.includes(savedId)) {
+        savedId = DEFAULT_PLAYLIST_ID;
+        await saveLocalSetting("spotify_active_id", DEFAULT_PLAYLIST_ID);
+      }
+
       const savedCustom = await getLocalSetting<Array<{id: string, name: string}>>("spotify_custom_lists", []);
       
       setActivePlaylistId(savedId);
@@ -50,11 +69,25 @@ export default function SpotifyFloatingPlayer() {
     loadSpotifyConfig();
   }, []);
 
-  // Helper to extract Spotify Playlist ID from various URL formats
-  const extractPlaylistId = (url: string): string | null => {
-    const regex = /playlist\/([a-zA-Z0-9]{22})/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
+  // Helper to extract Spotify Playlist ID from URL, URI or raw ID
+  const extractPlaylistId = (input: string): string | null => {
+    if (!input) return null;
+    const trimmed = input.trim();
+
+    // 1. Full URL with playlist/ID
+    const urlMatch = trimmed.match(/playlist\/([a-zA-Z0-9]{22})/);
+    if (urlMatch) return urlMatch[1];
+
+    // 2. Spotify URI: spotify:playlist:ID
+    const uriMatch = trimmed.match(/spotify:playlist:([a-zA-Z0-9]{22})/);
+    if (uriMatch) return uriMatch[1];
+
+    // 3. Raw 22-character alphanumeric ID
+    if (/^[a-zA-Z0-9]{22}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    return null;
   };
 
   const handleAddPlaylist = async (e: React.FormEvent) => {
@@ -63,7 +96,7 @@ export default function SpotifyFloatingPlayer() {
 
     const id = extractPlaylistId(userPlaylistUrl);
     if (!id) {
-      alert("Por favor, introduce un enlace válido de playlist de Spotify (ej: https://open.spotify.com/.../playlist/ID)");
+      alert("Por favor, introduce un enlace válido de playlist de Spotify (ej: https://open.spotify.com/playlist/... o ID de 22 caracteres)");
       return;
     }
 
@@ -90,6 +123,10 @@ export default function SpotifyFloatingPlayer() {
     setIsOpen(false); // collapse to mini-bar after selecting
     await saveLocalSetting("spotify_active_id", id);
   };
+
+  if (!isEnabledByAdmin) {
+    return null;
+  }
 
   return (
     <>
@@ -243,9 +280,21 @@ export default function SpotifyFloatingPlayer() {
                       loading="lazy"
                     ></iframe>
                   </div>
-                  <p className="text-[8px] text-gray-500 italic text-center mt-1">
-                    Inicia sesión en Spotify en el widget para escuchar canciones completas.
-                  </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-[8px] text-gray-500 italic">
+                      Inicia sesión en el widget o abre en la app.
+                    </p>
+                    <a
+                      href={`https://open.spotify.com/playlist/${activePlaylistId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1DB954]/15 hover:bg-[#1DB954]/25 text-[#1DB954] text-[9px] font-bold border border-[#1DB954]/30 transition"
+                      title="Abrir directamente en la app o web de Spotify"
+                    >
+                      <span>Abrir en Spotify</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  </div>
                 </div>
 
                 {/* 2. Playlists Compartidas del Club */}
