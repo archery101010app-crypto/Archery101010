@@ -59,9 +59,9 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-5 flex items-center justify-between z-40">
+    <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-3 sm:px-5 flex items-center justify-between z-40 max-w-full overflow-hidden">
       {/* Brand logo compact */}
-      <div className="flex items-center gap-2 select-none">
+      <div className="flex items-center gap-2 select-none min-w-0">
         <div className="flex items-baseline gap-1">
           <div 
             className="flex text-lg tracking-tighter font-extrabold brand-logo-101010" 
@@ -81,7 +81,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       </div>
 
       {/* Sync Wifi Button, Theme Selector, View Switcher & Language Selector */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Coach View Switcher Toggle */}
         {user && onToggleCoachViewMode && (
           <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">

@@ -283,10 +283,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       variants={containerVariants}
       initial="initial"
       animate="animate"
-      className="flex flex-col gap-4 py-4"
+      className="flex flex-col gap-4 py-4 w-full max-w-full overflow-x-hidden"
     >
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex flex-col">
+      <div className="flex items-center justify-between mb-1 gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex flex-col min-w-0">
           <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
             <span>{t("dashHome")}</span>
             {user.plan === "PRO" && (

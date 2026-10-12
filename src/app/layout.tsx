@@ -36,8 +36,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 import ServiceWorkerRegister from "@/components/sw/ServiceWorkerRegister";
@@ -50,8 +50,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="h-full antialiased dark" style={{ colorScheme: "dark" }}>
-      <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none">
+    <html lang="es" className="h-full antialiased dark overflow-x-hidden w-full max-w-full" style={{ colorScheme: "dark" }}>
+      <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none overflow-x-hidden w-full max-w-full">
         <ServiceWorkerRegister />
         <LanguageProvider>
           <ErrorBoundary>

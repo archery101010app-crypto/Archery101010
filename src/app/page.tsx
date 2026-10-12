@@ -643,7 +643,7 @@ export default function Home() {
 
   // Authenticated application flow
   return (
-    <div className="flex-1 flex flex-col min-h-full">
+    <div className="flex-1 flex flex-col min-h-full w-full max-w-full overflow-x-hidden">
       {/* Top Header common to all screens */}
       <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={handleToggleCoachViewMode} />
 
@@ -666,7 +666,7 @@ export default function Home() {
       {/* Screen Router Container */}
       <main 
         ref={mainRef}
-        className="flex-1 overflow-y-auto pb-24 px-4 transition-[padding-top] duration-300 ease-in-out relative" 
+        className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-24 px-3 sm:px-4 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
         {currentScreen === "HOME" && (

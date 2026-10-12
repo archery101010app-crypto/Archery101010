@@ -18,12 +18,12 @@ export default function IPhoneFrame({ children }: { children: React.ReactNode })
 
   if (isAdminRoute || !showSimulator) {
     return (
-      <div className="min-h-screen w-full flex flex-col bg-black-oled relative">
+      <div className="min-h-screen w-full max-w-[100vw] flex flex-col bg-black-oled relative overflow-x-hidden">
         {/* Ambient background */}
         <div className="ambient-bg" />
 
         {/* Responsive Content Area */}
-        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col relative px-4 sm:px-6 md:px-8">
+        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col relative px-3 sm:px-6 md:px-8 overflow-x-hidden">
           {children}
         </div>
       </div>

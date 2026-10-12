@@ -473,7 +473,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   };
 
   return (
-    <div className="flex flex-col gap-5 py-4 min-h-full">
+    <div className="flex flex-col gap-5 py-4 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button

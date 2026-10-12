@@ -267,7 +267,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   };
 
   return (
-    <div className="flex flex-col gap-5 max-w-xl mx-auto pb-16 px-1">
+    <div className="flex flex-col gap-5 max-w-xl mx-auto pb-16 px-1 w-full max-w-full overflow-x-hidden">
       {/* Top Header */}
       <div className="flex items-center justify-between bg-neutral-900/60 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
         <button
