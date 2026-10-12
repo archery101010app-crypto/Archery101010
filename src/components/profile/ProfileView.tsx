@@ -1347,14 +1347,26 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       )}
 
-      {/* Manual de Usuario Button */}
-      <button
-        onClick={() => window.open("/manual/", "_blank")}
-        className="w-full py-3.5 mt-2 rounded-full border border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
-      >
-        <BookOpen size={16} />
-        <span>Manual de Usuario</span>
-      </button>
+      {/* Botones de Soporte y Legal */}
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        {/* Manual de Usuario Button */}
+        <button
+          onClick={() => window.open("/manual/", "_blank")}
+          className="py-3 rounded-full border border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        >
+          <BookOpen size={15} />
+          <span>Manual</span>
+        </button>
+
+        {/* Política de Privacidad Button */}
+        <button
+          onClick={() => window.open("/privacy", "_blank")}
+          className="py-3 rounded-full border border-white/10 hover:bg-white/5 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        >
+          <Shield size={15} />
+          <span>Privacidad</span>
+        </button>
+      </div>
 
       {/* Log out Action Button */}
       <button
