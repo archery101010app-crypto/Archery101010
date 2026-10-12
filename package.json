@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.42.0",
+  "version": "2.43.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,9 +9,13 @@
     "lint": "eslint",
     "deploy:test": "next build && firebase deploy -P test",
     "deploy:prod": "next build && firebase deploy -P prod",
-    "bump-version": "node scripts/increment-version.js"
+    "bump-version": "node scripts/increment-version.js",
+    "cap:sync": "next build && npx cap sync",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@paypal/react-paypal-js": "^9.2.0",
     "canvas-confetti": "^1.9.4",
     "firebase": "^12.13.0",
@@ -24,6 +28,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
