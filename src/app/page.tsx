@@ -120,6 +120,22 @@ export default function Home() {
         console.error("Error reading authentication", e);
       } finally {
         setLoading(false);
+        // Configure Native Capacitor StatusBar and hide SplashScreen
+        if (typeof window !== "undefined") {
+          import("@capacitor/core").then(async ({ Capacitor }) => {
+            if (Capacitor.isNativePlatform()) {
+              try {
+                const { StatusBar, Style } = await import("@capacitor/status-bar");
+                await StatusBar.setStyle({ style: Style.Dark });
+                await StatusBar.setBackgroundColor({ color: "#050505" });
+              } catch (_) {}
+              try {
+                const { SplashScreen } = await import("@capacitor/splash-screen");
+                await SplashScreen.hide();
+              } catch (_) {}
+            }
+          }).catch(() => {});
+        }
       }
     }
     initApp();

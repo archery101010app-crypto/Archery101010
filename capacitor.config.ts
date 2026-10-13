@@ -9,7 +9,19 @@ const config: CapacitorConfig = {
   },
   backgroundColor: '#050505',
   plugins: {
-    // Custom native plugin configs if needed
+    SplashScreen: {
+      launchShowDuration: 1800,
+      launchAutoHide: true,
+      backgroundColor: '#050505',
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#050505',
+      overlaysWebView: false
+    }
   }
 };
 

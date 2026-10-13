@@ -53,3 +53,14 @@ if (fs.existsSync(swPath)) {
 } else {
   console.warn("public/sw.js not found, skipping cache name bump");
 }
+
+// 5. Update android/app/build.gradle versionCode and versionName
+const gradlePath = path.join(__dirname, '../android/app/build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradleContent = fs.readFileSync(gradlePath, 'utf8');
+  const vCode = parts[0] * 10000 + parts[1] * 100 + parts[2];
+  gradleContent = gradleContent.replace(/versionCode\s+\d+/, `versionCode ${vCode}`);
+  gradleContent = gradleContent.replace(/versionName\s+["'].*?["']/, `versionName "${newVersion}"`);
+  fs.writeFileSync(gradlePath, gradleContent, 'utf8');
+  console.log(`Updated android/app/build.gradle with: versionCode ${vCode}, versionName "${newVersion}"`);
+}
