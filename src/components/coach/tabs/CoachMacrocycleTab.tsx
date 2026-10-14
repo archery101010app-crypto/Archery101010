@@ -492,14 +492,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition shadow-glow-cyan"
               >
                 <Plus size={12} />
-                <span>Nuevo Macrociclo</span>
+                <span>Ciclo</span>
               </button>
             </div>
 
             <div className="flex flex-col gap-3">
               {macrocycles.length === 0 ? (
                 <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white/30 text-xs">
-                  Aún no has planificado ningún macrociclo. Presiona "+ Nuevo Macrociclo" para iniciar.
+                  Aún no has planificado ningún macrociclo. Presiona "+ Ciclo" para iniciar.
                 </div>
               ) : (
                 macrocycles.map((mac) => {
@@ -796,7 +796,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                    {editingId ? "Editar Macrociclo" : "Nuevo Macrociclo"}
+                    {editingId ? "Editar Ciclo" : "Ciclo"}
                   </h3>
                   <span className="text-[9px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5">Paso {step} de 4</span>
                 </div>
