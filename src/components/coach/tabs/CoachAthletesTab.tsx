@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { UserProfile } from "@/lib/authService";
-import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail } from "lucide-react";
+import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface CoachAthletesTabProps {
@@ -125,40 +125,60 @@ export default function CoachAthletesTab({
   return (
     <div className="flex flex-col gap-4">
       {/* Top Action Bar: Search, Filters and Create Button */}
-      <div className="flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
-        <div className="flex-1 flex gap-2">
-          <div className="flex-1 bg-neutral-900/60 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
-            <Search size={14} className="text-gray-dim" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre o alias..."
-              className="bg-transparent border-none text-white text-xs outline-none flex-1 placeholder:text-gray-dim"
-            />
-          </div>
-
-          <select
-            value={bowFilter}
-            onChange={(e) => setBowFilter(e.target.value)}
-            className="bg-neutral-900/60 border border-white/5 rounded-xl text-gray-dim text-xs px-3 outline-none cursor-pointer"
-          >
-            <option value="ALL">Todos los Arcos</option>
-            <option value="Recurve">Recurvo</option>
-            <option value="Compound">Compuesto</option>
-            <option value="Barebow">Barebow</option>
-            <option value="Traditional">Tradicional</option>
-          </select>
+      <div className="flex flex-col gap-2.5 w-full max-w-full">
+        {/* Row 1: Search Input (Full width, easy to tap on mobile) */}
+        <div className="w-full bg-neutral-900/60 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
+          <Search size={15} className="text-gray-dim shrink-0" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por nombre o alias..."
+            className="bg-transparent border-none text-white text-xs outline-none flex-1 min-w-0 placeholder:text-gray-dim"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="text-gray-dim hover:text-white text-xs p-0.5 cursor-pointer"
+              title="Limpiar búsqueda"
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
 
-        {/* Primary CTA: Create Athlete Profile */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan hover:brightness-110 active:scale-95 transition cursor-pointer shrink-0"
-        >
-          <UserPlus size={14} className="stroke-[2.5]" />
-          <span>Crear Alumno</span>
-        </button>
+        {/* Row 2: Bow Filter Box & Create Athlete Button (100% visible, no cut-off) */}
+        <div className="flex items-center gap-2 w-full justify-between min-w-0">
+          {/* Bow Selector Dropdown Box */}
+          <div className="relative flex-1 min-w-0">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-cyan-neon">
+              <Filter size={13} />
+            </div>
+            <select
+              value={bowFilter}
+              onChange={(e) => setBowFilter(e.target.value)}
+              className="w-full bg-neutral-900/80 border border-white/10 hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs pl-8 pr-7 py-2.5 rounded-xl outline-none transition cursor-pointer appearance-none truncate font-medium"
+            >
+              <option value="ALL">Todos los Arcos</option>
+              <option value="Recurve">Arco Recurvo</option>
+              <option value="Compound">Arco Compuesto</option>
+              <option value="Barebow">Arco Barebow</option>
+              <option value="Traditional">Arco Tradicional</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-dim">
+              <ChevronDown size={14} />
+            </div>
+          </div>
+
+          {/* Primary CTA: Create Athlete Profile */}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan hover:brightness-110 active:scale-95 transition cursor-pointer shrink-0"
+          >
+            <UserPlus size={14} className="stroke-[2.5]" />
+            <span>Crear Alumno</span>
+          </button>
+        </div>
       </div>
 
       {/* Roster list */}
