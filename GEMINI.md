@@ -7,3 +7,4 @@
 3.  **Frontend SaaS Premium 2025:** Estructura moderna con Next.js, TypeScript, Tailwind CSS, Framer Motion, shadcn/ui y modo oscuro OLED por defecto.
 4.  **Control de Versión de Publicación:** Cada vez que se realicen cambios y se publiquen commits en el repositorio, se debe incrementar el número de versión de la aplicación sumando +0.1 a la versión actual mediante el script de auto-incremento.
 5.  **Control Centralizado:** La versión de la aplicación se almacena de forma centralizada en `src/lib/version.ts` y se actualiza mediante `npm run bump-version`.
+6.  **Flujo de Usuario Mobile-First (Dispositivo Android):** El usuario opera, evalúa y prueba casi en su totalidad desde su celular Android. Todas las entregas, enlaces, interfaces táctiles y pruebas deben estar orientadas para que el usuario pueda abrirlas, probarlas y descargarlas directamente en su teléfono móvil sin depender de configuraciones complejas en la computadora.
