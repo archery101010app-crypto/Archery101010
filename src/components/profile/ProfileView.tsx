@@ -784,27 +784,29 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 2: Bow configuration (Arco #1, Arco #2, Arco #3) */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-3.5">
-        <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-4">
+        {/* Header */}
+        <div className="flex justify-between items-center border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
-            <Target size={16} className="text-cyan-neon" />
+            <Target size={18} className="text-cyan-neon" />
             <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">
               {t("bowConfig")}
             </h4>
           </div>
           <button
+            type="button"
             onClick={() => {
               if (editBow) handleSaveBow();
               else setEditBow(true);
             }}
-            className="text-xs text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer bg-cyan-neon/10 hover:bg-cyan-neon/20 px-3 py-1 rounded-xl transition"
+            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
           >
             {editBow ? "Guardar" : "Editar"}
           </button>
         </div>
 
         {editBow ? (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-4">
             {bowsList.map((bow, idx) => {
               const bowNumber = idx + 1;
               const isPrimary = idx === 0;
@@ -812,12 +814,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               return (
                 <div
                   key={bow.id || idx}
-                  className="bg-neutral-950/80 border border-white/10 rounded-2xl p-3.5 md:p-4 flex flex-col gap-3 relative"
+                  className="bg-neutral-950/80 border border-white/10 rounded-2xl p-4 flex flex-col gap-3.5 shadow-md relative"
                 >
                   {/* Bow Header */}
-                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
+                      <span className="w-6 h-6 rounded-lg bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
                         {bowNumber}
                       </span>
                       <h5 className="text-white text-xs font-black uppercase tracking-wide">
@@ -829,7 +831,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleRemoveBow(idx)}
-                        className="text-red-rival hover:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 transition flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                        className="h-7 px-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-rival text-[10px] font-bold flex items-center gap-1.5 transition cursor-pointer"
                         title="Eliminar este arco"
                       >
                         <Trash2 size={12} />
@@ -839,11 +841,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   </div>
 
                   {/* Tipo de Arco Selector */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
                       Tipo de Arco
                     </label>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-3 gap-2">
                       {(["Recurve", "Compound", "Barebow"] as const).map((typeOption) => {
                         const isSelected = bow.type === typeOption;
                         const label = typeOption === "Recurve" ? "Recurvo" : typeOption === "Compound" ? "Compuesto" : "Barebow";
@@ -852,7 +854,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition border cursor-pointer ${
+                            className={`h-10 flex items-center justify-center rounded-xl text-[11px] font-black uppercase tracking-wider transition border cursor-pointer ${
                               isSelected
                                 ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
                                 : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
@@ -866,9 +868,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   </div>
 
                   {/* Fila: Marca y Modelo */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
                         Marca
                       </label>
                       <input
@@ -876,11 +878,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         value={bow.brand}
                         onChange={(e) => handleUpdateBow(idx, { brand: e.target.value })}
                         placeholder="Ej. Hoyt, Mathews"
-                        className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
+                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition placeholder:text-white/20"
                       />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
                         Modelo
                       </label>
                       <input
@@ -888,15 +890,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         value={bow.model}
                         onChange={(e) => handleUpdateBow(idx, { model: e.target.value })}
                         placeholder="Ej. Satori, TRX"
-                        className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
+                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition placeholder:text-white/20"
                       />
                     </div>
                   </div>
 
                   {/* Fila: Potencia y Apertura */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
                         Potencia
                       </label>
                       <div className="relative flex items-center">
@@ -906,15 +908,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.poundage || ""}
                           onChange={(e) => handleUpdateBow(idx, { poundage: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 38"
-                          className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 pr-10 rounded-xl outline-none focus:border-cyan-neon transition"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-12 rounded-xl outline-none transition placeholder:text-white/20"
                         />
-                        <span className="absolute right-3 text-[10px] text-gray-dim font-bold pointer-events-none">
+                        <span className="absolute right-3 text-[11px] text-cyan-neon font-black pointer-events-none uppercase">
                           lbs
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
                         Apertura
                       </label>
                       <div className="relative flex items-center">
@@ -924,9 +926,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.drawLength || ""}
                           onChange={(e) => handleUpdateBow(idx, { drawLength: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 28.5"
-                          className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 pr-8 rounded-xl outline-none focus:border-cyan-neon transition"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-10 rounded-xl outline-none transition placeholder:text-white/20"
                         />
-                        <span className="absolute right-3 text-[11px] text-gray-dim font-bold pointer-events-none">
+                        <span className="absolute right-3.5 text-sm text-cyan-neon font-black pointer-events-none">
                           &quot;
                         </span>
                       </div>
@@ -941,9 +943,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <button
                 type="button"
                 onClick={handleAddBow}
-                className="w-full py-3 rounded-2xl border border-dashed border-cyan-neon/40 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer"
+                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
               >
-                <Plus size={14} />
+                <Plus size={15} />
                 <span>+ Agregar Arco #2</span>
               </button>
             )}
@@ -953,36 +955,25 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <button
                 type="button"
                 onClick={handleAddBow}
-                className="w-full py-3 rounded-2xl border border-dashed border-cyan-neon/40 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer"
+                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
               >
-                <Plus size={14} />
+                <Plus size={15} />
                 <span>+ Agregar Arco #3</span>
               </button>
             )}
 
-            {/* Botones de Acción en Modo Edición */}
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleSaveBow}
-                className="flex-1 py-3 bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow-glow-cyan cursor-pointer"
-              >
-                Guardar Arcos
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBowsList(parseInitialBows(user));
-                  setEditBow(false);
-                }}
-                className="px-4 py-3 bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
-              >
-                Cancelar
-              </button>
-            </div>
+            {/* Botón Guardar Arcos Rectangular y Bien Cuadrado (Sin botón de Cancelar) */}
+            <button
+              type="button"
+              onClick={handleSaveBow}
+              className="h-12 w-full rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition shadow-glow-cyan cursor-pointer active:scale-[0.99]"
+            >
+              <Check size={16} strokeWidth={3} />
+              <span>Guardar Arcos</span>
+            </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             {bowsList.map((bow, idx) => {
               const bowNumber = idx + 1;
               const isPrimary = idx === 0;
@@ -991,30 +982,30 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               return (
                 <div
                   key={bow.id || idx}
-                  className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3.5 flex flex-col gap-2.5"
+                  className="bg-neutral-950/70 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-md"
                 >
-                  <div className="flex justify-between items-center">
-                    <span className="text-white text-xs font-black uppercase tracking-wide flex items-center gap-1.5">
-                      <span className="w-4 h-4 rounded-full bg-cyan-neon/10 text-cyan-neon text-[9px] font-black flex items-center justify-center">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
+                    <span className="text-white text-xs font-black uppercase tracking-wide flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
                         {bowNumber}
                       </span>
                       {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-white/5 border border-white/10 text-cyan-neon">
+                    <span className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon flex items-center justify-center">
                       {typeName}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-gray-dim">Marca y Modelo:</span>
-                      <span className="text-white font-bold truncate">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Marca / Modelo</span>
+                      <span className="text-white text-xs font-bold truncate">
                         {bow.brand ? `${bow.brand} ${bow.model || ""}` : "Sin especificar"}
                       </span>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-gray-dim">Potencia / Apertura:</span>
-                      <span className="text-white font-bold">
+                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Potencia / Apertura</span>
+                      <span className="text-white text-xs font-bold">
                         {bow.poundage ? `${bow.poundage} lbs` : "-"}
                         {bow.drawLength ? ` • ${bow.drawLength}"` : ""}
                       </span>
@@ -1025,7 +1016,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             })}
 
             {bowsList.length < 3 && (
-              <p className="text-[10px] text-gray-dim text-center pt-1 italic">
+              <p className="text-[10px] text-gray-dim text-center pt-0.5 italic">
                 {bowsList.length === 1 
                   ? '¿Tienes otro arco? Toca "Editar" para registrar tu Arco #2.' 
                   : '¿Tienes un tercer arco? Toca "Editar" para registrar tu Arco #3.'}
