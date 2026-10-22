@@ -29,6 +29,7 @@ import AdPopupOverlay from "@/components/ads/AdPopupOverlay";
 import SuperAdminView from "@/components/admin/SuperAdminView";
 import { AdCampaign } from "@/lib/db/adTypes";
 import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
+import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 // Screens that the authenticated user can access
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
@@ -55,9 +56,66 @@ export default function Home() {
   const [dbVersion, setDbVersion] = useState(0);
 
   const [pendingInvitation, setPendingInvitation] = useState<any | null>(null);
-  
+  const [backToast, setBackToast] = useState<string | null>(null);
+
   const mainRef = React.useRef<HTMLElement | null>(null);
   const bypassBeforeUnloadRef = React.useRef(false);
+  const currentScreenRef = React.useRef<Screen>(currentScreen);
+
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+    // Push history state on screen navigation so iOS/Android edge-swipe pops cleanly to previous screen
+    if (typeof window !== "undefined" && currentScreen !== "HOME") {
+      try {
+        window.history.pushState({ screen: currentScreen }, "");
+      } catch {
+        // ignore
+      }
+    }
+  }, [currentScreen]);
+
+  // Mobile Back Navigation (Android hardware button & Apple iOS / Android edge-swipe)
+  useEffect(() => {
+    const cleanup = initMobileBackNavigation({
+      getCurrentScreen: () => currentScreenRef.current,
+      onNavigateHome: () => {
+        if (currentScreenRef.current !== "HOME") {
+          setCurrentScreen("HOME");
+        }
+      },
+      showToast: (msg) => {
+        setBackToast(msg);
+        setTimeout(() => setBackToast(null), 2200);
+      }
+    });
+
+    return () => cleanup();
+  }, []);
+
+  // Register modal dismissals so back gesture closes modals first
+  useEffect(() => {
+    if (pendingInvitation) {
+      return registerModalDismiss(() => setPendingInvitation(null));
+    }
+  }, [pendingInvitation]);
+
+  useEffect(() => {
+    if (showDiscardConfirm) {
+      return registerModalDismiss(() => setShowDiscardConfirm(false));
+    }
+  }, [showDiscardConfirm]);
+
+  useEffect(() => {
+    if (activePopup) {
+      return registerModalDismiss(() => setActivePopup(null));
+    }
+  }, [activePopup]);
+
+  useEffect(() => {
+    if (unlockedStar) {
+      return registerModalDismiss(() => setUnlockedStar(null));
+    }
+  }, [unlockedStar]);
 
   // Check authentication status and initialize database on mount
   useEffect(() => {
@@ -1089,6 +1147,22 @@ export default function Home() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Back Navigation Toast (OLED Mobile HUD) */}
+      <AnimatePresence>
+        {backToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 rounded-full bg-neutral-900/95 border border-white/15 text-white/90 text-xs font-semibold shadow-2xl backdrop-blur-md pointer-events-none flex items-center gap-2"
+          >
+            <span>🏹</span>
+            <span>{backToast}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

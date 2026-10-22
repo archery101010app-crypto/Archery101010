@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface CoachAthletesTabProps {
   athletes: UserProfile[];
@@ -21,6 +22,13 @@ export default function CoachAthletesTab({
   const [searchTerm, setSearchTerm] = useState("");
   const [bowFilter, setBowFilter] = useState<string>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Hook into mobile back button and gestures
+  React.useEffect(() => {
+    if (isModalOpen) {
+      return registerModalDismiss(() => setIsModalOpen(false));
+    }
+  }, [isModalOpen]);
 
   // New athlete form state
   const [fullName, setFullName] = useState("");

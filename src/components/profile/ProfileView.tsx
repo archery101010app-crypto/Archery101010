@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -36,6 +37,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [editPhysical, setEditPhysical] = useState(false);
   const [editClubDetails, setEditClubDetails] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+
+  // Hook into mobile back button and gestures
+  useEffect(() => {
+    if (isPaywallOpen) {
+      return registerModalDismiss(() => setIsPaywallOpen(false));
+    }
+  }, [isPaywallOpen]);
 
   // Form Fields
   const [fullName, setFullName] = useState(user.fullName);

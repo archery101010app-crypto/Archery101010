@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar } from "@/lib/cycleCalendarSync";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface CoachMacrocycleTabProps {
   user: UserProfile;
@@ -55,6 +56,25 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [syncYear, setSyncYear] = useState(new Date().getFullYear());
   const [syncMonth, setSyncMonth] = useState(new Date().getMonth());
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Hook into mobile back button and edge-swipe gestures
+  useEffect(() => {
+    if (showCreateModal) {
+      return registerModalDismiss(() => setShowCreateModal(false));
+    }
+  }, [showCreateModal]);
+
+  useEffect(() => {
+    if (showSyncModal) {
+      return registerModalDismiss(() => setShowSyncModal(false));
+    }
+  }, [showSyncModal]);
+
+  useEffect(() => {
+    if (selectedMacro) {
+      return registerModalDismiss(() => setSelectedMacro(null));
+    }
+  }, [selectedMacro]);
 
   const handleOpenSyncModal = (macro: Macrocycle) => {
     setMacroToSync(macro);
