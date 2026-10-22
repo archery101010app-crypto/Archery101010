@@ -565,22 +565,13 @@ export default function Home() {
     };
   }, []);
 
-  // Load persistent font size and theme contrast from IndexedDB on mount
+  // Load persistent theme contrast from IndexedDB on mount
   useEffect(() => {
-    async function loadFontSizeAndTheme() {
+    async function loadTheme() {
       try {
         const { getLocalSetting } = await import("@/lib/db/indexedDB");
-        const savedSize = await getLocalSetting<string>("user_font_size", "large");
         const root = document.documentElement;
-        
-        // Scale root font size
-        if (savedSize === "small") {
-          root.style.fontSize = "18px";
-        } else if (savedSize === "medium") {
-          root.style.fontSize = "20px";
-        } else {
-          root.style.fontSize = "22px";
-        }
+        root.style.fontSize = ""; // Reset custom font scaling to let OS/browser handle text naturally
 
         // Apply theme contrast
         const savedTheme = await getLocalSetting<string>("app_theme", "dark");
@@ -590,10 +581,10 @@ export default function Home() {
           root.classList.remove("light-contrast");
         }
       } catch (e) {
-        console.error("Error loading font size and theme settings", e);
+        console.error("Error loading theme settings", e);
       }
     }
-    loadFontSizeAndTheme();
+    loadTheme();
   }, [user?.uid]);
 
   // Prevent accidental reload whenever a user session is active
