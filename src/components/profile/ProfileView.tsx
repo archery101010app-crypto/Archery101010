@@ -805,15 +805,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   className="bg-neutral-950/80 border border-white/10 rounded-2xl p-4 flex flex-col gap-3.5 shadow-md relative"
                 >
                   {/* Bow Header */}
-                  <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
-                        {bowNumber}
-                      </span>
-                      <h5 className="text-white text-xs font-black uppercase tracking-wide">
-                        {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
-                      </h5>
-                    </div>
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <h5 className="text-white text-xs font-black uppercase tracking-wider">
+                      Arco #{bowNumber}
+                    </h5>
 
                     {!isPrimary && (
                       <button
@@ -1003,28 +998,23 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   key={bow.id || idx}
                   className="bg-neutral-950/70 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-md"
                 >
-                  <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
-                    <span className="text-white text-xs font-black uppercase tracking-wide flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
-                        {bowNumber}
-                      </span>
-                      {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
+                  <div className="border-b border-white/5 pb-2">
+                    <span className="text-white text-xs font-black uppercase tracking-wider">
+                      Arco #{bowNumber}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-6 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/5 border border-white/10 text-cyan-neon flex items-center justify-center">
-                        {(bow.hand || "RH") === "RH" ? "Diestro (RH)" : "Zurdo (LH)"}
-                      </span>
-                      <span className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon flex items-center justify-center">
-                        {typeName}
-                      </span>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Marca / Modelo</span>
+                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Marca</span>
                       <span className="text-white text-xs font-bold truncate">
-                        {bow.brand ? `${bow.brand} ${bow.model || ""}` : "Sin especificar"}
+                        {bow.brand || "Sin especificar"}
+                      </span>
+                    </div>
+                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Modelo</span>
+                      <span className="text-white text-xs font-bold truncate">
+                        {bow.model || "Sin especificar"}
                       </span>
                     </div>
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
@@ -1032,6 +1022,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <span className="text-white text-xs font-bold">
                         {bow.poundage ? `${bow.poundage} lbs` : "-"}
                         {bow.drawLength ? ` • ${bow.drawLength}"` : ""}
+                      </span>
+                    </div>
+                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                      <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Orientación</span>
+                      <span className="text-cyan-neon text-xs font-black uppercase">
+                        {(bow.hand || "RH") === "RH" ? "Diestro (RH)" : "Zurdo (LH)"}
                       </span>
                     </div>
                   </div>
