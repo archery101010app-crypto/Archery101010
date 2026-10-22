@@ -34,7 +34,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // Section edit toggles
   const [editPersonal, setEditPersonal] = useState(false);
   const [editBow, setEditBow] = useState(false);
-  const [editPhysical, setEditPhysical] = useState(false);
   const [editClubDetails, setEditClubDetails] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
@@ -64,6 +63,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         model: b.model || "",
         poundage: b.poundage || 0,
         drawLength: b.drawLength || 0,
+        hand: b.hand || (u.physicalData?.dominantHand === "L" ? "LH" : "RH"),
         defaultDistance: b.defaultDistance || (b.type === "Compound" ? 50 : b.type === "Recurve" ? 70 : 18)
       }));
     }
@@ -76,6 +76,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         model: u.bowConfig.model || "",
         poundage: u.bowConfig.poundage || 0,
         drawLength: u.bowConfig.drawLength || 0,
+        hand: u.bowConfig.hand || (u.physicalData?.dominantHand === "L" ? "LH" : "RH"),
         defaultDistance: u.bowConfig.defaultDistance || (u.bowConfig.type === "Compound" ? 50 : u.bowConfig.type === "Recurve" ? 70 : 18)
       }];
     }
@@ -87,6 +88,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       model: "",
       poundage: 0,
       drawLength: 0,
+      hand: u.physicalData?.dominantHand === "L" ? "LH" : "RH",
       defaultDistance: 70
     }];
   };
@@ -120,6 +122,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         model: "",
         poundage: 0,
         drawLength: 0,
+        hand: bowsList[0]?.hand || "RH",
         defaultDistance: 70
       }
     ]);
@@ -129,18 +132,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     if (index === 0) return; // Cannot delete primary bow
     setBowsList((prev) => prev.filter((_, i) => i !== index));
   };
-
-  const [height, setHeight] = useState(user.physicalData?.height || 175);
-  const [weight, setWeight] = useState(user.physicalData?.weight || 70);
-  const [dominantHand, setDominantHand] = useState<"L" | "R">(user.physicalData?.dominantHand === "L" ? "L" : "R");
-
-  useEffect(() => {
-    if (!editPhysical) {
-      setHeight(user.physicalData?.height || 175);
-      setWeight(user.physicalData?.weight || 70);
-      setDominantHand(user.physicalData?.dominantHand === "L" ? "L" : "R");
-    }
-  }, [user.physicalData, editPhysical]);
 
   // Notification Toggles
   const [pushNotif, setPushNotif] = useState(true);
@@ -376,6 +367,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         model: b.model?.trim() || "",
         poundage: Number(b.poundage) || 0,
         drawLength: Number(b.drawLength) || 0,
+        hand: b.hand || "RH",
         defaultDistance: Number(b.defaultDistance) || (b.type === "Compound" ? 50 : b.type === "Recurve" ? 70 : 18)
       }));
 
@@ -383,29 +375,18 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
       const updated = await updateProfile(user.uid, {
         bowConfig: primaryBow,
-        bows: cleanedBows
+        bows: cleanedBows,
+        physicalData: {
+          height: user.physicalData?.height || 0,
+          weight: user.physicalData?.weight || 0,
+          dominantEye: user.physicalData?.dominantEye || (primaryBow.hand === "LH" ? "L" : "R"),
+          dominantHand: primaryBow.hand === "LH" ? "L" : "R"
+        }
       });
       onProfileUpdated(updated);
       setEditBow(false);
     } catch (e) {
       console.error("Error saving bow configuration:", e);
-    }
-  };
-
-  const handleSavePhysical = async () => {
-    try {
-      const updated = await updateProfile(user.uid, {
-        physicalData: {
-          height: Number(height) || 0,
-          weight: Number(weight) || 0,
-          dominantHand,
-          dominantEye: user.physicalData?.dominantEye || (dominantHand === "L" ? "L" : "R")
-        }
-      });
-      onProfileUpdated(updated);
-      setEditPhysical(false);
-    } catch (e) {
-      console.error("Error saving physical data:", e);
     }
   };
 
@@ -941,6 +922,37 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       </div>
                     </div>
                   </div>
+
+                  {/* Fila: Lateralidad / Orientación */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+                      Lateralidad / Orientación
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateBow(idx, { hand: "RH" })}
+                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                          (bow.hand || "RH") === "RH"
+                            ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                            : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
+                        }`}
+                      >
+                        Diestro (RH)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateBow(idx, { hand: "LH" })}
+                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                          bow.hand === "LH"
+                            ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                            : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
+                        }`}
+                      >
+                        Zurdo (LH)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -998,9 +1010,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       </span>
                       {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
                     </span>
-                    <span className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon flex items-center justify-center">
-                      {typeName}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-6 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/5 border border-white/10 text-cyan-neon flex items-center justify-center">
+                        {(bow.hand || "RH") === "RH" ? "Diestro (RH)" : "Zurdo (LH)"}
+                      </span>
+                      <span className="h-6 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon flex items-center justify-center">
+                        {typeName}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
@@ -1029,138 +1046,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   : '¿Tienes un tercer arco? Toca "Editar" para registrar tu Arco #3.'}
               </p>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* SECTION 3: Physical Data (Estatura, Peso, Derecho o Zurdo) */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex justify-between items-center border-b border-white/5 pb-3">
-          <div className="flex items-center gap-2">
-            <User size={18} className="text-cyan-neon" />
-            <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">
-              {t("physicalData")}
-            </h4>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (editPhysical) handleSavePhysical();
-              else setEditPhysical(true);
-            }}
-            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
-          >
-            {editPhysical ? "Guardar" : "Editar"}
-          </button>
-        </div>
-
-        {editPhysical ? (
-          <div className="flex flex-col gap-3.5">
-            {/* Fila 1: Estatura y Peso */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
-                  Estatura
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    step="1"
-                    value={height || ""}
-                    onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : ("" as any))}
-                    className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-11 rounded-xl outline-none transition placeholder:text-white/20"
-                    placeholder="175"
-                  />
-                  <span className="absolute right-3.5 text-[11px] text-cyan-neon font-black pointer-events-none uppercase">
-                    cm
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
-                  Peso
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={weight || ""}
-                    onChange={(e) => setWeight(e.target.value ? Number(e.target.value) : ("" as any))}
-                    className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-11 rounded-xl outline-none transition placeholder:text-white/20"
-                    placeholder="70"
-                  />
-                  <span className="absolute right-3.5 text-[11px] text-cyan-neon font-black pointer-events-none uppercase">
-                    kg
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Fila 2: Derecho o Zurdo */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
-                Derecho o Zurdo
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setDominantHand("R")}
-                  className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
-                    dominantHand === "R"
-                      ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
-                      : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
-                  }`}
-                >
-                  Derecho
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDominantHand("L")}
-                  className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
-                    dominantHand === "L"
-                      ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
-                      : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
-                  }`}
-                >
-                  Zurdo
-                </button>
-              </div>
-            </div>
-
-            {/* Botón Guardar Rectangular */}
-            <button
-              type="button"
-              onClick={handleSavePhysical}
-              className="h-12 w-full rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition shadow-glow-cyan cursor-pointer active:scale-[0.99] mt-1"
-            >
-              <Check size={16} strokeWidth={3} />
-              <span>Guardar Datos Físicos</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-2.5">
-            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
-              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Estatura</span>
-              <span className="text-white text-xs font-bold truncate mt-0.5">
-                {user.physicalData?.height ? `${user.physicalData.height} cm` : "--"}
-              </span>
-            </div>
-
-            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
-              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Peso</span>
-              <span className="text-white text-xs font-bold truncate mt-0.5">
-                {user.physicalData?.weight ? `${user.physicalData.weight} kg` : "--"}
-              </span>
-            </div>
-
-            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
-              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Lateralidad</span>
-              <span className="text-cyan-neon text-xs font-black uppercase tracking-wider truncate mt-0.5">
-                {user.physicalData?.dominantHand === "L" ? "Zurdo" : "Derecho"}
-              </span>
-            </div>
           </div>
         )}
       </div>

@@ -263,8 +263,18 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                     <span className="text-white text-xs font-bold">{athlete.bowConfig?.type || "—"}</span>
                   </div>
                   <div>
+                    <span className="text-[9px] text-gray-dim block">Orientación</span>
+                    <span className="text-cyan-neon text-xs font-bold">
+                      {(athlete.bowConfig?.hand === "LH" || athlete.physicalData?.dominantHand === "L") ? "Zurdo (LH)" : "Diestro (RH)"}
+                    </span>
+                  </div>
+                  <div>
                     <span className="text-[9px] text-gray-dim block">Potencia (Poundage)</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} libras` : "—"}</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-gray-dim block">Apertura</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.drawLength ? `${athlete.bowConfig.drawLength}"` : "—"}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-dim block">Marca</span>
@@ -277,31 +287,21 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 </div>
               </div>
 
-              <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
-                <span className="text-[10px] text-yellow-gold font-black tracking-wider uppercase">Datos Físicos</span>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-[9px] text-gray-dim block">Estatura</span>
-                    <span className="text-white text-xs font-bold">{athlete.physicalData?.height || "—"} cm</span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-gray-dim block">Peso</span>
-                    <span className="text-white text-xs font-bold">{athlete.physicalData?.weight || "—"} kg</span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-gray-dim block">Ojo Dominante</span>
-                    <span className="text-white text-xs font-bold">
-                      {athlete.physicalData?.dominantEye === "R" ? "Derecho" : athlete.physicalData?.dominantEye === "L" ? "Izquierdo" : "—"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-gray-dim block">Mano Dominante</span>
-                    <span className="text-white text-xs font-bold">
-                      {athlete.physicalData?.dominantHand === "R" ? "Derecha" : athlete.physicalData?.dominantHand === "L" ? "Izquierda" : "—"}
-                    </span>
+              {athlete.physicalData && (athlete.physicalData.height > 0 || athlete.physicalData.weight > 0) && (
+                <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
+                  <span className="text-[10px] text-yellow-gold font-black tracking-wider uppercase">Datos Físicos</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[9px] text-gray-dim block">Estatura</span>
+                      <span className="text-white text-xs font-bold">{athlete.physicalData?.height || "—"} cm</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-dim block">Peso</span>
+                      <span className="text-white text-xs font-bold">{athlete.physicalData?.weight || "—"} kg</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-2">
                 <span className="text-[10px] text-gray-dim font-black tracking-wider uppercase">Información de Contacto</span>

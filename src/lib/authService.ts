@@ -11,6 +11,7 @@ export interface BowConfig {
   poundage: number;
   drawLength?: number;
   defaultDistance?: number;
+  hand?: "RH" | "LH";
 }
 
 export interface UserProfile {
