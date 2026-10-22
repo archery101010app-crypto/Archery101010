@@ -36,16 +36,17 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
     e.preventDefault();
     setError("");
 
-    if (!fullName.trim() || !nickname.trim() || !birthDate || !city.trim() || !country || !gender) {
+    if (!fullName.trim() || !birthDate || !country || !gender) {
       setError("Por favor completa todos los campos obligatorios.");
       return;
     }
 
     setLoading(true);
     try {
+      const cleanNick = nickname.trim() || user.nickname?.trim() || fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
       const updated = await updateProfile(user.uid, {
         fullName: fullName.trim(),
-        nickname: nickname.trim(),
+        nickname: cleanNick,
         birthDate,
         city: city.trim(),
         country,

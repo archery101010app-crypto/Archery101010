@@ -34,9 +34,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [fullName, setFullName] = useState("");
-  const [nickname, setNickname] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [city, setCity] = useState("");
   const [country, setCountry] = useState("CR");
   const [gender, setGender] = useState("M");
 
@@ -65,7 +63,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   };
 
   const handleRegister = async () => {
-    if (!fullName.trim() || !nickname.trim() || !birthDate || !city.trim()) {
+    if (!fullName.trim() || !birthDate) {
       setError("Completa todos los campos obligatorios");
       return;
     }
@@ -73,13 +71,15 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
     setError("");
 
     try {
+      const cleanFullName = fullName.trim();
+      const autoNickname = cleanFullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
       const user = await registerUser({
         email,
         password,
-        fullName: fullName.trim(),
-        nickname: nickname.trim(),
+        fullName: cleanFullName,
+        nickname: autoNickname,
         birthDate,
-        city: city.trim(),
+        city: "",
         country,
         gender,
         clubId: null,
@@ -208,27 +208,15 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
             >
               <h3 className="text-white text-lg font-bold tracking-wide mb-1">{t("step2")}</h3>
               
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("fullName")} *</label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Ej. José Ángel"
-                    className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("nickname")} *</label>
-                  <input
-                    type="text"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    placeholder="Ej. jose10"
-                    className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
-                  />
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-dim">{t("fullName")} *</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ej. José Ángel"
+                  className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -241,19 +229,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("city")} *</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Ej. San José"
-                    className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs text-gray-dim">{t("country")} *</label>
                   <select
@@ -268,19 +244,19 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     ))}
                   </select>
                 </div>
+              </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("gender")} *</label>
-                  <select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
-                  >
-                    <option value="M" className="bg-black text-white">{t("genderM")}</option>
-                    <option value="F" className="bg-black text-white">{t("genderF")}</option>
-                    <option value="O" className="bg-black text-white">{t("genderO")}</option>
-                  </select>
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-dim">{t("gender")} *</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                >
+                  <option value="M" className="bg-black text-white">{t("genderM")}</option>
+                  <option value="F" className="bg-black text-white">{t("genderF")}</option>
+                  <option value="O" className="bg-black text-white">{t("genderO")}</option>
+                </select>
               </div>
             </motion.div>
           )}

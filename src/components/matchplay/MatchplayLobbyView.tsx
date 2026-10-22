@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UserProfile } from "@/lib/authService";
+import { UserProfile, updateProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2 } from "lucide-react";
+import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
@@ -40,6 +40,7 @@ const RIVAL_LIST = [
   {
     uid: "RIV-1",
     fullName: "Daniela Solano",
+    nickname: "dani_solano",
     country: "CR",
     clubName: "Club Halcones",
     clubLogo: "2",
@@ -51,6 +52,7 @@ const RIVAL_LIST = [
   {
     uid: "RIV-2",
     fullName: "Carlos Ruiz",
+    nickname: "carlos_mx",
     country: "MX",
     clubName: "Nock Archery",
     clubLogo: "3",
@@ -62,6 +64,7 @@ const RIVAL_LIST = [
   {
     uid: "RIV-3",
     fullName: "Laura Archer",
+    nickname: "laura_spain",
     country: "ES",
     clubName: "Real Arquería",
     clubLogo: "1",
@@ -73,6 +76,7 @@ const RIVAL_LIST = [
   {
     uid: "RIV-4",
     fullName: "Sebastián Castro",
+    nickname: "sebas_barebow",
     country: "CR",
     clubName: "Club Halcones",
     clubLogo: "2",
@@ -84,6 +88,7 @@ const RIVAL_LIST = [
   {
     uid: "RIV-5",
     fullName: "Mateo Pérez",
+    nickname: "mateo_flechas",
     country: "CO",
     clubName: "Flechas Andinas",
     clubLogo: "4",
@@ -120,6 +125,29 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
+
+  // Competitor Gamertag / Alias State for Duels
+  const [isEditingAlias, setIsEditingAlias] = useState(false);
+  const [currentAlias, setCurrentAlias] = useState(user.nickname || user.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero");
+
+  useEffect(() => {
+    if (user.nickname) {
+      setCurrentAlias(user.nickname);
+    }
+  }, [user.nickname]);
+
+  const handleSaveAlias = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanAlias = currentAlias.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 15) || "arquero";
+    setCurrentAlias(cleanAlias);
+    setIsEditingAlias(false);
+    try {
+      const updated = await updateProfile(user.uid, { nickname: cleanAlias });
+      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updated } }));
+    } catch (err) {
+      console.error("Error updating matchplay alias:", err);
+    }
+  };
   // Sincronización automática de presencia y cola en el lobby
   useEffect(() => {
     if (!user?.uid) return;
@@ -353,6 +381,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const filteredRivals = realUsers.map((u) => ({
     uid: u.uid || "",
     fullName: u.fullName || "",
+    nickname: u.nickname || (u.fullName ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) : "arquero"),
     email: u.email || "",
     country: u.country || "CR",
     clubName: u.clubName || "Independiente",
@@ -394,6 +423,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const practiceBots = RIVAL_LIST.map((riv) => ({
     uid: riv.uid,
     fullName: riv.fullName,
+    nickname: (riv as any).nickname || "",
     country: riv.country,
     clubName: riv.clubName,
     clubLogo: riv.clubLogo,
@@ -587,6 +617,52 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             Lobby de Competencia 1v1
           </p>
         </div>
+      </div>
+
+      {/* Competitor Gamertag / Alias Card */}
+      <div className="bg-neutral-900/80 border border-purple-500/20 rounded-2xl px-3.5 py-2.5 flex items-center justify-between z-10 shadow-sm backdrop-blur-md">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300 text-xs font-black shrink-0">
+            @
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[9px] text-gray-dim uppercase font-black tracking-wider">Tu Alias para Retos</span>
+            {isEditingAlias ? (
+              <form onSubmit={handleSaveAlias} className="flex items-center gap-1.5 mt-0.5">
+                <input
+                  type="text"
+                  autoFocus
+                  value={currentAlias}
+                  onChange={(e) => setCurrentAlias(e.target.value)}
+                  className="h-7 w-32 bg-neutral-950 border border-purple-500 text-purple-300 font-mono font-bold text-xs px-2 rounded-lg outline-none"
+                  placeholder="alias"
+                />
+                <button
+                  type="submit"
+                  className="h-7 px-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Check size={12} />
+                  <span>Ok</span>
+                </button>
+              </form>
+            ) : (
+              <span className="text-white text-xs font-mono font-black truncate text-purple-300">
+                @{currentAlias}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {!isEditingAlias && (
+          <button
+            type="button"
+            onClick={() => setIsEditingAlias(true)}
+            className="h-7 px-2.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1 shrink-0"
+          >
+            <Edit3 size={11} />
+            <span>Cambiar</span>
+          </button>
+        )}
       </div>
 
       {/* Stats / Intro banner */}
@@ -887,8 +963,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             </div>
                             
                             <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                                {riv.nickname && (
+                                  <span className="text-purple-400 font-mono text-[9px] font-bold">@{riv.nickname}</span>
+                                )}
                                 <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase shrink-0">
                                   {riv.bowConfig.type}
                                 </span>
@@ -948,8 +1027,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         </div>
                         
                         <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-gray-300 text-xs font-medium truncate">{riv.fullName}</span>
+                            {riv.nickname && (
+                              <span className="text-purple-400/80 font-mono text-[9px] font-semibold">@{riv.nickname}</span>
+                            )}
                             <span className="text-[7px] px-1 py-0.2 rounded bg-neutral-950 text-gray-500 font-bold uppercase shrink-0">
                               {riv.bowConfig.type}
                             </span>

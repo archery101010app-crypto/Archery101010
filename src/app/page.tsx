@@ -1035,7 +1035,7 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Blocking Profile Completion Modal */}
-      {user && (!user.nickname?.trim() || !user.fullName?.trim() || !user.birthDate || !user.city?.trim() || !user.country || !user.gender) && (
+      {user && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender) && (
         <ProfileCompletionModal
           user={user}
           onComplete={(updatedUser) => setUser(updatedUser)}

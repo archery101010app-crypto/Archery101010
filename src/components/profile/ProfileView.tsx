@@ -678,7 +678,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder={t("nickname")}
+                placeholder="Alias para Retos (ej. flecha10)"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -724,8 +724,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <span className="text-white font-bold">{user.fullName}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Apodo:</span>
-              <span className="text-white font-bold">{user.nickname || "-"}</span>
+              <span className="text-gray-dim">Alias para Retos:</span>
+              <span className="text-cyan-neon font-mono font-bold">@{user.nickname || "arquero"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-gray-dim">Nacimiento:</span>
