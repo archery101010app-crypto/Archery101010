@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, updateProfile, transferCoachRole, logoutUser, getLoggedUser } from "@/lib/authService";
+import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, getLoggedUser } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -53,11 +53,82 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [city, setCity] = useState(user.city || "");
   const [gender, setGender] = useState(user.gender);
 
-  const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user.bowConfig?.type || "Barebow");
-  const [bowBrand, setBowBrand] = useState(user.bowConfig?.brand || "");
-  const [bowModel, setBowModel] = useState(user.bowConfig?.model || "");
-  const [poundage, setPoundage] = useState(user.bowConfig?.poundage || 35);
-  const [defaultDistance, setDefaultDistance] = useState(user.bowConfig?.defaultDistance || 18);
+  // Multi-Bow Configuration State (Arco #1, Arco #2, Arco #3)
+  const parseInitialBows = (u: UserProfile): BowConfig[] => {
+    if (u.bows && u.bows.length > 0) {
+      return u.bows.map((b, idx) => ({
+        id: b.id || `BOW-${idx + 1}`,
+        name: b.name || (idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`),
+        type: b.type || "Recurve",
+        brand: b.brand || "",
+        model: b.model || "",
+        poundage: b.poundage || 0,
+        drawLength: b.drawLength || 0,
+        defaultDistance: b.defaultDistance || (b.type === "Compound" ? 50 : b.type === "Recurve" ? 70 : 18)
+      }));
+    }
+    if (u.bowConfig) {
+      return [{
+        id: "BOW-1",
+        name: "Arco Principal",
+        type: u.bowConfig.type || "Recurve",
+        brand: u.bowConfig.brand || "",
+        model: u.bowConfig.model || "",
+        poundage: u.bowConfig.poundage || 0,
+        drawLength: u.bowConfig.drawLength || 0,
+        defaultDistance: u.bowConfig.defaultDistance || (u.bowConfig.type === "Compound" ? 50 : u.bowConfig.type === "Recurve" ? 70 : 18)
+      }];
+    }
+    return [{
+      id: "BOW-1",
+      name: "Arco Principal",
+      type: "Recurve",
+      brand: "",
+      model: "",
+      poundage: 0,
+      drawLength: 0,
+      defaultDistance: 70
+    }];
+  };
+
+  const [bowsList, setBowsList] = useState<BowConfig[]>(parseInitialBows(user));
+
+  useEffect(() => {
+    if (!editBow) {
+      setBowsList(parseInitialBows(user));
+    }
+  }, [user.bows, user.bowConfig, editBow]);
+
+  const handleUpdateBow = (index: number, updates: Partial<BowConfig>) => {
+    setBowsList((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], ...updates };
+      return copy;
+    });
+  };
+
+  const handleAddBow = () => {
+    if (bowsList.length >= 3) return;
+    const nextIdx = bowsList.length + 1;
+    setBowsList((prev) => [
+      ...prev,
+      {
+        id: `BOW-${nextIdx}`,
+        name: `Arco #${nextIdx}`,
+        type: "Recurve",
+        brand: "",
+        model: "",
+        poundage: 0,
+        drawLength: 0,
+        defaultDistance: 70
+      }
+    ]);
+  };
+
+  const handleRemoveBow = (index: number) => {
+    if (index === 0) return; // Cannot delete primary bow
+    setBowsList((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const [height, setHeight] = useState(user.physicalData?.height || 175);
   const [weight, setWeight] = useState(user.physicalData?.weight || 70);
@@ -290,19 +361,27 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   const handleSaveBow = async () => {
     try {
+      const cleanedBows: BowConfig[] = bowsList.map((b, idx) => ({
+        id: b.id || `BOW-${idx + 1}`,
+        name: idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`,
+        type: b.type || "Recurve",
+        brand: b.brand?.trim() || (idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`),
+        model: b.model?.trim() || "",
+        poundage: Number(b.poundage) || 0,
+        drawLength: Number(b.drawLength) || 0,
+        defaultDistance: Number(b.defaultDistance) || (b.type === "Compound" ? 50 : b.type === "Recurve" ? 70 : 18)
+      }));
+
+      const primaryBow = cleanedBows[0];
+
       const updated = await updateProfile(user.uid, {
-        bowConfig: {
-          type: bowType,
-          brand: bowBrand,
-          model: bowModel,
-          poundage: Number(poundage),
-          defaultDistance: Number(defaultDistance)
-        }
+        bowConfig: primaryBow,
+        bows: cleanedBows
       });
       onProfileUpdated(updated);
       setEditBow(false);
     } catch (e) {
-      console.error(e);
+      console.error("Error saving bow configuration:", e);
     }
   };
 
@@ -704,83 +783,254 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         )}
       </div>
 
-      {/* SECTION 2: Bow configuration */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("bowConfig")}</h4>
+      {/* SECTION 2: Bow configuration (Arco #1, Arco #2, Arco #3) */}
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-3.5">
+        <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Target size={16} className="text-cyan-neon" />
+            <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">
+              {t("bowConfig")}
+            </h4>
+          </div>
           <button
             onClick={() => {
               if (editBow) handleSaveBow();
               else setEditBow(true);
             }}
-            className="text-xs text-cyan-neon font-bold hover:underline cursor-pointer"
+            className="text-xs text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer bg-cyan-neon/10 hover:bg-cyan-neon/20 px-3 py-1 rounded-xl transition"
           >
             {editBow ? "Guardar" : "Editar"}
           </button>
         </div>
 
         {editBow ? (
-          <div className="flex flex-col gap-3 mt-1">
-            <select
-              value={bowType}
-              onChange={(e) => setBowType(e.target.value as any)}
-              className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-            >
-              <option value="Recurve">Recurve</option>
-              <option value="Compound">Compound</option>
-              <option value="Barebow">Barebow</option>
-            </select>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={bowBrand}
-                onChange={(e) => setBowBrand(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Marca"
-              />
-              <input
-                type="text"
-                value={bowModel}
-                onChange={(e) => setBowModel(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Modelo"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={poundage}
-                onChange={(e) => setPoundage(Number(e.target.value))}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Libras"
-              />
-              <input
-                type="number"
-                value={defaultDistance}
-                onChange={(e) => setDefaultDistance(Number(e.target.value))}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Distancia"
-              />
+          <div className="flex flex-col gap-3.5">
+            {bowsList.map((bow, idx) => {
+              const bowNumber = idx + 1;
+              const isPrimary = idx === 0;
+
+              return (
+                <div
+                  key={bow.id || idx}
+                  className="bg-neutral-950/80 border border-white/10 rounded-2xl p-3.5 md:p-4 flex flex-col gap-3 relative"
+                >
+                  {/* Bow Header */}
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black flex items-center justify-center">
+                        {bowNumber}
+                      </span>
+                      <h5 className="text-white text-xs font-black uppercase tracking-wide">
+                        {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
+                      </h5>
+                    </div>
+
+                    {!isPrimary && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBow(idx)}
+                        className="text-red-rival hover:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 transition flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                        title="Eliminar este arco"
+                      >
+                        <Trash2 size={12} />
+                        <span>Eliminar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tipo de Arco Selector */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                      Tipo de Arco
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(["Recurve", "Compound", "Barebow"] as const).map((typeOption) => {
+                        const isSelected = bow.type === typeOption;
+                        const label = typeOption === "Recurve" ? "Recurvo" : typeOption === "Compound" ? "Compuesto" : "Barebow";
+                        return (
+                          <button
+                            key={typeOption}
+                            type="button"
+                            onClick={() => handleUpdateBow(idx, { type: typeOption })}
+                            className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition border cursor-pointer ${
+                              isSelected
+                                ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                                : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Fila: Marca y Modelo */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                        Marca
+                      </label>
+                      <input
+                        type="text"
+                        value={bow.brand}
+                        onChange={(e) => handleUpdateBow(idx, { brand: e.target.value })}
+                        placeholder="Ej. Hoyt, Mathews"
+                        className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                        Modelo
+                      </label>
+                      <input
+                        type="text"
+                        value={bow.model}
+                        onChange={(e) => handleUpdateBow(idx, { model: e.target.value })}
+                        placeholder="Ej. Satori, TRX"
+                        className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila: Potencia y Apertura */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                        Potencia
+                      </label>
+                      <div className="relative flex items-center">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={bow.poundage || ""}
+                          onChange={(e) => handleUpdateBow(idx, { poundage: e.target.value ? Number(e.target.value) : ("" as any) })}
+                          placeholder="Ej. 38"
+                          className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 pr-10 rounded-xl outline-none focus:border-cyan-neon transition"
+                        />
+                        <span className="absolute right-3 text-[10px] text-gray-dim font-bold pointer-events-none">
+                          lbs
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-gray-dim uppercase font-black tracking-widest">
+                        Apertura
+                      </label>
+                      <div className="relative flex items-center">
+                        <input
+                          type="number"
+                          step="0.25"
+                          value={bow.drawLength || ""}
+                          onChange={(e) => handleUpdateBow(idx, { drawLength: e.target.value ? Number(e.target.value) : ("" as any) })}
+                          placeholder="Ej. 28.5"
+                          className="w-full bg-neutral-900 border border-white/10 text-white text-xs p-2.5 pr-8 rounded-xl outline-none focus:border-cyan-neon transition"
+                        />
+                        <span className="absolute right-3 text-[11px] text-gray-dim font-bold pointer-events-none">
+                          &quot;
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Botón para desplegar Arco #2 (si solo hay 1) */}
+            {bowsList.length === 1 && (
+              <button
+                type="button"
+                onClick={handleAddBow}
+                className="w-full py-3 rounded-2xl border border-dashed border-cyan-neon/40 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>+ Agregar Arco #2</span>
+              </button>
+            )}
+
+            {/* Botón para desplegar Arco #3 (si hay 2) */}
+            {bowsList.length === 2 && (
+              <button
+                type="button"
+                onClick={handleAddBow}
+                className="w-full py-3 rounded-2xl border border-dashed border-cyan-neon/40 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>+ Agregar Arco #3</span>
+              </button>
+            )}
+
+            {/* Botones de Acción en Modo Edición */}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleSaveBow}
+                className="flex-1 py-3 bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow-glow-cyan cursor-pointer"
+              >
+                Guardar Arcos
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBowsList(parseInitialBows(user));
+                  setEditBow(false);
+                }}
+                className="px-4 py-3 bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2 mt-1">
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Tipo de arco:</span>
-              <span className="text-white font-bold">{user.bowConfig?.type || "N/A"}</span>
-            </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Marca/Modelo:</span>
-              <span className="text-white font-bold">{user.bowConfig?.brand || "Generic"} {user.bowConfig?.model || "Model"}</span>
-            </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Poundaje:</span>
-              <span className="text-white font-bold">{user.bowConfig?.poundage || 0} lbs</span>
-            </div>
-            <div className="flex justify-between text-xs py-1">
-              <span className="text-gray-dim">Distancia predeterminada:</span>
-              <span className="text-white font-bold">{user.bowConfig?.defaultDistance || 0}m</span>
-            </div>
+          <div className="flex flex-col gap-2.5">
+            {bowsList.map((bow, idx) => {
+              const bowNumber = idx + 1;
+              const isPrimary = idx === 0;
+              const typeName = bow.type === "Recurve" ? "Recurvo" : bow.type === "Compound" ? "Compuesto" : "Barebow";
+
+              return (
+                <div
+                  key={bow.id || idx}
+                  className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3.5 flex flex-col gap-2.5"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-white text-xs font-black uppercase tracking-wide flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded-full bg-cyan-neon/10 text-cyan-neon text-[9px] font-black flex items-center justify-center">
+                        {bowNumber}
+                      </span>
+                      {isPrimary ? "Arco #1 (Principal)" : `Arco #${bowNumber}`}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-white/5 border border-white/10 text-cyan-neon">
+                      {typeName}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-gray-dim">Marca y Modelo:</span>
+                      <span className="text-white font-bold truncate">
+                        {bow.brand ? `${bow.brand} ${bow.model || ""}` : "Sin especificar"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-gray-dim">Potencia / Apertura:</span>
+                      <span className="text-white font-bold">
+                        {bow.poundage ? `${bow.poundage} lbs` : "-"}
+                        {bow.drawLength ? ` • ${bow.drawLength}"` : ""}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {bowsList.length < 3 && (
+              <p className="text-[10px] text-gray-dim text-center pt-1 italic">
+                {bowsList.length === 1 
+                  ? '¿Tienes otro arco? Toca "Editar" para registrar tu Arco #2.' 
+                  : '¿Tienes un tercer arco? Toca "Editar" para registrar tu Arco #3.'}
+              </p>
+            )}
           </div>
         )}
       </div>

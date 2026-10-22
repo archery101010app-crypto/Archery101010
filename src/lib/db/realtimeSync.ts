@@ -44,6 +44,7 @@ function isProfileFunctionallyDifferent(p1: UserProfile | null, p2: UserProfile 
   }
 
   if (JSON.stringify(p1.bowConfig) !== JSON.stringify(p2.bowConfig)) return true;
+  if (JSON.stringify(p1.bows) !== JSON.stringify(p2.bows)) return true;
   if (JSON.stringify(p1.physicalData) !== JSON.stringify(p2.physicalData)) return true;
 
   return false;

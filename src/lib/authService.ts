@@ -2,6 +2,17 @@ import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue,
 import { db } from "./firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
+export interface BowConfig {
+  id?: string;
+  name?: string;
+  type: "Recurve" | "Compound" | "Barebow";
+  brand: string;
+  model: string;
+  poundage: number;
+  drawLength?: number;
+  defaultDistance?: number;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -11,13 +22,8 @@ export interface UserProfile {
   country: string;
   city: string;
   gender: string;
-  bowConfig?: {
-    type: "Recurve" | "Compound" | "Barebow";
-    brand: string;
-    model: string;
-    poundage: number;
-    defaultDistance: number;
-  };
+  bowConfig?: BowConfig;
+  bows?: BowConfig[];
   physicalData?: {
     height: number;
     weight: number;
