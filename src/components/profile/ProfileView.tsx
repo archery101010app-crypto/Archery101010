@@ -132,8 +132,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   const [height, setHeight] = useState(user.physicalData?.height || 175);
   const [weight, setWeight] = useState(user.physicalData?.weight || 70);
-  const [dominantEye, setDominantEye] = useState<"L" | "R">(user.physicalData?.dominantEye || "R");
-  const [dominantHand, setDominantHand] = useState<"L" | "R">(user.physicalData?.dominantHand || "R");
+  const [dominantHand, setDominantHand] = useState<"L" | "R">(user.physicalData?.dominantHand === "L" ? "L" : "R");
+
+  useEffect(() => {
+    if (!editPhysical) {
+      setHeight(user.physicalData?.height || 175);
+      setWeight(user.physicalData?.weight || 70);
+      setDominantHand(user.physicalData?.dominantHand === "L" ? "L" : "R");
+    }
+  }, [user.physicalData, editPhysical]);
 
   // Notification Toggles
   const [pushNotif, setPushNotif] = useState(true);
@@ -389,16 +396,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     try {
       const updated = await updateProfile(user.uid, {
         physicalData: {
-          height: Number(height),
-          weight: Number(weight),
-          dominantEye,
-          dominantHand
+          height: Number(height) || 0,
+          weight: Number(weight) || 0,
+          dominantHand,
+          dominantEye: user.physicalData?.dominantEye || (dominantHand === "L" ? "L" : "R")
         }
       });
       onProfileUpdated(updated);
       setEditPhysical(false);
     } catch (e) {
-      console.error(e);
+      console.error("Error saving physical data:", e);
     }
   };
 
@@ -1026,76 +1033,132 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         )}
       </div>
 
-      {/* SECTION 3: Physical Data */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("physicalData")}</h4>
+      {/* SECTION 3: Physical Data (Estatura, Peso, Derecho o Zurdo) */}
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-4">
+        {/* Header */}
+        <div className="flex justify-between items-center border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            <User size={18} className="text-cyan-neon" />
+            <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">
+              {t("physicalData")}
+            </h4>
+          </div>
           <button
+            type="button"
             onClick={() => {
               if (editPhysical) handleSavePhysical();
               else setEditPhysical(true);
             }}
-            className="text-xs text-cyan-neon font-bold hover:underline cursor-pointer"
+            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
           >
             {editPhysical ? "Guardar" : "Editar"}
           </button>
         </div>
 
         {editPhysical ? (
-          <div className="flex flex-col gap-3 mt-1">
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={height}
-                onChange={(e) => setHeight(Number(e.target.value))}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Altura (cm)"
-              />
-              <input
-                type="number"
-                value={weight}
-                onChange={(e) => setWeight(Number(e.target.value))}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Peso (kg)"
-              />
+          <div className="flex flex-col gap-3.5">
+            {/* Fila 1: Estatura y Peso */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+                  Estatura
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    step="1"
+                    value={height || ""}
+                    onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : ("" as any))}
+                    className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-11 rounded-xl outline-none transition placeholder:text-white/20"
+                    placeholder="175"
+                  />
+                  <span className="absolute right-3.5 text-[11px] text-cyan-neon font-black pointer-events-none uppercase">
+                    cm
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+                  Peso
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={weight || ""}
+                    onChange={(e) => setWeight(e.target.value ? Number(e.target.value) : ("" as any))}
+                    className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-11 rounded-xl outline-none transition placeholder:text-white/20"
+                    placeholder="70"
+                  />
+                  <span className="absolute right-3.5 text-[11px] text-cyan-neon font-black pointer-events-none uppercase">
+                    kg
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={dominantEye}
-                onChange={(e) => setDominantEye(e.target.value as any)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-              >
-                <option value="L">Ojo: Izquierdo (L)</option>
-                <option value="R">Ojo: Derecho (R)</option>
-              </select>
-              <select
-                value={dominantHand}
-                onChange={(e) => setDominantHand(e.target.value as any)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-              >
-                <option value="L">Mano: Izquierda (L)</option>
-                <option value="R">Mano: Derecha (R)</option>
-              </select>
+
+            {/* Fila 2: Derecho o Zurdo */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+                Derecho o Zurdo
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDominantHand("R")}
+                  className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                    dominantHand === "R"
+                      ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                      : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
+                  }`}
+                >
+                  Derecho
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDominantHand("L")}
+                  className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                    dominantHand === "L"
+                      ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                      : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
+                  }`}
+                >
+                  Zurdo
+                </button>
+              </div>
             </div>
+
+            {/* Botón Guardar Rectangular */}
+            <button
+              type="button"
+              onClick={handleSavePhysical}
+              className="h-12 w-full rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition shadow-glow-cyan cursor-pointer active:scale-[0.99] mt-1"
+            >
+              <Check size={16} strokeWidth={3} />
+              <span>Guardar Datos Físicos</span>
+            </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-2 mt-1">
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Estatura / Peso:</span>
-              <span className="text-white font-bold">
-                {user.physicalData?.height ?? "--"} cm / {user.physicalData?.weight ?? "--"} kg
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
+              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Estatura</span>
+              <span className="text-white text-xs font-bold truncate mt-0.5">
+                {user.physicalData?.height ? `${user.physicalData.height} cm` : "--"}
               </span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-gray-dim">Ojo dominante:</span>
-              <span className="text-white font-bold">
-                {user.physicalData?.dominantEye === "L" ? "Izquierdo" : user.physicalData?.dominantEye === "R" ? "Derecho" : "--"}
+
+            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
+              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Peso</span>
+              <span className="text-white text-xs font-bold truncate mt-0.5">
+                {user.physicalData?.weight ? `${user.physicalData.weight} kg` : "--"}
               </span>
             </div>
-            <div className="flex justify-between text-xs py-1">
-              <span className="text-gray-dim">Mano dominante:</span>
-              <span className="text-white font-bold">
-                {user.physicalData?.dominantHand === "L" ? "Izquierda" : user.physicalData?.dominantHand === "R" ? "Derecha" : "--"}
+
+            <div className="h-14 bg-neutral-950/70 border border-white/10 rounded-2xl px-3.5 flex flex-col justify-center shadow-md">
+              <span className="text-[9px] text-gray-dim uppercase font-black tracking-widest">Lateralidad</span>
+              <span className="text-cyan-neon text-xs font-black uppercase tracking-wider truncate mt-0.5">
+                {user.physicalData?.dominantHand === "L" ? "Zurdo" : "Derecho"}
               </span>
             </div>
           </div>

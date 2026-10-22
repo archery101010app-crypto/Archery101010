@@ -27,7 +27,7 @@ export interface UserProfile {
   physicalData?: {
     height: number;
     weight: number;
-    dominantEye: "L" | "R";
+    dominantEye?: "L" | "R";
     dominantHand: "L" | "R";
   };
   clubId: string | null;
