@@ -35,7 +35,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
 
   const tabsConfig = [
     { id: "DASHBOARD", label: "Dashboard", icon: BarChart3, component: AdminDashboardTab },
-    { id: "USERS", label: "Usuarios", icon: Users, component: AdminUsersTab },
+    { id: "USERS", label: "Arqueros Inscritos", icon: Users, component: AdminUsersTab },
     { id: "CAMPAIGNS", label: "Campañas", icon: Megaphone, component: AdminCampaignsTab },
     { id: "SUBSCRIPTIONS", label: "Suscripciones", icon: CreditCard, component: AdminSubscriptionsTab },
     { id: "SETTINGS", label: "Configuración", icon: Settings, component: AdminSettingsTab }

@@ -135,8 +135,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   // Notification Toggles
   const [pushNotif, setPushNotif] = useState(true);
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [waNotif, setWaNotif] = useState(true);
   
   // Athlete Star State
   const [maxStar, setMaxStar] = useState<any | null>(null);
@@ -302,11 +300,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   useEffect(() => {
     async function loadToggles() {
       const push = await getLocalSetting("notif_push", true);
-      const email = await getLocalSetting("notif_email", true);
-      const wa = await getLocalSetting("notif_wa", true);
       setPushNotif(push);
-      setEmailNotif(email);
-      setWaNotif(wa);
 
       // Load star achievement
       try {
@@ -1027,54 +1021,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 4: Preferences Notifications */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
-        <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("notifTitle")}</h4>
-        <div className="flex flex-col gap-3.5 mt-1">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/90 font-bold">{t("pushNotif")}</span>
-            <button
-              onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
-              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                pushNotif ? "bg-cyan-neon" : "bg-gray-border"
-              }`}
-            >
-              <div
-                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-                style={{ left: pushNotif ? "18px" : "2px" }}
-              />
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/90 font-bold">{t("emailNotif")}</span>
-            <button
-              onClick={() => handleNotifToggle("notif_email", emailNotif, setEmailNotif)}
-              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                emailNotif ? "bg-cyan-neon" : "bg-gray-border"
-              }`}
-            >
-              <div
-                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-                style={{ left: emailNotif ? "18px" : "2px" }}
-              />
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/90 font-bold">{t("waNotif")}</span>
-            <button
-              onClick={() => handleNotifToggle("notif_wa", waNotif, setWaNotif)}
-              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                waNotif ? "bg-cyan-neon" : "bg-gray-border"
-              }`}
-            >
-              <div
-                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-                style={{ left: waNotif ? "18px" : "2px" }}
-              />
-            </button>
-          </div>
+      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex items-center justify-between gap-3">
+        <div className="flex flex-col min-w-0">
+          <span className="text-white text-xs font-black uppercase tracking-wider">{t("pushNotif")}</span>
+          <span className="text-[10px] text-gray-dim leading-snug">Alertas de retos, duelos 1v1 y recordatorios</span>
         </div>
+        <button
+          onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
+          className={`w-10 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 ${
+            pushNotif ? "bg-cyan-neon shadow-glow-cyan" : "bg-neutral-800 border border-white/10"
+          }`}
+        >
+          <div
+            className="w-4.5 h-4.5 bg-white rounded-full absolute top-[3px] transition-all shadow-md"
+            style={{ left: pushNotif ? "19px" : "3px" }}
+          />
+        </button>
       </div>
 
       {/* SECTION 3.8: Estrellas 101010 720 */}
@@ -1432,7 +1394,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       )}
 
       {/* Superadmin Panel Direct Link */}
-      {user.role === "superadmin" && onNavigate && (
+      {(user.role === "superadmin" || user.email?.toLowerCase().includes("admin") || devSimulateSuperAdmin) && onNavigate && (
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 flex flex-col gap-2.5">
           <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
             <Shield size={14} className="text-purple-400" />

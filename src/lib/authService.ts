@@ -43,6 +43,7 @@ export interface UserProfile {
   password?: string;
   profileSetupCompleted?: boolean;
   lastActiveAt?: number;
+  createdAt?: number;
 }
 
 // Emulates real backend Firebase calls using local DB to support zero-config developer onboarding
@@ -319,7 +320,8 @@ export async function registerUser(
       weight: 70,
       dominantEye: "R",
       dominantHand: "R"
-    }
+    },
+    createdAt: Date.now()
   };
 
   // Save to database lists
