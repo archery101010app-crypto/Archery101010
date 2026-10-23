@@ -1408,24 +1408,29 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </div>
             </div>
 
-            {/* Action buttons (Undo & Miss) */}
-            <div className="flex flex-col gap-2.5 px-4 z-10">
-              <div className="flex justify-center items-center gap-3">
+            {/* Action buttons (Undo, Miss & Confirm End) */}
+            <div className="flex flex-col gap-2.5 px-3 z-10 mt-1">
+              <div className="flex items-center gap-2.5 w-full">
                 <button
                   onClick={handleBackspace}
                   disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
-                  className="flex-1 py-3 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  className="flex-1 py-3.5 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 active:scale-95"
                 >
-                  <Undo2 size={13} />
+                  <Undo2 size={14} />
                   <span>Deshacer</span>
                 </button>
                 <button
-                  onClick={() => {
-                    handleScoreInput("M");
-                  }}
-                  className="flex-1 py-3 rounded-xl border border-red-rival/30 bg-red-rival/5 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/10 transition"
+                  onClick={() => handleScoreInput("M")}
+                  className="flex-1 py-3.5 rounded-xl border border-red-rival/30 bg-red-rival/10 text-red-rival font-extrabold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-95"
                 >
-                  Fallo (Miss)
+                  Fallo (M)
+                </button>
+                <button
+                  onClick={handleConfirmEnd}
+                  className="flex-1.5 py-3.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan hover:brightness-110 transition active:scale-95 cursor-pointer"
+                >
+                  <span>Confirmar</span>
+                  <ArrowRight size={14} />
                 </button>
               </div>
             </div>
@@ -1512,7 +1517,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border-2 border-yellow-gold text-yellow-gold font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,242,0,0.15)] hover:bg-yellow-gold/10 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-yellow-gold/80 bg-yellow-gold/10 text-yellow-gold font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(255,242,0,0.12)] hover:bg-yellow-gold/20 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1520,7 +1525,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Backspace */}
               <button
                 onClick={handleBackspace}
-                className="py-3 rounded-xl border border-gray-border bg-neutral-900 text-gray-dim font-bold text-sm flex items-center justify-center cursor-pointer hover:text-white hover:bg-neutral-850 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white hover:bg-neutral-850 active:scale-95 transition"
               >
                 ⌫
               </button>
@@ -1530,7 +1535,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border-2 border-red-rival text-red-rival font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.15)] hover:bg-red-rival/10 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-red-rival/80 bg-red-rival/10 text-red-rival font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.12)] hover:bg-red-rival/20 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1541,7 +1546,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border-2 border-blue-500 text-blue-400 font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(59,130,246,0.15)] hover:bg-blue-500/10 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-blue-500/80 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(59,130,246,0.12)] hover:bg-blue-500/20 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1552,7 +1557,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border-2 border-neutral-700 text-neutral-400 font-extrabold text-sm flex items-center justify-center cursor-pointer hover:bg-neutral-800/40 hover:text-white active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900/80 text-neutral-300 font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1563,7 +1568,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3 rounded-xl border-2 border-white text-white font-extrabold text-sm flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:bg-white/10 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-white/50 bg-white/5 text-white font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.08)] hover:bg-white/15 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1572,7 +1577,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Miss */}
               <button
                 onClick={() => handleScoreInput("M")}
-                className="col-span-2 py-3 rounded-xl border-2 border-neutral-500 text-neutral-400 font-extrabold text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-500/10 hover:text-neutral-200 active:scale-95 transition"
+                className="col-span-2 py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900 text-neutral-400 font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-neutral-200 active:scale-95 transition"
               >
                 Miss (M)
               </button>
@@ -1580,9 +1585,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Confirm Round/End */}
               <button
                 onClick={handleConfirmEnd}
-                className="col-span-2 py-3 rounded-xl bg-gradient-to-br from-cyan-brand to-cyan-neon text-black font-extrabold text-xs flex items-center justify-center uppercase cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition"
+                className="col-span-2 py-3.5 min-h-[48px] rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs flex items-center justify-center uppercase cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition gap-1.5"
               >
                 <span>Confirmar End</span>
+                <ArrowRight size={14} />
               </button>
             </div>
           </div>
@@ -1605,28 +1611,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         </div>
       )}
 
-      {/* Quick navigation bottom options for manual confirms */}
-      {mode === "TARGET" && (
-        <div className="flex justify-between items-center gap-4 mt-4">
-          <button
-            onClick={() => {
-              handleBackspace();
-            }}
-            className="flex-1 py-3 rounded-xl border border-gray-border text-gray-dim font-bold text-xs flex items-center justify-center gap-1 hover:text-white transition cursor-pointer"
-          >
-            <span>Retroceder</span>
-          </button>
-          <button
-            onClick={() => {
-              handleConfirmEnd();
-            }}
-            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan cursor-pointer"
-          >
-            <span>Confirmar End</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      )}
+
 
       {/* MODAL: Post-session Summary Notes (Final Save screen) */}
       <AnimatePresence>

@@ -477,11 +477,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       const bowCode = customBow === "Compound" ? "C" : customBow === "Recurve" ? "R" : "B";
       const generatedCode = `INV-${bowCode}${customDistance}-${codeSuffix}`;
       
-      const shareUrl = typeof window !== "undefined" 
+      const shareUrl = typeof window !== "undefined" && !window.location.origin.includes("localhost")
         ? `${window.location.origin}?join=${generatedCode}`
-        : `https://archery101010.web.app?join=${generatedCode}`;
+        : `https://archery101010-c0bb4.web.app?join=${generatedCode}`;
 
-      const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010! Formato: ${customBow} a ${customDistance}m. Ingresa el código "${generatedCode}" en la sección de Duelos, o haz clic en este enlace para unirte: ${shareUrl}`;
+      const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010!\n\n🏹 Formato: ${customBow} a ${customDistance}m\n🔑 Código: ${generatedCode}\n\n👉 Toca aquí para unirte al duelo en vivo:\n${shareUrl}`;
 
       // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
       setDoc(doc(db, "active_duels", generatedCode), {
@@ -1274,13 +1274,24 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                 <div className="grid grid-cols-2 gap-2 w-full mb-3">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      if (typeof navigator !== "undefined" && navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: "Duelo de Eliminación - Archery 101010",
+                            text: generatedInvite.text
+                          });
+                          return;
+                        } catch (e) {
+                          // Fallback to direct WhatsApp web/app link if dismissed or failed
+                        }
+                      }
                       const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(generatedInvite.text)}`;
                       window.open(waUrl, "_blank");
                     }}
-                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1"
+                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
                   >
-                    <span>WhatsApp</span>
+                    <span>Compartir / WhatsApp</span>
                   </button>
                   <button
                     onClick={() => {
