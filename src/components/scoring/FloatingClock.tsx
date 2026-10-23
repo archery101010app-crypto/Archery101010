@@ -312,13 +312,26 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
           >
             {/* Top Toolbar */}
             <div className="flex justify-between items-center w-full">
-              <span className="text-white/60 font-black text-xs tracking-widest uppercase">
-                Archery 101010 Timer
-              </span>
+              <div 
+                className="flex items-center gap-1.5 select-none"
+                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              >
+                <span className="text-white text-xs sm:text-sm font-black tracking-wider uppercase">
+                  ARCHERY
+                </span>
+                <div className="flex items-center tracking-tight font-extrabold text-xs sm:text-sm">
+                  <span className="text-cyan-neon drop-shadow-[0_0_8px_rgba(0,191,255,0.45)]">10</span>
+                  <span className="text-red-rival drop-shadow-[0_0_8px_rgba(255,0,0,0.35)]">10</span>
+                  <span className="text-yellow-gold drop-shadow-[0_0_8px_rgba(255,229,0,0.35)]">10</span>
+                </div>
+                <span className="text-white/80 text-[11px] sm:text-xs font-black tracking-widest uppercase pl-0.5">
+                  TIMER
+                </span>
+              </div>
               <button
                 onClick={() => setIsOverlayOpen(false)}
                 aria-label="Minimizar reloj"
-                className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 transition"
+                className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 active:scale-95 transition"
               >
                 <Minimize2 size={20} />
               </button>
