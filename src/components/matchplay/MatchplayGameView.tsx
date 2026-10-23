@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle, RefreshCw, Share2 } from "lucide-react";
 import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
@@ -1707,8 +1707,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setCurrentArrow(nextArrow);
 
     // Haptic vibration feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(40);
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      if (value === "10" || value === "X") {
+        navigator.vibrate([25, 40, 35]); // Celebratory double pulse
+      } else if (value === "M") {
+        navigator.vibrate([45, 30, 45]);
+      } else {
+        navigator.vibrate(20);
+      }
     }
 
     // Trigger simulated rival shot or send via WebRTC
@@ -1740,6 +1746,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const handleUndo = () => {
     if (rivalThinking || duelFinished || validationPhase !== "IDLE") return;
 
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+
     if (isShootOff) {
       setUserShootOffShot(null);
       if (isFriendDuel) {
@@ -1770,6 +1780,43 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         setRivalTiros(updatedRivalTiros);
       }
     }
+  };
+
+  // WhatsApp Duel Result Sharing (Android Web Share API + Direct URL fallback)
+  const handleShareDuelWhatsApp = async () => {
+    const userTotal = userTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0);
+    const rivalTotal = rivalTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0);
+    const outcomeEmoji = winner === "USER" ? "🏆" : winner === "RIVAL" ? "🥈" : "🤝";
+    const outcomeText = winner === "USER" ? "¡VICTORIA!" : winner === "RIVAL" ? "Derrota" : "Empate";
+
+    const message = 
+      `⚔️ *DUELO 1v1 MATCHPLAY - ARCHERY 101010*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `${outcomeEmoji} *Resultado:* ${outcomeText}\n` +
+      `🏹 *Formato:* ${config.bowType} · ${config.distance}m\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎯 *${user.fullName || "Tú"}:* ${userTotal} pts ${!isCompound ? `(${userSetPoints} SP)` : ""}\n` +
+      `🎯 *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🔥 *¿Quieres retarme o jugar la revancha?*\n` +
+      `📲 Entra aquí: https://archery101010-c0bb4.web.app`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Duelo 1v1 - Archery 101010`,
+          text: message,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.error("Share error:", err);
+        }
+      }
+    }
+
+    const encoded = encodeURIComponent(message);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
   };
 
   const handleBackspace = () => {
@@ -3378,12 +3425,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 </div>
               </div>
 
-              <button
-                onClick={handleSaveAndExit}
-                className="w-full py-3.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_20px_rgba(168,85,247,0.2)] text-center font-black"
-              >
-                Guardar y Volver a Dashboard
-              </button>
+              <div className="flex flex-col gap-2.5 w-full">
+                <button
+                  onClick={handleShareDuelWhatsApp}
+                  className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition active:scale-95 cursor-pointer"
+                >
+                  <Share2 size={16} />
+                  <span>Compartir Resultado por WhatsApp</span>
+                </button>
+                <button
+                  onClick={handleSaveAndExit}
+                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_20px_rgba(168,85,247,0.2)] text-center font-black"
+                >
+                  Guardar y Volver a Dashboard
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

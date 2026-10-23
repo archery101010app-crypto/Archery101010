@@ -7,7 +7,7 @@ import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting,
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2 } from "lucide-react";
+import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2 } from "lucide-react";
 import confetti from "canvas-confetti";
 
 interface ScoringViewProps {
@@ -280,9 +280,44 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return runningSum;
   };
 
+  // Haptic tactile vibration feedback helper
+  const triggerHaptic = (type: "arrow" | "gold" | "undo" | "confirm" | "miss") => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        switch (type) {
+          case "gold":
+            navigator.vibrate([25, 40, 35]); // Celebratory double pulse for 10 or X
+            break;
+          case "miss":
+            navigator.vibrate([45, 30, 45]); // Distinct buzz for Miss (M)
+            break;
+          case "arrow":
+            navigator.vibrate(20); // Crisp physical click
+            break;
+          case "undo":
+            navigator.vibrate(30); // Soft rumble
+            break;
+          case "confirm":
+            navigator.vibrate([35, 45, 35]); // Confirmation pulse
+            break;
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+  };
+
   // Keyboard tactile touch event handler
   const handleScoreInput = (value: string) => {
     if (currentEndIdx >= config.endsCount) return;
+
+    if (value === "X" || value === "10") {
+      triggerHaptic("gold");
+    } else if (value === "M") {
+      triggerHaptic("miss");
+    } else {
+      triggerHaptic("arrow");
+    }
 
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
@@ -312,6 +347,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const executeConfirmEnd = () => {
+    triggerHaptic("confirm");
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
       newEnds[currentEndIdx].note = endNote;
@@ -363,6 +399,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     setCurrentEndIdx(targetEnd);
     setCurrentArrowIdx(targetArrow);
+    triggerHaptic("undo");
 
     // Clear the impact marker independently (no nested setState)
     setImpacts((prev) =>
@@ -379,6 +416,70 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       });
       return newEnds;
     });
+  };
+
+  // WhatsApp Scorecard Sharing (Android Web Share API + Direct URL fallback)
+  const handleShareScorecardWhatsApp = async () => {
+    const totalScore = calculateTotalScore();
+    const maxScore = config.maxScore || (config.endsCount * config.arrowsPerEnd * 10);
+    const pct = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    
+    let countX = 0;
+    let count10 = 0;
+    let totalArrows = 0;
+    
+    ends.forEach((end) => {
+      end.arrows.forEach((a) => {
+        if (a === "X") { countX++; count10++; totalArrows++; }
+        else if (a === "10") { count10++; totalArrows++; }
+        else if (a !== "") { totalArrows++; }
+      });
+    });
+
+    const avgPerArrow = totalArrows > 0 ? (totalScore / totalArrows).toFixed(2) : "0.0";
+
+    const endsDetail = ends
+      .map((e, idx) => {
+        const valid = e.arrows.filter((a) => a !== "");
+        if (valid.length === 0) return null;
+        const endSum = valid.reduce((s, a) => s + getScoreValue(a), 0);
+        return `• End ${idx + 1}: ${valid.join(", ")}  →  *${endSum}* pts`;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    const message = 
+      `🎯 *PLANILLA OFICIAL ARCHERY 101010*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `👤 *Arquero:* ${user.fullName || "Arquero"}\n` +
+      `🏹 *Arco:* ${config.bowType || user.bowConfig?.type || "Barebow"}\n` +
+      `📏 *Modalidad:* ${config.format} · ${config.distance}m\n` +
+      `🎯 *Flechas Tiradas:* ${totalArrows}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🏆 *PUNTUACIÓN TOTAL:* *${totalScore}* / ${maxScore} pts (*${pct}%*)\n` +
+      `⭐ *10s:* ${count10} | *Xs:* ${countX}\n` +
+      `📊 *Promedio/Flecha:* ${avgPerArrow} pts\n` +
+      (endsDetail ? `\n📋 *Desglose de Tiradas:*\n${endsDetail}\n` : "") +
+      (sessionNote ? `\n📝 *Notas:* ${sessionNote}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📲 *App Oficial:* https://archery101010-c0bb4.web.app`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Planilla de Tiro - ${user.fullName}`,
+          text: message,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.error("Share error:", err);
+        }
+      }
+    }
+
+    const encoded = encodeURIComponent(message);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
   };
 
   // Helper to convert client coordinates to relative SVG percent coordinates
@@ -1721,15 +1822,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Action buttons */}
               <div className="flex flex-col gap-2.5 mt-2">
                 <button
+                  onClick={handleShareScorecardWhatsApp}
+                  className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition active:scale-95 cursor-pointer"
+                >
+                  <Share2 size={16} />
+                  <span>Compartir Planilla por WhatsApp</span>
+                </button>
+                <button
                   onClick={handleFinishAndSave}
-                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-black text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
                 >
                   <Save size={15} />
                   <span>Guardar Entrenamiento</span>
                 </button>
                 <button
                   onClick={() => setIsFinishing(false)}
-                  className="w-full py-3.5 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                 >
                   Seguir Tirando
                 </button>
