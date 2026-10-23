@@ -696,8 +696,8 @@ export default function Home() {
   // Calculate dynamic main padding top based on active ads and safe areas.
   const hasBanner = activeBanner !== null;
   const paddingTopStyle = hasBanner
-    ? "calc(8rem + env(safe-area-inset-top))"
-    : "calc(3.25rem + env(safe-area-inset-top))";
+    ? "calc(8.5rem + env(safe-area-inset-top))"
+    : "calc(4.75rem + env(safe-area-inset-top))";
 
   const handleToggleCoachViewMode = (val: boolean) => {
     setCoachViewMode(val);
@@ -731,7 +731,7 @@ export default function Home() {
       {/* Screen Router Container */}
       <main 
         ref={mainRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-24 px-3 sm:px-4 transition-[padding-top] duration-300 ease-in-out relative" 
+        className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-28 px-3.5 sm:px-5 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
         {currentScreen === "HOME" && (

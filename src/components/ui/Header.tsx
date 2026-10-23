@@ -59,7 +59,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-3 sm:px-5 flex items-center justify-between z-40 max-w-full overflow-hidden">
+    <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-4 sm:px-6 flex items-center justify-between z-40 max-w-full overflow-hidden">
       {/* Brand logo compact */}
       <div className="flex items-center gap-2 select-none min-w-0">
         <div className="flex items-baseline gap-1">

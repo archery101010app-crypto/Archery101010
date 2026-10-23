@@ -44,7 +44,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
   );
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-[340px]">
+    <div className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-[340px]">
       <div className="bg-neutral-900/85 backdrop-blur-xl rounded-full border border-white/10 px-5 py-2.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
         {uniqueItems.map((item) => {
           const Icon = item.icon;

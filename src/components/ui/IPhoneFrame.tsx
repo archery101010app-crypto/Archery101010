@@ -23,7 +23,7 @@ export default function IPhoneFrame({ children }: { children: React.ReactNode })
         <div className="ambient-bg" />
 
         {/* Responsive Content Area */}
-        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col relative px-3 sm:px-6 md:px-8 overflow-x-hidden">
+        <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col relative px-4 sm:px-6 md:px-8 overflow-x-hidden">
           {children}
         </div>
       </div>
