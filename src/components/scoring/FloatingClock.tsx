@@ -1,9 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCw, Minimize2, Square, X, Clock } from "lucide-react";
+import { Play, Pause, RotateCw, Minimize2, Square, X, Clock, Volume2, VolumeX, AlertTriangle, Radio } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { 
+  initWAAudio, 
+  playWA2Beeps, 
+  playWA1Beep, 
+  playWA3Beeps, 
+  playWA5EmergencyBeeps, 
+  playWAWarning30s, 
+  playWATestTone, 
+  WASoundMode 
+} from "@/lib/audio/waAudioSignals";
 
 interface FloatingClockProps {
   onClockDisabledChange?: (disabled: boolean) => void;
@@ -16,6 +26,8 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   // Config
   const [prepTime, setPrepTime] = useState(10);
   const [shootTime, setShootTime] = useState(120);
+  const [soundMode, setSoundMode] = useState<WASoundMode>("horn");
+  const [enableVoice, setEnableVoice] = useState(true);
   
   // State
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
@@ -27,7 +39,6 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   const [totalPhaseTime, setTotalPhaseTime] = useState(10);
 
   // Audio Context Ref
-  const audioCtxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load presets from localStorage on mount
@@ -35,8 +46,16 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     if (typeof window !== "undefined") {
       const savedPrep = localStorage.getItem("relojSegsEntrada");
       const savedShoot = localStorage.getItem("relojSegsTiro");
+      const savedMode = localStorage.getItem("relojSoundMode") as WASoundMode;
+      const savedVoice = localStorage.getItem("relojVoice");
       if (savedPrep) setPrepTime(Number(savedPrep));
       if (savedShoot) setShootTime(Number(savedShoot));
+      if (savedMode && ["horn", "whistle", "mute"].includes(savedMode)) {
+        setSoundMode(savedMode);
+      }
+      if (savedVoice !== null) {
+        setEnableVoice(savedVoice === "true");
+      }
     }
   }, []);
 
@@ -52,77 +71,33 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     }
   }, [timeLeft, phase, isActive, onTimeUpdate]);
 
-  // Audio context initializer
-  const initAudio = () => {
-    if (!audioCtxRef.current) {
-      try {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      } catch (e) {
-        console.error("Web Audio API not supported", e);
-      }
-    }
-    if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume();
-    }
-  };
-
-  // Web Audio Synth Beeper
-  const beep = (freq: number, duration: number, volume: number) => {
-    initAudio();
-    const ctx = audioCtxRef.current;
-    if (!ctx) return;
-
-    try {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      osc.frequency.value = freq;
-      osc.type = "square";
-      const now = ctx.currentTime;
-
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(volume, now + 0.03);
-      gainNode.gain.setValueAtTime(volume, now + duration - 0.06);
-      gainNode.gain.linearRampToValueAtTime(0, now + duration);
-
-      osc.start(now);
-      osc.stop(now + duration);
-    } catch (e) {
-      console.warn("Beep synthesis failed", e);
-    }
-  };
-
-  // Whistles & Beeps definitions
+  // Whistles & Beeps definitions via World Archery synthesizer
   const playPrepSignal = () => {
-    beep(660, 1.0, 0.7);
-    setTimeout(() => beep(660, 1.0, 0.7), 1200); // 2 long whistles
+    playWA2Beeps(soundMode);
   };
 
   const playShootSignal = () => {
-    beep(880, 1.2, 0.8); // 1 long whistle
+    playWA1Beep(soundMode);
   };
 
   const playEndSignal = () => {
-    beep(440, 0.9, 0.8);
-    setTimeout(() => beep(440, 0.9, 0.8), 1050);
-    setTimeout(() => beep(440, 0.9, 0.8), 2100); // 3 whistles
+    playWA3Beeps(soundMode);
   };
 
   const playWarningBeep = () => {
-    beep(550, 0.18, 0.4);
+    playWAWarning30s(soundMode);
   };
 
-  // Text-To-Speech Synthesizer
+  // Text-To-Speech Synthesizer (optional countdown)
   const speakNumber = (num: number) => {
+    if (!enableVoice) return;
     if (typeof window !== "undefined" && window.speechSynthesis) {
       try {
         const utterance = new SpeechSynthesisUtterance(String(num));
         utterance.lang = "es-ES";
-        utterance.rate = 1.2;
+        utterance.rate = 1.25;
         utterance.pitch = 1.0;
-        utterance.volume = 0.9;
+        utterance.volume = 0.95;
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
       } catch (e) {
@@ -148,7 +123,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
           }
           
           if (nextVal <= 0) {
-            // Transition to shoot phase
+            // Transition to shoot phase: 1 solid whistle/horn blast
             setPhase("shoot");
             setTimeLeft(shootTime);
             setTotalPhaseTime(shootTime);
@@ -167,7 +142,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
           }
 
           if (nextVal <= 0) {
-            // Timer expired
+            // Timer expired: 3 whistles/horn blasts to stop
             if (timerRef.current) clearInterval(timerRef.current);
             setIsActive(false);
             playEndSignal();
@@ -182,7 +157,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
   // Clock Actions
   const handleStart = () => {
-    initAudio();
+    initWAAudio();
     localStorage.setItem("relojSegsEntrada", String(prepTime));
     localStorage.setItem("relojSegsTiro", String(shootTime));
 
@@ -194,6 +169,28 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     playPrepSignal();
 
     startTimerLoop();
+  };
+
+  const handleEmergencyStop = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setIsActive(false);
+    setIsPaused(false);
+    setPhase("prep");
+    setTimeLeft(prepTime);
+    playWA5EmergencyBeeps(soundMode);
+  };
+
+  const handleSoundModeChange = (mode: WASoundMode) => {
+    initWAAudio();
+    setSoundMode(mode);
+    localStorage.setItem("relojSoundMode", mode);
+    playWATestTone(mode);
+  };
+
+  const handleVoiceToggle = () => {
+    const next = !enableVoice;
+    setEnableVoice(next);
+    localStorage.setItem("relojVoice", String(next));
   };
 
   useEffect(() => {
@@ -350,51 +347,134 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                 </div>
 
                 {/* Ticking Controls */}
-                <div className="flex items-center gap-4 mt-4 flex-wrap justify-center">
+                <div className="flex items-center gap-3 mt-4 flex-wrap justify-center">
                   <button
                     onClick={handlePauseToggle}
-                    className="px-6 py-3.5 rounded-2xl bg-yellow-gold text-black font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                    className="px-5 py-3 rounded-2xl bg-yellow-gold text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
                   >
-                    {isPaused ? <Play size={16} /> : <Pause size={16} />}
+                    {isPaused ? <Play size={15} /> : <Pause size={15} />}
                     <span>{isPaused ? t("resume") : t("pause")}</span>
                   </button>
                   <button
                     onClick={handleResetPhase}
-                    className="px-6 py-3.5 rounded-2xl bg-green-success text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                    className="px-5 py-3 rounded-2xl bg-green-success text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
                   >
-                    <RotateCw size={16} />
+                    <RotateCw size={15} />
                     <span>{t("resetPhase")}</span>
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="px-6 py-3.5 rounded-2xl bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg hover:bg-white/25 active:scale-95 transition"
+                    className="px-5 py-3 rounded-2xl bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-white/25 active:scale-95 transition"
                   >
-                    <Minimize2 size={16} />
+                    <Minimize2 size={15} />
                     <span>{t("minimize")}</span>
                   </button>
                   <button
                     onClick={handleStop}
-                    className="px-6 py-3.5 rounded-2xl bg-red-rival text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                    className="px-5 py-3 rounded-2xl bg-neutral-800 border border-white/20 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-neutral-700 active:scale-95 transition"
                   >
-                    <Square size={16} />
+                    <Square size={15} />
                     <span>{t("stop")}</span>
                   </button>
                 </div>
+
+                {/* Emergency Stop / Alto al Fuego (WA Rule 13.4 - 5 rapid horn blasts) */}
+                <button
+                  onClick={handleEmergencyStop}
+                  className="px-6 py-3 rounded-full bg-red-600/90 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-red-400/40 shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-95 transition cursor-pointer"
+                  title="Detención inmediata de tiro según reglamento World Archery"
+                >
+                  <AlertTriangle size={16} />
+                  <span>🚨 Alto al Fuego (5 Beeps)</span>
+                </button>
               </div>
             ) : (
               // Config Panel (Idle Configuration State)
-              <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-8">
+              <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-5">
                 <div className="text-center">
                   <h2 className="text-white text-2xl font-black tracking-wide uppercase">
                     {t("clockTitle")}
                   </h2>
-                  <p className="text-gray-dim text-xs mt-1">
-                    Ajusta los segundos libremente
+                  <p className="text-gray-dim text-xs mt-0.5">
+                    Señales oficiales World Archery & temporizador
                   </p>
                 </div>
 
+                {/* Sound Mode Selector Pills */}
+                <div className="w-full bg-black/40 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-black uppercase text-gray-dim tracking-wider flex items-center gap-1">
+                      <Radio size={12} className="text-cyan-neon" />
+                      Señal Acústica WA
+                    </span>
+                    <button
+                      onClick={() => playWATestTone(soundMode)}
+                      className="text-[10px] font-bold text-cyan-neon hover:text-white flex items-center gap-1 cursor-pointer"
+                    >
+                      <Volume2 size={12} />
+                      <span>Probar</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSoundModeChange("horn")}
+                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                        soundMode === "horn"
+                          ? "bg-cyan-neon text-black shadow-glow-cyan"
+                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                      }`}
+                    >
+                      <span>📢 Bocina WA</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSoundModeChange("whistle")}
+                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                        soundMode === "whistle"
+                          ? "bg-cyan-neon text-black shadow-glow-cyan"
+                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                      }`}
+                    >
+                      <span>🎷 Silbato</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSoundModeChange("mute")}
+                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                        soundMode === "mute"
+                          ? "bg-red-500 text-white"
+                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                      }`}
+                    >
+                      <span>🔇 Silencio</span>
+                    </button>
+                  </div>
+
+                  {/* Voice countdown toggle */}
+                  <div className="flex items-center justify-between border-t border-white/5 pt-2 px-1">
+                    <span className="text-[11px] text-white/80 font-medium">
+                      Cuenta regresiva de voz (últimos 10s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleVoiceToggle}
+                      className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
+                        enableVoice ? "bg-cyan-neon" : "bg-neutral-800"
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-black transition-transform absolute top-0.5 ${
+                          enableVoice ? "left-5" : "left-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
                 {/* Manual adjust input fields */}
-                <div className="grid grid-cols-2 gap-4 w-full">
+                <div className="grid grid-cols-2 gap-3 w-full">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-white/70 text-center font-bold">
                       {t("prepSecs")}
@@ -405,7 +485,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                       onChange={(e) => setPrepTime(Math.max(5, Number(e.target.value)))}
                       min="5"
                       max="30"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-3 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-2.5 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
                     />
                   </div>
 
@@ -419,33 +499,33 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                       onChange={(e) => setShootTime(Math.max(30, Number(e.target.value)))}
                       min="30"
                       max="300"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-3 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-2.5 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
                     />
                   </div>
                 </div>
 
-                {/* GIANT START BUTTON (140x140px) */}
+                {/* GIANT START BUTTON (130x130px) */}
                 <motion.button
                   onClick={handleStart}
                   whileHover={{ scale: 1.06, boxShadow: "0 0 30px rgba(0,229,255,0.4)" }}
                   whileTap={{ scale: 0.92 }}
-                  className="w-[140px] h-[140px] rounded-full bg-gradient-to-br from-cyan-brand to-cyan-neon border-4 border-white/10 shadow-[0_10px_25px_rgba(0,162,232,0.3)] flex flex-col items-center justify-center gap-1 cursor-pointer text-white"
+                  className="w-[130px] h-[130px] rounded-full bg-gradient-to-br from-cyan-brand to-cyan-neon border-4 border-white/10 shadow-[0_10px_25px_rgba(0,162,232,0.3)] flex flex-col items-center justify-center gap-1 cursor-pointer text-white"
                 >
-                  <Play size={32} fill="white" className="ml-1" />
+                  <Play size={30} fill="white" className="ml-1" />
                   <span className="text-xs font-black tracking-widest uppercase">{t("startClock")}</span>
                 </motion.button>
 
                 {/* Sin Reloj & Cerrar Action Toggles */}
-                <div className="flex flex-col gap-2 w-full mt-4">
+                <div className="flex flex-col gap-2 w-full">
                   <button
                     onClick={handleDisableToggle}
-                    className="w-full py-3.5 rounded-2xl bg-yellow-gold/80 hover:bg-yellow-gold text-black font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                    className="w-full py-3 rounded-2xl bg-yellow-gold/80 hover:bg-yellow-gold text-black font-black text-xs uppercase tracking-wider transition cursor-pointer"
                   >
                     🚫 {t("noClock")}
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="w-full py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <X size={14} />
                     <span>{t("closeClock")}</span>

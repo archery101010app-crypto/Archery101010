@@ -7,8 +7,10 @@ import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting,
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2 } from "lucide-react";
+import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X } from "lucide-react";
 import confetti from "canvas-confetti";
+import { calculateDispersionAnalysis, DispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
+import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
 
 interface ScoringViewProps {
   user: UserProfile;
@@ -138,6 +140,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [endNote, setEndNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
   const [isFinishing, setIsFinishing] = useState(false); // Session summary modal state
+  const [showDispersionDrawer, setShowDispersionDrawer] = useState(false); // Modal de Clics de Mira & Agrupación
+  const [dispersionScope, setDispersionScope] = useState<"END" | "GLOBAL">("GLOBAL");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
@@ -938,7 +943,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return "bg-white text-black border-white/20"; // 1-2 rings
   };
 
-  // Centroid and Dispersion calculations for the current End
+  // Centroid and Dispersion calculations for the current End & Full Session
   const currentEndImpacts = impacts.filter((imp) => imp.endIdx === currentEndIdx);
   const N = currentEndImpacts.length;
 
@@ -963,6 +968,47 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       };
     }
   }
+
+  // Smart Dispersion and Sight Adjustment Analytics
+  const currentEndAnalysis = calculateDispersionAnalysis(
+    currentEndImpacts,
+    config.distance || 70,
+    config.bowType || "Recurve"
+  );
+  const globalDispersion = calculateDispersionAnalysis(
+    impacts,
+    config.distance || 70,
+    config.bowType || "Recurve"
+  );
+  const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
+
+  // Shot Chart Share Handler (HD Target Image)
+  const handleShareShotChart = async () => {
+    setIsGeneratingImage(true);
+    try {
+      const archerName = user.nickname || user.fullName || "Arquero";
+      const totalScore = calculateTotalScore();
+      const tens = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "10" || a === "X").length, 0);
+      const xs = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "X").length, 0);
+
+      await shareTargetShotChart({
+        impacts,
+        presetType: isCompoundTarget ? "WA_6c" : "WA_10_122",
+        score: totalScore,
+        maxScore: config.maxScore,
+        tensCount: tens,
+        xsCount: xs,
+        distanceM: config.distance || 70,
+        bowType: config.bowType || "Recurve",
+        archerName,
+        dispersion: globalDispersion
+      });
+    } catch (err) {
+      console.error("Error sharing target shot chart:", err);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
   const playTallyClickSound = () => {
     try {
@@ -1390,6 +1436,34 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <div className="ml-auto px-3 py-1.5 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11px] text-cyan-neon shadow-sm">
                 Suma: {calculateEndTotal(currentEndIdx)} pts
               </div>
+            </div>
+
+            {/* Quick Actions Bar: Clics de Mira & Compartir Diana */}
+            <div className="flex items-center justify-between gap-2 px-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowDispersionDrawer(true)}
+                className="flex-1 py-2 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
+              >
+                <Crosshair size={14} className="text-cyan-neon animate-pulse" />
+                <span>Clics de Mira</span>
+                {activeAnalysis && activeAnalysis.count > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
+                    {activeAnalysis.clockDirection}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareShotChart}
+                disabled={isGeneratingImage || impacts.length === 0}
+                className="py-2 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                title="Generar y compartir imagen de la diana con impactos"
+              >
+                <Camera size={14} />
+                <span>{isGeneratingImage ? "Generando..." : "Foto Diana"}</span>
+              </button>
             </div>
             
             <div className="flex justify-center items-center py-2 relative">
@@ -1819,8 +1893,38 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
               )}
 
+              {/* Group Dispersion Summary in Finish Modal */}
+              {globalDispersion && impacts.length > 0 && (
+                <div className="bg-neutral-950/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-gray-dim uppercase font-bold flex items-center gap-1">
+                      <Crosshair size={11} className="text-cyan-neon" />
+                      Agrupación & Mira
+                    </span>
+                    <span className="text-cyan-neon font-mono font-bold text-[10px]">
+                      Ø {globalDispersion.spreadCm.toFixed(1)} cm
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-white/90 text-[11px]">
+                    <span>Centro del grupo:</span>
+                    <span className="font-bold text-yellow-gold">{globalDispersion.clockDirection}</span>
+                  </div>
+                  <p className="text-[10px] text-gray-dim leading-snug">
+                    {globalDispersion.adviceText}
+                  </p>
+                </div>
+              )}
+
               {/* Action buttons */}
               <div className="flex flex-col gap-2.5 mt-2">
+                <button
+                  onClick={handleShareShotChart}
+                  disabled={isGeneratingImage || impacts.length === 0}
+                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.25)] transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Camera size={16} />
+                  <span>{isGeneratingImage ? "Generando Imagen..." : "Compartir Diana Gráfica (Foto / HD)"}</span>
+                </button>
                 <button
                   onClick={handleShareScorecardWhatsApp}
                   className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition active:scale-95 cursor-pointer"
@@ -1997,6 +2101,159 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </button>
               </div>
             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: Análisis Inteligente de Dispersión y Ajuste de Mira */}
+      <AnimatePresence>
+        {showDispersionDrawer && (
+          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 w-full max-w-sm flex flex-col gap-4 text-left shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon">
+                    <Crosshair size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-white text-sm font-black uppercase tracking-wide">
+                      Centro & Clics de Mira
+                    </h3>
+                    <p className="text-[10px] text-gray-dim">
+                      {config.bowType || "Recurvo"} • {config.distance || 70}m • Dianas WA
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDispersionDrawer(false)}
+                  className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-dim hover:text-white transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Scope Switcher: End actual vs Toda la sesión */}
+              <div className="grid grid-cols-2 gap-1.5 bg-neutral-950 p-1 rounded-xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setDispersionScope("END")}
+                  className={`py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition cursor-pointer ${
+                    dispersionScope === "END"
+                      ? "bg-cyan-neon text-black shadow-glow-cyan"
+                      : "text-gray-dim hover:text-white"
+                  }`}
+                >
+                  End {currentEndIdx + 1} ({currentEndImpacts.length} flechas)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDispersionScope("GLOBAL")}
+                  className={`py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition cursor-pointer ${
+                    dispersionScope === "GLOBAL"
+                      ? "bg-cyan-neon text-black shadow-glow-cyan"
+                      : "text-gray-dim hover:text-white"
+                  }`}
+                >
+                  Toda la Sesión ({impacts.length} flechas)
+                </button>
+              </div>
+
+              {/* Content */}
+              {activeAnalysis && activeAnalysis.count > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {/* Compass / Direction Card */}
+                  <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
+                        Desviación del Grupo
+                      </span>
+                      <div className="text-xl font-black text-white mt-0.5 flex items-center gap-2">
+                        <span>{activeAnalysis.clockDirection}</span>
+                        <span className="text-xs font-bold text-cyan-neon">
+                          ({activeAnalysis.distanceFromCenterCm.toFixed(1)} cm del centro)
+                        </span>
+                      </div>
+                    </div>
+                    <div className="px-2.5 py-1 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] text-center">
+                      {activeAnalysis.groupQuality}
+                    </div>
+                  </div>
+
+                  {/* Sight Clicks Recommendations */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Horizontal */}
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                      <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
+                        ↔️ Deriva Horizontal
+                      </span>
+                      <span className="text-xs font-bold text-white">
+                        {activeAnalysis.deltaXCm === 0 
+                          ? "Centrado" 
+                          : `${Math.abs(activeAnalysis.deltaXCm).toFixed(1)} cm ${activeAnalysis.deltaXCm > 0 ? "Derecha" : "Izquierda"}`}
+                      </span>
+                      <div className="mt-1 pt-1 border-t border-white/5">
+                        <span className="text-[10px] font-black text-yellow-gold uppercase">
+                          {activeAnalysis.horizontalClicks > 0
+                            ? `Mover ${activeAnalysis.horizontalClicks} clics a la ${activeAnalysis.horizontalDirection}`
+                            : "Sin ajuste horizontal"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Vertical */}
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                      <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
+                        ↕️ Elevación Vertical
+                      </span>
+                      <span className="text-xs font-bold text-white">
+                        {activeAnalysis.deltaYCm === 0 
+                          ? "Centrado" 
+                          : `${Math.abs(activeAnalysis.deltaYCm).toFixed(1)} cm ${activeAnalysis.deltaYCm > 0 ? "Arriba" : "Abajo"}`}
+                      </span>
+                      <div className="mt-1 pt-1 border-t border-white/5">
+                        <span className="text-[10px] font-black text-yellow-gold uppercase">
+                          {activeAnalysis.verticalClicks > 0
+                            ? `Mover ${activeAnalysis.verticalClicks} clics hacia ${activeAnalysis.verticalDirection}`
+                            : "Sin ajuste vertical"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dispersion spread card */}
+                  <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
+                    <span className="text-gray-dim font-medium">Diámetro Máximo de Grupo:</span>
+                    <span className="font-mono font-black text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
+                  </div>
+
+                  {/* Summary Tip */}
+                  <div className="bg-cyan-brand/5 border border-cyan-brand/20 rounded-2xl p-3 text-[11px] text-cyan-neon font-medium leading-relaxed">
+                    💡 {activeAnalysis.adviceText}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center text-xs text-gray-dim flex flex-col items-center gap-2">
+                  <Target size={28} className="text-gray-dim/40" />
+                  <span>Aún no hay impactos registrados en este ámbito. Dispara y marca tus flechas en la diana.</span>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowDispersionDrawer(false)}
+                className="w-full py-3 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs uppercase cursor-pointer transition"
+              >
+                Cerrar Análisis
+              </button>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
