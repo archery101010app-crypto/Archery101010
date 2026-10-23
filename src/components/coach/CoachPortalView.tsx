@@ -219,6 +219,22 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       setSessions(allSessions);
     }
     loadCoachData();
+
+    // Listen for realtime database changes (new athlete sessions synced from cloud)
+    const handleDbChange = async (e: any) => {
+      if (!e.detail || e.detail.store === "sessions_local" || e.detail.store === "settings_local") {
+        const freshSessions = await getLocalSessions();
+        setSessions(freshSessions);
+        const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const clubArchers = allUsers.filter(u => (u.clubId === activeClubId) && u.role === "archer");
+        if (clubArchers.length > 0) {
+          setAthletes(clubArchers);
+        }
+      }
+    };
+
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => window.removeEventListener("local-db-change", handleDbChange);
   }, [user, activeClubId]);
 
   // Create new athlete profile callback
@@ -357,22 +373,23 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         {/* Quick Club Code */}
         <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end bg-neutral-950/80 px-3 py-1.5 rounded-xl border border-white/5">
           <div className="flex flex-col">
-            <span className="text-[8px] text-gray-dim uppercase font-bold">Código de Club</span>
-            <span className="text-xs font-mono font-black text-cyan-neon tracking-wider">
-              {activeClubId}
+            <span className="text-[8px] text-gray-dim uppercase font-bold">Código para tus Alumnos</span>
+            <span className="text-xs font-mono font-black text-cyan-neon tracking-wider select-all">
+              {user.clubInviteCode || activeClubId}
             </span>
           </div>
           <button
             onClick={() => {
+              const codeToCopy = user.clubInviteCode || activeClubId;
               if (navigator.clipboard) {
-                navigator.clipboard.writeText(activeClubId);
-                alert("Código de club copiado al portapapeles. Compártelo con tus alumnos.");
+                navigator.clipboard.writeText(codeToCopy);
+                alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen a tu club.`);
               }
             }}
-            className="p-1 text-gray-dim hover:text-white transition cursor-pointer"
-            title="Copiar código"
+            className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
+            title="Copiar código para alumnos"
           >
-            <Share2 size={12} />
+            <Share2 size={13} />
           </button>
         </div>
       </div>

@@ -639,3 +639,78 @@ export async function migrateOfflineGuestData(newUid: string): Promise<void> {
     console.error("Error migrating guest offline data:", err);
   }
 }
+
+/**
+ * Joins an existing club using the Coach's invite code or club ID.
+ */
+export async function joinClubByInviteCode(
+  userUid: string,
+  inviteCode: string
+): Promise<{ success: boolean; clubName?: string | null; user?: UserProfile; error?: string }> {
+  const cleanCode = inviteCode.trim().toUpperCase();
+  if (!cleanCode) {
+    return { success: false, error: "Ingresa un código de club válido." };
+  }
+
+  // 1. Search in local simulated_users
+  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  let clubCoach = usersList.find(
+    (u) =>
+      (u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach") &&
+      (u.clubInviteCode?.toUpperCase() === cleanCode || u.clubId?.toUpperCase() === cleanCode)
+  );
+
+  // 2. Fallback: Search Firestore if available
+  if (!clubCoach) {
+    try {
+      const { db } = await import("@/lib/firebase");
+      const { collection, getDocs, query, where } = await import("firebase/firestore");
+      // Search by inviteCode
+      const q1 = query(collection(db, "users"), where("clubInviteCode", "==", cleanCode));
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) {
+        clubCoach = snap1.docs[0].data() as UserProfile;
+      } else {
+        // Search by clubId
+        const q2 = query(collection(db, "users"), where("clubId", "==", cleanCode));
+        const snap2 = await getDocs(q2);
+        if (!snap2.empty) {
+          clubCoach = snap2.docs[0].data() as UserProfile;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not query Firestore for club coach:", err);
+    }
+  }
+
+  if (!clubCoach || !clubCoach.clubId) {
+    return {
+      success: false,
+      error: "Código no encontrado. Verifica el código de invitación con tu Coach."
+    };
+  }
+
+  const updates: Partial<UserProfile> = {
+    clubId: clubCoach.clubId,
+    clubName: clubCoach.clubName || "Club Archery 101010",
+    clubLogo: clubCoach.clubLogo || "0",
+    clubCountry: clubCoach.clubCountry || clubCoach.country || "CR"
+  };
+
+  const updated = await updateProfile(userUid, updates);
+  return { success: true, clubName: updates.clubName ?? undefined, user: updated };
+}
+
+/**
+ * Leaves the current club, returning to independent archer status.
+ */
+export async function leaveCurrentClub(userUid: string): Promise<{ success: boolean; user?: UserProfile }> {
+  const updated = await updateProfile(userUid, {
+    clubId: null,
+    clubName: null,
+    clubLogo: undefined,
+    clubCountry: undefined
+  });
+  return { success: true, user: updated };
+}
+

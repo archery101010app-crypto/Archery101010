@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, getLoggedUser } from "@/lib/authService";
+import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -157,6 +158,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // Club roster states
   const [clubMembers, setClubMembers] = useState<UserProfile[]>([]);
 
+  // Athlete Club & Coach Linking states
+  const [athleteInviteCode, setAthleteInviteCode] = useState("");
+  const [isJoiningClub, setIsJoiningClub] = useState(false);
+  const [clubJoinFeedback, setClubJoinFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [coachProfile, setCoachProfile] = useState<UserProfile | null>(null);
+
   useEffect(() => {
     async function loadClubMembers() {
       if (user.clubId) {
@@ -168,6 +175,65 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     }
     loadClubMembers();
   }, [user.clubId, user.role]);
+
+  useEffect(() => {
+    async function loadCoachInfo() {
+      if (user.clubId) {
+        try {
+          const { getLocalSetting } = await import("@/lib/db/indexedDB");
+          const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const coach = list.find((u) => u.clubId === user.clubId && (u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach" || u.isClubCreator));
+          if (coach) {
+            setCoachProfile(coach);
+          }
+        } catch (e) {
+          console.error("Error loading coach profile:", e);
+        }
+      } else {
+        setCoachProfile(null);
+      }
+    }
+    loadCoachInfo();
+  }, [user.clubId]);
+
+  const handleJoinClub = async () => {
+    if (!athleteInviteCode.trim()) return;
+    setIsJoiningClub(true);
+    setClubJoinFeedback(null);
+    try {
+      const res = await joinClubByInviteCode(user.uid, athleteInviteCode.trim());
+      if (res.success && res.user) {
+        triggerHaptic("confirm");
+        setClubJoinFeedback({ type: "success", message: `¡Te has vinculado exitosamente al club "${res.user.clubName || "Arqueros"}"!` });
+        onProfileUpdated(res.user);
+        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
+        setAthleteInviteCode("");
+      } else {
+        triggerHaptic("miss");
+        setClubJoinFeedback({ type: "error", message: res.error || "No se encontró el club o código de invitación inválido." });
+      }
+    } catch (err: any) {
+      setClubJoinFeedback({ type: "error", message: err?.message || "Error al intentar vincularte al club." });
+    } finally {
+      setIsJoiningClub(false);
+    }
+  };
+
+  const handleLeaveClub = async () => {
+    if (!confirm("¿Estás seguro de que deseas desvincularte de este club y entrenador?")) return;
+    try {
+      const res = await leaveCurrentClub(user.uid);
+      if (res.success && res.user) {
+        triggerHaptic("confirm");
+        setClubJoinFeedback({ type: "success", message: "Te has desvinculado del club exitosamente." });
+        setCoachProfile(null);
+        onProfileUpdated(res.user);
+        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
+      }
+    } catch (err) {
+      console.error("Error leaving club:", err);
+    }
+  };
 
   const handleSelectUserRole = async (targetRole: "archer" | "coach") => {
     let nextRole: UserProfile["role"] = targetRole;
@@ -1173,6 +1239,121 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           );
         })()}
       </div>
+
+      {/* SECTION 4.5: Mi Club y Entrenador (Para atletas / arqueros) */}
+      {(user.role === "archer" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
+        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-cyan-neon" />
+              Mi Club y Entrenador
+            </h4>
+            {user.clubId && (
+              <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Vinculado
+              </span>
+            )}
+          </div>
+
+          {clubJoinFeedback && (
+            <div className={`p-3 rounded-2xl text-xs font-medium flex items-center gap-2 border ${
+              clubJoinFeedback.type === "success" 
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" 
+                : "bg-red-500/10 border-red-500/30 text-red-300"
+            }`}>
+              {clubJoinFeedback.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              )}
+              <span className="leading-snug">{clubJoinFeedback.message}</span>
+            </div>
+          )}
+
+          {user.clubId ? (
+            <div className="flex flex-col gap-3">
+              {/* Tarjeta del Club Vinculado */}
+              <div className="flex items-center gap-3.5 bg-neutral-950/50 p-3.5 rounded-2xl border border-white/5">
+                <ClubLogoIcon logo={user.clubLogo || "0"} className="w-12 h-12 shrink-0 bg-neutral-900 border border-white/10 rounded-xl p-1.5" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-white text-xs font-black truncate">{user.clubName || "Club Deportivo"}</span>
+                  <span className="text-[10px] text-gray-dim flex items-center gap-1 mt-0.5">
+                    <span>{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷"}</span>
+                    <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || user.country}</span>
+                  </span>
+                  {user.clubInviteCode && (
+                    <span className="text-[9px] font-mono text-cyan-neon/90 mt-0.5">
+                      Código: {user.clubInviteCode}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Información del Entrenador */}
+              <div className="bg-neutral-950/30 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] text-gray-dim uppercase font-black tracking-wider flex items-center gap-1">
+                    <Users className="w-3 h-3 text-cyan-neon" /> Tu Entrenador
+                  </span>
+                  {coachProfile?.whatsappNumber && (
+                    <a
+                      href={`https://wa.me/${coachProfile.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola Coach ${coachProfile.fullName}, soy ${user.fullName}. Te escribo desde Archery 101010.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    >
+                      <MessageCircle className="w-3 h-3" /> WhatsApp
+                    </a>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white font-bold">{coachProfile?.fullName || "Entrenador Asignado"}</span>
+                  <span className="text-[10px] text-gray-dim">{coachProfile?.email || "En línea"}</span>
+                </div>
+                <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[10px] text-cyan-300 leading-snug flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
+                  <span>Tus planillas y series se sincronizan en tiempo real con el panel de tu coach.</span>
+                </div>
+              </div>
+
+              {/* Desvincularse */}
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleLeaveClub}
+                  className="text-[11px] text-red-400/80 hover:text-red-400 font-bold transition-colors cursor-pointer py-1 px-2"
+                >
+                  Desvincularme del club
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-[11px] text-gray-dim leading-snug">
+                Pídele a tu entrenador o club su código de invitación (ej. <strong className="text-white">INV-XXXXXX</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
+              </p>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={athleteInviteCode}
+                  onChange={(e) => setAthleteInviteCode(e.target.value.toUpperCase())}
+                  placeholder="INV-XXXXXX o CLB-XXXX"
+                  className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase font-mono tracking-wider placeholder:text-gray-dim outline-none focus:border-cyan-neon transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleJoinClub}
+                  disabled={!athleteInviteCode.trim() || isJoiningClub}
+                  className="px-4 py-2.5 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                >
+                  {isJoiningClub ? "Vinculando..." : "Vincular"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* SECTION 5: Coach/Admin management */}
       {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && user.clubId && (
