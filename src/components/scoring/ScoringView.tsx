@@ -1446,7 +1446,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 className="flex-1 py-2 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
               >
                 <Crosshair size={14} className="text-cyan-neon animate-pulse" />
-                <span>Clics de Mira</span>
+                <span>Ajuste de Mira</span>
                 {activeAnalysis && activeAnalysis.count > 0 && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
                     {activeAnalysis.clockDirection}
@@ -2123,7 +2123,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   </div>
                   <div>
                     <h3 className="text-white text-sm font-black uppercase tracking-wide">
-                      Centro & Clics de Mira
+                      Centro & Ajuste de Mira
                     </h3>
                     <p className="text-[10px] text-gray-dim">
                       {config.bowType || "Recurvo"} • {config.distance || 70}m • Dianas WA
@@ -2186,7 +2186,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     </div>
                   </div>
 
-                  {/* Sight Clicks Recommendations */}
+                  {/* Sight Direction Recommendations */}
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Horizontal */}
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
@@ -2200,9 +2200,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       </span>
                       <div className="mt-1 pt-1 border-t border-white/5">
                         <span className="text-[10px] font-black text-yellow-gold uppercase">
-                          {activeAnalysis.horizontalClicks > 0
-                            ? `Mover ${activeAnalysis.horizontalClicks} clics a la ${activeAnalysis.horizontalDirection}`
-                            : "Sin ajuste horizontal"}
+                          {activeAnalysis.horizontalDirection !== "CENTRADO"
+                            ? `Mover a la ${activeAnalysis.horizontalDirection}`
+                            : "Centrado"}
                         </span>
                       </div>
                     </div>
@@ -2219,9 +2219,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       </span>
                       <div className="mt-1 pt-1 border-t border-white/5">
                         <span className="text-[10px] font-black text-yellow-gold uppercase">
-                          {activeAnalysis.verticalClicks > 0
-                            ? `Mover ${activeAnalysis.verticalClicks} clics hacia ${activeAnalysis.verticalDirection}`
-                            : "Sin ajuste vertical"}
+                          {activeAnalysis.verticalDirection !== "CENTRADO"
+                            ? `Mover hacia ${activeAnalysis.verticalDirection}`
+                            : "Centrado"}
                         </span>
                       </div>
                     </div>

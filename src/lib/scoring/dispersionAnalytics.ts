@@ -160,13 +160,13 @@ export function calculateDispersionAnalysis(
     groupQuality = "Bueno / Cerrado";
   }
 
-  // Actionable advice text
+  // Actionable advice text (direction only, without clicks)
   let adviceParts: string[] = [];
-  if (horizontalDirection !== "CENTRADO" && horizontalClicks > 0) {
-    adviceParts.push(`Mueve tu mira ${horizontalClicks} ${horizontalClicks === 1 ? "clic" : "clics"} a la ${horizontalDirection}`);
+  if (horizontalDirection !== "CENTRADO") {
+    adviceParts.push(`Mueve a la ${horizontalDirection}`);
   }
-  if (verticalDirection !== "CENTRADO" && verticalClicks > 0) {
-    adviceParts.push(`Mueve tu mira ${verticalClicks} ${verticalClicks === 1 ? "clic" : "clics"} hacia ${verticalDirection}`);
+  if (verticalDirection !== "CENTRADO") {
+    adviceParts.push(`Mueve hacia ${verticalDirection}`);
   }
 
   const adviceText = adviceParts.length > 0 

@@ -233,10 +233,16 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   const groupQuality = dispersion ? dispersion.groupQuality : "Sin impactos";
   drawStatBox(ctx, 385, cardY, 310, cardHeight, "AGRUPACIÓN", spreadText, groupQuality);
 
-  // Card 3: Centro & Clics
+  // Card 3: Centro & Ajuste de Mira (Dirección únicamente)
   const centerText = dispersion ? dispersion.clockDirection : "Centro 🎯";
-  const clicksText = dispersion ? (dispersion.horizontalClicks > 0 || dispersion.verticalClicks > 0 ? `${dispersion.horizontalClicks + dispersion.verticalClicks} clics recomendados` : "Mira centrada") : "Calibrado";
-  drawStatBox(ctx, 725, cardY, 305, cardHeight, "CENTRO DE GRUPO", centerText, clicksText);
+  let directionAdvice = "Mira centrada";
+  if (dispersion) {
+    const parts: string[] = [];
+    if (dispersion.horizontalDirection !== "CENTRADO") parts.push(`Mueve a la ${dispersion.horizontalDirection}`);
+    if (dispersion.verticalDirection !== "CENTRADO") parts.push(`Mueve hacia ${dispersion.verticalDirection}`);
+    if (parts.length > 0) directionAdvice = parts.join(" y ");
+  }
+  drawStatBox(ctx, 725, cardY, 305, cardHeight, "AJUSTE DE MIRA", centerText, directionAdvice);
 
   // 7. Footer Watermark
   ctx.font = "600 14px sans-serif";
