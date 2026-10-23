@@ -172,8 +172,8 @@ export default function AdminSettingsTab() {
             {/* Macrocycle Flag */}
             <div className="flex items-center justify-between border-t border-white/5 pt-3">
               <div>
-                <span className="text-xs font-bold text-white block">Módulo de Macrociclos</span>
-                <span className="text-[9px] text-white/40 block">Habilita planificación avanzada de macrociclos de entrenamiento.</span>
+                <span className="text-xs font-bold text-white block">Módulo de Ciclos</span>
+                <span className="text-[9px] text-white/40 block">Habilita planificación avanzada de ciclos de entrenamiento.</span>
               </div>
               <button
                 type="button"

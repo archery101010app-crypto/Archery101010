@@ -337,7 +337,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const handleSyncCycleToMonth = async () => {
     const macro = macrocycles.find((m) => m.id === syncMacroId) || macrocycles[0];
     if (!macro) {
-      alert("No hay ningún macrociclo disponible para sincronizar.");
+      alert("No hay ningún ciclo disponible para sincronizar.");
       return;
     }
 
@@ -626,7 +626,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       {macrocycles.length > 0 && (
         <div className="flex items-center justify-between gap-3 px-1">
           <span className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
-            {language === "es" ? "Plan Macrociclo:" : "Macrocycle Plan:"}
+            {language === "es" ? "Plan / Ciclo:" : "Cycle Plan:"}
           </span>
           <select
             value={selectedMacrocycleId}
@@ -1340,7 +1340,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* Macrocycle Selector */}
                 <div className="flex flex-col gap-1 mt-1">
                   <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">
-                    Seleccionar Plan / Macrociclo
+                    Seleccionar Plan / Ciclo
                   </label>
                   <select
                     value={syncMacroId}

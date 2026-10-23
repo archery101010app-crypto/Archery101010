@@ -17,7 +17,7 @@ import {
   getLocalSetting,
   saveLocalSetting
 } from "@/lib/db/indexedDB";
-import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
+import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar } from "@/lib/cycleCalendarSync";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
@@ -193,8 +193,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
           phases: [
             {
               id: "PHASE-D-1",
-              name: "Preparación Física",
-              type: "fisica",
+              name: "Etapa 1: Acondicionamiento y Base",
               startDate: "2026-06-01",
               endDate: "2026-06-30",
               weeklySessionGoal: 3,
@@ -204,19 +203,17 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             },
             {
               id: "PHASE-D-2",
-              name: "Volumen de Flechas",
-              type: "volumen",
+              name: "Etapa 2: Volumen de Flechas",
               startDate: "2026-07-01",
               endDate: "2026-08-15",
               weeklySessionGoal: 4,
               weeklyArrowGoal: 600,
               notes: "Aumentar capacidad aeróbica muscular y volumen de tiro.",
-              color: "#00BFFF"
+              color: "#00E5FF"
             },
             {
               id: "PHASE-D-3",
-              name: "Puesta a Punto",
-              type: "puesta_punto",
+              name: "Etapa 3: Afinamiento y Técnica",
               startDate: "2026-08-16",
               endDate: "2026-09-15",
               weeklySessionGoal: 3,
@@ -226,14 +223,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             },
             {
               id: "PHASE-D-4",
-              name: "Fase Competitiva",
-              type: "competitiva",
+              name: "Etapa 4: Simulacro y Competencias",
               startDate: "2026-09-16",
               endDate: "2026-09-30",
               weeklySessionGoal: 2,
               weeklyArrowGoal: 200,
               notes: "Duelos simulados y control mental competitivo.",
-              color: "#FF0000"
+              color: "#EF4444"
             }
           ]
         };
@@ -269,15 +265,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setVolumeGoal(8000);
     setPhases([
       {
-        id: "phase-init",
-        name: "Preparación Física",
-        type: "fisica",
+        id: "etapa-init",
+        name: "Etapa 1",
         startDate: new Date().toISOString().split("T")[0],
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
         weeklySessionGoal: 3,
         weeklyArrowGoal: 200,
         notes: "",
-        color: PHASE_CONFIG.fisica.color
+        color: ETAPA_COLORS[0].color
       }
     ]);
     setAssignmentType("club");
@@ -302,19 +297,19 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   };
 
   const handleAddPhase = () => {
-    const newType = "volumen";
+    const nextIdx = phases.length;
+    const color = ETAPA_COLORS[nextIdx % ETAPA_COLORS.length].color;
     setPhases([
       ...phases,
       {
-        id: `phase-${Date.now()}`,
-        name: PHASE_CONFIG[newType].label,
-        type: newType,
+        id: `etapa-${Date.now()}`,
+        name: `Etapa ${nextIdx + 1}`,
         startDate: startDate,
         endDate: endDate,
         weeklySessionGoal: 4,
         weeklyArrowGoal: 400,
         notes: "",
-        color: PHASE_CONFIG[newType].color
+        color: color
       }
     ]);
   };
@@ -323,13 +318,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setPhases(
       phases.map((p) => {
         if (p.id === id) {
-          const updated = { ...p, [field]: value };
-          if (field === "type") {
-            const typedVal = value as MacrocyclePhase["type"];
-            updated.name = PHASE_CONFIG[typedVal].label;
-            updated.color = PHASE_CONFIG[typedVal].color;
-          }
-          return updated;
+          return { ...p, [field]: value };
         }
         return p;
       })
@@ -408,7 +397,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Seguro que deseas eliminar este macrociclo?")) return;
+    if (!confirm("¿Seguro que deseas eliminar este ciclo?")) return;
     
     await deleteLocalMacrocycle(id);
 
@@ -475,11 +464,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
           </span>
 
           <h3 className="text-white text-base font-black uppercase tracking-wide">
-            Planificación de Macrociclos
+            Planificación de Ciclos
           </h3>
 
           <p className="text-[11px] text-gray-dim leading-relaxed">
-            Planifica la temporada olímpica de tu club. Diseña macrociclos con fases de preparación física, volumen, puesta a punto y competitiva. Define metas de flechas y supervisa el progreso de todo el equipo en tiempo real.
+            Planifica la temporada de tu club. Diseña ciclos con etapas personalizadas según tus objetivos, define metas de flechas y supervisa el progreso de todo el equipo en tiempo real.
           </p>
 
           <button
@@ -506,20 +495,20 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             className="flex flex-col gap-4"
           >
             <div className="flex justify-between items-center">
-              <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Macrociclos Activos</span>
+              <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Ciclos Activos</span>
               <button
                 onClick={handleOpenCreate}
                 className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition shadow-glow-cyan"
               >
                 <Plus size={12} />
-                <span>Ciclo</span>
+                <span>+ Ciclo</span>
               </button>
             </div>
 
             <div className="flex flex-col gap-3">
               {macrocycles.length === 0 ? (
                 <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white/30 text-xs">
-                  Aún no has planificado ningún macrociclo. Presiona "+ Ciclo" para iniciar.
+                  Aún no has planificado ningún ciclo. Presiona "+ Ciclo" para iniciar.
                 </div>
               ) : (
                 macrocycles.map((mac) => {
@@ -548,7 +537,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                             }}
                             className="text-[8px] font-black uppercase px-2.5 py-1 rounded-full border"
                           >
-                            Fase: {currentPhase.name}
+                            Etapa: {currentPhase.name}
                           </span>
                         )}
                       </div>
@@ -678,7 +667,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
             {/* Chronogram timeline visualization */}
             <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3.5">
-              <span className="text-[9px] text-white/40 uppercase font-black tracking-widest">Línea de Tiempo del Macrociclo</span>
+              <span className="text-[9px] text-white/40 uppercase font-black tracking-widest">Línea de Tiempo del Ciclo</span>
               
               {/* Visual relative duration bar */}
               <div className="h-6 w-full rounded-xl overflow-hidden flex border border-white/5">
@@ -708,7 +697,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   return (
                     <div 
-                      key={phase.id}
+                      key={phase.id} 
                       className={`p-3.5 rounded-2xl border flex flex-col gap-2 relative overflow-hidden ${
                         isActive 
                           ? "bg-neutral-950/80 border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.02)]" 
@@ -730,7 +719,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         </span>
                         {isActive && (
                           <span className="text-[8px] font-black text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-full border border-cyan-neon/20 animate-pulse">
-                            Fase Activa
+                            Etapa Activa
                           </span>
                         )}
                       </div>
@@ -875,17 +864,17 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </div>
               )}
 
-              {/* STEP 2: PHASES timeline builder */}
+              {/* STEP 2: ETAPAS timeline builder */}
               {step === 2 && (
                 <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">Fases del Cronograma</span>
+                    <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">Etapas del Cronograma</span>
                     <button
                       type="button"
                       onClick={handleAddPhase}
-                      className="text-[9px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
+                      className="text-[9px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold cursor-pointer"
                     >
-                      + Agregar Fase
+                      + Agregar Etapa
                     </button>
                   </div>
 
@@ -902,33 +891,35 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   <div className="flex flex-col gap-2.5">
                     {phases.map((phase, idx) => (
-                      <div key={phase.id} className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-2 relative">
-                        {/* Phase Header with controls */}
+                      <div key={phase.id} className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3.5 flex flex-col gap-3 relative">
+                        {/* Etapa Header with controls */}
                         <div className="flex justify-between items-center mb-0.5">
-                          <span className="text-[8px] font-black text-white/30 uppercase">Fase #{idx + 1}</span>
+                          <span className="text-[9px] font-black text-white/40 uppercase">Etapa #{idx + 1}</span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => handleMovePhase(idx, "up")}
                               disabled={idx === 0}
-                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              title="Subir etapa"
                             >
-                              <ArrowUp size={10} />
+                              <ArrowUp size={11} />
                             </button>
                             <button
                               type="button"
                               onClick={() => handleMovePhase(idx, "down")}
                               disabled={idx === phases.length - 1}
-                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              title="Bajar etapa"
                             >
-                              <ArrowDown size={10} />
+                              <ArrowDown size={11} />
                             </button>
                             {phases.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => handleRemovePhase(phase.id)}
-                                className="p-1.5 rounded bg-red-500/10 text-red-400 hover:text-red-300 ml-1.5"
-                                title="Eliminar"
+                                className="p-1.5 rounded bg-red-500/10 text-red-400 hover:text-red-300 ml-1.5 cursor-pointer"
+                                title="Eliminar etapa"
                               >
                                 <Trash2 size={11} />
                               </button>
@@ -936,60 +927,72 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                           </div>
                         </div>
 
-                        {/* Phase Inputs */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Tipo de Fase</label>
-                            <select
-                              value={phase.type}
-                              onChange={(e) => handleUpdatePhaseField(phase.id, "type", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-[10px] outline-none"
-                            >
-                              {Object.entries(PHASE_CONFIG).map(([k, v]) => (
-                                <option key={k} value={k}>{v.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Nombre Custom</label>
-                            <input
-                              type="text"
-                              value={phase.name}
-                              onChange={(e) => handleUpdatePhaseField(phase.id, "name", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-[10px] outline-none"
-                            />
-                          </div>
+                        {/* Stage Name & Color Selection */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[8px] text-white/40 uppercase font-bold">Nombre de la Etapa</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Acondicionamiento, Volumen, Torneo, Puesta a Punto..."
+                            value={phase.name}
+                            onChange={(e) => handleUpdatePhaseField(phase.id, "name", e.target.value)}
+                            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                          />
+                        </div>
 
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] text-white/40 uppercase font-bold">Color Identificador</label>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {ETAPA_COLORS.map((c) => (
+                              <button
+                                key={c.color}
+                                type="button"
+                                onClick={() => handleUpdatePhaseField(phase.id, "color", c.color)}
+                                style={{ backgroundColor: c.color }}
+                                className={`w-5 h-5 rounded-full transition-all cursor-pointer ${
+                                  phase.color === c.color 
+                                    ? "scale-125 ring-2 ring-white ring-offset-2 ring-offset-neutral-950" 
+                                    : "opacity-60 hover:opacity-100"
+                                }`}
+                                title={c.name}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Dates and Targets */}
+                        <div className="grid grid-cols-2 gap-2 mt-0.5">
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Inicio</label>
+                            <label className="text-[8px] text-white/40 uppercase font-bold">Fecha Inicio</label>
                             <input
                               type="date"
                               value={phase.startDate}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "startDate", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-0.5 text-white text-[10px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1 text-white text-[10px] outline-none"
                             />
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Fin</label>
+                            <label className="text-[8px] text-white/40 uppercase font-bold">Fecha Fin</label>
                             <input
                               type="date"
                               value={phase.endDate}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "endDate", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-0.5 text-white text-[10px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1 text-white text-[10px] outline-none"
                             />
                           </div>
 
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Sesiones / Sem</label>
+                            <label className="text-[8px] text-white/40 uppercase font-bold">Sesiones / Semana</label>
                             <input
                               type="number"
+                              min={1}
+                              max={7}
                               value={phase.weeklySessionGoal}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "weeklySessionGoal", Number(e.target.value))}
                               className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-[10px] outline-none"
                             />
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Flechas / Sem</label>
+                            <label className="text-[8px] text-white/40 uppercase font-bold">Flechas / Semana</label>
                             <input
                               type="number"
                               value={phase.weeklyArrowGoal}
@@ -1000,12 +1003,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         </div>
 
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[8px] text-white/40 uppercase font-bold">Notas / Indicaciones</label>
+                          <label className="text-[8px] text-white/40 uppercase font-bold">Notas / Indicaciones para Arqueros</label>
                           <textarea
                             value={phase.notes}
                             onChange={(e) => handleUpdatePhaseField(phase.id, "notes", e.target.value)}
                             rows={1.5}
-                            placeholder="Indicaciones para los arqueros..."
+                            placeholder="Indicaciones para los arqueros en esta etapa..."
                             className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none resize-none"
                           />
                         </div>
@@ -1120,7 +1123,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     </div>
 
                     <div className="flex flex-col border-t border-white/5 pt-2.5">
-                      <span className="text-[9px] text-white/30 uppercase font-bold">Fases Configuradas ({phases.length})</span>
+                      <span className="text-[9px] text-white/30 uppercase font-bold">Etapas Configuradas ({phases.length})</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {phases.map((p) => (
                           <span 
@@ -1185,7 +1188,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase shadow-[0_0_15px_rgba(34,197,94,0.3)] flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Sparkles size={14} />
-                    <span>{editingId ? "Guardar Cambios" : "Crear Macrociclo"}</span>
+                    <span>{editingId ? "Guardar Cambios" : "Crear Ciclo"}</span>
                   </button>
                 )}
               </div>
@@ -1264,7 +1267,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   {/* Phases Preview */}
                   <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
-                    <span className="text-[9px] text-white/40 uppercase font-bold">Fases que se asignarán</span>
+                    <span className="text-[9px] text-white/40 uppercase font-bold">Etapas que se asignarán</span>
                     <div className="flex flex-wrap gap-1.5">
                       {macroToSync.phases?.map((p) => (
                         <span

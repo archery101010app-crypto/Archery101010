@@ -53,7 +53,7 @@ export default function AdminDashboardTab() {
     {
       id: "act-2",
       user: "Daniela Rivas",
-      action: "creó un macrociclo de preparación",
+      action: "creó un ciclo de preparación",
       detail: "Preparación Sala 2026",
       time: "hace 42 minutos",
       icon: Calendar,

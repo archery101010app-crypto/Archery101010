@@ -197,7 +197,7 @@ export default function PrivacyPolicyPage() {
             <div className="bg-neutral-900/50 p-3.5 rounded-2xl border border-white/5">
               <strong className="text-white block mb-1">🎯 Privacidad entre Alumno y Coach</strong>
               <p className="text-neutral-400">
-                Si estás vinculado a un club o entrenador suscrito, tus resultados de puntuación y macrociclo son compartidos únicamente con tu entrenador designado.
+                Si estás vinculado a un club o entrenador suscrito, tus resultados de puntuación y ciclos de entrenamiento son compartidos únicamente con tu entrenador designado.
               </p>
             </div>
           </div>

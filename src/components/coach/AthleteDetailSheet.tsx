@@ -683,7 +683,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               <div className="flex flex-col gap-2.5 mt-1">
                 {notes.length === 0 ? (
                   <p className="text-[11px] text-gray-dim text-center py-6">
-                    No has añadido notas a este atleta. Tus anotaciones son privadas y te ayudan a estructurar su macrociclo.
+                    No has añadido notas a este atleta. Tus anotaciones son privadas y te ayudan a estructurar su ciclo.
                   </p>
                 ) : (
                   notes.map((note) => {

@@ -674,7 +674,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         {user.plan === "FREE" ? (
           <div className="flex flex-col gap-2 mt-2">
             <p className="text-[10px] text-gray-dim leading-snug">
-              Desbloquea macrociclos de entrenamiento, tuning de flechas (Spine Matching), y guías de ejercicios premium.
+              Desbloquea ciclos de entrenamiento, tuning de flechas (Spine Matching), y guías de ejercicios premium.
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
@@ -1695,7 +1695,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {/* Benefits checklist */}
               <div className="flex flex-col gap-2.5">
                 {[
-                  "Acceso completo a planificación de Macrociclos",
+                  "Acceso completo a planificación de Ciclos",
                   "Módulo de Spine Matching (Tuning del arco)",
                   "Guías y rutinas de entrenamiento premium",
                   "Analytics y reportes avanzados de progresión"
