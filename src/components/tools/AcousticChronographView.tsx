@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ArrowLeft, Mic, Gauge, Trash2, Sparkles, Volume2, Target,
   Info, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  RotateCcw, Save, Smartphone, ExternalLink, Zap, BookOpen, Settings, X
+  RotateCcw, Save, Smartphone, ExternalLink, Zap, BookOpen, Settings, X, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
@@ -16,6 +16,7 @@ import {
   celsiusToFahrenheit
 } from "@/lib/audioChronograph";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface AcousticChronographViewProps {
   user: UserProfile;
@@ -36,9 +37,11 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   // Speed unit toggle: FPS vs KM/H
   const [speedUnit, setSpeedUnit] = useState<"FPS" | "KMH">("FPS");
 
-  // Modals for Instructions and Arrow Specs
+  // Modals for Instructions, Arrow Specs, and Google Play Microphone Disclosure
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showSpecsModal, setShowSpecsModal] = useState(false);
+  const [showMicDisclosure, setShowMicDisclosure] = useState(false);
+  const [hasAcceptedMicDisclosure, setHasAcceptedMicDisclosure] = useState(false);
 
   // Active Listening / Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -73,6 +76,9 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     async function loadInitialData() {
       const logs = await getLocalSetting<ShotResult[]>("chronograph_logs", []);
       setShotHistory(logs);
+
+      const micAccepted = await getLocalSetting<boolean>("accepted_mic_disclosure_v1", false);
+      setHasAcceptedMicDisclosure(micAccepted);
 
       const savedSpecs = await getLocalSetting<any>("chronograph_specs", null);
       if (savedSpecs) {
@@ -119,6 +125,24 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       }
     };
   }, []);
+
+  // Permission request with Google Play Prominent Disclosure
+  const handleRequestMeasurement = () => {
+    triggerHaptic("tick");
+    if (!hasAcceptedMicDisclosure) {
+      setShowMicDisclosure(true);
+      return;
+    }
+    startRecording();
+  };
+
+  const handleAcceptMicDisclosure = async () => {
+    triggerHaptic("confirm");
+    setHasAcceptedMicDisclosure(true);
+    setShowMicDisclosure(false);
+    await saveLocalSetting("accepted_mic_disclosure_v1", true);
+    startRecording();
+  };
 
   // Start Audio Recording / Listening for Shot at 18 Meters
   const startRecording = async () => {
@@ -451,7 +475,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <button
             type="button"
             disabled={isRecording}
-            onClick={startRecording}
+            onClick={handleRequestMeasurement}
             className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
               isRecording 
                 ? "bg-red-500 text-white animate-pulse" 
@@ -824,6 +848,59 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 >
                   <Save size={15} />
                   <span>Guardar Parámetros de Flecha</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de Permiso de Micrófono (Google Play Prominent Disclosure) */}
+        {showMicDisclosure && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-neutral-900 border border-cyan-neon/30 p-6 rounded-3xl max-w-sm w-full flex flex-col gap-4 shadow-2xl"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon shrink-0">
+                  <Mic size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">Acceso al Micrófono</h3>
+                  <span className="text-[10px] text-cyan-neon font-bold">Privacidad y Procesamiento 100% Local</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                <strong>Archery 101010</strong> utiliza el micrófono exclusivamente para captar el intervalo acústico entre la suelta de la flecha y su impacto en la diana a 18 metros, calculando así su velocidad de vuelo (FPS).
+              </p>
+
+              <div className="bg-neutral-950 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-[11px] text-neutral-300">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-0.5">
+                  <ShieldCheck size={15} />
+                  <span>Garantía de Privacidad y Seguridad:</span>
+                </div>
+                <span>• El audio se procesa en tiempo real dentro de tu propio teléfono.</span>
+                <span>• NUNCA se graba voz humana ni se guardan archivos de audio.</span>
+                <span>• Ningún dato acústico se comparte ni se transmite por internet.</span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMicDisclosure(false)}
+                  className="flex-1 py-3 rounded-xl border border-white/10 text-neutral-400 text-xs font-bold hover:text-white transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAcceptMicDisclosure}
+                  className="flex-1 py-3 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase tracking-wider hover:brightness-110 shadow-glow-cyan transition cursor-pointer"
+                >
+                  Entendido
                 </button>
               </div>
             </motion.div>

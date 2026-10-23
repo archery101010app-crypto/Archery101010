@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
 import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession } from "@/lib/db/indexedDB";
@@ -11,6 +11,8 @@ import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSqua
 import confetti from "canvas-confetti";
 import { calculateDispersionAnalysis, DispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
+import { triggerHaptic } from "@/lib/haptics";
+import { useWakeLock } from "@/lib/useWakeLock";
 
 interface ScoringViewProps {
   user: UserProfile;
@@ -66,6 +68,7 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
 
 export default function ScoringView({ user, config, onBack, onSessionSaved }: ScoringViewProps) {
   const { t } = useLanguage();
+  useWakeLock(true); // Keep display awake during active shooting session
   const isBlockFormat = config.format === "WA 600" || config.format === "WA 720";
 
   const isCompoundTarget = config.bowType === "Compound" && (config.distance === 50 || config.format === "WA 720");
@@ -283,33 +286,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       runningSum += calculateEndTotal(i);
     }
     return runningSum;
-  };
-
-  // Haptic tactile vibration feedback helper
-  const triggerHaptic = (type: "arrow" | "gold" | "undo" | "confirm" | "miss") => {
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      try {
-        switch (type) {
-          case "gold":
-            navigator.vibrate([25, 40, 35]); // Celebratory double pulse for 10 or X
-            break;
-          case "miss":
-            navigator.vibrate([45, 30, 45]); // Distinct buzz for Miss (M)
-            break;
-          case "arrow":
-            navigator.vibrate(20); // Crisp physical click
-            break;
-          case "undo":
-            navigator.vibrate(30); // Soft rumble
-            break;
-          case "confirm":
-            navigator.vibrate([35, 45, 35]); // Confirmation pulse
-            break;
-        }
-      } catch {
-        // Safe fallback
-      }
-    }
   };
 
   // Keyboard tactile touch event handler
@@ -943,43 +919,51 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return "bg-white text-black border-white/20"; // 1-2 rings
   };
 
-  // Centroid and Dispersion calculations for the current End & Full Session
-  const currentEndImpacts = impacts.filter((imp) => imp.endIdx === currentEndIdx);
-  const N = currentEndImpacts.length;
+  // Centroid and Dispersion calculations for the current End & Full Session (Memoized for 60/120 FPS performance)
+  const currentEndImpacts = useMemo(() => {
+    return impacts.filter((imp) => imp.endIdx === currentEndIdx);
+  }, [impacts, currentEndIdx]);
 
-  let centroid = null;
-  let dispersion = null;
+  const { centroid, dispersion } = useMemo(() => {
+    const N = currentEndImpacts.length;
+    if (N < 1) return { centroid: null, dispersion: null };
 
-  if (N >= 1) {
     const sumX = currentEndImpacts.reduce((sum, imp) => sum + imp.x, 0);
     const sumY = currentEndImpacts.reduce((sum, imp) => sum + imp.y, 0);
     const meanX = sumX / N;
     const meanY = sumY / N;
-    centroid = { x: meanX, y: meanY };
+    const c = { x: meanX, y: meanY };
 
-    if (N >= 2) {
-      const sumSqDiffX = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.x - meanX, 2), 0);
-      const sumSqDiffY = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.y - meanY, 2), 0);
-      const sigmaX = Math.sqrt(sumSqDiffX / (N - 1));
-      const sigmaY = Math.sqrt(sumSqDiffY / (N - 1));
-      dispersion = {
-        rx: Math.max(1.8, sigmaX),
-        ry: Math.max(1.8, sigmaY)
-      };
-    }
-  }
+    if (N < 2) return { centroid: c, dispersion: null };
+
+    const sumSqDiffX = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.x - meanX, 2), 0);
+    const sumSqDiffY = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.y - meanY, 2), 0);
+    const sigmaX = Math.sqrt(sumSqDiffX / (N - 1));
+    const sigmaY = Math.sqrt(sumSqDiffY / (N - 1));
+    const d = {
+      rx: Math.max(1.8, sigmaX),
+      ry: Math.max(1.8, sigmaY)
+    };
+    return { centroid: c, dispersion: d };
+  }, [currentEndImpacts]);
 
   // Smart Dispersion and Sight Adjustment Analytics
-  const currentEndAnalysis = calculateDispersionAnalysis(
-    currentEndImpacts,
-    config.distance || 70,
-    config.bowType || "Recurve"
-  );
-  const globalDispersion = calculateDispersionAnalysis(
-    impacts,
-    config.distance || 70,
-    config.bowType || "Recurve"
-  );
+  const currentEndAnalysis = useMemo(() => {
+    return calculateDispersionAnalysis(
+      currentEndImpacts,
+      config.distance || 70,
+      config.bowType || "Recurve"
+    );
+  }, [currentEndImpacts, config.distance, config.bowType]);
+
+  const globalDispersion = useMemo(() => {
+    return calculateDispersionAnalysis(
+      impacts,
+      config.distance || 70,
+      config.bowType || "Recurve"
+    );
+  }, [impacts, config.distance, config.bowType]);
+
   const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
 
   // Shot Chart Share Handler (HD Target Image)

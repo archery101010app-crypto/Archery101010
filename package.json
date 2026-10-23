@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.66.0",
+  "version": "2.67.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,6 +10,7 @@
     "deploy:test": "next build && firebase deploy -P test",
     "deploy:prod": "next build && firebase deploy -P prod",
     "bump-version": "node scripts/increment-version.js",
+    "generate:assets": "node scripts/generate-playstore-assets.js",
     "cap:sync": "next build && npx cap sync",
     "cap:open": "npx cap open android"
   },
@@ -17,6 +18,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
     "@paypal/react-paypal-js": "^9.2.0",

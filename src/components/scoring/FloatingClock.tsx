@@ -14,6 +14,8 @@ import {
   playWATestTone, 
   WASoundMode 
 } from "@/lib/audio/waAudioSignals";
+import { triggerHaptic } from "@/lib/haptics";
+import { useWakeLock } from "@/lib/useWakeLock";
 
 interface FloatingClockProps {
   onClockDisabledChange?: (disabled: boolean) => void;
@@ -34,6 +36,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false); // "Sin Reloj"
+  useWakeLock(isActive); // Keep display awake during active countdown/timer
   const [phase, setPhase] = useState<"prep" | "shoot">("prep");
   const [timeLeft, setTimeLeft] = useState(10);
   const [totalPhaseTime, setTotalPhaseTime] = useState(10);
@@ -157,6 +160,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
   // Clock Actions
   const handleStart = () => {
+    triggerHaptic("confirm");
     initWAAudio();
     localStorage.setItem("relojSegsEntrada", String(prepTime));
     localStorage.setItem("relojSegsTiro", String(shootTime));
@@ -172,6 +176,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   };
 
   const handleEmergencyStop = () => {
+    triggerHaptic("miss");
     if (timerRef.current) clearInterval(timerRef.current);
     setIsActive(false);
     setIsPaused(false);
@@ -181,6 +186,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   };
 
   const handleSoundModeChange = (mode: WASoundMode) => {
+    triggerHaptic("tick");
     initWAAudio();
     setSoundMode(mode);
     localStorage.setItem("relojSoundMode", mode);
@@ -188,6 +194,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   };
 
   const handleVoiceToggle = () => {
+    triggerHaptic("tick");
     const next = !enableVoice;
     setEnableVoice(next);
     localStorage.setItem("relojVoice", String(next));
@@ -208,10 +215,12 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   }, [isActive, isPaused, phase, prepTime, shootTime]);
 
   const handlePauseToggle = () => {
+    triggerHaptic("arrow");
     setIsPaused(!isPaused);
   };
 
   const handleResetPhase = () => {
+    triggerHaptic("undo");
     setTimeLeft(phase === "prep" ? prepTime : shootTime);
     setTotalPhaseTime(phase === "prep" ? prepTime : shootTime);
     setIsPaused(false);
