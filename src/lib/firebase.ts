@@ -7,7 +7,7 @@ import { getMessaging, isSupported } from "firebase/messaging";
 const firebaseConfigs = {
   test: {
     apiKey: "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE",
-    authDomain: "archery101010-c0bb4.firebaseapp.com",
+    authDomain: "archery101010-c0bb4.web.app",
     projectId: "archery101010-c0bb4",
     storageBucket: "archery101010-c0bb4.firebasestorage.app",
     messagingSenderId: "757910399585",
@@ -15,7 +15,7 @@ const firebaseConfigs = {
   },
   prod: {
     apiKey: "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE",
-    authDomain: "archery101010-c0bb4.firebaseapp.com",
+    authDomain: "archery101010-c0bb4.web.app",
     projectId: "archery101010-c0bb4",
     storageBucket: "archery101010-c0bb4.firebasestorage.app",
     messagingSenderId: "757910399585",
@@ -43,7 +43,7 @@ if (typeof window !== "undefined") {
     if (envKey && !envKey.includes("mock-api-key")) {
       activeConfig = {
         apiKey: envKey,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.firebaseapp.com",
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.web.app",
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010-c0bb4",
         storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010-c0bb4.firebasestorage.app",
         messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585",
@@ -55,7 +55,15 @@ if (typeof window !== "undefined") {
   } else if (host.includes("archery101010-tst") || host.includes("101010-tst") || host.includes("tst")) {
     activeConfig = firebaseConfigs.test;
   } else {
-    activeConfig = firebaseConfigs.prod;
+    // Dynamically align authDomain to the current host to prevent third-party cookie/storage-partitioning blocking
+    const dynamicAuthDomain = host.includes("firebaseapp.com")
+      ? host
+      : (host.includes("web.app") ? host : "archery101010-c0bb4.web.app");
+
+    activeConfig = {
+      ...firebaseConfigs.prod,
+      authDomain: dynamicAuthDomain
+    };
   }
 } else {
   // Server-side (SSR) fallback
@@ -63,7 +71,7 @@ if (typeof window !== "undefined") {
   if (envKey && !envKey.includes("mock-api-key")) {
     activeConfig = {
       apiKey: envKey,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.firebaseapp.com",
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.web.app",
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "archery101010-c0bb4",
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "archery101010-c0bb4.firebasestorage.app",
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585",

@@ -6,7 +6,7 @@ import { loginUser, loginSocialUser, UserProfile } from "@/lib/authService";
 import { Mail, Lock, AlertCircle, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
-import { signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 import { getLocalSetting } from "@/lib/db/indexedDB";
 
 interface LoginViewProps {
@@ -80,6 +80,29 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  // Check for OAuth redirect completion
+  useEffect(() => {
+    async function checkRedirect() {
+      try {
+        const isLocalhost = typeof window !== "undefined" && 
+                            (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+        const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
+                               process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
+        if (isMockFirebase) return;
+
+        const result = await getRedirectResult(auth);
+        if (result && result.user && result.user.email) {
+          setLoading(true);
+          const user = await loginSocialUser(result.user.email, result.user.displayName || "");
+          onLoginSuccess(user);
+        }
+      } catch (err: any) {
+        console.error("Error al procesar retorno de redirección:", err);
+      }
+    }
+    checkRedirect();
+  }, [onLoginSuccess]);
 
   // Check if typed email matches a local social account with no password
   useEffect(() => {
@@ -165,6 +188,16 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       setError("El inicio de sesión con Facebook no está disponible temporalmente.");
       return;
     }
+
+    // Check if running inside native Capacitor environment where popups are blocked by Android WebView
+    const isCapacitorNative = typeof window !== "undefined" && 
+                              !!(window as any).Capacitor?.isNativePlatform?.();
+
+    if (isCapacitorNative) {
+      setError("En la app instalada en Android, por favor inicia sesión o regístrate con tu correo y contraseña.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -180,10 +213,23 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         const provider = providerName === "google" 
           ? new GoogleAuthProvider() 
           : new FacebookAuthProvider();
+
+        if (providerName === "google") {
+          (provider as GoogleAuthProvider).setCustomParameters({ prompt: "select_account" });
+        }
           
-        const result = await signInWithPopup(auth, provider);
-        email = result.user.email || "";
-        displayName = result.user.displayName || "";
+        try {
+          const result = await signInWithPopup(auth, provider);
+          email = result.user.email || "";
+          displayName = result.user.displayName || "";
+        } catch (popupErr: any) {
+          if (popupErr.code === "auth/popup-blocked") {
+            // Popup was blocked by mobile browser - fallback to same-domain redirect
+            await signInWithRedirect(auth, provider);
+            return;
+          }
+          throw popupErr;
+        }
       } else {
         // Fallback simulated logic for developer local testing
         email = providerName === "google" ? "google-user@archery101010.com" : "facebook-user@archery101010.com";
@@ -200,9 +246,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       console.error("Error en autenticación social:", err);
       let msg = "Error en autenticación social.";
       if (err.code === "auth/popup-closed-by-user") {
-        msg = "Inicio de sesión cancelado por el usuario.";
+        msg = "Inicio de sesión cancelado.";
+      } else if (err.code === "auth/popup-blocked") {
+        msg = "Las ventanas emergentes están bloqueadas en tu navegador. Puedes ingresar o registrarte con tu correo y contraseña.";
+      } else if (err.code === "auth/missing-initial-state" || err.code === "auth/web-storage-unsupported") {
+        msg = "El navegador tiene bloqueado el almacenamiento de sesión. Te recomendamos ingresar con tu correo y contraseña.";
       } else if (err.code === "auth/configuration-not-found" || err.code === "auth/operation-not-allowed") {
-        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está activado en la consola de Firebase. Por favor regístrate normalmente.`;
+        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está activado en Firebase. Por favor regístrate normalmente.`;
       } else if (err.message) {
         msg = err.message;
       }
