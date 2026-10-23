@@ -21,7 +21,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [showPracticeInfoModal, setShowPracticeInfoModal] = useState(false);
   const [practiceInfoType, setPracticeInfoType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [dontShowAgainPractice, setDontShowAgainPractice] = useState(false);
-  const [warmupArrows, setWarmupArrows] = useState(0);
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<"WA 300" | "WA 600" | "WA 720" | "Libre">("WA 300");
@@ -31,8 +30,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       ? user.bowConfig.defaultDistance 
       : 18
   );
-  const [autoScore, setAutoScore] = useState(false);
-  const [includeNotes, setIncludeNotes] = useState(true);
   const [endsCount, setEndsCount] = useState(10);
   const [arrowsPerEnd, setArrowsPerEnd] = useState(3);
 
@@ -69,12 +66,12 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       format,
       bowType,
       distance,
-      autoScore,
-      includeNotes,
+      autoScore: true,
+      includeNotes: true,
       endsCount,
       arrowsPerEnd,
       maxScore: endsCount * arrowsPerEnd * 10,
-      warmupArrows: warmupArrows
+      warmupArrows: 0
     });
   };
 
@@ -315,76 +312,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             </div>
           </motion.div>
         )}
-
-        {/* Flechas de Calentamiento / Preparatorias */}
-        <div className="flex flex-col gap-2 bg-neutral-900/30 p-4 rounded-2xl border border-white/5">
-          <div className="flex justify-between items-center">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-white text-sm font-bold">Flechas de Calentamiento</span>
-              <span className="text-[10px] text-gray-dim leading-none">Flechas preparatorias antes del registro</span>
-            </div>
-            <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setWarmupArrows(Math.max(0, warmupArrows - 6))}
-                className="px-2.5 py-1.5 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 hover:bg-neutral-900"
-              >
-                -6
-              </button>
-              <span className="w-10 text-center font-bold text-white text-xs">{warmupArrows}</span>
-              <button
-                type="button"
-                onClick={() => setWarmupArrows(Math.min(60, warmupArrows + 6))}
-                className="px-2.5 py-1.5 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 hover:bg-neutral-900"
-              >
-                +6
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Toggles */}
-        <div className="flex flex-col gap-3.5 mt-2 bg-neutral-900/30 p-4 rounded-2xl border border-white/5">
-          <div className="flex justify-between items-center">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-white text-sm font-bold">{t("autoScore")}</span>
-              <span className="text-[10px] text-gray-dim leading-none">Avanzar al siguiente end automáticamente</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAutoScore(!autoScore)}
-              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                autoScore ? "bg-cyan-neon" : "bg-gray-border"
-              }`}
-            >
-              <motion.div
-                layout
-                className="w-5 h-5 bg-white rounded-full absolute top-0.5"
-                style={{ left: autoScore ? "22px" : "2px" }}
-              />
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-white text-sm font-bold">{t("includeNotes")}</span>
-              <span className="text-[10px] text-gray-dim leading-none">Habilitar notas en ends y sumario</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIncludeNotes(!includeNotes)}
-              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                includeNotes ? "bg-cyan-neon" : "bg-gray-border"
-              }`}
-            >
-              <motion.div
-                layout
-                className="w-5 h-5 bg-white rounded-full absolute top-0.5"
-                style={{ left: includeNotes ? "22px" : "2px" }}
-              />
-            </button>
-          </div>
-        </div>
 
         {/* Start button */}
         <motion.button

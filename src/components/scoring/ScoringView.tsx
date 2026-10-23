@@ -1986,8 +1986,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
               <p className="text-xs text-gray-dim leading-relaxed">
                 {config.practiceType === "Volumen" 
-                  ? "Confirma la cantidad total de flechas lanzadas en esta práctica (incluyendo calentamiento si aplica):"
-                  : "Has registrado tiros en planilla y calentamiento. Confirma la cantidad exacta de flechas tiradas hoy para tus estadísticas de volumen:"
+                  ? "Confirma la cantidad total de flechas lanzadas en esta práctica:"
+                  : "Confirma la cantidad exacta de flechas tiradas hoy para tus estadísticas de volumen:"
                 }
               </p>
 
