@@ -46,6 +46,6 @@ Esta guía contiene las respuestas exactas que debes seleccionar en la consola d
 
 En la sección **Contenido de la app > Política de privacidad**, debes ingresar la URL oficial de la app:
 ```
-https://archery101010-c0bb4.web.app/privacy
+https://archery101010.com/privacy
 ```
 *(Esta página ya está completamente desplegada y cumple con los estándares de Google Play, Apple App Store y RGPD/GDPR).*

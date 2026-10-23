@@ -1799,7 +1799,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       `🎯 *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `🔥 *¿Quieres retarme o jugar la revancha?*\n` +
-      `📲 Entra aquí: https://archery101010-c0bb4.web.app`;
+      `📲 Entra aquí: https://archery101010.com`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {

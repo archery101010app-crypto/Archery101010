@@ -27,7 +27,7 @@ Usa estos textos e información para completar la ficha de la tienda en **Google
 
 * **URL de la Política de Privacidad:**
   ```text
-  https://archery101010-c0bb4.web.app/privacy
+  https://archery101010.com/privacy
   ```
 
 ---

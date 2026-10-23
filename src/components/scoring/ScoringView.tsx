@@ -443,7 +443,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       (endsDetail ? `\n📋 *Desglose de Tiradas:*\n${endsDetail}\n` : "") +
       (sessionNote ? `\n📝 *Notas:* ${sessionNote}\n` : "") +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📲 *App Oficial:* https://archery101010-c0bb4.web.app`;
+      `📲 *App Oficial:* https://archery101010.com`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {

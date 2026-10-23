@@ -479,7 +479,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       
       const shareUrl = typeof window !== "undefined" && !window.location.origin.includes("localhost")
         ? `${window.location.origin}?join=${generatedCode}`
-        : `https://archery101010-c0bb4.web.app?join=${generatedCode}`;
+        : `https://archery101010.com?join=${generatedCode}`;
 
       const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010!\n\n🏹 Formato: ${customBow} a ${customDistance}m\n🔑 Código: ${generatedCode}\n\n👉 Toca aquí para unirte al duelo en vivo:\n${shareUrl}`;
 
