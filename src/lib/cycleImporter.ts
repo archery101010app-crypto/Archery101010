@@ -105,7 +105,6 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
 
   // Check if first row is a header
   let dataRows = rows;
-  let headers = ["nombre", "inicio", "fin", "sesiones", "flechas", "notas"];
   const headerCandidates = rows[0].map((c) => c.toLowerCase());
   const isHeader = headerCandidates.some(
     (c) =>
@@ -152,7 +151,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
     const rawStart = row[startCol];
     const rawEnd = row[endCol];
 
-    let startDate = normalizeDateString(rawStart, currentEstimatedStartDate);
+    const startDate = normalizeDateString(rawStart, currentEstimatedStartDate);
     let endDate = normalizeDateString(
       rawEnd,
       new Date(new Date(startDate).getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]

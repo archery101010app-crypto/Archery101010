@@ -83,12 +83,12 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   ctx.font = "900 36px sans-serif";
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(archerName || "Arquero", 50, 130);
+  ctx.fillText(archerName || "Arquero", 50, 130, 710);
 
   // Category & Details
   ctx.font = "600 20px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
-  ctx.fillText(`${bowType} • ${distanceM}m • ${dateStr}`, 50, 162);
+  ctx.fillText(`${bowType} • ${distanceM}m • ${dateStr}`, 50, 162, 710);
 
   // Total Score Badge (Top Right)
   ctx.fillStyle = "rgba(253, 216, 53, 0.1)";
@@ -277,15 +277,15 @@ function drawStatBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.font = "bold 12px sans-serif";
   ctx.fillStyle = "rgba(0, 229, 255, 0.9)";
   ctx.textAlign = "left";
-  ctx.fillText(title, x + 18, y + 28);
+  ctx.fillText(title, x + 18, y + 28, w - 36);
 
   ctx.font = "900 22px monospace";
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(main, x + 18, y + 62);
+  ctx.fillText(main, x + 18, y + 62, w - 36);
 
   ctx.font = "500 13px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-  ctx.fillText(sub, x + 18, y + 90);
+  ctx.fillText(sub, x + 18, y + 90, w - 36);
 }
 
 /**
@@ -300,7 +300,7 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
     if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({
         files: [file],
-        title: `Diana ${params.archerName} - Archery 101010`,
+        title: `Diana ${params.archerName || "Arquero"} - Archery 101010`,
         text: `🎯 Mi diana de tiro en Archery 101010: ${params.score}/${params.maxScore} pts (${params.tensCount} 10s, ${params.xsCount} Xs). ¡Mira la agrupación!`
       });
       return true;

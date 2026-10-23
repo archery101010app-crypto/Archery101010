@@ -646,7 +646,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               ) : (
                 macrocycles.map((mac) => {
                   const currentPhase = getCurrentPhaseType(mac);
-                  const progress = Math.min(100, Math.round((mac.currentVolume / mac.volumeGoal) * 100));
+                  const progress = mac.volumeGoal > 0 ? Math.min(100, Math.round((mac.currentVolume / mac.volumeGoal) * 100)) : 0;
                   return (
                     <div
                       key={mac.id}
@@ -720,7 +720,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                               e.stopPropagation();
                               handleOpenSyncModal(mac);
                             }}
-                            className="px-2 py-1 rounded-xl bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30 text-[9px] font-black uppercase flex items-center gap-1 cursor-pointer transition shadow-glow-yellow/5"
+                            className="px-2 py-1 rounded-xl bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30 text-[9px] font-black uppercase flex items-center gap-1 cursor-pointer transition shadow-sm"
                             title="Sincronizar calendario del mes"
                           >
                             <RefreshCw size={10} />
@@ -759,7 +759,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleOpenSyncModal(selectedMacro)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 text-yellow-gold border border-yellow-gold/35 text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition shadow-glow-yellow/10"
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 text-yellow-gold border border-yellow-gold/35 text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition shadow-sm"
                   title="Sincronizar con el Calendario de la App"
                 >
                   <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
@@ -1355,7 +1355,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               >
                 <div className="flex justify-between items-center border-b border-white/5 pb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-glow-yellow/10">
+                    <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-sm">
                       <RefreshCw size={15} />
                     </div>
                     <div>

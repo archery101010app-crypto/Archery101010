@@ -18,25 +18,25 @@ export interface StarDefinition {
 }
 
 export const RECURVE_STARS: StarDefinition[] = [
-  { level: 1, minScore: 500, name: "Estrella de Bronce", color: "#CD7F32", iconColor: "text-amber-700", badgeClass: "bg-amber-900/20 text-amber-500 border-amber-800/30", description: "Logrado en Recurvo 70m con 500+ puntos" },
-  { level: 2, minScore: 550, name: "Estrella de Plata", color: "#C0C0C0", iconColor: "text-slate-400", badgeClass: "bg-slate-800/30 text-slate-350 border-slate-700/30", description: "Logrado en Recurvo 70m con 550+ puntos" },
-  { level: 3, minScore: 575, name: "Estrella de Oro", color: "#FFE500", iconColor: "text-yellow-gold", badgeClass: "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20", description: "Logrado en Recurvo 70m con 575+ puntos" },
-  { level: 4, minScore: 600, name: "Estrella Azul", color: "#00BFFF", iconColor: "text-cyan-neon", badgeClass: "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20", description: "Logrado en Recurvo 70m con 600+ puntos" },
-  { level: 5, minScore: 620, name: "Estrella Roja", color: "#FF0000", iconColor: "text-red-rival", badgeClass: "bg-red-rival/10 text-red-rival border-red-rival/20", description: "Logrado en Recurvo 70m con 620+ puntos" },
-  { level: 6, minScore: 650, name: "Estrella de Oro y Negro", color: "#DAA520", iconColor: "text-amber-500", badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20", description: "Logrado en Recurvo 70m con 650+ puntos" },
-  { level: 7, minScore: 675, name: "Estrella Púrpura", color: "#A855F7", iconColor: "text-purple-500", badgeClass: "bg-purple-550/10 text-purple-400 border-purple-500/20", description: "Logrado en Recurvo 70m con 675+ puntos" },
-  { level: 8, minScore: 700, name: "Estrella de Diamante", color: "#EC4899", iconColor: "text-pink-500", badgeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20", description: "Logrado en Recurvo 70m con 700+ puntos" }
+  { level: 1, minScore: 500, name: "Estrella de Bronce", color: "#CD7F32", iconColor: "text-amber-700", badgeClass: "bg-amber-900/20 text-amber-500 border-amber-800/30", description: "Lograda en Recurvo 70m con 500+ puntos" },
+  { level: 2, minScore: 550, name: "Estrella de Plata", color: "#C0C0C0", iconColor: "text-slate-400", badgeClass: "bg-slate-800/30 text-slate-300 border-slate-700/30", description: "Lograda en Recurvo 70m con 550+ puntos" },
+  { level: 3, minScore: 575, name: "Estrella de Oro", color: "#FFE500", iconColor: "text-yellow-gold", badgeClass: "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20", description: "Lograda en Recurvo 70m con 575+ puntos" },
+  { level: 4, minScore: 600, name: "Estrella Azul", color: "#00BFFF", iconColor: "text-cyan-neon", badgeClass: "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20", description: "Lograda en Recurvo 70m con 600+ puntos" },
+  { level: 5, minScore: 620, name: "Estrella Roja", color: "#FF0000", iconColor: "text-red-rival", badgeClass: "bg-red-rival/10 text-red-rival border-red-rival/20", description: "Lograda en Recurvo 70m con 620+ puntos" },
+  { level: 6, minScore: 650, name: "Estrella de Oro y Negro", color: "#DAA520", iconColor: "text-amber-500", badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20", description: "Lograda en Recurvo 70m con 650+ puntos" },
+  { level: 7, minScore: 675, name: "Estrella Púrpura", color: "#A855F7", iconColor: "text-purple-500", badgeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20", description: "Lograda en Recurvo 70m con 675+ puntos" },
+  { level: 8, minScore: 700, name: "Estrella de Diamante", color: "#EC4899", iconColor: "text-pink-500", badgeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20", description: "Lograda en Recurvo 70m con 700+ puntos" }
 ];
 
 export const COMPOUND_STARS: StarDefinition[] = [
-  { level: 1, minScore: 500, name: "Estrella de Bronce", color: "#CD7F32", iconColor: "text-amber-700", badgeClass: "bg-amber-900/20 text-amber-500 border-amber-800/30", description: "Logrado en Compuesto 50m con 500+ puntos" },
-  { level: 2, minScore: 550, name: "Estrella de Plata", color: "#C0C0C0", iconColor: "text-slate-400", badgeClass: "bg-slate-800/30 text-slate-350 border-slate-700/30", description: "Logrado en Compuesto 50m con 550+ puntos" },
-  { level: 3, minScore: 575, name: "Estrella de Oro", color: "#FFE500", iconColor: "text-yellow-gold", badgeClass: "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20", description: "Logrado en Compuesto 50m con 575+ puntos" },
-  { level: 4, minScore: 600, name: "Estrella Azul", color: "#00BFFF", iconColor: "text-cyan-neon", badgeClass: "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20", description: "Logrado en Compuesto 50m con 600+ puntos" },
-  { level: 5, minScore: 620, name: "Estrella Roja", color: "#FF0000", iconColor: "text-red-rival", badgeClass: "bg-red-rival/10 text-red-rival border-red-rival/20", description: "Logrado en Compuesto 50m con 620+ puntos" },
-  { level: 6, minScore: 650, name: "Estrella de Oro y Negro", color: "#DAA520", iconColor: "text-amber-500", badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20", description: "Logrado en Compuesto 50m con 650+ puntos" },
-  { level: 7, minScore: 675, name: "Estrella Púrpura", color: "#A855F7", iconColor: "text-purple-500", badgeClass: "bg-purple-550/10 text-purple-400 border-purple-500/20", description: "Logrado en Compuesto 50m con 675+ puntos" },
-  { level: 8, minScore: 700, name: "Estrella de Diamante", color: "#EC4899", iconColor: "text-pink-500", badgeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20", description: "Logrado en Compuesto 50m con 700+ puntos" }
+  { level: 1, minScore: 500, name: "Estrella de Bronce", color: "#CD7F32", iconColor: "text-amber-700", badgeClass: "bg-amber-900/20 text-amber-500 border-amber-800/30", description: "Lograda en Compuesto 50m con 500+ puntos" },
+  { level: 2, minScore: 550, name: "Estrella de Plata", color: "#C0C0C0", iconColor: "text-slate-400", badgeClass: "bg-slate-800/30 text-slate-300 border-slate-700/30", description: "Lograda en Compuesto 50m con 550+ puntos" },
+  { level: 3, minScore: 575, name: "Estrella de Oro", color: "#FFE500", iconColor: "text-yellow-gold", badgeClass: "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20", description: "Lograda en Compuesto 50m con 575+ puntos" },
+  { level: 4, minScore: 600, name: "Estrella Azul", color: "#00BFFF", iconColor: "text-cyan-neon", badgeClass: "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20", description: "Lograda en Compuesto 50m con 600+ puntos" },
+  { level: 5, minScore: 620, name: "Estrella Roja", color: "#FF0000", iconColor: "text-red-rival", badgeClass: "bg-red-rival/10 text-red-rival border-red-rival/20", description: "Lograda en Compuesto 50m con 620+ puntos" },
+  { level: 6, minScore: 650, name: "Estrella de Oro y Negro", color: "#DAA520", iconColor: "text-amber-500", badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20", description: "Lograda en Compuesto 50m con 650+ puntos" },
+  { level: 7, minScore: 675, name: "Estrella Púrpura", color: "#A855F7", iconColor: "text-purple-500", badgeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20", description: "Lograda en Compuesto 50m con 675+ puntos" },
+  { level: 8, minScore: 700, name: "Estrella de Diamante", color: "#EC4899", iconColor: "text-pink-500", badgeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20", description: "Lograda en Compuesto 50m con 700+ puntos" }
 ];
 
 export interface AthleteStarDoc {

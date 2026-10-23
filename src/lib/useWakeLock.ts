@@ -9,13 +9,12 @@ import { useEffect, useRef, useState } from "react";
  */
 export function useWakeLock(enabled: boolean = true) {
   const [isLocked, setIsLocked] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const [isSupported] = useState(() => typeof navigator !== "undefined" && "wakeLock" in navigator);
   const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof navigator === "undefined") return;
     const supported = "wakeLock" in navigator;
-    setIsSupported(supported);
     if (!supported || !enabled) {
       if (wakeLockRef.current) {
         wakeLockRef.current.release().catch(() => {});

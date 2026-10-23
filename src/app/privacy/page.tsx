@@ -73,10 +73,10 @@ export default function PrivacyPolicyPage() {
           <div className="bg-neutral-900/80 border border-white/5 p-3 rounded-2xl flex items-center gap-3">
             <Mail size={16} className="text-cyan-neon shrink-0" />
             <a 
-              href="mailto:soporte@archery101010.com" 
+              href="mailto:info@archery101010.com" 
               className="text-cyan-neon font-mono text-xs hover:underline font-bold"
             >
-              soporte@archery101010.com
+              info@archery101010.com
             </a>
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function PrivacyPolicyPage() {
             <li>Acceder, rectificar o descargar una copia de tus estadísticas de tiro y datos de perfil.</li>
             <li>Revocar los permisos de micrófono o notificaciones en cualquier instante desde los ajustes de tu sistema operativo.</li>
             <li>
-              <strong className="text-white">Eliminación Total de Cuenta y Datos (*Right to be Forgotten*):</strong> Puedes solicitar la eliminación irreversible de tu cuenta y todos tus registros enviando un correo a <a href="mailto:soporte@archery101010.com" className="text-cyan-neon underline font-bold">soporte@archery101010.com</a> con el asunto <em>"Eliminar mi cuenta"</em> desde tu correo registrado. Procesamos y purgamos todos tus datos en un plazo máximo de 30 días.
+              <strong className="text-white">Eliminación Total de Cuenta y Datos (*Right to be Forgotten*):</strong> Puedes solicitar la eliminación irreversible de tu cuenta y todos tus registros enviando un correo a <a href="mailto:info@archery101010.com" className="text-cyan-neon underline font-bold">info@archery101010.com</a> con el asunto <em>&quot;Eliminar mi cuenta&quot;</em> desde tu correo registrado. Procesamos y purgamos todos tus datos en un plazo máximo de 30 días.
             </li>
           </ul>
         </div>

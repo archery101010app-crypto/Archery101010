@@ -161,7 +161,7 @@ export function calculateDispersionAnalysis(
   }
 
   // Actionable advice text (direction only, without clicks)
-  let adviceParts: string[] = [];
+  const adviceParts: string[] = [];
   if (horizontalDirection !== "CENTRADO") {
     adviceParts.push(`Mueve a la ${horizontalDirection}`);
   }

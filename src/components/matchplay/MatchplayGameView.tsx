@@ -881,11 +881,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   const [disconnectSeconds, setDisconnectSeconds] = useState<number>(0);
   const isReconnectingRef = useRef<boolean>(false);
+  const [hasConnectedOnce, setHasConnectedOnce] = useState<boolean>(false);
   const hasConnectedOnceRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (isRivalConnected) {
       hasConnectedOnceRef.current = true;
+      setHasConnectedOnce(true);
     }
   }, [isRivalConnected]);
 
@@ -3522,7 +3524,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       {/* Pausa por Reconexión P2P Overlay */}
       <AnimatePresence>
-        {isFriendDuel && !isRivalConnected && !duelFinished && hasConnectedOnceRef.current && (
+        {isFriendDuel && !isRivalConnected && !duelFinished && hasConnectedOnce && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

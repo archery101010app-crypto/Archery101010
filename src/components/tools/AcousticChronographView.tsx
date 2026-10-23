@@ -116,16 +116,6 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     handleSaveSpecs(arrowWeight, arrowLength, String(converted), nextUnit);
   };
 
-  // Cleanup Web Audio API stream on unmount
-  useEffect(() => {
-    return () => {
-      stopRecording();
-      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-        audioCtxRef.current.close();
-      }
-    };
-  }, []);
-
   // Permission request with Google Play Prominent Disclosure
   const handleRequestMeasurement = () => {
     triggerHaptic("tick");
@@ -282,6 +272,16 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
     }
   };
+
+  // Cleanup Web Audio API stream on unmount
+  useEffect(() => {
+    return () => {
+      stopRecording();
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+        audioCtxRef.current.close();
+      }
+    };
+  }, []);
 
   // Delete shot from history
   const handleDeleteShot = async (id: string) => {
@@ -619,7 +619,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span>Posición del Teléfono</span>
                   </h4>
                   <p className="text-[11px] pl-6 text-white/70">
-                    Coloca el teléfono a la altura de tu flecha en apertura completa (recomendado en trípode) y a <strong className="text-cyan-neon">15 cm (6")</strong> hacia un lado del vástago de la flecha.
+                    Coloca el teléfono a la altura de tu flecha en apertura completa (recomendado en trípode) y a <strong className="text-cyan-neon">15 cm (6 pulg)</strong> hacia un lado del vástago de la flecha.
                   </p>
                 </div>
 
@@ -639,7 +639,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span>Disparo y Cálculo por Sonido</span>
                   </h4>
                   <p className="text-[11px] pl-6 text-white/70">
-                    Presiona el botón <strong className="text-white">"Medir Velocidad"</strong> y realiza el disparo dentro de los 3 segundos.
+                    Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong> y realiza el disparo dentro de los 3 segundos.
                   </p>
                 </div>
               </div>
@@ -699,7 +699,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
                   {/* 15 cm lateral gap */}
                   <line x1="160" y1="330" x2="205" y2="330" stroke="#FFFFFF" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.5" />
-                  <text x="182" y="325" fill="#00E5FF" fontSize="7" fontWeight="bold" textAnchor="middle">15 cm (6")</text>
+                  <text x="182" y="325" fill="#00E5FF" fontSize="7" fontWeight="bold" textAnchor="middle">15 cm (6 pulg)</text>
 
                   {/* Callouts */}
                   <text x="25" y="310" fill="#E65100" fontSize="8" fontWeight="bold">Tope de cuerda aquí</text>

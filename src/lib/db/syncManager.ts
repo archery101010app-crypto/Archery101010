@@ -1,10 +1,9 @@
 import { db } from "@/lib/firebase";
-import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   getSyncQueue,
   removeFromSyncQueue,
-  updateSyncItem,
-  SyncItem
+  updateSyncItem
 } from "./indexedDB";
 
 // State flags to control sequential runs and prevent race conditions

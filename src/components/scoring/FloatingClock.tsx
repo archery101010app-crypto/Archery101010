@@ -44,6 +44,13 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   // Audio Context Ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const formatTime = (seconds: number) => {
+    const s = Math.max(0, seconds);
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
   // Load presets from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -249,13 +256,6 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const s = Math.max(0, seconds);
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-  };
-
   // Color logic for full-screen overlay based on phase
   const getFaseDataAttribute = () => {
     if (timeLeft <= 0) return "over";
@@ -308,7 +308,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
             exit={{ opacity: 0 }}
             id="clock_fs"
             data-fase={getFaseDataAttribute()}
-            className="fixed inset-0 z-[9999] flex flex-col justify-between p-6 transition-all duration-300"
+            className="fixed inset-0 z-[9999] flex flex-col justify-between p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] overflow-y-auto transition-all duration-300"
           >
             {/* Top Toolbar */}
             <div className="flex justify-between items-center w-full">
@@ -317,6 +317,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
               </span>
               <button
                 onClick={() => setIsOverlayOpen(false)}
+                aria-label="Minimizar reloj"
                 className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 transition"
               >
                 <Minimize2 size={20} />
@@ -394,7 +395,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                   title="Detención inmediata de tiro según reglamento World Archery"
                 >
                   <AlertTriangle size={16} />
-                  <span>🚨 Alto al Fuego (5 Beeps)</span>
+                  <span>🚨 Alto al Fuego (5 Pitidos)</span>
                 </button>
               </div>
             ) : (
@@ -469,7 +470,8 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                     <button
                       type="button"
                       onClick={handleVoiceToggle}
-                      className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
+                      aria-label="Cuenta regresiva de voz"
+                      className={`w-10 h-5 shrink-0 rounded-full transition-colors relative cursor-pointer ${
                         enableVoice ? "bg-cyan-neon" : "bg-neutral-800"
                       }`}
                     >

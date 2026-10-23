@@ -128,7 +128,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="p-4 rounded-2xl border border-yellow-gold/30 bg-yellow-gold/5 flex flex-col gap-3 shadow-glow-yellow/5 relative overflow-hidden"
+            className="p-4 rounded-2xl border border-yellow-gold/30 bg-yellow-gold/5 flex flex-col gap-3 shadow-sm relative overflow-hidden"
           >
             <div className="flex justify-between items-start">
               <div className="flex flex-col gap-0.5">

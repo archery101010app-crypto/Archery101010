@@ -10,7 +10,7 @@ interface CoachDuelsTabProps {
 }
 
 export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps) {
-  const duels = sessions.filter(s => s.isDuel);
+  const duels = (sessions || []).filter(s => s.isDuel);
 
   // Group stats by athlete
   const getDuelsStandings = () => {
@@ -61,18 +61,18 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                 key={idx}
                 className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/40 border border-white/[0.02]"
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-dim font-bold w-4">#{idx + 1}</span>
-                  <div className="flex flex-col">
-                    <span className="text-white text-xs font-bold leading-none">{st.userName}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] text-gray-dim font-bold w-4 shrink-0">#{idx + 1}</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white text-xs font-bold leading-none truncate">{st.userName || "Arquero"}</span>
                     <span className="text-[8px] text-gray-dim mt-1">
                       {st.wins}V - {st.losses}D - {st.ties}E · Total: {st.total}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end">
-                  <span className="text-xs font-black text-purple-400">{winRate}% W/L</span>
+                <div className="flex flex-col items-end shrink-0 pl-2">
+                  <span className="text-xs font-black text-purple-400">{winRate}%</span>
                   <span className="text-[8px] text-gray-dim uppercase">Efectividad</span>
                 </div>
               </div>
@@ -89,25 +89,28 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
           <p className="text-[11px] text-gray-dim text-center py-6">No se han registrado duelos en la arena aún.</p>
         ) : (
           duels.map((duel) => {
-            const dateStr = new Date(duel.timestamp).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short"
-            });
+            const duelDate = new Date(duel.timestamp);
+            const dateStr = isNaN(duelDate.getTime())
+              ? "—"
+              : duelDate.toLocaleDateString(undefined, {
+                  day: "numeric",
+                  month: "short"
+                });
             return (
               <div
                 key={duel.uid || duel.id}
-                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 flex justify-between items-center"
+                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 flex justify-between items-center gap-2"
               >
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-white text-xs font-bold leading-tight">
-                    {duel.userName}
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-white text-xs font-bold leading-tight truncate">
+                    {duel.userName || "Arquero"}
                   </span>
-                  <span className="text-[9px] text-gray-dim">
-                    vs <span className="text-purple-400 font-extrabold">{duel.opponent}</span> · {duel.distance}m · {dateStr}
+                  <span className="text-[9px] text-gray-dim truncate">
+                    vs <span className="text-purple-400 font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
                   </span>
                 </div>
                 
-                <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                <span className={`shrink-0 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
                   duel.outcome === "win"
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan"
                     : duel.outcome === "loss"

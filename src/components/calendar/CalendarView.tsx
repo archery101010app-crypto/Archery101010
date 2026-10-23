@@ -275,13 +275,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     if (diffDays === 0) {
       return { 
         text: language === "es" ? "Hoy" : "Today", 
-        colorClass: "text-amber-500 bg-amber-500/10 border-amber-500/25 shadow-glow-yellow/5", 
+        colorClass: "text-amber-500 bg-amber-500/10 border-amber-500/25 shadow-sm", 
         isPast: false 
       };
     } else if (diffDays === 1) {
       return { 
         text: language === "es" ? "Mañana" : "Tomorrow", 
-        colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-glow-cyan/5", 
+        colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-sm", 
         isPast: false 
       };
     } else if (diffDays > 1) {
@@ -583,7 +583,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           {isCoach && (
             <button
               onClick={() => setShowSyncModal(true)}
-              className="px-3 py-2 rounded-2xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 border border-yellow-gold/40 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-glow-yellow/10 cursor-pointer active:scale-95 transition"
+              className="px-3 py-2 rounded-2xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 border border-yellow-gold/40 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition"
               title="Sincronizar ciclo con el mes"
             >
               <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
@@ -702,7 +702,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   !cell.isCurrentMonth
                     ? "text-gray-dim/20 border-transparent pointer-events-none"
                     : cell.hasSession && !activePhaseInfo && !coachAssignment
-                    ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-glow-cyan/5 cursor-pointer hover:border-cyan-neon/50 active:scale-95"
+                    ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                     : "text-white/80 hover:bg-neutral-900/80 border-white/[0.04] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                 } ${isToday ? "border-cyan-neon shadow-glow-cyan bg-cyan-neon/15" : ""} ${
                   coachAssignment ? "shadow-[0_0_10px_rgba(255,255,255,0.03)]" : ""
@@ -801,7 +801,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
             {phase.notes && (
               <p className="text-[10px] text-white/50 leading-relaxed italic border-t border-white/[0.03] pt-2.5 mt-0.5">
-                "{phase.notes}"
+                &ldquo;{phase.notes}&rdquo;
               </p>
             )}
           </div>
@@ -1155,7 +1155,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             Indicaciones del Entrenador
                           </span>
                           <p className="text-xs text-white/80 italic leading-relaxed bg-neutral-950/50 p-2.5 rounded-xl border border-white/[0.03]">
-                            "{coachAssignment.coachNotes || coachAssignment.description}"
+                            &ldquo;{coachAssignment.coachNotes || coachAssignment.description}&rdquo;
                           </p>
                         </div>
                       )}
@@ -1200,7 +1200,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       </div>
 
                       {activePhaseInfo.phase.notes && (
-                        <p className="text-[10px] text-white/60 italic">"{activePhaseInfo.phase.notes}"</p>
+                        <p className="text-[10px] text-white/60 italic">&ldquo;{activePhaseInfo.phase.notes}&rdquo;</p>
                       )}
 
                       {isCoach && (
@@ -1310,7 +1310,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-glow-yellow/10">
+                  <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-sm">
                     <RefreshCw size={15} />
                   </div>
                   <div>

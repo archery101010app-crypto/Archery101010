@@ -912,7 +912,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
 
                 <p className="text-[10px] text-gray-dim leading-relaxed px-2">
-                  {selectedDetailStar.star.description || `Logrado con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
+                  {selectedDetailStar.star.description || `Se obtiene con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
                 </p>
 
                 <div className="mt-6 flex flex-col gap-2 w-full">

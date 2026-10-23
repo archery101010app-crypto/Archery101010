@@ -156,7 +156,7 @@ export const translations = {
     viewDetails: "Ver Detalles →",
     weeklyPlanner: "Planificador Semanal Básico",
     assignMacro: "Asignar Plan o Ciclo",
-    advTeamAnalytics: "Analytics Avanzados del Equipo",
+    advTeamAnalytics: "Análisis Avanzado del Equipo",
     exportReports: "Exportar Informes",
     whatsappBtnTooltip: "Enviar aviso rápido de WhatsApp",
 
@@ -297,7 +297,7 @@ export const translations = {
     // Scoring
     newSession: "New Session",
     practiceType: "Practice Type",
-    practiceControl: "Puntuación",
+    practiceControl: "Scoring",
     practicePractice: "Practice",
     practiceVolume: "Volume",
     sessionFormat: "WA Format",
@@ -332,7 +332,7 @@ export const translations = {
     resetPhase: "Reset",
     minimize: "Minimize",
     stop: "Stop",
-    noClockToast: "The session will proceed without timer.",
+    noClockToast: "The session will proceed without a timer.",
 
     // Historial
     historyTitle: "Session History",
@@ -344,7 +344,7 @@ export const translations = {
     personalBest: "🏆 Personal Best",
     details: "Details",
     arrowsDistribution: "Arrow Distribution",
-    impactsMap: "Impacts Map",
+    impactsMap: "Impact Map",
     share: "Share",
 
     // Coach View

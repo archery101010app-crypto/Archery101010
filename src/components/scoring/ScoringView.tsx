@@ -206,6 +206,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   }, [ends, config.practiceType]);
 
+  // Sum total score
+  const getScoreValue = (val: string): number => {
+    if (val === "X" || val === "10") return 10;
+    if (val === "M" || val === "") return 0;
+    return Number(val) || 0;
+  };
+
+  const calculateTotalScore = (): number => {
+    let sum = 0;
+    ends.forEach((e) => {
+      e.arrows.forEach((a) => {
+        sum += getScoreValue(a);
+      });
+    });
+    return sum;
+  };
+
   // Autoguardado en caliente tras cada tiro o cambio de notas
   useEffect(() => {
     if (ends.length === 0) return;
@@ -257,23 +274,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       }
     }
   }, [currentEndIdx, mode]);
-
-  // Sum total score
-  const getScoreValue = (val: string): number => {
-    if (val === "X" || val === "10") return 10;
-    if (val === "M" || val === "") return 0;
-    return Number(val) || 0;
-  };
-
-  const calculateTotalScore = (): number => {
-    let sum = 0;
-    ends.forEach((e) => {
-      e.arrows.forEach((a) => {
-        sum += getScoreValue(a);
-      });
-    });
-    return sum;
-  };
 
   const calculateEndTotal = (endIdx: number): number => {
     if (!ends[endIdx]) return 0;
@@ -1191,7 +1191,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </span>
           </div>
           <div className="text-right flex flex-col items-end">
-            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/20 shadow-glow-cyan/20">
+            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/20 shadow-glow-cyan">
               Práctica de Volumen
             </span>
           </div>

@@ -22,7 +22,7 @@ Usa estos textos e información para completar la ficha de la tienda en **Google
 
 * **Dirección de correo de contacto:**
   ```text
-  archery101010app@gmail.com
+  info@archery101010.com
   ```
 
 * **URL de la Política de Privacidad:**

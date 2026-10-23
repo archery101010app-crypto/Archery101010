@@ -342,7 +342,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         <div className="flex-1 flex flex-col gap-4">
           
           {/* Card Volume Giant */}
-          <div className="bg-neutral-900/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-1.5 relative overflow-hidden shadow-glow-cyan/5">
+          <div className="bg-neutral-900/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-1.5 relative overflow-hidden shadow-sm">
             <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
               Volumen Acumulado
             </span>
