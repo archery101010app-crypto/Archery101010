@@ -5,7 +5,8 @@ import { UserProfile } from "@/lib/authService";
 import { 
   Lock, Sparkles, Plus, Calendar, CheckCircle2, ChevronRight, 
   Trash2, ArrowUp, ArrowDown, Users, User, ArrowLeft, Layout, 
-  Copy, Archive, Edit2, AlertCircle, Check, X, RefreshCw
+  Copy, Archive, Edit2, AlertCircle, Check, X, RefreshCw,
+  FileSpreadsheet, Download, UploadCloud, ClipboardPaste, HelpCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -20,6 +21,12 @@ import {
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar } from "@/lib/cycleCalendarSync";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { 
+  parseSpreadsheetData, 
+  ParsedCycleResult, 
+  downloadSampleTemplate, 
+  exportCycleToCsv 
+} from "@/lib/cycleImporter";
 
 interface CoachMacrocycleTabProps {
   user: UserProfile;
@@ -57,12 +64,25 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [syncMonth, setSyncMonth] = useState(new Date().getMonth());
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Smart Spreadsheet Import Modal states
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importPlanName, setImportPlanName] = useState("");
+  const [importPreview, setImportPreview] = useState<ParsedCycleResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
   // Hook into mobile back button and edge-swipe gestures
   useEffect(() => {
     if (showCreateModal) {
       return registerModalDismiss(() => setShowCreateModal(false));
     }
   }, [showCreateModal]);
+
+  useEffect(() => {
+    if (showImportModal) {
+      return registerModalDismiss(() => setShowImportModal(false));
+    }
+  }, [showImportModal]);
 
   useEffect(() => {
     if (showSyncModal) {
@@ -75,6 +95,109 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
       return registerModalDismiss(() => setSelectedMacro(null));
     }
   }, [selectedMacro]);
+
+  const handleOpenImportModal = () => {
+    setImportText("");
+    setImportPlanName("");
+    setImportPreview(null);
+    setImportError(null);
+    setShowImportModal(true);
+  };
+
+  const handleParseImport = (textToParse: string, nameOverride?: string) => {
+    setImportText(textToParse);
+    setImportError(null);
+    if (!textToParse.trim()) {
+      setImportPreview(null);
+      return;
+    }
+    const currentName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan de Entrenamiento 2026");
+    const result = parseSpreadsheetData(textToParse, currentName);
+    if (result.success && result.stages.length > 0) {
+      setImportPreview(result);
+      if (!importPlanName && !nameOverride) {
+        setImportPlanName(result.planName);
+      }
+    } else {
+      setImportPreview(null);
+      setImportError(result.error || "No se detectaron etapas. Verifica las columnas de tu Excel.");
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          handleParseImport(text);
+          return;
+        }
+      }
+      alert("Copia las celdas en tu Excel o Google Sheets y pégalas directamente en el recuadro de texto.");
+    } catch {
+      alert("Pega directamente el contenido copiado en el campo de texto.");
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+        setImportPlanName(cleanName);
+        handleParseImport(content, cleanName);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview || importPreview.stages.length === 0) return;
+    const id = generateResilientId("MAC");
+    const nowStr = new Date().toISOString();
+    const finalName = importPlanName.trim() || importPreview.planName || "Plan Importado";
+
+    const newCycle: Macrocycle = {
+      id,
+      name: finalName,
+      coachId: user.uid,
+      clubId: user.clubId || "CLB-DEMO",
+      startDate: importPreview.startDate,
+      endDate: importPreview.endDate,
+      phases: importPreview.stages,
+      assignmentType: "club",
+      assignedAthleteIds: [],
+      volumeGoal: importPreview.totalVolumeGoal,
+      currentVolume: 0,
+      status: "active",
+      createdAt: nowStr,
+      updatedAt: nowStr
+    };
+
+    await saveLocalMacrocycle(id, newCycle);
+
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "macrocycles",
+      operation: "INSERT",
+      payloadId: id,
+      payload: newCycle,
+      timestamp: Date.now()
+    });
+
+    const list = await getLocalMacrocycles();
+    setMacrocycles(list);
+    setShowImportModal(false);
+    setSelectedMacro(newCycle);
+
+    // Ask coach if they want to sync calendar right now
+    if (confirm(`✓ ¡Plan "${finalName}" importado con éxito!\n\nSe cargaron ${importPreview.stages.length} etapas.\n\n¿Deseas sincronizar el calendario de tus alumnos para el mes actual ahora mismo?`)) {
+      handleOpenSyncModal(newCycle);
+    }
+  };
 
   const handleOpenSyncModal = (macro: Macrocycle) => {
     setMacroToSync(macro);
@@ -496,13 +619,23 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
           >
             <div className="flex justify-between items-center">
               <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Ciclos Activos</span>
-              <button
-                onClick={handleOpenCreate}
-                className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition shadow-glow-cyan"
-              >
-                <Plus size={12} />
-                <span>+ Ciclo</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleOpenImportModal}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-emerald-400 font-black text-[9px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition hover:border-emerald-500/30 shadow-sm"
+                  title="Importar plan copiado de Excel o Google Sheets"
+                >
+                  <FileSpreadsheet size={12} className="text-emerald-400" />
+                  <span>Importar Excel / Sheets</span>
+                </button>
+                <button
+                  onClick={handleOpenCreate}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition shadow-glow-cyan"
+                >
+                  <Plus size={12} />
+                  <span>+ Ciclo</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -631,6 +764,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 >
                   <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
                   <span>Sincronizar Calendario</span>
+                </button>
+                <button
+                  onClick={() => exportCycleToCsv(selectedMacro)}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-emerald-400 transition cursor-pointer border border-white/5"
+                  title="Exportar a Excel / Google Sheets (CSV)"
+                >
+                  <Download size={13} />
                 </button>
                 <button
                   onClick={() => handleOpenEdit(selectedMacro)}
@@ -1295,6 +1435,193 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* MODAL IMPORT EXCEL / GOOGLE SHEETS */}
+      <AnimatePresence>
+        {showImportModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-lg p-5 flex flex-col gap-4 max-h-[92vh] overflow-y-auto shadow-2xl relative"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <FileSpreadsheet size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-white tracking-wide flex items-center gap-2">
+                      Importar Plan desde Excel / Sheets
+                    </h3>
+                    <p className="text-[10px] text-white/50">
+                      Pega tus celdas copiadas o carga tu archivo CSV
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="p-1.5 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Action Buttons: Paste, Upload, Template */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={handlePasteClipboard}
+                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95"
+                >
+                  <ClipboardPaste size={14} className="text-cyan-neon" />
+                  <span>Pegar Celdas</span>
+                </button>
+
+                <label className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition cursor-pointer active:scale-95 text-center">
+                  <UploadCloud size={14} className="text-emerald-400" />
+                  <span>Subir Archivo</span>
+                  <input
+                    type="file"
+                    accept=".csv,.tsv,.txt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={downloadSampleTemplate}
+                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95 text-center"
+                >
+                  <Download size={14} className="text-yellow-gold" />
+                  <span>Descargar Modelo</span>
+                </button>
+              </div>
+
+              {/* Plan Name */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
+                  Nombre del Plan / Ciclo
+                </label>
+                <input
+                  type="text"
+                  value={importPlanName}
+                  onChange={(e) => {
+                    setImportPlanName(e.target.value);
+                    if (importText.trim()) {
+                      handleParseImport(importText, e.target.value);
+                    }
+                  }}
+                  placeholder="Ej: Plan Nacional 2026 - Recurvo"
+                  className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-400 transition placeholder:text-white/20"
+                />
+              </div>
+
+              {/* Text Area for Pasted Data */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
+                    Datos (Copia y pega desde Excel o Google Sheets)
+                  </label>
+                  {importText.trim() && (
+                    <span className="text-[9px] text-white/40">
+                      {importText.trim().split("\n").length} líneas
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={importText}
+                  onChange={(e) => handleParseImport(e.target.value)}
+                  placeholder={`Ejemplo de columnas (separadas por tabulación o comas):\nEtapa\tInicio\tFin\tFlechas/Sem\tSesiones/Sem\tEnfoque\nPreparación General\t2026-02-01\t2026-03-15\t450\t5\tVolumen base y técnica\nPreparación Especial\t2026-03-16\t2026-04-30\t550\t5\tRitmo de tiro y agrupación`}
+                  rows={4}
+                  className="bg-neutral-900 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-white/90 outline-none focus:border-emerald-400 transition placeholder:text-white/20 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Error Message */}
+              {importError && (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] flex items-center gap-2">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {/* Live Preview */}
+              {importPreview && importPreview.stages.length > 0 && (
+                <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle2 size={12} />
+                      {importPreview.stages.length} Etapas detectadas
+                    </span>
+                    <span className="text-white/60 font-mono">
+                      Meta: {importPreview.totalVolumeGoal.toLocaleString()} flechas
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    {importPreview.stages.map((stg, i) => {
+                      const diffDays = Math.max(1, Math.round((new Date(stg.endDate).getTime() - new Date(stg.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+                      const estWeeks = Math.max(1, Math.round(diffDays / 7));
+                      return (
+                        <div
+                          key={stg.id || i}
+                          className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between text-[10px]"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: stg.color || "#10B981" }}
+                            />
+                            <div>
+                              <div className="font-black text-white">{stg.name}</div>
+                              <div className="text-[9px] text-white/40 font-mono">
+                                {stg.startDate} ➔ {stg.endDate} ({estWeeks} sem)
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-cyan-neon font-black font-mono">
+                              {stg.weeklyArrowGoal} <span className="text-[8px] font-normal text-white/40">fl/sem</span>
+                            </div>
+                            <div className="text-[9px] text-white/40">
+                              {stg.weeklySessionGoal} sesiones/sem
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!importPreview || importPreview.stages.length === 0}
+                  onClick={handleConfirmImport}
+                  className="flex-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Sparkles size={14} />
+                  <span>Cargar Plan al Club</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );
