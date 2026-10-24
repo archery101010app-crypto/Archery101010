@@ -1,7 +1,7 @@
 {
   "name": "Archery 101010",
   "short_name": "Archery 101010",
-  "description": "SaaS Premium y Offline-First para Tiro con Arco Olímpico y de Alto Rendimiento",
+  "description": "App para arqueros y coach: planificación, registro en diana, duelos eliminatorios y cronógrafo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#050505",

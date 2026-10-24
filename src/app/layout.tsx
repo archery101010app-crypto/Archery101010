@@ -3,16 +3,16 @@ import "./globals.css";
 import IPhoneFrame from "@/components/ui/IPhoneFrame";
 
 export const metadata: Metadata = {
-  title: "Archery 101010 - SaaS Premium de Tiro con Arco",
-  description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
+  title: "Archery 10 10 10 - App para Arqueros y Coaches",
+  description: "App para arqueros y coach: planificación, registro de anotaciones en diana, duelos eliminatorios, cronógrafo balístico y mucho más.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
     apple: "/images/logo_final.png",
   },
   openGraph: {
-    title: "Archery 101010 - SaaS Premium de Tiro con Arco",
-    description: "Plataforma de entrenamiento de tiro con arco moderna, inteligente y offline-first.",
+    title: "Archery 10 10 10 - App para Arqueros y Coaches",
+    description: "App para arqueros y coach: planificación, registro de anotaciones en diana, duelos eliminatorios, cronógrafo balístico y mucho más.",
     url: "https://archery101010.com",
     siteName: "Archery 101010",
     images: [
