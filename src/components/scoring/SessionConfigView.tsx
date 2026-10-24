@@ -101,7 +101,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   };
 
   return (
-    <div className="flex flex-col gap-5 py-4 min-h-full w-full max-w-full overflow-x-hidden">
+    <div className="flex flex-col gap-4 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
@@ -119,7 +119,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       </div>
 
       {/* Configuration Form wrapper */}
-      <div className="flex-1 flex flex-col gap-5">
+      <div className="flex-1 flex flex-col gap-4">
         {/* Draft Restore Alert Card */}
         {draftSession && (
           <motion.div
@@ -318,7 +318,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-4 mt-auto rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan cursor-pointer flex justify-center items-center gap-1.5"
+          className="w-full py-3.5 mt-2 mb-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan cursor-pointer flex justify-center items-center gap-1.5"
         >
           <Target size={16} />
           <span>{t("startSessionBtn")}</span>
