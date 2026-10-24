@@ -598,7 +598,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   return (
     <div className="flex flex-col gap-5 py-4 min-h-full relative overflow-hidden">
       {/* Background neon blobs */}
-      <div className="absolute top-[-10%] left-[-20%] w-[80%] aspect-square rounded-full bg-purple-500/10 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute top-[-10%] left-[-20%] w-[80%] aspect-square rounded-full bg-cyan-neon/5 blur-[120px] pointer-events-none z-0" />
       <div className="absolute bottom-[-10%] right-[-20%] w-[80%] aspect-square rounded-full bg-cyan-neon/5 blur-[120px] pointer-events-none z-0" />
 
       {/* Header */}
@@ -613,16 +613,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <h2 className="text-white text-lg font-black uppercase tracking-wide flex items-center gap-1.5">
             ⚔️ Duelos de Eliminación
           </h2>
-          <p className="text-[10px] text-purple-400 uppercase tracking-widest font-black">
+          <p className="text-[10px] text-cyan-neon uppercase tracking-widest font-black">
             Lobby de Competencia 1v1
           </p>
         </div>
       </div>
 
       {/* Competitor Gamertag / Alias Card */}
-      <div className="bg-neutral-900/80 border border-purple-500/20 rounded-2xl px-3.5 py-2.5 flex items-center justify-between z-10 shadow-sm backdrop-blur-md">
+      <div className="bg-neutral-900/80 border border-white/10 rounded-2xl px-3.5 py-2.5 flex items-center justify-between z-10 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300 text-xs font-black shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon text-xs font-black shrink-0">
             @
           </div>
           <div className="flex flex-col min-w-0">
@@ -634,19 +634,19 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   autoFocus
                   value={currentAlias}
                   onChange={(e) => setCurrentAlias(e.target.value)}
-                  className="h-7 w-32 bg-neutral-950 border border-purple-500 text-purple-300 font-mono font-bold text-xs px-2 rounded-lg outline-none"
+                  className="h-7 w-32 bg-neutral-950 border border-cyan-neon text-cyan-neon font-mono font-bold text-xs px-2 rounded-lg outline-none"
                   placeholder="alias"
                 />
                 <button
                   type="submit"
-                  className="h-7 px-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                  className="h-7 px-2.5 rounded-lg bg-cyan-neon hover:bg-cyan-brand text-black font-black text-[10px] flex items-center gap-1 cursor-pointer transition active:scale-95"
                 >
                   <Check size={12} />
                   <span>Ok</span>
                 </button>
               </form>
             ) : (
-              <span className="text-white text-xs font-mono font-black truncate text-purple-300">
+              <span className="text-white text-xs font-mono font-black truncate text-cyan-neon">
                 @{currentAlias}
               </span>
             )}
@@ -657,7 +657,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <button
             type="button"
             onClick={() => setIsEditingAlias(true)}
-            className="h-7 px-2.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1 shrink-0"
+            className="h-7 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-neon text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
           >
             <Edit3 size={11} />
             <span>Cambiar</span>
@@ -666,7 +666,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       </div>
 
       {/* Stats / Intro banner */}
-      <div className="bg-gradient-to-r from-purple-950/40 via-neutral-900/60 to-cyan-950/20 backdrop-blur-md border border-purple-500/20 p-4 rounded-3xl z-10 flex items-center justify-between shadow-[0_4px_24px_rgba(168,85,247,0.08)]">
+      <div className="bg-neutral-900/60 backdrop-blur-md border border-white/10 p-4 rounded-3xl z-10 flex items-center justify-between shadow-sm">
         <div className="flex flex-col gap-1 w-[70%]">
           <h3 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1">
             <Trophy size={14} className="text-yellow-gold" />
@@ -688,7 +688,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           onClick={() => setActiveTab("SEARCH")}
           className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
             activeTab === "SEARCH"
-              ? "bg-purple-600 text-white shadow-glow-purple"
+              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
               : "text-gray-dim hover:text-white"
           }`}
         >
@@ -698,7 +698,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           onClick={() => setActiveTab("DRAFTS")}
           className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all relative ${
             activeTab === "DRAFTS"
-              ? "bg-purple-600 text-white shadow-glow-purple"
+              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
               : "text-gray-dim hover:text-white"
           }`}
         >
@@ -713,7 +713,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           onClick={() => setActiveTab("HISTORY")}
           className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
             activeTab === "HISTORY"
-              ? "bg-purple-600 text-white shadow-glow-purple"
+              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
               : "text-gray-dim hover:text-white"
           }`}
         >
@@ -728,9 +728,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setIsCreatingRoom(!isCreatingRoom)}
-              className="bg-neutral-900/60 backdrop-blur-md border border-white/5 hover:border-purple-500/30 p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer transition group"
+              className="bg-neutral-900/60 backdrop-blur-md border border-white/5 hover:border-cyan-neon/40 p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer transition group"
             >
-              <Plus size={18} className="text-purple-400 group-hover:scale-110 transition" />
+              <Plus size={18} className="text-cyan-neon group-hover:scale-110 transition" />
               <span className="text-[10px] text-white font-bold uppercase tracking-wider">Crear Duelo</span>
             </button>
             
@@ -774,7 +774,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         onClick={() => setDuelMode("BOT")}
                         className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
                           duelMode === "BOT"
-                            ? "bg-purple-600 text-white shadow-glow-purple"
+                            ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
                             : "text-gray-dim hover:text-white"
                         }`}
                       >
@@ -785,7 +785,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         onClick={() => setDuelMode("FRIEND")}
                         className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
                           duelMode === "FRIEND"
-                            ? "bg-purple-600 text-white shadow-glow-purple"
+                            ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
                             : "text-gray-dim hover:text-white"
                         }`}
                       >
@@ -828,7 +828,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       <select
                         value={botLevel}
                         onChange={(e) => setBotLevel(e.target.value as any)}
-                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-purple-500/50 transition"
+                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
                       >
                         <option value="Rookie">Novato (Rookie Bot - 7.2 Promedio)</option>
                         <option value="Medium">Nivel Medio (Medium Archer Bot - 8.3 Promedio)</option>
@@ -837,13 +837,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       </select>
                     </div>
                   ) : (
-                    <p className="text-[9.5px] text-purple-300 leading-snug">
+                    <p className="text-[9.5px] text-cyan-neon/90 leading-snug">
                       ✨ Genera una invitación abierta con un código QR y enlace para compartir por WhatsApp con cualquier arquero real.
                     </p>
                   )}
                   <button
                     type="submit"
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-[0_0_15px_rgba(168,85,247,0.15)] text-center"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-glow-cyan text-center"
                   >
                     {duelMode === "BOT" ? "Lanzar Duelo y Esperar Rival" : "Generar Invitación Abierta"}
                   </button>
@@ -863,7 +863,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar arquero o club..."
-                className="w-full bg-neutral-900/60 border border-white/5 text-white text-xs pl-10 pr-4 py-2.5 rounded-xl outline-none focus:border-purple-500/40 transition duration-150"
+                className="w-full bg-neutral-900/60 border border-white/5 text-white text-xs pl-10 pr-4 py-2.5 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
               />
             </div>
 
@@ -873,7 +873,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 onClick={() => setBowFilter("ALL")}
                 className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
                   bowFilter === "ALL"
-                    ? "bg-purple-500/10 border-purple-500 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.1)]"
+                    ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
                     : "bg-neutral-900/40 border-white/5 text-gray-dim"
                 }`}
               >
@@ -885,7 +885,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   onClick={() => setBowFilter(bow)}
                   className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
                     bowFilter === bow
-                      ? "bg-purple-500/10 border-purple-500 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.1)]"
+                      ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
                       : "bg-neutral-900/40 border-white/5 text-gray-dim"
                   }`}
                 >
@@ -952,7 +952,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           key={riv.uid}
                           variants={cardVariants}
                           exit={{ opacity: 0, scale: 0.95 }}
-                          className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-purple-500/25 hover:shadow-[0_0_12px_rgba(168,85,247,0.03)] transition-all duration-200"
+                          className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-cyan-neon/30 transition-all duration-200"
                         >
                           <div className="flex items-center gap-3 w-[70%]">
                             <div className="relative shrink-0">
@@ -966,9 +966,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
                                 {riv.nickname && (
-                                  <span className="text-purple-400 font-mono text-[9px] font-bold">@{riv.nickname}</span>
+                                  <span className="text-cyan-neon font-mono text-[9px] font-bold">@{riv.nickname}</span>
                                 )}
-                                <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase shrink-0">
+                                <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-yellow-gold font-extrabold uppercase shrink-0">
                                   {riv.bowConfig.type}
                                 </span>
                               </div>
@@ -1030,7 +1030,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-gray-300 text-xs font-medium truncate">{riv.fullName}</span>
                             {riv.nickname && (
-                              <span className="text-purple-400/80 font-mono text-[9px] font-semibold">@{riv.nickname}</span>
+                              <span className="text-cyan-neon/80 font-mono text-[9px] font-semibold">@{riv.nickname}</span>
                             )}
                             <span className="text-[7px] px-1 py-0.2 rounded bg-neutral-950 text-gray-500 font-bold uppercase shrink-0">
                               {riv.bowConfig.type}
@@ -1067,7 +1067,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       {activeTab === "DRAFTS" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
           <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-            <Users size={13} className="text-purple-400" />
+            <Users size={13} className="text-cyan-neon" />
             Duelos en Progreso ({drafts.length})
           </h4>
           
@@ -1081,7 +1081,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               drafts.map((dr) => (
                 <div
                   key={dr.uid}
-                  className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3.5 flex justify-between items-center hover:border-purple-500/25 transition-all duration-200"
+                  className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3.5 flex justify-between items-center hover:border-cyan-neon/30 transition-all duration-200"
                 >
                   <div className="flex flex-col gap-1 w-[70%]">
                     <div className="flex items-center gap-1.5">
@@ -1136,7 +1136,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       {activeTab === "HISTORY" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
           <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-            <Trophy size={13} className="text-purple-400" />
+            <Trophy size={13} className="text-yellow-gold" />
             Historial de Duelos ({history.length})
           </h4>
           
@@ -1157,7 +1157,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="flex flex-col gap-1 w-[70%]">
                       <div className="flex items-center gap-1.5">
                         <span className="text-white text-xs font-bold">vs {h.opponent} {flag}</span>
-                        <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-purple-400 font-extrabold uppercase">
+                        <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-yellow-gold font-extrabold uppercase">
                           {h.bowConfig?.type || "Barebow"}
                         </span>
                       </div>
@@ -1196,15 +1196,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-neutral-950 border border-purple-500/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(168,85,247,0.15)] overflow-hidden"
+              className="bg-neutral-950 border border-white/10 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-2xl overflow-hidden"
             >
               <div 
                 className="absolute inset-0 opacity-10 pointer-events-none"
-                style={{ background: `radial-gradient(circle, #a855f7 0%, transparent 70%)` }}
+                style={{ background: `radial-gradient(circle, #00BFFF 0%, transparent 70%)` }}
               />
 
               <div className="relative z-10 flex flex-col items-center">
-                <span className="text-[10px] text-purple-300 font-black tracking-widest uppercase block mb-1">
+                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
                   Invitación Generada ✉️
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
@@ -1215,7 +1215,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </p>
 
                 {/* CSS QR Code Mockup */}
-                <div className="my-5 w-40 h-40 bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center relative shadow-[0_0_15px_rgba(168,85,247,0.1)] select-none">
+                <div className="my-5 w-40 h-40 bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center relative shadow-glow-cyan select-none">
                   {/* Laser scan animation line */}
                   <motion.div 
                     animate={{ top: ["5%", "95%", "5%"] }}
@@ -1239,7 +1239,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="w-5.5 h-5.5 bg-white rounded-sm" />
                     <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
                     <div className="w-5.5 h-5.5 bg-white rounded-sm" />
-                    <div className="w-5.5 h-5.5 bg-purple-500 rounded-sm" />
+                    <div className="w-5.5 h-5.5 bg-yellow-gold rounded-sm" />
                     <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
 
                     <div className="w-5.5 h-5.5 bg-white/20 rounded-sm" />
@@ -1298,7 +1298,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       navigator.clipboard.writeText(generatedInvite.text);
                       alert("¡Enlace e invitación completa copiada al portapapeles!");
                     }}
-                    className="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1 shadow-glow-purple"
+                    className="py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10 font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1"
                   >
                     <span>Copiar Enlace</span>
                   </button>
@@ -1352,16 +1352,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-[320px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_40px_rgba(168,85,247,0.1)] relative overflow-hidden"
+              className="w-full max-w-[320px] bg-neutral-950 border border-white/10 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 to-indigo-600" />
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
               
-              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto mt-2 animate-spin [animation-duration:3s]">
+              <div className="w-12 h-12 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon mx-auto mt-2 animate-spin [animation-duration:3s]">
                 🎯
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[9px] text-purple-400 font-black tracking-widest uppercase">
+                <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase">
                   Desafío en Proceso
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
