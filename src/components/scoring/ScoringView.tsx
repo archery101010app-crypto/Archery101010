@@ -13,6 +13,7 @@ import { calculateDispersionAnalysis, DispersionAnalysis } from "@/lib/scoring/d
 import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
+import { playRealisticMechanicalClockClick } from "@/lib/soundUtils";
 
 interface ScoringViewProps {
   user: UserProfile;
@@ -995,35 +996,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const playTallyClickSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      const filter = ctx.createBiquadFilter();
-      filter.type = "bandpass";
-      filter.frequency.setValueAtTime(1400, ctx.currentTime);
-      filter.Q.setValueAtTime(10, ctx.currentTime);
-      
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(1000, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.04);
-      
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.005, ctx.currentTime + 0.04);
-      
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start();
-      osc.stop(ctx.currentTime + 0.05);
-    } catch (e) {
-      console.warn("AudioContext failed:", e);
-    }
+    playRealisticMechanicalClockClick();
+    triggerHaptic("tick");
   };
 
   const handleTallyIncrement = () => {

@@ -211,3 +211,90 @@ export function stopRingingSound() {
   activeRingOscillators = [];
 }
 
+/**
+ * Sonido realista de "clock/click" mecánico de contador de flechas (Tally Counter)
+ * Sintetiza la física acústica de un contador manual cromado:
+ * 1. Micro-fricción de émbolo (ruido blanco moldeado con filtro pasa-altos).
+ * 2. Transitorio percutor de impacto metálico (martillo de acero en alta frecuencia).
+ * 3. Resonancia de cavidad interna metálica (cuerpo de acero amortiguado).
+ * 4. Chasquido de trinquete de muelle secundario (pawl snap a los 12ms).
+ */
+export function playRealisticMechanicalClockClick() {
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // --- Capa 1: Micro-fricción de pulsación metálica (ruido de 5ms) ---
+    const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * 0.005));
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "highpass";
+    noiseFilter.frequency.setValueAtTime(3200, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.35, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.005);
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseSource.start(now);
+
+    // --- Capa 2: Golpe percutor metálico principal (Transient Strike) ---
+    const strikeOsc = ctx.createOscillator();
+    const strikeGain = ctx.createGain();
+    strikeOsc.type = "triangle";
+    strikeOsc.frequency.setValueAtTime(3600, now);
+    strikeOsc.frequency.exponentialRampToValueAtTime(750, now + 0.016);
+    strikeGain.gain.setValueAtTime(0.7, now);
+    strikeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+    strikeOsc.connect(strikeGain);
+    strikeGain.connect(ctx.destination);
+    strikeOsc.start(now);
+    strikeOsc.stop(now + 0.02);
+
+    // --- Capa 3: Resonancia de carcasa metálica (Dual-Band Metal Body) ---
+    const bodyOsc = ctx.createOscillator();
+    const bodyGain = ctx.createGain();
+    const bodyFilter = ctx.createBiquadFilter();
+    bodyFilter.type = "bandpass";
+    bodyFilter.frequency.setValueAtTime(1350, now);
+    bodyFilter.Q.setValueAtTime(9, now);
+
+    bodyOsc.type = "sine";
+    bodyOsc.frequency.setValueAtTime(1420, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(620, now + 0.035);
+    bodyGain.gain.setValueAtTime(0.5, now);
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+    bodyOsc.connect(bodyFilter);
+    bodyFilter.connect(bodyGain);
+    bodyGain.connect(ctx.destination);
+    bodyOsc.start(now);
+    bodyOsc.stop(now + 0.04);
+
+    // --- Capa 4: Salto del trinquete secundario a los 12ms (Spring Pawl Snap) ---
+    const snapOsc = ctx.createOscillator();
+    const snapGain = ctx.createGain();
+    snapOsc.type = "square";
+    snapOsc.frequency.setValueAtTime(1050, now + 0.012);
+    snapOsc.frequency.exponentialRampToValueAtTime(320, now + 0.024);
+
+    snapGain.gain.setValueAtTime(0, now);
+    snapGain.gain.setValueAtTime(0.22, now + 0.012);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.026);
+
+    snapOsc.connect(snapGain);
+    snapGain.connect(ctx.destination);
+    snapOsc.start(now + 0.012);
+    snapOsc.stop(now + 0.03);
+  } catch (e) {
+    console.warn("[Sound] Failed to play mechanical clock click:", e);
+  }
+}
+
+
