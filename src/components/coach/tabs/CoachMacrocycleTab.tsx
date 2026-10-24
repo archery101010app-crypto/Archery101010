@@ -596,9 +596,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
           <button
             onClick={onUpgrade}
-            className="w-full mt-3 py-3 rounded-full bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow hover:brightness-105 active:scale-98 transition cursor-pointer"
+            className="w-full mt-3 py-3 rounded-full bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow hover:brightness-105 active:scale-98 transition cursor-pointer flex items-center justify-center gap-1.5"
           >
-            Adquirir Plan PRO
+            <Sparkles size={14} />
+            <span>Activar Plan PRO Gratis (Promo Lanzamiento) ✦</span>
           </button>
         </div>
       </div>

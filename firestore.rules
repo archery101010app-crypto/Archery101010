@@ -1,8 +1,676 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model & Architecture Documentation
+    // ===============================================================
+    //
+    // Application: Archery 101010
+    //
+    // Collection: users
+    // Document ID: {userId} (user's Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required, 1-128 chars, matches userId) [Immutable]
+    //   - email: string (required, valid email, 3-128 chars)
+    //   - fullName: string (required, 1-100 chars)
+    //   - nickname: string (optional, 0-50 chars)
+    //   - birthDate: string (optional, 0-30 chars)
+    //   - country: string (optional, 0-10 chars)
+    //   - city: string (optional, 0-100 chars)
+    //   - gender: string (optional, 0-20 chars)
+    //   - role: string (required: 'archer' | 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
+    //   - plan: string (optional: 'FREE' | 'PRO')
+    //   - clubId: string or null (optional, 0-100 chars)
+    //   - clubName: string or null (optional, 0-100 chars)
+    //   - clubLogo: string (optional, 0-2048 chars)
+    //   - clubCountry: string (optional, 0-10 chars)
+    //   - clubInviteCode: string (optional, 0-50 chars)
+    //   - isClubCreator: bool (optional)
+    //   - whatsappNumber: string (optional, 0-30 chars)
+    //   - password: string (optional, 0-100 chars)
+    //   - profileSetupCompleted: bool (optional)
+    //   - bowConfig: map (optional)
+    //   - bows: list (optional, max 10 items)
+    //   - physicalData: map (optional)
+    //   - createdAt: number / timestamp (optional)
+    //   - lastActiveAt: number / timestamp (optional)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: sessions
+    // Document ID: {sessionId} (e.g., "SES-timestamp-random")
+    // Fields:
+    //   - id: string (optional, 1-100 chars)
+    //   - userId: string (required, 1-128 chars, matches creator UID) [Immutable]
+    //   - userName: string (optional, 0-100 chars)
+    //   - clubId: string or null (optional, 0-100 chars)
+    //   - timestamp: number / timestamp (required)
+    //   - practiceType: string (optional, 0-50 chars)
+    //   - bowType: string (optional, 0-30 chars)
+    //   - distance: number (optional, 0-150)
+    //   - format: string (optional, 0-50 chars)
+    //   - endsCount: number (optional, 0-100)
+    //   - arrowsPerEnd: number (optional, 0-20)
+    //   - maxScore: number (optional, 0-2000)
+    //   - score: number (optional, 0-2000)
+    //   - ends: list (optional, max 100 items)
+    //   - sessionNote: string (optional, 0-2000 chars)
+    //   - impacts: list (optional, max 500 items)
+    //   - totalArrowsVolume: number (optional, 0-2000)
+    //   - blockStats: map (optional)
+    //   - deletedByArcher: bool (optional)
+    //   - restoredByCoach: bool (optional)
+    //   - isVolumeOnly: bool (optional)
+    //   - isDraft: bool (optional)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: calendar_events
+    // Document ID: {eventId} (e.g., "EVT-timestamp-random")
+    // Fields:
+    //   - id: string (required, 1-100 chars)
+    //   - title: string (required, 1-150 chars)
+    //   - date: string (required, 1-30 chars)
+    //   - description: string (optional, 0-2000 chars)
+    //   - createdByRole: string (optional: 'coach' | 'archer' | 'admin')
+    //   - createdByName: string (optional, 0-100 chars)
+    //   - createdByUid: string (required, 1-128 chars) [Immutable]
+    //   - clubId: string (optional, 0-100 chars)
+    //   - type: string (optional: 'competition' | 'training' | 'meeting' | 'other')
+    //   - timestamp: number / timestamp (optional)
+    //   - macrocycleId: string (optional, 0-100 chars)
+    //   - phaseId: string (optional, 0-100 chars)
+    //   - phaseName: string (optional, 0-100 chars)
+    //   - phaseType: string (optional, 0-100 chars)
+    //   - phaseColor: string (optional, 0-30 chars)
+    //   - targetArrows: number (optional, 0-2000)
+    //   - assignedAthleteIds: list (optional, max 200 items)
+    //   - focusPoints: list (optional, max 50 items)
+    //   - coachNotes: string (optional, 0-2000 chars)
+    //   - isRestDay: bool (optional)
+    //   - isCompleted: bool (optional)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: macrocycles
+    // Document ID: {macrocycleId} (e.g., "MAC-timestamp-random")
+    // Fields:
+    //   - id: string (required, 1-100 chars)
+    //   - name: string (required, 1-150 chars)
+    //   - coachId: string (required, 1-128 chars) [Immutable]
+    //   - clubId: string (optional, 0-100 chars)
+    //   - startDate: string (optional, 0-30 chars)
+    //   - endDate: string (optional, 0-30 chars)
+    //   - phases: list (optional, max 50 items)
+    //   - assignmentType: string (optional: 'club' | 'group' | 'individual')
+    //   - assignedAthleteIds: list (optional, max 200 items)
+    //   - groupName: string (optional, 0-100 chars)
+    //   - volumeGoal: number (optional, 0-1000000)
+    //   - currentVolume: number (optional, 0-1000000)
+    //   - status: string (optional: 'active' | 'completed' | 'draft')
+    //   - createdAt: string / number / timestamp (optional)
+    //   - updatedAt: string / number / timestamp (optional)
+    //
+    // Collection: athlete_stars
+    // Document ID: {userId} (user's UID)
+    // Fields:
+    //   - userId: string (required, 1-128 chars) [Immutable]
+    //   - userName: string (optional, 0-100 chars)
+    //   - bowType: string (optional: 'Recurve' | 'Compound' | 'Barebow')
+    //   - highestScore: number (required, 0-720)
+    //   - highestStarLevel: number (required, 1-10)
+    //   - starName: string (optional, 0-100 chars)
+    //   - starColor: string (optional, 0-50 chars)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: star_history
+    // Document ID: {historyId} (e.g., "STR-timestamp-random")
+    // Fields:
+    //   - id: string (required, 1-100 chars)
+    //   - userId: string (required, 1-128 chars) [Immutable]
+    //   - userName: string (optional, 0-100 chars)
+    //   - bowType: string (optional: 'Recurve' | 'Compound' | 'Barebow')
+    //   - score: number (required, 0-720)
+    //   - starLevel: number (required, 1-10)
+    //   - starName: string (optional, 0-100 chars)
+    //   - starColor: string (optional, 0-50 chars)
+    //   - date: string (optional, 0-30 chars)
+    //   - eventId: string (optional, 0-100 chars)
+    //   - timestamp: number / timestamp (optional)
+    //
+    // Collection: active_duels
+    // Document ID: {roomCode} (e.g., "INV-C50-XYZ12")
+    // Fields:
+    //   - id: string (required, 1-100 chars)
+    //   - creatorUid: string (required, 1-128 chars) [Immutable]
+    //   - creatorName: string (optional, 0-100 chars)
+    //   - creatorCountry: string (optional, 0-10 chars)
+    //   - creatorConnected: bool (optional)
+    //   - creatorConnectedAt: number / timestamp (optional)
+    //   - creatorReady: bool (optional)
+    //   - playerUid: string (optional, 0-128 chars)
+    //   - playerName: string (optional, 0-100 chars)
+    //   - playerConnected: bool (optional)
+    //   - playerConnectedAt: number / timestamp (optional)
+    //   - playerReady: bool (optional)
+    //   - bowType: string (optional, 0-30 chars)
+    //   - distance: number (optional, 0-150)
+    //   - status: string (optional: 'waiting' | 'active' | 'finished' | 'cancelled')
+    //   - webrtcOffer: string or null (optional, 0-65536 chars)
+    //   - webrtcAnswer: string or null (optional, 0-65536 chars)
+    //   - creatorCandidates: list (optional, max 100 items)
+    //   - playerCandidates: list (optional, max 100 items)
+    //   - creatorPhoto: string or null (optional, 0-2048 chars)
+    //   - playerPhoto: string or null (optional, 0-2048 chars)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: duel_invitations
+    // Document ID: {invitationId} (e.g., "INV-timestamp-random")
+    // Fields:
+    //   - senderUid: string (required, 1-128 chars) [Immutable]
+    //   - senderName: string (optional, 0-100 chars)
+    //   - receiverUid: string (required, 1-128 chars) [Immutable]
+    //   - bowType: string (optional, 0-30 chars)
+    //   - distance: number (optional, 0-150)
+    //   - status: string (required: 'pending' | 'accepted' | 'rejected' | 'cancelled')
+    //   - roomCode: string (required, 1-50 chars)
+    //   - createdAt: number / timestamp (optional)
+    //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: ad_campaigns
+    // Document ID: {campaignId} (e.g., "AD-timestamp-random")
+    // Fields:
+    //   - id: string (required, 1-100 chars)
+    //   - name: string (required, 1-150 chars)
+    //   - type: string (required: 'popup' | 'banner_widget' | 'notification_bar')
+    //   - status: string (required: 'active' | 'paused' | 'scheduled' | 'expired')
+    //   - slides: list (optional, max 20 items)
+    //   - startDate: string (optional, 0-30 chars)
+    //   - endDate: string (optional, 0-30 chars)
+    //   - showOnAppOpen: bool (optional)
+    //   - frequencyMinutes: number (optional, 0-1440)
+    //   - maxImpressionsPerDay: number (optional, 0-1000)
+    //   - slideIntervalSeconds: number (optional, 0-120)
+    //   - targetScreens: list (optional, max 20 items)
+    //   - targetRoles: list (optional, max 10 items)
+    //   - targetPlans: list (optional, max 10 items)
+    //   - totalImpressions: number (optional, 0-100000000)
+    //   - totalClicks: number (optional, 0-100000000)
+    //   - fontSize: string (optional, 0-20 chars)
+    //   - pillStyle: string (optional, 0-20 chars)
+    //   - customHeight: number (optional, 0-1000)
+    //   - createdAt: string / number / timestamp (optional)
+    //   - updatedAt: string / number / timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.uid == 'USR-SUPERADMIN-ADMIN101010' ||
+        request.auth.token.get('superadmin', false) == true ||
+        request.auth.token.get('role', '') == 'superadmin' ||
+        (request.auth.token.email != null &&
+          (request.auth.token.email == 'admin@archery101010.com' ||
+           request.auth.token.email == 'admin101010@archery101010.com'))
+      );
+    }
+
+    function isCoach() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.token.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['coach', 'team_admin_coach', 'team_admin'])
+      );
+    }
+
+    function validString(str, minLen, maxLen) {
+      return str is string && str.size() >= minLen && str.size() <= maxLen;
+    }
+
+    function validOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) || data[field] == null ||
+        (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
+    }
+
+    function validOptionalNumber(data, field, minVal, maxVal) {
+      return !(field in data) || data[field] == null ||
+        (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function validOptionalBool(data, field) {
+      return !(field in data) || data[field] == null || data[field] is bool;
+    }
+
+    function validOptionalList(data, field, maxSize) {
+      return !(field in data) || data[field] == null ||
+        (data[field] is list && data[field].size() <= maxSize);
+    }
+
+    function validOptionalMap(data, field) {
+      return !(field in data) || data[field] == null || data[field] is map;
+    }
+
+    function validOptionalDateOrTimestamp(data, field) {
+      return !(field in data) || data[field] == null ||
+        data[field] is number ||
+        data[field] is timestamp ||
+        (data[field] is string && data[field].size() <= 50);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.size() >= 3 && email.size() <= 128 &&
+        email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // ===============================================================
+    // Domain Validators (Enforced on BOTH create and update)
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'fullName', 'role']) &&
+        validString(data.uid, 1, 128) &&
+        isValidEmail(data.email) &&
+        validString(data.fullName, 1, 100) &&
+        data.role in ['archer', 'coach', 'team_admin', 'team_admin_coach', 'superadmin'] &&
+        validOptionalString(data, 'nickname', 0, 50) &&
+        validOptionalString(data, 'birthDate', 0, 30) &&
+        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'city', 0, 100) &&
+        validOptionalString(data, 'gender', 0, 20) &&
+        (!('plan' in data) || data.plan in ['FREE', 'PRO']) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'clubName', 0, 100) &&
+        validOptionalString(data, 'clubLogo', 0, 2048) &&
+        validOptionalString(data, 'clubCountry', 0, 10) &&
+        validOptionalString(data, 'clubInviteCode', 0, 50) &&
+        validOptionalBool(data, 'isClubCreator') &&
+        validOptionalString(data, 'whatsappNumber', 0, 30) &&
+        validOptionalString(data, 'password', 0, 100) &&
+        validOptionalBool(data, 'profileSetupCompleted') &&
+        validOptionalMap(data, 'bowConfig') &&
+        validOptionalList(data, 'bows', 10) &&
+        validOptionalMap(data, 'physicalData') &&
+        validOptionalDateOrTimestamp(data, 'createdAt') &&
+        validOptionalDateOrTimestamp(data, 'lastActiveAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['userId', 'timestamp']) &&
+        validString(data.userId, 1, 128) &&
+        validOptionalDateOrTimestamp(data, 'timestamp') &&
+        validOptionalString(data, 'id', 1, 100) &&
+        validOptionalString(data, 'userName', 0, 100) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'practiceType', 0, 50) &&
+        validOptionalString(data, 'bowType', 0, 30) &&
+        validOptionalNumber(data, 'distance', 0, 150) &&
+        validOptionalString(data, 'format', 0, 50) &&
+        validOptionalNumber(data, 'endsCount', 0, 100) &&
+        validOptionalNumber(data, 'arrowsPerEnd', 0, 20) &&
+        validOptionalNumber(data, 'maxScore', 0, 2000) &&
+        validOptionalNumber(data, 'score', 0, 2000) &&
+        validOptionalList(data, 'ends', 100) &&
+        validOptionalString(data, 'sessionNote', 0, 2000) &&
+        validOptionalList(data, 'impacts', 500) &&
+        validOptionalNumber(data, 'totalArrowsVolume', 0, 2000) &&
+        validOptionalMap(data, 'blockStats') &&
+        validOptionalBool(data, 'deletedByArcher') &&
+        validOptionalBool(data, 'restoredByCoach') &&
+        validOptionalBool(data, 'isVolumeOnly') &&
+        validOptionalBool(data, 'isDraft') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidCalendarEvent(data) {
+      return data.keys().hasAll(['id', 'title', 'date', 'createdByUid']) &&
+        validString(data.id, 1, 100) &&
+        validString(data.title, 1, 150) &&
+        validString(data.date, 1, 30) &&
+        validString(data.createdByUid, 1, 128) &&
+        validOptionalString(data, 'description', 0, 2000) &&
+        (!('createdByRole' in data) || data.createdByRole in ['coach', 'archer', 'admin']) &&
+        validOptionalString(data, 'createdByName', 0, 100) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'type', 0, 50) &&
+        validOptionalDateOrTimestamp(data, 'timestamp') &&
+        validOptionalString(data, 'macrocycleId', 0, 100) &&
+        validOptionalString(data, 'phaseId', 0, 100) &&
+        validOptionalString(data, 'phaseName', 0, 100) &&
+        validOptionalString(data, 'phaseType', 0, 100) &&
+        validOptionalString(data, 'phaseColor', 0, 30) &&
+        validOptionalNumber(data, 'targetArrows', 0, 2000) &&
+        validOptionalList(data, 'assignedAthleteIds', 200) &&
+        validOptionalList(data, 'focusPoints', 50) &&
+        validOptionalString(data, 'coachNotes', 0, 2000) &&
+        validOptionalBool(data, 'isRestDay') &&
+        validOptionalBool(data, 'isCompleted') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidMacrocycle(data) {
+      return data.keys().hasAll(['id', 'name', 'coachId']) &&
+        validString(data.id, 1, 100) &&
+        validString(data.name, 1, 150) &&
+        validString(data.coachId, 1, 128) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'startDate', 0, 30) &&
+        validOptionalString(data, 'endDate', 0, 30) &&
+        validOptionalList(data, 'phases', 50) &&
+        (!('assignmentType' in data) || data.assignmentType in ['club', 'group', 'individual']) &&
+        validOptionalList(data, 'assignedAthleteIds', 200) &&
+        validOptionalString(data, 'groupName', 0, 100) &&
+        validOptionalNumber(data, 'volumeGoal', 0, 1000000) &&
+        validOptionalNumber(data, 'currentVolume', 0, 1000000) &&
+        (!('status' in data) || data.status in ['active', 'completed', 'draft']) &&
+        validOptionalDateOrTimestamp(data, 'createdAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidAthleteStar(data) {
+      return data.keys().hasAll(['userId', 'highestScore', 'highestStarLevel']) &&
+        validString(data.userId, 1, 128) &&
+        validOptionalString(data, 'userName', 0, 100) &&
+        (!('bowType' in data) || data.bowType in ['Recurve', 'Compound', 'Barebow']) &&
+        data.highestScore is number && data.highestScore >= 0 && data.highestScore <= 720 &&
+        data.highestStarLevel is number && data.highestStarLevel >= 1 && data.highestStarLevel <= 10 &&
+        validOptionalString(data, 'starName', 0, 100) &&
+        validOptionalString(data, 'starColor', 0, 50) &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidStarHistory(data) {
+      return data.keys().hasAll(['id', 'userId', 'score', 'starLevel']) &&
+        validString(data.id, 1, 100) &&
+        validString(data.userId, 1, 128) &&
+        validOptionalString(data, 'userName', 0, 100) &&
+        (!('bowType' in data) || data.bowType in ['Recurve', 'Compound', 'Barebow']) &&
+        data.score is number && data.score >= 0 && data.score <= 720 &&
+        data.starLevel is number && data.starLevel >= 1 && data.starLevel <= 10 &&
+        validOptionalString(data, 'starName', 0, 100) &&
+        validOptionalString(data, 'starColor', 0, 50) &&
+        validOptionalString(data, 'date', 0, 30) &&
+        validOptionalString(data, 'eventId', 0, 100) &&
+        validOptionalDateOrTimestamp(data, 'timestamp');
+    }
+
+    function isValidActiveDuel(data) {
+      return data.keys().hasAll(['id', 'creatorUid']) &&
+        validString(data.id, 1, 100) &&
+        validString(data.creatorUid, 1, 128) &&
+        validOptionalString(data, 'creatorName', 0, 100) &&
+        validOptionalString(data, 'creatorCountry', 0, 10) &&
+        validOptionalBool(data, 'creatorConnected') &&
+        validOptionalDateOrTimestamp(data, 'creatorConnectedAt') &&
+        validOptionalBool(data, 'creatorReady') &&
+        validOptionalString(data, 'playerUid', 0, 128) &&
+        validOptionalString(data, 'playerName', 0, 100) &&
+        validOptionalBool(data, 'playerConnected') &&
+        validOptionalDateOrTimestamp(data, 'playerConnectedAt') &&
+        validOptionalBool(data, 'playerReady') &&
+        validOptionalString(data, 'bowType', 0, 30) &&
+        validOptionalNumber(data, 'distance', 0, 150) &&
+        (!('status' in data) || data.status in ['waiting', 'active', 'finished', 'cancelled']) &&
+        validOptionalString(data, 'webrtcOffer', 0, 65536) &&
+        validOptionalString(data, 'webrtcAnswer', 0, 65536) &&
+        validOptionalList(data, 'creatorCandidates', 100) &&
+        validOptionalList(data, 'playerCandidates', 100) &&
+        validOptionalString(data, 'creatorPhoto', 0, 2048) &&
+        validOptionalString(data, 'playerPhoto', 0, 2048) &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidDuelInvitation(data) {
+      return data.keys().hasAll(['senderUid', 'receiverUid', 'roomCode', 'status']) &&
+        validString(data.senderUid, 1, 128) &&
+        validString(data.receiverUid, 1, 128) &&
+        validString(data.roomCode, 1, 50) &&
+        data.status in ['pending', 'accepted', 'rejected', 'cancelled'] &&
+        validOptionalString(data, 'senderName', 0, 100) &&
+        validOptionalString(data, 'bowType', 0, 30) &&
+        validOptionalNumber(data, 'distance', 0, 150) &&
+        validOptionalDateOrTimestamp(data, 'createdAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    function isValidAdCampaign(data) {
+      return data.keys().hasAll(['id', 'name', 'type', 'status']) &&
+        validString(data.id, 1, 100) &&
+        validString(data.name, 1, 150) &&
+        data.type in ['popup', 'banner_widget', 'notification_bar'] &&
+        data.status in ['active', 'paused', 'scheduled', 'expired'] &&
+        validOptionalList(data, 'slides', 20) &&
+        validOptionalString(data, 'startDate', 0, 30) &&
+        validOptionalString(data, 'endDate', 0, 30) &&
+        validOptionalBool(data, 'showOnAppOpen') &&
+        validOptionalNumber(data, 'frequencyMinutes', 0, 1440) &&
+        validOptionalNumber(data, 'maxImpressionsPerDay', 0, 1000) &&
+        validOptionalNumber(data, 'slideIntervalSeconds', 0, 120) &&
+        validOptionalList(data, 'targetScreens', 20) &&
+        validOptionalList(data, 'targetRoles', 10) &&
+        validOptionalList(data, 'targetPlans', 10) &&
+        validOptionalNumber(data, 'totalImpressions', 0, 100000000) &&
+        validOptionalNumber(data, 'totalClicks', 0, 100000000) &&
+        validOptionalString(data, 'fontSize', 0, 20) &&
+        validOptionalString(data, 'pillStyle', 0, 20) &&
+        validOptionalNumber(data, 'customHeight', 0, 1000) &&
+        validOptionalDateOrTimestamp(data, 'createdAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Authenticated users can read profiles for rival searches, club directories, and real-time sync
+      allow read: if isAuthenticated();
+
+      // Users can create their own document; superadmins can create any profile.
+      // Privilege escalation to 'superadmin' is strictly prohibited for standard users.
+      allow create: if isAuthenticated() &&
+        (isOwner(userId) || isSuperAdmin()) &&
+        request.resource.data.uid == userId &&
+        isValidUser(request.resource.data) &&
+        (isSuperAdmin() || request.resource.data.role != 'superadmin');
+
+      // Users can update their own profile; superadmins can update any profile.
+      // Role elevation to 'superadmin' is strictly forbidden.
+      // UID is immutable.
+      allow update: if isAuthenticated() &&
+        (isOwner(userId) || isSuperAdmin()) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.uid == resource.data.uid &&
+        isValidUser(request.resource.data) &&
+        (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin'));
+
+      // Only superadmins can delete user profiles
+      allow delete: if isSuperAdmin();
+    }
+
+    // 2. Sessions Collection
+    match /sessions/{sessionId} {
+      // Authenticated users can read sessions (required for real-time club sync and coach monitoring)
+      allow read: if isAuthenticated();
+
+      // Session owner can create their session
+      allow create: if isAuthenticated() &&
+        (request.resource.data.userId == request.auth.uid || isSuperAdmin()) &&
+        isValidSession(request.resource.data);
+
+      // Session owner, their coach, or superadmin can update (e.g., soft delete, coach note, session restore).
+      // Session ownership cannot be transferred (userId is immutable).
+      allow update: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        request.resource.data.userId == resource.data.userId &&
+        isValidSession(request.resource.data);
+
+      // Only the session owner or a superadmin can permanently delete a session
+      allow delete: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+
+    // 3. Calendar Events Collection
+    match /calendar_events/{eventId} {
+      // Shared calendar events are readable by authenticated club members
+      allow read: if isAuthenticated();
+
+      // Athletes, coaches, or superadmins can create events
+      allow create: if isAuthenticated() &&
+        (request.resource.data.createdByUid == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        isValidCalendarEvent(request.resource.data);
+
+      // Creator, coach, or superadmin can update an event. Creator UID is immutable.
+      allow update: if isAuthenticated() &&
+        (resource.data.createdByUid == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        request.resource.data.createdByUid == resource.data.createdByUid &&
+        isValidCalendarEvent(request.resource.data);
+
+      // Creator, coach, or superadmin can delete an event
+      allow delete: if isAuthenticated() &&
+        (resource.data.createdByUid == request.auth.uid || isCoach() || isSuperAdmin());
+    }
+
+    // 4. Macrocycles Collection
+    match /macrocycles/{macrocycleId} {
+      // Readable by authenticated users (athletes tracking their assigned training cycles)
+      allow read: if isAuthenticated();
+
+      // Coaches and superadmins can create macrocycles
+      allow create: if isAuthenticated() &&
+        (request.resource.data.coachId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        isValidMacrocycle(request.resource.data);
+
+      // Author coach or superadmin can update. CoachId is immutable.
+      allow update: if isAuthenticated() &&
+        (resource.data.coachId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        request.resource.data.coachId == resource.data.coachId &&
+        isValidMacrocycle(request.resource.data);
+
+      // Author coach or superadmin can delete macrocycles
+      allow delete: if isAuthenticated() &&
+        (resource.data.coachId == request.auth.uid || isSuperAdmin());
+    }
+
+    // 5. Athlete Stars Collection (doc id: userId)
+    match /athlete_stars/{userId} {
+      // Gamification stars are readable by all authenticated archers for club badges and rival cards
+      allow read: if isAuthenticated();
+
+      // Owner, coach, or superadmin can create/update star achievements
+      allow create: if isAuthenticated() &&
+        (request.auth.uid == userId || isCoach() || isSuperAdmin()) &&
+        request.resource.data.userId == userId &&
+        isValidAthleteStar(request.resource.data);
+
+      allow update: if isAuthenticated() &&
+        (request.auth.uid == userId || isCoach() || isSuperAdmin()) &&
+        request.resource.data.userId == userId &&
+        request.resource.data.userId == resource.data.userId &&
+        isValidAthleteStar(request.resource.data);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 6. Star History Collection (doc id: historyId)
+    match /star_history/{historyId} {
+      // Star audit logs are readable by authenticated users
+      allow read: if isAuthenticated();
+
+      // Owner, coach, or superadmin can record star history
+      allow create: if isAuthenticated() &&
+        (request.resource.data.userId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        isValidStarHistory(request.resource.data);
+
+      allow update: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        request.resource.data.userId == resource.data.userId &&
+        isValidStarHistory(request.resource.data);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 7. Active Duels Collection (doc id: roomCode)
+    match /active_duels/{roomCode} {
+      // Authenticated players can look up and join active duel rooms
+      allow read: if isAuthenticated();
+
+      // Authenticated users can host a duel, setting themselves as creator
+      allow create: if isAuthenticated() &&
+        (request.resource.data.creatorUid == request.auth.uid || isSuperAdmin()) &&
+        isValidActiveDuel(request.resource.data);
+
+      // Either the creator, the invited rival/joining player, or superadmin can update the duel room.
+      // Creator UID is immutable.
+      allow update: if isAuthenticated() &&
+        (resource.data.creatorUid == request.auth.uid ||
+         resource.data.playerUid == request.auth.uid ||
+         resource.data.playerUid == '' ||
+         !('playerUid' in resource.data) ||
+         isSuperAdmin()) &&
+        request.resource.data.creatorUid == resource.data.creatorUid &&
+        isValidActiveDuel(request.resource.data);
+
+      // Only the duel creator or superadmin can delete a duel room
+      allow delete: if isAuthenticated() &&
+        (resource.data.creatorUid == request.auth.uid || isSuperAdmin());
+    }
+
+    // 8. Duel Invitations Collection (doc id: invitationId)
+    match /duel_invitations/{invitationId} {
+      // Direct duel invites are private between sender, receiver, and superadmin
+      allow read: if isAuthenticated() &&
+        (resource.data.senderUid == request.auth.uid ||
+         resource.data.receiverUid == request.auth.uid ||
+         isSuperAdmin());
+
+      // Sender can create the invitation
+      allow create: if isAuthenticated() &&
+        request.resource.data.senderUid == request.auth.uid &&
+        isValidDuelInvitation(request.resource.data);
+
+      // Sender or receiver can update (accept, reject, cancel). Sender and receiver UIDs are immutable.
+      allow update: if isAuthenticated() &&
+        (resource.data.senderUid == request.auth.uid ||
+         resource.data.receiverUid == request.auth.uid ||
+         isSuperAdmin()) &&
+        request.resource.data.senderUid == resource.data.senderUid &&
+        request.resource.data.receiverUid == resource.data.receiverUid &&
+        isValidDuelInvitation(request.resource.data);
+
+      // Sender, receiver, or superadmin can delete the invitation
+      allow delete: if isAuthenticated() &&
+        (resource.data.senderUid == request.auth.uid ||
+         resource.data.receiverUid == request.auth.uid ||
+         isSuperAdmin());
+    }
+
+    // 9. Ad Campaigns Collection (doc id: campaignId)
+    match /ad_campaigns/{campaignId} {
+      // In-app sponsored banners and popups are readable by authenticated users
+      allow read: if isAuthenticated();
+
+      // Only superadmins can create, update, or delete marketing campaigns
+      allow create: if isSuperAdmin() && isValidAdCampaign(request.resource.data);
+      allow update: if isSuperAdmin() && isValidAdCampaign(request.resource.data);
+      allow delete: if isSuperAdmin();
+    }
+
+    // Default Deny for any unspecified paths
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

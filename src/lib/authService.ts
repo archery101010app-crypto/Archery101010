@@ -301,7 +301,7 @@ export async function registerUser(
     ...userFields,
     uid,
     role: finalRole,
-    plan: "FREE", // default register is free tier
+    plan: "PRO", // Promoción de Lanzamiento: Acceso PRO 100% gratuito para nuevos usuarios pioneros
     isClubCreator: isCreator,
     clubInviteCode: inviteCode,
     clubLogo,

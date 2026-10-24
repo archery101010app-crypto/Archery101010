@@ -676,37 +676,37 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </h4>
         {user.plan === "FREE" ? (
           <div className="flex flex-col gap-2 mt-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[8.5px] bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow animate-pulse">
+                🎉 PROMO DE LANZAMIENTO
+              </span>
+            </div>
             <p className="text-[10px] text-gray-dim leading-snug">
-              Desbloquea ciclos de entrenamiento, tuning de flechas (Spine Matching), y guías de ejercicios premium.
+              ¡Por motivo de lanzamiento oficial, obtén acceso ilimitado a todas las herramientas PRO (Ciclos, Spine Tuning, Cronógrafo y Portal Coach) 100% gratis!
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
-              className="w-full py-2.5 mt-1 rounded-xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition"
+              className="w-full py-2.5 mt-1 rounded-xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5"
             >
-              Adquirir PRO ✦
+              <Sparkles size={14} />
+              <span>Activar PRO Gratis (Promo Pioneros) ✦</span>
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-1 mt-2">
+          <div className="flex flex-col gap-1.5 mt-2">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[8.5px] bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow">
+                ✦ ACCESO PIONERO ACTIVO
+              </span>
+            </div>
             <div className="flex justify-between text-[10px] text-gray-dim font-bold">
-              <span>{t("billingDate")}</span>
-              <span className="text-white">27 de Junio, 2026</span>
+              <span>Estado:</span>
+              <span className="text-cyan-neon font-black">Activo · Ilimitado Gratuito</span>
             </div>
-            <div className="flex justify-between text-[10px] text-gray-dim font-bold mt-1">
-              <span>Paypal email:</span>
-              <span className="text-white truncate max-w-[160px]">{user.email}</span>
+            <div className="flex justify-between text-[10px] text-gray-dim font-bold">
+              <span>Beneficios:</span>
+              <span className="text-white">Todas las herramientas PRO desbloqueadas</span>
             </div>
-            <button
-              onClick={() => {
-                const nextUser = { ...user, plan: "FREE" } as UserProfile;
-                onProfileUpdated(nextUser);
-                setDevSimulatePro(false);
-                alert("Suscripción PRO cancelada (simulado)");
-              }}
-              className="text-[10px] text-red-rival hover:underline font-bold text-left self-start mt-2 cursor-pointer"
-            >
-              Cancelar Suscripción
-            </button>
           </div>
         )}
       </div>
@@ -1680,11 +1680,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <span className="text-[10px] text-yellow-gold font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow">
-                    PLAN PREMIUM
+                  <span className="text-[9px] text-yellow-gold font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow">
+                    🎉 PROMOCIÓN DE LANZAMIENTO
                   </span>
                   <h3 className="text-white text-lg font-black uppercase tracking-wide mt-1.5">
-                    Adquirir Plan PRO ✦
+                    Acceso PRO Pionero ✦
                   </h3>
                 </div>
                 <button
@@ -1698,10 +1698,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {/* Benefits checklist */}
               <div className="flex flex-col gap-2.5">
                 {[
-                  "Acceso completo a planificación de Ciclos",
-                  "Módulo de Spine Matching (Tuning del arco)",
-                  "Guías y rutinas de entrenamiento premium",
-                  "Analytics y reportes avanzados de progresión"
+                  "Acceso completo a planificación de Ciclos y Macroestructuras",
+                  "Módulo de Spine Matching (Tuning balístico de flechas)",
+                  "Cronógrafo Acústico de alta precisión sin restricciones",
+                  "Portal Coach: Seguimiento de atletas y asistencias en vivo",
+                  "Analytics y reportes avanzados de dispersión olímpica"
                 ].map((b, idx) => (
                   <div key={idx} className="flex items-start gap-2 text-xs text-white/90">
                     <Check size={16} className="text-yellow-gold mt-0.5 shrink-0" />
@@ -1710,24 +1711,26 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 ))}
               </div>
 
-              {/* Price card */}
-              <div className="bg-neutral-950 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+              {/* Price card: Launch special */}
+              <div className="bg-neutral-950 p-4 rounded-2xl border border-yellow-gold/30 flex justify-between items-center shadow-inner">
                 <div className="flex flex-col">
-                  <span className="text-[9px] text-gray-dim uppercase font-bold">Mensual</span>
-                  <span className="text-xl font-black text-white">$4.99 USD</span>
+                  <span className="text-[9px] text-gray-dim uppercase font-bold line-through">Precio regular: $4.99 USD</span>
+                  <span className="text-2xl font-black text-yellow-gold flex items-center gap-1.5">
+                    $0.00 <span className="text-xs text-white font-bold uppercase tracking-wider">¡GRATIS!</span>
+                  </span>
                 </div>
-                <span className="text-[10px] text-cyan-neon font-black">Cancela cuando quieras</span>
+                <span className="text-[10px] text-cyan-neon font-black bg-cyan-neon/10 border border-cyan-neon/30 px-2.5 py-1 rounded-full">
+                  Acceso Especial
+                </span>
               </div>
 
-              {/* Mock PayPal Button */}
+              {/* Free Launch Activation Button */}
               <button
                 onClick={handlePaypalUpgrade}
-                className="w-full py-3 rounded-xl bg-[#FFC439] hover:bg-[#F2B522] text-[#003087] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg transition duration-200"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-yellow-gold via-amber-400 to-yellow-500 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-glow-yellow transition active:scale-95"
               >
-                {/* Simulated PayPal typography style */}
-                <span className="italic font-extrabold lowercase text-sm">Pay</span>
-                <span className="italic font-extrabold lowercase text-sm text-[#0079C1] -ml-1">Pal</span>
-                <span className="text-[10px] font-bold tracking-normal uppercase ml-1">Comprar</span>
+                <Sparkles size={16} />
+                <span>Activar Mi Cuenta PRO Gratis ✦</span>
               </button>
             </motion.div>
           </motion.div>
