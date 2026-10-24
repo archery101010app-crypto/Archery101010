@@ -666,8 +666,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       </div>
 
       {/* Stats / Intro banner */}
-      <div className="bg-neutral-900/60 backdrop-blur-md border border-white/10 p-4 rounded-3xl z-10 flex items-center justify-between shadow-sm">
-        <div className="flex flex-col gap-1 w-[70%]">
+      <div className="bg-neutral-900/60 backdrop-blur-md border border-white/10 p-4 rounded-3xl z-10 flex items-center shadow-sm">
+        <div className="flex flex-col gap-1 w-full">
           <h3 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1">
             <Trophy size={14} className="text-yellow-gold" />
             Normas Olímpicas WA
@@ -675,10 +675,6 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <p className="text-[10px] text-gray-dim leading-snug">
             Recurvo compite a sets de 6 puntos. Compuesto compite por puntos acumulados de 15 flechas.
           </p>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-[9px] text-gray-dim uppercase font-black">Flecha Promedio</span>
-          <span className="text-lg font-black text-cyan-neon tracking-tight">9.0</span>
         </div>
       </div>
 
@@ -867,55 +863,43 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               />
             </div>
 
-            {/* Filter Badges */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                onClick={() => setBowFilter("ALL")}
-                className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
-                  bowFilter === "ALL"
-                    ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                    : "bg-neutral-900/40 border-white/5 text-gray-dim"
-                }`}
-              >
-                Todos los Arcos
-              </button>
-              {["Recurve", "Compound", "Barebow"].map((bow) => (
-                <button
-                  key={bow}
-                  onClick={() => setBowFilter(bow)}
-                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
-                    bowFilter === bow
-                      ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                      : "bg-neutral-900/40 border-white/5 text-gray-dim"
-                  }`}
-                >
-                  {bow}
-                </button>
-              ))}
-              <div className="w-[1px] bg-white/10 shrink-0 my-0.5 mx-1" />
-              <button
-                onClick={() => setDistanceFilter("ALL")}
-                className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
-                  distanceFilter === "ALL"
-                    ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon shadow-[0_0_8px_rgba(0,229,255,0.1)]"
-                    : "bg-neutral-900/40 border-white/5 text-gray-dim"
-                }`}
-              >
-                Todas las Dist.
-              </button>
-              {["18", "50", "70"].map((dist) => (
-                <button
-                  key={dist}
-                  onClick={() => setDistanceFilter(dist)}
-                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shrink-0 border cursor-pointer ${
-                    distanceFilter === dist
-                      ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon shadow-[0_0_8px_rgba(0,229,255,0.1)]"
-                      : "bg-neutral-900/40 border-white/5 text-gray-dim"
-                  }`}
-                >
-                  {dist}m
-                </button>
-              ))}
+            {/* Filter Badges - Adjusted and Centered */}
+            <div className="flex flex-col items-center justify-center gap-2 py-1 w-full">
+              {/* Bow Type Filters */}
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                {(["Recurve", "Compound", "Barebow"] as const).map((bow) => (
+                  <button
+                    key={bow}
+                    type="button"
+                    onClick={() => setBowFilter(bowFilter === bow ? "ALL" : bow)}
+                    className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-200 border cursor-pointer text-center active:scale-95 ${
+                      bowFilter === bow
+                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                        : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white hover:border-white/10"
+                    }`}
+                  >
+                    {bow}
+                  </button>
+                ))}
+              </div>
+
+              {/* Distance Filters */}
+              <div className="flex items-center justify-center gap-1.5">
+                {(["18", "50", "70"] as const).map((dist) => (
+                  <button
+                    key={dist}
+                    type="button"
+                    onClick={() => setDistanceFilter(distanceFilter === dist ? "ALL" : dist)}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-200 border cursor-pointer text-center active:scale-95 ${
+                      distanceFilter === dist
+                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                        : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white hover:border-white/10"
+                    }`}
+                  >
+                    {dist}m
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
