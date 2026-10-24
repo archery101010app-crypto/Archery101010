@@ -650,13 +650,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <button
             type="button"
             onClick={() => handleSelectUserRole("coach")}
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+            className={`relative px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
               user.role === "coach" || user.role === "team_admin_coach"
                 ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
                 : "text-gray-dim hover:text-white"
             }`}
           >
             Coach
+            <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+              PRO
+            </span>
           </button>
         </div>
       </div>
