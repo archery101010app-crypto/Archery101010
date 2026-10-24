@@ -4,7 +4,7 @@ import IPhoneFrame from "@/components/ui/IPhoneFrame";
 
 export const metadata: Metadata = {
   title: "Archery 10 10 10 - App para Arqueros y Coaches",
-  description: "App para arqueros y coach: planificación, registro de anotaciones en diana, duelos eliminatorios, cronógrafo balístico y mucho más.",
+  description: "App para arqueros y coach: diana, duelos, cronógrafo, planificación ¡y más!",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Archery 10 10 10 - App para Arqueros y Coaches",
-    description: "App para arqueros y coach: planificación, registro de anotaciones en diana, duelos eliminatorios, cronógrafo balístico y mucho más.",
+    description: "App para arqueros y coach: diana, duelos, cronógrafo, planificación ¡y más!",
     url: "https://archery101010.com",
     siteName: "Archery 101010",
     images: [
