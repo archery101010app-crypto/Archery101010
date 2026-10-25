@@ -608,7 +608,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   {t("impactsMap")}
                 </h4>
                 {(() => {
-                  const presetType = getDianaPresetKey(selectedSession.bowType, selectedSession.distance, selectedSession.format);
+                  const presetType = getDianaPresetKey(selectedSession.bowType, selectedSession.distance, selectedSession.format, selectedSession.targetType);
                   const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
                   
                   return (

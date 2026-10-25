@@ -44,7 +44,7 @@ export interface RingConfig {
 }
 
 export const DIANA_PRESETS: Record<string, RingConfig[]> = {
-  // Diana oficial WA completa (10 a 1) para Recurvo y Barebow
+  // Diana oficial WA completa (10 a 1) para Recurvo y Barebow outdoor (30m, 50m, 60m, 70m)
   WA_10_122: [
     { r: 48, v: "1", fill: "#FFFFFF", stroke: "#E2E8F0" },
     { r: 43.2, v: "2", fill: "#FFFFFF", stroke: "#E2E8F0" },
@@ -58,6 +58,15 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
     { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
     { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ],
+  // Diana Recurvo 18m: borra la línea del 5, 4, 3, 2, 1 (anillos 6 al 10 + X, 10 reglamentario 4cm)
+  WA_RECURVE_18: [
+    { r: 48.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 28.8, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 19.2, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 9.6, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 4.8, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ],
   // Diana Compuesto 50m: de la línea del 5 hacia adentro (elimina 4, 3, 2, 1)
   WA_COMPOUND_50: [
     { r: 48.0, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
@@ -68,7 +77,27 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
     { r: 8.0, v: "10", fill: "#FDD835", stroke: "#F57F17" },
     { r: 4.0, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ],
-  // Diana Compuesto 18m: elimina 5, 4, 3, 2, 1 (anillos 6 al 10 + X)
+  // Diana Compuesto 18m Vegas 300: anillos 6 al 10 + X (10 completo, elimina 5, 4, 3, 2, 1)
+  VEGAS_300: [
+    { r: 48.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 28.8, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 19.2, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 9.6, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 4.8, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ],
+  // Diana Compuesto 18m WA 300: NUEVA diana oficial World Archery con el 10 más pequeño
+  // Según reglamento WA: sólo el anillo interior de 2cm es 10 (radio 4.8). El resto del anillo amarillo (radio 9.6) puntúa 9.
+  WA_300_COMPOUND: [
+    { r: 48.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 28.8, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 19.2, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 9.6, v: "9", fill: "#FDD835", stroke: "#B45309" }, // Línea intermedia en amarillo, cuenta como 9
+    { r: 4.8, v: "10", fill: "#FDD835", stroke: "#171717" }, // 10 oficial WA Compuesto (radio 4.8, 2cm de diámetro)
+    { r: 2.4, v: "X", fill: "#FDD835", stroke: "#171717" }   // X oficial WA Compuesto (radio 2.4)
+  ],
+  // Aliases de compatibilidad retroactiva
   WA_COMPOUND_18: [
     { r: 48.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
     { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
@@ -77,7 +106,6 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
     { r: 9.6, v: "10", fill: "#FDD835", stroke: "#F57F17" },
     { r: 4.8, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ],
-  // Alias de compatibilidad retroactiva
   WA_6c: [
     { r: 48.0, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
     { r: 40.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
@@ -89,14 +117,39 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
   ]
 };
 
-export function getDianaPresetKey(bowType?: string, distance?: number, format?: string): string {
+export function getDianaPresetKey(
+  bowType?: string,
+  distance?: number,
+  format?: string,
+  targetType?: string
+): string {
+  // 1. Compuesto (Compound)
   if (bowType === "Compound") {
-    if (distance === 18 || format === "Indoor 300" || format === "WA 300") {
-      return "WA_COMPOUND_18";
+    if (distance === 18 || format === "WA 300" || format === "Vegas 300" || format === "Indoor 300") {
+      if (format === "Vegas 300" || targetType === "Vegas 300") {
+        return "VEGAS_300";
+      }
+      // Por defecto para Compuesto 18m / WA 300: Diana oficial WA con 10 pequeño (Reglamento World Archery)
+      return "WA_300_COMPOUND";
     }
-    // Compuesto a 50m y exteriores oficiales (WA 720, WA 360, etc.)
+    // Compuesto 50m y exteriores: de la línea del 5 hacia adentro (elimina 4, 3, 2, 1)
     return "WA_COMPOUND_50";
   }
+
+  // 2. Recurvo (Recurve)
+  if (bowType === "Recurve") {
+    // En recurvo 18mts: borra la línea del 5, 4, 3, 2, 1 (anillos 6 al 10 + X)
+    if (distance === 18 || format === "WA 300" || format === "Vegas 300" || format === "Indoor 300") {
+      return "WA_RECURVE_18";
+    }
+    return "WA_10_122";
+  }
+
+  // 3. Barebow y otros
+  if (distance === 18 && (format === "WA 300" || format === "Vegas 300" || format === "Indoor 300")) {
+    return "WA_RECURVE_18";
+  }
+
   return "WA_10_122";
 }
 
@@ -106,8 +159,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const isBlockFormat = config.format === "WA 600" || config.format === "WA 720";
 
   const presetType = useMemo(() => {
-    return getDianaPresetKey(config.bowType, config.distance, config.format);
-  }, [config.bowType, config.distance, config.format]);
+    return getDianaPresetKey(config.bowType, config.distance, config.format, config.targetType);
+  }, [config.bowType, config.distance, config.format, config.targetType]);
 
   const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
 
@@ -1115,6 +1168,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           <div>
             <h3 className="text-white text-sm font-black uppercase tracking-wide">
               {config.format === "Libre" ? "Ajuste libre" : config.format} · {config.distance}m
+              {presetType === "WA_300_COMPOUND" && " · 10 Oficial"}
+              {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
             <p className="text-[10px] text-gray-dim uppercase tracking-wider">
               {config.practiceType} · {config.bowType}
@@ -1478,7 +1533,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       r={ring.r}
                       fill={ring.fill}
                       stroke={ring.stroke}
-                      strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+                      strokeWidth={ring.v === "X" ? 0.25 : ring.v === "10" && presetType === "WA_300_COMPOUND" ? 0.35 : 0.2}
                     />
                   ))}
 
@@ -2302,7 +2357,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 r={ring.r}
                 fill={ring.fill}
                 stroke={ring.stroke}
-                strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+                strokeWidth={ring.v === "X" ? 0.25 : ring.v === "10" && presetType === "WA_300_COMPOUND" ? 0.35 : 0.2}
               />
             ))}
 

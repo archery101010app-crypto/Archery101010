@@ -24,6 +24,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<string>("Libre");
+  const [targetType, setTargetType] = useState<string>("WA 300");
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
   const [distance, setDistance] = useState(
     user?.bowConfig?.defaultDistance && user.bowConfig.defaultDistance <= 70 
@@ -62,10 +63,19 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     } else if (newFormat === "WA 720") {
       setEndsCount(12);
       setArrowsPerEnd(6);
-    } else if (newFormat === "Indoor 300") {
+      if (distance === 18) {
+        setDistance(bowType === "Compound" ? 50 : 70);
+      }
+    } else if (newFormat === "WA 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
       setDistance(18);
+      setTargetType("WA 300");
+    } else if (newFormat === "Vegas 300") {
+      setEndsCount(10);
+      setArrowsPerEnd(3);
+      setDistance(18);
+      setTargetType("Vegas 300");
     }
   };
 
@@ -73,6 +83,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     onStartSession({
       practiceType,
       format,
+      targetType: format === "Vegas 300" || targetType === "Vegas 300" ? "Vegas 300" : "WA 300",
       bowType,
       distance,
       autoScore: true,
@@ -219,7 +230,12 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <option value="Libre" className="bg-black text-white">Ajuste libre</option>
               <option value="WA 360" className="bg-black text-white">WA 360</option>
               <option value="WA 720" className="bg-black text-white">WA 720</option>
-              <option value="Indoor 300" className="bg-black text-white">Indoor 300</option>
+              <option value="WA 300" className="bg-black text-white">
+                WA 300 {bowType === "Compound" ? "(10 Reducido Oficial)" : ""}
+              </option>
+              <option value="Vegas 300" className="bg-black text-white">
+                Vegas 300 {bowType === "Compound" ? "(10 Completo)" : ""}
+              </option>
             </select>
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-dim pointer-events-none" />
           </div>
@@ -227,6 +243,39 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <p className="text-[10px] text-cyan-neon font-mono font-bold px-1">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
             </p>
+          )}
+
+          {/* Selector de Diana específica para Compuesto 18m en Ajuste Libre */}
+          {bowType === "Compound" && distance === 18 && format === "Libre" && (
+            <div className="flex flex-col gap-1.5 mt-1 p-2.5 rounded-xl bg-neutral-900/50 border border-white/5">
+              <label className="text-[10px] text-cyan-neon font-bold uppercase tracking-wider">
+                Diana 18m Compuesto
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTargetType("WA 300")}
+                  className={`py-2 px-2.5 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
+                    targetType === "WA 300"
+                      ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan"
+                      : "border-white/10 bg-neutral-950/60 text-gray-dim hover:text-white"
+                  }`}
+                >
+                  WA 300 (10 Pequeño)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetType("Vegas 300")}
+                  className={`py-2 px-2.5 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
+                    targetType === "Vegas 300"
+                      ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan"
+                      : "border-white/10 bg-neutral-950/60 text-gray-dim hover:text-white"
+                  }`}
+                >
+                  Vegas 300 (10 Completo)
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
