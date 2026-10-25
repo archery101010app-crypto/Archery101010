@@ -218,7 +218,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Exit states
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
   const [fontSize, setFontSize] = useState("normal");
-  const [showNextEndConfirm, setShowNextEndConfirm] = useState(false);
 
   // Volume Confirmation States
   const [isConfirmingVolume, setIsConfirmingVolume] = useState(false);
@@ -416,15 +415,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
-  const executeConfirmEnd = () => {
+  const handleConfirmEnd = () => {
     triggerHaptic("confirm");
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
-      newEnds[currentEndIdx].note = endNote;
+      if (newEnds[currentEndIdx]) {
+        newEnds[currentEndIdx].note = endNote;
+      }
       return newEnds;
     });
     setEndNote("");
-    setShowNextEndConfirm(false);
 
     if (currentEndIdx < config.endsCount - 1) {
       setCurrentEndIdx(currentEndIdx + 1);
@@ -433,10 +433,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       // Completed all ends, trigger session summary notes modal
       setIsFinishing(true);
     }
-  };
-
-  const handleConfirmEnd = () => {
-    setShowNextEndConfirm(true);
   };
 
   const handleBackspace = () => {
@@ -2122,61 +2118,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         )}
       </AnimatePresence>
 
-      {/* MODAL: Confirm End Transition */}
-      <AnimatePresence>
-        {showNextEndConfirm && (
-          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
-              <div>
-                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
-                  End {currentEndIdx + 1} Completado
-                </span>
-                <h3 className="text-white text-base font-black uppercase mt-1">
-                  Confirmar Resultados
-                </h3>
-              </div>
 
-              {/* End Arrows Summary Card */}
-              <div className="flex flex-col gap-2 bg-neutral-950/60 p-4 rounded-2xl border border-white/5">
-                <div className="flex justify-center gap-1.5">
-                  {ends[currentEndIdx]?.arrows.map((a, idx) => (
-                    <div
-                      key={idx}
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border text-xs ${getArrowColorClass(
-                        a
-                      )}`}
-                    >
-                      {a || "—"}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-xs font-black text-cyan-neon mt-1">
-                  Suma del End: {calculateEndTotal(currentEndIdx)} pts
-                </div>
-              </div>
-
-              <p className="text-[10px] text-gray-dim leading-normal">
-                Verifica tus impactos antes de continuar. No podrás modificar este End tras avanzar.
-              </p>
-
-              <div className="flex flex-col gap-2 mt-2">
-                <button
-                  onClick={executeConfirmEnd}
-                  className="w-full py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
-                >
-                  {currentEndIdx < config.endsCount - 1 ? `Confirmar e Ir a End ${currentEndIdx + 2}` : "Confirmar y Finalizar"}
-                </button>
-                <button
-                  onClick={() => setShowNextEndConfirm(false)}
-                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
-                >
-                  Modificar Tiros
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* MODAL: Análisis Inteligente de Dispersión y Ajuste de Mira */}
       <AnimatePresence>
