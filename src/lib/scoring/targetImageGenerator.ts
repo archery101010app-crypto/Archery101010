@@ -5,7 +5,7 @@ import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
 
 export interface TargetShotChartParams {
   impacts: ShotImpactData[];
-  presetType?: "WA_10_122" | "WA_6c";
+  presetType?: string;
   score: number;
   maxScore: number;
   tensCount: number;

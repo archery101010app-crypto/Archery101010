@@ -44,6 +44,7 @@ export interface RingConfig {
 }
 
 export const DIANA_PRESETS: Record<string, RingConfig[]> = {
+  // Diana oficial WA completa (10 a 1) para Recurvo y Barebow
   WA_10_122: [
     { r: 48, v: "1", fill: "#FFFFFF", stroke: "#E2E8F0" },
     { r: 43.2, v: "2", fill: "#FFFFFF", stroke: "#E2E8F0" },
@@ -57,24 +58,58 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
     { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
     { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ],
-  WA_6c: [
-    { r: 48, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+  // Diana Compuesto 50m: de la línea del 5 hacia adentro (elimina 4, 3, 2, 1)
+  WA_COMPOUND_50: [
+    { r: 48.0, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 40.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 32.0, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 24.0, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 16.0, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 8.0, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 4.0, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ],
+  // Diana Compuesto 18m: elimina 5, 4, 3, 2, 1 (anillos 6 al 10 + X)
+  WA_COMPOUND_18: [
+    { r: 48.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
     { r: 38.4, v: "7", fill: "#E53935", stroke: "#C62828" },
     { r: 28.8, v: "8", fill: "#E53935", stroke: "#C62828" },
     { r: 19.2, v: "9", fill: "#FDD835", stroke: "#F57F17" },
     { r: 9.6, v: "10", fill: "#FDD835", stroke: "#F57F17" },
-    { r: 3.0, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+    { r: 4.8, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+  ],
+  // Alias de compatibilidad retroactiva
+  WA_6c: [
+    { r: 48.0, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 40.0, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
+    { r: 32.0, v: "7", fill: "#E53935", stroke: "#C62828" },
+    { r: 24.0, v: "8", fill: "#E53935", stroke: "#C62828" },
+    { r: 16.0, v: "9", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 8.0, v: "10", fill: "#FDD835", stroke: "#F57F17" },
+    { r: 4.0, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ]
 };
+
+export function getDianaPresetKey(bowType?: string, distance?: number, format?: string): string {
+  if (bowType === "Compound") {
+    if (distance === 18 || format === "Indoor 300" || format === "WA 300") {
+      return "WA_COMPOUND_18";
+    }
+    // Compuesto a 50m y exteriores oficiales (WA 720, WA 360, etc.)
+    return "WA_COMPOUND_50";
+  }
+  return "WA_10_122";
+}
 
 export default function ScoringView({ user, config, onBack, onSessionSaved }: ScoringViewProps) {
   const { t } = useLanguage();
   useWakeLock(true); // Keep display awake during active shooting session
   const isBlockFormat = config.format === "WA 600" || config.format === "WA 720";
 
-  const isCompoundTarget = config.bowType === "Compound" && (config.distance === 50 || config.format === "WA 720");
-  const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
-  const presetRings = DIANA_PRESETS[presetType];
+  const presetType = useMemo(() => {
+    return getDianaPresetKey(config.bowType, config.distance, config.format);
+  }, [config.bowType, config.distance, config.format]);
+
+  const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
 
   // Touch magnifier states & refs
   interface LupaState {
@@ -978,7 +1013,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
       await shareTargetShotChart({
         impacts,
-        presetType: isCompoundTarget ? "WA_6c" : "WA_10_122",
+        presetType: presetType,
         score: totalScore,
         maxScore: config.maxScore,
         tensCount: tens,
@@ -1067,9 +1102,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   return (
-    <div className="flex flex-col gap-4 py-4 min-h-full">
+    <div className="flex flex-col gap-2.5 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Top Config info Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsExitModalOpen(true)}
@@ -1079,7 +1114,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </button>
           <div>
             <h3 className="text-white text-sm font-black uppercase tracking-wide">
-              {config.format} · {config.distance}m
+              {config.format === "Libre" ? "Ajuste libre" : config.format} · {config.distance}m
             </h3>
             <p className="text-[10px] text-gray-dim uppercase tracking-wider">
               {config.practiceType} · {config.bowType}
@@ -1332,7 +1367,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         ) : mode === "TARGET" ? (
           // TARGET MODE (Diana SVG)
-          <div className="flex-1 flex flex-col gap-4 relative">
+          <div className="flex-1 flex flex-col items-center justify-between gap-2.5 relative w-full max-w-md mx-auto">
             {/* Floating Animated Shot Value Badge */}
             <AnimatePresence>
               {animatingValue && (
@@ -1368,42 +1403,44 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </AnimatePresence>
 
             {/* Parciales del End Activo (Optimizado) */}
-            <div className="flex justify-center items-center gap-3 py-2 px-4 bg-neutral-900/40 rounded-2xl border border-white/10 mx-4 shadow-inner">
-              <span className="text-[10px] text-cyan-neon font-black uppercase tracking-widest">
-                ACTUAL:
-              </span>
-              <div className="flex gap-2">
-                {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
-                  const isCellEditing = currentArrowIdx === arrowIdx;
-                  return (
-                    <div
-                      key={arrowIdx}
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm border-2 transition-all ${getArrowColorClass(
-                        a
-                      )} ${
-                        isCellEditing
-                          ? "border-cyan-neon ring-2 ring-cyan-neon/30 shadow-glow-cyan bg-cyan-neon/10 scale-105"
-                          : "border-white/5"
-                      }`}
-                    >
-                      {a || "—"}
-                    </div>
-                  );
-                })}
+            <div className="w-full flex justify-between items-center gap-2 py-2 px-3.5 bg-neutral-900/60 rounded-2xl border border-white/10 shadow-inner">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-cyan-neon font-black uppercase tracking-widest">
+                  ACTUAL:
+                </span>
+                <div className="flex gap-1.5">
+                  {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
+                    const isCellEditing = currentArrowIdx === arrowIdx;
+                    return (
+                      <div
+                        key={arrowIdx}
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all ${getArrowColorClass(
+                          a
+                        )} ${
+                          isCellEditing
+                            ? "border-cyan-neon ring-2 ring-cyan-neon/30 shadow-glow-cyan bg-cyan-neon/10 scale-105"
+                            : "border-white/5"
+                        }`}
+                      >
+                        {a || "—"}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="ml-auto px-3 py-1.5 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11px] text-cyan-neon shadow-sm">
+              <div className="px-2.5 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11px] text-cyan-neon shadow-sm">
                 Suma: {calculateEndTotal(currentEndIdx)} pts
               </div>
             </div>
 
             {/* Quick Actions Bar: Clics de Mira & Compartir Diana */}
-            <div className="flex items-center justify-between gap-2 px-4 mt-2">
+            <div className="w-full flex items-center justify-between gap-2 px-0.5">
               <button
                 type="button"
                 onClick={() => setShowDispersionDrawer(true)}
-                className="flex-1 py-2 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
+                className="flex-1 py-1.5 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
               >
-                <Crosshair size={14} className="text-cyan-neon animate-pulse" />
+                <Crosshair size={13} className="text-cyan-neon animate-pulse" />
                 <span>Ajuste de Mira</span>
                 {activeAnalysis && activeAnalysis.count > 0 && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
@@ -1416,20 +1453,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 type="button"
                 onClick={handleShareShotChart}
                 disabled={isGeneratingImage || impacts.length === 0}
-                className="py-2 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                className="py-1.5 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 title="Generar y compartir imagen de la diana con impactos"
               >
-                <Camera size={14} />
+                <Camera size={13} />
                 <span>{isGeneratingImage ? "Generando..." : "Foto Diana"}</span>
               </button>
             </div>
             
-            <div className="flex justify-center items-center py-2 relative">
+            {/* Diana Central (20% más grande, centrada y armónica) */}
+            <div className="flex justify-center items-center py-1 relative w-full">
               <div className="relative overflow-visible">
                 <svg
                   ref={dianaRef}
                   viewBox="0 0 100 100"
-                  className="w-full max-w-[260px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative z-10"
+                  className="w-full max-w-[312px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative z-10"
                 >
                   {/* Concentric rings rendered dynamically */}
                   {presetRings.map((ring, index) => (
@@ -1503,12 +1541,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </div>
 
             {/* Historial de Ends Scrollable en Diana */}
-            <div className="flex flex-col gap-1.5 px-4 z-10">
+            <div className="w-full flex flex-col gap-1 z-10 px-0.5">
               <div className="flex justify-between items-center text-[9px] font-black uppercase text-gray-dim tracking-widest px-1">
                 <span>Historial de Tiradas (Ends)</span>
                 <span className="text-cyan-neon font-bold">Total: {calculateTotalScore()} pts</span>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                 {ends.map((e, idx) => {
                   const isCompleted = e.arrows.every(a => a !== "" && a !== undefined);
                   const total = calculateEndTotal(idx);
@@ -1523,7 +1561,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           setCurrentArrowIdx(0);
                         }
                       }}
-                      className={`flex flex-col items-center justify-center p-2 rounded-xl border min-w-[58px] cursor-pointer transition-all ${
+                      className={`flex flex-col items-center justify-center p-1.5 rounded-xl border min-w-[54px] cursor-pointer transition-all ${
                         isCurrent 
                           ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan" 
                           : isCompleted 
@@ -1542,30 +1580,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </div>
 
             {/* Action buttons (Undo, Miss & Confirm End) */}
-            <div className="flex flex-col gap-2.5 px-3 z-10 mt-1">
-              <div className="flex items-center gap-2.5 w-full">
-                <button
-                  onClick={handleBackspace}
-                  disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
-                  className="flex-1 py-3.5 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <Undo2 size={14} />
-                  <span>Deshacer</span>
-                </button>
-                <button
-                  onClick={() => handleScoreInput("M")}
-                  className="flex-1 py-3.5 rounded-xl border border-red-rival/30 bg-red-rival/10 text-red-rival font-extrabold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-95"
-                >
-                  Fallo (M)
-                </button>
-                <button
-                  onClick={handleConfirmEnd}
-                  className="flex-1.5 py-3.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan hover:brightness-110 transition active:scale-95 cursor-pointer"
-                >
-                  <span>Confirmar</span>
-                  <ArrowRight size={14} />
-                </button>
-              </div>
+            <div className="w-full flex items-center gap-2 z-10 mt-0.5 px-0.5">
+              <button
+                onClick={handleBackspace}
+                disabled={currentEndIdx === 0 && currentArrowIdx === 0 && (!ends[0] || ends[0].arrows[0] === "")}
+                className="flex-1 py-3 rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-bold text-xs uppercase cursor-pointer hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 active:scale-95"
+              >
+                <Undo2 size={13} />
+                <span>Deshacer</span>
+              </button>
+              <button
+                onClick={() => handleScoreInput("M")}
+                className="flex-1 py-3 rounded-xl border border-red-rival/30 bg-red-rival/10 text-red-rival font-extrabold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-95"
+              >
+                Fallo (M)
+              </button>
+              <button
+                onClick={handleConfirmEnd}
+                className="flex-1.5 py-3 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan hover:brightness-110 transition active:scale-95 cursor-pointer"
+              >
+                <span>Confirmar</span>
+                <ArrowRight size={13} />
+              </button>
             </div>
           </div>
         ) : (
@@ -1675,37 +1711,61 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               ))}
 
               {/* Blue points 6-5 */}
-              {["6", "5"].map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleScoreInput(key)}
-                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-blue-500/80 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(59,130,246,0.12)] hover:bg-blue-500/20 active:scale-95 transition"
-                >
-                  {key}
-                </button>
-              ))}
+              {["6", "5"].map((key) => {
+                const isEnabled = presetRings.some(r => r.v === key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleScoreInput(key)}
+                    disabled={!isEnabled}
+                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-blue-500/80 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center transition ${
+                      isEnabled
+                        ? "cursor-pointer shadow-[0_0_12px_rgba(59,130,246,0.12)] hover:bg-blue-500/20 active:scale-95"
+                        : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
+                    }`}
+                  >
+                    {key}
+                  </button>
+                );
+              })}
 
               {/* Dark points 4-3 */}
-              {["4", "3"].map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleScoreInput(key)}
-                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900/80 text-neutral-300 font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
-                >
-                  {key}
-                </button>
-              ))}
+              {["4", "3"].map((key) => {
+                const isEnabled = presetRings.some(r => r.v === key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleScoreInput(key)}
+                    disabled={!isEnabled}
+                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900/80 text-neutral-300 font-black text-base flex items-center justify-center transition ${
+                      isEnabled
+                        ? "cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95"
+                        : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
+                    }`}
+                  >
+                    {key}
+                  </button>
+                );
+              })}
 
               {/* White points 2-1 */}
-              {["2", "1"].map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleScoreInput(key)}
-                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-white/50 bg-white/5 text-white font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.08)] hover:bg-white/15 active:scale-95 transition"
-                >
-                  {key}
-                </button>
-              ))}
+              {["2", "1"].map((key) => {
+                const isEnabled = presetRings.some(r => r.v === key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleScoreInput(key)}
+                    disabled={!isEnabled}
+                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-white/50 bg-white/5 text-white font-black text-base flex items-center justify-center transition ${
+                      isEnabled
+                        ? "cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.08)] hover:bg-white/15 active:scale-95"
+                        : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
+                    }`}
+                  >
+                    {key}
+                  </button>
+                );
+              })}
 
               {/* Miss */}
               <button
@@ -2216,15 +2276,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         )}
       </AnimatePresence>
 
-      {/* Touch Magnifier Circle Overlay */}
+      {/* Touch Magnifier Circle Overlay (20% más grande) */}
       {lupaState.active && (
         <div
           style={{
             position: "fixed",
-            left: lupaState.clientX - 65,
-            top: lupaState.clientY - 145,
-            width: 130,
-            height: 130,
+            left: lupaState.clientX - 78,
+            top: lupaState.clientY - 170,
+            width: 156,
+            height: 156,
             pointerEvents: "none",
             zIndex: 99999
           }}

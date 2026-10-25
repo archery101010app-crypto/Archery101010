@@ -20,7 +20,7 @@ import {
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
-import { DIANA_PRESETS } from "../scoring/ScoringView";
+import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -373,9 +373,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
                                   <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
-                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig?.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
-                                      const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
-                                      const presetRings = DIANA_PRESETS[presetType];
+                                      const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format);
+                                      const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
                                       
                                       return (
                                         <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -501,9 +500,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
                                   <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
-                                      const isCompoundTarget = sess.bowType === "Compound" || (athlete.bowConfig?.type === "Compound" && (sess.distance === 50 || sess.format?.includes("WA 720")));
-                                      const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
-                                      const presetRings = DIANA_PRESETS[presetType];
+                                      const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format);
+                                      const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
                                       
                                       return (
                                         <svg viewBox="0 0 100 100" className="w-full h-full">

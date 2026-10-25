@@ -23,7 +23,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [dontShowAgainPractice, setDontShowAgainPractice] = useState(false);
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
-  const [format, setFormat] = useState<"WA 300" | "WA 600" | "WA 720" | "Libre">("WA 300");
+  const [format, setFormat] = useState<string>("Libre");
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
   const [distance, setDistance] = useState(
     user?.bowConfig?.defaultDistance && user.bowConfig.defaultDistance <= 70 
@@ -46,17 +46,26 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   }, []);
 
   // Automatically adjust parameters based on Format selection
-  const handleFormatChange = (newFormat: "WA 300" | "WA 600" | "WA 720" | "Libre") => {
+  const handleFormatChange = (newFormat: string) => {
     setFormat(newFormat);
-    if (newFormat === "WA 300") {
+    if (newFormat === "Libre") {
       setEndsCount(10);
       setArrowsPerEnd(3);
-    } else if (newFormat === "WA 600") {
-      setEndsCount(20);
-      setArrowsPerEnd(3);
+    } else if (newFormat === "WA 360") {
+      if (distance === 18) {
+        setEndsCount(12);
+        setArrowsPerEnd(3);
+      } else {
+        setEndsCount(6);
+        setArrowsPerEnd(6);
+      }
     } else if (newFormat === "WA 720") {
       setEndsCount(12);
       setArrowsPerEnd(6);
+    } else if (newFormat === "Indoor 300") {
+      setEndsCount(10);
+      setArrowsPerEnd(3);
+      setDistance(18);
     }
   };
 
@@ -204,16 +213,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <div className="relative">
             <select
               value={format}
-              onChange={(e) => handleFormatChange(e.target.value as any)}
-              className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition duration-200 appearance-none"
+              onChange={(e) => handleFormatChange(e.target.value)}
+              className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition duration-200 appearance-none font-bold"
             >
-              <option value="WA 300" className="bg-black text-white">WA 300 (10 Ends x 3 Flechas)</option>
-              <option value="WA 600" className="bg-black text-white">WA 600 (20 Ends x 3 Flechas)</option>
-              <option value="WA 720" className="bg-black text-white">WA 720 (12 Ends x 6 Flechas)</option>
-              <option value="Libre" className="bg-black text-white">Ajuste Libre / Manual</option>
+              <option value="Libre" className="bg-black text-white">Ajuste libre</option>
+              <option value="WA 360" className="bg-black text-white">WA 360</option>
+              <option value="WA 720" className="bg-black text-white">WA 720</option>
+              <option value="Indoor 300" className="bg-black text-white">Indoor 300</option>
             </select>
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-dim pointer-events-none" />
           </div>
+          {format !== "Libre" && (
+            <p className="text-[10px] text-cyan-neon font-mono font-bold px-1">
+              {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
+            </p>
+          )}
         </div>
 
         {/* Bow Type Chips */}
@@ -249,7 +263,18 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <button
                 key={d}
                 type="button"
-                onClick={() => setDistance(d)}
+                onClick={() => {
+                  setDistance(d);
+                  if (format === "WA 360") {
+                    if (d === 18) {
+                      setEndsCount(12);
+                      setArrowsPerEnd(3);
+                    } else {
+                      setEndsCount(6);
+                      setArrowsPerEnd(6);
+                    }
+                  }
+                }}
                 className={`py-3 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"

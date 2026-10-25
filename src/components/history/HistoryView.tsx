@@ -7,7 +7,7 @@ import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilient
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight } from "lucide-react";
-import { DIANA_PRESETS } from "../scoring/ScoringView";
+import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -608,10 +608,8 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   {t("impactsMap")}
                 </h4>
                 {(() => {
-                  const isCompoundTarget = selectedSession.bowType === "Compound" && 
-                    (selectedSession.distance === 50 || selectedSession.format?.includes("WA 720"));
-                  const presetType = isCompoundTarget ? "WA_6c" : "WA_10_122";
-                  const presetRings = DIANA_PRESETS[presetType];
+                  const presetType = getDianaPresetKey(selectedSession.bowType, selectedSession.distance, selectedSession.format);
+                  const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
                   
                   return (
                     <svg
