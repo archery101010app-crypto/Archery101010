@@ -35,7 +35,7 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
     dispersion: initialDispersion
   } = params;
 
-  const dispersion = initialDispersion || calculateDispersionAnalysis(impacts, distanceM, bowType);
+  const dispersion = initialDispersion || calculateDispersionAnalysis(impacts, distanceM, bowType, presetType);
 
   const canvas = document.createElement("canvas");
   canvas.width = 1080;

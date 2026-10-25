@@ -56,7 +56,7 @@ export const DIANA_PRESETS: Record<string, RingConfig[]> = {
     { r: 14.4, v: "8", fill: "#E53935", stroke: "#C62828" },
     { r: 9.6, v: "9", fill: "#FDD835", stroke: "#F57F17" },
     { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
-    { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
+    { r: 2.4, v: "X", fill: "#FDD835", stroke: "#F57F17" }
   ],
   // Diana Recurvo 18m: borra la línea del 5, 4, 3, 2, 1 (anillos 6 al 10 + X, 10 reglamentario 4cm)
   WA_RECURVE_18: [
@@ -1064,22 +1064,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return { centroid: c, dispersion: d, groupingHullPoints: hullPointsStr };
   }, [currentEndImpacts]);
 
-  // Smart Dispersion and Sight Adjustment Analytics
+  // Smart Dispersion and Sight Adjustment Analytics con dimensiones oficiales exactas
   const currentEndAnalysis = useMemo(() => {
     return calculateDispersionAnalysis(
       currentEndImpacts,
       config.distance || 70,
-      config.bowType || "Recurve"
+      config.bowType || "Recurve",
+      presetType,
+      config.format,
+      config.targetType
     );
-  }, [currentEndImpacts, config.distance, config.bowType]);
+  }, [currentEndImpacts, config.distance, config.bowType, presetType, config.format, config.targetType]);
 
   const globalDispersion = useMemo(() => {
     return calculateDispersionAnalysis(
       impacts,
       config.distance || 70,
-      config.bowType || "Recurve"
+      config.bowType || "Recurve",
+      presetType,
+      config.format,
+      config.targetType
     );
-  }, [impacts, config.distance, config.bowType]);
+  }, [impacts, config.distance, config.bowType, presetType, config.format, config.targetType]);
 
   const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
 
@@ -2317,15 +2323,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     </div>
                   </div>
 
+                  {/* Target Face Official Dimension Card */}
+                  <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
+                    <span className="text-gray-dim font-medium">Diana Reglamentaria:</span>
+                    <span className="font-mono font-bold text-gray-300">{activeAnalysis.targetName}</span>
+                  </div>
+
                   {/* Dispersion spread card */}
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
                     <span className="text-gray-dim font-medium">Diámetro Máximo de Grupo:</span>
                     <span className="font-mono font-black text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
                   </div>
 
-                  {/* Summary Tip */}
-                  <div className="bg-cyan-brand/5 border border-cyan-brand/20 rounded-2xl p-3 text-[11px] text-cyan-neon font-medium leading-relaxed">
-                    💡 {activeAnalysis.adviceText}
+                  {/* Summary Tip (Cuadro con el mismo estilo oscuro y bombillo) */}
+                  <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 text-xs text-neutral-300 font-medium leading-relaxed flex items-start gap-2.5">
+                    <span className="text-base select-none leading-none mt-0.5">💡</span>
+                    <span className="leading-snug">{activeAnalysis.adviceText}</span>
                   </div>
                 </div>
               ) : (
