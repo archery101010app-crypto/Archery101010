@@ -2596,7 +2596,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </div>
 
           {/* Interactive target SVG (100x100 base) */}
-          <div className="relative w-full max-w-[250px] aspect-square bg-neutral-950/30 rounded-full border border-white/5 flex items-center justify-center shadow-2xl overflow-visible">
+          <div className="relative w-full max-w-[275px] aspect-square bg-neutral-950/30 rounded-full border border-white/5 flex items-center justify-center shadow-2xl overflow-visible">
             
             <motion.svg
               ref={dianaRef}

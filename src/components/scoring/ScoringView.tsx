@@ -1418,7 +1418,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         ) : mode === "TARGET" ? (
           // TARGET MODE (Diana SVG)
-          <div className="flex-1 flex flex-col items-center justify-between gap-2.5 relative w-full max-w-md mx-auto">
+          <div className="flex-1 flex flex-col items-center justify-between gap-2 relative w-full max-w-[344px] mx-auto">
             {/* Floating Animated Shot Value Badge */}
             <AnimatePresence>
               {animatingValue && (
@@ -1512,13 +1512,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </button>
             </div>
             
-            {/* Diana Central (20% más grande, centrada y armónica) */}
-            <div className="flex justify-center items-center py-1 relative w-full">
+            {/* Diana Central (+10% adicional: 344px, centrada y armónica) */}
+            <div className="flex justify-center items-center py-0.5 relative w-full">
               <div className="relative overflow-visible">
                 <svg
                   ref={dianaRef}
                   viewBox="0 0 100 100"
-                  className="w-full max-w-[312px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative z-10"
+                  className="w-full max-w-[344px] aspect-square rounded-full border-4 border-neutral-900 shadow-2xl bg-black cursor-crosshair overflow-visible relative z-10"
                 >
                   {/* Concentric rings rendered dynamically */}
                   {presetRings.map((ring, index) => (
@@ -2278,10 +2278,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <div
           style={{
             position: "fixed",
-            left: lupaState.clientX - 78,
-            top: lupaState.clientY - 170,
-            width: 156,
-            height: 156,
+            left: lupaState.clientX - 86,
+            top: lupaState.clientY - 185,
+            width: 172,
+            height: 172,
             pointerEvents: "none",
             zIndex: 99999
           }}

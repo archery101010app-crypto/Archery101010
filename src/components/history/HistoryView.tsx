@@ -614,7 +614,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   return (
                     <svg
                       viewBox="0 0 100 100"
-                      className="w-full max-w-[220px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
+                      className="w-full max-w-[242px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
                     >
                       {presetRings.map((ring, index) => (
                         <circle

@@ -371,7 +371,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                               <div className="p-4 flex flex-col gap-4">
                                 <div className="flex flex-col items-center gap-2">
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
-                                  <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                  <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
                                       const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
@@ -498,7 +498,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                               <div className="p-4 flex flex-col gap-4">
                                 <div className="flex flex-col items-center gap-2">
                                   <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
-                                  <div className="w-48 h-48 rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                  <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
                                       const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;

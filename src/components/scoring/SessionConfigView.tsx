@@ -244,39 +244,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
             </p>
           )}
-
-          {/* Selector de Diana específica para Compuesto 18m en Ajuste Libre */}
-          {bowType === "Compound" && distance === 18 && format === "Libre" && (
-            <div className="flex flex-col gap-1.5 mt-1 p-2.5 rounded-xl bg-neutral-900/50 border border-white/5">
-              <label className="text-[10px] text-cyan-neon font-bold uppercase tracking-wider">
-                Diana 18m Compuesto
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTargetType("WA 300")}
-                  className={`py-2 px-2.5 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
-                    targetType === "WA 300"
-                      ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan"
-                      : "border-white/10 bg-neutral-950/60 text-gray-dim hover:text-white"
-                  }`}
-                >
-                  WA 300 (10 Pequeño)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTargetType("Vegas 300")}
-                  className={`py-2 px-2.5 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
-                    targetType === "Vegas 300"
-                      ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan"
-                      : "border-white/10 bg-neutral-950/60 text-gray-dim hover:text-white"
-                  }`}
-                >
-                  Vegas 300 (10 Completo)
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Bow Type Chips */}
