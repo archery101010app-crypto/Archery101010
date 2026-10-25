@@ -9,7 +9,7 @@ import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X } from "lucide-react";
 import confetti from "canvas-confetti";
-import { calculateDispersionAnalysis, DispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
+import { calculateDispersionAnalysis, DispersionAnalysis, getConvexHull } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -376,9 +376,29 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return runningSum;
   };
 
+  // Verifica si el end actual tiene todas sus flechas anotadas
+  const isCurrentEndComplete = useMemo(() => {
+    const curEnd = ends[currentEndIdx];
+    if (!curEnd || !curEnd.arrows || curEnd.arrows.length === 0) return false;
+    return (
+      curEnd.arrows.length === config.arrowsPerEnd &&
+      curEnd.arrows.every((a) => a !== "" && a !== undefined)
+    );
+  }, [ends, currentEndIdx, config.arrowsPerEnd]);
+
   // Keyboard tactile touch event handler
   const handleScoreInput = (value: string) => {
     if (currentEndIdx >= config.endsCount) return;
+
+    // Si el end ya tiene todas las flechas registradas, no permitir más tiros hasta confirmar o deshacer
+    const currentEnd = ends[currentEndIdx];
+    if (
+      currentEnd &&
+      currentEnd.arrows.length === config.arrowsPerEnd &&
+      currentEnd.arrows.every((a) => a !== "" && a !== undefined)
+    ) {
+      return;
+    }
 
     if (value === "X" || value === "10") {
       triggerHaptic("gold");
@@ -390,32 +410,32 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
-      const currentEnd = { ...newEnds[currentEndIdx] };
-      const currentArrows = [...currentEnd.arrows];
+      const end = { ...newEnds[currentEndIdx] };
+      const currentArrows = [...end.arrows];
 
       currentArrows[currentArrowIdx] = value;
-      currentEnd.arrows = currentArrows;
-      newEnds[currentEndIdx] = currentEnd;
+      end.arrows = currentArrows;
+      newEnds[currentEndIdx] = end;
 
       return newEnds;
     });
 
-    // Advance cell pointer index
+    // Advance cell pointer index (sin avanzar de end automáticamente)
     advanceCell();
   };
 
   const advanceCell = () => {
     if (currentArrowIdx < config.arrowsPerEnd - 1) {
       setCurrentArrowIdx(currentArrowIdx + 1);
-    } else {
-      // Completed current end arrows
-      if (config.autoScore && currentEndIdx < config.endsCount - 1) {
-        handleConfirmEnd();
-      }
     }
   };
 
   const handleConfirmEnd = () => {
+    // Blindaje: No permitir pasar al siguiente end si no se han anotado las flechas
+    if (!isCurrentEndComplete) {
+      return;
+    }
+
     triggerHaptic("confirm");
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
@@ -576,6 +596,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const registerShot = (x: number, y: number, value: string) => {
     if (currentEndIdx >= config.endsCount) return;
+
+    // Si el end actual ya está completo, no añadir más flechas hasta confirmar o deshacer
+    const currentEnd = ends[currentEndIdx];
+    if (
+      currentEnd &&
+      currentEnd.arrows.length === config.arrowsPerEnd &&
+      currentEnd.arrows.every((a) => a !== "" && a !== undefined)
+    ) {
+      return;
+    }
 
     const newImpact: ShotImpact = {
       endIdx: currentEndIdx,
@@ -1009,9 +1039,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return impacts.filter((imp) => imp.endIdx === currentEndIdx);
   }, [impacts, currentEndIdx]);
 
-  const { centroid, dispersion } = useMemo(() => {
+  const { centroid, dispersion, groupingHullPoints } = useMemo(() => {
     const N = currentEndImpacts.length;
-    if (N < 1) return { centroid: null, dispersion: null };
+    if (N < 1) return { centroid: null, dispersion: null, groupingHullPoints: null };
 
     const sumX = currentEndImpacts.reduce((sum, imp) => sum + imp.x, 0);
     const sumY = currentEndImpacts.reduce((sum, imp) => sum + imp.y, 0);
@@ -1019,17 +1049,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const meanY = sumY / N;
     const c = { x: meanX, y: meanY };
 
-    if (N < 2) return { centroid: c, dispersion: null };
+    if (N < 2) return { centroid: c, dispersion: null, groupingHullPoints: null };
 
-    const sumSqDiffX = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.x - meanX, 2), 0);
-    const sumSqDiffY = currentEndImpacts.reduce((sum, imp) => sum + Math.pow(imp.y - meanY, 2), 0);
-    const sigmaX = Math.sqrt(sumSqDiffX / (N - 1));
-    const sigmaY = Math.sqrt(sumSqDiffY / (N - 1));
+    const hull = getConvexHull(currentEndImpacts.map((imp) => ({ x: imp.x, y: imp.y })));
+    const hullPointsStr = hull.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+
+    // Cobertura completa de la dispersión de las flechas
+    const maxDistX = Math.max(...currentEndImpacts.map((imp) => Math.abs(imp.x - meanX)));
+    const maxDistY = Math.max(...currentEndImpacts.map((imp) => Math.abs(imp.y - meanY)));
     const d = {
-      rx: Math.max(1.8, sigmaX),
-      ry: Math.max(1.8, sigmaY)
+      rx: Math.max(2.8, maxDistX + 1.2),
+      ry: Math.max(2.8, maxDistY + 1.2)
     };
-    return { centroid: c, dispersion: d };
+    return { centroid: c, dispersion: d, groupingHullPoints: hullPointsStr };
   }, [currentEndImpacts]);
 
   // Smart Dispersion and Sight Adjustment Analytics
@@ -1465,12 +1497,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     return (
                       <div
                         key={arrowIdx}
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all ${getArrowColorClass(
+                        onClick={() => setCurrentArrowIdx(arrowIdx)}
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer ${getArrowColorClass(
                           a
                         )} ${
                           isCellEditing
                             ? "border-cyan-neon ring-2 ring-cyan-neon/30 shadow-glow-cyan bg-cyan-neon/10 scale-105"
-                            : "border-white/5"
+                            : "border-white/5 hover:border-white/20"
                         }`}
                       >
                         {a || "—"}
@@ -1533,26 +1566,58 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     />
                   ))}
 
-                  {/* Centroid & Dispersion */}
-                  {centroid && (
-                    <g>
-                      <line x1={centroid.x - 2} y1={centroid.y} x2={centroid.x + 2} y2={centroid.y} stroke="#00E5FF" strokeWidth="0.4" />
-                      <line x1={centroid.x} y1={centroid.y - 2} x2={centroid.x} y2={centroid.y + 2} stroke="#00E5FF" strokeWidth="0.4" />
-                      <circle cx={centroid.x} cy={centroid.y} r="0.6" fill="#00E5FF" />
-                    </g>
+                  {/* Línea representativa de la agrupación de flechas */}
+                  {currentEndImpacts.length === 2 && (
+                    <line
+                      x1={currentEndImpacts[0].x}
+                      y1={currentEndImpacts[0].y}
+                      x2={currentEndImpacts[1].x}
+                      y2={currentEndImpacts[1].y}
+                      stroke="#00E5FF"
+                      strokeWidth="1.0"
+                      strokeDasharray="2.5 1.5"
+                      strokeLinecap="round"
+                    />
                   )}
-                  {centroid && dispersion && (
+
+                  {currentEndImpacts.length >= 3 && groupingHullPoints && (
+                    <polygon
+                      points={groupingHullPoints}
+                      fill="rgba(0, 229, 255, 0.12)"
+                      stroke="#00E5FF"
+                      strokeWidth="1.0"
+                      strokeDasharray="2.5 1.5"
+                      strokeLinejoin="round"
+                    />
+                  )}
+
+                  {/* Elipse sutil de dispersión perimetral */}
+                  {centroid && dispersion && currentEndImpacts.length >= 3 && (
                     <ellipse
                       cx={centroid.x}
                       cy={centroid.y}
                       rx={dispersion.rx}
                       ry={dispersion.ry}
-                      fill="rgba(0, 229, 255, 0.08)"
+                      fill="rgba(0, 229, 255, 0.04)"
                       stroke="#00E5FF"
-                      strokeWidth="0.35"
+                      strokeWidth="0.4"
                       strokeDasharray="1.5 1.5"
-                      className="animate-pulse"
+                      opacity="0.6"
                     />
+                  )}
+
+                  {/* Cruz (+) en el centro de la agrupación de flechas */}
+                  {centroid && currentEndImpacts.length >= 1 && (
+                    <g className="cursor-default pointer-events-none">
+                      {/* Sombra de contraste negra */}
+                      <line x1={centroid.x - 3.5} y1={centroid.y} x2={centroid.x + 3.5} y2={centroid.y} stroke="#000000" strokeWidth="2.5" strokeLinecap="round" />
+                      <line x1={centroid.x} y1={centroid.y - 3.5} x2={centroid.x} y2={centroid.y + 3.5} stroke="#000000" strokeWidth="2.5" strokeLinecap="round" />
+                      {/* Cruz Neón Cian (+) */}
+                      <line x1={centroid.x - 3.5} y1={centroid.y} x2={centroid.x + 3.5} y2={centroid.y} stroke="#00E5FF" strokeWidth="1.1" strokeLinecap="round" />
+                      <line x1={centroid.x} y1={centroid.y - 3.5} x2={centroid.x} y2={centroid.y + 3.5} stroke="#00E5FF" strokeWidth="1.1" strokeLinecap="round" />
+                      {/* Punto central del centroide */}
+                      <circle cx={centroid.x} cy={centroid.y} r="0.8" fill="#00E5FF" stroke="#000000" strokeWidth="0.35" />
+                    </g>
                   )}
 
                   {/* Render coordinate markers on the diana SVG */}
@@ -1648,7 +1713,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </button>
               <button
                 onClick={handleConfirmEnd}
-                className="flex-1.5 py-3 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-glow-cyan hover:brightness-110 transition active:scale-95 cursor-pointer"
+                disabled={!isCurrentEndComplete}
+                className={`flex-1.5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 ${
+                  isCurrentEndComplete
+                    ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-110 cursor-pointer animate-pulse"
+                    : "bg-neutral-900 border border-white/5 text-neutral-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
+                }`}
               >
                 <span>Confirmar</span>
                 <ArrowRight size={13} />
@@ -1829,7 +1899,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Confirm Round/End */}
               <button
                 onClick={handleConfirmEnd}
-                className="col-span-2 py-3.5 min-h-[48px] rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs flex items-center justify-center uppercase cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition gap-1.5"
+                disabled={!isCurrentEndComplete}
+                className={`col-span-2 py-3.5 min-h-[48px] rounded-xl font-black text-xs flex items-center justify-center uppercase transition gap-1.5 active:scale-95 ${
+                  isCurrentEndComplete
+                    ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-110 cursor-pointer animate-pulse"
+                    : "bg-neutral-900 border border-white/5 text-neutral-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
+                }`}
               >
                 <span>Confirmar End</span>
                 <ArrowRight size={14} />
@@ -2303,14 +2378,37 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               />
             ))}
 
+            {/* Línea representativa de agrupación en Lupa */}
+            {currentEndImpacts.length === 2 && (
+              <line
+                x1={currentEndImpacts[0].x}
+                y1={currentEndImpacts[0].y}
+                x2={currentEndImpacts[1].x}
+                y2={currentEndImpacts[1].y}
+                stroke="#00E5FF"
+                strokeWidth="0.8"
+                strokeDasharray="1.5 1"
+              />
+            )}
+            {currentEndImpacts.length >= 3 && groupingHullPoints && (
+              <polygon
+                points={groupingHullPoints}
+                fill="rgba(0, 229, 255, 0.12)"
+                stroke="#00E5FF"
+                strokeWidth="0.8"
+                strokeDasharray="1.5 1"
+              />
+            )}
             {centroid && (
               <g>
-                <line x1={centroid.x - 2} y1={centroid.y} x2={centroid.x + 2} y2={centroid.y} stroke="#00E5FF" strokeWidth="0.4" />
-                <line x1={centroid.x} y1={centroid.y - 2} x2={centroid.x} y2={centroid.y + 2} stroke="#00E5FF" strokeWidth="0.4" />
-                <circle cx={centroid.x} cy={centroid.y} r="0.6" fill="#00E5FF" />
+                <line x1={centroid.x - 3} y1={centroid.y} x2={centroid.x + 3} y2={centroid.y} stroke="#000000" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1={centroid.x} y1={centroid.y - 3} x2={centroid.x} y2={centroid.y + 3} stroke="#000000" strokeWidth="2.2" strokeLinecap="round" />
+                <line x1={centroid.x - 3} y1={centroid.y} x2={centroid.x + 3} y2={centroid.y} stroke="#00E5FF" strokeWidth="1.0" strokeLinecap="round" />
+                <line x1={centroid.x} y1={centroid.y - 3} x2={centroid.x} y2={centroid.y + 3} stroke="#00E5FF" strokeWidth="1.0" strokeLinecap="round" />
+                <circle cx={centroid.x} cy={centroid.y} r="0.6" fill="#00E5FF" stroke="#000" strokeWidth="0.3" />
               </g>
             )}
-            {centroid && dispersion && (
+            {centroid && dispersion && currentEndImpacts.length >= 3 && (
               <ellipse
                 cx={centroid.x}
                 cy={centroid.y}

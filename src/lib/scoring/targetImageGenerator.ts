@@ -1,6 +1,6 @@
 "use client";
 
-import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis } from "./dispersionAnalytics";
+import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
 
 export interface TargetShotChartParams {
@@ -170,6 +170,45 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+
+    // Grouping Polygon / Line
+    if (impacts.length >= 3) {
+      const hull = getConvexHull(impacts.map(i => ({ x: i.x, y: i.y })));
+      if (hull.length >= 3) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(0, 229, 255, 0.85)";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([8, 6]);
+        ctx.fillStyle = "rgba(0, 229, 255, 0.08)";
+        ctx.beginPath();
+        hull.forEach((p, idx) => {
+          const hx = targetCenterX + ((p.x - 50) / 48) * targetRadius;
+          const hy = targetCenterY + ((p.y - 50) / 48) * targetRadius;
+          if (idx === 0) ctx.moveTo(hx, hy);
+          else ctx.lineTo(hx, hy);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (impacts.length === 2) {
+      const p1 = impacts[0];
+      const p2 = impacts[1];
+      const hx1 = targetCenterX + ((p1.x - 50) / 48) * targetRadius;
+      const hy1 = targetCenterY + ((p1.y - 50) / 48) * targetRadius;
+      const hx2 = targetCenterX + ((p2.x - 50) / 48) * targetRadius;
+      const hy2 = targetCenterY + ((p2.y - 50) / 48) * targetRadius;
+      ctx.save();
+      ctx.strokeStyle = "rgba(0, 229, 255, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(hx1, hy1);
+      ctx.lineTo(hx2, hy2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Centroid crosshair
     ctx.strokeStyle = "#00E5FF";
