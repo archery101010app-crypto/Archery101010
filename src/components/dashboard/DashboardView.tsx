@@ -350,107 +350,140 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-2 sm:mb-3 gap-2 flex-wrap sm:flex-nowrap">
+      <div className="flex items-center justify-between mb-1 gap-2">
         <div className="flex flex-col min-w-0">
-          <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
-            <span>{t("dashHome")}</span>
+          <div className="flex items-center gap-2">
+            <h2 className="text-white text-lg font-bold tracking-tight">
+              {t("dashHome")}
+            </h2>
             {user.plan === "PRO" && (
-              <span className="text-yellow-gold text-xs font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow animate-pulse">
+              <span className="text-yellow-gold text-[10px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase">
                 {t("proBadge")}
               </span>
             )}
-          </h2>
-          <p className="text-xs text-gray-dim mt-0.5">
+          </div>
+          <p className="text-xs text-neutral-400 mt-0.5">
             {t("helloLabel")}{user.fullName} · {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
-                className="animate-pulse text-red-rival hover:text-red-400 font-extrabold cursor-pointer border-b border-dashed border-red-rival ml-1"
-                title={language === "es" ? "¡Configura tu perfil de arquero aquí!" : "Setup your archer profile here!"}
+                className="text-red-rival hover:text-red-400 font-semibold cursor-pointer border-b border-red-rival/60 ml-1"
+                title={language === "es" ? "Configura tu perfil de arquero aquí" : "Setup your archer profile here"}
               >
-                {user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")} ({language === "es" ? "Configurar Perfil ⚠️" : "Setup Profile ⚠️"})
+                {user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")} ({language === "es" ? "Completar perfil" : "Complete profile"})
               </span>
             ) : (
-              <span>{user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")}</span>
+              <span className="text-neutral-300 font-medium">{user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")}</span>
             )}
           </p>
-        </div>
-
-        {/* Club & Country Badge */}
-        <div className="flex items-center gap-2.5 bg-neutral-900/80 border border-white/10 rounded-2xl px-3 py-1.5 shadow-[0_0_15px_rgba(0,229,255,0.05)] hover:border-cyan-neon/30 transition-all duration-300">
-          <div className="w-8 h-8 rounded-xl bg-neutral-950 border border-white/5 flex items-center justify-center relative shrink-0 shadow-inner group">
-            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
-            <span className="absolute -bottom-1.5 -right-1.5 text-sm drop-shadow-md">{clubFlag}</span>
-          </div>
-          <div className="flex flex-col text-left">
-            <span className="text-[10px] font-black text-white leading-none truncate max-w-[120px]">
-              {user.clubName || t("independentLabel")}
-            </span>
-            <span className="text-[8px] text-cyan-neon font-bold mt-1.5 uppercase tracking-wider leading-none">
-              {clubCountryName}
-            </span>
-          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4 sm:gap-5">
-        {/* Progreso Semanal */}
+        {/* Progreso Semanal (Conectado a sesiones reales) */}
         <motion.div
           variants={cardVariants}
-          className="col-span-2 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36"
+          onClick={() => onNavigate("HISTORY")}
+          className="col-span-2 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group"
         >
-          <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase">
-            {t("weeklyProgress")}
-          </span>
-          <div className="w-full h-20 mt-1 relative">
-            <svg viewBox="0 0 100 40" className="w-full h-full">
-              <path
-                d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12 L 95,38 L 5,38 Z"
-                fill="rgba(0, 229, 255, 0.06)"
-              />
-              <path
-                d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12"
-                fill="none"
-                stroke="#00E5FF"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {[
-                { x: 5, y: 35 },
-                { x: 20, y: 30 },
-                { x: 40, y: 32 },
-                { x: 60, y: 22 },
-                { x: 80, y: 25 },
-                { x: 95, y: 12 }
-              ].map((p, idx) => (
-                <circle
-                  key={idx}
-                  cx={p.x}
-                  cy={p.y}
-                  r="1.8"
-                  className="fill-cyan-neon stroke-black stroke-[0.8px]"
-                />
-              ))}
-            </svg>
-          </div>
+          {(() => {
+            const scored = sessions
+              .filter((s) => !s.isVolumeOnly && !s.isDraft && s.maxScore > 0 && s.score > 0)
+              .sort((a, b) => a.timestamp - b.timestamp)
+              .slice(-6);
+
+            const hasData = scored.length > 0;
+            const latest = hasData ? scored[scored.length - 1] : null;
+            const latestPct = latest ? Math.round((latest.score / latest.maxScore) * 100) : 0;
+
+            const points = hasData
+              ? scored.map((s, idx) => {
+                  const x = scored.length === 1 ? 50 : 6 + (idx * 88) / (scored.length - 1);
+                  const ratio = Math.max(0, Math.min(1, s.score / s.maxScore));
+                  const y = 34 - ratio * 24;
+                  return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
+                })
+              : [
+                  { x: 6, y: 28 },
+                  { x: 35, y: 24 },
+                  { x: 65, y: 20 },
+                  { x: 94, y: 14 }
+                ];
+
+            const linePath = points
+              .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`)
+              .join(" ");
+            const areaPath =
+              points.length > 1
+                ? `${linePath} L ${points[points.length - 1].x},38 L ${points[0].x},38 Z`
+                : "";
+
+            return (
+              <>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs text-neutral-400 font-semibold tracking-tight">
+                    {t("weeklyProgress")}
+                  </span>
+                  {hasData ? (
+                    <span className="text-xs font-bold text-white tabular-nums">
+                      {latest.score} <span className="text-neutral-500 font-medium">/ {latest.maxScore}</span>{" "}
+                      <span className="text-cyan-neon ml-0.5">({latestPct}%)</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-neutral-500 font-medium">
+                      {language === "es" ? "Sin rondas aún" : "No rounds yet"}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full h-20 mt-1 relative">
+                  <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+                    {areaPath && (
+                      <path
+                        d={areaPath}
+                        fill="rgba(0, 191, 255, 0.06)"
+                      />
+                    )}
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke={hasData ? "#00BFFF" : "rgba(255,255,255,0.15)"}
+                      strokeWidth="1.8"
+                      strokeDasharray={hasData ? undefined : "3 3"}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {hasData &&
+                      points.map((p, idx) => (
+                        <circle
+                          key={idx}
+                          cx={p.x}
+                          cy={p.y}
+                          r="2"
+                          className="fill-cyan-neon stroke-[#0D0F12] stroke-[1.2px]"
+                        />
+                      ))}
+                  </svg>
+                </div>
+              </>
+            );
+          })()}
         </motion.div>
 
         {/* Clubes y Programas */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 group"
+          className="col-span-1 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase leading-snug">
+          <span className="text-xs text-neutral-400 font-semibold tracking-tight leading-snug">
             {t("clubsPrograms")}
           </span>
           <div className="flex flex-col gap-0.5 overflow-hidden">
             <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[8px] text-gray-dim truncate flex items-center gap-1 mt-0.5">
+            <span className="text-[11px] text-neutral-400 truncate flex items-center gap-1 mt-0.5">
               <span>{clubFlag}</span>
-              <span>
+              <span className="truncate">
                 {user.role === "coach" 
                   ? "Coach" 
                   : user.role === "team_admin" 
@@ -463,7 +496,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             </span>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/5 group-hover:border-cyan-neon/20 transition-all">
+          <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/[0.07] group-hover:border-white/20 transition-colors">
             <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
           </div>
         </motion.div>
@@ -472,43 +505,37 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
-          className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 relative overflow-hidden group flex justify-between items-center h-28"
+          className="col-span-3 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 cursor-pointer hover:border-white/20 transition-colors duration-200 relative overflow-hidden group flex justify-between items-center h-28"
         >
-          {/* Subtle light effect in harmony with the app */}
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-neon/[0.04] to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
-          
-          <div className="flex flex-col gap-1 z-10 w-[75%]">
-            <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-neon opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-neon"></span>
-              </span>
+          <div className="flex flex-col gap-1 z-10 w-[78%]">
+            <span className="text-[11px] text-cyan-neon font-semibold tracking-tight flex items-center gap-1.5">
+              <span className="inline-flex rounded-full h-1.5 w-1.5 bg-cyan-neon" />
               {t("liveArenaTitle")}
             </span>
-            <h3 className="text-white text-base font-black uppercase tracking-wide mt-1 group-hover:text-cyan-neon transition-colors">
+            <h3 className="text-white text-base font-bold tracking-tight mt-0.5 group-hover:text-cyan-neon transition-colors">
               {t("duelsTitle")}
             </h3>
-            <p className="text-[10px] text-gray-dim leading-snug mt-0.5">
+            <p className="text-xs text-neutral-400 leading-snug">
               {t("duelsDesc")}
             </p>
           </div>
 
-          <div className="w-12 h-12 rounded-2xl bg-neutral-950 border border-white/10 flex items-center justify-center text-cyan-neon group-hover:border-cyan-neon/40 group-hover:scale-105 transition-all shrink-0">
-            <Trophy size={20} />
+          <div className="w-11 h-11 rounded-xl bg-neutral-950 border border-white/[0.07] flex items-center justify-center text-cyan-neon group-hover:border-white/20 transition-colors shrink-0">
+            <Trophy size={19} strokeWidth={2} />
           </div>
           
-          <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
+          <ArrowUpRight size={15} className="absolute top-3.5 right-3.5 text-neutral-500 group-hover:text-white transition-colors" />
         </motion.div>
       </div>
 
       <motion.button
         variants={cardVariants}
-        whileHover={{ scale: 1.02, filter: "brightness(1.08)" }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         onClick={() => onNavigate("TARGET")}
-        className="w-full py-4 sm:py-4.5 rounded-full bg-gradient-to-r from-cyan-neon via-[#00D4FF] to-cyan-brand text-black font-black text-base sm:text-lg tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center gap-2 mt-4 sm:mt-5 active:scale-95"
+        className="w-full py-4 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-base sm:text-lg tracking-wide uppercase transition-colors cursor-pointer flex justify-center items-center gap-2.5 mt-2 active:scale-[0.99]"
       >
-        <span className="text-xl">🎯</span>
+        <Target size={20} strokeWidth={2.5} className="text-black shrink-0" />
         <span>{t("newSession")}</span>
       </motion.button>
 
@@ -516,17 +543,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="fixed left-0 top-[calc(50%-112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
-          className="h-28 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 select-none"
+          className="h-28 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none"
         >
-          <motion.span
-            animate={{ scale: [1, 1.25, 1], rotate: [0, 10, -10, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            className="text-base text-black font-extrabold"
-          >
+          <span className="text-sm text-black font-black leading-none">
             ★
-          </motion.span>
+          </span>
           <span 
-            className="text-[8px] font-black tracking-[0.18em] uppercase" 
+            className="text-[8px] font-black tracking-[0.18em] uppercase text-black" 
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
           >
             Estrellas 101010
