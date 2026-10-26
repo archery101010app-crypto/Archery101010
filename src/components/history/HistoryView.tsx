@@ -225,7 +225,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
             {/* Date Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Fecha:
               </span>
               <div className="flex gap-1.5">
@@ -237,7 +237,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setDateFilter(f.id as any)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
                       dateFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
                         : "bg-neutral-950 border border-white/5 text-gray-dim"
@@ -251,7 +251,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Practice Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Tipo:
               </span>
               <div className="flex gap-1.5">
@@ -264,7 +264,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setPracticeFilter(f.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
                       practiceFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
                         : "bg-neutral-950 border border-white/5 text-gray-dim"
@@ -278,20 +278,20 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Bow Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[50px]">
+              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Arco:
               </span>
               <div className="flex gap-1.5">
                 {[
                   { id: "ALL", label: t("filterAll") },
-                  { id: "Recurve", label: "Recurve" },
-                  { id: "Compound", label: "Compound" },
+                  { id: "Recurve", label: "Recurvo" },
+                  { id: "Compound", label: "Compuesto" },
                   { id: "Barebow", label: "Barebow" }
                 ].map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setBowFilter(f.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
                       bowFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
                         : "bg-neutral-950 border border-white/5 text-gray-dim"
@@ -321,22 +321,24 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     whileHover={{ scale: 1.01 }}
                     className="bg-neutral-900/60 backdrop-blur border border-white/10 p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
                   >
-                    <div className="flex flex-col gap-1 w-[70%]">
+                    <div className="flex flex-col gap-1 w-[70%] min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-gray-dim font-bold">{formatDate(session.timestamp)}</span>
                         <span className="text-[8px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
-                          {session.practiceType}
+                          {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
                         <span className="text-xl font-black text-white">{session.score}</span>
                         <span className="text-[10px] text-gray-dim">/ {session.maxScore}</span>
-                        <span className="text-[11px] text-yellow-gold font-bold ml-1">
-                          {Math.round((session.score / session.maxScore) * 100)}%
-                        </span>
+                        {session.maxScore > 0 && (
+                          <span className="text-[11px] text-yellow-gold font-bold ml-1">
+                            {Math.round((session.score / session.maxScore) * 100)}%
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-gray-dim truncate">
-                        {session.format} · {session.bowType} · {session.distance}m
+                        {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
                     </div>
 
@@ -526,7 +528,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               <div className="text-right">
                 <span className="text-[9px] text-gray-dim font-bold uppercase tracking-widest">Precisión</span>
                 <p className="text-2xl font-black text-yellow-gold leading-tight">
-                  {Math.round((selectedSession.score / selectedSession.maxScore) * 100)}%
+                  {selectedSession.maxScore > 0 ? Math.round((selectedSession.score / selectedSession.maxScore) * 100) : 0}%
                 </p>
               </div>
             </div>
@@ -539,11 +541,15 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
                 <span className="text-[8px] text-gray-dim uppercase block">Arco</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.bowType}</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
+                  {selectedSession.bowType === "Recurve" ? "Recurvo" : selectedSession.bowType === "Compound" ? "Compuesto" : selectedSession.bowType}
+                </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
                 <span className="text-[8px] text-gray-dim uppercase block">Tipo</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.practiceType}</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
+                  {selectedSession.practiceType === "Control" ? t("practiceControl") : selectedSession.practiceType}
+                </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
                 <span className="text-[8px] text-gray-dim uppercase block">Rondas</span>

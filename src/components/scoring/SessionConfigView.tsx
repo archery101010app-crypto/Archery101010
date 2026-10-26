@@ -154,7 +154,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   Sesión Pausada
                 </span>
                 <h4 className="text-white text-xs font-bold mt-1">
-                  {draftSession.format} · {draftSession.distance}m · {draftSession.bowType}
+                  {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
                 </h4>
                 <p className="text-[9px] text-gray-dim">
                   Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
@@ -263,7 +263,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "border-white/10 bg-neutral-900/40 text-gray-dim hover:text-white"
                 }`}
               >
-                {type}
+                {type === "Recurve" ? "Recurvo" : type === "Compound" ? "Compuesto" : "Barebow"}
               </button>
             ))}
           </div>
@@ -388,7 +388,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas."
                 )}
                 {practiceInfoType === "Volumen" && (
-                  "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión"
+                  "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión."
                 )}
               </p>
 

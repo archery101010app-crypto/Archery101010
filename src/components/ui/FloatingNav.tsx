@@ -27,7 +27,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
       ]
     : [
-        { id: "HOME" as Screen, icon: Home, label: "Home" },
+        { id: "HOME" as Screen, icon: Home, label: "Inicio" },
         { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
         { id: "HISTORY" as Screen, icon: History, label: "Historial" },
         { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
@@ -58,6 +58,8 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                 onClick={() => {
                   onScreenChange(item.id);
                 }}
+                title={item.label}
+                aria-label={item.label}
                 className="relative flex flex-col items-center justify-center p-1.5 cursor-pointer outline-none group"
               >
                 {/* Highlight active glow behind icon */}
@@ -72,7 +74,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                 {/* Icon wrapper with PRO badge */}
                 <div className="relative">
                   <Icon
-                    size={22}
+                    size={20}
                     className={`transition-colors duration-200 relative z-10 ${
                       isActive
                         ? "text-cyan-neon shadow-glow-cyan"
@@ -88,16 +90,14 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                   )}
                 </div>
 
-                {/* Active dot indicator */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeDot"
-                    className="w-1.5 h-1.5 rounded-full bg-cyan-neon mt-1 shadow-glow-cyan"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-                
-                {!isActive && <div className="w-1.5 h-1.5 mt-1 bg-transparent" />}
+                {/* Label indicator */}
+                <span
+                  className={`text-[8px] font-bold tracking-tight mt-0.5 leading-none transition-colors duration-200 ${
+                    isActive ? "text-cyan-neon font-black" : "text-gray-dim/80 group-hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </span>
               </button>
             );
         })}

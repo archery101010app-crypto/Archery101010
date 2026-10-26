@@ -1206,7 +1206,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
             <p className="text-[10px] text-gray-dim uppercase tracking-wider">
-              {config.practiceType} · {config.bowType}
+              {config.practiceType === "Control" ? t("practiceControl") : config.practiceType} · {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType}
             </p>
           </div>
         </div>
@@ -1519,19 +1519,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </AnimatePresence>
 
             {/* Parciales del End Activo (Optimizado) */}
-            <div className="w-full flex justify-between items-center gap-2 py-2 px-3.5 bg-neutral-900/60 rounded-2xl border border-white/10 shadow-inner">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-cyan-neon font-black uppercase tracking-widest">
+            <div className="w-full flex justify-between items-center gap-1.5 py-2 px-3 bg-neutral-900/60 rounded-2xl border border-white/10 shadow-inner">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[9px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
                   ACTUAL:
                 </span>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1">
                   {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
                     const isCellEditing = currentArrowIdx === arrowIdx;
                     return (
                       <div
                         key={arrowIdx}
                         onClick={() => setCurrentArrowIdx(arrowIdx)}
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer ${getArrowColorClass(
+                        className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer shrink-0 ${getArrowColorClass(
                           a
                         )} ${
                           isCellEditing
@@ -1545,7 +1545,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   })}
                 </div>
               </div>
-              <div className="px-2.5 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11px] text-cyan-neon shadow-sm">
+              <div className="px-2 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[10px] text-cyan-neon shadow-sm shrink-0 whitespace-nowrap">
                 Suma: {calculateEndTotal(currentEndIdx)} pts
               </div>
             </div>
@@ -1926,7 +1926,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 onClick={() => handleScoreInput("M")}
                 className="col-span-2 py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900 text-neutral-400 font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-neutral-200 active:scale-95 transition"
               >
-                Miss (M)
+                Fallo (M)
               </button>
 
               {/* Confirm Round/End */}
@@ -2008,7 +2008,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               ) : (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
-                    <span className="text-[9px] text-gray-dim uppercase font-bold">Score Total</span>
+                    <span className="text-[9px] text-gray-dim uppercase font-bold">Puntaje Total</span>
                     <p className="text-2xl font-black text-cyan-neon mt-0.5">
                       {calculateTotalScore()}
                     </p>
@@ -2016,7 +2016,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <div>
                     <span className="text-[9px] text-gray-dim uppercase font-bold">Precisión</span>
                     <p className="text-2xl font-black text-yellow-gold mt-0.5">
-                      {Math.round((calculateTotalScore() / config.maxScore) * 100)}%
+                      {config.maxScore > 0 ? Math.round((calculateTotalScore() / config.maxScore) * 100) : 0}%
                     </p>
                   </div>
                 </div>
@@ -2249,7 +2249,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       Centro & Ajuste de Mira
                     </h3>
                     <p className="text-[10px] text-gray-dim">
-                      {config.bowType || "Recurvo"} • {config.distance || 70}m • Dianas WA
+                      {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} • {config.distance || 70}m • Dianas WA
                     </p>
                   </div>
                 </div>

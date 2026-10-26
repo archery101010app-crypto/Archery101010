@@ -616,7 +616,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           
           <div className="flex items-center gap-1.5 mt-2">
             <span className="text-[9px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black px-2 py-0.5 rounded-full uppercase">
-              {user.role}
+              {user.role === "archer"
+                ? "Atleta"
+                : user.role === "coach"
+                ? "Coach"
+                : user.role === "team_admin_coach"
+                ? "Admin / Coach"
+                : user.role === "team_admin"
+                ? "Administrador"
+                : user.role === "superadmin"
+                ? "Super Admin"
+                : user.role}
             </span>
             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
               user.plan === "PRO" 
@@ -1041,9 +1051,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   key={bow.id || idx}
                   className="bg-neutral-950/70 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-md"
                 >
-                  <div className="border-b border-white/5 pb-2">
+                  <div className="border-b border-white/5 pb-2 flex items-center justify-between">
                     <span className="text-white text-xs font-black uppercase tracking-wider">
-                      Arco #{bowNumber}
+                      Arco #{bowNumber} {isPrimary && <span className="text-gray-dim font-bold text-[10px]">(Principal)</span>}
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon">
+                      {typeName}
                     </span>
                   </div>
 
@@ -1135,7 +1148,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   {maxStar.starName}
                 </span>
                 <span className="text-[9px] text-gray-dim mt-0.5 font-bold uppercase">
-                  {t("recordLabel")} {maxStar.highestScore} pts ({maxStar.bowType})
+                  {t("recordLabel")} {maxStar.highestScore} pts ({maxStar.bowType === "Compound" ? "Compuesto" : maxStar.bowType === "Recurve" ? "Recurvo" : maxStar.bowType})
                 </span>
               </div>
             </div>

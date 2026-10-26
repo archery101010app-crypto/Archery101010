@@ -302,10 +302,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 className="animate-pulse text-red-rival hover:text-red-400 font-extrabold cursor-pointer border-b border-dashed border-red-rival ml-1"
                 title={language === "es" ? "¡Configura tu perfil de arquero aquí!" : "Setup your archer profile here!"}
               >
-                {user?.bowConfig?.type || "Barebow"} ({language === "es" ? "Configurar Perfil ⚠️" : "Setup Profile ⚠️"})
+                {user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")} ({language === "es" ? "Configurar Perfil ⚠️" : "Setup Profile ⚠️"})
               </span>
             ) : (
-              <span>{user?.bowConfig?.type || "Barebow"}</span>
+              <span>{user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")}</span>
             )}
           </p>
         </div>
