@@ -332,15 +332,15 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-5 sm:gap-6 py-4 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY APP / by 101010 */}
+      {/* Titular Oficial: ARCHERY APP / by 101010 (+25% de tamaño) */}
       <div 
         className="w-full flex flex-col justify-center items-center pt-2 pb-5 sm:pb-7 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <h1 className="text-[25px] sm:text-[34px] md:text-[42px] text-white tracking-widest text-center leading-tight">
+        <h1 className="text-[31px] sm:text-[43px] md:text-[53px] text-white tracking-widest text-center leading-tight">
           ARCHERY APP
         </h1>
-        <div className="flex items-baseline justify-center gap-2 text-[25px] sm:text-[34px] md:text-[42px] leading-none">
+        <div className="flex items-baseline justify-center gap-2 text-[31px] sm:text-[43px] md:text-[53px] leading-none">
           <span className="text-white text-[0.35em] tracking-wider">by</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
