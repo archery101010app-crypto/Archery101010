@@ -493,21 +493,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         🎯 {t("newSession")}
       </motion.button>
 
-      {/* Floating stars tab on the left edge */}
+      {/* Floating stars tab on the left edge (15% más corta) */}
       <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40] scale-90 origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
-          className="flex flex-col items-center justify-center gap-2 py-4 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 md:w-9 select-none"
+          className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 md:w-9 select-none"
         >
           <motion.span
             animate={{ scale: [1, 1.25, 1], rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            className="text-lg text-black font-extrabold"
+            className="text-base text-black font-extrabold"
           >
             ★
           </motion.span>
           <span 
-            className="text-[8.5px] font-black tracking-[0.2em] uppercase" 
+            className="text-[7.5px] font-black tracking-[0.16em] uppercase" 
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
           >
             Estrellas 101010
