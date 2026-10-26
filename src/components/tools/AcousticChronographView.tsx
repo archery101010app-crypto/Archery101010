@@ -24,9 +24,9 @@ interface AcousticChronographViewProps {
 }
 
 export default function AcousticChronographView({ user, onBack }: AcousticChronographViewProps) {
-  // Official Distance: 18 Metros (18.0 m / approx 20 yards)
-  const distanceMeters = 18.0;
-  const distanceYards = 19.685;
+  // Configurable Distance: 18m (official default), 10m, or 5m
+  const [distanceMeters, setDistanceMeters] = useState<number>(18.0);
+  const distanceYards = Math.round(distanceMeters * 1.09361 * 100) / 100;
 
   // Input specifications states
   const [arrowWeight, setArrowWeight] = useState<string>("420");
@@ -88,6 +88,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         if (savedSpecs.arrowLength) setArrowLength(String(savedSpecs.arrowLength));
         if (savedSpecs.temperature) setTemperature(String(savedSpecs.temperature));
         if (savedSpecs.tempUnit) setTempUnit(savedSpecs.tempUnit);
+        if (savedSpecs.distanceMeters) setDistanceMeters(Number(savedSpecs.distanceMeters));
       } else if (user.bowConfig?.poundage) {
         const approxWeight = Math.round(user.bowConfig.poundage * 7.5);
         setArrowWeight(String(approxWeight));
@@ -97,12 +98,13 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   }, [user]);
 
   // Save specs handler
-  const handleSaveSpecs = async (w: string, l: string, t: string, u: "F" | "C") => {
+  const handleSaveSpecs = async (w: string, l: string, t: string, u: "F" | "C", dist: number = distanceMeters) => {
     await saveLocalSetting("chronograph_specs", {
       arrowWeight: Number(w) || 420,
       arrowLength: Number(l) || 28.5,
       temperature: Number(t) || 70,
-      tempUnit: u
+      tempUnit: u,
+      distanceMeters: dist
     });
   };
 
@@ -322,8 +324,8 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     const result: ShotResult = {
       id: `SHOT-${Date.now()}`,
       timestamp: Date.now(),
-      distanceMeters: 18.0,
-      distanceYards: 19.685,
+      distanceMeters,
+      distanceYards,
       temperatureCelsius: tempCelsius,
       temperatureFahrenheit: tempFahrenheit,
       arrowMassGrains: numWeight,
@@ -341,7 +343,10 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       momentumSlugFtSec: stats.momentumSlugFtSec,
       releasePeakSec: detection.releaseSec,
       impactPeakSec: detection.impactSec,
-      confidence: detection.confidence
+      confidence: detection.confidence,
+      waveformBins: detection.waveformBins,
+      releaseBin: detection.releaseBin,
+      impactBin: detection.impactBin
     };
 
     triggerHaptic("confirm");
@@ -493,11 +498,28 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       <div className="bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.08)] gap-4">
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
 
-        {/* Distance Badge & Unit Switcher */}
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-1.5 bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black px-3 py-1 rounded-full text-[10px] uppercase tracking-wider">
-            <Target size={12} />
-            <span>Distancia: 18 Metros</span>
+        {/* Distance Selector Pills (5m, 10m, 18m) & Unit Switcher */}
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-xl border border-white/10">
+            {[5, 10, 18].map((dist) => (
+              <button
+                key={dist}
+                type="button"
+                disabled={isRecording}
+                onClick={() => {
+                  triggerHaptic("tick");
+                  setDistanceMeters(dist);
+                  handleSaveSpecs(arrowWeight, arrowLength, temperature, tempUnit, dist);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                  distanceMeters === dist
+                    ? "bg-cyan-neon/20 text-cyan-neon border border-cyan-neon/40 shadow-glow-cyan"
+                    : "text-gray-dim hover:text-white"
+                }`}
+              >
+                {dist}m
+              </button>
+            ))}
           </div>
 
           {/* Unit Toggle Option: FPS vs KM/H */}
@@ -594,6 +616,47 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 {lastShotResult.momentumSlugFtSec ? `${lastShotResult.momentumSlugFtSec.toFixed(3)} slug-ft/s` : "—"}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Acoustic Oscilloscope Waveform (Visualizes Release & Impact Transients) */}
+        {lastShotResult?.waveformBins && lastShotResult.waveformBins.length > 0 && (
+          <div className="w-full bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider">
+              <span className="text-cyan-neon flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-cyan-neon inline-block" />
+                Suelta (0 ms)
+              </span>
+              <span className="text-white/40">Onda Acústica ({lastShotResult.distanceMeters}m)</span>
+              <span className="text-yellow-gold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-yellow-gold inline-block" />
+                Impacto (+{(lastShotResult.totalTimeSec * 1000).toFixed(0)} ms)
+              </span>
+            </div>
+            <svg viewBox="0 0 240 44" className="w-full h-11 overflow-visible">
+              {lastShotResult.waveformBins.map((amp, idx) => {
+                const isRel = idx === lastShotResult.releaseBin;
+                const isImp = idx === lastShotResult.impactBin;
+                const barH = Math.max(2, amp * 36);
+                const x = idx * 3 + 1;
+                const y = 40 - barH;
+                const fill = isRel
+                  ? "#00E5FF"
+                  : isImp
+                  ? "#FFE500"
+                  : idx > (lastShotResult.releaseBin ?? 0) && idx < (lastShotResult.impactBin ?? 0)
+                  ? "rgba(0, 229, 255, 0.35)"
+                  : "rgba(255, 255, 255, 0.18)";
+                return (
+                  <g key={idx}>
+                    <rect x={x} y={y} width="2" height={barH} rx="1" fill={fill} />
+                    {(isRel || isImp) && (
+                      <circle cx={x + 1} cy={Math.max(3, y - 3)} r="2.2" fill={isRel ? "#00E5FF" : "#FFE500"} />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
           </div>
         )}
 

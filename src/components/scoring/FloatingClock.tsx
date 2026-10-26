@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCw, Minimize2, Square, X, Clock, Volume2, VolumeX, AlertTriangle, Radio } from "lucide-react";
+import { Play, Pause, RotateCw, Minimize2, Square, X, Clock, Volume2, AlertTriangle, Radio } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { 
@@ -10,7 +10,6 @@ import {
   playWA1Beep, 
   playWA3Beeps, 
   playWA5EmergencyBeeps, 
-  playWAWarning30s, 
   playWATestTone, 
   WASoundMode 
 } from "@/lib/audio/waAudioSignals";
@@ -18,18 +17,36 @@ import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
 
 interface FloatingClockProps {
+  arrowsPerEnd?: number;
   onClockDisabledChange?: (disabled: boolean) => void;
   // Exposes current clock time to inline mini widget
-  onTimeUpdate?: (timeStr: string, phase: "prep" | "shoot" | null, isOver: boolean, isWarn: boolean) => void;
+  onTimeUpdate?: (timeStr: string, phase: "prep" | "shoot" | "stop" | null, isOver: boolean, isWarn: boolean) => void;
 }
 
-export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: FloatingClockProps) {
+/**
+ * Official World Archery Timing Presets (Book 2 Art. 7.3 & Book 3 Art. 13.4 / 15.1.1)
+ * Current WA Standard: 30 seconds per arrow (90s for 3 arrows, 180s for 6 arrows)
+ * Classic / Para-Archery: 40 seconds per arrow (120s for 3 arrows, 240s for 6 arrows)
+ * Alternating Matchplay / Shoot-Off: 20 seconds (1 arrow)
+ */
+const WA_OFFICIAL_PRESETS = [
+  { id: "WA_90", label: "3 Flechas WA (90s)", sub: "30s/flecha · Oficial", prep: 10, shoot: 90 },
+  { id: "WA_180", label: "6 Flechas WA (180s)", sub: "30s/flecha · Oficial", prep: 10, shoot: 180 },
+  { id: "WA_120", label: "3 Flechas (120s)", sub: "40s/flecha · Clásico", prep: 10, shoot: 120 },
+  { id: "WA_240", label: "6 Flechas (240s)", sub: "40s/flecha · Clásico", prep: 10, shoot: 240 },
+  { id: "WA_20", label: "Duelo / 1 Flecha (20s)", sub: "Tiro alternado WA", prep: 10, shoot: 20 }
+];
+
+export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange, onTimeUpdate }: FloatingClockProps) {
   const { t } = useLanguage();
+  // Default to current WA 30s/arrow rule: 90s for 3 arrows, 180s for 6 arrows
+  const defaultShootByArrows = arrowsPerEnd === 6 ? 180 : 90;
+
   // Config
   const [prepTime, setPrepTime] = useState(10);
-  const [shootTime, setShootTime] = useState(120);
+  const [shootTime, setShootTime] = useState(defaultShootByArrows);
   const [soundMode, setSoundMode] = useState<WASoundMode>("horn");
-  const [enableVoice, setEnableVoice] = useState(true);
+  const [enableVoice, setEnableVoice] = useState(false); // Disabled by default for pure WA tournament compliance
   
   // State
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
@@ -37,7 +54,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   const [isPaused, setIsPaused] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false); // "Sin Reloj"
   useWakeLock(isActive); // Keep display awake during active countdown/timer
-  const [phase, setPhase] = useState<"prep" | "shoot">("prep");
+  const [phase, setPhase] = useState<"prep" | "shoot" | "stop">("prep");
   const [timeLeft, setTimeLeft] = useState(10);
   const [totalPhaseTime, setTotalPhaseTime] = useState(10);
 
@@ -51,15 +68,19 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // Load presets from localStorage on mount
+  // Warning threshold according to WA rules:
+  // Last 30 seconds for standard ends (90s, 120s, 180s, 240s), or last 5 seconds for 20s alternating shots
+  const getWarningThreshold = (totalShootSecs: number) => (totalShootSecs <= 30 ? 5 : 30);
+
+  // Load presets from localStorage on mount and adapt to arrowsPerEnd
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedPrep = localStorage.getItem("relojSegsEntrada");
-      const savedShoot = localStorage.getItem("relojSegsTiro");
       const savedMode = localStorage.getItem("relojSoundMode") as WASoundMode;
       const savedVoice = localStorage.getItem("relojVoice");
       if (savedPrep) setPrepTime(Number(savedPrep));
-      if (savedShoot) setShootTime(Number(savedShoot));
+      // Sync default shootTime with the session's arrowsPerEnd (90s for 3 arrows, 180s for 6 arrows)
+      setShootTime(arrowsPerEnd === 6 ? 180 : 90);
       if (savedMode && ["horn", "whistle", "mute"].includes(savedMode)) {
         setSoundMode(savedMode);
       }
@@ -67,21 +88,42 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
         setEnableVoice(savedVoice === "true");
       }
     }
-  }, []);
+  }, [arrowsPerEnd]);
+
+  // Official World Archery Light Color ("RED" | "YELLOW" | "GREEN")
+  const getOfficialLightState = (): "RED" | "YELLOW" | "GREEN" => {
+    if (phase === "prep" || phase === "stop" || timeLeft <= 0) {
+      return "RED"; // Red light: Wait on line (10s prep) or Cease fire (0:00)
+    }
+    const warnSecs = getWarningThreshold(shootTime);
+    if (phase === "shoot" && timeLeft <= warnSecs) {
+      return "YELLOW"; // Yellow/Amber light: Last 30 seconds visual warning
+    }
+    return "GREEN"; // Green light: Shooting in progress
+  };
+
+  const lightState = getOfficialLightState();
 
   // Sync to parent mini clock view
   useEffect(() => {
     if (onTimeUpdate) {
-      if (!isActive) {
+      if (!isActive && phase !== "stop") {
         onTimeUpdate("", null, false, false);
       } else {
-        const isWarn = phase === "shoot" && timeLeft <= 30 && timeLeft > 0;
-        onTimeUpdate(formatTime(timeLeft), phase, timeLeft <= 0, isWarn);
+        const warnSecs = getWarningThreshold(shootTime);
+        const isWarn = phase === "shoot" && timeLeft <= warnSecs && timeLeft > 0;
+        const isOver = phase === "stop" || timeLeft <= 0;
+        onTimeUpdate(formatTime(timeLeft), phase, isOver, isWarn);
       }
     }
-  }, [timeLeft, phase, isActive, onTimeUpdate]);
+  }, [timeLeft, phase, isActive, shootTime, onTimeUpdate]);
 
-  // Whistles & Beeps definitions via World Archery synthesizer
+  // Official World Archery Sound Signals (Book 3, Art. 15.1.1):
+  // - 2 sound signals: Athletes go to the shooting line (10s preparation, RED light)
+  // - 1 sound signal: Start of shooting time (GREEN light)
+  // - 0 sound signals at 30s warning (Visual transition to YELLOW light only)
+  // - 3 sound signals: End of shooting time (RED light, stop shooting)
+  // - 5+ sound signals: Emergency stop shooting immediately (RED light)
   const playPrepSignal = () => {
     playWA2Beeps(soundMode);
   };
@@ -92,10 +134,6 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
   const playEndSignal = () => {
     playWA3Beeps(soundMode);
-  };
-
-  const playWarningBeep = () => {
-    playWAWarning30s(soundMode);
   };
 
   // Text-To-Speech Synthesizer (optional countdown)
@@ -127,33 +165,25 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
         const nextVal = prev - 1;
 
         if (phase === "prep") {
-          // Warning beeps in preparation phase (last 3 seconds)
-          if (nextVal <= 3 && nextVal > 0) {
-            playWarningBeep();
-          }
-          
+          // Official WA: No intermediate beeps during 10s prep. At 0, 1 blast starts shooting (Green light).
           if (nextVal <= 0) {
-            // Transition to shoot phase: 1 solid whistle/horn blast
             setPhase("shoot");
             setTimeLeft(shootTime);
             setTotalPhaseTime(shootTime);
             playShootSignal();
             return shootTime;
           }
-        } else {
-          // Warning at 30 seconds remaining
-          if (nextVal === 30) {
-            playWarningBeep();
-          }
-          
-          // Speech synthesis for final 10 seconds of shooting time
+        } else if (phase === "shoot") {
+          // Official WA: At 30s remaining, light turns Yellow silently (no horn blast).
+          // Optional voice countdown if enabled by user for solo training:
           if (nextVal <= 10 && nextVal > 0) {
             speakNumber(nextVal);
           }
 
           if (nextVal <= 0) {
-            // Timer expired: 3 whistles/horn blasts to stop
+            // Timer expired: 3 blasts to stop shooting & light turns RED
             if (timerRef.current) clearInterval(timerRef.current);
+            setPhase("stop");
             setIsActive(false);
             playEndSignal();
             return 0;
@@ -177,7 +207,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     setPhase("prep");
     setTimeLeft(prepTime);
     setTotalPhaseTime(prepTime);
-    playPrepSignal();
+    playPrepSignal(); // 2 beeps + Red Light
 
     startTimerLoop();
   };
@@ -187,9 +217,9 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     if (timerRef.current) clearInterval(timerRef.current);
     setIsActive(false);
     setIsPaused(false);
-    setPhase("prep");
-    setTimeLeft(prepTime);
-    playWA5EmergencyBeeps(soundMode);
+    setPhase("stop");
+    setTimeLeft(0);
+    playWA5EmergencyBeeps(soundMode); // 5 rapid blasts + Red Light
   };
 
   const handleSoundModeChange = (mode: WASoundMode) => {
@@ -228,11 +258,15 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
   const handleResetPhase = () => {
     triggerHaptic("undo");
-    setTimeLeft(phase === "prep" ? prepTime : shootTime);
-    setTotalPhaseTime(phase === "prep" ? prepTime : shootTime);
+    const nextPhase = phase === "stop" ? "prep" : phase;
+    setPhase(nextPhase);
+    setTimeLeft(nextPhase === "prep" ? prepTime : shootTime);
+    setTotalPhaseTime(nextPhase === "prep" ? prepTime : shootTime);
     setIsPaused(false);
     if (!isActive) {
       setIsActive(true);
+      if (nextPhase === "prep") playPrepSignal();
+      else playShootSignal();
     }
   };
 
@@ -256,13 +290,6 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
     }
   };
 
-  // Color logic for full-screen overlay based on phase
-  const getFaseDataAttribute = () => {
-    if (timeLeft <= 0) return "over";
-    if (phase === "shoot" && timeLeft <= 30) return "warn";
-    return phase;
-  };
-
   if (isDisabled) {
     return (
       <button
@@ -278,6 +305,15 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
   // Percentage for progress bar fill
   const progressPercent = totalPhaseTime > 0 ? (timeLeft / totalPhaseTime) * 100 : 0;
 
+  // FAB color reflects official WA light when active
+  const fabColorClass = isActive
+    ? lightState === "RED"
+      ? "bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)]"
+      : lightState === "YELLOW"
+      ? "bg-yellow-gold text-black shadow-[0_0_20px_rgba(255,229,0,0.6)]"
+      : "bg-green-success text-white shadow-[0_0_20px_rgba(0,200,83,0.6)]"
+    : "bg-cyan-brand text-white shadow-[0_0_15px_rgba(0,162,232,0.3)] animate-fab-pulse";
+
   return (
     <>
       {/* Floating Action Button (FAB) */}
@@ -285,11 +321,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
         onClick={() => setIsOverlayOpen(true)}
         animate={isActive ? { scale: [1, 1.05, 1] } : {}}
         transition={isActive ? { repeat: Infinity, duration: 1.5 } : {}}
-        className={`fixed bottom-[72px] right-4 z-40 w-[62px] h-[62px] rounded-full flex flex-col items-center justify-center shadow-2xl cursor-pointer ${
-          isActive
-            ? "bg-green-success text-white shadow-[0_0_15px_rgba(0,200,83,0.4)]"
-            : "bg-cyan-brand text-white shadow-[0_0_15px_rgba(0,162,232,0.3)] animate-fab-pulse"
-        }`}
+        className={`fixed bottom-[72px] right-4 z-40 w-[62px] h-[62px] rounded-full flex flex-col items-center justify-center shadow-2xl cursor-pointer ${fabColorClass}`}
       >
         <Clock size={24} />
         {isActive && (
@@ -299,7 +331,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
         )}
       </motion.button>
 
-      {/* Full-Screen Tabata Overlay */}
+      {/* Full-Screen World Archery Official Timing & Traffic Light System */}
       <AnimatePresence>
         {isOverlayOpen && (
           <motion.div
@@ -307,11 +339,23 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             id="clock_fs"
-            data-fase={getFaseDataAttribute()}
-            className="fixed inset-0 z-[9999] flex flex-col justify-between p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] overflow-y-auto transition-all duration-300"
+            className="fixed inset-0 z-[9999] flex flex-col justify-between p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] overflow-y-auto transition-all duration-300 bg-black"
           >
+            {/* Ambient Official Light Border & Top Glow when Active */}
+            {(isActive || phase === "stop") && (
+              <div
+                className={`pointer-events-none fixed inset-0 transition-all duration-300 border-[6px] ${
+                  lightState === "RED"
+                    ? "border-red-600 shadow-[inset_0_0_90px_rgba(220,38,38,0.35)]"
+                    : lightState === "YELLOW"
+                    ? "border-yellow-gold shadow-[inset_0_0_90px_rgba(255,229,0,0.30)]"
+                    : "border-green-success shadow-[inset_0_0_90px_rgba(0,200,83,0.30)]"
+                }`}
+              />
+            )}
+
             {/* Top Toolbar */}
-            <div className="flex justify-between items-center w-full">
+            <div className="flex justify-between items-center w-full relative z-10">
               <div 
                 className="flex items-center gap-1.5 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
@@ -325,7 +369,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                   <span className="text-yellow-gold drop-shadow-[0_0_8px_rgba(255,229,0,0.35)]">10</span>
                 </div>
                 <span className="text-white/80 text-[11px] sm:text-xs font-black tracking-widest uppercase pl-0.5">
-                  TIMER
+                  WA TIMER
                 </span>
               </div>
               <button
@@ -337,31 +381,91 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
               </button>
             </div>
 
-            {/* Run Panel (Ticking State) */}
-            {isActive ? (
-              <div className="flex-1 flex flex-col justify-center items-center gap-8">
-                {/* Labels */}
-                <div className="text-center">
-                  <h2 className="text-white/80 font-black text-lg md:text-xl tracking-[0.15em] uppercase">
-                    {phase === "prep" ? t("phasePrep") : t("phaseShoot")}
-                  </h2>
-                  <p className="text-white/60 text-sm md:text-base font-medium mt-1">
-                    {phase === "prep" ? t("statePrep") : t("stateShoot")}
+            {/* Run Panel (Ticking State or Finished Stop State) */}
+            {isActive || phase === "stop" ? (
+              <div className="flex-1 flex flex-col justify-center items-center gap-5 relative z-10 my-2">
+                {/* OFFICIAL WORLD ARCHERY 3-LIGHT SEMAPHORE (RED / YELLOW / GREEN) */}
+                <div className="flex items-center gap-4 bg-neutral-950/95 border border-white/15 px-6 py-3 rounded-full shadow-2xl">
+                  {/* RED LAMP */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
+                        lightState === "RED"
+                          ? "bg-red-600 border-red-300 shadow-[0_0_25px_#ef4444,0_0_50px_#dc2626] scale-110"
+                          : "bg-red-950/30 border-red-900/30 opacity-30"
+                      }`}
+                    />
+                  </div>
+                  {/* YELLOW LAMP */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
+                        lightState === "YELLOW"
+                          ? "bg-yellow-gold border-yellow-200 shadow-[0_0_25px_#FFE500,0_0_50px_#FFE500] scale-110"
+                          : "bg-yellow-950/30 border-yellow-900/30 opacity-30"
+                      }`}
+                    />
+                  </div>
+                  {/* GREEN LAMP */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
+                        lightState === "GREEN"
+                          ? "bg-green-success border-emerald-200 shadow-[0_0_25px_#00C853,0_0_50px_#00C853] scale-110"
+                          : "bg-emerald-950/30 border-emerald-900/30 opacity-30"
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Official Phase & Signal Banner */}
+                <div className="text-center flex flex-col items-center gap-1">
+                  <span
+                    className={`px-4 py-1 rounded-full text-xs font-black uppercase tracking-[0.18em] border ${
+                      lightState === "RED"
+                        ? "bg-red-600/20 border-red-500/50 text-red-400"
+                        : lightState === "YELLOW"
+                        ? "bg-yellow-gold/20 border-yellow-gold/50 text-yellow-gold"
+                        : "bg-green-success/20 border-green-success/50 text-green-success"
+                    }`}
+                  >
+                    {phase === "prep"
+                      ? "🔴 LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)"
+                      : phase === "stop"
+                      ? "🔴 LUZ ROJA · FIN DE TIEMPO (3 PITIDOS)"
+                      : lightState === "YELLOW"
+                      ? `🟡 LUZ AMARILLA · ÚLTIMOS ${getWarningThreshold(shootTime)}s`
+                      : "🟢 LUZ VERDE · TIEMPO DE TIRO (1 PITIDO)"}
+                  </span>
+                  <p className="text-white/70 text-xs font-bold mt-0.5">
+                    {phase === "prep"
+                      ? "Avanza a la línea de tiro · Prohibido levantar el arco"
+                      : phase === "stop"
+                      ? "Alto al fuego · Ir a anotar y recoger flechas"
+                      : "Disparo autorizado"}
                   </p>
                 </div>
 
                 {/* Display giant clock digits */}
-                <div className="text-[min(34vw,28vh)] font-black text-white leading-none tracking-tighter select-none font-mono drop-shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+                <div
+                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none font-mono transition-colors duration-200 ${
+                    lightState === "RED"
+                      ? "text-red-500 drop-shadow-[0_0_35px_rgba(239,68,68,0.45)]"
+                      : lightState === "YELLOW"
+                      ? "text-yellow-gold drop-shadow-[0_0_35px_rgba(255,229,0,0.45)]"
+                      : "text-green-success drop-shadow-[0_0_35px_rgba(0,200,83,0.45)]"
+                  }`}
+                >
                   {formatTime(timeLeft)}
                 </div>
 
                 {/* Progress bar */}
                 <div className="w-full max-w-[500px] h-4 bg-white/15 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-100 ${
-                      timeLeft <= 0
-                        ? "bg-red-rival"
-                        : phase === "shoot" && timeLeft <= 30
+                    className={`h-full rounded-full transition-all duration-200 ${
+                      lightState === "RED"
+                        ? "bg-red-600"
+                        : lightState === "YELLOW"
                         ? "bg-yellow-gold"
                         : "bg-green-success"
                     }`}
@@ -370,14 +474,24 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                 </div>
 
                 {/* Ticking Controls */}
-                <div className="flex items-center gap-3 mt-4 flex-wrap justify-center">
-                  <button
-                    onClick={handlePauseToggle}
-                    className="px-5 py-3 rounded-2xl bg-yellow-gold text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
-                  >
-                    {isPaused ? <Play size={15} /> : <Pause size={15} />}
-                    <span>{isPaused ? t("resume") : t("pause")}</span>
-                  </button>
+                <div className="flex items-center gap-2.5 mt-2 flex-wrap justify-center">
+                  {phase !== "stop" ? (
+                    <button
+                      onClick={handlePauseToggle}
+                      className="px-5 py-3 rounded-2xl bg-yellow-gold text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                    >
+                      {isPaused ? <Play size={15} /> : <Pause size={15} />}
+                      <span>{isPaused ? t("resume") : t("pause")}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStart}
+                      className="px-5 py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition"
+                    >
+                      <Play size={15} />
+                      <span>Nueva Ronda (2 Pitidos)</span>
+                    </button>
+                  )}
                   <button
                     onClick={handleResetPhase}
                     className="px-5 py-3 rounded-2xl bg-green-success text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
@@ -397,7 +511,7 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                     className="px-5 py-3 rounded-2xl bg-neutral-800 border border-white/20 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-neutral-700 active:scale-95 transition"
                   >
                     <Square size={15} />
-                    <span>{t("stop")}</span>
+                    <span>Configurar</span>
                   </button>
                 </div>
 
@@ -413,18 +527,55 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
               </div>
             ) : (
               // Config Panel (Idle Configuration State)
-              <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-5">
+              <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-4 relative z-10 my-2">
                 <div className="text-center">
-                  <h2 className="text-white text-2xl font-black tracking-wide uppercase">
-                    {t("clockTitle")}
+                  <h2 className="text-white text-xl font-black tracking-wide uppercase">
+                    Reloj Oficial World Archery
                   </h2>
-                  <p className="text-gray-dim text-xs mt-0.5">
-                    Señales oficiales World Archery & temporizador
+                  <p className="text-gray-dim text-[11px] mt-0.5">
+                    Reglamento WA: 2 pitidos (Rojo) · 1 pitido (Verde) · 30s (Amarillo) · 3 pitidos (Fin)
                   </p>
                 </div>
 
+                {/* Official WA Quick Presets */}
+                <div className="w-full bg-neutral-950/90 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider px-1">
+                    Formatos Oficiales World Archery
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {WA_OFFICIAL_PRESETS.map((preset) => {
+                      const isSelected = shootTime === preset.shoot && prepTime === preset.prep;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic("tick");
+                            setPrepTime(preset.prep);
+                            setShootTime(preset.shoot);
+                          }}
+                          className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col ${
+                            preset.id === "WA_20" ? "col-span-2" : ""
+                          } ${
+                            isSelected
+                              ? "bg-cyan-neon/15 border-cyan-neon text-white shadow-glow-cyan"
+                              : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white"
+                          }`}
+                        >
+                          <span className="text-[11px] font-black uppercase text-white leading-tight">
+                            {preset.label}
+                          </span>
+                          <span className="text-[9px] text-cyan-neon/80 font-bold">
+                            {preset.sub}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Sound Mode Selector Pills */}
-                <div className="w-full bg-black/40 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-2">
+                <div className="w-full bg-neutral-950/90 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[10px] font-black uppercase text-gray-dim tracking-wider flex items-center gap-1">
                       <Radio size={12} className="text-cyan-neon" />
@@ -477,8 +628,8 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
                   {/* Voice countdown toggle */}
                   <div className="flex items-center justify-between border-t border-white/5 pt-2 px-1">
-                    <span className="text-[11px] text-white/80 font-medium">
-                      Cuenta regresiva de voz (últimos 10s)
+                    <span className="text-[10px] text-white/70 font-medium">
+                      Voz opcional en últimos 10s (Entrenamiento)
                     </span>
                     <button
                       type="button"
@@ -499,9 +650,9 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
 
                 {/* Manual adjust input fields */}
                 <div className="grid grid-cols-2 gap-3 w-full">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-white/70 text-center font-bold">
-                      {t("prepSecs")}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-white/70 text-center font-bold">
+                      Preparación (Rojo · s)
                     </label>
                     <input
                       type="number"
@@ -509,47 +660,47 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
                       onChange={(e) => setPrepTime(Math.max(5, Number(e.target.value)))}
                       min="5"
                       max="30"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-2.5 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-white/10 border border-white/20 text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-white/70 text-center font-bold">
-                      {t("shootSecs")}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-white/70 text-center font-bold">
+                      Tiro (Verde/Amarillo · s)
                     </label>
                     <input
                       type="number"
                       value={shootTime}
-                      onChange={(e) => setShootTime(Math.max(30, Number(e.target.value)))}
-                      min="30"
+                      onChange={(e) => setShootTime(Math.max(10, Number(e.target.value)))}
+                      min="10"
                       max="300"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-xl font-black py-2.5 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-white/10 border border-white/20 text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
                     />
                   </div>
                 </div>
 
-                {/* GIANT START BUTTON (130x130px) */}
+                {/* GIANT START BUTTON */}
                 <motion.button
                   onClick={handleStart}
                   whileHover={{ scale: 1.06, boxShadow: "0 0 30px rgba(0,229,255,0.4)" }}
                   whileTap={{ scale: 0.92 }}
-                  className="w-[130px] h-[130px] rounded-full bg-gradient-to-br from-cyan-brand to-cyan-neon border-4 border-white/10 shadow-[0_10px_25px_rgba(0,162,232,0.3)] flex flex-col items-center justify-center gap-1 cursor-pointer text-white"
+                  className="w-[116px] h-[116px] rounded-full bg-gradient-to-br from-cyan-brand to-cyan-neon border-4 border-white/10 shadow-[0_10px_25px_rgba(0,162,232,0.3)] flex flex-col items-center justify-center gap-1 cursor-pointer text-white"
                 >
-                  <Play size={30} fill="white" className="ml-1" />
-                  <span className="text-xs font-black tracking-widest uppercase">{t("startClock")}</span>
+                  <Play size={28} fill="white" className="ml-1" />
+                  <span className="text-[11px] font-black tracking-widest uppercase">{t("startClock")}</span>
                 </motion.button>
 
                 {/* Sin Reloj & Cerrar Action Toggles */}
-                <div className="flex flex-col gap-2 w-full">
+                <div className="grid grid-cols-2 gap-2 w-full">
                   <button
                     onClick={handleDisableToggle}
-                    className="w-full py-3 rounded-2xl bg-yellow-gold/80 hover:bg-yellow-gold text-black font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                    className="w-full py-2.5 rounded-2xl bg-yellow-gold/80 hover:bg-yellow-gold text-black font-black text-xs uppercase tracking-wider transition cursor-pointer"
                   >
                     🚫 {t("noClock")}
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    className="w-full py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <X size={14} />
                     <span>{t("closeClock")}</span>
@@ -559,8 +710,8 @@ export default function FloatingClock({ onClockDisabledChange, onTimeUpdate }: F
             )}
 
             {/* Bottom Brand */}
-            <div className="text-center text-[10px] text-white/30 uppercase tracking-widest mt-4">
-              Archery 101010 Olympic System
+            <div className="text-center text-[10px] text-white/30 uppercase tracking-widest mt-2 relative z-10">
+              Archery 101010 · World Archery Official Timing System
             </div>
           </motion.div>
         )}

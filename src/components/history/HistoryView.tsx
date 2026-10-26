@@ -8,6 +8,7 @@ import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight } from "lucide-react";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
+import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -71,13 +72,29 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     setFilteredSessions(result);
   }, [dateFilter, practiceFilter, bowFilter, sessions]);
 
-  // Personal Best (Best Score) calculation
-  const getPersonalBest = (): number => {
-    if (sessions.length === 0) return 0;
-    return Math.max(...sessions.map((s) => s.score || 0));
-  };
+  // Personal Best (Best Score) calculation separated by format + bowType + distance + maxScore
+  const getCategoryKey = (s: any) =>
+    `${s.bowType || "Recurve"}_${s.format || "Libre"}_${s.distance || 18}_${s.maxScore || 300}`;
 
-  const pbScore = getPersonalBest();
+  const pbByCategory = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    sessions
+      .filter((s) => !s.deletedByArcher)
+      .forEach((s) => {
+        const key = getCategoryKey(s);
+        const sc = s.score || 0;
+        if (sc > 0 && (!map[key] || sc > map[key])) {
+          map[key] = sc;
+        }
+      });
+    return map;
+  }, [sessions]);
+
+  const isSessionPB = (s: any): boolean => {
+    const key = getCategoryKey(s);
+    const best = pbByCategory[key] || 0;
+    return best > 0 && s.score === best;
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -295,7 +312,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </div>
             ) : (
               filteredSessions.map((session) => {
-                const isPB = pbScore > 0 && session.score === pbScore;
+                const isPB = isSessionPB(session);
                 
                 return (
                   <motion.div
@@ -610,33 +627,85 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 {(() => {
                   const presetType = getDianaPresetKey(selectedSession.bowType, selectedSession.distance, selectedSession.format, selectedSession.targetType);
                   const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                  const disp = calculateDispersionStats(
+                    selectedSession.impacts,
+                    Number(selectedSession.distance) || 18,
+                    selectedSession.bowType,
+                    selectedSession.format,
+                    selectedSession.targetType
+                  );
                   
                   return (
-                    <svg
-                      viewBox="0 0 100 100"
-                      className="w-full max-w-[242px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
-                    >
-                      {presetRings.map((ring, index) => (
-                        <circle
-                          key={index}
-                          cx="50"
-                          cy="50"
-                          r={ring.r}
-                          fill={ring.fill}
-                          stroke={ring.stroke}
-                          strokeWidth={ring.v === "X" ? 0.15 : 0.2}
-                        />
-                      ))}
-                      
-                      {selectedSession.impacts.map((imp: any, idx: number) => (
-                        <g key={idx}>
-                          <circle cx={imp.x} cy={imp.y} r="1.4" className="fill-yellow-gold stroke-black stroke-[0.3px]" />
-                          <text x={imp.x} y={imp.y + 0.5} textAnchor="middle" fontSize="1.3" fontWeight="black" fill="black">
-                            {imp.value === "X" ? "X" : imp.value}
-                          </text>
-                        </g>
-                      ))}
-                    </svg>
+                    <>
+                      <svg
+                        viewBox="0 0 100 100"
+                        className="w-full max-w-[242px] aspect-square rounded-full border-2 border-neutral-800 bg-black overflow-visible relative mt-2"
+                      >
+                        {presetRings.map((ring, index) => (
+                          <circle
+                            key={index}
+                            cx="50"
+                            cy="50"
+                            r={ring.r}
+                            fill={ring.fill}
+                            stroke={ring.stroke}
+                            strokeWidth={ring.v === "X" ? 0.15 : 0.2}
+                          />
+                        ))}
+
+                        {disp && (
+                          <g className="pointer-events-none">
+                            {disp.hullPolygon.length >= 3 && (
+                              <polygon
+                                points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                                fill="rgba(0, 229, 255, 0.15)"
+                                stroke="#00E5FF"
+                                strokeWidth="0.45"
+                                strokeDasharray="1.2,0.8"
+                              />
+                            )}
+                            {disp.hullPolygon.length === 2 && (
+                              <line
+                                x1={disp.hullPolygon[0].x}
+                                y1={disp.hullPolygon[0].y}
+                                x2={disp.hullPolygon[1].x}
+                                y2={disp.hullPolygon[1].y}
+                                stroke="#00E5FF"
+                                strokeWidth="0.45"
+                                strokeDasharray="1.2,0.8"
+                              />
+                            )}
+                            <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                            <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                            <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                            <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                          </g>
+                        )}
+                        
+                        {selectedSession.impacts.map((imp: any, idx: number) => (
+                          <g key={idx}>
+                            <circle cx={imp.x} cy={imp.y} r="1.4" className="fill-yellow-gold stroke-black stroke-[0.3px]" />
+                            <text x={imp.x} y={imp.y + 0.5} textAnchor="middle" fontSize="1.3" fontWeight="black" fill="black">
+                              {imp.value === "X" ? "X" : imp.value}
+                            </text>
+                          </g>
+                        ))}
+                      </svg>
+                      {disp && (
+                        <div className="w-full grid grid-cols-2 gap-2 mt-2 text-center">
+                          <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
+                            <span className="text-[8px] text-gray-dim uppercase font-bold block">Agrupación Real</span>
+                            <span className="text-xs font-black text-cyan-neon">{disp.groupRadiusCm} cm</span>
+                          </div>
+                          <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
+                            <span className="text-[8px] text-gray-dim uppercase font-bold block">Centro (+) vs X</span>
+                            <span className="text-xs font-black text-white">
+                              {Math.hypot(disp.offsetCmX, disp.offsetCmY).toFixed(1)} cm
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>

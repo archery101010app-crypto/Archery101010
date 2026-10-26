@@ -24,6 +24,9 @@ export interface ShotResult {
   releasePeakSec: number;
   impactPeakSec: number;
   confidence?: number;
+  waveformBins?: number[];
+  releaseBin?: number;
+  impactBin?: number;
   notes?: string;
 }
 
@@ -36,6 +39,9 @@ export interface PeakDetectionResult {
   releaseAmplitude: number;
   impactAmplitude: number;
   snrDb: number;
+  waveformBins?: number[];
+  releaseBin?: number;
+  impactBin?: number;
   reason?: string;
 }
 
@@ -402,6 +408,34 @@ export function detectAudioPeaksFromPCM(
   const snrDb = Math.round(20 * Math.log10(Math.max(1.1, refinedImpactPeak / localFloorRms)) * 10) / 10;
   const confidence = Math.min(0.99, Math.max(0.65, (snrDb - 6) / 20));
 
+  // Build 80-bin normalized waveform envelope around [releaseFrame - 20ms, refinedImpactFrame + 40ms] for visual oscilloscope
+  const numBins = 80;
+  const startVisFrame = Math.max(0, releaseFrame - Math.floor(0.025 / frameDurationSec));
+  const endVisFrame = Math.min(numFrames - 1, refinedImpactFrame + Math.floor(0.045 / frameDurationSec));
+  const visSpan = Math.max(numBins, endVisFrame - startVisFrame);
+  const waveformBins: number[] = [];
+
+  for (let b = 0; b < numBins; b++) {
+    const f0 = startVisFrame + Math.floor((b * visSpan) / numBins);
+    const f1 = Math.max(f0 + 1, startVisFrame + Math.floor(((b + 1) * visSpan) / numBins));
+    let binMax = 0;
+    for (let f = f0; f < f1 && f < numFrames; f++) {
+      if (framePeak[f] > binMax) binMax = framePeak[f];
+    }
+    // Use non-linear compression (pow 0.55) so both the near-field release and 18m far-field impact are clearly visible
+    const norm = Math.min(1, Math.pow(binMax / Math.max(0.01, releaseMaxAmp), 0.55));
+    waveformBins.push(Math.round(norm * 100) / 100);
+  }
+
+  const releaseBin = Math.min(
+    numBins - 1,
+    Math.max(0, Math.round(((releaseFrame - startVisFrame) / visSpan) * (numBins - 1)))
+  );
+  const impactBin = Math.min(
+    numBins - 1,
+    Math.max(releaseBin + 1, Math.round(((refinedImpactFrame - startVisFrame) / visSpan) * (numBins - 1)))
+  );
+
   return {
     status: "OK",
     releaseSec,
@@ -410,7 +444,10 @@ export function detectAudioPeaksFromPCM(
     confidence,
     releaseAmplitude: releaseMaxAmp,
     impactAmplitude: refinedImpactPeak,
-    snrDb
+    snrDb,
+    waveformBins,
+    releaseBin,
+    impactBin
   };
 }
 

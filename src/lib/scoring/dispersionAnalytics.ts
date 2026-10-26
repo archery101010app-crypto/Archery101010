@@ -387,3 +387,34 @@ export function getConvexHull(points: { x: number; y: number }[]): { x: number; 
   return lower.concat(upper);
 }
 
+/**
+ * Convenience wrapper returning centroid, convex hull polygon, and real cm group/offset stats
+ */
+export function calculateDispersionStats(
+  impacts: { x: number; y: number; endIdx?: number; arrowIdx?: number; value?: string }[],
+  distanceM: number = 70,
+  bowType: string = "Recurve",
+  format?: string,
+  targetType?: string
+) {
+  if (!impacts || impacts.length === 0) return null;
+  const normalized: ShotImpactData[] = impacts.map((imp, idx) => ({
+    endIdx: imp.endIdx ?? 0,
+    arrowIdx: imp.arrowIdx ?? idx,
+    x: imp.x,
+    y: imp.y,
+    value: imp.value ?? "10"
+  }));
+  const analysis = calculateDispersionAnalysis(normalized, distanceM, bowType, undefined, format, targetType);
+  if (!analysis) return null;
+  const hullPolygon = getConvexHull(impacts.map((p) => ({ x: p.x, y: p.y })));
+  return {
+    ...analysis,
+    hullPolygon,
+    groupRadiusCm: Math.round(analysis.spreadCm * 10) / 10,
+    offsetCmX: Math.round(analysis.deltaXCm * 10) / 10,
+    offsetCmY: Math.round(analysis.deltaYCm * 10) / 10
+  };
+}
+
+

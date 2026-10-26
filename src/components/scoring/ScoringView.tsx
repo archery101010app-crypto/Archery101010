@@ -205,7 +205,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Floating clock synchronization states
   const [clockDisabled, setClockDisabled] = useState(false);
   const [clockTimeStr, setClockTimeStr] = useState("");
-  const [clockPhase, setClockPhase] = useState<"prep" | "shoot" | null>(null);
+  const [clockPhase, setClockPhase] = useState<"prep" | "shoot" | "stop" | null>(null);
   const [clockIsOver, setClockIsOver] = useState(false);
   const [clockIsWarn, setClockIsWarn] = useState(false);
 
@@ -1249,6 +1249,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
       {/* Floating clock controller integration */}
       <FloatingClock
+        arrowsPerEnd={config.arrowsPerEnd}
         onClockDisabledChange={setClockDisabled}
         onTimeUpdate={(timeStr, phase, isOver, isWarn) => {
           setClockTimeStr(timeStr);
@@ -1260,16 +1261,42 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
       {/* Mini Clock display widget (visible when floating clock is running and overlay minimized) */}
       {clockTimeStr && (
-        <div className="w-full bg-neutral-900/80 backdrop-blur border border-gray-border rounded-xl px-4 py-2 flex items-center justify-between shadow-lg">
+        <div
+          className={`w-full bg-neutral-900/90 backdrop-blur border rounded-xl px-4 py-2 flex items-center justify-between shadow-lg transition-colors ${
+            clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+              ? "border-red-500/50"
+              : clockIsWarn
+              ? "border-yellow-gold/50"
+              : "border-green-success/50"
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-success animate-ping" />
-            <span className="text-xs text-gray-dim font-bold uppercase tracking-wider">
-              {clockPhase === "prep" ? t("phasePrep") : t("phaseShoot")}
+            <span
+              className={`w-3 h-3 rounded-full animate-pulse ${
+                clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+                  ? "bg-red-600 shadow-[0_0_10px_#dc2626]"
+                  : clockIsWarn
+                  ? "bg-yellow-gold shadow-[0_0_10px_#FFE500]"
+                  : "bg-green-success shadow-[0_0_10px_#00C853]"
+              }`}
+            />
+            <span className="text-xs text-white font-bold uppercase tracking-wider">
+              {clockPhase === "prep"
+                ? "🔴 Preparación (Ir a la línea)"
+                : clockPhase === "stop" || clockIsOver
+                ? "🔴 Fin de Tiempo (Alto)"
+                : clockIsWarn
+                ? "🟡 Últimos 30s de Tiro"
+                : "🟢 Tiempo de Tiro"}
             </span>
           </div>
           <span
             className={`text-lg font-black font-mono leading-none ${
-              clockIsOver ? "text-red-rival" : clockIsWarn ? "text-yellow-gold" : "text-white"
+              clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+                ? "text-red-500"
+                : clockIsWarn
+                ? "text-yellow-gold"
+                : "text-green-success"
             }`}
           >
             {clockTimeStr}

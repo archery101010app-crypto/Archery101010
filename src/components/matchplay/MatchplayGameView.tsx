@@ -10,6 +10,8 @@ import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic, startRingingSound, stopRingingSound } from "@/lib/soundUtils";
+import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
+import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
 
 const COUNTRIES = [
   { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
@@ -35,22 +37,15 @@ export interface ShotImpact {
   value: string;
 }
 
-const presetRings = [
-  { r: 48, v: "1", fill: "#FFFFFF", stroke: "#E2E8F0" },
-  { r: 43.2, v: "2", fill: "#FFFFFF", stroke: "#E2E8F0" },
-  { r: 38.4, v: "3", fill: "#000000", stroke: "#404040" },
-  { r: 33.6, v: "4", fill: "#000000", stroke: "#404040" },
-  { r: 28.8, v: "5", fill: "#1E88E5", stroke: "#1565C0" },
-  { r: 24, v: "6", fill: "#1E88E5", stroke: "#1565C0" },
-  { r: 19.2, v: "7", fill: "#E53935", stroke: "#C62828" },
-  { r: 14.4, v: "8", fill: "#E53935", stroke: "#C62828" },
-  { r: 9.6, v: "9", fill: "#FDD835", stroke: "#F57F17" },
-  { r: 4.8, v: "10", fill: "#FDD835", stroke: "#F57F17" },
-  { r: 1.5, v: "X", fill: "#FDD835", stroke: "#F57F17" }
-];
-
 export default function MatchplayGameView({ user, config, onBack, onDuelSaved }: MatchplayGameViewProps) {
-  const isCompound = config.system === "cumulative";
+  const isCompound = config.system === "cumulative" || config.bowType === "Compound";
+  const dianaPresetKey = getDianaPresetKey(
+    config.bowType || (isCompound ? "Compound" : "Recurve"),
+    Number(config.distance) || (isCompound ? 50 : 70),
+    config.format,
+    config.targetType
+  );
+  const presetRings = DIANA_PRESETS[dianaPresetKey] || DIANA_PRESETS.WA_10_122;
   
   // Game states (initialized from config in case of resuming a draft)
   const [currentEnd, setCurrentEnd] = useState<number>(config.currentEnd ?? 0);
@@ -1514,18 +1509,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // Calculate coordinates for keyboard values to plot them on target
   const getCoordinatesForScore = (val: string) => {
-    // Offset Y coordinates relative to center (50, 50)
     if (val === "X") return { x: 50, y: 50 };
-    if (val === "10") return { x: 50, y: 53 };
-    if (val === "9") return { x: 50, y: 57 };
-    if (val === "8") return { x: 50, y: 62 };
-    if (val === "7") return { x: 50, y: 67 };
-    if (val === "6") return { x: 50, y: 72 };
-    if (val === "5") return { x: 50, y: 77 };
-    if (val === "4") return { x: 50, y: 82 };
-    if (val === "3") return { x: 50, y: 87 };
-    if (val === "2") return { x: 50, y: 91 };
-    if (val === "1") return { x: 50, y: 95 };
+    const sorted = [...presetRings].sort((a, b) => a.r - b.r);
+    const idx = sorted.findIndex((r) => r.v === val);
+    if (idx !== -1) {
+      const innerR = idx > 0 ? sorted[idx - 1].r : 0;
+      const midR = (innerR + sorted[idx].r) / 2;
+      return { x: 50, y: Math.min(99, 50 + midR) };
+    }
     return { x: 50, y: 99 }; // Miss (M)
   };
 
@@ -2632,23 +2623,44 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <line x1={cursorPos.x - 3} y1={cursorPos.y} x2={cursorPos.x + 3} y2={cursorPos.y} stroke="white" strokeWidth="0.25" />
               <line x1={cursorPos.x} y1={cursorPos.y - 3} x2={cursorPos.x} y2={cursorPos.y + 3} stroke="white" strokeWidth="0.25" />
               
-              {/* Centroid and Dispersion group */}
+              {/* Centroid, Convex Hull Grouping Polygon & Crosshair (+) */}
               {(() => {
-                const stats = getCentroidAndDispersion();
-                if (!stats || stats.dispersion === 0) return null;
+                const endImps = impacts.filter(imp => imp.endIdx === currentEnd);
+                const disp = calculateDispersionStats(
+                  endImps,
+                  Number(config.distance) || (isCompound ? 50 : 70),
+                  config.bowType || (isCompound ? "Compound" : "Recurve"),
+                  config.format,
+                  config.targetType
+                );
+                if (!disp) return null;
                 return (
-                  <>
-                    <circle cx={stats.cx} cy={stats.cy} r="0.8" fill="#FFC107" stroke="#FFF" strokeWidth="0.2" />
-                    <circle
-                      cx={stats.cx}
-                      cy={stats.cy}
-                      r={stats.dispersion}
-                      fill="rgba(255, 193, 7, 0.12)"
-                      stroke="#FFC107"
-                      strokeWidth="0.3"
-                      strokeDasharray="1,1"
-                    />
-                  </>
+                  <g className="pointer-events-none">
+                    {disp.hullPolygon.length >= 3 && (
+                      <polygon
+                        points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                        fill="rgba(0, 229, 255, 0.14)"
+                        stroke="#00E5FF"
+                        strokeWidth="0.45"
+                        strokeDasharray="1.2,0.8"
+                      />
+                    )}
+                    {disp.hullPolygon.length === 2 && (
+                      <line
+                        x1={disp.hullPolygon[0].x}
+                        y1={disp.hullPolygon[0].y}
+                        x2={disp.hullPolygon[1].x}
+                        y2={disp.hullPolygon[1].y}
+                        stroke="#00E5FF"
+                        strokeWidth="0.45"
+                        strokeDasharray="1.2,0.8"
+                      />
+                    )}
+                    <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                    <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                    <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                    <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                  </g>
                 );
               })()}
 

@@ -21,6 +21,7 @@ import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
+import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -375,6 +376,15 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
                                       const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                                      const disp = sess.impacts && sess.impacts.length > 0
+                                        ? calculateDispersionStats(
+                                            sess.impacts,
+                                            Number(sess.distance) || 18,
+                                            sess.bowType || athlete.bowConfig?.type,
+                                            sess.format,
+                                            sess.targetType
+                                          )
+                                        : null;
                                       
                                       return (
                                         <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -389,6 +399,34 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                               strokeWidth={0.1}
                                             />
                                           ))}
+                                          {disp && (
+                                            <g className="pointer-events-none">
+                                              {disp.hullPolygon.length >= 3 && (
+                                                <polygon
+                                                  points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                                                  fill="rgba(0, 229, 255, 0.15)"
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.45"
+                                                  strokeDasharray="1.2,0.8"
+                                                />
+                                              )}
+                                              {disp.hullPolygon.length === 2 && (
+                                                <line
+                                                  x1={disp.hullPolygon[0].x}
+                                                  y1={disp.hullPolygon[0].y}
+                                                  x2={disp.hullPolygon[1].x}
+                                                  y2={disp.hullPolygon[1].y}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.45"
+                                                  strokeDasharray="1.2,0.8"
+                                                />
+                                              )}
+                                              <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                              <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                            </g>
+                                          )}
                                           {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
                                             <g key={iIdx}>
                                               <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
@@ -502,6 +540,15 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
                                       const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                                      const disp = sess.impacts && sess.impacts.length > 0
+                                        ? calculateDispersionStats(
+                                            sess.impacts,
+                                            Number(sess.distance) || 18,
+                                            sess.bowType || athlete.bowConfig?.type,
+                                            sess.format,
+                                            sess.targetType
+                                          )
+                                        : null;
                                       
                                       return (
                                         <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -516,6 +563,34 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                               strokeWidth={0.1}
                                             />
                                           ))}
+                                          {disp && (
+                                            <g className="pointer-events-none">
+                                              {disp.hullPolygon.length >= 3 && (
+                                                <polygon
+                                                  points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                                                  fill="rgba(0, 229, 255, 0.15)"
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.45"
+                                                  strokeDasharray="1.2,0.8"
+                                                />
+                                              )}
+                                              {disp.hullPolygon.length === 2 && (
+                                                <line
+                                                  x1={disp.hullPolygon[0].x}
+                                                  y1={disp.hullPolygon[0].y}
+                                                  x2={disp.hullPolygon[1].x}
+                                                  y2={disp.hullPolygon[1].y}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.45"
+                                                  strokeDasharray="1.2,0.8"
+                                                />
+                                              )}
+                                              <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                              <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                            </g>
+                                          )}
                                           {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
                                             <g key={iIdx}>
                                               <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
