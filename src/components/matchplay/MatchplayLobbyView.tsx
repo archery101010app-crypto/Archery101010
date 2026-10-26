@@ -611,7 +611,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         </button>
         <div>
           <h2 className="text-white text-lg font-black uppercase tracking-wide flex items-center gap-1.5">
-            ⚔️ Duelos de Eliminación
+            Duelos de Eliminación
           </h2>
           <p className="text-[10px] text-cyan-neon uppercase tracking-widest font-black">
             Lobby de Competencia 1v1

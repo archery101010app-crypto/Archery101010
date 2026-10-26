@@ -472,20 +472,20 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
-          className="col-span-3 bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-red-950/20 backdrop-blur-md rounded-3xl border border-purple-500/25 p-4 cursor-pointer hover:border-purple-400/40 transition-all duration-300 relative overflow-hidden group flex justify-between items-center h-28 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+          className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 relative overflow-hidden group flex justify-between items-center h-28"
         >
-          {/* Subtle light effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent opacity-50 group-hover:opacity-80 transition-opacity" />
+          {/* Subtle light effect in harmony with the app */}
+          <div className="absolute inset-0 bg-gradient-to-r from-cyan-neon/[0.04] to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
           
-          <div className="flex flex-col gap-1 z-10 w-[70%]">
-            <span className="text-[9px] text-purple-300 font-black tracking-widest uppercase flex items-center gap-1.5">
+          <div className="flex flex-col gap-1 z-10 w-[75%]">
+            <span className="text-[9px] text-cyan-neon font-black tracking-widest uppercase flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-neon opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-neon"></span>
               </span>
               {t("liveArenaTitle")}
             </span>
-            <h3 className="text-white text-base font-black uppercase tracking-wide mt-1">
+            <h3 className="text-white text-base font-black uppercase tracking-wide mt-1 group-hover:text-cyan-neon transition-colors">
               {t("duelsTitle")}
             </h3>
             <p className="text-[10px] text-gray-dim leading-snug mt-0.5">
@@ -493,8 +493,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </p>
           </div>
 
-          <div className="w-12 h-12 rounded-2xl bg-neutral-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:text-purple-300 group-hover:border-purple-400/60 group-hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.1)] transition-all">
-            <Trophy size={20} className="animate-bounce [animation-duration:3s]" />
+          <div className="w-12 h-12 rounded-2xl bg-neutral-950 border border-white/10 flex items-center justify-center text-cyan-neon group-hover:border-cyan-neon/40 group-hover:scale-105 transition-all shrink-0">
+            <Trophy size={20} />
           </div>
           
           <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
