@@ -220,10 +220,10 @@ export default function CoachAthletesTab({
               <div
                 key={ath.uid}
                 onClick={() => onViewAthlete(ath)}
-                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 hover:border-cyan-neon/20 hover:bg-neutral-900/60 transition cursor-pointer flex justify-between items-center group"
+                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 hover:border-cyan-neon/20 hover:bg-neutral-900/60 transition cursor-pointer flex justify-between items-center gap-2 group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 flex items-center justify-center font-black text-xs text-white">
                       {ath.fullName.substring(0, 2).toUpperCase()}
                     </div>
@@ -232,31 +232,31 @@ export default function CoachAthletesTab({
                     )}
                   </div>
 
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-white text-xs font-bold leading-tight group-hover:text-cyan-neon transition-colors">
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-white text-xs font-bold leading-tight group-hover:text-cyan-neon transition-colors truncate">
                         {ath.fullName}
                       </span>
                       {ath.nickname && (
-                        <span className="text-[9px] text-gray-dim font-medium">
+                        <span className="text-[9px] text-gray-dim font-medium truncate">
                           (@{ath.nickname})
                         </span>
                       )}
                     </div>
-                    <span className="text-[9px] text-gray-dim mt-0.5">
-                      {ath.bowConfig?.type || "Barebow"} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
+                    <span className="text-[9px] text-gray-dim mt-0.5 truncate">
+                      {ath.bowConfig?.type === "Recurve" ? "Recurvo" : ath.bowConfig?.type === "Compound" ? "Compuesto" : (ath.bowConfig?.type || "Barebow")} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0">
                   {stats.averageScore > 0 && (
-                    <div className="flex flex-col text-right">
-                      <span className="text-xs font-black text-yellow-gold">{stats.averageScore} pts</span>
+                    <div className="flex flex-col text-right shrink-0">
+                      <span className="text-xs font-black text-yellow-gold whitespace-nowrap">{stats.averageScore} pts</span>
                       <span className="text-[8px] text-gray-dim leading-none">Promedio</span>
                     </div>
                   )}
-                  <ChevronRight size={14} className="text-gray-dim group-hover:text-cyan-neon transition-colors" />
+                  <ChevronRight size={14} className="text-gray-dim group-hover:text-cyan-neon transition-colors shrink-0" />
                 </div>
               </div>
             );

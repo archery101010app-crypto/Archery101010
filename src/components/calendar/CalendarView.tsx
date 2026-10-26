@@ -646,9 +646,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       )}
 
       {/* Grid calendar */}
-      <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-4">
+      <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
         {/* Days of week header */}
-        <div className="grid grid-cols-7 gap-1 text-center">
+        <div className="grid grid-cols-7 gap-1.5 text-center">
           {daysOfWeek.map((day) => (
             <span key={day} className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">
               {day}
@@ -657,7 +657,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         </div>
 
         {/* Days Grid cells */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {cells.map((cell, idx) => {
             const isToday =
               cell.isCurrentMonth &&
@@ -698,7 +698,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   }
                 }}
                 style={customStyle}
-                className={`aspect-square rounded-2xl flex flex-col items-center justify-between py-1.5 px-0.5 relative text-xs font-bold transition-all border ${
+                className={`aspect-square rounded-2xl flex flex-col items-center justify-between py-1 px-0.5 relative text-xs font-bold transition-all border overflow-hidden ${
                   !cell.isCurrentMonth
                     ? "text-gray-dim/20 border-transparent pointer-events-none"
                     : cell.hasSession && !activePhaseInfo && !coachAssignment
@@ -710,30 +710,30 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 title={cell.isCurrentMonth ? "Toca para ver la asignación de este día" : ""}
               >
                 {/* Day Number + Coach badge dot if assigned */}
-                <div className="flex items-center justify-between w-full px-1.5">
-                  <span className={`text-[11px] ${isToday ? "text-cyan-neon font-black" : "text-white/90"}`}>
+                <div className="flex items-center justify-between w-full px-1 leading-none">
+                  <span className={`text-[10px] sm:text-[11px] leading-none ${isToday ? "text-cyan-neon font-black" : "text-white/90"}`}>
                     {cell.day}
                   </span>
                   {coachAssignment && !coachAssignment.isRestDay && (
                     <span 
                       style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }} 
-                      className="w-1.5 h-1.5 rounded-full animate-pulse shadow-sm"
+                      className="w-1.5 h-1.5 rounded-full animate-pulse shadow-sm shrink-0"
                       title="Asignación del Coach"
                     />
                   )}
                 </div>
 
                 {/* Center / Bottom Info: Target Arrows or Phase label */}
-                <div className="flex flex-col items-center gap-0.5 w-full">
+                <div className="flex flex-col items-center gap-0.5 w-full min-w-0">
                   {coachAssignment && coachAssignment.targetArrows ? (
                     <span 
                       style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                      className="text-[8px] font-black tracking-tight leading-none truncate max-w-full"
+                      className="text-[7px] sm:text-[8px] font-black tracking-tight leading-none truncate max-w-full px-0.5"
                     >
                       🎯{coachAssignment.targetArrows}
                     </span>
                   ) : activePhaseInfo ? (
-                    <span className="text-[7px] font-black uppercase tracking-wider scale-90 opacity-80 leading-none truncate max-w-[90%] mb-0.5">
+                    <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-wider opacity-85 leading-none truncate max-w-[92%]">
                       {activePhaseInfo.phase.name}
                     </span>
                   ) : null}
@@ -770,19 +770,19 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               style={{ backgroundColor: phase.color }}
               className="absolute left-0 top-0 bottom-0 w-[4px]"
             />
-            <div className="flex justify-between items-start">
-              <div>
+            <div className="flex justify-between items-start gap-2 flex-wrap">
+              <div className="min-w-0 flex-1">
                 <span className="text-[8px] font-black uppercase text-cyan-neon tracking-widest block">
                   {language === "es" ? "Fase Activa Hoy" : "Active Phase Today"}
                 </span>
-                <h4 className="text-sm font-black text-white uppercase mt-0.5">{phase.name}</h4>
-                <span className="text-[9px] text-white/50 block mt-0.5">
+                <h4 className="text-sm font-black text-white uppercase mt-0.5 truncate">{phase.name}</h4>
+                <span className="text-[9px] text-white/50 block mt-0.5 truncate">
                   Plan: {macroName}
                 </span>
               </div>
               <span 
                 style={{ color: phase.color, borderColor: `${phase.color}30`, backgroundColor: `${phase.color}15` }}
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase"
+                className="text-[9px] font-bold px-2.5 py-0.5 rounded-full border uppercase shrink-0 whitespace-nowrap"
               >
                 {phase.startDate} al {phase.endDate}
               </span>
@@ -932,7 +932,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     </div>
 
                     {/* Countdown Badge */}
-                    <span className={`text-[10px] px-2.5 py-1 rounded-xl font-extrabold uppercase border ${countdown.colorClass}`}>
+                    <span className={`text-[10px] px-2.5 py-1 rounded-xl font-extrabold uppercase border shrink-0 whitespace-nowrap ${countdown.colorClass}`}>
                       {countdown.text}
                     </span>
                   </div>

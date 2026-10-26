@@ -347,23 +347,23 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     <div className="flex flex-col gap-4 min-h-[500px]">
       {/* Director Identity Banner */}
       <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 p-4 rounded-3xl border border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-brand/30 to-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center font-black text-cyan-neon text-lg shadow-glow-cyan shrink-0">
             {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
           </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <h2 className="text-white text-base font-black uppercase tracking-wide">
+          <div className="flex flex-col min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-white text-base font-black uppercase tracking-wide truncate max-w-full">
                 Coach {user.fullName || "Director"}
               </h2>
-              <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow flex items-center gap-1">
+              <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow flex items-center gap-1 shrink-0 whitespace-nowrap">
                 <ShieldCheck size={10} />
                 <span>Coach Suscrito</span>
               </span>
             </div>
-            <p className="text-[10px] text-gray-dim mt-0.5 flex items-center gap-1.5">
-              <Building2 size={11} className="text-cyan-neon" />
-              <span>{user.clubName || "Club Archery 101010"}</span>
+            <p className="text-[10px] text-gray-dim mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <Building2 size={11} className="text-cyan-neon shrink-0" />
+              <span className="truncate">{user.clubName || "Club Archery 101010"}</span>
               <span>·</span>
               <span>Receptor y Director de Estadísticas</span>
             </p>

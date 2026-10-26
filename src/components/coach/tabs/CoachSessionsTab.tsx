@@ -148,7 +148,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             <option value="ALL">Todos los Alumnos ({athletes.length})</option>
             {athletes.map((a) => (
               <option key={a.uid} value={a.uid}>
-                {a.fullName} ({a.bowConfig?.type || "Arco"})
+                {a.fullName} ({a.bowConfig?.type === "Recurve" ? "Recurvo" : a.bowConfig?.type === "Compound" ? "Compuesto" : (a.bowConfig?.type || "Arco")})
               </option>
             ))}
           </select>
@@ -203,8 +203,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             });
 
             // Calculate arrows and average
-            const totalArrows = sess.arrowsTotal || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : (sess.ends ? sess.ends.reduce((acc: number, end: any) => acc + (end.arrows ? end.arrows.length : 0), 0) : 0));
-            const avgPerArrow = totalArrows > 0 && sess.score > 0 ? (sess.score / totalArrows).toFixed(1) : "—";
+            const scoredArrows = sess.arrowsTotal || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : (sess.ends ? sess.ends.reduce((acc: number, end: any) => acc + (end.arrows ? end.arrows.length : 0), 0) : 0));
+            const totalArrows = sess.totalArrowsVolume || scoredArrows;
+            const avgPerArrow = scoredArrows > 0 && sess.score > 0 ? (sess.score / scoredArrows).toFixed(1) : "—";
+            const bowTypeEs = sess.bowType === "Recurve" ? "Recurvo" : sess.bowType === "Compound" ? "Compuesto" : (sess.bowType || "Arco");
 
             // Count 10s and Xs
             let count10 = 0;
@@ -235,22 +237,22 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {(sess.userName || "AT").substring(0, 2).toUpperCase()}
                     </div>
 
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-white text-xs font-bold leading-tight">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-white text-xs font-bold leading-tight truncate">
                           {sess.userName || "Alumno"}
                         </span>
-                        <span className="text-[8px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon px-1.5 py-0.2 rounded-full font-black uppercase">
+                        <span className="text-[8px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon px-1.5 py-0.5 rounded-full font-black uppercase shrink-0">
                           {sess.practiceType}
                         </span>
                       </div>
-                      <span className="text-[9px] text-gray-dim mt-0.5">
-                        {sess.format || "WA 720"} · {sess.distance}m · {sess.bowType || "Arco"} · {dateStr} {timeStr}
+                      <span className="text-[9px] text-gray-dim mt-0.5 truncate">
+                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {dateStr} {timeStr}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <div className="flex flex-col text-right">
                       <div className="flex items-baseline gap-1 justify-end">
                         <span className="text-base font-black text-cyan-neon leading-tight">
@@ -319,16 +321,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                               return (
                                 <div
                                   key={endIdx}
-                                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-neutral-900/80 border border-white/5 text-[11px]"
+                                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-900/80 border border-white/5 text-[11px]"
                                 >
-                                  <span className="text-[9px] text-gray-dim font-bold w-12">
+                                  <span className="text-[9px] text-gray-dim font-bold shrink-0">
                                     Serie #{endIdx + 1}
                                   </span>
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1 flex-wrap justify-center">
                                     {endArrows.map((arrowVal, aIdx) => (
                                       <span
                                         key={aIdx}
-                                        className={`w-5 h-5 rounded flex items-center justify-center font-black text-[9px] ${
+                                        className={`w-5 h-5 rounded flex items-center justify-center font-black text-[9px] shrink-0 ${
                                           arrowVal === "X" || arrowVal === "10"
                                             ? "bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30"
                                             : arrowVal === "9" || arrowVal === "8"
@@ -342,7 +344,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                       </span>
                                     ))}
                                   </div>
-                                  <span className="text-white font-extrabold w-8 text-right text-[10px]">
+                                  <span className="text-white font-extrabold text-right text-[10px] shrink-0 whitespace-nowrap">
                                     {endScore} pts
                                   </span>
                                 </div>
@@ -407,10 +409,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     ★
                   </div>
 
-                  <div className="flex flex-col">
-                    <span className="text-white text-xs font-extrabold">{rank.userName}</span>
-                    <span className="text-[8px] text-gray-dim uppercase font-bold">
-                      {rank.starName} · {rank.bowType}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-white text-xs font-extrabold truncate">{rank.userName}</span>
+                    <span className="text-[8px] text-gray-dim uppercase font-bold truncate">
+                      {rank.starName} · {rank.bowType === "Recurve" ? "Recurvo" : rank.bowType === "Compound" ? "Compuesto" : (rank.bowType || "Arco")}
                     </span>
                   </div>
                 </div>

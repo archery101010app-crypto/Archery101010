@@ -37,11 +37,17 @@ export default function CoachOverviewTab({
   // Find inactive athletes (no session in last 7 days)
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const inactiveAthletes = athletes.filter(ath => {
-    const athActivities = recentActivities.filter(a => a.userUid === ath.uid);
+    const athActivities = recentActivities.filter(a => a.userId === ath.uid || a.userUid === ath.uid);
     if (athActivities.length === 0) return true;
     const lastActivity = Math.max(...athActivities.map(a => a.timestamp || 0));
     return lastActivity < oneWeekAgo;
   });
+
+  const formatBowTypeEs = (type?: string) => {
+    if (!type || type === "Recurve") return "Recurvo";
+    if (type === "Compound") return "Compuesto";
+    return type;
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -56,40 +62,40 @@ export default function CoachOverviewTab({
       </div>
 
       {/* Bento Grid de Métricas */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-neutral-900/60 backdrop-blur-md p-3.5 rounded-2xl border border-white/5 flex flex-col justify-between h-24">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Atletas</span>
-          <div className="flex flex-col">
-            <span className="text-2xl font-black text-white">{athletes.length}</span>
-            <span className="text-[8px] text-gray-dim">Registrados</span>
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
+          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Atletas</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-2xl font-black text-white truncate">{athletes.length}</span>
+            <span className="text-[8px] text-gray-dim truncate">Registrados</span>
           </div>
         </div>
-        <div className="bg-neutral-900/60 backdrop-blur-md p-3.5 rounded-2xl border border-white/5 flex flex-col justify-between h-24">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Volumen total</span>
-          <div className="flex flex-col">
-            <span className="text-2xl font-black text-cyan-neon">
-              {recentActivities.reduce((acc, act) => acc + (act.arrowsTotal || (act.endsCount * act.arrowsPerEnd) || 0), 0) + 1420}
+        <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
+          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Volumen total</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-2xl font-black text-cyan-neon truncate">
+              {recentActivities.reduce((acc, act) => acc + (act.totalArrowsVolume || act.arrowsTotal || (act.endsCount && act.arrowsPerEnd ? act.endsCount * act.arrowsPerEnd : 0) || 0), 0)}
             </span>
-            <span className="text-[8px] text-gray-dim">Flechas tiradas</span>
+            <span className="text-[8px] text-gray-dim truncate">Flechas tiradas</span>
           </div>
         </div>
-        <div className="bg-neutral-900/60 backdrop-blur-md p-3.5 rounded-2xl border border-white/5 flex flex-col justify-between h-24">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">Asistencia</span>
-          <div className="flex flex-col">
-            <span className="text-2xl font-black text-yellow-gold">{presentCount}</span>
-            <span className="text-[8px] text-gray-dim">Presentes hoy</span>
+        <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
+          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Asistencia</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-2xl font-black text-yellow-gold truncate">{presentCount}</span>
+            <span className="text-[8px] text-gray-dim truncate">Presentes hoy</span>
           </div>
         </div>
       </div>
 
       {/* Asistencia del Día */}
       <div className="bg-neutral-900/40 backdrop-blur-md p-4 rounded-3xl border border-white/10 flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <div>
+        <div className="flex justify-between items-center gap-2">
+          <div className="min-w-0">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">Control de Asistencia del Día</h4>
             <p className="text-[9px] text-gray-dim mt-0.5">Marca los arqueros que asisten al entrenamiento de hoy</p>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black">
+          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black shrink-0 whitespace-nowrap">
             {presentCount} / {athletes.length}
           </span>
         </div>
@@ -101,28 +107,28 @@ export default function CoachOverviewTab({
               <div
                 key={ath.uid}
                 onClick={() => onToggleAttendance(ath.uid)}
-                className={`flex justify-between items-center p-2.5 rounded-xl border transition-all cursor-pointer ${
+                className={`flex justify-between items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
                   isPresent
                     ? "border-cyan-neon/30 bg-cyan-neon/5"
                     : "border-white/[0.03] bg-neutral-950/20"
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-[10px] text-white">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-[10px] text-white shrink-0">
                     {ath.fullName.substring(0, 2).toUpperCase()}
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-white text-xs font-bold leading-tight">{ath.fullName}</span>
-                    <span className="text-[9px] text-gray-dim mt-0.5">{ath.bowConfig?.type || "Recurve"} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-white text-xs font-bold leading-tight truncate">{ath.fullName}</span>
+                    <span className="text-[9px] text-gray-dim mt-0.5 truncate">{formatBowTypeEs(ath.bowConfig?.type)} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
                   </div>
                 </div>
-                <div className="text-gray-dim">
+                <div className="text-gray-dim shrink-0">
                   {isPresent ? (
-                    <span className="text-[9px] bg-cyan-neon text-black font-extrabold px-2 py-1 rounded-full uppercase tracking-wider shadow-glow-cyan">
+                    <span className="text-[9px] bg-cyan-neon text-black font-extrabold px-2 py-1 rounded-full uppercase tracking-wider shadow-glow-cyan whitespace-nowrap">
                       Presente
                     </span>
                   ) : (
-                    <span className="text-[9px] bg-neutral-900 text-gray-dim font-bold px-2 py-1 rounded-full uppercase tracking-wider border border-white/5">
+                    <span className="text-[9px] bg-neutral-900 text-gray-dim font-bold px-2 py-1 rounded-full uppercase tracking-wider border border-white/5 whitespace-nowrap">
                       Ausente
                     </span>
                   )}
