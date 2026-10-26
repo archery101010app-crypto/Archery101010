@@ -18,7 +18,7 @@ const SHARED_PLAYLISTS = [
   {
     id: "37i9dQZF1DWWQRwui0ExPn",
     name: "Ritmo & Barebow",
-    creator: "José Angel",
+    creator: "Archery 101010",
     description: "Lofi Beats: compás relajado y constante para ritmo y cadencia de tiro.",
   },
   {

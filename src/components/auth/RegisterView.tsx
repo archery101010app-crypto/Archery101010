@@ -214,7 +214,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ej. José Ángel"
+                  placeholder=""
                   className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
                 />
               </div>

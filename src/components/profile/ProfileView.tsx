@@ -762,14 +762,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder={t("fullName")}
+                placeholder=""
               />
               <input
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder="Alias para Retos (ej. flecha10)"
+                placeholder=""
               />
             </div>
             <div className="grid grid-cols-2 gap-2">

@@ -104,7 +104,7 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ej. José Ángel"
+                placeholder=""
                 className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
               />
             </div>
@@ -116,7 +116,7 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="Ej. jose10"
+                placeholder=""
                 className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
               />
             </div>

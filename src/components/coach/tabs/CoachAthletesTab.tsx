@@ -309,7 +309,7 @@ export default function CoachAthletesTab({
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Ej. Mateo Vargas Castro"
+                    placeholder=""
                     className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                   />
                 </div>
@@ -324,7 +324,7 @@ export default function CoachAthletesTab({
                       type="text"
                       value={nickname}
                       onChange={(e) => setNickname(e.target.value)}
-                      placeholder="Ej. mateo"
+                      placeholder=""
                       className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
