@@ -1364,15 +1364,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[11px] text-gray-dim leading-snug">
-                Pídele a tu entrenador o club su código de invitación (ej. <strong className="text-white">INV-XXXXXX</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
+                Pídele a tu entrenador o club su código de invitación de 6 dígitos (ej. <strong className="text-white">101010</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
               </p>
 
               <div className="flex gap-2">
                 <input
                   type="text"
+                  maxLength={6}
                   value={athleteInviteCode}
-                  onChange={(e) => setAthleteInviteCode(e.target.value.toUpperCase())}
-                  placeholder="INV-XXXXXX o CLB-XXXX"
+                  onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9a-zA-Z]/g, "").slice(0, 6))}
+                  placeholder="Código de 6 dígitos"
                   className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase font-mono tracking-wider placeholder:text-gray-dim outline-none focus:border-cyan-neon transition-colors"
                 />
                 <button
@@ -1497,12 +1498,32 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
             )}
 
-            {/* Invite code */}
+            {/* Invite code (6 dígitos) */}
             <div className="flex flex-col gap-1 border-t border-white/[0.03] pt-2">
-              <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">{t("inviteCode")}</span>
-              <span className="text-sm font-mono font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
-                {user.clubInviteCode || "CLUB-1234"}
-              </span>
+              <span className="text-[9px] text-gray-dim font-bold uppercase tracking-wider">{t("inviteCode")} (6 dígitos)</span>
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-sm font-mono font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
+                  {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
+                    ? user.clubInviteCode 
+                    : "101010"}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("¿Deseas generar un nuevo código de 6 dígitos para tus alumnos?")) {
+                      const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+                      const freshCode = generateClubInviteCode();
+                      const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
+                      onProfileUpdated(updated);
+                      alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
+                    }
+                  }}
+                  className="px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-xs font-bold transition cursor-pointer active:scale-95"
+                  title="Borrar y generar nuevo código de 6 dígitos"
+                >
+                  Nuevo
+                </button>
+              </div>
             </div>
 
             {/* Coach personal WhatsApp */}

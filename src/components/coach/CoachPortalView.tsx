@@ -16,7 +16,8 @@ import {
   Sparkles,
   ShieldCheck,
   Building2,
-  Share2
+  Share2,
+  RefreshCw
 } from "lucide-react";
 
 // Sub-components / Tabs
@@ -220,6 +221,23 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     }
     loadCoachData();
 
+    // Migración automática: Borrar códigos antiguos o que excedan 6 dígitos y generar un código numérico limpio de 6 dígitos
+    async function ensureClean6DigitCode() {
+      const code = user.clubInviteCode ? user.clubInviteCode.trim() : "";
+      const isValid6DigitCode = code.length > 0 && code.length <= 6 && /^\d+$/.test(code);
+      if (!isValid6DigitCode) {
+        try {
+          const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+          const freshCode = generateClubInviteCode();
+          const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
+          if (onUserUpdate) onUserUpdate(updated);
+        } catch (err) {
+          console.error("Error asegurando código de 6 dígitos:", err);
+        }
+      }
+    }
+    ensureClean6DigitCode();
+
     // Listen for realtime database changes (new athlete sessions synced from cloud)
     const handleDbChange = async (e: any) => {
       if (!e.detail || e.detail.store === "sessions_local" || e.detail.store === "settings_local") {
@@ -370,27 +388,57 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           </div>
         </div>
 
-        {/* Quick Club Code */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end bg-neutral-950/80 px-3 py-1.5 rounded-xl border border-white/5">
+        {/* Quick Club Code (Máximo 6 dígitos) */}
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-neutral-950/80 px-3 py-2 rounded-xl border border-white/5">
           <div className="flex flex-col">
-            <span className="text-[8px] text-gray-dim uppercase font-bold">Código para tus Alumnos</span>
-            <span className="text-xs font-mono font-black text-cyan-neon tracking-wider select-all">
-              {user.clubInviteCode || activeClubId}
-            </span>
+            <span className="text-[8px] text-gray-dim uppercase font-bold tracking-wider">Código para Alumnos</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-sm font-mono font-black text-cyan-neon tracking-widest select-all">
+                {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
+                  ? user.clubInviteCode 
+                  : "101010"}
+              </span>
+              <span className="text-[7px] text-gray-dim font-bold uppercase tracking-wider">
+                (6 dígitos)
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              const codeToCopy = user.clubInviteCode || activeClubId;
-              if (navigator.clipboard) {
-                navigator.clipboard.writeText(codeToCopy);
-                alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen a tu club.`);
-              }
-            }}
-            className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
-            title="Copiar código para alumnos"
-          >
-            <Share2 size={13} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const codeToCopy = (user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode))
+                  ? user.clubInviteCode
+                  : "101010";
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(codeToCopy);
+                  alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen a tu club.`);
+                }
+              }}
+              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
+              title="Copiar código para alumnos"
+            >
+              <Share2 size={13} />
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm("¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?")) {
+                  try {
+                    const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+                    const freshCode = generateClubInviteCode();
+                    const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
+                    if (onUserUpdate) onUserUpdate(updated);
+                    alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
+                  } catch (err) {
+                    console.error("Error al regenerar código:", err);
+                  }
+                }
+              }}
+              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-gray-dim hover:text-yellow-gold transition cursor-pointer"
+              title="Borrar y generar nuevo código de 6 dígitos"
+            >
+              <RefreshCw size={13} />
+            </button>
+          </div>
         </div>
       </div>
 

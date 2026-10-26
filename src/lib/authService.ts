@@ -273,6 +273,14 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   return user;
 }
 
+/**
+ * Genera un código de invitación para alumnos limpio y corto de 6 dígitos numéricos (máximo 6 dígitos).
+ * Ej. 748291
+ */
+export function generateClubInviteCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 export async function registerUser(
   profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode"> & { password?: string; actAsCoach?: boolean }
 ): Promise<UserProfile> {
@@ -323,7 +331,7 @@ export async function registerUser(
       finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
       isCreator = true;
       userFields.clubId = generateResilientId("CLB");
-      inviteCode = `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      inviteCode = generateClubInviteCode();
     } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
       userFields.clubId = null;
       userFields.clubName = null;

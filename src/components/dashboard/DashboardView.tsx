@@ -332,6 +332,22 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-4 py-4 w-full max-w-full overflow-x-hidden"
     >
+      {/* Titular Oficial: ARCHERY 101010 APP */}
+      <div className="w-full flex justify-center items-center pt-2 pb-5 sm:pb-7 select-none">
+        <h1 
+          className="text-lg sm:text-2xl md:text-3xl tracking-widest text-center flex items-center justify-center gap-2 sm:gap-2.5 flex-wrap"
+          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+        >
+          <span className="text-white">ARCHERY</span>
+          <span className="inline-flex tracking-tight">
+            <span className="text-cyan-neon">10</span>
+            <span className="text-red-rival">10</span>
+            <span className="text-yellow-gold">10</span>
+          </span>
+          <span className="text-white">APP</span>
+        </h1>
+      </div>
+
       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap sm:flex-nowrap">
         <div className="flex flex-col min-w-0">
           <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
