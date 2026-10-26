@@ -857,7 +857,7 @@ export default function Home() {
       />
 
       {/* Spotify Floating Player */}
-      <SpotifyFloatingPlayer />
+      <SpotifyFloatingPlayer showSideTab={currentScreen === "HOME" && !coachViewMode} />
 
       {/* Star Unlock Celebrate Overlay Modal */}
       <AnimatePresence>
