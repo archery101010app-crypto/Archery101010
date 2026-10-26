@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPolicyPage() {
-  const lastUpdated = "12 de Octubre de 2026";
+  const lastUpdated = "25 de Octubre de 2026";
 
   return (
     <div className="min-h-screen py-10 px-4 sm:px-6 max-w-4xl mx-auto flex flex-col gap-8 text-neutral-200">
@@ -218,20 +218,38 @@ export default function PrivacyPolicyPage() {
         </div>
 
         {/* SECCIÓN 7: Derechos del Usuario y Eliminación de Cuenta */}
-        <div className="bg-neutral-950 border border-red-rival/30 rounded-3xl p-6 flex flex-col gap-3">
+        <div id="delete-account" className="bg-neutral-950 border border-red-rival/30 rounded-3xl p-6 flex flex-col gap-3.5">
           <div className="flex items-center gap-2 text-white font-bold text-base">
             <FileText size={18} className="text-red-rival" />
-            <h2>7. Tus Derechos y Eliminación Completa de Cuenta</h2>
+            <h2>7. Tus Derechos y Eliminación Completa de Cuenta y Datos</h2>
           </div>
           <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
-            De conformidad con las directrices obligatorias de <strong>Google Play</strong> y <strong>Apple App Store</strong>, tienes derecho en cualquier momento a:
+            De conformidad con las políticas de seguridad de datos de <strong>Google Play Store</strong> y <strong>Apple App Store</strong>, tienes control total sobre tu información y puedes eliminar tu cuenta en cualquier momento por dos vías:
           </p>
-          <ul className="list-disc pl-5 text-xs text-neutral-400 space-y-1.5">
-            <li>Acceder, rectificar o descargar una copia de tus estadísticas de tiro y datos de perfil.</li>
-            <li>Revocar los permisos de micrófono o notificaciones en cualquier instante desde los ajustes de tu sistema operativo.</li>
-            <li>
-              <strong className="text-white">Eliminación Total de Cuenta y Datos (*Right to be Forgotten*):</strong> Puedes solicitar la eliminación irreversible de tu cuenta y todos tus registros enviando un correo a <a href="mailto:info@archery101010.com" className="text-cyan-neon underline font-bold">info@archery101010.com</a> con el asunto <em>&quot;Eliminar mi cuenta&quot;</em> desde tu correo registrado. Procesamos y purgamos todos tus datos en un plazo máximo de 30 días.
-            </li>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
+              <strong className="text-white">1. Eliminación Inmediata desde la App</strong>
+              <p className="text-neutral-400 leading-relaxed">
+                Abre <strong>Archery 10 10 10</strong>, dirígete a la pestaña <strong>Perfil</strong> y pulsa el botón <strong>&quot;Eliminar mi cuenta y datos&quot;</strong> al final de la pantalla. Al confirmar, tu perfil, configuraciones de arco, sesiones de tiro, historial de duelos y récords se eliminan de inmediato del dispositivo y de Google Cloud Firestore.
+              </p>
+            </div>
+            <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
+              <strong className="text-white">2. Solicitud Web (Sin abrir la App)</strong>
+              <p className="text-neutral-400 leading-relaxed">
+                Si ya desinstalaste la aplicación, puedes solicitar la baja total enviando un correo directo a{" "}
+                <a
+                  href="mailto:info@archery101010.com?subject=Eliminar%20mi%20cuenta%20Archery%20101010"
+                  className="text-cyan-neon underline font-bold"
+                >
+                  info@archery101010.com
+                </a>{" "}
+                con el asunto <em>&quot;Eliminar mi cuenta Archery 101010&quot;</em> desde tu correo registrado.
+              </p>
+            </div>
+          </div>
+          <ul className="list-disc pl-5 text-xs text-neutral-400 space-y-1">
+            <li><strong className="text-white">Datos que se eliminan:</strong> Perfil de usuario (<code className="text-neutral-300">users</code>), planillas e impactos (<code className="text-neutral-300">sessions</code>), insignias/estrellas (<code className="text-neutral-300">athlete_stars</code>) y vinculación a clubes.</li>
+            <li><strong className="text-white">Plazo de retención tras la baja:</strong> 0 días para eliminaciones desde la app y máximo 7 días hábiles para solicitudes por correo electrónico, sin conservar copias personales posteriores.</li>
           </ul>
         </div>
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
+import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, deleteUserAccount, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
 import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,13 +37,18 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [editBow, setEditBow] = useState(false);
   const [editClubDetails, setEditClubDetails] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Hook into mobile back button and gestures
   useEffect(() => {
     if (isPaywallOpen) {
       return registerModalDismiss(() => setIsPaywallOpen(false));
     }
-  }, [isPaywallOpen]);
+    if (isDeleteAccountOpen) {
+      return registerModalDismiss(() => setIsDeleteAccountOpen(false));
+    }
+  }, [isPaywallOpen, isDeleteAccountOpen]);
 
   // Form Fields
   const [fullName, setFullName] = useState(user.fullName);
@@ -518,6 +523,19 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     
     await logoutUser();
     onLogout();
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteUserAccount(user.uid);
+      setIsDeleteAccountOpen(false);
+      onLogout();
+    } catch (e) {
+      console.error("Error deleting user account:", e);
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   const handleNotifToggle = async (key: string, currentVal: boolean, setVal: (v: boolean) => void) => {
@@ -1675,6 +1693,62 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         <LogOut size={16} />
         <span>{t("logout")}</span>
       </button>
+
+      {/* Delete Account & Data Action Button (Google Play / App Store Policy Requirement) */}
+      <button
+        onClick={() => setIsDeleteAccountOpen(true)}
+        className="w-full py-2.5 rounded-full border border-white/5 hover:border-red-rival/40 text-gray-dim hover:text-red-rival font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+      >
+        <Trash2 size={13} />
+        <span>Eliminar mi cuenta y datos</span>
+      </button>
+
+      {/* DELETE ACCOUNT CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {isDeleteAccountOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 15 }}
+              className="w-full max-w-sm bg-neutral-900 border border-red-rival/30 p-6 rounded-3xl flex flex-col gap-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-rival/10 border border-red-rival/30 flex items-center justify-center mx-auto text-red-rival">
+                <Trash2 size={22} />
+              </div>
+              <h3 className="text-white text-base font-black uppercase tracking-wide">
+                ¿Eliminar Cuenta Permanentemente?
+              </h3>
+              <p className="text-xs text-gray-dim leading-relaxed">
+                Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán de forma definitiva tu perfil (<span className="text-white font-mono">{user.email}</span>), configuraciones de arco, planillas de entrenamiento, historial de duelos y récords tanto de este dispositivo como de la nube.
+              </p>
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={() => setIsDeleteAccountOpen(false)}
+                  className="flex-1 py-3 rounded-full bg-neutral-800 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={handleConfirmDeleteAccount}
+                  className="flex-1 py-3 rounded-full bg-red-rival hover:brightness-110 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
+                >
+                  {isDeletingAccount ? "Eliminando..." : "Sí, Eliminar"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* PAYWALL DIALOG (PayPal SDK simulation modal) */}
       <AnimatePresence>

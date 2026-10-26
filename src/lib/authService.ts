@@ -476,6 +476,61 @@ export async function logoutUser(): Promise<void> {
   await saveLocalSetting("current_user", null);
 }
 
+/**
+ * Permanently deletes a user account and all associated local & cloud data
+ * (Mandatory Google Play Store & Apple App Store Account Deletion compliance)
+ */
+export async function deleteUserAccount(uid: string): Promise<void> {
+  // 1. Remove user from local simulated_users list
+  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const filteredUsers = usersList.filter((u) => u.uid !== uid);
+  await saveLocalSetting("simulated_users", filteredUsers);
+
+  // 2. Delete all local sessions belonging to this user
+  try {
+    const { deleteLocalSession, athleteStarsStore } = await import("./db/indexedDB");
+    const localSessions = await getLocalSessions();
+    for (const sess of localSessions) {
+      if (!sess.userUid || sess.userUid === uid) {
+        await deleteLocalSession(sess.id);
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "DELETE",
+          payloadId: sess.id,
+          payload: { id: sess.id },
+          timestamp: Date.now()
+        });
+      }
+    }
+    await athleteStarsStore.removeItem(uid);
+  } catch (err) {
+    console.warn("Error cleaning local sessions during account deletion:", err);
+  }
+
+  // 3. Queue user deletion in Sync Queue & attempt direct Firestore deletion if online
+  await addToSyncQueue({
+    id: generateResilientId("TXN"),
+    collection: "users",
+    operation: "DELETE",
+    payloadId: uid,
+    payload: { uid },
+    timestamp: Date.now()
+  });
+
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    try {
+      const { doc, deleteDoc } = await import("firebase/firestore");
+      await deleteDoc(doc(db, "users", uid));
+    } catch (err) {
+      console.warn("Direct Firestore user delete deferred to sync queue:", err);
+    }
+  }
+
+  // 4. Clear active session
+  await saveLocalSetting("current_user", null);
+}
+
 export function isSuperAdmin(user: UserProfile | null): boolean {
   return user?.role === "superadmin";
 }
