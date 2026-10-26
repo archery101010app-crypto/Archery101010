@@ -332,20 +332,22 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-5 sm:gap-6 py-4 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY 101010 APP (+15% de tamaño) */}
-      <div className="w-full flex justify-center items-center pt-2 pb-5 sm:pb-7 select-none">
-        <h1 
-          className="text-[21px] sm:text-[28px] md:text-[35px] tracking-widest text-center flex items-center justify-center gap-2 sm:gap-3 flex-wrap"
-          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-        >
-          <span className="text-white">ARCHERY</span>
-          <span className="inline-flex tracking-tight">
+      {/* Titular Oficial: MY ARCHERY APP / by 101010 (+20% de tamaño) */}
+      <div 
+        className="w-full flex flex-col justify-center items-center pt-2 pb-5 sm:pb-7 select-none gap-1.5"
+        style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+      >
+        <h1 className="text-[25px] sm:text-[34px] md:text-[42px] text-white tracking-widest text-center leading-tight">
+          MY ARCHERY APP
+        </h1>
+        <div className="flex items-baseline justify-center gap-2 text-[21px] sm:text-[28px] md:text-[35px] leading-none">
+          <span className="text-white text-[0.7em] tracking-wider">by</span>
+          <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </span>
-          <span className="text-white">APP</span>
-        </h1>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-2 sm:mb-3 gap-2 flex-wrap sm:flex-nowrap">
