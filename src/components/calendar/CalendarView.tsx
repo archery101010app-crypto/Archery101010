@@ -332,8 +332,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const month = currentDate.getMonth();
 
   const firstDayOfMonth = new Date(year, month, 1).getDay();
-  // Adjust to start week on Monday: 0 (Sun) becomes 6, 1-6 (Mon-Sat) becomes 0-5
-  const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+  // Start week on Sunday: 0 (Sun) through 6 (Sat)
+  const startOffset = firstDayOfMonth;
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevMonthDays = new Date(year, month, 0).getDate();
@@ -440,8 +440,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   }
 
   const daysOfWeek = language === "es" 
-    ? ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
-    : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+    ? ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"]
+    : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
   // Helper to calculate countdown
   const getDaysRemaining = (eventDateStr: string): { text: string; colorClass: string; isPast: boolean } => {
@@ -793,35 +793,35 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       </div>
 
       {/* Month selection selector */}
-      <div className="flex justify-between items-center bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
+      <div className="flex justify-between items-center bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5">
         <button
           onClick={prevMonth}
-          className="p-1.5 rounded-lg text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+          className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
         >
-          <ChevronLeft size={18} />
+          <ChevronLeft size={20} />
         </button>
         <div className="text-center">
-          <span className="text-white font-extrabold text-sm capitalize block">{monthName}</span>
-          <span className="text-[9px] text-gray-dim">Toca cualquier día para ver las tareas</span>
+          <span className="text-white font-extrabold text-base sm:text-lg capitalize block leading-tight">{monthName}</span>
+          <span className="text-[11px] text-gray-dim mt-0.5 block">Toca cualquier día para ver las tareas</span>
         </div>
         <button
           onClick={nextMonth}
-          className="p-1.5 rounded-lg text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+          className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
         >
-          <ChevronRight size={18} />
+          <ChevronRight size={20} />
         </button>
       </div>
 
       {/* Macrocycle Filter */}
       {macrocycles.length > 0 && (
         <div className="flex items-center justify-between gap-3 px-1">
-          <span className="text-[10px] text-gray-dim uppercase font-black tracking-widest">
+          <span className="text-xs text-gray-dim uppercase font-black tracking-widest">
             {language === "es" ? "Plan / Ciclo:" : "Cycle Plan:"}
           </span>
           <select
             value={selectedMacrocycleId}
             onChange={(e) => setSelectedMacrocycleId(e.target.value)}
-            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-[10px] uppercase font-bold outline-none focus:border-cyan-neon max-w-[200px]"
+            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[220px]"
           >
             <option value="ALL">
               {language === "es" ? "Todos los Planes" : "All Plans"}
@@ -838,11 +838,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       {/* Grid calendar */}
       <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
         {/* Days of week header */}
-        <div className="grid grid-cols-7 gap-1.5 text-center">
-          {daysOfWeek.map((day) => (
-            <span key={day} className="text-[10px] text-gray-dim font-bold uppercase tracking-wider">
-              {day}
-            </span>
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center border-b border-white/5 pb-2">
+          {daysOfWeek.map((day, dIdx) => (
+            <div key={day} className="flex items-center justify-center py-0.5">
+              <span
+                className={`text-xs sm:text-sm font-black uppercase tracking-wider leading-none ${
+                  dIdx === 0 ? "text-cyan-neon" : "text-gray-dim"
+                }`}
+              >
+                {day}
+              </span>
+            </div>
           ))}
         </div>
 
@@ -888,59 +894,59 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   }
                 }}
                 style={customStyle}
-                className={`aspect-square rounded-2xl flex flex-col items-center justify-between py-1 px-0.5 relative text-xs font-bold transition-all border overflow-hidden ${
+                className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-0.5 p-1 relative font-bold transition-all border overflow-hidden ${
                   !cell.isCurrentMonth
                     ? "text-gray-dim/20 border-transparent pointer-events-none"
                     : cell.hasSession && !activePhaseInfo && !coachAssignment
                     ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
-                    : "text-white/80 hover:bg-neutral-900/80 border-white/[0.04] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
+                    : "text-white/90 hover:bg-neutral-900/80 border-white/[0.06] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                 } ${isToday ? "border-cyan-neon shadow-glow-cyan bg-cyan-neon/15" : ""} ${
                   coachAssignment ? "shadow-[0_0_10px_rgba(255,255,255,0.03)]" : ""
                 }`}
                 title={cell.isCurrentMonth ? "Toca para ver la asignación de este día" : ""}
               >
-                {/* Day Number + Coach badge dot if assigned */}
-                <div className="flex items-center justify-between w-full px-1 leading-none">
-                  <span className={`text-[10px] sm:text-[11px] leading-none ${isToday ? "text-cyan-neon font-black" : "text-white/90"}`}>
-                    {cell.day}
+                {/* Coach badge dot pinned top-right so day number stays 100% centered */}
+                {coachAssignment && !coachAssignment.isRestDay && (
+                  <span 
+                    style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }} 
+                    className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full animate-pulse shadow-sm"
+                    title="Asignación del Coach"
+                  />
+                )}
+
+                {/* Day Number (+20% larger and squarely centered) */}
+                <span className={`text-[13px] sm:text-[15px] leading-none text-center ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white/95"}`}>
+                  {cell.day}
+                </span>
+
+                {/* Target Arrows or Phase label (+20% larger) */}
+                {coachAssignment && coachAssignment.targetArrows ? (
+                  <span 
+                    style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
+                    className="text-[9px] sm:text-[10px] font-black tracking-tight leading-none truncate max-w-full px-0.5 text-center"
+                  >
+                    🎯{coachAssignment.targetArrows}
                   </span>
-                  {coachAssignment && !coachAssignment.isRestDay && (
-                    <span 
-                      style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }} 
-                      className="w-1.5 h-1.5 rounded-full animate-pulse shadow-sm shrink-0"
-                      title="Asignación del Coach"
-                    />
-                  )}
-                </div>
+                ) : activePhaseInfo ? (
+                  <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
+                    {activePhaseInfo.phase.name}
+                  </span>
+                ) : null}
 
-                {/* Center / Bottom Info: Target Arrows or Phase label */}
-                <div className="flex flex-col items-center gap-0.5 w-full min-w-0">
-                  {coachAssignment && coachAssignment.targetArrows ? (
-                    <span 
-                      style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                      className="text-[7px] sm:text-[8px] font-black tracking-tight leading-none truncate max-w-full px-0.5"
-                    >
-                      🎯{coachAssignment.targetArrows}
-                    </span>
-                  ) : activePhaseInfo ? (
-                    <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-wider opacity-85 leading-none truncate max-w-[92%]">
-                      {activePhaseInfo.phase.name}
-                    </span>
-                  ) : null}
-
-                  {/* Visual dots for events */}
-                  <div className="flex gap-0.5 justify-center w-full min-h-[4px]">
+                {/* Visual dots for events */}
+                {(cell.dayEvents.length > 0 || cell.hasSession) && (
+                  <div className="flex gap-0.5 justify-center items-center w-full mt-0.5">
                     {cell.dayEvents.slice(0, 3).map((ev) => (
                       <span 
                         key={ev.id} 
-                        className={`w-1 h-1 rounded-full ${getEventDotColor(ev.type)}`} 
+                        className={`w-1.5 h-1.5 rounded-full ${getEventDotColor(ev.type)}`} 
                       />
                     ))}
                     {cell.hasSession && (
-                      <span className="w-1 h-1 rounded-full bg-yellow-gold" title="Práctica Realizada" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-gold" title="Práctica Realizada" />
                     )}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
