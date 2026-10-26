@@ -134,23 +134,23 @@ export default function SpotifyFloatingPlayer() {
 
   return (
     <>
-      {/* 1. Spotify Collapsible Folding Tab on the Left Edge (50% larger) */}
+      {/* 1. Spotify Collapsible Folding Tab on the Left Edge */}
       {!isOpen && !isMiniBarActive && (
-        <div className="fixed left-0 top-[58%] -translate-y-1/2 z-[40] scale-[1.35] origin-left">
+        <div className="fixed left-0 top-[56%] -translate-y-1/2 z-[40] scale-90 origin-left">
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Abrir Spotify"
-            className="flex flex-col items-center justify-center gap-2 py-3 px-1 rounded-r-2xl bg-neutral-950/95 border-y border-r border-[#1DB954]/60 shadow-[4px_0_20px_rgba(29,185,84,0.35)] cursor-pointer text-[#1DB954] hover:brightness-110 hover:border-[#1DB954] transition-all duration-300 w-9 select-none group"
+            className="flex flex-col items-center justify-center gap-2 py-3.5 px-1 rounded-r-2xl bg-neutral-950/95 border-y border-r border-[#1DB954]/50 shadow-[4px_0_15px_rgba(29,185,84,0.25)] cursor-pointer text-[#1DB954] hover:brightness-110 hover:border-[#1DB954] transition-all duration-300 w-8 md:w-9 select-none group"
           >
             <motion.div
               animate={isPlaying ? { rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] } : {}}
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               className="text-[#1DB954]"
             >
-              <Music size={16} />
+              <Music size={15} />
             </motion.div>
             <span 
-              className="text-[8.5px] font-black tracking-[0.2em] uppercase text-[#1DB954] group-hover:text-[#1ED760]" 
+              className="text-[8px] font-black tracking-[0.2em] uppercase text-[#1DB954] group-hover:text-[#1ED760]" 
               style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
             >
               Spotify
