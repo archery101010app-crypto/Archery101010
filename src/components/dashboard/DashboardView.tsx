@@ -330,12 +330,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       variants={containerVariants}
       initial="initial"
       animate="animate"
-      className="flex flex-col gap-4 py-4 w-full max-w-full overflow-x-hidden"
+      className="flex flex-col gap-5 sm:gap-6 py-4 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY 101010 APP */}
+      {/* Titular Oficial: ARCHERY 101010 APP (+15% de tamaño) */}
       <div className="w-full flex justify-center items-center pt-2 pb-5 sm:pb-7 select-none">
         <h1 
-          className="text-lg sm:text-2xl md:text-3xl tracking-widest text-center flex items-center justify-center gap-2 sm:gap-2.5 flex-wrap"
+          className="text-[21px] sm:text-[28px] md:text-[35px] tracking-widest text-center flex items-center justify-center gap-2 sm:gap-3 flex-wrap"
           style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
         >
           <span className="text-white">ARCHERY</span>
@@ -348,7 +348,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </h1>
       </div>
 
-      <div className="flex items-center justify-between mb-1 gap-2 flex-wrap sm:flex-nowrap">
+      <div className="flex items-center justify-between mb-2 sm:mb-3 gap-2 flex-wrap sm:flex-nowrap">
         <div className="flex flex-col min-w-0">
           <h2 className="text-white text-xl font-black flex items-center gap-1.5 uppercase tracking-wide">
             <span>{t("dashHome")}</span>
@@ -390,7 +390,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-4 sm:gap-5">
         {/* Progreso Semanal */}
         <motion.div
           variants={cardVariants}
@@ -501,12 +501,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
       <motion.button
         variants={cardVariants}
-        whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
+        whileHover={{ scale: 1.02, filter: "brightness(1.08)" }}
         whileTap={{ scale: 0.98 }}
         onClick={() => onNavigate("TARGET")}
-        className="w-full py-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center mt-2"
+        className="w-full py-4 sm:py-4.5 rounded-full bg-gradient-to-r from-cyan-neon via-[#00D4FF] to-cyan-brand text-black font-black text-base sm:text-lg tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center gap-2 mt-4 sm:mt-5 active:scale-95"
       >
-        🎯 {t("newSession")}
+        <span className="text-xl">🎯</span>
+        <span>{t("newSession")}</span>
       </motion.button>
 
       {/* Floating stars tab on the left edge */}
