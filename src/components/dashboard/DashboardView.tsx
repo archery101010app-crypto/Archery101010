@@ -374,330 +374,160 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </div>
       </div>
 
-      {/* 🎯 HERO ARENA OLÍMPICA */}
-      <motion.div
-        variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-neutral-900/90 via-neutral-950 to-neutral-900/95 border border-cyan-500/25 p-5 shadow-[0_0_30px_rgba(0,229,255,0.08)] backdrop-blur-xl group"
-      >
-        {/* Ambient Glows */}
-        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+      <div className="grid grid-cols-3 gap-3">
+        {/* ARCHERY 101010 app — Sober OLED Branding Card */}
+        <motion.div
+          variants={cardVariants}
+          className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4.5 relative overflow-hidden flex items-center justify-between group hover:border-cyan-neon/30 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.4)]"
+        >
+          {/* Subtle ambient light */}
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-cyan-neon/5 blur-2xl pointer-events-none" />
+          <div className="absolute -left-8 -bottom-8 w-32 h-32 rounded-full bg-yellow-gold/5 blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col gap-4">
-          {/* Top Tag & Stats Badge */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-neon border border-cyan-500/25 shadow-[0_0_10px_rgba(0,229,255,0.15)]">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+          <div className="flex flex-col z-10 text-left">
+            <span className="text-[9px] text-cyan-neon font-black tracking-[0.25em] uppercase flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
+              SISTEMA OFICIAL DE TIRO CON ARCO
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
+                ARCHERY 101010
+              </h1>
+              <span className="text-xs sm:text-sm font-black text-yellow-gold tracking-widest lowercase bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/20">
+                app
               </span>
-              {language === "es" ? "Arena Olímpica 101010" : "Olympic Arena 101010"}
-            </span>
-
-            <div className="flex items-center gap-2">
-              {stats.bestScore > 0 && (
-                <span className="text-[10px] font-black text-yellow-gold bg-yellow-gold/10 px-2.5 py-0.5 rounded-full border border-yellow-gold/20 flex items-center gap-1">
-                  <span>★ PB</span>
-                  <span className="text-white">{stats.bestScore}</span>
-                </span>
-              )}
             </div>
+            <p className="text-[10px] text-gray-dim leading-snug mt-1">
+              {language === "es" 
+                ? "Puntuación de diana reglamentaria WA, balística acústica, gestión y matchplay."
+                : "Official WA target scoring, acoustic ballistics, training management and matchplay."}
+            </p>
           </div>
 
-          {/* Central Row: Description + Interactive Target */}
-          <div className="flex flex-col sm:flex-row items-center gap-5 justify-between py-1">
-            <div className="flex flex-col text-center sm:text-left items-center sm:items-start flex-1 min-w-0">
-              <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase leading-none">
-                {language === "es" ? "¿Listo para tirar?" : "Ready to Shoot?"}
-              </h3>
-              <p className="text-xs text-gray-dim mt-2 leading-relaxed max-w-sm">
-                {language === "es" 
-                  ? "Registra tus rondas con diana reglamentaria WA o conteo libre, impactos exactos y cálculo automático."
-                  : "Track rounds with official WA targets or free count, arrow impact coordinates, and live stats."}
-              </p>
-
-              {/* Dynamic Mission / Coach Assignment or Streak Capsule */}
-              {todayMission ? (
-                <div 
-                  onClick={() => onNavigate("CALENDAR")}
-                  className="mt-3.5 w-full bg-cyan-950/40 border border-cyan-500/30 rounded-2xl p-2.5 flex items-center justify-between gap-2.5 hover:border-cyan-neon/60 transition cursor-pointer group/m"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-neon shrink-0">
-                      <Target size={16} />
-                    </div>
-                    <div className="flex flex-col min-w-0 text-left">
-                      <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider flex items-center gap-1 truncate">
-                        <span>🎯 {language === "es" ? "Misión de Hoy" : "Today's Mission"}</span>
-                        {todayMission.targetArrows && (
-                          <span className="text-white/80">· {todayMission.targetArrows} {language === "es" ? "flechas" : "arrows"}</span>
-                        )}
-                      </span>
-                      <span className="text-xs font-bold text-white truncate">
-                        {todayMission.title}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={14} className="text-cyan-neon group-hover/m:translate-x-0.5 transition-transform shrink-0" />
-                </div>
-              ) : (
-                <div className="mt-3 flex items-center gap-2 text-[10px] text-gray-dim bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                  <Flame size={13} className="text-amber-400" />
-                  <span>
-                    {stats.totalArrows > 0 
-                      ? `${stats.totalArrows.toLocaleString()} ${language === "es" ? "flechas acumuladas en tu historial" : "arrows accumulated in your history"}` 
-                      : (language === "es" ? "Inicia tu primer entrenamiento oficial" : "Start your first official training")}
-                  </span>
-                </div>
-              )}
+          <div className="flex items-center gap-2 z-10 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-neutral-950 border border-white/10 flex items-center justify-center text-cyan-neon group-hover:border-cyan-neon/40 group-hover:scale-105 transition-all shadow-inner">
+              <Target size={24} className="text-cyan-neon drop-shadow-[0_0_8px_rgba(0,229,255,0.4)]" />
             </div>
-
-            {/* Target Graphic (Interactive World Archery Olympic Target) */}
-            <motion.div
-              whileHover={{ scale: 1.05, rotate: 3 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              onClick={() => onNavigate("TARGET")}
-              className="relative w-32 h-32 sm:w-36 sm:h-36 shrink-0 cursor-pointer select-none"
-              title={language === "es" ? "Toca para abrir la diana" : "Tap to open target"}
-            >
-              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-cyan-500/20 via-yellow-500/20 to-red-500/20 blur-md animate-pulse" />
-              
-              <svg viewBox="0 0 160 160" className="w-full h-full relative drop-shadow-[0_0_15px_rgba(0,229,255,0.25)]">
-                {/* 1 & 2 White rings */}
-                <circle cx="80" cy="80" r="76" fill="#F3F4F6" stroke="#9CA3AF" strokeWidth="1" />
-                <circle cx="80" cy="80" r="68.4" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="0.8" />
-                
-                {/* 3 & 4 Black rings */}
-                <circle cx="80" cy="80" r="60.8" fill="#1F2937" stroke="#4B5563" strokeWidth="1" />
-                <circle cx="80" cy="80" r="53.2" fill="#111827" stroke="#374151" strokeWidth="0.8" />
-                
-                {/* 5 & 6 Blue rings */}
-                <circle cx="80" cy="80" r="45.6" fill="#0284C7" stroke="#38BDF8" strokeWidth="1" />
-                <circle cx="80" cy="80" r="38" fill="#0EA5E9" stroke="#7DD3FC" strokeWidth="0.8" />
-                
-                {/* 7 & 8 Red rings */}
-                <circle cx="80" cy="80" r="30.4" fill="#DC2626" stroke="#F87171" strokeWidth="1" />
-                <circle cx="80" cy="80" r="22.8" fill="#EF4444" stroke="#FCA5A5" strokeWidth="0.8" />
-                
-                {/* 9 & 10 Gold rings */}
-                <circle cx="80" cy="80" r="15.2" fill="#EAB308" stroke="#FDE047" strokeWidth="1" />
-                <circle cx="80" cy="80" r="7.6" fill="#FACC15" stroke="#FEF08A" strokeWidth="0.8" />
-                
-                {/* X-Ring Center Crosshair */}
-                <line x1="80" y1="74" x2="80" y2="86" stroke="#854D0E" strokeWidth="0.8" strokeLinecap="round" />
-                <line x1="74" y1="80" x2="86" y2="80" stroke="#854D0E" strokeWidth="0.8" strokeLinecap="round" />
-                
-                {/* High-tech Arrow Impact Point in the 10/X */}
-                <circle cx="81.5" cy="78.5" r="2.2" fill="#00E5FF" stroke="#000000" strokeWidth="0.6" className="drop-shadow-[0_0_6px_#00E5FF]" />
-                <circle cx="81.5" cy="78.5" r="4.5" fill="none" stroke="#00E5FF" strokeWidth="0.5" opacity="0.6" />
-              </svg>
-            </motion.div>
           </div>
+        </motion.div>
 
-          {/* Primary Action Button inside the Hero */}
-          <motion.button
-            whileHover={{ scale: 1.015, filter: "brightness(1.1)" }}
-            whileTap={{ scale: 0.985 }}
-            onClick={() => onNavigate("TARGET")}
-            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyan-500 via-cyan-neon to-cyan-400 text-black font-black text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(0,229,255,0.4)] hover:shadow-[0_0_30px_rgba(0,229,255,0.6)] transition-all cursor-pointer flex items-center justify-center gap-2 mt-1"
-          >
-            <Target size={18} className="text-black" />
-            <span>{language === "es" ? "Iniciar Ronda de Tiro" : "Start Shooting Round"}</span>
-            <ArrowUpRight size={16} className="text-black" />
-          </motion.button>
-        </div>
-      </motion.div>
-
-      {/* 🚀 BENTO GRID DE MODOS CLAVE */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* CARD 1: ⚔️ Duelos 1 vs 1 (Matchplay) */}
+        {/* Progreso Semanal */}
         <motion.div
           variants={cardVariants}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className="col-span-2 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36"
+        >
+          <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase">
+            {t("weeklyProgress")}
+          </span>
+          <div className="w-full h-20 mt-1 relative">
+            <svg viewBox="0 0 100 40" className="w-full h-full">
+              <path
+                d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12 L 95,38 L 5,38 Z"
+                fill="rgba(0, 229, 255, 0.06)"
+              />
+              <path
+                d="M 5,35 L 20,30 L 40,32 L 60,22 L 80,25 L 95,12"
+                fill="none"
+                stroke="#00E5FF"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {[
+                { x: 5, y: 35 },
+                { x: 20, y: 30 },
+                { x: 40, y: 32 },
+                { x: 60, y: 22 },
+                { x: 80, y: 25 },
+                { x: 95, y: 12 }
+              ].map((p, idx) => (
+                <circle
+                  key={idx}
+                  cx={p.x}
+                  cy={p.y}
+                  r="1.8"
+                  className="fill-cyan-neon stroke-black stroke-[0.8px]"
+                />
+              ))}
+            </svg>
+          </div>
+        </motion.div>
+
+        {/* Clubes y Programas */}
+        <motion.div
+          variants={cardVariants}
+          className="col-span-1 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 flex flex-col justify-between h-36 cursor-pointer hover:border-cyan-neon/30 transition-all duration-300 group"
+          onClick={() => onNavigate("PROFILE")}
+        >
+          <span className="text-[9px] text-gray-dim font-black tracking-widest uppercase leading-snug">
+            {t("clubsPrograms")}
+          </span>
+          <div className="flex flex-col gap-0.5 overflow-hidden">
+            <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
+              {user.clubName || t("myClub")}
+            </span>
+            <span className="text-[8px] text-gray-dim truncate flex items-center gap-1 mt-0.5">
+              <span>{clubFlag}</span>
+              <span>
+                {user.role === "coach" 
+                  ? "Coach" 
+                  : user.role === "team_admin" 
+                    ? t("roleAdmin") 
+                    : user.role === "team_admin_coach" 
+                      ? "Admin / Coach" 
+                      : user.role === "superadmin" 
+                        ? "Super Admin" 
+                        : t("roleMember")}
+              </span>
+            </span>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/5 group-hover:border-cyan-neon/20 transition-all">
+            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
+          </div>
+        </motion.div>
+
+        {/* Duelos de Eliminación */}
+        <motion.div
+          variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
-          className="bg-gradient-to-br from-purple-950/50 via-neutral-900/80 to-neutral-950 rounded-2xl border border-purple-500/25 p-3.5 cursor-pointer hover:border-purple-400/60 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[135px] shadow-[0_0_15px_rgba(168,85,247,0.06)]"
+          className="col-span-3 bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-red-950/20 backdrop-blur-md rounded-3xl border border-purple-500/25 p-4 cursor-pointer hover:border-purple-400/40 transition-all duration-300 relative overflow-hidden group flex justify-between items-center h-28 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
+          {/* Subtle light effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent opacity-50 group-hover:opacity-80 transition-opacity" />
           
-          <div className="flex items-center justify-between w-full z-10">
-            <div className="w-9 h-9 rounded-xl bg-purple-900/40 border border-purple-500/30 flex items-center justify-center text-purple-300 group-hover:scale-110 group-hover:text-purple-200 transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-              <Swords size={18} />
-            </div>
-            <span className="text-[8px] font-black uppercase tracking-wider text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
-              <span>1 vs 1</span>
+          <div className="flex flex-col gap-1 z-10 w-[70%]">
+            <span className="text-[9px] text-purple-300 font-black tracking-widest uppercase flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              {t("liveArenaTitle")}
             </span>
+            <h3 className="text-white text-base font-black uppercase tracking-wide mt-1">
+              {t("duelsTitle")}
+            </h3>
+            <p className="text-[10px] text-gray-dim leading-snug mt-0.5">
+              {t("duelsDesc")}
+            </p>
           </div>
 
-          <div className="flex flex-col z-10 mt-3">
-            <span className="text-white text-sm font-black uppercase tracking-wide group-hover:text-purple-300 transition-colors">
-              {language === "es" ? "Duelos 1 vs 1" : "1 vs 1 Duels"}
-            </span>
-            <span className="text-[9.5px] text-gray-dim leading-snug mt-0.5 line-clamp-2">
-              {language === "es" ? "Matchplay y series de eliminación directa" : "Matchplay and direct elimination sets"}
-            </span>
+          <div className="w-12 h-12 rounded-2xl bg-neutral-950/80 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:text-purple-300 group-hover:border-purple-400/60 group-hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.1)] transition-all">
+            <Trophy size={20} className="animate-bounce [animation-duration:3s]" />
           </div>
-
-          <div className="flex items-center justify-end w-full mt-1 z-10">
-            <span className="text-[9px] font-bold text-purple-400 group-hover:text-purple-300 flex items-center gap-0.5">
-              <span>{language === "es" ? "Entrar" : "Enter"}</span>
-              <ArrowUpRight size={12} />
-            </span>
-          </div>
-        </motion.div>
-
-        {/* CARD 2: ⏱️ Cronógrafo Balístico */}
-        <motion.div
-          variants={cardVariants}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => onNavigate("CHRONOGRAPH")}
-          className="bg-gradient-to-br from-amber-950/40 via-neutral-900/80 to-neutral-950 rounded-2xl border border-amber-500/25 p-3.5 cursor-pointer hover:border-amber-400/60 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[135px] shadow-[0_0_15px_rgba(245,158,11,0.06)]"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/20 transition-all" />
           
-          <div className="flex items-center justify-between w-full z-10">
-            <div className="w-9 h-9 rounded-xl bg-amber-900/40 border border-amber-500/30 flex items-center justify-center text-amber-300 group-hover:scale-110 group-hover:text-amber-200 transition-all shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-              <Gauge size={18} />
-            </div>
-            <span className="text-[8px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-              FPS · m/s
-            </span>
-          </div>
-
-          <div className="flex flex-col z-10 mt-3">
-            <span className="text-white text-sm font-black uppercase tracking-wide group-hover:text-amber-300 transition-colors">
-              {language === "es" ? "Cronógrafo" : "Chronograph"}
-            </span>
-            <span className="text-[9.5px] text-gray-dim leading-snug mt-0.5 line-clamp-2">
-              {language === "es" ? "Medición balística acústica de velocidad" : "Acoustic ballistic arrow speed tracking"}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end w-full mt-1 z-10">
-            <span className="text-[9px] font-bold text-amber-400 group-hover:text-amber-300 flex items-center gap-0.5">
-              <span>{language === "es" ? "Medir" : "Measure"}</span>
-              <ArrowUpRight size={12} />
-            </span>
-          </div>
-        </motion.div>
-
-        {/* CARD 3: 📅 Mi Calendario & Plan */}
-        <motion.div
-          variants={cardVariants}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => onNavigate("CALENDAR")}
-          className="bg-gradient-to-br from-sky-950/40 via-neutral-900/80 to-neutral-950 rounded-2xl border border-sky-500/25 p-3.5 cursor-pointer hover:border-sky-400/60 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[135px] shadow-[0_0_15px_rgba(14,165,233,0.06)]"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-sky-500/20 transition-all" />
-          
-          <div className="flex items-center justify-between w-full z-10">
-            <div className="w-9 h-9 rounded-xl bg-sky-900/40 border border-sky-500/30 flex items-center justify-center text-sky-300 group-hover:scale-110 group-hover:text-sky-200 transition-all shadow-[0_0_10px_rgba(14,165,233,0.2)]">
-              <Calendar size={18} />
-            </div>
-            <span className="text-[8px] font-black uppercase tracking-wider text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
-              {upcomingCount > 0 
-                ? `${upcomingCount} ${language === "es" ? "eventos" : "events"}` 
-                : (language === "es" ? "Plan Activo" : "Active Plan")}
-            </span>
-          </div>
-
-          <div className="flex flex-col z-10 mt-3">
-            <span className="text-white text-sm font-black uppercase tracking-wide group-hover:text-sky-300 transition-colors">
-              {language === "es" ? "Calendario & Plan" : "Calendar & Plan"}
-            </span>
-            <span className="text-[9.5px] text-gray-dim leading-snug mt-0.5 line-clamp-2">
-              {language === "es" ? "Macrociclos, torneos y tareas del coach" : "Macrocycles, tournaments and coach tasks"}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end w-full mt-1 z-10">
-            <span className="text-[9px] font-bold text-sky-400 group-hover:text-sky-300 flex items-center gap-0.5">
-              <span>{language === "es" ? "Ver Plan" : "View Plan"}</span>
-              <ArrowUpRight size={12} />
-            </span>
-          </div>
-        </motion.div>
-
-        {/* CARD 4: 📊 Historial & Estadísticas */}
-        <motion.div
-          variants={cardVariants}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => onNavigate("HISTORY")}
-          className="bg-gradient-to-br from-emerald-950/40 via-neutral-900/80 to-neutral-950 rounded-2xl border border-emerald-500/25 p-3.5 cursor-pointer hover:border-emerald-400/60 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[135px] shadow-[0_0_15px_rgba(16,185,129,0.06)]"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
-          
-          <div className="flex items-center justify-between w-full z-10">
-            <div className="w-9 h-9 rounded-xl bg-emerald-900/40 border border-emerald-500/30 flex items-center justify-center text-emerald-300 group-hover:scale-110 group-hover:text-emerald-200 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-              <TrendingUp size={18} />
-            </div>
-            <span className="text-[8px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              {sessions.length} {language === "es" ? "sesiones" : "sessions"}
-            </span>
-          </div>
-
-          <div className="flex flex-col z-10 mt-3">
-            <span className="text-white text-sm font-black uppercase tracking-wide group-hover:text-emerald-300 transition-colors">
-              {language === "es" ? "Historial & Récords" : "History & Records"}
-            </span>
-            <span className="text-[9.5px] text-gray-dim leading-snug mt-0.5 line-clamp-2">
-              {stats.bestScore > 0 
-                ? `${language === "es" ? "Récord Personal" : "Personal Best"}: ${stats.bestScore} pts` 
-                : (language === "es" ? "Récords, volumen y evolución" : "Records, volume and evolution")}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end w-full mt-1 z-10">
-            <span className="text-[9px] font-bold text-emerald-400 group-hover:text-emerald-300 flex items-center gap-0.5">
-              <span>{language === "es" ? "Explorar" : "Explore"}</span>
-              <ArrowUpRight size={12} />
-            </span>
-          </div>
+          <ArrowUpRight size={16} className="absolute top-4 right-4 text-gray-dim group-hover:text-white transition-colors" />
         </motion.div>
       </div>
 
-      {/* 🌟 BANNER OFICIAL ESTRELLAS 101010 */}
-      <motion.div
+      <motion.button
         variants={cardVariants}
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={() => setIsStarsDrawerOpen(true)}
-        className="w-full bg-gradient-to-r from-amber-500/15 via-neutral-900/90 to-yellow-500/10 border border-yellow-gold/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:border-yellow-gold/60 transition-all duration-300 shadow-[0_0_20px_rgba(255,229,0,0.06)] group"
+        whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => onNavigate("TARGET")}
+        className="w-full py-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center mt-2"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 via-yellow-gold to-yellow-600 p-0.5 shadow-[0_0_15px_rgba(255,229,0,0.25)] flex items-center justify-center shrink-0 group-hover:rotate-6 transition-transform">
-            <div className="w-full h-full bg-neutral-950 rounded-[14px] flex items-center justify-center">
-              <span className="text-yellow-gold text-lg font-black leading-none drop-shadow-md">★</span>
-            </div>
-          </div>
-          <div className="flex flex-col text-left min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-white text-xs font-black uppercase tracking-wider">
-                {athleteStar?.highestStar 
-                  ? `${language === "es" ? "Estrella Actual" : "Current Star"}: ${athleteStar.highestStar.name}`
-                  : (language === "es" ? "Estrellas 101010 Oficiales" : "Official 101010 Stars")}
-              </span>
-              <span className="text-[8px] bg-yellow-gold/20 text-yellow-gold font-bold px-2 py-0.5 rounded-full border border-yellow-gold/30 uppercase">
-                WA 720
-              </span>
-            </div>
-            <span className="text-[10px] text-gray-dim leading-snug truncate mt-0.5">
-              {athleteStar?.highestStar 
-                ? `${athleteStar.highestStar.score} pts · ${athleteStar.highestStar.bowType}` 
-                : (language === "es" ? "Tira 72 flechas a 70m/50m y desbloquea insignias oficiales" : "Shoot 72 arrows at 70m/50m to unlock official stars")}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 text-[10px] font-black text-yellow-gold shrink-0">
-          <span>{language === "es" ? "Ver Insignias" : "View Stars"}</span>
-          <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-        </div>
-      </motion.div>
+        🎯 {t("newSession")}
+      </motion.button>
 
       {/* Floating stars tab on the left edge */}
       <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40] scale-90 origin-left">

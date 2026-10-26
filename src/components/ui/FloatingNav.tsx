@@ -5,6 +5,20 @@ import { Home, Target, History, Calendar, User, Users, Shield, Gauge, Sparkles }
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 
+function SpotifyNavIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="currentColor" 
+      className={className}
+    >
+      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.495 17.307a.75.75 0 0 1-1.032.248c-2.825-1.726-6.38-2.116-10.57-1.16a.75.75 0 1 1-.336-1.462c4.582-1.045 8.528-.601 11.69 1.342a.75.75 0 0 1 .248 1.032zm1.467-3.26a.938.938 0 0 1-1.29.31c-3.235-1.988-8.166-2.564-11.993-1.401a.938.938 0 1 1-.547-1.794c4.372-1.328 9.803-.687 13.52 1.595a.938.938 0 0 1 .31 1.29zm.126-3.411c-3.878-2.302-10.28-2.515-13.99-1.388a1.125 1.125 0 1 1-.655-2.154c4.27-1.297 11.332-1.046 15.807 1.61a1.125 1.125 0 0 1-1.162 1.932z" />
+    </svg>
+  );
+}
+
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
 
 interface FloatingNavProps {
@@ -24,6 +38,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "HOME" as Screen, icon: Users, label: "Director" },
         { id: "HISTORY" as Screen, icon: History, label: "Resultados" },
         { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
       ]
     : [
@@ -32,6 +47,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "HISTORY" as Screen, icon: History, label: "Historial" },
         { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
         { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
       ];
 
@@ -44,62 +60,72 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
   );
 
   return (
-    <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-[340px]">
-      <div className="bg-neutral-900/85 backdrop-blur-xl rounded-full border border-white/10 px-5 py-2.5 flex items-center justify-between shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+    <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-[390px]">
+      <div className="bg-neutral-900/90 backdrop-blur-xl rounded-full border border-white/10 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-around shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
+          const isSpotify = item.id === "SPOTIFY";
+          const isProBlocked = item.isPro && user?.plan === "FREE";
 
-            const isProBlocked = item.isPro && user?.plan === "FREE";
-
-            return (
-              <button
-                key={item.label}
-                onClick={() => {
+          return (
+            <button
+              key={item.label}
+              onClick={() => {
+                if (item.isAction) {
+                  window.dispatchEvent(new CustomEvent("open-spotify-player"));
+                } else {
                   onScreenChange(item.id);
-                }}
-                title={item.label}
-                aria-label={item.label}
-                className="relative flex flex-col items-center justify-center p-1.5 cursor-pointer outline-none group"
-              >
-                {/* Highlight active glow behind icon */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeGlow"
-                    className="absolute inset-0 bg-cyan-neon/5 rounded-full blur-md"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
+                }
+              }}
+              title={item.label}
+              aria-label={item.label}
+              className="relative flex flex-col items-center justify-center p-1 cursor-pointer outline-none group flex-1"
+            >
+              {/* Highlight active glow behind icon */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeGlow"
+                  className="absolute inset-0 bg-cyan-neon/5 rounded-full blur-md"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
 
-                {/* Icon wrapper with PRO badge */}
-                <div className="relative">
-                  <Icon
-                    size={20}
-                    className={`transition-colors duration-200 relative z-10 ${
-                      isActive
-                        ? "text-cyan-neon shadow-glow-cyan"
-                        : isProBlocked
-                        ? "text-yellow-gold/80 group-hover:text-yellow-gold"
-                        : "text-gray-dim group-hover:text-white"
-                    }`}
-                  />
-                  {item.isPro && (
-                    <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
-                      PRO
-                    </span>
-                  )}
-                </div>
-
-                {/* Label indicator */}
-                <span
-                  className={`text-[8px] font-bold tracking-tight mt-0.5 leading-none transition-colors duration-200 ${
-                    isActive ? "text-cyan-neon font-black" : "text-gray-dim/80 group-hover:text-white"
+              {/* Icon wrapper with PRO badge */}
+              <div className="relative flex items-center justify-center">
+                <Icon
+                  size={19}
+                  className={`transition-colors duration-200 relative z-10 ${
+                    isSpotify
+                      ? "text-[#1DB954] hover:text-[#1ED760] hover:scale-110 transition-transform"
+                      : isActive
+                      ? "text-cyan-neon shadow-glow-cyan"
+                      : isProBlocked
+                      ? "text-yellow-gold/80 group-hover:text-yellow-gold"
+                      : "text-gray-dim group-hover:text-white"
                   }`}
-                >
-                  {item.label}
-                </span>
-              </button>
-            );
+                />
+                {item.isPro && (
+                  <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+                    PRO
+                  </span>
+                )}
+              </div>
+
+              {/* Label indicator */}
+              <span
+                className={`text-[8px] font-bold tracking-tight mt-0.5 leading-none transition-colors duration-200 ${
+                  isSpotify
+                    ? "text-[#1DB954]/90 group-hover:text-[#1ED760]"
+                    : isActive
+                    ? "text-cyan-neon font-black"
+                    : "text-gray-dim/80 group-hover:text-white"
+                }`}
+              >
+                {item.label}
+              </span>
+            </button>
+          );
         })}
       </div>
     </div>

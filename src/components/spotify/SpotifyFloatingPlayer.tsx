@@ -67,6 +67,10 @@ export default function SpotifyFloatingPlayer() {
       setCustomPlaylists(savedCustom);
     }
     loadSpotifyConfig();
+
+    const handleToggle = () => setIsOpen(prev => !prev);
+    window.addEventListener("open-spotify-player", handleToggle);
+    return () => window.removeEventListener("open-spotify-player", handleToggle);
   }, []);
 
   // Helper to extract Spotify Playlist ID from URL, URI or raw ID
@@ -130,26 +134,29 @@ export default function SpotifyFloatingPlayer() {
 
   return (
     <>
-      {/* 1. Green Spotify Floating Action Button (Draggable) — only when mini-bar is NOT active */}
+      {/* 1. Spotify Collapsible Folding Tab on the Left Edge */}
       {!isOpen && !isMiniBarActive && (
-        <motion.div
-          drag
-          dragMomentum={false}
-          dragElastic={0.05}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="fixed bottom-[140px] left-6 z-[999] cursor-grab active:cursor-grabbing"
-        >
-          <div
+        <div className="fixed left-0 top-[56%] -translate-y-1/2 z-[40] scale-90 origin-left">
+          <button
             onClick={() => setIsOpen(true)}
-            className="w-[62px] h-[62px] rounded-full bg-[#1DB954] text-white flex items-center justify-center shadow-[0_0_20px_rgba(29,185,84,0.45)] border border-[#1ED760]/20 relative"
+            aria-label="Abrir Spotify"
+            className="flex flex-col items-center justify-center gap-2 py-3.5 px-1 rounded-r-2xl bg-neutral-950/95 border-y border-r border-[#1DB954]/50 shadow-[4px_0_15px_rgba(29,185,84,0.25)] cursor-pointer text-[#1DB954] hover:brightness-110 hover:border-[#1DB954] transition-all duration-300 w-8 md:w-9 select-none group"
           >
-            <Music size={26} className={isPlaying ? "animate-pulse" : ""} />
-            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-gold rounded-full border-2 border-[#1DB954] flex items-center justify-center text-[7px] text-black font-black">
-              ♫
+            <motion.div
+              animate={isPlaying ? { rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] } : {}}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="text-[#1DB954]"
+            >
+              <Music size={15} />
+            </motion.div>
+            <span 
+              className="text-[8px] font-black tracking-[0.2em] uppercase text-[#1DB954] group-hover:text-[#1ED760]" 
+              style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+            >
+              Spotify
             </span>
-          </div>
-        </motion.div>
+          </button>
+        </div>
       )}
 
       {/* 1.5 Mini Player Bar (Visible only when collapsed and active) */}
