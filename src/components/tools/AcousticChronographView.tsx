@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { 
   calculateArrowSpeed, 
-  detectAudioPeaks, 
+  detectAudioPeaksFromPCM, 
   ShotResult,
   fahrenheitToCelsius,
   celsiusToFahrenheit
@@ -45,8 +45,10 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
   // Active Listening / Recording State
   const [isRecording, setIsRecording] = useState(false);
+  const [listenStage, setListenStage] = useState<"IDLE" | "SETTLING" | "ARMED" | "CAPTURING_IMPACT">("IDLE");
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastShotResult, setLastShotResult] = useState<ShotResult | null>(null);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
 
   // Tooltip helper
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
@@ -58,9 +60,9 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   const audioCtxRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Temperature calculations
   const tempCelsius = tempUnit === "F" 
@@ -119,6 +121,11 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   // Permission request with Google Play Prominent Disclosure
   const handleRequestMeasurement = () => {
     triggerHaptic("tick");
+    if (isRecording) {
+      stopRecording();
+      setDetectionError(null);
+      return;
+    }
     if (!hasAcceptedMicDisclosure) {
       setShowMicDisclosure(true);
       return;
@@ -134,18 +141,32 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     startRecording();
   };
 
-  // Start Audio Recording / Listening for Shot at 18 Meters
+  // Start Raw PCM Audio Listening & Triggered Shot Capture at 18 Meters
   const startRecording = async () => {
     try {
+      setDetectionError(null);
       setIsRecording(true);
-      audioChunksRef.current = [];
+      setListenStage("SETTLING");
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Disable AGC, Noise Suppression & Echo Cancellation so percussive bow & target transients are NOT filtered out
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1
+        },
+        video: false
+      });
       mediaStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioCtx();
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
       audioCtxRef.current = audioCtx;
+      const sampleRate = audioCtx.sampleRate;
 
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -153,124 +174,215 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       analyserRef.current = analyser;
       source.connect(analyser);
 
-      // Volume Meter Loop
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
+      // Volume Meter Loop (Time-Domain Peak Level)
+      const timeDomainArray = new Float32Array(analyser.fftSize);
       const updateLevel = () => {
         if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
+        analyserRef.current.getFloatTimeDomainData(timeDomainArray);
+        let maxPeak = 0;
+        for (let i = 0; i < timeDomainArray.length; i++) {
+          const abs = Math.abs(timeDomainArray[i]);
+          if (abs > maxPeak) maxPeak = abs;
         }
-        const avg = sum / bufferLength;
-        setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+        setAudioLevel(Math.min(100, Math.round(Math.pow(maxPeak, 0.6) * 100)));
         animFrameRef.current = requestAnimationFrame(updateLevel);
       };
       updateLevel();
 
-      // MediaRecorder for 3.2s shot window (ample time for release + 18m flight + return sound)
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      // Raw PCM Capture using ScriptProcessorNode (2048 samples ≈ 42ms per callback)
+      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+      processorRef.current = processor;
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+      const startTimeMs = performance.now();
+      const settlingGuardMs = 450; // Ignore initial screen tap / finger noise
+      const postTriggerDurationSec = 0.72; // 720ms after bow shot covers arrows down to 110 FPS at 18m
+      const targetCaptureSamples = Math.ceil(sampleRate * (0.08 + postTriggerDurationSec));
+
+      let isTriggered = false;
+      let preTriggerChunk = new Float32Array(Math.ceil(sampleRate * 0.08)); // 80ms pre-trigger rolling buffer
+      let capturedChunks: Float32Array[] = [];
+      let capturedSampleCount = 0;
+      let rollingAmbientRms = 0.004;
+
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        const chunk = new Float32Array(input.length);
+        chunk.set(input);
+
+        const elapsedMs = performance.now() - startTimeMs;
+
+        // 1. Settling guard: ignore first 450ms (button tap noise)
+        if (elapsedMs < settlingGuardMs) {
+          return;
         }
-      };
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const arrayBuffer = await blob.arrayBuffer();
-        
-        if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-          try {
-            const decodedBuffer = await audioCtxRef.current.decodeAudioData(arrayBuffer);
+        // Transition UI badge from SETTLING to ARMED
+        if (!isTriggered) {
+          setListenStage((prev) => (prev === "SETTLING" ? "ARMED" : prev));
+        }
 
-            // Auto detect peaks using 18m ballistic acoustic parameters
-            const detected = detectAudioPeaks(decodedBuffer, distanceMeters, tempCelsius);
-            
-            const relSec = detected ? Math.round(detected.releaseSec * 1000) / 1000 : 0.20;
-            const impSec = detected 
-              ? Math.round(detected.impactSec * 1000) / 1000 
-              : Math.round((0.20 + (distanceMeters / 85) + (distanceMeters / 343)) * 1000) / 1000;
-            
-            const totalElapsed = Math.max(0.01, impSec - relSec);
-            const numWeight = Number(arrowWeight) || 420;
-            const numLength = Number(arrowLength) || 28.5;
+        // Compute chunk peak & RMS
+        let chunkPeak = 0;
+        let sumSq = 0;
+        for (let i = 0; i < chunk.length; i++) {
+          const v = Math.abs(chunk[i]);
+          if (v > chunkPeak) chunkPeak = v;
+          sumSq += v * v;
+        }
+        const chunkRms = Math.sqrt(sumSq / chunk.length);
 
-            const stats = calculateArrowSpeed(
-              totalElapsed,
-              distanceMeters,
-              tempCelsius,
-              numWeight,
-              numLength
-            );
+        if (!isTriggered) {
+          // Check if this chunk contains the sharp acoustic impulse of the bow release
+          const triggerThreshold = Math.max(0.038, rollingAmbientRms * 5.5);
+          if (chunkPeak >= triggerThreshold) {
+            isTriggered = true;
+            setListenStage("CAPTURING_IMPACT");
+            capturedChunks.push(new Float32Array(preTriggerChunk));
+            capturedChunks.push(chunk);
+            capturedSampleCount = preTriggerChunk.length + chunk.length;
+          } else {
+            // Update rolling ambient RMS floor & shift pre-trigger buffer
+            rollingAmbientRms = rollingAmbientRms * 0.85 + chunkRms * 0.15;
+            if (chunk.length >= preTriggerChunk.length) {
+              preTriggerChunk.set(chunk.subarray(chunk.length - preTriggerChunk.length));
+            } else {
+              preTriggerChunk.copyWithin(0, chunk.length);
+              preTriggerChunk.set(chunk, preTriggerChunk.length - chunk.length);
+            }
+          }
+        } else {
+          // Already triggered by bow shot: accumulate post-shot samples until 720ms window completes
+          capturedChunks.push(chunk);
+          capturedSampleCount += chunk.length;
 
-            const result: ShotResult = {
-              id: `SHOT-${Date.now()}`,
-              timestamp: Date.now(),
-              distanceMeters: 18.0,
-              distanceYards: 19.685,
-              temperatureCelsius: tempCelsius,
-              temperatureFahrenheit: tempFahrenheit,
-              arrowMassGrains: numWeight,
-              arrowLengthInches: numLength,
-              totalTimeSec: totalElapsed,
-              flightTimeSec: stats.flightTimeSec,
-              speedMps: stats.speedMps,
-              speedFps: stats.speedFps,
-              speedKmh: stats.speedKmh,
-              launchSpeedFps: stats.launchSpeedFps,
-              launchSpeedMps: stats.launchSpeedMps,
-              launchSpeedKmh: stats.launchSpeedKmh,
-              kineticEnergyFtLbs: stats.kineticEnergyFtLbs,
-              momentumSlugFtSec: stats.momentumSlugFtSec,
-              releasePeakSec: relSec,
-              impactPeakSec: impSec
-            };
+          if (capturedSampleCount >= targetCaptureSamples) {
+            // Combine chunks into a contiguous Float32Array
+            const fullBuffer = new Float32Array(capturedSampleCount);
+            let offset = 0;
+            for (const c of capturedChunks) {
+              fullBuffer.set(c, offset);
+              offset += c.length;
+            }
 
-            setLastShotResult(result);
-
-            // Automatically add to history log
-            const updated = [result, ...shotHistory];
-            setShotHistory(updated);
-            await saveLocalSetting("chronograph_logs", updated);
-
-          } catch (err) {
-            console.error("Audio decoding error:", err);
+            stopRecording();
+            processCapturedShotPCM(fullBuffer, sampleRate);
           }
         }
-        setIsRecording(false);
       };
 
-      mediaRecorder.start();
-
-      // Automatically stop recording after 3.2 seconds
-      setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-          stopRecording();
-        }
-      }, 3200);
-
+      // Safety timeout: keep listening in ARMED state for up to 20 seconds for the archer to aim & shoot
+      timeoutRef.current = setTimeout(() => {
+        stopRecording();
+        setDetectionError(
+          "No se detectó ningún disparo en 20 segundos. Presiona Medir Velocidad cuando estés listo en la línea de tiro."
+        );
+      }, 20000);
     } catch (err) {
       console.error("Microphone access error:", err);
-      alert("No se pudo acceder al micrófono. Por favor permite los permisos de audio en tu navegador.");
-      setIsRecording(false);
+      alert("No se pudo acceder al micrófono. Por favor permite los permisos de audio en tu teléfono.");
+      stopRecording();
     }
   };
 
+  const processCapturedShotPCM = async (pcmSamples: Float32Array, sampleRate: number) => {
+    const detection = detectAudioPeaksFromPCM(
+      pcmSamples,
+      sampleRate,
+      distanceMeters,
+      tempCelsius,
+      0.15
+    );
+
+    if (detection.status !== "OK") {
+      triggerHaptic("tick");
+      setDetectionError(
+        detection.reason ||
+          "No se pudo distinguir el impacto en la diana a 18m. Asegúrate de que el teléfono esté a 15 cm del arco y que el impacto en el parapeto sea audible."
+      );
+      return;
+    }
+
+    const numWeight = Number(arrowWeight) || 420;
+    const numLength = Number(arrowLength) || 28.5;
+
+    const stats = calculateArrowSpeed(
+      detection.totalTimeSec,
+      distanceMeters,
+      tempCelsius,
+      numWeight,
+      numLength,
+      0.15
+    );
+
+    const result: ShotResult = {
+      id: `SHOT-${Date.now()}`,
+      timestamp: Date.now(),
+      distanceMeters: 18.0,
+      distanceYards: 19.685,
+      temperatureCelsius: tempCelsius,
+      temperatureFahrenheit: tempFahrenheit,
+      arrowMassGrains: numWeight,
+      arrowLengthInches: numLength,
+      totalTimeSec: detection.totalTimeSec,
+      flightTimeSec: stats.flightTimeSec,
+      soundReturnTimeSec: stats.soundReturnTimeSec,
+      speedMps: stats.speedMps,
+      speedFps: stats.speedFps,
+      speedKmh: stats.speedKmh,
+      launchSpeedFps: stats.launchSpeedFps,
+      launchSpeedMps: stats.launchSpeedMps,
+      launchSpeedKmh: stats.launchSpeedKmh,
+      kineticEnergyFtLbs: stats.kineticEnergyFtLbs,
+      momentumSlugFtSec: stats.momentumSlugFtSec,
+      releasePeakSec: detection.releaseSec,
+      impactPeakSec: detection.impactSec,
+      confidence: detection.confidence
+    };
+
+    triggerHaptic("confirm");
+    setLastShotResult(result);
+
+    setShotHistory((prev) => {
+      const updated = [result, ...prev];
+      saveLocalSetting("chronograph_logs", updated);
+      return updated;
+    });
+  };
+
   const stopRecording = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
+    if (processorRef.current) {
+      processorRef.current.onaudioprocess = null;
+      try {
+        processorRef.current.disconnect();
+      } catch {}
+      processorRef.current = null;
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
     }
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      try {
+        audioCtxRef.current.close();
+      } catch {}
+      audioCtxRef.current = null;
+    }
+    setIsRecording(false);
+    setListenStage("IDLE");
+    setAudioLevel(0);
   };
 
   // Cleanup Web Audio API stream on unmount
@@ -431,25 +543,40 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
         {/* Secondary Speed Info or Status */}
         {lastShotResult ? (
-          <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
-            {speedUnit === "FPS" ? (
-              <>
-                <span className="text-white">{lastShotResult.launchSpeedKmh.toFixed(1)} <span className="text-gray-dim text-[10px]">km/h</span></span>
-                <span className="text-gray-border">•</span>
-                <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
-              </>
-            ) : (
-              <>
-                <span className="text-white">{Math.round(lastShotResult.launchSpeedFps)} <span className="text-gray-dim text-[10px]">FPS</span></span>
-                <span className="text-gray-border">•</span>
-                <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
-              </>
-            )}
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
+              {speedUnit === "FPS" ? (
+                <>
+                  <span className="text-white">{lastShotResult.launchSpeedKmh.toFixed(1)} <span className="text-gray-dim text-[10px]">km/h</span></span>
+                  <span className="text-gray-border">•</span>
+                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
+                </>
+              ) : (
+                <>
+                  <span className="text-white">{Math.round(lastShotResult.launchSpeedFps)} <span className="text-gray-dim text-[10px]">FPS</span></span>
+                  <span className="text-gray-border">•</span>
+                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-gray-dim text-[10px]">m/s</span></span>
+                </>
+              )}
+            </div>
+            <span className="text-[10px] text-cyan-neon/80 font-mono">
+              Vuelo neto: {(lastShotResult.flightTimeSec * 1000).toFixed(1)} ms · Retorno sonido: {((lastShotResult.soundReturnTimeSec ?? (lastShotResult.totalTimeSec - lastShotResult.flightTimeSec)) * 1000).toFixed(1)} ms
+            </span>
           </div>
         ) : (
           <span className="text-xs text-gray-dim">
             Presiona el botón de abajo y dispara hacia la diana a 18 metros
           </span>
+        )}
+
+        {/* Honest Diagnostic Warning if No Shot or Impact Detected */}
+        {detectionError && (
+          <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start gap-2.5 text-left">
+            <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+            <span className="text-[11px] text-amber-200 leading-snug font-medium">
+              {detectionError}
+            </span>
+          </div>
         )}
 
         {/* Ballistics Row: Kinetic Energy & Momentum */}
@@ -474,18 +601,25 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         <div className="flex flex-col gap-2 w-full mt-2 pt-3 border-t border-white/5">
           <button
             type="button"
-            disabled={isRecording}
             onClick={handleRequestMeasurement}
             className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
               isRecording 
-                ? "bg-red-500 text-white animate-pulse" 
+                ? listenStage === "CAPTURING_IMPACT"
+                  ? "bg-amber-500 text-black animate-pulse"
+                  : "bg-red-500 text-white animate-pulse" 
                 : "bg-cyan-neon text-black hover:brightness-110"
             }`}
           >
             {isRecording ? (
               <>
                 <Volume2 size={18} className="animate-spin" />
-                <span>Escuchando Disparo a 18 Metros ({audioLevel}%)</span>
+                <span>
+                  {listenStage === "SETTLING"
+                    ? "Calibrando silencio..."
+                    : listenStage === "CAPTURING_IMPACT"
+                    ? "¡Disparo detectado! Midiendo impacto a 18m..."
+                    : `Armado: Esperando tu Disparo (${audioLevel}%) · Toca para cancelar`}
+                </span>
               </>
             ) : (
               <>
@@ -496,7 +630,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           </button>
           <span className="text-[10px] text-gray-dim text-center">
             {isRecording 
-              ? "¡Dispara ahora! El micrófono está detectando el sonido de la suelta y el impacto a 18m." 
+              ? "Tienes hasta 20 segundos para apuntar con calma y disparar. Se activará al detectar la suelta." 
               : "Distancia reglamentaria: 18 metros medidos con cinta métrica."}
           </span>
         </div>
@@ -639,7 +773,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span>Disparo y Cálculo por Sonido</span>
                   </h4>
                   <p className="text-[11px] pl-6 text-white/70">
-                    Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong> y realiza el disparo dentro de los 3 segundos.
+                    Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong>; el cronógrafo quedará armado hasta por 20 segundos esperando a que apuntes con calma y dispares. Al detectar la suelta, capturará automáticamente el impacto a 18 metros.
                   </p>
                 </div>
               </div>
