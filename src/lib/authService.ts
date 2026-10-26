@@ -1,6 +1,14 @@
 import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
-import { db } from "./firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "./firebase";
+import { collection, doc, getDoc, query, where, getDocs } from "firebase/firestore";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+  deleteUser,
+  updateProfile as updateFirebaseAuthProfile
+} from "firebase/auth";
 
 export interface BowConfig {
   id?: string;
@@ -40,18 +48,12 @@ export interface UserProfile {
   isClubCreator: boolean;
   whatsappNumber?: string;
   clubInviteCode?: string;
-  password?: string;
   profileSetupCompleted?: boolean;
   lastActiveAt?: number;
   createdAt?: number;
 }
 
-// Emulates real backend Firebase calls using local DB to support zero-config developer onboarding
-export async function getLoggedUser(): Promise<UserProfile | null> {
-  return await getLocalSetting<UserProfile | null>("current_user", null);
-}
-
-const LOGIN_TIMEOUT_MS = 3000; // 3 seconds timeout
+const LOGIN_TIMEOUT_MS = 5000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
@@ -74,155 +76,180 @@ function isProfileValid(u: UserProfile | null | undefined): boolean {
   );
 }
 
+function sanitizeUserProfile(u: any): UserProfile {
+  const copy = { ...u };
+  delete copy.password;
+  delete copy.actAsCoach;
+  return copy as UserProfile;
+}
+
+function translateFirebaseAuthError(err: any): string {
+  const code = err?.code || "";
+  if (
+    code === "auth/invalid-credential" ||
+    code === "auth/wrong-password" ||
+    code === "auth/user-not-found"
+  ) {
+    return "Correo o contraseña incorrectos. Si aún no tienes cuenta, pulsa 'Registrarse'.";
+  }
+  if (code === "auth/email-already-in-use") {
+    return "Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.";
+  }
+  if (code === "auth/weak-password") {
+    return "La contraseña debe tener al menos 6 caracteres.";
+  }
+  if (code === "auth/invalid-email") {
+    return "El formato del correo electrónico no es válido.";
+  }
+  if (code === "auth/too-many-requests") {
+    return "Demasiados intentos fallidos. Por seguridad, espera unos minutos o restablece tu contraseña.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "Error de conexión. Verifica tu acceso a internet e inténtalo de nuevo.";
+  }
+  if (code === "auth/requires-recent-login") {
+    return "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta.";
+  }
+  return err?.message || "Error de autenticación.";
+}
+
+export async function getLoggedUser(): Promise<UserProfile | null> {
+  const u = await getLocalSetting<UserProfile | null>("current_user", null);
+  if (!u) return null;
+  return sanitizeUserProfile(u);
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) {
+    throw new Error("Ingresa tu correo electrónico para enviarte el enlace de recuperación.");
+  }
+  try {
+    await sendPasswordResetEmail(auth, cleanEmail);
+  } catch (err: any) {
+    throw new Error(translateFirebaseAuthError(err));
+  }
+}
+
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
   const normalizedEmail = email.trim().toLowerCase();
-  const isAdminInput = normalizedEmail === "admin101010" || 
-                       normalizedEmail === "admin@archery101010.com" || 
-                       normalizedEmail === "admin101010@archery101010.com";
+  const isAdminEmail =
+    normalizedEmail === "admin101010" ||
+    normalizedEmail === "admin@archery101010.com" ||
+    normalizedEmail === "admin101010@archery101010.com";
 
-  const targetEmail = isAdminInput ? "admin@archery101010.com" : normalizedEmail;
+  const targetEmail = normalizedEmail === "admin101010" ? "admin@archery101010.com" : normalizedEmail;
 
-  if (isAdminInput) {
-    if (password !== "Rod@admin26") {
-      throw new Error("Contraseña incorrecta. Solo el administrador puede iniciar sesión aquí.");
+  if (!password) {
+    throw new Error("Por favor ingresa tu contraseña.");
+  }
+
+  let authUid = "";
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
+
+  // 1. Authenticate with Firebase Authentication (server-side password verification)
+  if (isOnline) {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, targetEmail, password);
+      authUid = cred.user.uid;
+    } catch (authErr: any) {
+      throw new Error(translateFirebaseAuthError(authErr));
+    }
+  } else {
+    // Offline fallback: only allow if this user is already the active Firebase Auth session on this device
+    if (auth.currentUser && (auth.currentUser.email || "").toLowerCase() === targetEmail) {
+      authUid = auth.currentUser.uid;
+    } else {
+      throw new Error("Se requiere conexión a internet para verificar tus credenciales de inicio de sesión.");
     }
   }
 
   let user: UserProfile | undefined = undefined;
 
-  // 1. Try to fetch from Firestore if online to enable real-time multi-device sync
-  if (typeof navigator !== "undefined" && navigator.onLine) {
+  // 2. Fetch user profile from Firestore by UID (or email fallback)
+  if (isOnline && authUid) {
     try {
-      // Check if the api key is the mock placeholder to prevent hanging on mock environments
-      const isLocalhost = typeof window !== "undefined" && 
-                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
-      
-      if (!isMockFirebase) {
+      const directSnap = await withTimeout(getDoc(doc(db, "users", authUid)), LOGIN_TIMEOUT_MS);
+      if (directSnap.exists()) {
+        user = sanitizeUserProfile(directSnap.data());
+      } else {
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
-          const remoteUser = querySnapshot.docs[0].data() as UserProfile;
-          
-          // Save/update in local simulated list to keep it updated offline
-          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || (u.email || "").toLowerCase() === (remoteUser.email || "").toLowerCase());
-          
-          if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
-            console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
-            user = { ...remoteUser, ...localUser, profileSetupCompleted: true };
-          } else {
-            user = remoteUser;
-          }
-          
-          const idx = localUsers.findIndex((u) => u.uid === user!.uid);
-          if (idx !== -1) {
-            localUsers[idx] = user;
-          } else {
-            localUsers.push(user);
-          }
-          await saveLocalSetting("simulated_users", localUsers);
+          user = sanitizeUserProfile({
+            ...querySnapshot.docs[0].data(),
+            uid: authUid
+          });
         }
       }
+
+      if (user) {
+        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const localUser = localUsers.find(
+          (u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail
+        );
+        if (localUser && isProfileValid(localUser) && !isProfileValid(user)) {
+          user = sanitizeUserProfile({ ...user, ...localUser, uid: authUid, profileSetupCompleted: true });
+        }
+        const cleanedList = localUsers
+          .filter((u) => u.uid !== authUid && (u.email || "").toLowerCase() !== targetEmail)
+          .map(sanitizeUserProfile);
+        cleanedList.push(user);
+        await saveLocalSetting("simulated_users", cleanedList);
+      }
     } catch (err) {
-      console.warn("Firestore user fetch timed out or failed, falling back to local database:", err);
+      console.warn("Firestore user fetch timed out or failed, falling back to local cache:", err);
     }
   }
 
-  // 2. Fallback to local IndexedDB store if offline or not found in Firestore
+  // 3. Fallback to local IndexedDB cache if Firestore had no document yet
   if (!user) {
     const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    user = usersList.find((u) => (u.email || "").toLowerCase() === targetEmail);
+    const cached = usersList.find(
+      (u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail
+    );
+    if (cached) {
+      user = sanitizeUserProfile({ ...cached, uid: authUid || cached.uid });
+    }
   }
 
-  // 3. If user exists, validate password
-  if (user) {
-    if (isAdminInput && password !== "Rod@admin26") {
-      throw new Error("Contraseña incorrecta. Solo el administrador puede iniciar sesión aquí.");
-    }
-    if (user.password) {
-      if (!password || user.password !== password) {
-        throw new Error("Contraseña incorrecta. Por favor intenta de nuevo.");
-      }
-    }
-  } else {
-    // 4. Create default profile depending on the input type
-    if (isAdminInput) {
-      user = {
-        uid: "USR-SUPERADMIN-ADMIN101010",
-        email: "admin@archery101010.com",
-        fullName: "Admin101010",
-        nickname: "admin",
-        birthDate: "1990-01-01",
-        country: "CR",
-        city: "San José",
-        gender: "M",
-        bowConfig: {
-          type: "Barebow",
-          brand: "Hoyt",
-          model: "Satori",
-          poundage: 40,
-          defaultDistance: 18
-        },
-        physicalData: {
-          height: 180,
-          weight: 75,
-          dominantEye: "R",
-          dominantHand: "R"
-        },
-        clubId: null,
-        clubName: null,
-        role: "superadmin",
-        plan: "PRO",
-        isClubCreator: false,
-        password: "Rod@admin26",
-        profileSetupCompleted: true
-      };
-    } else {
-      const isSocialLogin = targetEmail.includes("google-user") || targetEmail.includes("facebook-user");
-      if (isSocialLogin) {
-        const providerName = targetEmail.includes("google") ? "Google User" : "Facebook User";
-        user = {
-          uid: generateResilientId("USR"),
-          email: targetEmail,
-          fullName: providerName,
-          nickname: "",
-          birthDate: "1995-05-15",
-          country: "CR",
-          city: "",
-          gender: "M",
-          bowConfig: {
-            type: "Barebow",
-            brand: "Hoyt",
-            model: "Satori",
-            poundage: 35,
-            defaultDistance: 18
-          },
-          physicalData: {
-            height: 175,
-            weight: 70,
-            dominantEye: "R",
-            dominantHand: "R"
-          },
-          clubId: null,
-          clubName: null,
-          role: "archer",
-          plan: "FREE",
-          isClubCreator: false,
-          profileSetupCompleted: false
-        };
-      } else {
-        // Enforce registration for normal users
-        throw new Error("El correo ingresado no está registrado. Por favor, ve a la opción 'Registrarse' para crear una cuenta.");
-      }
-    }
+  // 4. If authenticated in Firebase Auth but profile doc doesn't exist yet, initialize it
+  if (!user && authUid) {
+    user = {
+      uid: authUid,
+      email: targetEmail,
+      fullName: auth.currentUser?.displayName || (isAdminEmail ? "Admin101010" : "Arquero"),
+      nickname: isAdminEmail ? "admin" : "",
+      birthDate: "1995-05-15",
+      country: "CR",
+      city: "San José",
+      gender: "M",
+      bowConfig: {
+        type: "Barebow",
+        brand: "Hoyt",
+        model: "Satori",
+        poundage: 35,
+        defaultDistance: 18
+      },
+      physicalData: {
+        height: 175,
+        weight: 70,
+        dominantEye: "R",
+        dominantHand: "R"
+      },
+      clubId: null,
+      clubName: null,
+      role: isAdminEmail ? "superadmin" : "archer",
+      plan: "PRO",
+      isClubCreator: false,
+      profileSetupCompleted: isAdminEmail,
+      createdAt: Date.now()
+    };
 
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
-    // Queue new user profile to Firestore sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "users",
@@ -233,6 +260,14 @@ export async function loginUser(email: string, password?: string): Promise<UserP
     });
   }
 
+  if (!user) {
+    throw new Error("No se encontró el perfil del usuario.");
+  }
+
+  if (isAdminEmail && user.role !== "superadmin") {
+    user.role = "superadmin";
+  }
+
   await migrateOfflineGuestData(user.uid);
   await saveLocalSetting("current_user", user);
   return user;
@@ -241,9 +276,25 @@ export async function loginUser(email: string, password?: string): Promise<UserP
 export async function registerUser(
   profileData: Omit<UserProfile, "uid" | "role" | "plan" | "isClubCreator" | "clubInviteCode"> & { password?: string; actAsCoach?: boolean }
 ): Promise<UserProfile> {
-  const uid = generateResilientId("USR");
-  
-  // Rule 8: Es coach si es mayor de edad (>=18 años) y es el que se registra de primero en un club que crea
+  const normalizedEmail = profileData.email.trim().toLowerCase();
+  const rawPassword = profileData.password;
+
+  if (!rawPassword || rawPassword.length < 6) {
+    throw new Error("La contraseña debe tener al menos 6 caracteres.");
+  }
+
+  // 1. Create account in Firebase Authentication so UID matches request.auth.uid in Firestore rules
+  let uid = "";
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, rawPassword);
+    uid = cred.user.uid;
+    if (profileData.fullName) {
+      await updateFirebaseAuthProfile(cred.user, { displayName: profileData.fullName.trim() }).catch(() => {});
+    }
+  } catch (authErr: any) {
+    throw new Error(translateFirebaseAuthError(authErr));
+  }
+
   // Calculate age
   const birthDate = new Date(profileData.birthDate);
   const today = new Date();
@@ -254,51 +305,56 @@ export async function registerUser(
   }
 
   const isAdult = age >= 18;
-  
-  let finalRole: UserProfile["role"] = "archer";
+  const isAdminEmail =
+    normalizedEmail === "admin@archery101010.com" ||
+    normalizedEmail === "admin101010@archery101010.com";
+
+  let finalRole: UserProfile["role"] = isAdminEmail ? "superadmin" : "archer";
   let isCreator = false;
   let inviteCode = "";
   let clubLogo = profileData.clubLogo || "0";
   let clubCountry = profileData.clubCountry || profileData.country;
 
-  // Extract actAsCoach to avoid adding it to the final UserProfile object
-  const { actAsCoach, ...userFields } = profileData;
+  // Strip password and actAsCoach so they are NEVER saved in UserProfile
+  const { actAsCoach, password: _discardedPassword, ...userFields } = profileData;
 
-  if (profileData.clubId === "CREATE_NEW" && isAdult) {
-    finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
-    isCreator = true;
-    userFields.clubId = generateResilientId("CLB");
-    inviteCode = `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-  } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
-    // If minor, they cannot create a club, default to independent archer
-    userFields.clubId = null;
-    userFields.clubName = null;
-    finalRole = "archer";
-  } else if (profileData.clubId && profileData.clubId !== "NONE") {
-    // Joining an existing club via invite code
-    finalRole = "archer";
-    const invite = profileData.clubId; // the invite code entered
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const clubCoach = usersList.find((u) => (u.role === "coach" || u.role === "team_admin_coach") && u.clubInviteCode === invite);
-    if (clubCoach) {
-      userFields.clubId = clubCoach.clubId;
-      userFields.clubName = clubCoach.clubName;
-      clubLogo = clubCoach.clubLogo || "0";
-      clubCountry = clubCoach.clubCountry || clubCoach.country;
+  if (!isAdminEmail) {
+    if (profileData.clubId === "CREATE_NEW" && isAdult) {
+      finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
+      isCreator = true;
+      userFields.clubId = generateResilientId("CLB");
+      inviteCode = `INV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
+      userFields.clubId = null;
+      userFields.clubName = null;
+      finalRole = "archer";
+    } else if (profileData.clubId && profileData.clubId !== "NONE") {
+      finalRole = "archer";
+      const invite = profileData.clubId;
+      const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+      const clubCoach = usersList.find((u) => (u.role === "coach" || u.role === "team_admin_coach") && u.clubInviteCode === invite);
+      if (clubCoach) {
+        userFields.clubId = clubCoach.clubId;
+        userFields.clubName = clubCoach.clubName;
+        clubLogo = clubCoach.clubLogo || "0";
+        clubCountry = clubCoach.clubCountry || clubCoach.country;
+      } else {
+        userFields.clubId = "CLB-JOINED";
+        userFields.clubName = "Club Unido";
+      }
     } else {
-      // fallback
-      userFields.clubId = "CLB-JOINED";
-      userFields.clubName = "Club Unido";
+      userFields.clubId = null;
+      userFields.clubName = null;
+      finalRole = "archer";
     }
   } else {
-    // Independent
     userFields.clubId = null;
     userFields.clubName = null;
-    finalRole = "archer";
   }
 
-  const newProfile: UserProfile = {
+  const newProfile: UserProfile = sanitizeUserProfile({
     ...userFields,
+    email: normalizedEmail,
     uid,
     role: finalRole,
     plan: "PRO", // Promoción de Lanzamiento: Acceso PRO 100% gratuito para nuevos usuarios pioneros
@@ -306,7 +362,6 @@ export async function registerUser(
     clubInviteCode: inviteCode,
     clubLogo,
     clubCountry,
-    password: profileData.password,
     profileSetupCompleted: true,
     bowConfig: profileData.bowConfig || {
       type: "Barebow",
@@ -322,14 +377,16 @@ export async function registerUser(
       dominantHand: "R"
     },
     createdAt: Date.now()
-  };
+  });
 
-  // Save to database lists
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  // Save to local cache without plaintext password
+  const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", []))
+    .filter((u) => u.uid !== uid && (u.email || "").toLowerCase() !== normalizedEmail)
+    .map(sanitizeUserProfile);
   usersList.push(newProfile);
   await saveLocalSetting("simulated_users", usersList);
 
-  // Queue to Firestore sync queue
+  // Queue to Firestore sync queue (document ID == Firebase Auth UID)
   await addToSyncQueue({
     id: generateResilientId("TXN"),
     collection: "users",
@@ -339,15 +396,15 @@ export async function registerUser(
     timestamp: Date.now()
   });
 
-  // Set as current logged user
+  await migrateOfflineGuestData(newProfile.uid);
   await saveLocalSetting("current_user", newProfile);
   return newProfile;
 }
 
 export async function updateProfile(uid: string, updates: Partial<UserProfile>): Promise<UserProfile> {
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
   let index = usersList.findIndex((u) => u.uid === uid);
-  
+
   let currentLogged = await getLoggedUser();
 
   if (index === -1 && currentLogged && currentLogged.uid === uid) {
@@ -356,12 +413,12 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   }
 
   if (index !== -1) {
-    const updatedUser = { ...usersList[index], ...updates, profileSetupCompleted: true };
+    const updatedUser = sanitizeUserProfile({ ...usersList[index], ...updates, profileSetupCompleted: true });
 
     // Propagation: If Coach/Admin updates club name, country or logo, cascade to all club members
     if (
-      (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") && 
-      updatedUser.clubId && 
+      (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") &&
+      updatedUser.clubId &&
       (updates.clubName !== undefined || updates.clubLogo !== undefined || updates.clubCountry !== undefined)
     ) {
       for (let i = 0; i < usersList.length; i++) {
@@ -376,7 +433,6 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     usersList[index] = updatedUser;
     await saveLocalSetting("simulated_users", usersList);
 
-    // Queue update to Firestore sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "users",
@@ -385,10 +441,9 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
       payload: updatedUser,
       timestamp: Date.now()
     });
-    
+
     if (currentLogged && currentLogged.uid === uid) {
-      // Refresh current user cache with all propagated changes too
-      currentLogged = { ...currentLogged, ...updates, profileSetupCompleted: true };
+      currentLogged = sanitizeUserProfile({ ...currentLogged, ...updates, profileSetupCompleted: true });
       if (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") {
         currentLogged.clubLogo = updatedUser.clubLogo;
         currentLogged.clubCountry = updatedUser.clubCountry;
@@ -400,10 +455,9 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   }
 
   if (currentLogged && currentLogged.uid === uid) {
-    const updated = { ...currentLogged, ...updates, profileSetupCompleted: true };
+    const updated = sanitizeUserProfile({ ...currentLogged, ...updates, profileSetupCompleted: true });
     await saveLocalSetting("current_user", updated);
 
-    // Queue update to Firestore sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "users",
@@ -425,14 +479,13 @@ export async function transferCoachRole(newCoachUid: string): Promise<boolean> {
     return false;
   }
 
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
   const newCoachIndex = usersList.findIndex((u) => u.uid === newCoachUid && u.clubId === currentLogged.clubId);
 
   if (newCoachIndex === -1) {
     return false;
   }
 
-  // Calculate age of new coach
   const birthDate = new Date(usersList[newCoachIndex].birthDate);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -442,26 +495,21 @@ export async function transferCoachRole(newCoachUid: string): Promise<boolean> {
   }
 
   if (age < 18) {
-    // New coach must be an adult
     return false;
   }
 
-  // Perform transfer
   const oldCoachIndex = usersList.findIndex((u) => u.uid === currentLogged.uid);
 
   if (oldCoachIndex !== -1) {
-    // Current coach becomes archer
     usersList[oldCoachIndex].role = "archer";
     usersList[oldCoachIndex].isClubCreator = false;
   }
 
-  // Target member becomes coach
   usersList[newCoachIndex].role = "coach";
   usersList[newCoachIndex].isClubCreator = true;
 
   await saveLocalSetting("simulated_users", usersList);
 
-  // Update session state of the logged-in user (who is now an archer)
   const updatedCurrentLogged: UserProfile = {
     ...currentLogged,
     role: "archer",
@@ -473,6 +521,11 @@ export async function transferCoachRole(newCoachUid: string): Promise<boolean> {
 }
 
 export async function logoutUser(): Promise<void> {
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.warn("Firebase signOut warning:", err);
+  }
   await saveLocalSetting("current_user", null);
 }
 
@@ -483,15 +536,15 @@ export async function logoutUser(): Promise<void> {
 export async function deleteUserAccount(uid: string): Promise<void> {
   // 1. Remove user from local simulated_users list
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-  const filteredUsers = usersList.filter((u) => u.uid !== uid);
+  const filteredUsers = usersList.filter((u) => u.uid !== uid).map(sanitizeUserProfile);
   await saveLocalSetting("simulated_users", filteredUsers);
 
-  // 2. Delete all local sessions belonging to this user
+  // 2. Delete all local sessions belonging specifically to this user
   try {
     const { deleteLocalSession, athleteStarsStore } = await import("./db/indexedDB");
     const localSessions = await getLocalSessions();
     for (const sess of localSessions) {
-      if (!sess.userUid || sess.userUid === uid) {
+      if (sess.userId === uid || sess.userUid === uid) {
         await deleteLocalSession(sess.id);
         await addToSyncQueue({
           id: generateResilientId("TXN"),
@@ -508,26 +561,51 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     console.warn("Error cleaning local sessions during account deletion:", err);
   }
 
-  // 3. Queue user deletion in Sync Queue & attempt direct Firestore deletion if online
-  await addToSyncQueue({
-    id: generateResilientId("TXN"),
-    collection: "users",
-    operation: "DELETE",
-    payloadId: uid,
-    payload: { uid },
-    timestamp: Date.now()
-  });
-
+  // 3. Delete cloud sessions, stars, and user profile in Firestore if online
   if (typeof navigator !== "undefined" && navigator.onLine) {
     try {
-      const { doc, deleteDoc } = await import("firebase/firestore");
-      await deleteDoc(doc(db, "users", uid));
+      const { deleteDoc } = await import("firebase/firestore");
+      // Delete all sessions of this user across any device in Firestore
+      const sessQuery = query(collection(db, "sessions"), where("userId", "==", uid));
+      const sessSnap = await withTimeout(getDocs(sessQuery), LOGIN_TIMEOUT_MS);
+      for (const sDoc of sessSnap.docs) {
+        await deleteDoc(doc(db, "sessions", sDoc.id)).catch(() => {});
+      }
+      // Delete athlete stars & user profile document
+      await deleteDoc(doc(db, "athlete_stars", uid)).catch(() => {});
+      await deleteDoc(doc(db, "users", uid)).catch(() => {});
     } catch (err) {
-      console.warn("Direct Firestore user delete deferred to sync queue:", err);
+      console.warn("Direct Firestore cleanup deferred to sync queue:", err);
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "DELETE",
+        payloadId: uid,
+        payload: { uid },
+        timestamp: Date.now()
+      });
     }
+
+    // 4. Delete Firebase Authentication user record
+    try {
+      if (auth.currentUser && auth.currentUser.uid === uid) {
+        await deleteUser(auth.currentUser);
+      }
+    } catch (authDelErr) {
+      console.warn("Firebase Auth user delete warning:", authDelErr);
+    }
+  } else {
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "DELETE",
+      payloadId: uid,
+      payload: { uid },
+      timestamp: Date.now()
+    });
   }
 
-  // 4. Clear active session
+  // 5. Clear active session
   await saveLocalSetting("current_user", null);
 }
 
@@ -537,41 +615,43 @@ export function isSuperAdmin(user: UserProfile | null): boolean {
 
 export async function loginSocialUser(email: string, displayName: string): Promise<UserProfile> {
   const targetEmail = email.trim().toLowerCase();
+  const authUid = auth.currentUser?.uid || generateResilientId("USR");
   let user: UserProfile | undefined = undefined;
 
   // 1. Try to fetch from Firestore if online
   if (typeof navigator !== "undefined" && navigator.onLine) {
     try {
-      const isLocalhost = typeof window !== "undefined" && 
-                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
-      
-      if (!isMockFirebase) {
+      const directSnap = await withTimeout(getDoc(doc(db, "users", authUid)), LOGIN_TIMEOUT_MS);
+      if (directSnap.exists()) {
+        user = sanitizeUserProfile(directSnap.data());
+      } else {
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
-          const remoteUser = querySnapshot.docs[0].data() as UserProfile;
-          
-          // Save/update in local simulated list
-          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const localUser = localUsers.find((u) => u.uid === remoteUser.uid || (u.email || "").toLowerCase() === (remoteUser.email || "").toLowerCase());
-          
-          if (localUser && isProfileValid(localUser) && !isProfileValid(remoteUser)) {
-            console.warn("[Auth] Local profile is complete, but remote is incomplete. Merging local fields to prevent setup loop.");
-            user = { ...remoteUser, ...localUser, profileSetupCompleted: true };
-          } else {
-            user = remoteUser;
-          }
-          
-          const idx = localUsers.findIndex((u) => u.uid === user!.uid);
-          if (idx !== -1) {
-            localUsers[idx] = user;
-          } else {
-            localUsers.push(user);
-          }
-          await saveLocalSetting("simulated_users", localUsers);
+          user = sanitizeUserProfile({
+            ...querySnapshot.docs[0].data(),
+            uid: authUid
+          });
         }
+      }
+
+      if (user) {
+        const localUsers = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+        const localUser = localUsers.find(
+          (u) => u.uid === user!.uid || (u.email || "").toLowerCase() === targetEmail
+        );
+
+        if (localUser && isProfileValid(localUser) && !isProfileValid(user)) {
+          user = sanitizeUserProfile({ ...user, ...localUser, uid: authUid, profileSetupCompleted: true });
+        }
+
+        const idx = localUsers.findIndex((u) => u.uid === user!.uid);
+        if (idx !== -1) {
+          localUsers[idx] = user;
+        } else {
+          localUsers.push(user);
+        }
+        await saveLocalSetting("simulated_users", localUsers);
       }
     } catch (err) {
       console.warn("Firestore user fetch failed, falling back to local database:", err);
@@ -580,14 +660,14 @@ export async function loginSocialUser(email: string, displayName: string): Promi
 
   // 2. Fallback to local IndexedDB store
   if (!user) {
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    user = usersList.find((u) => (u.email || "").toLowerCase() === targetEmail);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+    user = usersList.find((u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail);
   }
 
   // 3. Create default profile if user doesn't exist anywhere
   if (!user) {
     user = {
-      uid: generateResilientId("USR"),
+      uid: authUid,
       email: targetEmail,
       fullName: displayName || "Usuario Social",
       nickname: "",
@@ -611,16 +691,16 @@ export async function loginSocialUser(email: string, displayName: string): Promi
       clubId: null,
       clubName: null,
       role: "archer",
-      plan: "FREE",
+      plan: "PRO",
       isClubCreator: false,
-      profileSetupCompleted: false
+      profileSetupCompleted: false,
+      createdAt: Date.now()
     };
 
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
-    // Queue new user profile to Firestore sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "users",
@@ -674,13 +754,14 @@ export async function loginGuestOffline(): Promise<UserProfile> {
 export async function migrateOfflineGuestData(newUid: string): Promise<void> {
   try {
     const localSessions = await getLocalSessions();
-    const guestSessions = localSessions.filter(s => s.userUid === "USR-GUEST-OFFLINE");
-    
+    const guestSessions = localSessions.filter(
+      (s) => s.userId === "USR-GUEST-OFFLINE" || s.userUid === "USR-GUEST-OFFLINE"
+    );
+
     for (const session of guestSessions) {
-      const updatedSession = { ...session, userUid: newUid };
-      // Save updated session
+      const updatedSession = { ...session, userId: newUid };
+      delete updatedSession.userUid;
       await saveLocalSession(session.id, updatedSession);
-      // Queue sync
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "sessions",
@@ -718,15 +799,11 @@ export async function joinClubByInviteCode(
   // 2. Fallback: Search Firestore if available
   if (!clubCoach) {
     try {
-      const { db } = await import("@/lib/firebase");
-      const { collection, getDocs, query, where } = await import("firebase/firestore");
-      // Search by inviteCode
       const q1 = query(collection(db, "users"), where("clubInviteCode", "==", cleanCode));
       const snap1 = await getDocs(q1);
       if (!snap1.empty) {
         clubCoach = snap1.docs[0].data() as UserProfile;
       } else {
-        // Search by clubId
         const q2 = query(collection(db, "users"), where("clubId", "==", cleanCode));
         const snap2 = await getDocs(q2);
         if (!snap2.empty) {
@@ -768,4 +845,3 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
   });
   return { success: true, user: updated };
 }
-

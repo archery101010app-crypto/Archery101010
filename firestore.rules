@@ -28,7 +28,6 @@ service cloud.firestore {
     //   - clubInviteCode: string (optional, 0-50 chars)
     //   - isClubCreator: bool (optional)
     //   - whatsappNumber: string (optional, 0-30 chars)
-    //   - password: string (optional, 0-100 chars)
     //   - profileSetupCompleted: bool (optional)
     //   - bowConfig: map (optional)
     //   - bows: list (optional, max 10 items)
@@ -62,6 +61,7 @@ service cloud.firestore {
     //   - restoredByCoach: bool (optional)
     //   - isVolumeOnly: bool (optional)
     //   - isDraft: bool (optional)
+    //   - singleBlockSaved: bool (optional)
     //   - updatedAt: number / timestamp (optional)
     //
     // Collection: calendar_events
@@ -216,7 +216,6 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        request.auth.uid == 'USR-SUPERADMIN-ADMIN101010' ||
         request.auth.token.get('superadmin', false) == true ||
         request.auth.token.get('role', '') == 'superadmin' ||
         (request.auth.token.email != null &&
@@ -296,7 +295,6 @@ service cloud.firestore {
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalBool(data, 'isClubCreator') &&
         validOptionalString(data, 'whatsappNumber', 0, 30) &&
-        validOptionalString(data, 'password', 0, 100) &&
         validOptionalBool(data, 'profileSetupCompleted') &&
         validOptionalMap(data, 'bowConfig') &&
         validOptionalList(data, 'bows', 10) &&
@@ -330,6 +328,7 @@ service cloud.firestore {
         validOptionalBool(data, 'restoredByCoach') &&
         validOptionalBool(data, 'isVolumeOnly') &&
         validOptionalBool(data, 'isDraft') &&
+        validOptionalBool(data, 'singleBlockSaved') &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
@@ -496,8 +495,8 @@ service cloud.firestore {
         isValidUser(request.resource.data) &&
         (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin'));
 
-      // Only superadmins can delete user profiles
-      allow delete: if isSuperAdmin();
+      // Users can delete their own profile; superadmins can delete any profile
+      allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
     }
 
     // 2. Sessions Collection
@@ -581,7 +580,7 @@ service cloud.firestore {
         request.resource.data.userId == resource.data.userId &&
         isValidAthleteStar(request.resource.data);
 
-      allow delete: if isSuperAdmin();
+      allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
     }
 
     // 6. Star History Collection (doc id: historyId)
@@ -599,7 +598,7 @@ service cloud.firestore {
         request.resource.data.userId == resource.data.userId &&
         isValidStarHistory(request.resource.data);
 
-      allow delete: if isSuperAdmin();
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isSuperAdmin());
     }
 
     // 7. Active Duels Collection (doc id: roomCode)

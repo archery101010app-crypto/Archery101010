@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { loginUser, loginSocialUser, UserProfile } from "@/lib/authService";
-import { Mail, Lock, AlertCircle, X, Eye, EyeOff } from "lucide-react";
+import { loginUser, loginSocialUser, sendPasswordReset, UserProfile } from "@/lib/authService";
+import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
@@ -20,6 +20,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [resetSuccessMsg, setResetSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Connection and bypass states
@@ -104,29 +105,48 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     checkRedirect();
   }, [onLoginSuccess]);
 
-  // Check if typed email matches a local social account with no password
+  // Check if offline and typed email matches the active Firebase Auth session on this device
   useEffect(() => {
-    async function checkSocialBypass() {
-      if (!isOnline && email) {
+    async function checkOfflineSessionResume() {
+      if (!isOnline && email && auth.currentUser) {
         try {
-          const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const matched = usersList.find(
-            (u) => (u.email || "").toLowerCase() === email.trim().toLowerCase()
-          );
-          if (matched && !matched.password) {
-            setIsSocialBypassAvailable(true);
-            setBypassUser(matched);
-            return;
+          const activeAuthEmail = (auth.currentUser.email || "").toLowerCase();
+          if (activeAuthEmail && activeAuthEmail === email.trim().toLowerCase()) {
+            const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+            const matched = usersList.find((u) => u.uid === auth.currentUser?.uid || (u.email || "").toLowerCase() === activeAuthEmail);
+            if (matched) {
+              setIsSocialBypassAvailable(true);
+              setBypassUser(matched);
+              return;
+            }
           }
         } catch (err) {
-          console.error("Error checking social bypass list:", err);
+          console.error("Error checking offline session resume:", err);
         }
       }
       setIsSocialBypassAvailable(false);
       setBypassUser(null);
     }
-    checkSocialBypass();
+    checkOfflineSessionResume();
   }, [email, isOnline]);
+
+  const handlePasswordReset = async () => {
+    setError("");
+    setResetSuccessMsg("");
+    if (!email.trim()) {
+      setError("Escribe tu correo electrónico arriba y luego pulsa '¿Olvidaste tu contraseña?'.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordReset(email);
+      setResetSuccessMsg("Te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.");
+    } catch (err: any) {
+      setError(err.message || "No se pudo enviar el correo de recuperación.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBypassLogin = async () => {
     if (!bypassUser) return;
@@ -351,8 +371,15 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
         {error && (
           <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3 flex items-center gap-2 text-red-rival text-sm">
-            <AlertCircle size={18} />
+            <AlertCircle size={18} className="shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {resetSuccessMsg && (
+          <div className="bg-cyan-neon/10 border border-cyan-neon/40 rounded-xl p-3 flex items-center gap-2 text-cyan-neon text-xs">
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span>{resetSuccessMsg}</span>
           </div>
         )}
 
@@ -389,6 +416,16 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               className="absolute right-4 text-gray-dim hover:text-white transition cursor-pointer"
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+
+          <div className="flex justify-end -mt-1.5">
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              className="text-[11px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
             </button>
           </div>
 

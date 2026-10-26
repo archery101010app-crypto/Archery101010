@@ -131,25 +131,30 @@ export default function Home() {
       try {
         const loggedUser = await getLoggedUser();
         
-        // Helper to check for simulated/demo accounts
-        const isDemoUser = (u: any) => {
+        // Helper to check for simulated/demo or legacy non-Firebase-Auth accounts
+        const isLegacyOrDemoUser = (u: any) => {
           if (!u) return false;
           const name = (u.fullName || "").toLowerCase();
           const email = (u.email || "").toLowerCase();
-          const uid = (u.uid || "").toLowerCase();
-          return name.includes("demo") || 
+          const uid = String(u.uid || "");
+          const uidLower = uid.toLowerCase();
+          const isSyntheticLegacyUid = uid.startsWith("USR-") && uid !== "USR-GUEST-OFFLINE";
+          const hasPlaintextPassword = typeof u.password === "string" && u.password.length > 0;
+          return isSyntheticLegacyUid ||
+                 hasPlaintextPassword ||
+                 name.includes("demo") || 
                  name.includes("google-user") || 
                  name.includes("facebook-user") ||
                  email.includes("demo") || 
                  email.includes("google-user") || 
                  email.includes("facebook-user") ||
-                 uid.includes("demo") ||
-                 uid.includes("google-user") ||
-                 uid.includes("facebook-user");
+                 uidLower.includes("demo") ||
+                 uidLower.includes("google-user") ||
+                 uidLower.includes("facebook-user");
         };
 
-        if (loggedUser && isDemoUser(loggedUser)) {
-          console.warn("[Auth Startup] Demo account detected. Forcing clean logout:", loggedUser.email);
+        if (loggedUser && isLegacyOrDemoUser(loggedUser)) {
+          console.warn("[Auth Startup] Legacy/fictitious account detected. Forcing clean logout:", loggedUser.email);
           const { logoutUser } = await import("@/lib/authService");
           await logoutUser();
           setUser(null);
@@ -162,14 +167,20 @@ export default function Home() {
           }
         }
 
-        // Clean up all mock/demo users from simulated_users to avoid listing or retaining them
+        // Clean up all mock/demo/legacy users from simulated_users and stale sync queue items
         try {
-          const { getLocalSetting, saveLocalSetting } = await import("@/lib/db/indexedDB");
+          const { getLocalSetting, saveLocalSetting, getSyncQueue, removeFromSyncQueue } = await import("@/lib/db/indexedDB");
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const cleanedUsers = localUsers.filter(u => !isDemoUser(u));
+          const cleanedUsers = localUsers.filter(u => !isLegacyOrDemoUser(u));
           if (localUsers.length !== cleanedUsers.length) {
             await saveLocalSetting("simulated_users", cleanedUsers);
-            console.log("[Auth Startup] Cleaned mock/demo users from local database:", localUsers.length - cleanedUsers.length, "removed.");
+            console.log("[Auth Startup] Cleaned legacy/fictitious users from local database:", localUsers.length - cleanedUsers.length, "removed.");
+          }
+          const queue = await getSyncQueue();
+          for (const item of queue) {
+            if (item.collection === "users" && (String(item.payloadId || "").startsWith("USR-") || item.payload?.password)) {
+              await removeFromSyncQueue(item.id);
+            }
           }
         } catch (e) {
           console.error("Error cleaning up local simulated users:", e);
