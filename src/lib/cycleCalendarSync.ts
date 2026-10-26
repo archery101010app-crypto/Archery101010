@@ -6,6 +6,7 @@ import {
   generateResilientId 
 } from "@/lib/db/indexedDB";
 import { UserProfile } from "@/lib/authService";
+import { ParsedDailyEntry } from "@/lib/cycleImporter";
 
 export interface SyncCycleSummary {
   syncedDaysCount: number;
@@ -232,5 +233,139 @@ export async function syncCycleToMonthCalendar(
     macrocycleName: macrocycle.name,
     monthName,
     year
+  };
+}
+
+/**
+ * Directly saves day-by-day rows imported from Excel / Google Sheets into the Calendar,
+ * preserving each day's exact title, arrow count, focus points, and notes.
+ */
+export async function saveDailyEntriesToCalendar(
+  dailyEntries: ParsedDailyEntry[],
+  macrocycle: Macrocycle,
+  author: UserProfile
+): Promise<SyncCycleSummary> {
+  let syncedDaysCount = 0;
+  let trainingDaysCount = 0;
+  let restDaysCount = 0;
+  let totalArrowsAssigned = 0;
+
+  for (const entry of dailyEntries) {
+    const phase = macrocycle.phases?.find(
+      (p) => entry.date >= p.startDate && entry.date <= p.endDate
+    ) || macrocycle.phases?.[0];
+
+    const eventId = `EVT-MAC-${macrocycle.id}-${entry.date}`;
+    const isCoach = author.role === "coach";
+
+    const eventData: CalendarEvent = {
+      id: eventId,
+      title: entry.title,
+      date: entry.date,
+      description: entry.notes,
+      createdByRole: isCoach ? "coach" : "archer",
+      createdByName: author.fullName || (isCoach ? "Coach Director" : "Arquero"),
+      createdByUid: author.uid,
+      clubId: author.clubId || macrocycle.clubId,
+      type: entry.type,
+      timestamp: Date.now(),
+      macrocycleId: macrocycle.id,
+      phaseId: phase?.id,
+      phaseName: phase?.name || entry.stageName || macrocycle.name,
+      phaseType: phase?.type,
+      phaseColor: phase?.color || "#00E5FF",
+      targetArrows: entry.targetArrows,
+      assignedAthleteIds: macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []),
+      focusPoints: entry.focusPoints,
+      coachNotes: entry.notes,
+      isRestDay: entry.isRestDay,
+      isCompleted: false
+    };
+
+    await saveLocalEvent(eventId, eventData);
+
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "calendar_events",
+      operation: "UPDATE",
+      payloadId: eventId,
+      payload: eventData,
+      timestamp: Date.now()
+    });
+
+    syncedDaysCount++;
+    if (entry.isRestDay) {
+      restDaysCount++;
+    } else {
+      trainingDaysCount++;
+      totalArrowsAssigned += entry.targetArrows;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("local-db-change", { detail: { store: "calendar_events" } })
+    );
+  }
+
+  const firstDate = dailyEntries[0]?.date ? new Date(dailyEntries[0].date + "T12:00:00") : new Date();
+  const monthName = firstDate.toLocaleDateString("es-ES", { month: "long" });
+
+  return {
+    syncedDaysCount,
+    trainingDaysCount,
+    restDaysCount,
+    totalArrowsAssigned,
+    macrocycleName: macrocycle.name,
+    monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+    year: firstDate.getFullYear()
+  };
+}
+
+/**
+ * Synchronizes ALL months covered by a stage-based Macrocycle in a single operation.
+ */
+export async function syncEntireMacrocycleToCalendar(
+  macrocycle: Macrocycle,
+  author: UserProfile
+): Promise<SyncCycleSummary> {
+  const start = new Date(macrocycle.startDate + "T12:00:00");
+  const end = new Date(macrocycle.endDate + "T12:00:00");
+
+  let syncedDaysCount = 0;
+  let trainingDaysCount = 0;
+  let restDaysCount = 0;
+  let totalArrowsAssigned = 0;
+
+  let curYear = start.getFullYear();
+  let curMonth = start.getMonth();
+  const endYear = end.getFullYear();
+  const endMonth = end.getMonth();
+
+  // Safety cap of 18 months max
+  let guard = 0;
+  while ((curYear < endYear || (curYear === endYear && curMonth <= endMonth)) && guard < 18) {
+    const res = await syncCycleToMonthCalendar(macrocycle, curYear, curMonth, author);
+    syncedDaysCount += res.syncedDaysCount;
+    trainingDaysCount += res.trainingDaysCount;
+    restDaysCount += res.restDaysCount;
+    totalArrowsAssigned += res.totalArrowsAssigned;
+
+    curMonth++;
+    if (curMonth > 11) {
+      curMonth = 0;
+      curYear++;
+    }
+    guard++;
+  }
+
+  return {
+    syncedDaysCount,
+    trainingDaysCount,
+    restDaysCount,
+    totalArrowsAssigned,
+    macrocycleName: macrocycle.name,
+    monthName: `${macrocycle.startDate} al ${macrocycle.endDate}`,
+    year: start.getFullYear()
   };
 }

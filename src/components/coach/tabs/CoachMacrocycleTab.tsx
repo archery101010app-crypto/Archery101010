@@ -19,12 +19,14 @@ import {
   saveLocalSetting
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
-import { syncCycleToMonthCalendar } from "@/lib/cycleCalendarSync";
+import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar } from "@/lib/cycleCalendarSync";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { 
   parseSpreadsheetData, 
   ParsedCycleResult, 
   downloadSampleTemplate, 
+  downloadDailySampleTemplate,
+  fetchGoogleSheetCsv,
   exportCycleToCsv 
 } from "@/lib/cycleImporter";
 
@@ -70,6 +72,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [importPlanName, setImportPlanName] = useState("");
   const [importPreview, setImportPreview] = useState<ParsedCycleResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [sheetUrlInput, setSheetUrlInput] = useState("");
+  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
 
   // Hook into mobile back button and edge-swipe gestures
   useEffect(() => {
@@ -101,7 +105,21 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setImportPlanName("");
     setImportPreview(null);
     setImportError(null);
+    setSheetUrlInput("");
     setShowImportModal(true);
+  };
+
+  const handleFetchGoogleSheet = async () => {
+    if (!sheetUrlInput.trim()) return;
+    setIsFetchingSheet(true);
+    setImportError(null);
+    const res = await fetchGoogleSheetCsv(sheetUrlInput);
+    setIsFetchingSheet(false);
+    if (res.ok && res.csv) {
+      handleParseImport(res.csv);
+    } else {
+      setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
+    }
   };
 
   const handleParseImport = (textToParse: string, nameOverride?: string) => {
@@ -111,16 +129,28 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
       setImportPreview(null);
       return;
     }
+    // If user pasted a Google Sheets URL directly into the textarea, fetch it automatically!
+    if (textToParse.trim().startsWith("https://docs.google.com/spreadsheets/")) {
+      setSheetUrlInput(textToParse.trim());
+      fetchGoogleSheetCsv(textToParse.trim()).then((res) => {
+        if (res.ok && res.csv) {
+          handleParseImport(res.csv, nameOverride);
+        } else {
+          setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
+        }
+      });
+      return;
+    }
     const currentName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan de Entrenamiento 2026");
     const result = parseSpreadsheetData(textToParse, currentName);
-    if (result.success && result.stages.length > 0) {
+    if (result.success && (result.stages.length > 0 || result.dailyEntries.length > 0)) {
       setImportPreview(result);
       if (!importPlanName && !nameOverride) {
         setImportPlanName(result.planName);
       }
     } else {
       setImportPreview(null);
-      setImportError(result.error || "No se detectaron etapas. Verifica las columnas de tu Excel.");
+      setImportError(result.error || "No se detectaron datos válidos. Verifica las columnas de tu Excel o Sheets.");
     }
   };
 
@@ -155,7 +185,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   };
 
   const handleConfirmImport = async () => {
-    if (!importPreview || importPreview.stages.length === 0) return;
+    if (!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0)) return;
     const id = generateResilientId("MAC");
     const nowStr = new Date().toISOString();
     const finalName = importPlanName.trim() || importPreview.planName || "Plan Importado";
@@ -193,9 +223,24 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setShowImportModal(false);
     setSelectedMacro(newCycle);
 
-    // Ask coach if they want to sync calendar right now
-    if (confirm(`✓ ¡Plan "${finalName}" importado con éxito!\n\nSe cargaron ${importPreview.stages.length} etapas.\n\n¿Deseas sincronizar el calendario de tus alumnos para el mes actual ahora mismo?`)) {
-      handleOpenSyncModal(newCycle);
+    if (importPreview.mode === "daily" && importPreview.dailyEntries.length > 0) {
+      const summary = await saveDailyEntriesToCalendar(importPreview.dailyEntries, newCycle, user);
+      alert(
+        `✓ ¡Plan Día por Día "${finalName}" Importado y Publicado en el Calendario!\n\n` +
+        `• Días exactos cargados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+        `• Rango: ${importPreview.startDate} al ${importPreview.endDate}\n` +
+        `• Flechas totales programadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+        `Cada fecha ya tiene su actividad, meta de flechas y notas exactas en el Calendario.`
+      );
+    } else {
+      const summary = await syncEntireMacrocycleToCalendar(newCycle, user);
+      alert(
+        `✓ ¡Plan "${finalName}" Importado y Sincronizado Día por Día!\n\n` +
+        `• Etapas cargadas: ${importPreview.stages.length}\n` +
+        `• Días generados en el calendario: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+        `Tus arqueros ya pueden tocar cualquier día en su Calendario para ver la meta y el enfoque asignado.`
+      );
     }
   };
 
@@ -1459,7 +1504,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       Importar Plan desde Excel / Sheets
                     </h3>
                     <p className="text-[10px] text-white/50">
-                      Pega tus celdas copiadas o carga tu archivo CSV
+                      Detecta automáticamente formato Día por Día o por Etapas
                     </p>
                   </div>
                 </div>
@@ -1471,8 +1516,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </button>
               </div>
 
-              {/* Action Buttons: Paste, Upload, Template */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Action Buttons: Paste, Upload, Daily Template, Stage Template */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={handlePasteClipboard}
@@ -1484,7 +1529,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                 <label className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition cursor-pointer active:scale-95 text-center">
                   <UploadCloud size={14} className="text-emerald-400" />
-                  <span>Subir Archivo</span>
+                  <span>Subir CSV/Excel</span>
                   <input
                     type="file"
                     accept=".csv,.tsv,.txt"
@@ -1495,12 +1540,45 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                 <button
                   type="button"
-                  onClick={downloadSampleTemplate}
+                  onClick={downloadDailySampleTemplate}
                   className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95 text-center"
                 >
                   <Download size={14} className="text-yellow-gold" />
-                  <span>Descargar Modelo</span>
+                  <span>Modelo Día x Día</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={downloadSampleTemplate}
+                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95 text-center"
+                >
+                  <Download size={14} className="text-purple-400" />
+                  <span>Modelo Etapas</span>
+                </button>
+              </div>
+
+              {/* Google Sheets Direct Link Fetcher */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
+                  O pega el enlace público de tu Google Sheets
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="url"
+                    value={sheetUrlInput}
+                    onChange={(e) => setSheetUrlInput(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    className="flex-1 bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-[11px] outline-none focus:border-emerald-400 transition placeholder:text-white/20 min-w-0"
+                  />
+                  <button
+                    type="button"
+                    disabled={!sheetUrlInput.trim() || isFetchingSheet}
+                    onClick={handleFetchGoogleSheet}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 font-black text-[10px] uppercase tracking-wider shrink-0 transition disabled:opacity-40 cursor-pointer"
+                  >
+                    {isFetchingSheet ? "Leyendo..." : "Leer Sheets"}
+                  </button>
+                </div>
               </div>
 
               {/* Plan Name */}
@@ -1537,7 +1615,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 <textarea
                   value={importText}
                   onChange={(e) => handleParseImport(e.target.value)}
-                  placeholder={`Ejemplo de columnas (separadas por tabulación o comas):\nEtapa\tInicio\tFin\tFlechas/Sem\tSesiones/Sem\tEnfoque\nPreparación General\t2026-02-01\t2026-03-15\t450\t5\tVolumen base y técnica\nPreparación Especial\t2026-03-16\t2026-04-30\t550\t5\tRitmo de tiro y agrupación`}
+                  placeholder={`Formato Día por Día:\nFecha\tActividad\tFlechas\tEnfoque\tNotas\n26/10/2026\tVolumen 70m\t120\tAnclaje firme\tSeries de 6 flechas\n27/10/2026\tControl WA 720\t144\tTiempo oficial\tAnotar en la app\n\nO Formato por Etapas:\nEtapa\tInicio\tFin\tSesiones/Sem\tFlechas/Sem\tNotas`}
                   rows={4}
                   className="bg-neutral-900 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-white/90 outline-none focus:border-emerald-400 transition placeholder:text-white/20 resize-none leading-relaxed"
                 />
@@ -1552,52 +1630,84 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               )}
 
               {/* Live Preview */}
-              {importPreview && importPreview.stages.length > 0 && (
+              {importPreview && (importPreview.stages.length > 0 || importPreview.dailyEntries.length > 0) && (
                 <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                  <div className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center justify-between text-[10px] flex-wrap gap-1">
                     <span className="text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
                       <CheckCircle2 size={12} />
-                      {importPreview.stages.length} Etapas detectadas
+                      {importPreview.mode === "daily"
+                        ? `Modo Día por Día (${importPreview.dailyEntries.length} días exactos)`
+                        : `Modo por Etapas (${importPreview.stages.length} etapas)`}
                     </span>
                     <span className="text-white/60 font-mono">
                       Meta: {importPreview.totalVolumeGoal.toLocaleString()} flechas
                     </span>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
-                    {importPreview.stages.map((stg, i) => {
-                      const diffDays = Math.max(1, Math.round((new Date(stg.endDate).getTime() - new Date(stg.startDate).getTime()) / (1000 * 60 * 60 * 24)));
-                      const estWeeks = Math.max(1, Math.round(diffDays / 7));
-                      return (
+                  {importPreview.mode === "daily" ? (
+                    <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {importPreview.dailyEntries.map((dayItem, i) => (
                         <div
-                          key={stg.id || i}
-                          className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between text-[10px]"
+                          key={`${dayItem.date}-${i}`}
+                          className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between gap-2 text-[10px]"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: stg.color || "#10B981" }}
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                dayItem.isRestDay ? "bg-emerald-400" : dayItem.type === "competition" ? "bg-red-400" : "bg-cyan-neon"
+                              }`}
                             />
-                            <div>
-                              <div className="font-black text-white">{stg.name}</div>
-                              <div className="text-[9px] text-white/40 font-mono">
-                                {stg.startDate} ➔ {stg.endDate} ({estWeeks} sem)
+                            <div className="min-w-0 flex-1">
+                              <div className="font-black text-white truncate">{dayItem.title}</div>
+                              <div className="text-[9px] text-white/40 font-mono truncate">
+                                {dayItem.date} · {dayItem.focusPoints.join(", ")}
                               </div>
                             </div>
                           </div>
-
-                          <div className="text-right">
-                            <div className="text-cyan-neon font-black font-mono">
-                              {stg.weeklyArrowGoal} <span className="text-[8px] font-normal text-white/40">fl/sem</span>
-                            </div>
-                            <div className="text-[9px] text-white/40">
-                              {stg.weeklySessionGoal} sesiones/sem
+                          <div className="text-right shrink-0">
+                            <div className="text-cyan-neon font-black font-mono whitespace-nowrap">
+                              {dayItem.isRestDay ? "Descanso" : `🎯 ${dayItem.targetArrows} fl`}
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                      {importPreview.stages.map((stg, i) => {
+                        const diffDays = Math.max(1, Math.round((new Date(stg.endDate).getTime() - new Date(stg.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+                        const estWeeks = Math.max(1, Math.round(diffDays / 7));
+                        return (
+                          <div
+                            key={stg.id || i}
+                            className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between text-[10px]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: stg.color || "#10B981" }}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-black text-white truncate">{stg.name}</div>
+                                <div className="text-[9px] text-white/40 font-mono">
+                                  {stg.startDate} ➔ {stg.endDate} ({estWeeks} sem)
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <div className="text-cyan-neon font-black font-mono">
+                                {stg.weeklyArrowGoal} <span className="text-[8px] font-normal text-white/40">fl/sem</span>
+                              </div>
+                              <div className="text-[9px] text-white/40">
+                                {stg.weeklySessionGoal} sesiones/sem
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1612,12 +1722,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </button>
                 <button
                   type="button"
-                  disabled={!importPreview || importPreview.stages.length === 0}
+                  disabled={!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0)}
                   onClick={handleConfirmImport}
                   className="flex-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <Sparkles size={14} />
-                  <span>Cargar Plan al Club</span>
+                  <span>Cargar y Publicar en Calendario</span>
                 </button>
               </div>
             </motion.div>
