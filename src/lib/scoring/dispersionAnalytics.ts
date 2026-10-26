@@ -307,18 +307,24 @@ export function calculateDispersionAnalysis(
     groupQuality = "Disperso";
   }
 
-  // Consejo claro y accionable para el arquero
-  const adviceParts: string[] = [];
-  if (horizontalDirection !== "CENTRADO" && horizontalClicks > 0) {
-    adviceParts.push(`${horizontalClicks} clics a la ${horizontalDirection}`);
-  }
-  if (verticalDirection !== "CENTRADO" && verticalClicks > 0) {
-    adviceParts.push(`${verticalClicks} clics hacia ${verticalDirection}`);
+  // Recomendación de mira: Solo direcciones (ej. "Mover arriba y a la izquierda", NUNCA clics)
+  let directionRecommendation = "";
+  const hasVertical = verticalDirection !== "CENTRADO";
+  const hasHorizontal = horizontalDirection !== "CENTRADO";
+
+  if (hasVertical && hasHorizontal) {
+    const vText = verticalDirection === "ARRIBA" ? "arriba" : "abajo";
+    const hText = horizontalDirection === "DERECHA" ? "a la derecha" : "a la izquierda";
+    directionRecommendation = `Mover ${vText} y ${hText}`;
+  } else if (hasVertical) {
+    directionRecommendation = verticalDirection === "ARRIBA" ? "Mover hacia arriba" : "Mover hacia abajo";
+  } else if (hasHorizontal) {
+    directionRecommendation = horizontalDirection === "DERECHA" ? "Mover a la derecha" : "Mover a la izquierda";
   }
 
-  const adviceText = adviceParts.length > 0 
-    ? `Ajuste recomendado de mira: ${adviceParts.join(" y ")} (Regla: sigue el impacto).` 
-    : "¡Excelente centrado! Tu grupo está perfectamente calibrado en el 10.";
+  const adviceText = directionRecommendation 
+    ? `Recomendación: ${directionRecommendation} (Regla: sigue el impacto).` 
+    : "¡Excelente centrado! Tu grupo está calibrado en el 10.";
 
   return {
     count,

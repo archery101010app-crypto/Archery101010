@@ -276,10 +276,15 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   const centerText = dispersion ? dispersion.clockDirection : "Centro 🎯";
   let directionAdvice = "Mira centrada";
   if (dispersion) {
-    const parts: string[] = [];
-    if (dispersion.horizontalDirection !== "CENTRADO") parts.push(`Mueve a la ${dispersion.horizontalDirection}`);
-    if (dispersion.verticalDirection !== "CENTRADO") parts.push(`Mueve hacia ${dispersion.verticalDirection}`);
-    if (parts.length > 0) directionAdvice = parts.join(" y ");
+    const hasV = dispersion.verticalDirection !== "CENTRADO";
+    const hasH = dispersion.horizontalDirection !== "CENTRADO";
+    if (hasV && hasH) {
+      directionAdvice = `Mover ${dispersion.verticalDirection === "ARRIBA" ? "arriba" : "abajo"} y ${dispersion.horizontalDirection === "DERECHA" ? "a la derecha" : "a la izquierda"}`;
+    } else if (hasV) {
+      directionAdvice = dispersion.verticalDirection === "ARRIBA" ? "Mover hacia arriba" : "Mover hacia abajo";
+    } else if (hasH) {
+      directionAdvice = dispersion.horizontalDirection === "DERECHA" ? "Mover a la derecha" : "Mover a la izquierda";
+    }
   }
   drawStatBox(ctx, 725, cardY, 305, cardHeight, "AJUSTE DE MIRA", centerText, directionAdvice);
 
