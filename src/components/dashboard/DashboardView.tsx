@@ -375,32 +375,6 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               <span className="text-neutral-300 font-medium">{user?.bowConfig?.type === "Recurve" ? "Recurvo" : user?.bowConfig?.type === "Compound" ? "Compuesto" : (user?.bowConfig?.type || "Barebow")}</span>
             )}
           </p>
-
-          {/* Estado de Misión / Calendario Funcional (Empty state activo) */}
-          {todayMission ? (
-            <div 
-              onClick={() => onNavigate("CALENDAR")}
-              className="mt-2.5 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0D0F12] border border-cyan-neon/30 text-xs text-neutral-200 cursor-pointer hover:border-cyan-neon transition-colors group"
-            >
-              <span className="w-2 h-2 rounded-full bg-cyan-neon shrink-0" />
-              <span className="text-neutral-400 font-medium text-[11px]">{language === "es" ? "Misión de hoy:" : "Today's focus:"}</span>
-              <span className="font-bold text-white text-xs truncate max-w-[200px] group-hover:text-cyan-neon transition-colors">{todayMission.title}</span>
-              <ChevronRight size={13} className="text-neutral-500 group-hover:text-white shrink-0 ml-1" />
-            </div>
-          ) : (
-            <div 
-              onClick={() => onNavigate("CALENDAR")}
-              className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[11px] text-neutral-400 cursor-pointer hover:text-neutral-200 hover:border-white/20 transition-colors w-fit"
-            >
-              <Calendar size={12} className="text-cyan-neon shrink-0" />
-              <span>{language === "es" ? "+ Programar entreno en Calendario" : "+ Schedule session"}</span>
-              {upcomingCount > 0 && (
-                <span className="ml-1 text-[10px] text-neutral-400 bg-white/5 px-1.5 py-0.2 rounded font-mono">
-                  {upcomingCount} {language === "es" ? "próx." : "upc."}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -450,31 +424,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     {t("weeklyProgress")}
                   </span>
                   {hasData ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-black text-white tabular-nums tracking-tight">
-                        {latest.score}
-                        <span className="text-neutral-500 font-semibold text-xs ml-0.5">/{latest.maxScore}</span>
-                      </span>
-                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md border tracking-wider uppercase tabular-nums ${
-                        latestPct >= 90
-                          ? "bg-yellow-gold/15 text-yellow-gold border-yellow-gold/30"
-                          : latestPct >= 80
-                          ? "bg-red-500/15 text-red-400 border-red-500/30"
-                          : "bg-cyan-neon/15 text-cyan-neon border-cyan-neon/30"
-                      }`}>
-                        {latestPct}%
-                      </span>
-                    </div>
+                    <span className="text-xs font-bold text-white tabular-nums">
+                      {latest.score} <span className="text-neutral-500 font-medium">/ {latest.maxScore}</span>{" "}
+                      <span className="text-cyan-neon ml-0.5">({latestPct}%)</span>
+                    </span>
                   ) : (
-                    <span 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onNavigate("TARGET");
-                      }}
-                      className="text-[11px] text-cyan-neon hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Plus size={12} strokeWidth={2.5} />
-                      {language === "es" ? "Registrar ronda" : "Record round"}
+                    <span className="text-[11px] text-neutral-500 font-medium">
+                      {language === "es" ? "Sin rondas aún" : "No rounds yet"}
                     </span>
                   )}
                 </div>
@@ -577,33 +533,26 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.99 }}
         onClick={() => onNavigate("TARGET")}
-        className="w-full py-4 rounded-2xl bg-gradient-to-b from-[#1ad1ff] to-[#00b0eb] hover:brightness-105 border-t border-white/40 shadow-[0_10px_24px_-4px_rgba(0,191,255,0.35)] active:shadow-none active:scale-[0.99] text-black font-black text-base sm:text-lg tracking-wide uppercase transition-all duration-200 cursor-pointer flex justify-center items-center gap-2.5 mt-2 select-none"
+        className="w-full py-4 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-base sm:text-lg tracking-wide uppercase transition-colors cursor-pointer flex justify-center items-center gap-2.5 mt-2 active:scale-[0.99]"
       >
         <Target size={20} strokeWidth={2.5} className="text-black shrink-0" />
         <span>{t("newSession")}</span>
       </motion.button>
 
-      {/* Floating stars tab on the left edge (Twin docking system with Spotify tab) */}
+      {/* Floating stars tab on the left edge */}
       <div className="fixed left-0 top-[calc(50%-112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
-          aria-label="Abrir Estrellas 101010"
-          className="h-28 w-8 md:w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 active:scale-95 transition-all duration-200 select-none shadow-md shadow-yellow-gold/20"
+          className="h-28 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none"
         >
-          <div className="text-black flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-              <path d="M12 1.5l3.09 6.26 6.91 1-5 4.87 1.18 6.88L12 17.27l-6.18 3.24 1.18-6.88-5-4.87 6.91-1L12 1.5z" />
-            </svg>
-          </div>
+          <span className="text-sm text-black font-black leading-none">
+            ★
+          </span>
           <span 
-            className="text-[12px] sm:text-[13px] font-bold text-black select-none tracking-tight leading-none" 
-            style={{ 
-              fontFamily: "var(--font-family-logo, 'Good Times', 'Outfit', sans-serif)",
-              writingMode: "vertical-rl", 
-              textOrientation: "mixed" 
-            }}
+            className="text-[8px] font-black tracking-[0.18em] uppercase text-black" 
+            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
           >
-            Estrellas
+            Estrellas 101010
           </span>
         </button>
       </div>
