@@ -65,7 +65,6 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
-          const isSpotify = item.id === "SPOTIFY";
           const isProBlocked = item.isPro && user?.plan === "FREE";
 
           return (
@@ -96,9 +95,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                 <Icon
                   size={19}
                   className={`transition-colors duration-200 relative z-10 ${
-                    isSpotify
-                      ? "text-[#1DB954] hover:text-[#1ED760] hover:scale-110 transition-transform"
-                      : isActive
+                    isActive
                       ? "text-cyan-neon shadow-glow-cyan"
                       : isProBlocked
                       ? "text-yellow-gold/80 group-hover:text-yellow-gold"
@@ -115,11 +112,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {/* Label indicator */}
               <span
                 className={`text-[8px] font-bold tracking-tight mt-0.5 leading-none transition-colors duration-200 ${
-                  isSpotify
-                    ? "text-[#1DB954]/90 group-hover:text-[#1ED760]"
-                    : isActive
-                    ? "text-cyan-neon font-black"
-                    : "text-gray-dim/80 group-hover:text-white"
+                  isActive ? "text-cyan-neon font-black" : "text-gray-dim/80 group-hover:text-white"
                 }`}
               >
                 {item.label}

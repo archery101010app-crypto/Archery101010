@@ -375,41 +375,25 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        {/* ARCHERY 101010 app — Sober OLED Branding Card */}
-        <motion.div
-          variants={cardVariants}
-          className="col-span-3 bg-neutral-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4.5 relative overflow-hidden flex items-center justify-between group hover:border-cyan-neon/30 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.4)]"
-        >
-          {/* Subtle ambient light */}
-          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-cyan-neon/5 blur-2xl pointer-events-none" />
-          <div className="absolute -left-8 -bottom-8 w-32 h-32 rounded-full bg-yellow-gold/5 blur-2xl pointer-events-none" />
-
-          <div className="flex flex-col z-10 text-left">
-            <span className="text-[9px] text-cyan-neon font-black tracking-[0.25em] uppercase flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
-              SISTEMA OFICIAL DE TIRO CON ARCO
+        {/* ARCHERY 101010 app — Logo y tipografía sin cuadro ni complementos */}
+        <div className="col-span-3 flex flex-col items-center justify-center py-2.5 select-none">
+          <div className="flex items-center gap-2.5 flex-wrap justify-center">
+            <span className="text-white text-lg sm:text-xl font-black tracking-[0.3em] uppercase">
+              ARCHERY
             </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
-                ARCHERY 101010
-              </h1>
-              <span className="text-xs sm:text-sm font-black text-yellow-gold tracking-widest lowercase bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/20">
-                app
-              </span>
+            <div 
+              className="flex text-2xl sm:text-3xl tracking-tighter font-extrabold brand-logo-101010"
+              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+            >
+              <span className="text-cyan-neon drop-shadow-[0_0_15px_rgba(0,191,255,0.45)]">10</span>
+              <span className="text-red-rival drop-shadow-[0_0_15px_rgba(255,0,0,0.35)]">10</span>
+              <span className="text-yellow-gold drop-shadow-[0_0_15px_rgba(255,229,0,0.35)]">10</span>
             </div>
-            <p className="text-[10px] text-gray-dim leading-snug mt-1">
-              {language === "es" 
-                ? "Puntuación de diana reglamentaria WA, balística acústica, gestión y matchplay."
-                : "Official WA target scoring, acoustic ballistics, training management and matchplay."}
-            </p>
+            <span className="text-xs sm:text-sm font-black text-yellow-gold tracking-widest lowercase bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/20 shadow-glow-yellow">
+              app
+            </span>
           </div>
-
-          <div className="flex items-center gap-2 z-10 shrink-0">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-950 border border-white/10 flex items-center justify-center text-cyan-neon group-hover:border-cyan-neon/40 group-hover:scale-105 transition-all shadow-inner">
-              <Target size={24} className="text-cyan-neon drop-shadow-[0_0_8px_rgba(0,229,255,0.4)]" />
-            </div>
-          </div>
-        </motion.div>
+        </div>
 
         {/* Progreso Semanal */}
         <motion.div
@@ -529,21 +513,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         🎯 {t("newSession")}
       </motion.button>
 
-      {/* Floating stars tab on the left edge */}
-      <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40] scale-90 origin-left">
+      {/* Floating stars tab on the left edge (25% smaller) */}
+      <div className="fixed left-0 top-[40%] -translate-y-1/2 z-[40] scale-[0.68] origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
-          className="flex flex-col items-center justify-center gap-2 py-4 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 md:w-9 select-none"
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-r-2xl bg-gradient-to-b from-amber-500 via-yellow-gold to-yellow-600 border-y border-r border-yellow-gold/40 shadow-[4px_0_15px_rgba(255,229,0,0.2)] cursor-pointer text-black hover:brightness-110 hover:shadow-[4px_0_20px_rgba(255,229,0,0.35)] transition-all duration-300 w-8 select-none"
         >
           <motion.span
             animate={{ scale: [1, 1.25, 1], rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            className="text-lg text-black font-extrabold"
+            className="text-base text-black font-extrabold"
           >
             ★
           </motion.span>
           <span 
-            className="text-[8.5px] font-black tracking-[0.2em] uppercase" 
+            className="text-[8px] font-black tracking-[0.2em] uppercase" 
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
           >
             Estrellas 101010
