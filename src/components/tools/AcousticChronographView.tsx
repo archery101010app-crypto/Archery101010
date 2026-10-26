@@ -425,7 +425,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               </h2>
             </div>
             <p className="text-[10px] text-gray-dim uppercase tracking-wider">
-              Medición Balística Acústica
+              Medición Balística
             </p>
           </div>
         </div>
