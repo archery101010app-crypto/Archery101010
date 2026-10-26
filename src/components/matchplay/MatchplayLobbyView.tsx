@@ -878,7 +878,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white hover:border-white/10"
                     }`}
                   >
-                    {bow}
+                    {bow === "Recurve" ? "Recurvo" : bow === "Compound" ? "Compuesto" : "Barebow"}
                   </button>
                 ))}
               </div>
@@ -953,7 +953,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                   <span className="text-cyan-neon font-mono text-[9px] font-bold">@{riv.nickname}</span>
                                 )}
                                 <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-yellow-gold font-extrabold uppercase shrink-0">
-                                  {riv.bowConfig.type}
+                                  {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim">
@@ -1017,7 +1017,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                               <span className="text-cyan-neon/80 font-mono text-[9px] font-semibold">@{riv.nickname}</span>
                             )}
                             <span className="text-[7px] px-1 py-0.2 rounded bg-neutral-950 text-gray-500 font-bold uppercase shrink-0">
-                              {riv.bowConfig.type}
+                              {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                             </span>
                           </div>
                           <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim/75">
@@ -1071,7 +1071,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="flex items-center gap-1.5">
                       <span className="text-white text-xs font-bold">vs {dr.opponent}</span>
                       <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-cyan-neon font-extrabold uppercase">
-                        {dr.bowConfig?.type || "Barebow"}
+                        {dr.bowConfig?.type === "Recurve" ? "Recurvo" : dr.bowConfig?.type === "Compound" ? "Compuesto" : (dr.bowConfig?.type || "Barebow")}
                       </span>
                     </div>
                     <span className="text-[9px] text-gray-dim truncate mt-0.5">
@@ -1142,7 +1142,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       <div className="flex items-center gap-1.5">
                         <span className="text-white text-xs font-bold">vs {h.opponent} {flag}</span>
                         <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-yellow-gold font-extrabold uppercase">
-                          {h.bowConfig?.type || "Barebow"}
+                          {h.bowConfig?.type === "Recurve" ? "Recurvo" : h.bowConfig?.type === "Compound" ? "Compuesto" : (h.bowConfig?.type || "Barebow")}
                         </span>
                       </div>
                       <span className="text-[9px] text-gray-dim mt-0.5">

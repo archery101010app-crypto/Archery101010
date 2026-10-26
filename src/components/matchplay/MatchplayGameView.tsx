@@ -11,7 +11,7 @@ import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic, startRingingSound, stopRingingSound } from "@/lib/soundUtils";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
-import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
+import { calculateDispersionStats, getExactTargetDimensions } from "@/lib/scoring/dispersionAnalytics";
 
 const COUNTRIES = [
   { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
@@ -58,6 +58,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [isShootOff, setIsShootOff] = useState<boolean>(config.isShootOff ?? false);
   const [userShootOffShot, setUserShootOffShot] = useState<number | null>(config.userShootOffShot ?? null);
   const [rivalShootOffShot, setRivalShootOffShot] = useState<number | null>(config.rivalShootOffShot ?? null);
+  const [userShootOffDistCm, setUserShootOffDistCm] = useState<number | null>(config.userShootOffDistCm ?? null);
+  const [rivalShootOffDistCm, setRivalShootOffDistCm] = useState<number | null>(config.rivalShootOffDistCm ?? null);
   
   const [duelFinished, setDuelFinished] = useState<boolean>(config.duelFinished ?? false);
   const [winner, setWinner] = useState<"USER" | "RIVAL" | "TIE" | null>(config.winner ?? null);
@@ -430,9 +432,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         }
         case "shootoff":
           setRivalShootOffShot(msg.value);
+          if (typeof msg.distCm === "number") {
+            setRivalShootOffDistCm(msg.distCm);
+          }
           break;
         case "undo-shootoff":
           setRivalShootOffShot(null);
+          setRivalShootOffDistCm(null);
           break;
         case "photo":
           setRivalPhoto(msg.photo);
@@ -1681,9 +1687,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     speakRivalPhraseOnShot(numericValue);
 
     if (isShootOff) {
+      const targetSpec = getExactTargetDimensions(
+        Number(config.distance) || (isCompound ? 50 : 70),
+        config.bowType || (isCompound ? "Compound" : "Recurve"),
+        dianaPresetKey
+      );
+      const svgDist = Math.hypot(x - 50, y - 50);
+      const distCm = Number(((svgDist / 48) * targetSpec.visibleRadiusCm).toFixed(2));
       setUserShootOffShot(numericValue);
+      setUserShootOffDistCm(distCm);
       if (isFriendDuel) {
-        sendDataMessage({ type: "shootoff", value: numericValue });
+        sendDataMessage({ type: "shootoff", value: numericValue, distCm });
       } else {
         simulateRivalShootOff();
       }
@@ -1745,6 +1759,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     if (isShootOff) {
       setUserShootOffShot(null);
+      setUserShootOffDistCm(null);
       if (isFriendDuel) {
         sendDataMessage({ type: "undo-shootoff" });
       }
@@ -1858,12 +1873,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       } else { // Rookie
         score = rand > 0.9 ? 10 : rand > 0.6 ? 9 : rand > 0.25 ? 8 : rand > 0.1 ? 7 : 6;
       }
+      const targetSpec = getExactTargetDimensions(
+        Number(config.distance) || (isCompound ? 50 : 70),
+        config.bowType || (isCompound ? "Compound" : "Recurve"),
+        dianaPresetKey
+      );
+      const ringW = targetSpec.ringWidthCm;
+      const ringIdxFromCenter = Math.max(0, 10 - score);
+      const simulatedDistCm = Number(((ringIdxFromCenter + 0.15 + Math.random() * 0.7) * ringW).toFixed(2));
       setRivalShootOffShot(score);
+      setRivalShootOffDistCm(simulatedDistCm);
       setRivalThinking(false);
     }, 1800);
   };
 
-  // Check shoot-off winner
+  // Check shoot-off winner (Reglamento WA: Mayor puntaje o flecha más cercana al centro en cm/mm)
   useEffect(() => {
     if (isShootOff && userShootOffShot !== null && rivalShootOffShot !== null) {
       setTimeout(() => {
@@ -1876,14 +1900,31 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setWinner("RIVAL");
           setDuelFinished(true);
           speakRivalPhraseOnMatchEnd(false);
+        } else if (
+          userShootOffDistCm !== null &&
+          rivalShootOffDistCm !== null &&
+          Math.abs(userShootOffDistCm - rivalShootOffDistCm) >= 0.05
+        ) {
+          if (userShootOffDistCm < rivalShootOffDistCm) {
+            setWinner("USER");
+            setDuelFinished(true);
+            triggerConfetti();
+            speakRivalPhraseOnMatchEnd(true);
+          } else {
+            setWinner("RIVAL");
+            setDuelFinished(true);
+            speakRivalPhraseOnMatchEnd(false);
+          }
         } else {
-          alert("¡Empate en flecha de desempate! Se dispara otra flecha.");
+          alert("¡Empate exacto en distancia al centro! Se dispara otra flecha de desempate.");
           setUserShootOffShot(null);
           setRivalShootOffShot(null);
+          setUserShootOffDistCm(null);
+          setRivalShootOffDistCm(null);
         }
       }, 800);
     }
-  }, [isShootOff, userShootOffShot, rivalShootOffShot]);
+  }, [isShootOff, userShootOffShot, rivalShootOffShot, userShootOffDistCm, rivalShootOffDistCm]);
 
   // Trigger end completion evaluation in a friend duel when both players have finished their 3 arrows
   useEffect(() => {
@@ -2174,7 +2215,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <span className="absolute -bottom-1 -right-1 text-[11px] drop-shadow-md bg-neutral-950/80 px-0.5 rounded">{userFlag}</span>
             </div>
             <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
-              Tú ({config.bowType})
+              Tú ({config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType})
             </span>
             <span className="text-[9px] text-gray-dim flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
               <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3 h-3 shrink-0" />
@@ -2236,6 +2277,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <span className="text-xl font-black text-cyan-neon">
                 {userShootOffShot !== null ? userShootOffShot : "—"}
               </span>
+              {userShootOffDistCm !== null && (
+                <span className="text-[9px] font-mono font-bold text-cyan-neon/80">
+                  a {userShootOffDistCm.toFixed(1)} cm del centro
+                </span>
+              )}
             </div>
             <div className="flex flex-col items-center gap-0.5">
               <span className="text-[8px] text-gray-dim font-black uppercase">Rival Desempate</span>
@@ -2248,6 +2294,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   "—"
                 )}
               </span>
+              {!rivalThinking && rivalShootOffDistCm !== null && (
+                <span className="text-[9px] font-mono font-bold text-red-rival/80">
+                  a {rivalShootOffDistCm.toFixed(1)} cm del centro
+                </span>
+              )}
             </div>
           </div>
         )}

@@ -21,7 +21,7 @@ import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
-import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
+import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -143,7 +143,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               {athlete.fullName}
             </h3>
             <p className="text-[10px] text-gray-dim leading-none mt-0.5">
-              {athlete.bowConfig?.type || "Barebow"} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
+              {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
             </p>
           </div>
         </div>
@@ -261,7 +261,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-[9px] text-gray-dim block">Tipo de Arco</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.type || "—"}</span>
+                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "—")}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-dim block">Orientación</span>
@@ -270,7 +270,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                     </span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-gray-dim block">Potencia (Poundage)</span>
+                    <span className="text-[9px] text-gray-dim block">Libraje (lbs)</span>
                     <span className="text-white text-xs font-bold">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}</span>
                   </div>
                   <div>
@@ -437,6 +437,40 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       );
                                     })()}
                                   </div>
+                                  {sess.impacts && sess.impacts.length > 0 && (() => {
+                                    const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
+                                    const analysis = calculateDispersionAnalysis(
+                                      sess.impacts,
+                                      Number(sess.distance) || 18,
+                                      sess.bowType || athlete.bowConfig?.type || "Recurve",
+                                      presetType,
+                                      sess.format,
+                                      sess.targetType
+                                    );
+                                    if (!analysis) return null;
+                                    return (
+                                      <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider">
+                                            🎯 Análisis de Grupo y Mira
+                                          </span>
+                                          <span className="text-[10px] font-mono font-black text-white">
+                                            Ø {analysis.spreadCm.toFixed(1)} cm
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px]">
+                                          <span className="text-gray-dim">Centro del grupo (+):</span>
+                                          <span className="font-bold text-yellow-gold">
+                                            {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5 flex items-start gap-1.5">
+                                          <span className="text-xs leading-none mt-0.5">💡</span>
+                                          <span>{analysis.adviceText}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 {sess.ends && (
@@ -601,6 +635,40 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       );
                                     })()}
                                   </div>
+                                  {sess.impacts && sess.impacts.length > 0 && (() => {
+                                    const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
+                                    const analysis = calculateDispersionAnalysis(
+                                      sess.impacts,
+                                      Number(sess.distance) || 18,
+                                      sess.bowType || athlete.bowConfig?.type || "Recurve",
+                                      presetType,
+                                      sess.format,
+                                      sess.targetType
+                                    );
+                                    if (!analysis) return null;
+                                    return (
+                                      <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider">
+                                            🎯 Análisis de Grupo y Mira
+                                          </span>
+                                          <span className="text-[10px] font-mono font-black text-white">
+                                            Ø {analysis.spreadCm.toFixed(1)} cm
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px]">
+                                          <span className="text-gray-dim">Centro del grupo (+):</span>
+                                          <span className="font-bold text-yellow-gold">
+                                            {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5 flex items-start gap-1.5">
+                                          <span className="text-xs leading-none mt-0.5">💡</span>
+                                          <span>{analysis.adviceText}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 {sess.ends && (

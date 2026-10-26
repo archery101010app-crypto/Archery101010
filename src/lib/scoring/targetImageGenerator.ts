@@ -1,6 +1,6 @@
 "use client";
 
-import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull } from "./dispersionAnalytics";
+import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull, getExactTargetDimensions } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
 
 export interface TargetShotChartParams {
@@ -86,9 +86,10 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   ctx.fillText(archerName || "Arquero", 50, 130, 710);
 
   // Category & Details
+  const displayBowType = bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType;
   ctx.font = "600 20px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
-  ctx.fillText(`${bowType} • ${distanceM}m • ${dateStr}`, 50, 162, 710);
+  ctx.fillText(`${displayBowType} • ${distanceM}m • ${dateStr}`, 50, 162, 710);
 
   // Total Score Badge (Top Right)
   ctx.fillStyle = "rgba(253, 216, 53, 0.1)";
@@ -156,7 +157,8 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   if (dispersion && impacts.length >= 2) {
     const cx = targetCenterX + ((dispersion.centroidX - 50) / 48) * targetRadius;
     const cy = targetCenterY + ((dispersion.centroidY - 50) / 48) * targetRadius;
-    const rx = (dispersion.spreadCm / getTargetDiameter(distanceM, bowType)) * (targetRadius * 2) * 0.45;
+    const activeDiameterCm = getExactTargetDimensions(distanceM, bowType, presetType).visibleDiameterCm;
+    const rx = (dispersion.spreadCm / activeDiameterCm) * (targetRadius * 2) * 0.5;
     const clampedRx = Math.max(14, rx);
 
     // Dispersion circle

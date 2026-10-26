@@ -6,9 +6,10 @@ import { UserProfile } from "@/lib/authService";
 import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight } from "lucide-react";
+import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight, Camera } from "lucide-react";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
-import { calculateDispersionStats } from "@/lib/scoring/dispersionAnalytics";
+import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
+import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -34,6 +35,55 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   
   // Delete confirm state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  const handleShareSessionShotChart = async (session: any) => {
+    if (!session) return;
+    if (session.impacts && session.impacts.length > 0) {
+      setIsGeneratingImage(true);
+      try {
+        const archerName = user.nickname || user.fullName || "Arquero";
+        const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
+        const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
+        const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
+        const dispersion = calculateDispersionAnalysis(
+          session.impacts,
+          Number(session.distance) || 18,
+          session.bowType || "Recurve",
+          presetType,
+          session.format,
+          session.targetType
+        );
+        const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+
+        await shareTargetShotChart({
+          impacts: session.impacts,
+          presetType,
+          score: session.score || 0,
+          maxScore: session.maxScore || 300,
+          tensCount: tens,
+          xsCount: xs,
+          distanceM: Number(session.distance) || 18,
+          bowType: session.bowType || "Recurve",
+          archerName,
+          dateStr,
+          dispersion
+        });
+      } catch (err) {
+        console.error("Error sharing target shot chart from History:", err);
+      } finally {
+        setIsGeneratingImage(false);
+      }
+    } else {
+      const bowLabel = session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : (session.bowType || "Barebow");
+      const text = `🎯 *ARCHERY 101010 - Planilla de Tiro*\n🏹 *Arquero:* ${user.fullName || "Arquero"}\n📋 *Formato:* ${session.format} · ${bowLabel} · ${session.distance}m\n🏆 *Puntaje:* ${session.score} / ${session.maxScore} pts (${session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0}%)`;
+      if (typeof navigator !== "undefined" && navigator.share) {
+        navigator.share({ title: "Planilla - Archery 101010", text }).catch(() => {});
+      } else {
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+      }
+    }
+  };
 
   const loadSessions = async () => {
     const list = await getLocalSessions();
@@ -493,8 +543,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => alert("Compartiendo imagen...")}
-                  className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-cyan-neon cursor-pointer"
+                  onClick={() => handleShareSessionShotChart(selectedSession)}
+                  disabled={isGeneratingImage}
+                  className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-cyan-neon hover:border-cyan-neon transition cursor-pointer disabled:opacity-50"
+                  title="Compartir Foto Diana HD o Planilla"
                 >
                   <Share2 size={16} />
                 </button>
@@ -711,6 +763,15 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                           </div>
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleShareSessionShotChart(selectedSession)}
+                        disabled={isGeneratingImage}
+                        className="w-full py-3 mt-1 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.2)] transition active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        <Camera size={15} />
+                        <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Foto Diana (HD)"}</span>
+                      </button>
                     </>
                   );
                 })()}
