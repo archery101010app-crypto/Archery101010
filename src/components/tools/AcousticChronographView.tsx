@@ -408,45 +408,36 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   };
 
   return (
-    <div className="flex flex-col gap-5 max-w-xl mx-auto pb-16 px-1 w-full max-w-full overflow-x-hidden">
-      {/* Top Header */}
-      <div className="flex items-center justify-between bg-neutral-900/60 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-2xl bg-neutral-950/80 border border-white/10 text-gray-dim hover:text-white transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-        >
-          <ArrowLeft size={16} />
-          <span>Volver</span>
-        </button>
+    <div className="flex flex-col gap-4 py-4 max-w-xl mx-auto pb-16 px-1 w-full max-w-full overflow-x-hidden">
+      {/* Top Header (Matched with Calendar / Home header style & height) */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white cursor-pointer active:scale-95 transition"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-white text-lg font-black uppercase tracking-wide leading-tight">
+                Cronógrafo
+              </h2>
+            </div>
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider">
+              Medición Balística Acústica
+            </p>
+          </div>
+        </div>
 
-        <div className="flex items-center gap-1.5 bg-neutral-950/80 border border-cyan-neon/20 px-3 py-1.5 rounded-2xl text-[10px] text-cyan-neon font-black uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 bg-neutral-900/80 border border-cyan-neon/25 px-3 py-1.5 rounded-2xl text-[10px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
           <Target size={13} />
-          <span>18 Metros</span>
+          <span>{distanceMeters} Metros</span>
         </div>
       </div>
 
-      {/* Centered Brand Title & Main Action Buttons */}
+      {/* Main Action Buttons */}
       <div className="flex flex-col gap-3">
-        <div className="py-2 text-center flex flex-col items-center justify-center select-none">
-          {/* 10 10 10 Centrado Arriba */}
-          <div 
-            className="flex items-center justify-center tracking-tighter font-extrabold text-3xl sm:text-4xl leading-none"
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-          >
-            <span className="text-cyan-neon drop-shadow-[0_0_15px_rgba(0,191,255,0.45)]">10</span>
-            <span className="text-red-rival drop-shadow-[0_0_15px_rgba(255,0,0,0.35)]">10</span>
-            <span className="text-yellow-gold drop-shadow-[0_0_15px_rgba(255,229,0,0.35)]">10</span>
-          </div>
-
-          {/* CHRONOGRAPH Centrado Abajo */}
-          <span 
-            className="text-white text-xs sm:text-sm font-black tracking-[0.35em] sm:tracking-[0.45em] uppercase text-center mt-1.5 pl-1.5"
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-          >
-            CHRONOGRAPH
-          </span>
-        </div>
-
         {/* 2 ACTION BUTTONS: INSTRUCCIONES & CONFIGURAR FLECHA */}
         <div className="grid grid-cols-2 gap-2">
           {/* BOTÓN 1: INSTRUCCIONES */}
