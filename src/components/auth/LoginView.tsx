@@ -142,10 +142,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     try {
       await sendPasswordReset(cleanEmail);
       setResetSuccessMsg(
-        `Si tu cuenta existe en el sistema, Firebase envió el enlace de recuperación a:\n${cleanEmail}\n\n` +
-        `• Revisa tu carpeta de SPAM / Correo no deseado y la pestaña Promociones.\n` +
-        `• Remitente oficial: noreply@archery101010-c0bb4.firebaseapp.com\n\n` +
-        `¿Es tu primera vez en la app? Si nunca creaste una cuenta antes, no recibirás correo. Pulsa 'Regístrate' abajo para crear tu usuario en 30 segundos.`
+        `Enlace de recuperación enviado a:\n${cleanEmail}\n\n` +
+        `• Revisa tu bandeja de entrada o Spam.\n` +
+        `• Si aún no tienes cuenta, pulsa 'Regístrate' abajo.`
       );
     } catch (err: any) {
       setError(err.message || "No se pudo enviar el correo de recuperación.");
@@ -284,7 +283,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       } else if (err.code === "auth/missing-initial-state" || err.code === "auth/web-storage-unsupported") {
         msg = "El navegador tiene bloqueado el almacenamiento de sesión. Te recomendamos ingresar con tu correo y contraseña.";
       } else if (err.code === "auth/configuration-not-found" || err.code === "auth/operation-not-allowed") {
-        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está activado en Firebase. Por favor regístrate normalmente.`;
+        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está disponible. Por favor regístrate normalmente.`;
       } else if (err.message) {
         msg = err.message;
       }
