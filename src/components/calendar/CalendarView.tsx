@@ -12,7 +12,8 @@ import {
   addToSyncQueue, 
   CalendarEvent,
   getLocalMacrocycles,
-  saveLocalMacrocycle
+  saveLocalMacrocycle,
+  deleteLocalMacrocycle
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar } from "@/lib/cycleCalendarSync";
@@ -271,12 +272,40 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       setSessions(sessionList);
       
       const eventList = await getLocalEvents();
-      setEvents(eventList);
+      const cleanEvents: CalendarEvent[] = [];
+      for (const ev of eventList) {
+        const desc = (ev.description || "") + " " + (ev.coachNotes || "");
+        const isIndoorEvent = ev.macrocycleId === "MAC-DEMO-1" ||
+          (ev.title || "").toLowerCase().includes("indoor 2026") ||
+          (ev.title || "").toLowerCase().includes("preparación indoor") ||
+          (ev.title || "").toLowerCase().includes("preparacion indoor") ||
+          desc.toLowerCase().includes("indoor 2026") ||
+          desc.toLowerCase().includes("preparación temporada indoor 2026") ||
+          desc.toLowerCase().includes("preparacion temporada indoor 2026");
+        if (isIndoorEvent) {
+          await deleteLocalEvent(ev.id);
+        } else {
+          cleanEvents.push(ev);
+        }
+      }
+      setEvents(cleanEvents);
 
       const macroList = await getLocalMacrocycles();
-      setMacrocycles(macroList);
-      if (macroList.length > 0 && !syncMacroId) {
-        setSyncMacroId(macroList[0].id);
+      const cleanMacroList: Macrocycle[] = [];
+      for (const mac of macroList) {
+        const isIndoorDemo = mac.id === "MAC-DEMO-1" || 
+          (mac.name || "").toLowerCase().includes("indoor 2026") ||
+          (mac.name || "").toLowerCase().includes("preparación indoor") ||
+          (mac.name || "").toLowerCase().includes("preparacion indoor");
+        if (isIndoorDemo) {
+          await deleteLocalMacrocycle(mac.id);
+        } else {
+          cleanMacroList.push(mac);
+        }
+      }
+      setMacrocycles(cleanMacroList);
+      if (cleanMacroList.length > 0 && !syncMacroId) {
+        setSyncMacroId(cleanMacroList[0].id);
       }
     }
     loadData();

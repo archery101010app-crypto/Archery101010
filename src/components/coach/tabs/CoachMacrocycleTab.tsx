@@ -340,72 +340,21 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
         setRoster(athletes);
       }
 
-      // Load macrocycles
+      // Load macrocycles (filtrando y eliminando cualquier residuo de demo indoor 2026)
       const list = await getLocalMacrocycles();
-      if (list.length === 0) {
-        // Seed a demo macrocycle
-        const demoMacro: Macrocycle = {
-          id: "MAC-DEMO-1",
-          name: "Preparación Temporada Indoor 2026",
-          coachId: user.uid,
-          clubId: user.clubId || "CLB-DEMO",
-          startDate: "2026-06-01",
-          endDate: "2026-09-30",
-          volumeGoal: 8000,
-          currentVolume: 3480,
-          status: "active",
-          assignmentType: "club",
-          assignedAthleteIds: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          phases: [
-            {
-              id: "PHASE-D-1",
-              name: "Etapa 1: Acondicionamiento y Base",
-              startDate: "2026-06-01",
-              endDate: "2026-06-30",
-              weeklySessionGoal: 3,
-              weeklyArrowGoal: 300,
-              notes: "Fuerza específica, estabilidad y cardio general.",
-              color: "#8B5CF6"
-            },
-            {
-              id: "PHASE-D-2",
-              name: "Etapa 2: Volumen de Flechas",
-              startDate: "2026-07-01",
-              endDate: "2026-08-15",
-              weeklySessionGoal: 4,
-              weeklyArrowGoal: 600,
-              notes: "Aumentar capacidad aeróbica muscular y volumen de tiro.",
-              color: "#00E5FF"
-            },
-            {
-              id: "PHASE-D-3",
-              name: "Etapa 3: Afinamiento y Técnica",
-              startDate: "2026-08-16",
-              endDate: "2026-09-15",
-              weeklySessionGoal: 3,
-              weeklyArrowGoal: 400,
-              notes: "Afinamiento de técnica y control de puntajes.",
-              color: "#FFE500"
-            },
-            {
-              id: "PHASE-D-4",
-              name: "Etapa 4: Simulacro y Competencias",
-              startDate: "2026-09-16",
-              endDate: "2026-09-30",
-              weeklySessionGoal: 2,
-              weeklyArrowGoal: 200,
-              notes: "Duelos simulados y control mental competitivo.",
-              color: "#EF4444"
-            }
-          ]
-        };
-        await saveLocalMacrocycle(demoMacro.id, demoMacro);
-        setMacrocycles([demoMacro]);
-      } else {
-        setMacrocycles(list);
+      const cleanList: Macrocycle[] = [];
+      for (const macro of list) {
+        const isIndoorDemo = macro.id === "MAC-DEMO-1" || 
+          (macro.name || "").toLowerCase().includes("indoor 2026") ||
+          (macro.name || "").toLowerCase().includes("preparación indoor") ||
+          (macro.name || "").toLowerCase().includes("preparacion indoor");
+        if (isIndoorDemo) {
+          await deleteLocalMacrocycle(macro.id);
+        } else {
+          cleanList.push(macro);
+        }
       }
+      setMacrocycles(cleanList);
     }
 
     if (isPro) {
@@ -1010,7 +959,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Nombre del Plan</label>
                     <input
                       type="text"
-                      placeholder="Ej. Preparación Sala 2026"
+                      placeholder="Ej. Plan de Temporada"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"

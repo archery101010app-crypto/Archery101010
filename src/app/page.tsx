@@ -198,8 +198,31 @@ export default function Home() {
               await removeFromSyncQueue(item.id);
             }
           }
+
+          // Clean up any legacy demo macrocycles/events referencing "Indoor 2026"
+          const { getLocalMacrocycles, deleteLocalMacrocycle, getLocalEvents, deleteLocalEvent } = await import("@/lib/db/indexedDB");
+          const macros = await getLocalMacrocycles();
+          for (const m of macros) {
+            if (m.id === "MAC-DEMO-1" || 
+                (m.name || "").toLowerCase().includes("indoor 2026") || 
+                (m.name || "").toLowerCase().includes("preparación indoor") ||
+                (m.name || "").toLowerCase().includes("preparacion indoor")) {
+              await deleteLocalMacrocycle(m.id);
+            }
+          }
+          const events = await getLocalEvents();
+          for (const ev of events) {
+            const desc = (ev.description || "") + " " + (ev.coachNotes || "");
+            if (ev.macrocycleId === "MAC-DEMO-1" || 
+                (ev.title || "").toLowerCase().includes("indoor 2026") || 
+                desc.toLowerCase().includes("indoor 2026") ||
+                (ev.title || "").toLowerCase().includes("preparación indoor") ||
+                (ev.title || "").toLowerCase().includes("preparacion indoor")) {
+              await deleteLocalEvent(ev.id);
+            }
+          }
         } catch (e) {
-          console.error("Error cleaning up local simulated users:", e);
+          console.error("Error cleaning up local simulated users and legacy cycles:", e);
         }
       } catch (e) {
         console.error("Error reading authentication", e);
