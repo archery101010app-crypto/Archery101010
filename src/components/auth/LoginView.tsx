@@ -97,6 +97,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           setLoading(true);
           const user = await loginSocialUser(result.user.email, result.user.displayName || "");
           onLoginSuccess(user);
+          return;
+        }
+        if (auth.currentUser && auth.currentUser.email && auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
+          setLoading(true);
+          const user = await loginSocialUser(auth.currentUser.email, auth.currentUser.displayName || "");
+          onLoginSuccess(user);
         }
       } catch (err: any) {
         console.error("Error al procesar retorno de redirección:", err);
