@@ -24,26 +24,11 @@ export default function AdminSubscriptionsTab() {
       const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
       setUsers(list);
 
-      // Set default demo audit logs
-      const savedLogs = await getLocalSetting<SubscriptionLog[]>("sub_audit_logs", [
-        {
-          id: "LOG-1",
-          userName: "Carlos Mendoza",
-          previousPlan: "FREE",
-          newPlan: "PRO",
-          timestamp: new Date(Date.now() - 3600000 * 24).toISOString().split("T")[0],
-          reason: "Suscripción manual (SuperAdmin override)"
-        },
-        {
-          id: "LOG-2",
-          userName: "Daniela Rivas",
-          previousPlan: "FREE",
-          newPlan: "PRO",
-          timestamp: new Date(Date.now() - 3600000 * 48).toISOString().split("T")[0],
-          reason: "Pago procesado vía PayPal Standard"
-        }
-      ]);
-      setLogs(savedLogs);
+      // Load real audit logs from IndexedDB
+      const savedLogs = await getLocalSetting<SubscriptionLog[]>("sub_audit_logs", []);
+      // Purge any legacy dummy logs (e.g. LOG-1, LOG-2)
+      const cleanLogs = savedLogs.filter(l => l.id !== "LOG-1" && l.id !== "LOG-2");
+      setLogs(cleanLogs);
     }
     loadData();
   }, []);
@@ -163,20 +148,24 @@ export default function AdminSubscriptionsTab() {
           </h3>
 
           <div className="flex flex-col gap-4 mt-1.5 max-h-[40vh] overflow-y-auto pr-1">
-            {logs.map((log) => (
-              <div key={log.id} className="relative pl-4 border-l border-white/5 flex flex-col gap-1">
-                <div className="absolute left-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-white">{log.userName}</span>
-                  <span className="text-[8px] text-white/30 font-semibold">{log.timestamp}</span>
+            {logs.length === 0 ? (
+              <p className="text-xs text-white/40 italic py-4">No hay registros de cambios de suscripción.</p>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className="relative pl-4 border-l border-white/5 flex flex-col gap-1">
+                  <div className="absolute left-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-white">{log.userName}</span>
+                    <span className="text-[8px] text-white/30 font-semibold">{log.timestamp}</span>
+                  </div>
+                  <p className="text-[10px] text-white/60 leading-normal">
+                    Cambió de <span className="font-bold text-white/80">{log.previousPlan}</span> a{" "}
+                    <span className="font-black text-yellow-gold">{log.newPlan}</span>
+                  </p>
+                  <span className="text-[9px] text-cyan-neon/80 font-bold mt-0.5">{log.reason}</span>
                 </div>
-                <p className="text-[10px] text-white/60 leading-normal">
-                  Cambió de <span className="font-bold text-white/80">{log.previousPlan}</span> a{" "}
-                  <span className="font-black text-yellow-gold">{log.newPlan}</span>
-                </p>
-                <span className="text-[9px] text-cyan-neon/80 font-bold mt-0.5">{log.reason}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

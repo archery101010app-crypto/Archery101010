@@ -20,9 +20,9 @@ export default function AdminSettingsTab() {
 
   useEffect(() => {
     async function loadSettings() {
-      const pId = await settingsStore.getItem<string>("paypal_client_id") || "PAYPAL_CLIENT_ID_MOCK_123456789";
-      const pSec = await settingsStore.getItem<string>("paypal_secret") || "PAYPAL_SECRET_MOCK_987654321";
-      const wapp = await settingsStore.getItem<string>("support_whatsapp") || "+50688888888";
+      const pId = await settingsStore.getItem<string>("paypal_client_id") || "";
+      const pSec = await settingsStore.getItem<string>("paypal_secret") || "";
+      const wapp = await settingsStore.getItem<string>("support_whatsapp") || "";
       const email = await settingsStore.getItem<string>("support_email") || "info@archery101010.com";
       const flagDuels = await settingsStore.getItem<boolean>("flag_duels_enabled");
       const flagSpotify = await settingsStore.getItem<boolean>("flag_spotify_enabled");
