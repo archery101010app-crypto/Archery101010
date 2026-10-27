@@ -19,6 +19,7 @@ import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
 import AcousticChronographView from "@/components/tools/AcousticChronographView";
+import CoachPaymentModal from "@/components/subscription/CoachPaymentModal";
 
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -58,6 +59,7 @@ export default function Home() {
 
   const [pendingInvitation, setPendingInvitation] = useState<any | null>(null);
   const [backToast, setBackToast] = useState<string | null>(null);
+  const [showCoachPaymentModal, setShowCoachPaymentModal] = useState<boolean>(false);
 
   const mainRef = React.useRef<HTMLElement | null>(null);
   const bypassBeforeUnloadRef = React.useRef(false);
@@ -125,6 +127,18 @@ export default function Home() {
       });
     }
   }, [user, dismissedProfileModal]);
+
+  useEffect(() => {
+    if (showCoachPaymentModal) {
+      return registerModalDismiss(() => setShowCoachPaymentModal(false));
+    }
+  }, [showCoachPaymentModal]);
+
+  useEffect(() => {
+    const handleOpenPay = () => setShowCoachPaymentModal(true);
+    window.addEventListener("open-coach-payment", handleOpenPay);
+    return () => window.removeEventListener("open-coach-payment", handleOpenPay);
+  }, []);
 
   // Check authentication status and initialize database on mount
   useEffect(() => {
@@ -824,10 +838,19 @@ export default function Home() {
     : "calc(4.75rem + env(safe-area-inset-top))";
 
   const handleToggleCoachViewMode = (val: boolean) => {
-    setCoachViewMode(val);
     if (val) {
-      setCurrentScreen("HOME");
+      // Show Coach PRO payment and subscription modal
+      setShowCoachPaymentModal(true);
+      return;
     }
+    setCoachViewMode(false);
+  };
+
+  const handleCoachPaymentSuccess = (updatedUser: UserProfile) => {
+    setUser(updatedUser);
+    setCoachViewMode(true);
+    setCurrentScreen("HOME");
+    setShowCoachPaymentModal(false);
   };
 
   // Authenticated application flow
@@ -1269,6 +1292,16 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Coach PRO Subscription & Payment Modal */}
+      {user && (
+        <CoachPaymentModal
+          isOpen={showCoachPaymentModal}
+          onClose={() => setShowCoachPaymentModal(false)}
+          user={user}
+          onSuccess={handleCoachPaymentSuccess}
+        />
+      )}
 
       {/* Floating Back Navigation Toast (OLED Mobile HUD) */}
       <AnimatePresence>
