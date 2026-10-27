@@ -6,7 +6,8 @@ import {
   Lock, Sparkles, Plus, Calendar, CheckCircle2, ChevronRight, 
   Trash2, ArrowUp, ArrowDown, Users, User, ArrowLeft, Layout, 
   Copy, Archive, Edit2, AlertCircle, Check, X, RefreshCw,
-  FileSpreadsheet, Download, UploadCloud, ClipboardPaste, HelpCircle
+  FileSpreadsheet, Download, UploadCloud, ClipboardPaste, HelpCircle,
+  Unlink, UserMinus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -19,7 +20,7 @@ import {
   saveLocalSetting
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
-import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar } from "@/lib/cycleCalendarSync";
+import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { 
   parseSpreadsheetData, 
@@ -516,21 +517,29 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Seguro que deseas eliminar este ciclo?")) return;
+    const target = macrocycles.find((m) => m.id === id);
+    const planName = target?.name || "este plan";
+    if (!confirm(`¿Seguro que deseas desvincular y eliminar el plan "${planName}"?\n\nEsta acción borrará el plan y retirará todas sus asignaciones y tareas programadas en el calendario.`)) return;
     
-    await deleteLocalMacrocycle(id);
+    await unlinkAndPurgePlan(id);
 
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "macrocycles",
-      operation: "DELETE",
-      payloadId: id,
-      payload: null,
-      timestamp: Date.now()
-    });
-
-    setMacrocycles(macrocycles.filter((m) => m.id !== id));
+    const updated = await getLocalMacrocycles();
+    setMacrocycles(updated);
     if (selectedMacro?.id === id) setSelectedMacro(null);
+    alert(`✓ El plan "${planName}" ha sido desvinculado y eliminado por completo.`);
+  };
+
+  const handleUnlinkAthlete = async (macro: Macrocycle, athlete: UserProfile) => {
+    if (!confirm(`¿Deseas desvincular a ${athlete.fullName} del plan "${macro.name}"?\n\nSe retirarán todas las tareas y metas de este plan del calendario del alumno.`)) return;
+
+    await unlinkAndPurgePlan(macro.id, athlete.uid);
+
+    const updated = await getLocalMacrocycles();
+    setMacrocycles(updated);
+    const refreshedSelected = updated.find((m) => m.id === macro.id) || null;
+    setSelectedMacro(refreshedSelected);
+
+    alert(`✓ ${athlete.fullName} ha sido desvinculado(a) del plan exitosamente.`);
   };
 
   const handleDuplicate = async (macro: Macrocycle) => {
@@ -785,10 +794,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </button>
                 <button
                   onClick={() => handleDelete(selectedMacro.id)}
-                  className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/10 transition cursor-pointer"
-                  title="Eliminar"
+                  className="px-2.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition cursor-pointer flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                  title="Desvincular y eliminar este plan"
                 >
-                  <Trash2 size={13} />
+                  <Unlink size={13} />
+                  <span>Desvincular Plan</span>
                 </button>
               </div>
             </div>
@@ -913,9 +923,19 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <span className="text-xs font-black text-white">{athleteProgress.toLocaleString()} flechas</span>
-                          <span className="text-[9px] text-cyan-neon block font-bold mt-0.5">{pct}% de su meta</span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="text-xs font-black text-white">{athleteProgress.toLocaleString()} flechas</span>
+                            <span className="text-[9px] text-cyan-neon block font-bold mt-0.5">{pct}% de su meta</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
+                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                            title={`Desvincular a ${athlete.fullName} de este plan`}
+                          >
+                            <UserMinus size={14} />
+                          </button>
                         </div>
                       </div>
                     );

@@ -16,7 +16,7 @@ import {
   deleteLocalMacrocycle
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
-import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar } from "@/lib/cycleCalendarSync";
+import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
 import { 
   parseSpreadsheetData, 
   ParsedCycleResult, 
@@ -49,7 +49,9 @@ import {
   UploadCloud,
   ClipboardPaste,
   Download,
-  AlertCircle
+  AlertCircle,
+  Unlink,
+  UserMinus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -106,6 +108,53 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const [importError, setImportError] = useState<string | null>(null);
   const [sheetUrlInput, setSheetUrlInput] = useState("");
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
+
+  // Unlink Plan states
+  const [showUnlinkModal, setShowUnlinkModal] = useState(false);
+  const [macroToUnlink, setMacroToUnlink] = useState<Macrocycle | null>(null);
+  const [unlinkTargetAthleteId, setUnlinkTargetAthleteId] = useState<string>("ALL");
+  const [isUnlinking, setIsUnlinking] = useState(false);
+
+  const handleRequestUnlink = (macro: Macrocycle | null) => {
+    if (!macro) return;
+    setMacroToUnlink(macro);
+    setUnlinkTargetAthleteId("ALL");
+    setShowUnlinkModal(true);
+  };
+
+  const handleConfirmUnlink = async () => {
+    if (!macroToUnlink) return;
+    setIsUnlinking(true);
+    try {
+      const targetAthlete = unlinkTargetAthleteId !== "ALL" ? unlinkTargetAthleteId : undefined;
+      const res = await unlinkAndPurgePlan(macroToUnlink.id, targetAthlete);
+
+      const updatedMacros = await getLocalMacrocycles();
+      setMacrocycles(updatedMacros);
+      const updatedEvents = await getLocalEvents();
+      setEvents(updatedEvents);
+
+      if (selectedMacrocycleId === macroToUnlink.id) {
+        setSelectedMacrocycleId("ALL");
+      }
+
+      setShowUnlinkModal(false);
+      setShowDayModal(false);
+      const planName = macroToUnlink.name;
+      setMacroToUnlink(null);
+
+      alert(
+        targetAthlete 
+          ? `✓ Se ha desvinculado al alumno del plan "${planName}" y se retiraron sus tareas del calendario.`
+          : `✓ El plan "${planName}" ha sido desvinculado y se eliminaron ${res.deletedEventsCount} eventos del calendario.`
+      );
+    } catch (e) {
+      console.error("Error unlinking plan:", e);
+      alert("No se pudo desvincular el plan. Intenta de nuevo.");
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
 
   const handleOpenImportModal = () => {
     setImportText("");
@@ -896,26 +945,47 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         </button>
       </div>
 
-      {/* Macrocycle Filter */}
+      {/* Macrocycle Filter & Unlink Plan Action */}
       {macrocycles.length > 0 && (
-        <div className="flex items-center justify-between gap-3 px-1">
-          <span className="text-xs text-gray-dim uppercase font-black tracking-widest">
-            {language === "es" ? "Plan / Ciclo:" : "Cycle Plan:"}
-          </span>
-          <select
-            value={selectedMacrocycleId}
-            onChange={(e) => setSelectedMacrocycleId(e.target.value)}
-            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[220px]"
-          >
-            <option value="ALL">
-              {language === "es" ? "Todos los Planes" : "All Plans"}
-            </option>
-            {macrocycles.map((mac) => (
-              <option key={mac.id} value={mac.id}>
-                {mac.name}
+        <div className="flex items-center justify-between gap-2.5 px-1 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-gray-dim uppercase font-black tracking-widest shrink-0">
+              {language === "es" ? "Plan:" : "Plan:"}
+            </span>
+            <select
+              value={selectedMacrocycleId}
+              onChange={(e) => setSelectedMacrocycleId(e.target.value)}
+              className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[180px] sm:max-w-[220px] truncate"
+            >
+              <option value="ALL">
+                {language === "es" ? "Todos los Planes" : "All Plans"}
               </option>
-            ))}
-          </select>
+              {macrocycles.map((mac) => (
+                <option key={mac.id} value={mac.id}>
+                  {mac.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Botón Desvincular Plan */}
+          {(() => {
+            const currentPlan = selectedMacrocycleId !== "ALL" 
+              ? macrocycles.find((m) => m.id === selectedMacrocycleId) 
+              : macrocycles[0];
+            if (!currentPlan) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => handleRequestUnlink(currentPlan)}
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm"
+                title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
+              >
+                <Unlink size={11} />
+                <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
+              </button>
+            );
+          })()}
         </div>
       )}
 
@@ -1084,6 +1154,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 &ldquo;{phase.notes}&rdquo;
               </p>
             )}
+
+            <div className="flex items-center justify-between border-t border-white/[0.04] pt-2.5 mt-1">
+              <span className="text-[9px] text-white/40">Plan vinculado</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const m = macrocycles.find((mc) => mc.id === activePhaseInfo.macrocycle?.id || mc.name === macroName);
+                  if (m) handleRequestUnlink(m);
+                  else if (macrocycles.length > 0) handleRequestUnlink(macrocycles[0]);
+                }}
+                className="text-[10px] text-rose-400 hover:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+              >
+                <Unlink size={11} />
+                <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
+              </button>
+            </div>
           </div>
         );
       })()}
@@ -1352,16 +1438,51 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           </h4>
                         </div>
 
-                        {/* Edit button if coach */}
-                        {isCoach && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Edit button if coach */}
+                          {isCoach && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditAssignment(coachAssignment)}
+                              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[9px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit2 size={11} />
+                              <span>Editar</span>
+                            </button>
+                          )}
+                          {/* Botón para Desvincular Plan */}
                           <button
-                            onClick={() => handleOpenEditAssignment(coachAssignment)}
-                            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[9px] font-bold flex items-center gap-1 cursor-pointer"
+                            type="button"
+                            onClick={() => {
+                              const m = macrocycles.find((mc) => mc.id === coachAssignment.macrocycleId);
+                              if (m) {
+                                handleRequestUnlink(m);
+                              } else if (coachAssignment.macrocycleId) {
+                                handleRequestUnlink({
+                                  id: coachAssignment.macrocycleId,
+                                  name: coachAssignment.title,
+                                  startDate: coachAssignment.date,
+                                  endDate: coachAssignment.date,
+                                  phases: [],
+                                  assignmentType: "club",
+                                  assignedAthleteIds: [],
+                                  volumeGoal: 0,
+                                  currentVolume: 0,
+                                  status: "active",
+                                  coachId: "",
+                                  clubId: "",
+                                  createdAt: "",
+                                  updatedAt: ""
+                                });
+                              }
+                            }}
+                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition text-[9px] font-bold flex items-center gap-1 cursor-pointer"
+                            title="Desvincular Plan"
                           >
-                            <Edit2 size={11} />
-                            <span>Editar</span>
+                            <Unlink size={11} />
+                            <span>Desvincular</span>
                           </button>
-                        )}
+                        </div>
                       </div>
 
                       {/* Meta de Flechas */}
@@ -2105,6 +2226,106 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 >
                   <Sparkles size={14} />
                   <span>Transformar al Calendario</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Unlink Plan Confirmation Modal */}
+      <AnimatePresence>
+        {showUnlinkModal && macroToUnlink && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div 
+              className="absolute inset-0" 
+              onClick={() => {
+                if (!isUnlinking) {
+                  setShowUnlinkModal(false);
+                  setMacroToUnlink(null);
+                }
+              }} 
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-neutral-950 border border-white/10 rounded-3xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl z-10"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isUnlinking) {
+                    setShowUnlinkModal(false);
+                    setMacroToUnlink(null);
+                  }
+                }}
+                className="absolute top-4 right-4 p-1.5 rounded-xl bg-neutral-900 border border-white/10 text-white/40 hover:text-white transition"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                <Unlink size={24} />
+              </div>
+
+              <div>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  ¿Desvincular Plan?
+                </h3>
+                <p className="text-xs text-white/80 mt-1 leading-relaxed">
+                  Plan: <strong className="text-white">{macroToUnlink.name}</strong>
+                </p>
+                <p className="text-[11px] text-rose-400/90 mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                  Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.
+                </p>
+              </div>
+
+              {/* If Coach and multiple athletes are assigned */}
+              {isCoach && macroToUnlink.assignedAthleteIds && macroToUnlink.assignedAthleteIds.length > 0 && (
+                <div className="flex flex-col gap-1.5 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
+                  <label className="text-[9px] text-white/50 uppercase font-black tracking-widest">
+                    Desvincular a:
+                  </label>
+                  <select
+                    value={unlinkTargetAthleteId}
+                    onChange={(e) => setUnlinkTargetAthleteId(e.target.value)}
+                    className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-neon font-bold"
+                  >
+                    <option value="ALL">Todo el plan (Borrar completamente)</option>
+                    {macroToUnlink.assignedAthleteIds.map((athId) => (
+                      <option key={athId} value={athId}>
+                        Solo al alumno ({athId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUnlinkModal(false);
+                    setMacroToUnlink(null);
+                  }}
+                  disabled={isUnlinking}
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-white/70 hover:text-white font-bold text-xs uppercase cursor-pointer transition border border-white/5"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmUnlink}
+                  disabled={isUnlinking}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase cursor-pointer transition shadow-lg flex items-center justify-center gap-1.5"
+                >
+                  {isUnlinking ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Unlink size={14} />
+                  )}
+                  <span>Confirmar</span>
                 </button>
               </div>
             </motion.div>

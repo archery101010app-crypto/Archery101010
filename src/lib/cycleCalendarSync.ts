@@ -312,3 +312,122 @@ export async function syncEntireMacrocycleToCalendar(
     year: start.getFullYear()
   };
 }
+
+/**
+ * Unlinks and deletes a plan and all its calendar events from IndexedDB and sync queue.
+ * - If targetAthleteId is provided: unlinks only that athlete from the macrocycle (and their individual events).
+ * - If targetAthleteId is omitted: completely deletes the macrocycle and ALL associated calendar events.
+ */
+export async function unlinkAndPurgePlan(
+  macrocycleId: string,
+  targetAthleteId?: string
+): Promise<{ deletedEventsCount: number; planDeleted: boolean }> {
+  const { 
+    getLocalMacrocycles, 
+    saveLocalMacrocycle, 
+    deleteLocalMacrocycle, 
+    getLocalEvents, 
+    deleteLocalEvent, 
+    saveLocalEvent,
+    generateResilientId, 
+    addToSyncQueue 
+  } = await import("@/lib/db/indexedDB");
+
+  let deletedEventsCount = 0;
+  let planDeleted = false;
+
+  const macrocycles = await getLocalMacrocycles();
+  const targetMacro = macrocycles.find((m: Macrocycle) => m.id === macrocycleId);
+
+  const events = await getLocalEvents();
+
+  if (targetAthleteId) {
+    // Unlink single athlete
+    if (targetMacro) {
+      const updatedAthleteIds = (targetMacro.assignedAthleteIds || []).filter(
+        (id: string) => id !== targetAthleteId
+      );
+      targetMacro.assignedAthleteIds = updatedAthleteIds;
+      if (targetMacro.assignmentType === "individual" && updatedAthleteIds.length === 0) {
+        await deleteLocalMacrocycle(macrocycleId);
+        planDeleted = true;
+      } else {
+        await saveLocalMacrocycle(macrocycleId, targetMacro);
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "macrocycles",
+          operation: "UPDATE",
+          payloadId: macrocycleId,
+          payload: targetMacro,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    // Delete or update events for this athlete
+    for (const ev of events) {
+      if (ev.macrocycleId === macrocycleId) {
+        if (ev.assignedAthleteIds && ev.assignedAthleteIds.includes(targetAthleteId)) {
+          const remainingAthletes = ev.assignedAthleteIds.filter((id: string) => id !== targetAthleteId);
+          if (remainingAthletes.length === 0) {
+            await deleteLocalEvent(ev.id);
+            await addToSyncQueue({
+              id: generateResilientId("TXN"),
+              collection: "calendar_events",
+              operation: "DELETE",
+              payloadId: ev.id,
+              payload: {},
+              timestamp: Date.now()
+            });
+            deletedEventsCount++;
+          } else {
+            ev.assignedAthleteIds = remainingAthletes;
+            await saveLocalEvent(ev.id, ev);
+          }
+        }
+      }
+    }
+  } else {
+    // Complete unlink and deletion of the plan
+    if (targetMacro) {
+      await deleteLocalMacrocycle(macrocycleId);
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "macrocycles",
+        operation: "DELETE",
+        payloadId: macrocycleId,
+        payload: {},
+        timestamp: Date.now()
+      });
+      planDeleted = true;
+    }
+
+    // Delete ALL events tied to this macrocycle
+    for (const ev of events) {
+      if (ev.macrocycleId === macrocycleId) {
+        await deleteLocalEvent(ev.id);
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "calendar_events",
+          operation: "DELETE",
+          payloadId: ev.id,
+          payload: {},
+          timestamp: Date.now()
+        });
+        deletedEventsCount++;
+      }
+    }
+  }
+
+  // Notify listeners to update UI reactively
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("local-db-change", { detail: { store: "macrocycles_local" } })
+    );
+    window.dispatchEvent(
+      new CustomEvent("local-db-change", { detail: { store: "calendar_events" } })
+    );
+  }
+
+  return { deletedEventsCount, planDeleted };
+}
