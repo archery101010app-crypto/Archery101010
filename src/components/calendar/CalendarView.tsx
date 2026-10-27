@@ -16,14 +16,8 @@ import {
   deleteLocalMacrocycle
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
-import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
-import { 
-  parseSpreadsheetData, 
-  ParsedCycleResult, 
-  downloadSampleTemplate, 
-  downloadDailySampleTemplate,
-  fetchGoogleSheetCsv
-} from "@/lib/cycleImporter";
+import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
+import PlanImporterModal from "@/components/planning/PlanImporterModal";
 import { 
   ArrowLeft, 
   ChevronLeft, 
@@ -102,12 +96,27 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
   // Direct Excel / Google Sheets Importer states in Calendar
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [importPlanName, setImportPlanName] = useState("");
-  const [importPreview, setImportPreview] = useState<ParsedCycleResult | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [sheetUrlInput, setSheetUrlInput] = useState("");
-  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
+  const handleOpenImportModal = () => setShowImportModal(true);
+
+  const handleImportSuccess = async ({ macrocycle, summary }: { macrocycle: Macrocycle; summary: SyncCycleSummary }) => {
+    const updatedMacros = await getLocalMacrocycles();
+    setMacrocycles(updatedMacros);
+    const updatedEvents = await getLocalEvents();
+    setEvents(updatedEvents);
+
+    const firstDateObj = new Date(macrocycle.startDate + "T12:00:00");
+    if (!isNaN(firstDateObj.getTime())) {
+      setCurrentDate(new Date(firstDateObj.getFullYear(), firstDateObj.getMonth(), 1));
+    }
+    setSelectedMacrocycleId(macrocycle.id);
+
+    alert(
+      `✓ ¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
+      `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+      `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+      `Toca cualquier fecha en el calendario para ver el detalle exacto de cada día.`
+    );
+  };
 
   // Unlink Plan states
   const [showUnlinkModal, setShowUnlinkModal] = useState(false);
@@ -156,163 +165,6 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     }
   };
 
-  const handleOpenImportModal = () => {
-    setImportText("");
-    setImportPlanName("");
-    setImportPreview(null);
-    setImportError(null);
-    setSheetUrlInput("");
-    setShowImportModal(true);
-  };
-
-  const handleParseImport = (textToParse: string, nameOverride?: string) => {
-    setImportText(textToParse);
-    setImportError(null);
-    if (!textToParse.trim()) {
-      setImportPreview(null);
-      return;
-    }
-    if (textToParse.trim().startsWith("https://docs.google.com/spreadsheets/")) {
-      setSheetUrlInput(textToParse.trim());
-      fetchGoogleSheetCsv(textToParse.trim()).then((res) => {
-        if (res.ok && res.csv) {
-          handleParseImport(res.csv, nameOverride);
-        } else {
-          setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
-        }
-      });
-      return;
-    }
-    const currentName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan Calendarizado 2026");
-    const result = parseSpreadsheetData(textToParse, currentName);
-    if (result.success && (result.stages.length > 0 || result.dailyEntries.length > 0)) {
-      setImportPreview(result);
-      if (!importPlanName && !nameOverride) {
-        setImportPlanName(result.planName);
-      }
-    } else {
-      setImportPreview(null);
-      setImportError(result.error || "No se detectaron datos válidos. Verifica las columnas de tu Excel o Sheets.");
-    }
-  };
-
-  const handleFetchGoogleSheet = async () => {
-    if (!sheetUrlInput.trim()) return;
-    setIsFetchingSheet(true);
-    setImportError(null);
-    const res = await fetchGoogleSheetCsv(sheetUrlInput);
-    setIsFetchingSheet(false);
-    if (res.ok && res.csv) {
-      handleParseImport(res.csv);
-    } else {
-      setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
-    }
-  };
-
-  const handlePasteClipboard = async () => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          handleParseImport(text);
-          return;
-        }
-      }
-      alert("Copia las celdas en tu Excel o Google Sheets y pégalas directamente en el recuadro de texto.");
-    } catch {
-      alert("Pega directamente el contenido copiado en el campo de texto.");
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-        setImportPlanName(cleanName);
-        handleParseImport(content, cleanName);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleConfirmImportToCalendar = async () => {
-    if (!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0)) return;
-    const id = generateResilientId("MAC");
-    const nowStr = new Date().toISOString();
-    const finalName = importPlanName.trim() || importPreview.planName || "Plan Importado";
-
-    const newCycle: Macrocycle = {
-      id,
-      name: finalName,
-      coachId: user.uid,
-      clubId: user.clubId || "CLB-DEMO",
-      startDate: importPreview.startDate,
-      endDate: importPreview.endDate,
-      phases: importPreview.stages,
-      assignmentType: "club",
-      assignedAthleteIds: [],
-      volumeGoal: importPreview.totalVolumeGoal,
-      currentVolume: 0,
-      status: "active",
-      createdAt: nowStr,
-      updatedAt: nowStr
-    };
-
-    await saveLocalMacrocycle(id, newCycle);
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "macrocycles",
-      operation: "INSERT",
-      payloadId: id,
-      payload: newCycle,
-      timestamp: Date.now()
-    });
-
-    if (importPreview.mode === "daily" && importPreview.dailyEntries.length > 0) {
-      const summary = await saveDailyEntriesToCalendar(importPreview.dailyEntries, newCycle, user);
-      const updatedEvents = await getLocalEvents();
-      setEvents(updatedEvents);
-      const updatedMacros = await getLocalMacrocycles();
-      setMacrocycles(updatedMacros);
-      setShowImportModal(false);
-
-      // Jump calendar view to the first date of the imported plan
-      const firstDateObj = new Date(importPreview.startDate + "T12:00:00");
-      if (!isNaN(firstDateObj.getTime())) {
-        setCurrentDate(new Date(firstDateObj.getFullYear(), firstDateObj.getMonth(), 1));
-      }
-
-      alert(
-        `✓ ¡Plan Día por Día "${finalName}" Agregado al Calendario!\n\n` +
-        `• Días exactos programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-        `Toca cualquier día marcado en el calendario para ver su detalle completo.`
-      );
-    } else {
-      const summary = await syncEntireMacrocycleToCalendar(newCycle, user);
-      const updatedEvents = await getLocalEvents();
-      setEvents(updatedEvents);
-      const updatedMacros = await getLocalMacrocycles();
-      setMacrocycles(updatedMacros);
-      setShowImportModal(false);
-
-      const firstDateObj = new Date(importPreview.startDate + "T12:00:00");
-      if (!isNaN(firstDateObj.getTime())) {
-        setCurrentDate(new Date(firstDateObj.getFullYear(), firstDateObj.getMonth(), 1));
-      }
-
-      alert(
-        `✓ ¡Plan "${finalName}" Transformado Día por Día en el Calendario!\n\n` +
-        `• Etapas procesadas: ${importPreview.stages.length}\n` +
-        `• Días generados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}`
-      );
-    }
-  };
 
   // Load Sessions, Events and Macrocycles on Mount & on db change
   useEffect(() => {
@@ -1998,240 +1850,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       {/* ================================================================= */}
       {/* MODAL 5: IMPORT EXCEL / GOOGLE SHEETS DIRECTLY INTO CALENDAR      */}
       {/* ================================================================= */}
-      <AnimatePresence>
-        {showImportModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-neutral-950 border border-emerald-500/30 rounded-3xl w-full max-w-lg p-5 flex flex-col gap-4 max-h-[92vh] overflow-y-auto shadow-2xl relative text-left"
-            >
-              <div className="flex justify-between items-center pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <FileSpreadsheet size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-sm text-white tracking-wide">
-                      Importar Excel / Sheets al Calendario
-                    </h3>
-                    <p className="text-[10px] text-white/50">
-                      Reconoce tablas Día por Día o por Etapas automáticamente
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowImportModal(false)}
-                  className="p-1.5 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={handlePasteClipboard}
-                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95"
-                >
-                  <ClipboardPaste size={14} className="text-cyan-neon" />
-                  <span>Pegar Celdas</span>
-                </button>
-
-                <label className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition cursor-pointer active:scale-95 text-center">
-                  <UploadCloud size={14} className="text-emerald-400" />
-                  <span>Subir CSV/Excel</span>
-                  <input
-                    type="file"
-                    accept=".csv,.tsv,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={downloadDailySampleTemplate}
-                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95 text-center"
-                >
-                  <Download size={14} className="text-yellow-gold" />
-                  <span>Modelo Día x Día</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={downloadSampleTemplate}
-                  className="py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition active:scale-95 text-center"
-                >
-                  <Download size={14} className="text-purple-400" />
-                  <span>Modelo Etapas</span>
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
-                  O pega el enlace público de tu Google Sheets
-                </label>
-                <div className="flex gap-1.5">
-                  <input
-                    type="url"
-                    value={sheetUrlInput}
-                    onChange={(e) => setSheetUrlInput(e.target.value)}
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                    className="flex-1 bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-[11px] outline-none focus:border-emerald-400 transition placeholder:text-white/20 min-w-0"
-                  />
-                  <button
-                    type="button"
-                    disabled={!sheetUrlInput.trim() || isFetchingSheet}
-                    onClick={handleFetchGoogleSheet}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 font-black text-[10px] uppercase tracking-wider shrink-0 transition disabled:opacity-40 cursor-pointer"
-                  >
-                    {isFetchingSheet ? "Leyendo..." : "Leer Sheets"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
-                  Nombre del Plan
-                </label>
-                <input
-                  type="text"
-                  value={importPlanName}
-                  onChange={(e) => {
-                    setImportPlanName(e.target.value);
-                    if (importText.trim()) {
-                      handleParseImport(importText, e.target.value);
-                    }
-                  }}
-                  placeholder="Ej: Plan Mensual Octubre 2026"
-                  className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-400 transition placeholder:text-white/20"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-[9px] text-white/50 uppercase font-black tracking-wider">
-                    Celdas de Excel / Google Sheets
-                  </label>
-                  {importText.trim() && (
-                    <span className="text-[9px] text-white/40">
-                      {importText.trim().split("\n").length} líneas
-                    </span>
-                  )}
-                </div>
-                <textarea
-                  value={importText}
-                  onChange={(e) => handleParseImport(e.target.value)}
-                  placeholder={`Formato Día por Día:\nFecha\tActividad\tFlechas\tEnfoque\tNotas\n26/10/2026\tVolumen 70m\t120\tAnclaje firme\tSeries de 6 flechas\n27/10/2026\tControl WA 720\t144\tTiempo oficial\tAnotar en la app`}
-                  rows={4}
-                  className="bg-neutral-900 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-white/90 outline-none focus:border-emerald-400 transition placeholder:text-white/20 resize-none leading-relaxed"
-                />
-              </div>
-
-              {importError && (
-                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] flex items-center gap-2">
-                  <AlertCircle size={14} className="shrink-0" />
-                  <span>{importError}</span>
-                </div>
-              )}
-
-              {importPreview && (importPreview.stages.length > 0 || importPreview.dailyEntries.length > 0) && (
-                <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                  <div className="flex items-center justify-between text-[10px] flex-wrap gap-1">
-                    <span className="text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                      <CheckCircle2 size={12} />
-                      {importPreview.mode === "daily"
-                        ? `Modo Día por Día (${importPreview.dailyEntries.length} días exactos)`
-                        : `Modo por Etapas (${importPreview.stages.length} etapas)`}
-                    </span>
-                    <span className="text-white/60 font-mono">
-                      Meta: {importPreview.totalVolumeGoal.toLocaleString()} flechas
-                    </span>
-                  </div>
-
-                  {importPreview.mode === "daily" ? (
-                    <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
-                      {importPreview.dailyEntries.map((dayItem, i) => (
-                        <div
-                          key={`${dayItem.date}-${i}`}
-                          className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between gap-2 text-[10px]"
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span
-                              className={`w-2 h-2 rounded-full shrink-0 ${
-                                dayItem.isRestDay ? "bg-emerald-400" : dayItem.type === "competition" ? "bg-red-400" : "bg-cyan-neon"
-                              }`}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-black text-white truncate">{dayItem.title}</div>
-                              <div className="text-[9px] text-white/40 font-mono truncate">
-                                {dayItem.date} · {dayItem.focusPoints.join(", ")}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-cyan-neon font-black font-mono whitespace-nowrap">
-                              {dayItem.isRestDay ? "Descanso" : `🎯 ${dayItem.targetArrows} fl`}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
-                      {importPreview.stages.map((stg, i) => (
-                        <div
-                          key={stg.id || i}
-                          className="p-2 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between text-[10px]"
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: stg.color || "#10B981" }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-black text-white truncate">{stg.name}</div>
-                              <div className="text-[9px] text-white/40 font-mono">
-                                {stg.startDate} ➔ {stg.endDate}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-cyan-neon font-black font-mono">
-                              {stg.weeklyArrowGoal} fl/sem
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0)}
-                  onClick={handleConfirmImportToCalendar}
-                  className="flex-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-500/20 disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <Sparkles size={14} />
-                  <span>Transformar al Calendario</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* HIGH-END MODAL IMPORT EXCEL / GOOGLE SHEETS */}
+      <PlanImporterModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        user={user}
+        onSuccess={handleImportSuccess}
+        titleOverride="Calendario & Planificaci�n"
+      />
 
       {/* Unlink Plan Confirmation Modal */}
       <AnimatePresence>
