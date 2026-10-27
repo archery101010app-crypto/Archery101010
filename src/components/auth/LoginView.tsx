@@ -133,14 +133,20 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const handlePasswordReset = async () => {
     setError("");
     setResetSuccessMsg("");
-    if (!email.trim()) {
-      setError("Escribe tu correo electrónico arriba y luego pulsa '¿Olvidaste tu contraseña?'.");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError("Por favor escribe tu correo electrónico en la casilla de arriba y luego presiona '¿Olvidaste tu contraseña?'.");
       return;
     }
     setLoading(true);
     try {
-      await sendPasswordReset(email);
-      setResetSuccessMsg("Te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.");
+      await sendPasswordReset(cleanEmail);
+      setResetSuccessMsg(
+        `Si tu cuenta existe en el sistema, Firebase envió el enlace de recuperación a:\n${cleanEmail}\n\n` +
+        `• Revisa tu carpeta de SPAM / Correo no deseado y la pestaña Promociones.\n` +
+        `• Remitente oficial: noreply@archery101010-c0bb4.firebaseapp.com\n\n` +
+        `¿Es tu primera vez en la app? Si nunca creaste una cuenta antes, no recibirás correo. Pulsa 'Regístrate' abajo para crear tu usuario en 30 segundos.`
+      );
     } catch (err: any) {
       setError(err.message || "No se pudo enviar el correo de recuperación.");
     } finally {
@@ -205,7 +211,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
   const handleSocialLogin = async (providerName: string) => {
     if (providerName === "facebook") {
-      setError("El inicio de sesión con Facebook no está disponible temporalmente.");
+      setError(
+        "El inicio de sesión con Facebook requiere configuración en Meta Developers.\n\n" +
+        "Por favor ingresa o regístrate con tu correo electrónico y contraseña."
+      );
       return;
     }
 
@@ -214,7 +223,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                               !!(window as any).Capacitor?.isNativePlatform?.();
 
     if (isCapacitorNative) {
-      setError("En la app instalada en Android, por favor inicia sesión o regístrate con tu correo y contraseña.");
+      setError(
+        "En la aplicación instalada de Android, el acceso se realiza con tu Correo y Contraseña para permitir el uso 100% Offline en el campo de tiro.\n\n" +
+        "Si aún no tienes cuenta, pulsa 'Regístrate' abajo para crearla en 30 segundos."
+      );
       return;
     }
 
@@ -375,15 +387,15 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         </h2>
 
         {error && (
-          <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3 flex items-center gap-2 text-red-rival text-sm">
-            <AlertCircle size={18} className="shrink-0" />
+          <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3.5 flex items-start gap-2.5 text-red-rival text-xs whitespace-pre-line leading-relaxed text-left">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         {resetSuccessMsg && (
-          <div className="bg-cyan-neon/10 border border-cyan-neon/40 rounded-xl p-3 flex items-center gap-2 text-cyan-neon text-xs">
-            <CheckCircle2 size={16} className="shrink-0" />
+          <div className="bg-cyan-neon/10 border border-cyan-neon/40 rounded-xl p-3.5 flex items-start gap-2.5 text-cyan-neon text-xs whitespace-pre-line leading-relaxed text-left">
+            <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-cyan-neon" />
             <span>{resetSuccessMsg}</span>
           </div>
         )}
@@ -490,12 +502,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           </button>
           <button
             onClick={() => handleSocialLogin("facebook")}
-            className="w-full py-3 rounded-xl bg-neutral-900/60 border border-white/10 hover:border-cyan-brand/40 text-white font-medium text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer"
+            className="w-full py-3 rounded-xl bg-neutral-900/60 border border-white/10 hover:border-cyan-brand/40 text-white/50 font-medium text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer"
           >
-            <svg className="w-4 h-4 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-4 h-4 text-[#1877F2] opacity-60" viewBox="0 0 24 24" fill="currentColor">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
             </svg>
-            <span>{t("facebookLogin")}</span>
+            <span>{t("facebookLogin")} (Próximamente)</span>
           </button>
         </div>
       </div>
