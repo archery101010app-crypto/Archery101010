@@ -6,22 +6,20 @@ import {
   Sparkles, 
   Check, 
   ShieldCheck, 
-  CreditCard, 
   RotateCw, 
-  Award, 
   Target, 
   Calendar, 
   Users, 
-  Smartphone, 
-  CheckCircle2 
+  BarChart3,
+  CheckCircle2,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { 
   getCoachStoreProducts, 
   activateCoachLaunchPromo, 
-  restoreCoachStorePurchases, 
-  StoreProduct 
+  restoreCoachStorePurchases 
 } from "@/lib/billingService";
 
 interface CoachPaymentModalProps {
@@ -57,7 +55,7 @@ export default function CoachPaymentModal({
         onSuccess(res.updatedUser);
       }, 700);
     } catch (err: any) {
-      setStatusMessage({ text: err.message || "Error al activar la suscripción.", isError: true });
+      setStatusMessage({ text: err.message || "Error al procesar la activación.", isError: true });
     } finally {
       setIsProcessing(false);
     }
@@ -72,10 +70,10 @@ export default function CoachPaymentModal({
       if (res.updatedUser) {
         setTimeout(() => {
           onSuccess(res.updatedUser!);
-        }, 1000);
+        }, 900);
       }
     } catch (err: any) {
-      setStatusMessage({ text: "No se encontraron compras previas para restaurar.", isError: true });
+      setStatusMessage({ text: "No se encontraron compras previas registradas.", isError: true });
     } finally {
       setIsRestoring(false);
     }
@@ -84,54 +82,80 @@ export default function CoachPaymentModal({
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-        {/* Backdrop */}
+        {/* Backdrop with high-end dark glassmorphism */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/85 backdrop-blur-md"
+          className="fixed inset-0 bg-black/85 backdrop-blur-xl"
         />
 
-        {/* Modal Card */}
+        {/* Modal Window Container */}
         <motion.div
-          initial={{ scale: 0.92, y: 20, opacity: 0 }}
+          initial={{ scale: 0.94, y: 16, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
-          exit={{ scale: 0.92, y: 20, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-[#0E0E12] border border-white/15 rounded-3xl p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.8)] text-white flex flex-col gap-5 my-auto max-h-[92vh] overflow-y-auto scrollbar-none"
+          exit={{ scale: 0.94, y: 16, opacity: 0 }}
+          transition={{ type: "spring", damping: 26, stiffness: 320 }}
+          className="relative w-full max-w-lg bg-[#07080A] border border-white/10 rounded-[2rem] p-5 sm:p-7 shadow-[0_30px_90px_rgba(0,0,0,0.9)] text-white flex flex-col gap-5 my-auto max-h-[92vh] overflow-y-auto scrollbar-none"
         >
-          {/* Top Header */}
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 text-yellow-gold border border-yellow-gold/30 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-glow-yellow">
-                  <Sparkles size={11} />
-                  PROMOCIÓN DE LANZAMIENTO • 100% GRATIS
-                </span>
-                <span className="text-[9px] font-black uppercase tracking-wider bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25 px-2 py-0.5 rounded-full">
-                  Coach Suite 2026
-                </span>
+          {/* Subtle Top Ambient Lighting */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-28 bg-gradient-to-b from-yellow-gold/15 via-cyan-neon/5 to-transparent pointer-events-none blur-2xl" />
+
+          {/* Header Bar */}
+          <div className="relative z-10 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {/* Luxury Target Crest Icon */}
+              <div className="w-11 h-11 rounded-2xl bg-neutral-900 border border-yellow-gold/40 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(255,229,0,0.2)]">
+                <Target size={22} className="text-yellow-gold" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight uppercase mt-1">
-                Suscripción Coach PRO
-              </h2>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Herramientas de nivel olímpico para dirigir y potenciar a tus arqueros.
-              </p>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-neon">
+                    WORLD ARCHERY
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-white/30" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-yellow-gold">
+                    COACH SUITE
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white mt-0.5">
+                  Director de Tiro PRO
+                </h2>
+              </div>
             </div>
 
             <button
               onClick={onClose}
               className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition cursor-pointer shrink-0"
-              aria-label="Cerrar cuadro de suscripción"
+              aria-label="Cerrar ventana"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
-          {/* Pricing Tier Selector (Google Play & App Store Ready) */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Launch Special Promo Ribbon */}
+          <div className="relative z-10 bg-gradient-to-r from-yellow-gold/15 via-neutral-900 to-cyan-neon/15 border border-yellow-gold/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-[0_0_25px_rgba(255,229,0,0.1)]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-xl bg-yellow-gold text-black flex items-center justify-center font-black text-xs shrink-0 shadow-glow-yellow">
+                <Sparkles size={14} />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-wider text-yellow-gold">
+                  Temporada de Lanzamiento
+                </span>
+                <span className="text-xs font-bold text-white/90 leading-tight">
+                  100% Gratuito y Bonificado
+                </span>
+              </div>
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-wider bg-black/60 text-green-400 border border-green-500/30 px-2.5 py-1 rounded-full shrink-0">
+              $0.00 AHORA
+            </span>
+          </div>
+
+          {/* Tier Selector: Mensual vs Anual (Google Play & App Store Ready) */}
+          <div className="relative z-10 grid grid-cols-2 gap-2.5">
             {products.map((prod) => {
               const isSelected = selectedProductId === prod.id;
               return (
@@ -139,37 +163,37 @@ export default function CoachPaymentModal({
                   key={prod.id}
                   type="button"
                   onClick={() => setSelectedProductId(prod.id)}
-                  className={`p-3.5 rounded-2xl border flex flex-col justify-between text-left transition-all cursor-pointer relative overflow-hidden ${
+                  className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                     isSelected
-                      ? "bg-neutral-900 border-yellow-gold shadow-[0_0_20px_rgba(255,229,0,0.15)]"
-                      : "bg-neutral-950/70 border-white/10 hover:border-white/20"
+                      ? "bg-neutral-900/90 border-yellow-gold/80 shadow-[0_0_20px_rgba(255,229,0,0.18)]"
+                      : "bg-neutral-950/60 border-white/10 hover:border-white/20 text-white/70"
                   }`}
                 >
                   {prod.savingsBadge && (
-                    <span className="absolute top-2 right-2 text-[8px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded-full uppercase">
+                    <span className="absolute top-2 right-2 text-[8px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-glow-cyan">
                       {prod.savingsBadge}
                     </span>
                   )}
-                  
+
                   <div>
-                    <span className="text-[10px] font-black uppercase text-white/50 tracking-wider block">
-                      {prod.period === "monthly" ? "Facturación Mensual" : "Temporada Anual"}
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40 block">
+                      {prod.period === "monthly" ? "Mensual" : "Temporada Anual"}
                     </span>
-                    <span className="text-xs font-bold text-white block mt-0.5">
+                    <span className="text-xs font-black text-white uppercase tracking-tight block mt-0.5">
                       {prod.title}
                     </span>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-white/5">
-                    <span className="text-[9px] text-white/40 line-through block">
+                  <div className="mt-3 pt-2 border-t border-white/5 flex flex-col">
+                    <span className="text-[9px] text-white/35 line-through font-mono">
                       Regular: {prod.regularPrice}
                     </span>
                     <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-lg font-black text-yellow-gold">
-                        {prod.promoPrice}
+                      <span className="text-xl font-black text-yellow-gold tracking-tight">
+                        $0.00
                       </span>
-                      <span className="text-[9px] font-black text-green-400 uppercase">
-                        GRATIS AHORA
+                      <span className="text-[9px] font-black text-green-400 uppercase tracking-wider">
+                        GRATIS
                       </span>
                     </div>
                   </div>
@@ -178,24 +202,48 @@ export default function CoachPaymentModal({
             })}
           </div>
 
-          {/* Value Checklist */}
-          <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-4 flex flex-col gap-2.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-white/40">
-              ¿Qué incluye tu Acceso Coach PRO?
+          {/* Feature Bento Grid (Bespoke 2-column aesthetic) */}
+          <div className="relative z-10 bg-neutral-950/70 border border-white/5 rounded-2xl p-4 flex flex-col gap-2.5">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+              Herramientas de Alto Rendimiento Incluidas
             </span>
-            <div className="flex flex-col gap-2">
-              {selectedProduct.features.map((feature, idx) => (
-                <div key={idx} className="flex items-start gap-2.5 text-xs text-white/85">
-                  <div className="w-4 h-4 rounded-full bg-yellow-gold/15 border border-yellow-gold/30 flex items-center justify-center shrink-0 mt-0.5 text-yellow-gold">
-                    <Check size={11} strokeWidth={3} />
-                  </div>
-                  <span className="leading-tight">{feature}</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="flex items-start gap-2 bg-neutral-900/40 p-2.5 rounded-xl border border-white/5">
+                <Target size={15} className="text-cyan-neon shrink-0 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-white text-[11px] leading-tight">Director en Vivo</span>
+                  <span className="text-[9px] text-white/50 leading-snug mt-0.5">Supervisión de dianas y rondas en tiempo real.</span>
                 </div>
-              ))}
+              </div>
+
+              <div className="flex items-start gap-2 bg-neutral-900/40 p-2.5 rounded-xl border border-white/5">
+                <Calendar size={15} className="text-yellow-gold shrink-0 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-white text-[11px] leading-tight">Macroestructuras</span>
+                  <span className="text-[9px] text-white/50 leading-snug mt-0.5">Planes asignables a 1 alumno o a todo el equipo.</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 bg-neutral-900/40 p-2.5 rounded-xl border border-white/5">
+                <Users size={15} className="text-green-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-white text-[11px] leading-tight">Roster de Club</span>
+                  <span className="text-[9px] text-white/50 leading-snug mt-0.5">Invitaciones rápidas con código de 6 dígitos.</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 bg-neutral-900/40 p-2.5 rounded-xl border border-white/5">
+                <BarChart3 size={15} className="text-purple-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-white text-[11px] leading-tight">Control de Carga</span>
+                  <span className="text-[9px] text-white/50 leading-snug mt-0.5">Volumen de flechas y analítica balística FITA.</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Status Message */}
+          {/* Status Alert Banner if any */}
           {statusMessage && (
             <div
               className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
@@ -204,52 +252,49 @@ export default function CoachPaymentModal({
                   : "bg-green-500/10 border-green-500/30 text-green-400"
               }`}
             >
-              <CheckCircle2 size={16} className="shrink-0" />
+              <CheckCircle2 size={15} className="shrink-0" />
               <span>{statusMessage.text}</span>
             </div>
           )}
 
-          {/* Primary Action Button */}
-          <div className="flex flex-col gap-2">
+          {/* Primary CTA Button */}
+          <div className="relative z-10 flex flex-col gap-2">
             <button
               type="button"
               onClick={handleActivate}
               disabled={isProcessing}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-yellow-gold via-amber-400 to-yellow-500 hover:brightness-110 active:scale-[0.98] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-glow-yellow transition disabled:opacity-50"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-yellow-gold via-[#FFD000] to-amber-500 hover:brightness-105 active:scale-[0.98] text-black font-black text-xs uppercase tracking-[0.15em] flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_25px_rgba(255,229,0,0.35)] transition-all disabled:opacity-50"
             >
               <Sparkles size={16} />
               <span>{isProcessing ? "Activando Acceso..." : "Activar Acceso Coach PRO Gratis ✦"}</span>
             </button>
 
-            {/* Restore purchases for Google Play & App Store Compliance */}
-            <div className="flex items-center justify-between pt-1">
+            <span className="text-[9px] text-center text-white/40 font-medium">
+              Sin tarjeta de crédito requerida • Acceso instantáneo a la suite
+            </span>
+          </div>
+
+          {/* App Store & Google Play Compatibility Strip */}
+          <div className="relative z-10 border-t border-white/5 pt-3.5 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
               <button
                 type="button"
                 onClick={handleRestore}
                 disabled={isRestoring}
                 className="text-[10px] text-white/50 hover:text-white flex items-center gap-1.5 font-bold transition cursor-pointer"
               >
-                <RotateCw size={12} className={isRestoring ? "animate-spin text-cyan-neon" : ""} />
+                <RotateCw size={11} className={isRestoring ? "animate-spin text-cyan-neon" : ""} />
                 <span>{isRestoring ? "Restaurando..." : "Restaurar Compras de App Store / Play Store"}</span>
               </button>
 
-              <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">
-                ID: {selectedProduct.sku}
+              <span className="text-[8px] font-mono text-white/30 uppercase tracking-widest">
+                SKU: {selectedProduct.sku}
               </span>
             </div>
-          </div>
 
-          {/* Store Compliance & Legal Disclaimers */}
-          <div className="border-t border-white/5 pt-3 flex flex-col gap-1.5 text-[9px] text-white/40 leading-relaxed">
-            <div className="flex items-center gap-1 text-white/60 font-bold uppercase tracking-wider">
-              <ShieldCheck size={12} className="text-cyan-neon" />
-              <span>Plataforma Oficial Google Play & Apple App Store</span>
-            </div>
-            <p>
-              • Promoción exclusiva por fase de lanzamiento: 100% bonificada sin costo durante el periodo inicial.
-            </p>
-            <p>
-              • Los cobros de suscripción se procesan a través de tu cuenta de Google Play Store o Apple ID según tu dispositivo. La suscripción se renueva automáticamente a menos que se cancele al menos 24 horas antes del vencimiento. Puedes administrar o cancelar en los ajustes de tu cuenta en cualquier momento.
+            {/* Legal Disclaimers (Strict compliance with Google Play & Apple App Store Guidelines 3.1.2) */}
+            <p className="text-[8px] text-white/30 leading-relaxed">
+              Cobro y facturación gestionados de forma segura mediante Google Play Store o Apple ID según tu dispositivo. La suscripción se renueva automáticamente tras el periodo promocional al valor regular, a menos que se cancele al menos 24 horas antes del vencimiento. Puedes gestionar o cancelar tu suscripción en cualquier momento en los ajustes de tu cuenta de Google Play o Apple ID.
             </p>
           </div>
         </motion.div>
