@@ -303,17 +303,6 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
           </button>
         )}
       </div>
-
-      {/* Direct return to login if pressed by mistake */}
-      <div className="w-full text-center mt-4">
-        <button
-          type="button"
-          onClick={onNavigateToLogin}
-          className="text-xs text-gray-dim hover:text-yellow-gold transition-colors font-medium cursor-pointer"
-        >
-          ¿Entraste por error? <span className="text-yellow-gold font-bold underline ml-1">Volver al inicio de sesión</span>
-        </button>
-      </div>
     </div>
   );
 }
