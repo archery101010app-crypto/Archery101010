@@ -64,8 +64,8 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         <div className="absolute w-72 h-72 rounded-full bg-cyan-neon/5 blur-3xl pointer-events-none" />
         <div className="absolute w-60 h-60 rounded-full bg-white/[0.03] blur-2xl pointer-events-none" />
 
-        {/* Centered Giant Logo (Occupies 90% of screen width, smooth zoom-in, no rotation) */}
-        <div className="relative z-10 flex items-center justify-center w-[90%] mx-auto px-0">
+        {/* Centered Logo 101010 (Reducido un 15% a w-[76.5%] y max-h-[290px]) */}
+        <div className="relative z-10 flex items-center justify-center w-[76.5%] mx-auto px-0">
           <motion.img
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -74,9 +74,9 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
               ease: [0.25, 1, 0.5, 1], // Smooth cubic-bezier easeOut curve
               delay: 0.2 
             }}
-            src="/images/logo_final.png?v=6"
+            src="/images/logo_final.png?v=7"
             alt="Archery 101010 Logo"
-            className="w-full h-auto max-h-[340px] object-contain drop-shadow-[0_0_35px_rgba(0,191,255,0.45)]"
+            className="w-full h-auto max-h-[290px] object-contain drop-shadow-[0_0_30px_rgba(0,191,255,0.45)]"
           />
         </div>
       </div>
