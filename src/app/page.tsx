@@ -48,6 +48,7 @@ export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [dismissedProfileModal, setDismissedProfileModal] = useState(false);
 
   // Ads campaigns state
   const [activePopup, setActivePopup] = useState<AdCampaign | null>(null);
@@ -117,6 +118,14 @@ export default function Home() {
     }
   }, [unlockedStar]);
 
+  useEffect(() => {
+    if (user && !dismissedProfileModal && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender)) {
+      return registerModalDismiss(() => {
+        handleReturnToLoginFromProfile();
+      });
+    }
+  }, [user, dismissedProfileModal]);
+
   // Check authentication status and initialize database on mount
   useEffect(() => {
     async function initApp() {
@@ -153,8 +162,15 @@ export default function Home() {
                  uidLower.includes("facebook-user");
         };
 
-        if (loggedUser && isLegacyOrDemoUser(loggedUser)) {
-          console.warn("[Auth Startup] Legacy/fictitious account detected. Forcing clean logout:", loggedUser.email);
+        // Helper to check for incomplete registration that was abandoned or never finished
+        const isIncompleteUser = (u: any) => {
+          if (!u) return false;
+          // Must have an email and a valid fullName & birthDate to be considered an established user session
+          return !u.email || !u.fullName?.trim() || !u.birthDate;
+        };
+
+        if (loggedUser && (isLegacyOrDemoUser(loggedUser) || isIncompleteUser(loggedUser))) {
+          console.warn("[Auth Startup] Incomplete or legacy account detected. Forcing clean logout to Login:", loggedUser.email);
           const { logoutUser } = await import("@/lib/authService");
           await logoutUser();
           setUser(null);
@@ -619,11 +635,13 @@ export default function Home() {
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
     setCurrentScreen("HOME");
+    setDismissedProfileModal(false);
   };
 
   const handleRegisterSuccess = (registeredUser: UserProfile) => {
     setUser(registeredUser);
     setCurrentScreen("HOME");
+    setDismissedProfileModal(false);
   };
 
   const handleLogout = async () => {
@@ -638,9 +656,20 @@ export default function Home() {
         console.warn("Failed to clean up presence on logout:", err);
       }
     }
+    try {
+      const { logoutUser } = await import("@/lib/authService");
+      await logoutUser();
+    } catch (err) {
+      console.warn("Failed to logout cleanly:", err);
+    }
     setUser(null);
     setAuthScreen("LOGIN");
     setSessionConfig(null);
+    setDismissedProfileModal(false);
+  };
+
+  const handleReturnToLoginFromProfile = async () => {
+    await handleLogout();
   };
 
   const resumeSession = (draft: any) => {
@@ -1045,11 +1074,16 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Blocking Profile Completion Modal */}
-      {user && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender) && (
+      {/* Profile Completion Modal with X close and return to login support */}
+      {user && !dismissedProfileModal && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender) && (
         <ProfileCompletionModal
           user={user}
-          onComplete={(updatedUser) => setUser(updatedUser)}
+          onComplete={(updatedUser) => {
+            setUser(updatedUser);
+            setDismissedProfileModal(true);
+          }}
+          onClose={() => setDismissedProfileModal(true)}
+          onReturnToLogin={handleReturnToLoginFromProfile}
         />
       )}
 

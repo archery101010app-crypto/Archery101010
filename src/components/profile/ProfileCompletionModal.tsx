@@ -4,11 +4,13 @@ import React, { useState } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile, updateProfile } from "@/lib/authService";
 import { motion } from "framer-motion";
-import { AlertCircle, User } from "lucide-react";
+import { AlertCircle, User, X, ArrowLeft } from "lucide-react";
 
 interface ProfileCompletionModalProps {
   user: UserProfile;
   onComplete: (updatedUser: UserProfile) => void;
+  onClose?: () => void;
+  onReturnToLogin?: () => void;
 }
 
 const COUNTRIES = [
@@ -20,7 +22,7 @@ const COUNTRIES = [
   { code: "US", name: "United States", flag: "🇺🇸" }
 ];
 
-export default function ProfileCompletionModal({ user, onComplete }: ProfileCompletionModalProps) {
+export default function ProfileCompletionModal({ user, onComplete, onClose, onReturnToLogin }: ProfileCompletionModalProps) {
   const { t } = useLanguage();
   const [fullName, setFullName] = useState(user.fullName || "");
   const [nickname, setNickname] = useState(user.nickname || "");
@@ -60,6 +62,14 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
     }
   };
 
+  const handleExit = () => {
+    if (onReturnToLogin) {
+      onReturnToLogin();
+    } else if (onClose) {
+      onClose();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
       <motion.div
@@ -68,6 +78,19 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
         className="w-full max-w-md bg-neutral-950 border border-cyan-neon/30 p-6 rounded-3xl flex flex-col gap-4 shadow-[0_0_50px_rgba(0,229,255,0.15)] relative overflow-hidden"
       >
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
+        
+        {/* Botón X de Salida / Retorno */}
+        {(onClose || onReturnToLogin) && (
+          <button
+            type="button"
+            onClick={handleExit}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-dim hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
+            title="Cerrar y volver a inicio"
+            aria-label="Cerrar"
+          >
+            <X size={18} />
+          </button>
+        )}
         
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-full bg-cyan-neon/15 flex items-center justify-center text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan">
@@ -193,6 +216,17 @@ export default function ProfileCompletionModal({ user, onComplete }: ProfileComp
           >
             {loading ? "Guardando..." : "Guardar y Continuar"}
           </button>
+
+          {onReturnToLogin && (
+            <button
+              type="button"
+              onClick={onReturnToLogin}
+              className="w-full py-2.5 text-xs text-gray-dim hover:text-yellow-gold font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer mt-1 border border-white/5 hover:border-yellow-gold/30 rounded-xl"
+            >
+              <ArrowLeft size={14} />
+              <span>Volver a inicio de sesión (Usuario y contraseña)</span>
+            </button>
+          )}
         </form>
       </motion.div>
     </div>

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { registerUser } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Eye, EyeOff, X } from "lucide-react";
 
 interface RegisterViewProps {
   onRegisterSuccess: (user: any) => void;
@@ -107,6 +107,14 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         <span className="text-xs text-gray-dim font-bold tracking-widest uppercase">
           {t("registerTitle")}
         </span>
+        <button
+          onClick={onNavigateToLogin}
+          className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-dim hover:text-white hover:bg-white/15 transition-all cursor-pointer"
+          title="Cerrar y volver al inicio de sesión"
+          aria-label="Cerrar"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Progress Stepper Indicator */}
@@ -294,6 +302,17 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
             {loading ? t("loading") : t("confirm")}
           </button>
         )}
+      </div>
+
+      {/* Direct return to login if pressed by mistake */}
+      <div className="w-full text-center mt-4">
+        <button
+          type="button"
+          onClick={onNavigateToLogin}
+          className="text-xs text-gray-dim hover:text-yellow-gold transition-colors font-medium cursor-pointer"
+        >
+          ¿Entraste por error? <span className="text-yellow-gold font-bold underline ml-1">Volver al inicio de sesión</span>
+        </button>
       </div>
     </div>
   );
