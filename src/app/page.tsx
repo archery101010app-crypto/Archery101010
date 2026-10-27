@@ -199,26 +199,87 @@ export default function Home() {
             }
           }
 
-          // Clean up any legacy demo macrocycles/events referencing "Indoor 2026"
-          const { getLocalMacrocycles, deleteLocalMacrocycle, getLocalEvents, deleteLocalEvent } = await import("@/lib/db/indexedDB");
+          // Clean up any legacy demo macrocycles/events referencing "Indoor 2026" or "offline mode active"
+          const { getLocalMacrocycles, deleteLocalMacrocycle, getLocalEvents, deleteLocalEvent, saveLocalEvent } = await import("@/lib/db/indexedDB");
           const macros = await getLocalMacrocycles();
           for (const m of macros) {
+            const mName = (m.name || "").toLowerCase();
             if (m.id === "MAC-DEMO-1" || 
-                (m.name || "").toLowerCase().includes("indoor 2026") || 
-                (m.name || "").toLowerCase().includes("preparación indoor") ||
-                (m.name || "").toLowerCase().includes("preparacion indoor")) {
+                mName.includes("indoor 2026") || 
+                mName.includes("preparación indoor") ||
+                mName.includes("preparacion indoor") ||
+                mName.includes("offline mode active") ||
+                mName.includes("connect to the internet")) {
               await deleteLocalMacrocycle(m.id);
             }
           }
           const events = await getLocalEvents();
           for (const ev of events) {
-            const desc = (ev.description || "") + " " + (ev.coachNotes || "");
+            const fullDesc = `${ev.title || ""} ${ev.description || ""} ${ev.coachNotes || ""} ${ev.phaseName || ""}`.toLowerCase();
             if (ev.macrocycleId === "MAC-DEMO-1" || 
-                (ev.title || "").toLowerCase().includes("indoor 2026") || 
-                desc.toLowerCase().includes("indoor 2026") ||
-                (ev.title || "").toLowerCase().includes("preparación indoor") ||
-                (ev.title || "").toLowerCase().includes("preparacion indoor")) {
+                fullDesc.includes("indoor 2026") || 
+                fullDesc.includes("preparación indoor") ||
+                fullDesc.includes("preparacion indoor") ||
+                fullDesc.includes("offline mode active") ||
+                fullDesc.includes("connect to the internet")) {
               await deleteLocalEvent(ev.id);
+            } else {
+              // Limpiar textos de enfoque e indicaciones inventados previamente
+              let changed = false;
+              if (ev.focusPoints && ev.focusPoints.length > 0) {
+                const cleaned = ev.focusPoints.filter((pt) => {
+                  const ptl = pt.toLowerCase();
+                  return !(
+                    ptl.includes("ejecución técnica") ||
+                    ptl.includes("ejecucion tecnica") ||
+                    ptl.includes("postura de tiro") ||
+                    ptl.includes("ritmo y respiración") ||
+                    ptl.includes("ritmo y respiracion") ||
+                    ptl.includes("cumplimiento del objetivo asignado") ||
+                    ptl.includes("descanso neuromuscular") ||
+                    ptl.includes("estiramiento ligero") ||
+                    ptl.includes("consistencia técnica") ||
+                    ptl.includes("consistencia tecnica") ||
+                    ptl.includes("postura olímpica") ||
+                    ptl.includes("postura olimpica") ||
+                    ptl.includes("ritmo constante por flecha")
+                  );
+                });
+                if (cleaned.length !== ev.focusPoints.length) {
+                  ev.focusPoints = cleaned;
+                  changed = true;
+                }
+              }
+
+              if (ev.coachNotes) {
+                const cnl = ev.coachNotes.toLowerCase();
+                if (
+                  cnl.includes("postura olímpica y ritmo constante") ||
+                  cnl.includes("postura olimpica y ritmo constante") ||
+                  cnl.includes("asimilar las cargas de tiro") ||
+                  (cnl.includes("cumplir las") && cnl.includes("flechas asignadas"))
+                ) {
+                  ev.coachNotes = "";
+                  changed = true;
+                }
+              }
+
+              if (ev.description) {
+                const dsl = ev.description.toLowerCase();
+                if (
+                  dsl.includes("asignación del entrenador para la etapa") ||
+                  dsl.includes("asignacion del entrenador para la etapa") ||
+                  dsl.includes("día de recuperación física y neuromuscular") ||
+                  dsl.includes("dia de recuperacion fisica y neuromuscular")
+                ) {
+                  ev.description = "";
+                  changed = true;
+                }
+              }
+
+              if (changed) {
+                await saveLocalEvent(ev.id, ev);
+              }
             }
           }
         } catch (e) {

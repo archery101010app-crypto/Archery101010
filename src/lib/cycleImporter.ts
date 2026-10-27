@@ -139,10 +139,11 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
       };
     }
     const csvText = await response.text();
-    if (!csvText || csvText.trim().startsWith("<!DOCTYPE html>")) {
+    const csvLower = (csvText || "").toLowerCase();
+    if (!csvText || csvText.trim().startsWith("<!DOCTYPE html>") || csvLower.includes("offline mode active") || csvLower.includes("connect to the internet")) {
       return {
         ok: false,
-        error: "La hoja de Google Sheets es privada. Cambia el acceso a 'Cualquier persona con el enlace' o copia y pega las celdas directamente en el recuadro."
+        error: "No se pudo leer la hoja. Asegúrate de tener conexión a internet y de que el permiso en Google Sheets sea 'Cualquier persona con el enlace puede ver'."
       };
     }
     return { ok: true, csv: csvText };
@@ -164,7 +165,8 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
   const warnings: string[] = [];
   const todayStr = new Date().toISOString().split("T")[0];
 
-  if (!rawText || !rawText.trim()) {
+  const cleanRawLower = (rawText || "").toLowerCase();
+  if (!rawText || !rawText.trim() || cleanRawLower.includes("offline mode active") || cleanRawLower.includes("connect to the internet")) {
     return {
       success: false,
       mode: "stages",
@@ -175,7 +177,9 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       stages: [],
       dailyEntries: [],
       warnings: [],
-      error: "No se encontró texto o celdas para importar. Copia las celdas de Excel o Google Sheets."
+      error: cleanRawLower.includes("offline mode active") || cleanRawLower.includes("connect to the internet")
+        ? "No se pudo acceder a la hoja de Google Sheets porque no hay conexión a internet activa."
+        : "No se encontró texto o celdas para importar. Copia las celdas de Excel o Google Sheets."
     };
   }
 
@@ -317,19 +321,17 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       const targetArrows = !isNaN(parsedArrows) ? parsedArrows : (isRestWord ? 0 : 120);
       const isRestDay = targetArrows === 0 || isRestWord;
 
-      const finalTitle = rawTitle || (isRestDay ? "🌿 Descanso / Recuperación" : `🎯 Entrenamiento (${targetArrows} flechas)`);
+      const finalTitle = rawTitle || (isRestDay ? "Descanso" : (targetArrows > 0 ? `Entrenamiento (${targetArrows} flechas)` : "Entrenamiento"));
 
-      // Focus points
+      // Focus points: Solo los que vengan explícitamente en el documento original. NUNCA inventar.
       const rawFocus = row[focusCol] || "";
       const focusPoints = rawFocus
         ? rawFocus.split(/[,;•|]/).map((s) => s.trim()).filter(Boolean)
-        : isRestDay
-        ? ["Descanso neuromuscular y recuperación activa", "Estiramiento ligero e hidratación"]
-        : ["Ejecución técnica consciente", "Ritmo constante por flecha"];
+        : [];
 
-      // Notes
-      const rawNotes = row[notesCol] || rawFocus || "";
-      const notes = rawNotes.trim() || (isRestDay ? "Día de recuperación planificado." : `Meta del día: ${targetArrows} flechas.`);
+      // Notes: Solo lo que venga en el documento original. NUNCA inventar.
+      const rawNotes = row[notesCol] || "";
+      const notes = rawNotes.trim();
 
       // Detect event type
       let type: "training" | "competition" | "meeting" | "other" = "training";

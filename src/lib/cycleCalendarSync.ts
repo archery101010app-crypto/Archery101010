@@ -21,54 +21,9 @@ export interface SyncCycleSummary {
 /**
  * Returns tailored focus points based on the training phase
  */
-export function getRecommendedFocusPoints(phaseType?: string): string[] {
-  const normalized = (phaseType || "").toLowerCase();
-  if (normalized.includes("fisic") || normalized.includes("físic") || normalized.includes("base") || normalized.includes("fuerza")) {
-    return [
-      "Calentamiento articular dinámico",
-      "Fuerza específica con banda elástica (15-20 min)",
-      "Volumen moderado con control postural y core",
-      "Estiramientos de tren superior y espalda"
-    ];
-  }
-  if (normalized.includes("volumen") || normalized.includes("carga") || normalized.includes("tiro")) {
-    return [
-      "Calentamiento de hombros y escápulas",
-      "Ritmo de disparo constante (tiempo regular por flecha)",
-      "Expansión continua sin colapsar el anclaje",
-      "Registro y conteo estricto del volumen de tiro"
-    ];
-  }
-  if (normalized.includes("puesta") || normalized.includes("punto") || normalized.includes("tecnic") || normalized.includes("técnic")) {
-    return [
-      "Alineación visual y encare perfecto",
-      "Control del clic sincronizado con la soltada",
-      "Agrupamiento fino a la distancia reglamentaria",
-      "Evaluación de puntuación por tandas oficiales"
-    ];
-  }
-  if (normalized.includes("compet") || normalized.includes("duelo") || normalized.includes("torneo")) {
-    return [
-      "Protocolo oficial de tiro (tiempo y juez simulado)",
-      "Duelo 1 contra 1 eliminatorio bajo presión",
-      "Control de respiración diafragmática pre-disparo",
-      "Rutina de anclaje firme en momentos clave"
-    ];
-  }
-  if (normalized.includes("transic") || normalized.includes("manten")) {
-    return [
-      "Tiro técnico libre sin conteo de puntos",
-      "Revisión y mantenimiento del material y cuerdas",
-      "Sensaciones de soltada fluida y relajada",
-      "Flexibilidad y movilidad general"
-    ];
-  }
-  return [
-    "Ejecución técnica consciente y regular",
-    "Postura de tiro y control del anclaje",
-    "Ritmo y respiración constante por flecha",
-    "Cumplimiento del objetivo asignado por el entrenador"
-  ];
+export function getRecommendedFocusPoints(_phaseType?: string): string[] {
+  // Transfiere estrictamente el documento del usuario sin inventar textos
+  return [];
 }
 
 /**
@@ -150,26 +105,14 @@ export async function syncCycleToMonthCalendar(
       ? Math.round(phase.weeklyArrowGoal / Math.max(1, phase.weeklySessionGoal))
       : 0;
 
-    const focusPoints = isTraining 
-      ? getRecommendedFocusPoints(phase.type || phase.name)
-      : ["Descanso neuromuscular y recuperación activa", "Hidratación y estiramiento ligero"];
+    const focusPoints: string[] = [];
 
     // Deterministic ID per macrocycle and date prevents duplicate cards on multiple syncs
     const eventId = `EVT-MAC-${macrocycle.id}-${dateStr}`;
 
-    const title = isTraining
-      ? `🎯 Plan Coach: ${phase.name} (${arrowsPerSession} flechas)`
-      : `🌿 Descanso / Recuperación (${phase.name})`;
-
-    const description = isTraining
-      ? `Asignación del entrenador para la etapa ${phase.name}. Meta diaria: ${arrowsPerSession} flechas. Enfoque: ${focusPoints[0]}.`
-      : `Día de recuperación física y neuromuscular planificado dentro de la etapa ${phase.name}.`;
-
-    const coachNotes = options?.customNotes || phase.notes || (
-      isTraining
-        ? `Cumplir las ${arrowsPerSession} flechas asignadas manteniendo postura olímpica y ritmo constante.`
-        : "Asimilar las cargas de tiro de la semana. Descanso activo."
-    );
+    const title = phase.name || (isTraining ? `Entrenamiento (${arrowsPerSession} flechas)` : "Descanso");
+    const description = options?.customNotes || phase.notes || "";
+    const coachNotes = options?.customNotes || phase.notes || "";
 
     const eventData: CalendarEvent = {
       id: eventId,

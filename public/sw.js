@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.126.0";
+const CACHE_NAME = "archery-101010-cache-v2.127.0";
 const ASSETS_TO_CACHE = [
   "/",
   "/favicon.ico"
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
             return cachedResponse;
           }
           // If no cache match, return basic offline placeholder response
-          return new Response("Offline mode active. Connect to the internet to load this resource.");
+          return new Response("Offline mode active. Connect to the internet to load this resource.", { status: 503, statusText: "Offline" });
         });
       })
   );

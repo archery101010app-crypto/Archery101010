@@ -274,17 +274,73 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       const eventList = await getLocalEvents();
       const cleanEvents: CalendarEvent[] = [];
       for (const ev of eventList) {
-        const desc = (ev.description || "") + " " + (ev.coachNotes || "");
-        const isIndoorEvent = ev.macrocycleId === "MAC-DEMO-1" ||
-          (ev.title || "").toLowerCase().includes("indoor 2026") ||
-          (ev.title || "").toLowerCase().includes("preparación indoor") ||
-          (ev.title || "").toLowerCase().includes("preparacion indoor") ||
-          desc.toLowerCase().includes("indoor 2026") ||
-          desc.toLowerCase().includes("preparación temporada indoor 2026") ||
-          desc.toLowerCase().includes("preparacion temporada indoor 2026");
-        if (isIndoorEvent) {
+        const fullDesc = `${ev.title || ""} ${ev.description || ""} ${ev.coachNotes || ""} ${ev.phaseName || ""}`.toLowerCase();
+        const isBadEvent = ev.macrocycleId === "MAC-DEMO-1" ||
+          fullDesc.includes("indoor 2026") ||
+          fullDesc.includes("preparación indoor") ||
+          fullDesc.includes("preparacion indoor") ||
+          fullDesc.includes("offline mode active") ||
+          fullDesc.includes("connect to the internet");
+
+        if (isBadEvent) {
           await deleteLocalEvent(ev.id);
         } else {
+          // Limpiar cualquier texto de enfoque o notas inventado previamente por IA/plantilla
+          let changed = false;
+          if (ev.focusPoints && ev.focusPoints.length > 0) {
+            const cleaned = ev.focusPoints.filter((pt) => {
+              const ptl = pt.toLowerCase();
+              return !(
+                ptl.includes("ejecución técnica") ||
+                ptl.includes("ejecucion tecnica") ||
+                ptl.includes("postura de tiro") ||
+                ptl.includes("ritmo y respiración") ||
+                ptl.includes("ritmo y respiracion") ||
+                ptl.includes("cumplimiento del objetivo asignado") ||
+                ptl.includes("descanso neuromuscular") ||
+                ptl.includes("estiramiento ligero") ||
+                ptl.includes("consistencia técnica") ||
+                ptl.includes("consistencia tecnica") ||
+                ptl.includes("postura olímpica") ||
+                ptl.includes("postura olimpica") ||
+                ptl.includes("ritmo constante por flecha")
+              );
+            });
+            if (cleaned.length !== ev.focusPoints.length) {
+              ev.focusPoints = cleaned;
+              changed = true;
+            }
+          }
+
+          if (ev.coachNotes) {
+            const cnl = ev.coachNotes.toLowerCase();
+            if (
+              cnl.includes("postura olímpica y ritmo constante") ||
+              cnl.includes("postura olimpica y ritmo constante") ||
+              cnl.includes("asimilar las cargas de tiro") ||
+              (cnl.includes("cumplir las") && cnl.includes("flechas asignadas"))
+            ) {
+              ev.coachNotes = "";
+              changed = true;
+            }
+          }
+
+          if (ev.description) {
+            const dsl = ev.description.toLowerCase();
+            if (
+              dsl.includes("asignación del entrenador para la etapa") ||
+              dsl.includes("asignacion del entrenador para la etapa") ||
+              dsl.includes("día de recuperación física y neuromuscular") ||
+              dsl.includes("dia de recuperacion fisica y neuromuscular")
+            ) {
+              ev.description = "";
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            await saveLocalEvent(ev.id, ev);
+          }
           cleanEvents.push(ev);
         }
       }
@@ -296,7 +352,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         const isIndoorDemo = mac.id === "MAC-DEMO-1" || 
           (mac.name || "").toLowerCase().includes("indoor 2026") ||
           (mac.name || "").toLowerCase().includes("preparación indoor") ||
-          (mac.name || "").toLowerCase().includes("preparacion indoor");
+          (mac.name || "").toLowerCase().includes("preparacion indoor") ||
+          (mac.name || "").toLowerCase().includes("offline mode active") ||
+          (mac.name || "").toLowerCase().includes("connect to the internet");
         if (isIndoorDemo) {
           await deleteLocalMacrocycle(mac.id);
         } else {
@@ -590,16 +648,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setAssignmentEventId(null);
     setAssignDate(dateStr);
     const pName = phaseInfo?.phase?.name || "Entrenamiento";
-    setAssignTitle(`🎯 Plan Coach: ${pName}`);
+    setAssignTitle(pName);
     const defaultArrows = phaseInfo?.phase 
       ? Math.round(phaseInfo.phase.weeklyArrowGoal / Math.max(1, phaseInfo.phase.weeklySessionGoal)) 
-      : 120;
+      : 100;
     setAssignTargetArrows(defaultArrows);
-    const points = phaseInfo?.phase 
-      ? getRecommendedFocusPoints(phaseInfo.phase.type) 
-      : ["Calentamiento articular", "Ritmo constante de disparo", "Alineación"];
-    setAssignFocusPoint(points.slice(0, 2).join(", "));
-    setAssignNotes(phaseInfo?.phase?.notes || "Realizar la sesión completa manteniendo la técnica.");
+    setAssignFocusPoint("");
+    setAssignNotes(phaseInfo?.phase?.notes || "");
     setShowAssignmentModal(true);
   };
 
@@ -628,11 +683,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       timestamp: Date.now(),
       macrocycleId: activePhaseInfo?.macrocycle?.id,
       phaseId: activePhaseInfo?.phase?.id,
-      phaseName: activePhaseInfo?.phase?.name || "Asignación Especial",
+      phaseName: activePhaseInfo?.phase?.name || "Entrenamiento",
       phaseType: activePhaseInfo?.phase?.type,
       phaseColor: activePhaseInfo?.phase?.color || "#00BFFF",
       targetArrows: assignTargetArrows,
-      focusPoints: focusArr.length > 0 ? focusArr : ["Consistencia técnica", "Postura olímpica"],
+      focusPoints: focusArr,
       coachNotes: assignNotes,
       isRestDay: assignTargetArrows === 0,
       isCompleted: false
@@ -1374,13 +1429,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       )}
 
                       {/* Coach Notes */}
-                      {(coachAssignment.coachNotes || coachAssignment.description) && (
+                      {Boolean(coachAssignment.coachNotes && coachAssignment.coachNotes.trim()) && (
                         <div className="flex flex-col gap-1 border-t border-white/[0.04] pt-2">
                           <span className="text-[9px] text-white/40 uppercase font-black tracking-widest">
                             Indicaciones del Entrenador
                           </span>
                           <p className="text-xs text-white/80 italic leading-relaxed bg-neutral-950/50 p-2.5 rounded-xl border border-white/[0.03]">
-                            &ldquo;{coachAssignment.coachNotes || coachAssignment.description}&rdquo;
+                            &ldquo;{coachAssignment.coachNotes?.trim()}&rdquo;
                           </p>
                         </div>
                       )}

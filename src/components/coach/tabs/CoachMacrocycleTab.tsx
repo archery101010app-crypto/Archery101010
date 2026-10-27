@@ -347,7 +347,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
         const isIndoorDemo = macro.id === "MAC-DEMO-1" || 
           (macro.name || "").toLowerCase().includes("indoor 2026") ||
           (macro.name || "").toLowerCase().includes("preparación indoor") ||
-          (macro.name || "").toLowerCase().includes("preparacion indoor");
+          (macro.name || "").toLowerCase().includes("preparacion indoor") ||
+          (macro.name || "").toLowerCase().includes("offline mode active") ||
+          (macro.name || "").toLowerCase().includes("connect to the internet");
         if (isIndoorDemo) {
           await deleteLocalMacrocycle(macro.id);
         } else {
