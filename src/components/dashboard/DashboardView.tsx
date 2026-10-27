@@ -337,17 +337,17 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         className="w-full flex flex-col justify-center items-center pt-2 pb-5 sm:pb-7 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <h1 className="text-[31px] sm:text-[43px] md:text-[53px] text-white tracking-widest text-center leading-tight">
-          ARCHERY APP
-        </h1>
-        <div className="flex items-baseline justify-center gap-2 text-[31px] sm:text-[43px] md:text-[53px] leading-none">
-          <span className="text-white text-[0.35em] tracking-wider">by</span>
+        <h1 className="flex flex-wrap items-baseline justify-center gap-x-2.5 sm:gap-x-4 text-[26px] sm:text-[38px] md:text-[48px] leading-tight text-center">
+          <span className="text-white tracking-widest font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </span>
-        </div>
+        </h1>
+        <span className="text-[10px] sm:text-[12px] md:text-[14px] text-white/80 font-bold tracking-[0.45em] uppercase text-center pl-1">
+          THE APP
+        </span>
       </div>
 
       <div className="flex items-center justify-between mb-1 gap-2">

@@ -286,7 +286,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     <div className="flex-1 flex flex-col justify-between px-6 pt-12 pb-6 min-h-full">
 
 
-      {/* Brand logo section: ARCHERY APP / by 101010 (Misma letra y tamaño que página de inicio) */}
+      {/* Brand logo section: ARCHERY 101010 / THE APP (Branding Oficial Permanente) */}
       <div 
         className="w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
@@ -295,23 +295,23 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="text-[31px] sm:text-[43px] md:text-[53px] text-white tracking-widest text-center leading-tight"
+          className="flex flex-wrap items-baseline justify-center gap-x-2.5 sm:gap-x-4 text-[26px] sm:text-[38px] md:text-[48px] leading-tight text-center"
         >
-          ARCHERY APP
-        </motion.h1>
-        <motion.div 
-          initial={{ y: 10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="flex items-baseline justify-center gap-2 text-[31px] sm:text-[43px] md:text-[53px] leading-none"
-        >
-          <span className="text-white text-[0.35em] tracking-wider">by</span>
+          <span className="text-white tracking-widest font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </span>
-        </motion.div>
+        </motion.h1>
+        <motion.span 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="text-[10px] sm:text-[12px] md:text-[14px] text-white/80 font-bold tracking-[0.45em] uppercase text-center pl-1"
+        >
+          THE APP
+        </motion.span>
       </div>
 
       {/* Login form and fields */}

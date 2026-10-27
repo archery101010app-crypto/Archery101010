@@ -102,7 +102,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
           className="text-white text-xs sm:text-sm font-black uppercase tracking-[0.25em] text-center"
           style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
         >
-          Your Archery App
+          THE APP
         </motion.h1>
 
         {/* Dynamic tricolor underline stroke */}
