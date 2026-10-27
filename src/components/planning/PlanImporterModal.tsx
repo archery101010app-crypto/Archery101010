@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Macrocycle } from "@/lib/db/macrocycleTypes";
 import { 
   saveLocalMacrocycle, 
   generateResilientId, 
-  addToSyncQueue 
+  addToSyncQueue,
+  getLocalSetting 
 } from "@/lib/db/indexedDB";
 import { 
   saveDailyEntriesToCalendar, 
@@ -41,7 +42,9 @@ import {
   Info, 
   ArrowRight,
   ShieldAlert,
-  FileCheck2
+  FileCheck2,
+  Users,
+  User
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -78,7 +81,67 @@ export default function PlanImporterModal({
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
+  // Recipient assignment state (Coach role)
+  const [assignTarget, setAssignTarget] = useState<"all" | "single">("all");
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string>("");
+  const [clubAthletes, setClubAthletes] = useState<UserProfile[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    async function loadClubAthletes() {
+      if (user.role !== "coach") return;
+      try {
+        const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        let athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
+        if (athletes.length === 0) {
+          athletes = [
+            {
+              uid: "USR-ATHLETE-DANIELA",
+              email: "daniela@archery101010.com",
+              fullName: "Daniela Rivas",
+              nickname: "daniela",
+              birthDate: "2000-08-12",
+              country: "CR",
+              city: "San José",
+              gender: "F",
+              bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 38, defaultDistance: 70 },
+              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId || "CLB-DEMO",
+              clubName: user.clubName || "Club Deportivo",
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            },
+            {
+              uid: "USR-ATHLETE-CARLOS",
+              email: "carlos@archery101010.com",
+              fullName: "Carlos Mendoza",
+              nickname: "carlosm",
+              birthDate: "1998-04-25",
+              country: "CR",
+              city: "Cartago",
+              gender: "M",
+              bowConfig: { type: "Compound", brand: "Hoyt", model: "Stratum", poundage: 58, defaultDistance: 50 },
+              physicalData: { height: 175, weight: 74, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId || "CLB-DEMO",
+              clubName: user.clubName || "Club Deportivo",
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            }
+          ];
+        }
+        setClubAthletes(athletes);
+        if (athletes.length > 0 && !selectedAthleteId) {
+          setSelectedAthleteId(athletes[0].uid);
+        }
+      } catch (err) {
+        console.error("Error loading club athletes in PlanImporterModal:", err);
+      }
+    }
+    loadClubAthletes();
+  }, [user.clubId, user.role, isOpen]);
 
   if (!isOpen) return null;
 
@@ -189,16 +252,21 @@ export default function PlanImporterModal({
       const planId = generateResilientId("MAC");
       const finalName = (importPlanName.trim() || importPreview.planName || "Plan de Entrenamiento").trim();
 
+      const isCoach = user.role === "coach";
+      const isSingle = isCoach && assignTarget === "single" && Boolean(selectedAthleteId);
+      const targetAthletes = isSingle ? [selectedAthleteId] : (user.role === "archer" ? [user.uid] : []);
+      const assignmentType: "club" | "individual" = (isSingle || user.role === "archer") ? "individual" : "club";
+
       const newCycle: Macrocycle = {
         id: planId,
         name: finalName,
-        coachId: user.uid,
+        coachId: isCoach ? user.uid : "USR-COACH-DEFAULT",
         clubId: user.clubId || "CLB-DEMO",
         startDate: importPreview.startDate,
         endDate: importPreview.endDate,
         phases: importPreview.stages,
-        assignmentType: "club",
-        assignedAthleteIds: [],
+        assignmentType,
+        assignedAthleteIds: targetAthletes,
         volumeGoal: importPreview.totalVolumeGoal,
         currentVolume: 0,
         status: "active",
@@ -565,6 +633,71 @@ export default function PlanImporterModal({
                 </div>
               </div>
 
+              {/* Coach Recipient Selector: Send to 1 athlete or all */}
+              {user.role === "coach" && (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-neutral-900/90 border border-cyan-neon/30 flex flex-col gap-2.5 shadow-[0_0_25px_rgba(0,229,255,0.06)]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
+                      <Users size={13} className="text-cyan-neon" />
+                      <span>Destinatario del Plan & Calendario</span>
+                    </span>
+                    <span className="text-[9px] text-white/60 font-bold uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                      {assignTarget === "all" ? "Todo el Club" : "1 Alumno"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAssignTarget("all")}
+                      className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
+                        assignTarget === "all"
+                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                          : "bg-neutral-950/70 border-white/10 text-white/40 hover:text-white"
+                      }`}
+                    >
+                      <Users size={13} />
+                      <span>Todos los Alumnos</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAssignTarget("single")}
+                      className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
+                        assignTarget === "single"
+                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                          : "bg-neutral-950/70 border-white/10 text-white/40 hover:text-white"
+                      }`}
+                    >
+                      <User size={13} />
+                      <span>1 Alumno Específico</span>
+                    </button>
+                  </div>
+
+                  {assignTarget === "single" && (
+                    <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
+                      <label className="text-[9px] text-white/60 uppercase font-black tracking-widest flex items-center gap-1">
+                        <span>Selecciona el alumno de tu lista:</span>
+                      </label>
+                      <select
+                        value={selectedAthleteId}
+                        onChange={(e) => setSelectedAthleteId(e.target.value)}
+                        className="bg-neutral-950 border border-cyan-neon/40 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
+                      >
+                        {clubAthletes.map((ath) => (
+                          <option key={ath.uid} value={ath.uid}>
+                            {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-cyan-neon/80 italic">
+                        El plan y sus tareas se sincronizarán únicamente en el calendario del alumno seleccionado.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* PREVIEW CONTAINER */}
               {importPreview.mode === "daily" ? (
                 viewMode === "table" ? (
@@ -715,7 +848,11 @@ export default function PlanImporterModal({
             ) : (
               <>
                 <Sparkles size={15} />
-                <span>Vincular y Publicar al Calendario</span>
+                <span>
+                  {user.role === "coach" && assignTarget === "single"
+                    ? `Publicar y Enviar a ${clubAthletes.find(a => a.uid === selectedAthleteId)?.fullName || "Alumno"}`
+                    : "Vincular y Publicar al Calendario"}
+                </span>
                 <ArrowRight size={15} />
               </>
             )}

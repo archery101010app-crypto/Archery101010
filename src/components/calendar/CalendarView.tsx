@@ -13,7 +13,8 @@ import {
   CalendarEvent,
   getLocalMacrocycles,
   saveLocalMacrocycle,
-  deleteLocalMacrocycle
+  deleteLocalMacrocycle,
+  getLocalSetting
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
@@ -45,7 +46,9 @@ import {
   Download,
   AlertCircle,
   Unlink,
-  UserMinus
+  UserMinus,
+  User,
+  Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -124,6 +127,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const [unlinkTargetAthleteId, setUnlinkTargetAthleteId] = useState<string>("ALL");
   const [isUnlinking, setIsUnlinking] = useState(false);
 
+  // Coach Roster & Athlete Filter states
+  const [roster, setRoster] = useState<UserProfile[]>([]);
+  const [selectedAthleteFilter, setSelectedAthleteFilter] = useState<string>("ALL");
+
   const handleRequestUnlink = (macro: Macrocycle | null) => {
     if (!macro) return;
     setMacroToUnlink(macro);
@@ -171,6 +178,50 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     async function loadData() {
       const sessionList = await getLocalSessions();
       setSessions(sessionList);
+
+      if (isCoach) {
+        const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        let athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
+        if (athletes.length === 0) {
+          athletes = [
+            {
+              uid: "USR-ATHLETE-DANIELA",
+              email: "daniela@archery101010.com",
+              fullName: "Daniela Rivas",
+              nickname: "daniela",
+              birthDate: "2000-08-12",
+              country: "CR",
+              city: "San José",
+              gender: "F",
+              bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 38, defaultDistance: 70 },
+              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId || "CLB-DEMO",
+              clubName: user.clubName || "Club Deportivo",
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            },
+            {
+              uid: "USR-ATHLETE-CARLOS",
+              email: "carlos@archery101010.com",
+              fullName: "Carlos Mendoza",
+              nickname: "carlosm",
+              birthDate: "1998-04-25",
+              country: "CR",
+              city: "Cartago",
+              gender: "M",
+              bowConfig: { type: "Compound", brand: "Hoyt", model: "Stratum", poundage: 58, defaultDistance: 50 },
+              physicalData: { height: 175, weight: 74, dominantEye: "R", dominantHand: "R" },
+              clubId: user.clubId || "CLB-DEMO",
+              clubName: user.clubName || "Club Deportivo",
+              role: "archer",
+              plan: "FREE",
+              isClubCreator: false
+            }
+          ];
+        }
+        setRoster(athletes);
+      }
       
       const eventList = await getLocalEvents();
       const cleanEvents: CalendarEvent[] = [];
@@ -341,11 +392,31 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
   // Filter events that belong to the user's club or were created by the user or are assigned to all club
   const visibleEvents = events.filter((e) => {
-    if (user.clubId && e.clubId === user.clubId) return true;
+    // If filtering by specific macrocycle:
+    if (selectedMacrocycleId !== "ALL" && e.macrocycleId && e.macrocycleId !== selectedMacrocycleId) {
+      return false;
+    }
+
+    if (isCoach) {
+      // Coach athlete filter:
+      if (selectedAthleteFilter !== "ALL") {
+        if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
+          return e.assignedAthleteIds.includes(selectedAthleteFilter);
+        }
+        return Boolean(user.clubId && e.clubId === user.clubId);
+      }
+
+      if (user.clubId && e.clubId === user.clubId) return true;
+      if (e.createdByUid === user.uid) return true;
+      return !e.clubId;
+    }
+
+    // Archer (Student):
     if (e.createdByUid === user.uid) return true;
     if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
       return e.assignedAthleteIds.includes(user.uid);
     }
+    if (user.clubId && e.clubId === user.clubId) return true;
     return !e.clubId; // global
   });
 
@@ -798,26 +869,51 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       </div>
 
       {/* Macrocycle Filter & Unlink Plan Action */}
-      {macrocycles.length > 0 && (
+      {(macrocycles.length > 0 || (isCoach && roster.length > 0)) && (
         <div className="flex items-center justify-between gap-2.5 px-1 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs text-gray-dim uppercase font-black tracking-widest shrink-0">
-              {language === "es" ? "Plan:" : "Plan:"}
-            </span>
-            <select
-              value={selectedMacrocycleId}
-              onChange={(e) => setSelectedMacrocycleId(e.target.value)}
-              className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[180px] sm:max-w-[220px] truncate"
-            >
-              <option value="ALL">
-                {language === "es" ? "Todos los Planes" : "All Plans"}
-              </option>
-              {macrocycles.map((mac) => (
-                <option key={mac.id} value={mac.id}>
-                  {mac.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            {macrocycles.length > 0 && (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs text-gray-dim uppercase font-black tracking-widest shrink-0">
+                  {language === "es" ? "Plan:" : "Plan:"}
+                </span>
+                <select
+                  value={selectedMacrocycleId}
+                  onChange={(e) => setSelectedMacrocycleId(e.target.value)}
+                  className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[160px] sm:max-w-[200px] truncate cursor-pointer"
+                >
+                  <option value="ALL">
+                    {language === "es" ? "Todos los Planes" : "All Plans"}
+                  </option>
+                  {macrocycles.map((mac) => (
+                    <option key={mac.id} value={mac.id}>
+                      {mac.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {isCoach && roster.length > 0 && (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs text-cyan-neon uppercase font-black tracking-widest shrink-0 flex items-center gap-1">
+                  <User size={12} />
+                  <span>Alumno:</span>
+                </span>
+                <select
+                  value={selectedAthleteFilter}
+                  onChange={(e) => setSelectedAthleteFilter(e.target.value)}
+                  className="bg-neutral-900 border border-cyan-neon/30 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon max-w-[160px] sm:max-w-[190px] truncate cursor-pointer"
+                >
+                  <option value="ALL">Todos los Alumnos</option>
+                  {roster.map((ath) => (
+                    <option key={ath.uid} value={ath.uid}>
+                      {ath.fullName || ath.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Botón Desvincular Plan */}
@@ -830,7 +926,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               <button
                 type="button"
                 onClick={() => handleRequestUnlink(currentPlan)}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm"
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
                 title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
               >
                 <Unlink size={11} />
@@ -1270,6 +1366,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                               <Shield size={9} />
                               <span>Asignado por: {coachAssignment.createdByName}</span>
                             </span>
+
+                            {coachAssignment.assignedAthleteIds && coachAssignment.assignedAthleteIds.length > 0 ? (
+                              <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 flex items-center gap-1">
+                                <User size={9} />
+                                <span>
+                                  {isCoach 
+                                    ? `Para: ${roster.find(r => r.uid === coachAssignment.assignedAthleteIds?.[0])?.fullName || coachAssignment.assignedAthleteIds[0]}`
+                                    : "Asignación Individual"}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white/5 text-white/60 border border-white/5 flex items-center gap-1">
+                                <Users size={9} />
+                                <span>Todo el Club</span>
+                              </span>
+                            )}
 
                             {coachAssignment.phaseName && (
                               <span
@@ -1919,11 +2031,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-neon font-bold"
                   >
                     <option value="ALL">Todo el plan (Borrar completamente)</option>
-                    {macroToUnlink.assignedAthleteIds.map((athId) => (
-                      <option key={athId} value={athId}>
-                        Solo al alumno ({athId})
-                      </option>
-                    ))}
+                    {macroToUnlink.assignedAthleteIds.map((athId) => {
+                      const athleteObj = roster.find((r) => r.uid === athId);
+                      return (
+                        <option key={athId} value={athId}>
+                          Solo al alumno {athleteObj ? athleteObj.fullName : athId}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}

@@ -68,6 +68,7 @@ export async function syncCycleToMonthCalendar(
   coach: UserProfile,
   options?: {
     customNotes?: string;
+    targetAthleteId?: string;
   }
 ): Promise<SyncCycleSummary> {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -81,6 +82,12 @@ export async function syncCycleToMonthCalendar(
   let trainingDaysCount = 0;
   let restDaysCount = 0;
   let totalArrowsAssigned = 0;
+
+  const targetAthlete = options?.targetAthleteId;
+  const athleteSuffix = targetAthlete || (macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds?.[0] ? macrocycle.assignedAthleteIds[0] : "");
+  const assignedAthleteIds = targetAthlete 
+    ? [targetAthlete] 
+    : (macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []));
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -107,8 +114,10 @@ export async function syncCycleToMonthCalendar(
 
     const focusPoints: string[] = [];
 
-    // Deterministic ID per macrocycle and date prevents duplicate cards on multiple syncs
-    const eventId = `EVT-MAC-${macrocycle.id}-${dateStr}`;
+    // Deterministic ID per macrocycle, target athlete and date prevents duplicate cards on multiple syncs
+    const eventId = athleteSuffix 
+      ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${dateStr}` 
+      : `EVT-MAC-${macrocycle.id}-${dateStr}`;
 
     const title = phase.name || (isTraining ? `Entrenamiento (${arrowsPerSession} flechas)` : "Descanso");
     const description = options?.customNotes || phase.notes || "";
@@ -132,7 +141,7 @@ export async function syncCycleToMonthCalendar(
       phaseType: phase.type,
       phaseColor: phase.color || (phase.type && PHASE_CONFIG[phase.type] ? PHASE_CONFIG[phase.type].color : "#00BFFF"),
       targetArrows: arrowsPerSession,
-      assignedAthleteIds: macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []),
+      assignedAthleteIds,
       focusPoints,
       coachNotes,
       isRestDay: !isTraining,
@@ -193,12 +202,18 @@ export async function saveDailyEntriesToCalendar(
   let restDaysCount = 0;
   let totalArrowsAssigned = 0;
 
+  const athleteSuffix = (macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds?.[0]) 
+    ? macrocycle.assignedAthleteIds[0] 
+    : "";
+
   for (const entry of dailyEntries) {
     const phase = macrocycle.phases?.find(
       (p) => entry.date >= p.startDate && entry.date <= p.endDate
     ) || macrocycle.phases?.[0];
 
-    const eventId = `EVT-MAC-${macrocycle.id}-${entry.date}`;
+    const eventId = athleteSuffix 
+      ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${entry.date}` 
+      : `EVT-MAC-${macrocycle.id}-${entry.date}`;
     const isCoach = author.role === "coach";
 
     const eventData: CalendarEvent = {

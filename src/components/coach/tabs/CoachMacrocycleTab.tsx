@@ -59,6 +59,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [macroToSync, setMacroToSync] = useState<Macrocycle | null>(null);
   const [syncYear, setSyncYear] = useState(new Date().getFullYear());
   const [syncMonth, setSyncMonth] = useState(new Date().getMonth());
+  const [syncTargetType, setSyncTargetType] = useState<"all" | "single">("all");
+  const [syncSelectedAthleteId, setSyncSelectedAthleteId] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Smart Spreadsheet Import Modal states
@@ -97,11 +99,20 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     const list = await getLocalMacrocycles();
     setMacrocycles(list);
     setSelectedMacro(macrocycle);
+
+    const isSingle = macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds && macrocycle.assignedAthleteIds.length > 0;
+    const athleteName = isSingle 
+      ? roster.find((r) => r.uid === macrocycle.assignedAthleteIds[0])?.fullName || macrocycle.assignedAthleteIds[0]
+      : "Todos los alumnos del Club";
+
     alert(
       `✓ ¡Plan "${macrocycle.name}" Importado y Publicado en el Calendario!\n\n` +
+      `• Asignado a: ${athleteName}\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
       `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-      `Tus arqueros ya pueden tocar cualquier fecha en el calendario para ver las tareas asignadas.`
+      (isSingle
+        ? `Se ha sincronizado únicamente en el calendario de ${athleteName}.`
+        : `Tus arqueros ya pueden entrar a su calendario para ver las tareas asignadas.`)
     );
   };
 
@@ -109,6 +120,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setMacroToSync(macro);
     setSyncYear(new Date().getFullYear());
     setSyncMonth(new Date().getMonth());
+    if (macro.assignmentType === "individual" && macro.assignedAthleteIds && macro.assignedAthleteIds.length > 0) {
+      setSyncTargetType("single");
+      setSyncSelectedAthleteId(macro.assignedAthleteIds[0]);
+    } else {
+      setSyncTargetType("all");
+      setSyncSelectedAthleteId(roster[0]?.uid || "");
+    }
     setShowSyncModal(true);
   };
 
@@ -116,15 +134,24 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     if (!macroToSync) return;
     setIsSyncing(true);
     try {
-      const summary = await syncCycleToMonthCalendar(macroToSync, syncYear, syncMonth, user);
+      const targetAthlete = syncTargetType === "single" ? syncSelectedAthleteId : undefined;
+      const summary = await syncCycleToMonthCalendar(macroToSync, syncYear, syncMonth, user, {
+        targetAthleteId: targetAthlete
+      });
       setShowSyncModal(false);
+
+      const targetText = targetAthlete 
+        ? `Alumno: ${roster.find((r) => r.uid === targetAthlete)?.fullName || targetAthlete} (Sincronizado únicamente con su calendario)`
+        : "Todos los alumnos del Club";
+
       alert(
         `✓ ¡Calendario Sincronizado con Éxito!\n\n` +
         `• Plan: ${summary.macrocycleName}\n` +
+        `• Destinatario: ${targetText}\n` +
         `• Mes: ${summary.monthName} ${summary.year}\n` +
         `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
         `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-        `Tus arqueros ya pueden entrar a cada día en su calendario y ver la meta y el enfoque asignado.`
+        `Las tareas ya están reflejadas en el calendario correspondiente.`
       );
     } catch (err) {
       console.error("Error syncing cycle to calendar:", err);
@@ -1282,6 +1309,71 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     </div>
                   </div>
 
+                  {/* Selector de Destinatario: Todos los alumnos o 1 alumno */}
+                  <div className="flex flex-col gap-2 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-white/50 uppercase font-black tracking-widest flex items-center gap-1.5">
+                        <Users size={12} className="text-cyan-neon" />
+                        <span>Sincronizar con:</span>
+                      </span>
+                      <span className="text-[9px] text-cyan-neon font-mono font-bold">
+                        {syncTargetType === "all" ? "Todo el Club" : "1 Alumno"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSyncTargetType("all")}
+                        className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                          syncTargetType === "all"
+                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                            : "bg-neutral-950/60 border-white/10 text-white/40 hover:text-white"
+                        }`}
+                      >
+                        <Users size={12} />
+                        <span>Todos los Alumnos</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSyncTargetType("single");
+                          if (!syncSelectedAthleteId && roster.length > 0) {
+                            setSyncSelectedAthleteId(roster[0].uid);
+                          }
+                        }}
+                        className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                          syncTargetType === "single"
+                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                            : "bg-neutral-950/60 border-white/10 text-white/40 hover:text-white"
+                        }`}
+                      >
+                        <User size={12} />
+                        <span>1 Alumno Específico</span>
+                      </button>
+                    </div>
+
+                    {syncTargetType === "single" && (
+                      <div className="flex flex-col gap-1 pt-1 animate-fadeIn">
+                        <label className="text-[9px] text-white/40 uppercase font-bold">
+                          Seleccionar Alumno
+                        </label>
+                        <select
+                          value={syncSelectedAthleteId}
+                          onChange={(e) => setSyncSelectedAthleteId(e.target.value)}
+                          className="bg-neutral-950 border border-cyan-neon/40 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
+                        >
+                          {roster.map((ath) => (
+                            <option key={ath.uid} value={ath.uid}>
+                              {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Phases Preview */}
                   <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
                     <span className="text-[9px] text-white/40 uppercase font-bold">Etapas que se asignarán</span>
@@ -1305,7 +1397,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow flex items-center justify-center gap-2 cursor-pointer hover:brightness-105 active:scale-98 transition disabled:opacity-40"
                   >
                     <Sparkles size={14} />
-                    <span>{isSyncing ? "Sincronizando..." : `Sincronizar ${monthNames[syncMonth]} ${syncYear}`}</span>
+                    <span>
+                      {isSyncing 
+                        ? "Sincronizando..." 
+                        : syncTargetType === "single"
+                        ? `Sincronizar con ${roster.find(r => r.uid === syncSelectedAthleteId)?.fullName || "Alumno"}`
+                        : `Sincronizar con Todos (${monthNames[syncMonth]} ${syncYear})`}
+                    </span>
                   </button>
                 </div>
               </motion.div>
