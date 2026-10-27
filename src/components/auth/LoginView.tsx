@@ -286,27 +286,32 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     <div className="flex-1 flex flex-col justify-between px-6 pt-12 pb-6 min-h-full">
 
 
-      {/* Brand logo section */}
-      <div className="flex flex-col items-center justify-center my-auto py-6">
-        <motion.div 
-          initial={{ y: -15, opacity: 0 }}
+      {/* Brand logo section: ARCHERY APP / by 101010 (Misma letra y tamaño que página de inicio) */}
+      <div 
+        className="w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
+        style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+      >
+        <motion.h1 
+          initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="flex text-[52px] md:text-6xl tracking-tighter font-extrabold select-none mb-1.5"
-          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          transition={{ duration: 0.4 }}
+          className="text-[31px] sm:text-[43px] md:text-[53px] text-white tracking-widest text-center leading-tight"
         >
-          <span className="text-cyan-neon drop-shadow-[0_0_20px_rgba(0,191,255,0.4)]">10</span>
-          <span className="text-red-rival drop-shadow-[0_0_20px_rgba(255,0,0,0.3)]">10</span>
-          <span className="text-yellow-gold drop-shadow-[0_0_20px_rgba(255,229,0,0.3)]">10</span>
-        </motion.div>
-        <motion.span
+          ARCHERY APP
+        </motion.h1>
+        <motion.div 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-white text-[14px] font-black tracking-[0.55em] uppercase text-center pl-1.5"
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex items-baseline justify-center gap-2 text-[31px] sm:text-[43px] md:text-[53px] leading-none"
         >
-          ARCHERY
-        </motion.span>
+          <span className="text-white text-[0.35em] tracking-wider">by</span>
+          <span className="inline-flex tracking-tight font-extrabold">
+            <span className="text-cyan-neon">10</span>
+            <span className="text-red-rival">10</span>
+            <span className="text-yellow-gold">10</span>
+          </span>
+        </motion.div>
       </div>
 
       {/* Login form and fields */}
