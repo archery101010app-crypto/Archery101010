@@ -40,23 +40,11 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         Saltar
       </button>
 
-      {/* Top Tagline in Good Times font - bounded in px-6 for spacing */}
-      <motion.div
-        initial={{ y: -15, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="text-center px-6"
-      >
-        <span 
-          className="text-xs sm:text-sm text-cyan-neon font-black tracking-[0.25em] uppercase block"
-          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-        >
-          SISTEMA DE ENTRENAMIENTO
-        </span>
-      </motion.div>
+      {/* Top spacing placeholder */}
+      <div className="h-2" />
 
       {/* Central HUD with concentric circles and giant full-width logo */}
-      <div className="relative flex items-center justify-center w-full flex-1 my-4 px-0">
+      <div className="relative flex items-center justify-center w-full flex-1 my-2 px-0">
         {/* Concentric HUD Rings */}
         <motion.div
           animate={{ rotate: 360 }}
@@ -93,31 +81,31 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         </div>
       </div>
 
-      {/* Bottom Slogan - bounded in px-6 for spacing */}
-      <div className="w-full flex flex-col items-center justify-center min-h-[80px] px-6">
+      {/* Bottom Slogan - subido 10% y 20% más grande texto y línea */}
+      <div className="w-full flex flex-col items-center justify-center min-h-[90px] px-6 -translate-y-8 sm:-translate-y-12">
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.8, ease: "easeOut" }}
-          className="text-white text-xs sm:text-sm font-black uppercase tracking-[0.25em] text-center"
+          className="text-white text-[15px] sm:text-[18px] font-black uppercase tracking-[0.28em] text-center"
           style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
         >
           Your Archery App
         </motion.h1>
 
-        {/* Dynamic tricolor underline stroke */}
-        <div className="w-48 h-6 relative overflow-hidden mt-1">
+        {/* Dynamic tricolor underline stroke - 20% más grande */}
+        <div className="w-[235px] sm:w-[265px] h-7 relative overflow-hidden mt-1.5">
           <svg
             width="100%"
             height="100%"
             viewBox="0 0 200 20"
-            className="absolute inset-0 pointer-events-none opacity-80"
+            className="absolute inset-0 pointer-events-none opacity-85"
           >
             <motion.path
-              d="M 15,5 Q 100,14 185,5"
+              d="M 12,5 Q 100,15 188,5"
               fill="none"
               stroke="url(#slogan-gradient)"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
