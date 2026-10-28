@@ -1009,63 +1009,47 @@ export default function Home() {
         {unlockedStar && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-neutral-950 border border-yellow-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(255,229,0,0.15)] overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0B0E14] border border-yellow-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-2xl overflow-hidden"
             >
-              {/* Animated rays or backdrop glow */}
-              <div 
-                className="absolute inset-0 opacity-10 pointer-events-none"
-                style={{ background: `radial-gradient(circle, ${unlockedStar.star.color} 0%, transparent 70%)` }}
-              />
-
               <div className="relative z-10 flex flex-col items-center">
-                {/* Colored Glowing Star Icon */}
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.2, 1],
-                    rotate: [0, 15, -15, 0]
-                  }}
-                  transition={{ 
-                    duration: 1.5,
-                    repeat: Infinity,
-                    repeatType: "reverse"
-                  }}
-                  className="w-20 h-20 flex items-center justify-center rounded-full bg-neutral-900 border border-white/10 shadow-lg text-4xl mb-4"
+                <div
+                  className="w-16 h-16 flex items-center justify-center rounded-2xl bg-[#111620] border border-white/10 text-3xl mb-4"
                   style={{ color: unlockedStar.star.color }}
                 >
                   ★
-                </motion.div>
+                </div>
 
                 <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
-                  ¡NUEVA MARCA HISTÓRICA!
+                  NUEVA MARCA HISTÓRICA
                 </span>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
                   {unlockedStar.star.name}
                 </h3>
                 
-                <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3 w-full">
-                  <span className="text-[9px] text-gray-dim uppercase font-bold block">
+                <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full">
+                  <span className="text-[9px] text-white/50 uppercase font-bold block">
                     Puntuación Registrada
                   </span>
-                  <span className="text-2xl font-black text-white block mt-0.5">
-                    {unlockedStar.score} <span className="text-xs text-gray-dim">/ 720</span>
+                  <span className="text-2xl font-black text-white block mt-0.5 tabular-nums">
+                    {unlockedStar.score} <span className="text-xs text-white/50">/ 720</span>
                   </span>
-                  <span className="text-[9px] text-cyan-neon/70 uppercase font-black tracking-wider block mt-1">
-                    {unlockedStar.bowType} · {unlockedStar.distance}m (72 flechas)
+                  <span className="text-[9px] text-cyan-neon uppercase font-black tracking-wider block mt-1">
+                    {unlockedStar.bowType === "Recurve" ? "Recurvo" : unlockedStar.bowType === "Compound" ? "Compuesto" : unlockedStar.bowType} · {unlockedStar.distance} m (72 flechas)
                   </span>
                 </div>
 
-                <p className="text-xs text-gray-dim leading-relaxed px-2">
-                  ¡Felicitaciones {unlockedStar.userName}! Has logrado superar la marca mínima de {unlockedStar.star.minScore} puntos y desbloquear esta prestigiosa Estrella 101010.
+                <p className="text-xs text-white/65 leading-relaxed px-2 [text-wrap:pretty]">
+                  Felicitaciones, {unlockedStar.userName}. Has superado la marca mínima de {unlockedStar.star.minScore} puntos y desbloqueado esta Estrella 101010.
                 </p>
 
                 <button
                   onClick={() => setUnlockedStar(null)}
-                  className="mt-6 w-full py-3 bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition"
+                  className="mt-6 w-full h-11 bg-yellow-gold hover:brightness-105 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                 >
-                  ¡Excelente! Aceptar
+                  Continuar
                 </button>
               </div>
             </motion.div>
@@ -1078,44 +1062,33 @@ export default function Home() {
         {activeDraft && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-neutral-950 border border-cyan-neon/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(0,229,255,0.15)] overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0B0E14] border border-white/[0.1] rounded-3xl p-6 w-full max-w-sm text-center relative shadow-2xl overflow-hidden"
             >
-              {/* Radial gradient background light */}
-              <div 
-                className="absolute inset-0 opacity-10 pointer-events-none"
-                style={{ background: "radial-gradient(circle, #00E5FF 0%, transparent 70%)" }}
-              />
-
               <div className="relative z-10 flex flex-col items-center">
-                {/* Glowing Target icon */}
-                <div className="w-16 h-16 flex items-center justify-center rounded-full bg-neutral-900 border border-cyan-neon/20 shadow-lg text-3xl mb-4 text-cyan-neon animate-pulse">
-                  🎯
-                </div>
-
                 {!showDiscardConfirm ? (
                   <>
                     <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
-                      ¡SESIÓN PENDIENTE DETECTADA!
+                      SESIÓN EN PAUSA
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
                       ¿Reanudar Entrenamiento?
                     </h3>
                     
-                    <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3 w-full text-left">
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
-                        <span className="text-[10px] text-gray-dim uppercase font-bold">Formato WA</span>
-                        <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance}m</span>
+                    <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full text-left">
+                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[10px] text-white/50 uppercase font-bold">Formato WA</span>
+                        <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance} m</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
-                        <span className="text-[10px] text-gray-dim uppercase font-bold">Puntuación</span>
-                        <span className="text-xs font-black text-cyan-neon">{activeDraft.score} pts</span>
+                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[10px] text-white/50 uppercase font-bold">Puntuación</span>
+                        <span className="text-xs font-black text-cyan-neon tabular-nums">{activeDraft.score} pts</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2 mb-2">
-                        <span className="text-[10px] text-gray-dim uppercase font-bold">Progreso</span>
-                        <span className="text-xs font-black text-white">
+                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[10px] text-white/50 uppercase font-bold">Progreso</span>
+                        <span className="text-xs font-black text-white tabular-nums">
                           {(() => {
                             const shotCount = activeDraft.ends.reduce((sum: number, e: any) => sum + e.arrows.filter((a: string) => a !== "").length, 0);
                             const total = activeDraft.endsCount * activeDraft.arrowsPerEnd;
@@ -1124,8 +1097,8 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] text-gray-dim uppercase font-bold">Guardado</span>
-                        <span className="text-[10px] text-gray-dim font-medium">
+                        <span className="text-[10px] text-white/50 uppercase font-bold">Guardado</span>
+                        <span className="text-[10px] text-white/60 font-medium">
                           {activeDraft.timestamp ? (
                             (() => {
                               const date = new Date(activeDraft.timestamp);
@@ -1136,20 +1109,20 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-gray-dim leading-relaxed px-2">
-                      Tienes un borrador de sesión guardado. ¿Deseas continuar registrando tus tiros donde lo dejaste?
+                    <p className="text-xs text-white/65 leading-relaxed px-2 [text-wrap:pretty]">
+                      Tienes una sesión en curso guardada. ¿Deseas continuar registrando tus flechas donde lo dejaste?
                     </p>
 
-                    <div className="mt-6 flex flex-col gap-2 w-full">
+                    <div className="mt-5 flex flex-col gap-2 w-full">
                       <button
                         onClick={() => resumeSession(activeDraft)}
-                        className="w-full py-3 bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition"
+                        className="w-full h-11 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
                         Reanudar Entrenamiento
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(true)}
-                        className="w-full py-3 bg-neutral-900 border border-white/10 text-red-rival font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-neutral-800 transition"
+                        className="w-full h-11 bg-[#111620] border border-white/[0.08] text-red-rival font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.05] transition flex items-center justify-center"
                       >
                         Descartar Borrador
                       </button>
@@ -1158,26 +1131,26 @@ export default function Home() {
                 ) : (
                   <>
                     <span className="text-[10px] text-red-rival font-black tracking-widest uppercase block mb-1">
-                      ⚠️ CONFIRMACIÓN DE DESCARTE
+                      CONFIRMACIÓN DE DESCARTE
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
                       ¿Descartar Borrador?
                     </h3>
                     
-                    <p className="text-xs text-gray-dim leading-relaxed px-2 my-4">
-                      Esta action es irreversible y se perderán todos los tiros registrados en esta sesión de entrenamiento. ¿Estás completamente seguro?
+                    <p className="text-xs text-white/65 leading-relaxed px-2 my-4 [text-wrap:pretty]">
+                      Esta acción es irreversible y se perderán los tiros registrados en esta sesión en pausa. ¿Estás seguro de continuar?
                     </p>
 
-                    <div className="mt-4 flex flex-col gap-2 w-full">
+                    <div className="mt-2 flex flex-col gap-2 w-full">
                       <button
                         onClick={handleDiscardDraft}
-                        className="w-full py-3 bg-red-rival text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-red-700 transition"
+                        className="w-full h-11 bg-red-rival text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-red-700 transition flex items-center justify-center"
                       >
                         Sí, Descartar Permanentemente
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(false)}
-                        className="w-full py-3 bg-neutral-900 border border-white/10 text-gray-dim font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition"
+                        className="w-full h-11 bg-[#111620] border border-white/[0.08] text-white/70 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                       >
                         No, Volver Atrás
                       </button>
@@ -1211,24 +1184,27 @@ export default function Home() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-[340px] bg-neutral-950 border border-purple-500/30 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-[0_0_50px_rgba(168,85,247,0.15)] relative overflow-hidden"
+              className="w-full max-w-[340px] bg-[#0B0E14] border border-white/[0.12] p-6 rounded-3xl flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 to-indigo-600" />
-              
-              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mx-auto mt-2 animate-pulse">
-                🏆
+              <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+                <div className="flex-1 bg-cyan-neon" />
+                <div className="flex-1 bg-red-rival" />
+                <div className="flex-1 bg-yellow-gold" />
               </div>
 
               <div className="flex flex-col gap-1.5 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  ELIMINATORIA ONLINE 1 VS 1
+                </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  ¡Reto Recibido!
+                  Desafío en Vivo Recibido
                 </h3>
-                <p className="text-xs text-gray-dim leading-relaxed">
-                  <strong>{pendingInvitation.senderName}</strong> te ha desafiado a un duelo de <strong>{pendingInvitation.bowType}</strong> a <strong>{pendingInvitation.distance}m</strong>.
+                <p className="text-xs text-white/65 leading-relaxed [text-wrap:pretty]">
+                  <strong className="text-white">{pendingInvitation.senderName}</strong> te ha desafiado a una eliminatoria de <strong className="text-white">{pendingInvitation.bowType === "Recurve" ? "Recurvo" : pendingInvitation.bowType === "Compound" ? "Compuesto" : pendingInvitation.bowType}</strong> a <strong className="text-white">{pendingInvitation.distance} m</strong>.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2.5 mt-4">
+              <div className="flex flex-col gap-2.5 mt-2">
                 <button
                   onClick={async () => {
                     try {
@@ -1275,7 +1251,7 @@ export default function Home() {
                       setPendingInvitation(null);
                     }
                   }}
-                  className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-purple hover:brightness-110 active:scale-95 transition"
+                  className="w-full h-11 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                 >
                   Aceptar Desafío
                 </button>
@@ -1292,7 +1268,7 @@ export default function Home() {
                       setPendingInvitation(null);
                     }
                   }}
-                  className="w-full py-3 bg-neutral-900 border border-white/5 text-gray-dim font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition"
+                  className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white/60 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                 >
                   Rechazar
                 </button>
@@ -1320,9 +1296,8 @@ export default function Home() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 15, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 rounded-full bg-neutral-900/95 border border-white/15 text-white/90 text-xs font-semibold shadow-2xl backdrop-blur-md pointer-events-none flex items-center gap-2"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 rounded-full bg-[#0D1017]/95 border border-white/15 text-white/90 text-xs font-semibold shadow-2xl backdrop-blur-md pointer-events-none flex items-center justify-center"
           >
-            <span>🏹</span>
             <span>{backToast}</span>
           </motion.div>
         )}

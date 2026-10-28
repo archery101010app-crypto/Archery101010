@@ -437,7 +437,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
-          className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.12] hover:border-cyan-neon/50 p-4 sm:p-5 cursor-pointer transition-all duration-200 relative overflow-hidden group flex flex-col gap-3.5"
+          className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.1] hover:border-cyan-neon/50 p-4 sm:p-5 cursor-pointer transition-all duration-200 relative overflow-hidden group flex flex-col gap-3"
         >
           {/* Top Accent Hairline (WA Target Trio: Cyan / Red / Gold) */}
           <div className="absolute top-0 left-0 right-0 h-[3px] flex">
@@ -446,68 +446,53 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             <div className="flex-1 bg-yellow-gold" />
           </div>
 
-          {/* Top Status Row */}
+          {/* Row 1: Single-line Status Pill + Format Label (Guaranteed no line break) */}
           <div className="flex items-center justify-between gap-2 pt-0.5">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 whitespace-nowrap">
                 {t("liveArenaTitle")}
               </span>
             </div>
 
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 group-hover:text-white transition-colors flex items-center gap-1">
-              <span>{language === "es" ? "Entrar a la Arena" : "Enter Arena"}</span>
-              <ChevronRight size={14} className="text-cyan-neon group-hover:translate-x-0.5 transition-transform" />
+            <span className="text-[9px] font-bold uppercase tracking-wider text-white/45 whitespace-nowrap">
+              {language === "es" ? "Sets & Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
 
-          {/* Center Main Content + Visual 1v1 Face-Off */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col gap-1 min-w-0 flex-1">
-              <h3
-                className="text-white text-lg sm:text-xl font-black uppercase tracking-wide leading-tight group-hover:text-cyan-neon transition-colors"
-                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-              >
-                {t("duelsTitle")}
-              </h3>
-              <p className="text-xs text-white/65 leading-snug">
-                {t("duelsDesc")}
-              </p>
-            </div>
-
-            {/* Visual 1v1 Scoreboard Badge */}
-            <div className="shrink-0 bg-[#080A0F] border border-white/[0.09] rounded-xl px-3 py-2 flex items-center gap-2.5">
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black uppercase tracking-wider text-cyan-neon">TÚ</span>
-                <span className="text-sm font-black text-white tabular-nums leading-tight">6</span>
-              </div>
-              <div className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[9px] font-black text-red-rival tracking-wider">
-                VS
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black uppercase tracking-wider text-yellow-gold">RIVAL</span>
-                <span className="text-sm font-black text-white/75 tabular-nums leading-tight">4</span>
-              </div>
-            </div>
+          {/* Row 2: Full-width Title & Balanced Description (Never collides with side boxes) */}
+          <div className="flex flex-col gap-1 w-full text-left">
+            <h3
+              className="text-white text-[15px] sm:text-lg font-black uppercase tracking-wider leading-snug group-hover:text-cyan-neon transition-colors [text-wrap:balance]"
+              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+            >
+              {t("duelsTitle")}
+            </h3>
+            <p className="text-xs text-white/65 leading-relaxed [text-wrap:pretty]">
+              {t("duelsDesc")}
+            </p>
           </div>
 
-          {/* Bottom Quick Feature Pills + Action Button */}
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] flex-wrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
-                {language === "es" ? "Retar Amigo (Código / WhatsApp)" : "Challenge Friend"}
+          {/* Row 3: Symmetrical 2-Column Footer (1v1 Scoreboard + Primary CTA Button) */}
+          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
+            <div className="h-10 bg-[#080A0F] border border-white/[0.08] rounded-xl px-3 flex items-center justify-center gap-2.5">
+              <div className="flex items-baseline gap-1">
+                <span className="text-[9px] font-black uppercase tracking-wider text-cyan-neon">TÚ</span>
+                <span className="text-xs font-black text-white tabular-nums">6</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[8px] font-black text-red-rival tracking-wider leading-none">
+                VS
               </span>
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
-                {language === "es" ? "Rivales en Línea" : "Live Opponents"}
-              </span>
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
-                {language === "es" ? "Audio en Vivo" : "Live Voice"}
-              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs font-black text-white/80 tabular-nums">4</span>
+                <span className="text-[9px] font-black uppercase tracking-wider text-yellow-gold">RIVAL</span>
+              </div>
             </div>
 
-            <div className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[11px] uppercase tracking-wider group-hover:bg-[#19c8ff] transition-colors">
-              <Swords size={13} strokeWidth={2.5} />
-              <span>{language === "es" ? "Jugar 1 vs 1" : "Play 1v1"}</span>
+            <div className="h-10 rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap px-3">
+              <Swords size={13} strokeWidth={2.5} className="shrink-0" />
+              <span>{language === "es" ? "Entrar 1 vs 1" : "Enter 1v1"}</span>
+              <ChevronRight size={13} strokeWidth={2.5} className="shrink-0" />
             </div>
           </div>
         </motion.div>

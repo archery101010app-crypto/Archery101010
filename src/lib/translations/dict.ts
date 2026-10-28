@@ -13,7 +13,7 @@ export const translations = {
     skip: "Omitir",
     active: "Activo",
     back: "Volver",
-    proBadge: "PRO ✦",
+    proBadge: "PRO",
     freeBadge: "FREE",
 
     // Login
@@ -184,9 +184,9 @@ export const translations = {
     myClub: "Mi Club",
     roleAdmin: "Administrador",
     roleMember: "Miembro",
-    liveArenaTitle: "LIVE MATCHPLAY · 1 VS 1 ONLINE",
+    liveArenaTitle: "EN VIVO · 1 VS 1 ONLINE",
     duelsTitle: "ELIMINATORIAS ONLINE",
-    duelsDesc: "Duelos 1 vs 1 en tiempo real flecha a flecha contra amigos o arqueros en línea.",
+    duelsDesc: "Duelos 1 vs 1 en tiempo real contra amigos o arqueros en línea.",
     notEligibleStar: "No elegible para Estrella (Requiere WA 720)",
     starUnlocked: "Estrella ganada",
     starNotReached: "Estrella no alcanzada (< 500 pts)",
@@ -194,7 +194,7 @@ export const translations = {
     lockedStarNotice: "Completa una sesión oficial de tiro WA 720 (72 flechas) a la distancia reglamentaria (Recurvo a 70m o Compuesto a 50m) con un puntaje mínimo de 500 para ganar tu primera estrella de 101010.",
     recordLabel: "Récord:",
     nextLabel: "Siguiente:",
-    maxStarAchieved: "🏆 ¡Has alcanzado la Estrella máxima (Diamante)! 🏆",
+    maxStarAchieved: "Has alcanzado la Estrella máxima (Diamante)",
     pointsToNextStar: "puntos para subir de nivel de estrella."
   },
   en: {
