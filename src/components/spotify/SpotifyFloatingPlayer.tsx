@@ -15,9 +15,22 @@ import {
   Trash2,
   Minimize2,
   ListMusic,
-  ClipboardPaste
+  ClipboardPaste,
+  UserCheck,
+  UserPlus,
+  RefreshCw,
+  LogOut,
+  KeyRound
 } from "lucide-react";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import {
+  ConnectedSpotifyAccount,
+  extractSpotifyUsername,
+  fetchUserSpotifyPlaylists,
+  getSpotifyClientId,
+  handleSpotifyOAuthCallbackIfPresent,
+  startSpotifyOAuthPKCE
+} from "@/lib/spotifyAuth";
 
 // Predefined verified shared playlists for archery sessions
 const DEFAULT_PLAYLIST_ID = "37i9dQZF1DWZeKCadgRdKQ"; // Deep Focus
@@ -78,6 +91,7 @@ interface SpotifyFloatingPlayerProps {
 export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFloatingPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasLoadedIframe, setHasLoadedIframe] = useState(false);
+  const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [activePlaylistId, setActivePlaylistId] = useState(DEFAULT_PLAYLIST_ID);
   const [activeType, setActiveType] = useState<SpotifyEntityType>("playlist");
   const [userPlaylistUrl, setUserPlaylistUrl] = useState("");
@@ -89,13 +103,23 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
   const [isEnabledByAdmin, setIsEnabledByAdmin] = useState(true);
   const [isCompactPlayer, setIsCompactPlayer] = useState(false);
 
+  // Connected Spotify Account States
+  const [connectedAccount, setConnectedAccount] = useState<ConnectedSpotifyAccount | null>(null);
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [displayNameInput, setDisplayNameInput] = useState("");
+  const [showOAuthConfig, setShowOAuthConfig] = useState(false);
+  const [oauthClientIdInput, setOauthClientIdInput] = useState("");
+  const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
+
   // Playback & Mini-Bar states
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMiniBarActive, setIsMiniBarActive] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const loginPopupWatchingRef = useRef(false);
 
-  // Load active playlist and custom playlists on mount
+  // Load active playlist, custom playlists, and connected Spotify account on mount
   useEffect(() => {
     async function loadSpotifyConfig() {
       const flag = await getLocalSetting<boolean>("flag_spotify_enabled", true);
@@ -109,15 +133,60 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
 
       const savedType = await getLocalSetting<SpotifyEntityType>("spotify_active_type", "playlist");
       const savedCustom = await getLocalSetting<SpotifyItem[]>("spotify_custom_lists", []);
+      const savedAccount = await getLocalSetting<ConnectedSpotifyAccount | null>("spotify_connected_account", null);
+      const savedClientId = await getSpotifyClientId();
 
       setActivePlaylistId(savedId);
       setActiveType(savedType || "playlist");
-      setCustomPlaylists(Array.isArray(savedCustom) ? savedCustom : []);
+      let currentCustom = Array.isArray(savedCustom) ? savedCustom : [];
+      setCustomPlaylists(currentCustom);
+      if (savedAccount) {
+        setConnectedAccount(savedAccount);
+        setUsernameInput(savedAccount.username || "");
+        setDisplayNameInput(savedAccount.displayName || "");
+      }
+      if (savedClientId) {
+        setOauthClientIdInput(savedClientId);
+      }
+
+      // Check if returning from Spotify OAuth 2.0 PKCE callback
+      const callbackResult = await handleSpotifyOAuthCallbackIfPresent();
+      if (callbackResult) {
+        setConnectedAccount(callbackResult.account);
+        setHasLoadedIframe(true);
+        setIsOpen(true);
+
+        if (callbackResult.playlists.length > 0) {
+          const importedItems: SpotifyItem[] = callbackResult.playlists.map((pl) => ({
+            id: pl.id,
+            type: "playlist",
+            name: pl.name,
+            creator: pl.ownerName,
+            description: pl.tracksTotal ? `${pl.tracksTotal} canciones` : pl.description
+          }));
+
+          const existingIds = new Set(importedItems.map((i) => i.id));
+          const merged = [
+            ...importedItems,
+            ...currentCustom.filter((c) => !existingIds.has(c.id))
+          ];
+          setCustomPlaylists(merged);
+          await saveLocalSetting("spotify_custom_lists", merged);
+
+          // Automatically select the user's first playlist
+          setActivePlaylistId(importedItems[0].id);
+          setActiveType("playlist");
+          await saveLocalSetting("spotify_active_id", importedItems[0].id);
+          await saveLocalSetting("spotify_active_type", "playlist");
+        }
+        setAccountFeedback("Cuenta de Spotify sincronizada y playlists importadas.");
+        setTimeout(() => setAccountFeedback(null), 4000);
+      }
     }
     loadSpotifyConfig();
 
     const handleToggle = () => {
-      setIsOpen(prev => {
+      setIsOpen((prev) => {
         const next = !prev;
         if (next) setHasLoadedIframe(true);
         return next;
@@ -125,6 +194,20 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
     };
     window.addEventListener("open-spotify-player", handleToggle);
     return () => window.removeEventListener("open-spotify-player", handleToggle);
+  }, []);
+
+  // Refresh embedded player automatically when user returns from Spotify login window
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (loginPopupWatchingRef.current) {
+        loginPopupWatchingRef.current = false;
+        setIframeReloadKey((prev) => prev + 1);
+        setAccountFeedback("Sesión de Spotify actualizada en el reproductor.");
+        setTimeout(() => setAccountFeedback(null), 3500);
+      }
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    return () => window.removeEventListener("focus", handleWindowFocus);
   }, []);
 
   // Register Android / mobile back button to minimize modal cleanly
@@ -177,7 +260,96 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
 
   const handleTogglePlayPause = () => {
     sendSpotifyCommand("toggle");
-    setIsPlaying(prev => !prev);
+    setIsPlaying((prev) => !prev);
+  };
+
+  // Connect Spotify Account (User + Official Spotify Web Session Login for full tracks)
+  const handleConnectSpotifyAccount = async (openSpotifyLoginPopup: boolean) => {
+    const cleanUser = extractSpotifyUsername(usernameInput || displayNameInput || " arquero");
+    const cleanDisplay =
+      displayNameInput.trim() ||
+      (usernameInput.trim() ? extractSpotifyUsername(usernameInput) : "Mi Cuenta Spotify");
+
+    const newAccount: ConnectedSpotifyAccount = {
+      username: cleanUser,
+      displayName: cleanDisplay,
+      product: "premium",
+      authMode: "session",
+      connectedAt: new Date().toISOString()
+    };
+
+    setConnectedAccount(newAccount);
+    await saveLocalSetting("spotify_connected_account", newAccount);
+    setShowAccountForm(false);
+
+    if (openSpotifyLoginPopup) {
+      loginPopupWatchingRef.current = true;
+      const loginUrl =
+        "https://accounts.spotify.com/es/login?continue=" +
+        encodeURIComponent("https://open.spotify.com/");
+      const popup = window.open(
+        loginUrl,
+        "SpotifyAccountLogin",
+        "width=460,height=680,menubar=no,toolbar=no,location=yes,status=no"
+      );
+      if (!popup) {
+        window.open(loginUrl, "_blank", "noopener,noreferrer");
+      }
+      setAccountFeedback(
+        "Inicia sesión en la ventana de Spotify. Al volver aquí, tu reproductor tendrá acceso completo."
+      );
+    } else {
+      setIframeReloadKey((prev) => prev + 1);
+      setAccountFeedback("Usuario de Spotify vinculado correctamente.");
+      setTimeout(() => setAccountFeedback(null), 3000);
+    }
+  };
+
+  // Connect via OAuth 2.0 PKCE (fetches user profile + all user playlists automatically)
+  const handleStartOAuthSync = async () => {
+    try {
+      await startSpotifyOAuthPKCE(oauthClientIdInput);
+    } catch (err: any) {
+      setAccountFeedback(err?.message || "Ingresa un Client ID válido para OAuth.");
+    }
+  };
+
+  const handleRefreshOAuthPlaylists = async () => {
+    if (connectedAccount?.accessToken) {
+      const pls = await fetchUserSpotifyPlaylists(connectedAccount.accessToken);
+      if (pls.length > 0) {
+        const imported: SpotifyItem[] = pls.map((pl) => ({
+          id: pl.id,
+          type: "playlist",
+          name: pl.name,
+          creator: pl.ownerName,
+          description: pl.tracksTotal ? `${pl.tracksTotal} canciones` : pl.description
+        }));
+        const existingIds = new Set(imported.map((i) => i.id));
+        const merged = [
+          ...imported,
+          ...customPlaylists.filter((c) => !existingIds.has(c.id))
+        ];
+        setCustomPlaylists(merged);
+        await saveLocalSetting("spotify_custom_lists", merged);
+        setAccountFeedback(`${imported.length} playlists sincronizadas desde tu cuenta.`);
+        setTimeout(() => setAccountFeedback(null), 3000);
+        return;
+      }
+    }
+    // Reload embedded player to pick up active Spotify session
+    setIframeReloadKey((prev) => prev + 1);
+    setAccountFeedback("Reproductor sincronizado con tu sesión de Spotify.");
+    setTimeout(() => setAccountFeedback(null), 2500);
+  };
+
+  const handleDisconnectAccount = async () => {
+    setConnectedAccount(null);
+    setUsernameInput("");
+    setDisplayNameInput("");
+    await saveLocalSetting("spotify_connected_account", null);
+    setAccountFeedback("Cuenta desvinculada.");
+    setTimeout(() => setAccountFeedback(null), 2000);
   };
 
   // Universal Spotify extractor: supports URLs, regional /intl-xx/, /embed/, URIs, mobile share text, and raw 22-char IDs
@@ -282,7 +454,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
       type: extracted.type,
       name: cleanName
     };
-    const newList = [newItem, ...customPlaylists.filter(p => p.id !== extracted.id)];
+    const newList = [newItem, ...customPlaylists.filter((p) => p.id !== extracted.id)];
 
     setCustomPlaylists(newList);
     setActivePlaylistId(extracted.id);
@@ -305,7 +477,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
 
   const handleDeleteCustomPlaylist = async (e: React.MouseEvent, idToDelete: string) => {
     e.stopPropagation();
-    const updated = customPlaylists.filter(p => p.id !== idToDelete);
+    const updated = customPlaylists.filter((p) => p.id !== idToDelete);
     setCustomPlaylists(updated);
     await saveLocalSetting("spotify_custom_lists", updated);
     if (activePlaylistId === idToDelete) {
@@ -339,8 +511,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
   }
 
   const activePlaylistObj =
-    SHARED_PLAYLISTS.find(p => p.id === activePlaylistId) ||
-    customPlaylists.find(p => p.id === activePlaylistId);
+    SHARED_PLAYLISTS.find((p) => p.id === activePlaylistId) ||
+    customPlaylists.find((p) => p.id === activePlaylistId);
 
   return (
     <>
@@ -447,7 +619,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
           aria-hidden={!isOpen}
         >
           <div
-            className={`w-full max-w-[400px] max-h-[90vh] h-[780px] bg-[#0B0E14] border border-white/[0.08] rounded-[28px] flex flex-col overflow-hidden relative shadow-2xl transition-transform duration-200 ${
+            className={`w-full max-w-[410px] max-h-[90vh] h-[800px] bg-[#0B0E14] border border-white/[0.08] rounded-[28px] flex flex-col overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
           >
@@ -462,7 +634,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     Spotify
                   </h3>
                   <span className="text-[9px] text-[#1DB954] font-bold tracking-widest uppercase">
-                    Audio continuo en tus rondas
+                    {connectedAccount
+                      ? `Conectado · ${connectedAccount.displayName}`
+                      : "Audio continuo en tus rondas"}
                   </span>
                 </div>
               </div>
@@ -494,8 +668,197 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             {/* Scrollable Content */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 pb-8 scrollbar-none"
+              className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 pb-8 scrollbar-none"
             >
+              {/* 0. Cuenta Suscrita / Usuario de Spotify */}
+              <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
+                {connectedAccount && !showAccountForm ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0 font-black text-xs uppercase">
+                          {connectedAccount.displayName.slice(0, 2)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-black text-white truncate">
+                              {connectedAccount.displayName}
+                            </span>
+                            <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
+                              SUSCRIPCIÓN ACTIVA
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-white/50 truncate">
+                            Usuario: @{connectedAccount.username}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleRefreshOAuthPlaylists}
+                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white/70 hover:text-[#1DB954] cursor-pointer transition"
+                          title="Sincronizar reproductor con tu cuenta"
+                        >
+                          <RefreshCw size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAccountForm(true)}
+                          className="px-2 py-1 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-[9px] font-bold text-white/70 hover:text-white cursor-pointer transition"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectAccount}
+                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white/50 hover:text-red-400 cursor-pointer transition"
+                          title="Desvincular cuenta"
+                        >
+                          <LogOut size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleConnectSpotifyAccount(true)}
+                        className="flex-1 py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-[#1DB954] flex items-center justify-center gap-1.5 cursor-pointer transition"
+                      >
+                        <UserCheck size={12} />
+                        <span>Autenticar Sesión Premium en Spotify</span>
+                      </button>
+                      {connectedAccount.username && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(
+                              `https://open.spotify.com/user/${encodeURIComponent(connectedAccount.username)}`,
+                              "_blank",
+                              "noopener,noreferrer"
+                            )
+                          }
+                          className="py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-white/80 flex items-center gap-1 cursor-pointer transition shrink-0"
+                        >
+                          <span>Mi Perfil</span>
+                          <ExternalLink size={10} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <UserPlus size={14} className="text-[#1DB954]" />
+                        <span className="text-xs font-black uppercase tracking-wider text-white">
+                          Conectar Cuenta Suscrita de Spotify
+                        </span>
+                      </div>
+                      {connectedAccount && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAccountForm(false)}
+                          className="text-[10px] text-white/50 hover:text-white font-bold cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[10px] text-white/60 leading-snug">
+                      Ingresa tu usuario de Spotify e inicia sesión en tu cuenta suscrita para escuchar <strong className="text-white">canciones completas</strong> sin límite de 30 segundos.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={usernameInput}
+                        onChange={(e) => setUsernameInput(e.target.value)}
+                        placeholder="Tu usuario, correo o link de perfil"
+                        className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition"
+                      />
+                      <input
+                        type="text"
+                        value={displayNameInput}
+                        onChange={(e) => setDisplayNameInput(e.target.value)}
+                        placeholder="Tu nombre (ej. Coach / Arquero)"
+                        className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleConnectSpotifyAccount(true)}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
+                      >
+                        <UserCheck size={14} />
+                        <span>Iniciar Sesión en Spotify y Conectar</span>
+                      </button>
+                      {usernameInput.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => handleConnectSpotifyAccount(false)}
+                          className="py-2.5 px-3 rounded-xl bg-[#0B0E14] hover:bg-white/[0.05] border border-white/[0.08] text-white font-bold text-[10px] uppercase tracking-wider cursor-pointer transition"
+                        >
+                          Solo Guardar Usuario
+                        </button>
+                      )}
+                    </div>
+
+                    {/* OAuth 2.0 PKCE Auto-Import Option */}
+                    <div className="border-t border-white/[0.06] pt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowOAuthConfig((prev) => !prev)}
+                        className="text-[10px] text-white/50 hover:text-white/80 font-bold flex items-center gap-1 self-start cursor-pointer transition"
+                      >
+                        <KeyRound size={11} className="text-[#1DB954]" />
+                        <span>
+                          {showOAuthConfig
+                            ? "Ocultar sincronización automática de biblioteca (OAuth)"
+                            : "Sincronización automática de todas tus playlists (OAuth API)"}
+                        </span>
+                      </button>
+
+                      {showOAuthConfig && (
+                        <div className="bg-[#0B0E14] border border-white/[0.06] rounded-xl p-2.5 flex flex-col gap-2">
+                          <span className="text-[9px] text-white/50 leading-snug">
+                            Para importar automáticamente todas las playlists privadas de una cuenta vía API, ingresa el Spotify Client ID (Redirect URI:{" "}
+                            <code className="text-white/80">{typeof window !== "undefined" ? window.location.origin : ""}</code>):
+                          </span>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={oauthClientIdInput}
+                              onChange={(e) => setOauthClientIdInput(e.target.value)}
+                              placeholder="Spotify Client ID"
+                              className="flex-1 bg-[#121722] border border-white/[0.08] text-white text-[11px] px-2.5 py-1.5 rounded-lg outline-none focus:border-[#1DB954]"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleStartOAuthSync}
+                              className="px-3 py-1.5 rounded-lg bg-[#1DB954] text-black font-black text-[10px] uppercase tracking-wider cursor-pointer shrink-0"
+                            >
+                              Autorizar API
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {accountFeedback && (
+                  <div className="text-[10px] font-bold text-[#1DB954] bg-[#1DB954]/10 border border-[#1DB954]/30 rounded-xl px-2.5 py-1.5">
+                    {accountFeedback}
+                  </div>
+                )}
+              </div>
+
               {/* 1. Main Spotify Web Player Widget */}
               <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between px-0.5 gap-2">
@@ -505,14 +868,24 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                       {activePlaylistObj ? activePlaylistObj.name : "Playlist Activa"}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsCompactPlayer(prev => !prev)}
-                    className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[9px] font-bold text-white/80 flex items-center gap-1 shrink-0 cursor-pointer transition"
-                  >
-                    <ListMusic size={11} className="text-[#1DB954]" />
-                    <span>{isCompactPlayer ? "Ver Canciones" : "Vista Compacta"}</span>
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIframeReloadKey((prev) => prev + 1)}
+                      className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white/70 hover:text-white cursor-pointer transition"
+                      title="Recargar reproductor tras iniciar sesión"
+                    >
+                      <RefreshCw size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompactPlayer((prev) => !prev)}
+                      className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[9px] font-bold text-white/80 flex items-center gap-1 shrink-0 cursor-pointer transition"
+                    >
+                      <ListMusic size={11} className="text-[#1DB954]" />
+                      <span>{isCompactPlayer ? "Ver Canciones" : "Vista Compacta"}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Embedded Iframe Player - Persistent & Full Tracklist Enabled */}
@@ -522,7 +895,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                   }`}
                 >
                   <iframe
-                    key={`${activeType}-${activePlaylistId}`}
+                    key={`${activeType}-${activePlaylistId}-${iframeReloadKey}`}
                     ref={iframeRef}
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
@@ -549,12 +922,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                 </div>
               </div>
 
-              {/* 2. Vincular Mi Música de Spotify (Placed prominently for easy access) */}
+              {/* 2. Vincular Mi Música de Spotify */}
               <div className="bg-[#121722] border border-white/[0.08] p-3.5 rounded-2xl flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                     <Plus size={14} className="text-[#1DB954]" />
-                    Vincular Mi Playlist o Canción
+                    Agregar Playlist, Álbum o Canción
                   </h4>
                   <button
                     type="button"
@@ -639,7 +1012,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                             </span>
                           </span>
                           <span className="text-[10px] text-white/50">
-                            {typeLabel} guardada
+                            {list.description || `${typeLabel} guardada`}
                           </span>
                         </div>
 
