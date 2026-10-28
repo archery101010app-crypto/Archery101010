@@ -13,7 +13,7 @@ import {
   LayoutDashboard, 
   Users, 
   Award, 
-  Sparkles,
+  Calendar,
   ShieldCheck,
   Building2,
   Share2,
@@ -364,9 +364,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   return (
     <div className="flex flex-col gap-4 min-h-[500px]">
       {/* Director Identity Banner */}
-      <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 p-4 rounded-3xl border border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="bg-[#0D0F12] p-4 rounded-2xl border border-white/[0.08] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-brand/30 to-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center font-black text-cyan-neon text-lg shadow-glow-cyan shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center font-black text-cyan-neon text-lg shrink-0">
             {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
           </div>
           <div className="flex flex-col min-w-0 flex-1">
@@ -374,7 +374,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               <h2 className="text-white text-base font-black uppercase tracking-wide truncate max-w-full">
                 Coach {user.fullName || "Director"}
               </h2>
-              <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow flex items-center gap-1 shrink-0 whitespace-nowrap">
+              <span className="text-[8px] bg-yellow-gold/10 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/25 flex items-center gap-1 shrink-0 whitespace-nowrap">
                 <ShieldCheck size={10} />
                 <span>Coach Suscrito</span>
               </span>
@@ -389,7 +389,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         </div>
 
         {/* Quick Club Code (Máximo 6 dígitos) */}
-        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-neutral-950/80 px-3 py-2 rounded-xl border border-white/5">
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-black px-3 py-2 rounded-xl border border-white/[0.06]">
           <div className="flex flex-col">
             <span className="text-[8px] text-gray-dim uppercase font-bold tracking-wider">Código para Alumnos</span>
             <div className="flex items-baseline gap-1">
@@ -443,12 +443,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       </div>
 
       {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES */}
-      <div className="flex bg-neutral-950/80 border border-white/5 rounded-2xl p-1 justify-between shrink-0">
+      <div className="flex bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 justify-between shrink-0">
         {[
           { id: "ATHLETES", label: "Alumnos", icon: Users },
           { id: "SESSIONS", label: "Resultados", icon: Award },
           { id: "OVERVIEW", label: "Director", icon: LayoutDashboard },
-          { id: "MACROCYCLES", label: "Planes", icon: Sparkles }
+          { id: "MACROCYCLES", label: "Planes", icon: Calendar }
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -456,10 +456,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+              className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 active 
-                  ? "bg-neutral-900 border border-white/10 text-cyan-neon shadow-[0_0_12px_rgba(0,229,255,0.08)]" 
-                  : "text-gray-dim hover:text-white"
+                  ? "bg-white/[0.05] border border-white/[0.08] text-cyan-neon" 
+                  : "text-gray-dim hover:text-white border border-transparent"
               }`}
             >
               <Icon size={14} className={active ? "text-cyan-neon" : "text-gray-dim"} />

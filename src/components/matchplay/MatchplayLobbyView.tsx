@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { UserProfile, updateProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check } from "lucide-react";
+import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check, Target } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
@@ -522,10 +522,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     };
     
     const botNames = {
-      Rookie: "Bot Novato 🟢",
-      Medium: "Arquero Medio 🔵",
-      High: "Alto Nivel 🟡",
-      Olympic: "Campeón Olímpico 🔴"
+      Rookie: "Bot Novato",
+      Medium: "Arquero Medio",
+      High: "Alto Nivel",
+      Olympic: "Campeón Olímpico"
     };
 
     const matchConfig = {
@@ -597,10 +597,6 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   return (
     <div className="flex flex-col gap-5 py-4 min-h-full relative overflow-hidden">
-      {/* Background neon blobs */}
-      <div className="absolute top-[-10%] left-[-20%] w-[80%] aspect-square rounded-full bg-cyan-neon/5 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[-10%] right-[-20%] w-[80%] aspect-square rounded-full bg-cyan-neon/5 blur-[120px] pointer-events-none z-0" />
-
       {/* Header */}
       <div className="flex items-center gap-3 z-10">
         <button
@@ -834,12 +830,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     </div>
                   ) : (
                     <p className="text-[9.5px] text-cyan-neon/90 leading-snug">
-                      ✨ Genera una invitación abierta con un código QR y enlace para compartir por WhatsApp con cualquier arquero real.
+                      Genera una invitación abierta con un código QR y enlace para compartir por WhatsApp con cualquier arquero real.
                     </p>
                   )}
                   <button
                     type="submit"
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 active:scale-98 transition shadow-glow-cyan text-center"
+                    className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition text-center"
                   >
                     {duelMode === "BOT" ? "Lanzar Duelo y Esperar Rival" : "Generar Invitación Abierta"}
                   </button>
@@ -969,7 +965,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             <span className="text-[9px] text-cyan-neon font-black tracking-tight">Activo ahora</span>
                             <button
                               onClick={() => handleChallengeRealUser(riv)}
-                              className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan"
+                              className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
                             >
                               Retar
                             </button>
@@ -985,7 +981,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             {/* Simulated Practice Bots */}
             <div className="flex flex-col gap-2.5 mt-2">
               <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 text-gray-dim">
-                🤖 Oponentes de Práctica (Bots)
+                Oponentes de Práctica (Bots)
               </h4>
 
               <motion.div
@@ -1189,7 +1185,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
               <div className="relative z-10 flex flex-col items-center">
                 <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
-                  Invitación Generada ✉️
+                  Invitación Generada
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
                   Desafío 1v1 Amistoso
@@ -1199,12 +1195,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </p>
 
                 {/* CSS QR Code Mockup */}
-                <div className="my-5 w-40 h-40 bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center relative shadow-glow-cyan select-none">
+                <div className="my-5 w-40 h-40 bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center relative select-none">
                   {/* Laser scan animation line */}
                   <motion.div 
                     animate={{ top: ["5%", "95%", "5%"] }}
                     transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute left-2 right-2 h-0.5 bg-cyan-neon/60 shadow-glow-cyan z-20"
+                    className="absolute left-2 right-2 h-0.5 bg-cyan-neon/60 z-20"
                   />
                   {/* Grid mockup */}
                   <div className="grid grid-cols-5 gap-2 opacity-75">
@@ -1215,7 +1211,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="w-5.5 h-5.5 bg-white rounded-sm" />
                     
                     <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
-                    <div className="w-5.5 h-5.5 bg-cyan-neon rounded-sm flex items-center justify-center text-[10px]">🎯</div>
+                    <div className="w-5.5 h-5.5 bg-cyan-neon rounded-sm flex items-center justify-center text-black"><Target size={11} /></div>
                     <div className="w-5.5 h-5.5 bg-white/10 rounded-sm" />
                     <div className="w-5.5 h-5.5 bg-white rounded-sm" />
                     <div className="w-5.5 h-5.5 bg-white/20 rounded-sm" />
@@ -1273,7 +1269,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(generatedInvite.text)}`;
                       window.open(waUrl, "_blank");
                     }}
-                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5"
                   >
                     <span>Compartir / WhatsApp</span>
                   </button>
@@ -1311,9 +1307,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     setGeneratedInvite(null);
                     onStartDuel(matchConfig);
                   }}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider cursor-pointer hover:brightness-110 active:scale-98 transition shadow-glow-cyan"
+                  className="w-full py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition"
                 >
-                  🚀 Iniciar Arena de Duelo
+                  Iniciar Arena de Duelo
                 </button>
 
                 <button
@@ -1336,12 +1332,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-[320px] bg-neutral-950 border border-white/10 p-6 rounded-[36px] flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
+              className="w-full max-w-[320px] bg-[#0A0B0E] border border-white/10 p-6 rounded-3xl flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
-              
-              <div className="w-12 h-12 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon mx-auto mt-2 animate-spin [animation-duration:3s]">
-                🎯
+              <div className="w-12 h-12 rounded-full bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon mx-auto mt-2">
+                <Target size={20} />
               </div>
 
               <div className="flex flex-col gap-1.5">

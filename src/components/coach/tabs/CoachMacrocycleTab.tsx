@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { 
-  Lock, Sparkles, Plus, Calendar, CheckCircle2, ChevronRight, 
+  Lock, Plus, Calendar, CheckCircle2, ChevronRight, 
   Trash2, ArrowUp, ArrowDown, Users, User, ArrowLeft, Layout, 
   Copy, Archive, Edit2, AlertCircle, Check, X, RefreshCw,
   FileSpreadsheet, Download, UploadCloud, ClipboardPaste, HelpCircle,
@@ -17,7 +17,8 @@ import {
   generateResilientId, 
   addToSyncQueue, 
   getLocalSetting,
-  saveLocalSetting
+  saveLocalSetting,
+  getLocalSessions
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
@@ -38,6 +39,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   
   // Roster of athletes in the club
   const [roster, setRoster] = useState<UserProfile[]>([]);
+  const [allSessions, setAllSessions] = useState<any[]>([]);
 
   // Modal creation states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -245,6 +247,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
         }
       }
       setMacrocycles(cleanList);
+      const localSess = await getLocalSessions();
+      setAllSessions(localSess);
     }
 
     if (isPro) {
@@ -466,11 +470,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   // RENDER PAYWALL SCREEN IF FREE ACCOUNT
   if (!isPro) {
     return (
-      <div className="relative min-h-[300px] bg-neutral-950/40 rounded-3xl border border-white/5 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10" />
-
+      <div className="relative min-h-[300px] bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-6 flex flex-col items-center justify-center text-center overflow-hidden">
         <div className="flex flex-col items-center gap-3.5 z-20 max-w-xs">
-          <div className="w-12 h-12 rounded-2xl bg-yellow-gold/10 border border-yellow-gold/30 flex items-center justify-center text-yellow-gold shadow-glow-yellow animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-yellow-gold/10 border border-yellow-gold/25 flex items-center justify-center text-yellow-gold">
             <Lock size={20} />
           </div>
 
@@ -488,10 +490,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
           <button
             onClick={onUpgrade}
-            className="w-full mt-3 py-3 rounded-full bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow hover:brightness-105 active:scale-98 transition cursor-pointer flex items-center justify-center gap-1.5"
+            className="w-full mt-3 py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider active:scale-98 transition cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <Sparkles size={14} />
-            <span>Activar Plan PRO Gratis (Promo Lanzamiento) ✦</span>
+            <Check size={14} />
+            <span>Activar Plan PRO Gratis (Promo Lanzamiento)</span>
           </button>
         </div>
       </div>
@@ -794,9 +796,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               ) : (
                 <div className="flex flex-col gap-2 mt-1">
                   {roster.map((athlete) => {
-                    // Calculate random simulated progress for demo purposes
-                    const athleteProgress = Math.floor(Math.random() * 4000) + 1000;
-                    const pct = Math.min(100, Math.round((athleteProgress / (selectedMacro.volumeGoal / 2)) * 100));
+                    const startMs = selectedMacro.startDate ? new Date(selectedMacro.startDate + "T00:00:00").getTime() : 0;
+                    const endMs = selectedMacro.endDate ? new Date(selectedMacro.endDate + "T23:59:59").getTime() : Number.MAX_SAFE_INTEGER;
+                    const athleteProgress = allSessions
+                      .filter((s) => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && s.deletedByArcher !== true && s.timestamp >= startMs && s.timestamp <= endMs)
+                      .reduce((sum, s) => sum + (s.totalArrowsVolume || s.arrowsTotal || ((s.endsCount || 0) * (s.arrowsPerEnd || 0))), 0);
+                    const pct = selectedMacro.volumeGoal > 0 ? Math.min(100, Math.round((athleteProgress / selectedMacro.volumeGoal) * 100)) : 0;
                     
                     return (
                       <div key={athlete.uid} className="flex justify-between items-center bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
@@ -1229,9 +1234,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                   <button
                     type="button"
                     onClick={handleSaveMacrocycle}
-                    className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase shadow-[0_0_15px_rgba(34,197,94,0.3)] flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                   >
-                    <Sparkles size={14} />
+                    <Check size={14} />
                     <span>{editingId ? "Guardar Cambios" : "Crear Ciclo"}</span>
                   </button>
                 )}
@@ -1394,9 +1399,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     type="button"
                     disabled={isSyncing}
                     onClick={handleExecuteSync}
-                    className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow flex items-center justify-center gap-2 cursor-pointer hover:brightness-105 active:scale-98 transition disabled:opacity-40"
+                    className="w-full mt-2 py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40"
                   >
-                    <Sparkles size={14} />
+                    <RefreshCw size={14} />
                     <span>
                       {isSyncing 
                         ? "Sincronizando..." 

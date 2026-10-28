@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Home, Target, History, Calendar, User, Users, Shield, Gauge, Sparkles } from "lucide-react";
+import { Home, Target, History, Calendar, User, Users, Shield, Gauge } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 
@@ -61,7 +61,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
   return (
     <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-[390px]">
-      <div className="bg-neutral-900/90 backdrop-blur-xl rounded-full border border-white/10 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-around shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+      <div className="bg-[#0A0B0E]/95 backdrop-blur-md rounded-2xl border border-white/[0.08] px-2.5 sm:px-3.5 py-2 flex items-center justify-around shadow-[0_12px_32px_rgba(0,0,0,0.85)]">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
@@ -79,13 +79,13 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               }}
               title={item.label}
               aria-label={item.label}
-              className="relative flex flex-col items-center justify-center p-1 cursor-pointer outline-none group flex-1"
+              className="relative flex flex-col items-center justify-center py-1 px-1 cursor-pointer outline-none group flex-1"
             >
-              {/* Highlight active glow behind icon */}
+              {/* Active matte surface indicator */}
               {isActive && (
                 <motion.div
                   layoutId="activeGlow"
-                  className="absolute inset-0 bg-cyan-neon/5 rounded-full blur-md"
+                  className="absolute inset-0 bg-white/[0.05] border border-white/[0.08] rounded-xl"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -93,17 +93,17 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {/* Icon wrapper with PRO badge */}
               <div className="relative flex items-center justify-center">
                 <Icon
-                  size={19}
+                  size={18}
                   className={`transition-colors duration-200 relative z-10 ${
                     isActive
-                      ? "text-cyan-neon shadow-glow-cyan"
+                      ? "text-cyan-neon"
                       : isProBlocked
                       ? "text-yellow-gold/80 group-hover:text-yellow-gold"
                       : "text-gray-dim group-hover:text-white"
                   }`}
                 />
                 {item.isPro && (
-                  <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+                  <span className="absolute -top-1.5 -right-2.5 text-[7px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wider">
                     PRO
                   </span>
                 )}
@@ -111,8 +111,8 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[8px] font-bold tracking-tight mt-0.5 leading-none transition-colors duration-200 ${
-                  isActive ? "text-cyan-neon font-black" : "text-gray-dim/80 group-hover:text-white"
+                className={`text-[8px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 ${
+                  isActive ? "text-white font-black" : "text-gray-dim/80 group-hover:text-white"
                 }`}
               >
                 {item.label}

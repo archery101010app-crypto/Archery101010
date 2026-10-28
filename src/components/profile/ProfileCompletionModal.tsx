@@ -75,10 +75,8 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md bg-neutral-950 border border-cyan-neon/30 p-6 rounded-3xl flex flex-col gap-4 shadow-[0_0_50px_rgba(0,229,255,0.15)] relative overflow-hidden"
+        className="w-full max-w-md bg-[#0A0B0E] border border-white/10 p-6 rounded-3xl flex flex-col gap-4 relative overflow-hidden"
       >
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
-        
         {/* Botón X de Salida / Retorno */}
         {(onClose || onReturnToLogin) && (
           <button
@@ -93,7 +91,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
         )}
         
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-full bg-cyan-neon/15 flex items-center justify-center text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan">
+          <div className="w-10 h-10 rounded-xl bg-cyan-neon/10 flex items-center justify-center text-cyan-neon border border-cyan-neon/20">
             <User size={20} />
           </div>
           <div>
@@ -128,7 +126,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder=""
-                className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -140,7 +138,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder=""
-                className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
           </div>
@@ -154,7 +152,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -166,7 +164,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Ej. San José"
-                className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
           </div>
@@ -179,7 +177,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
               >
                 {COUNTRIES.map((c) => (
                   <option key={c.code} value={c.code} className="bg-black text-white">
@@ -196,7 +194,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
               >
                 <option value="M" className="bg-black text-white">{t("genderM")}</option>
                 <option value="F" className="bg-black text-white">{t("genderF")}</option>
@@ -205,14 +203,14 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
           </div>
 
-          <div className="bg-neutral-900/40 border border-white/5 p-3 rounded-2xl text-[10px] text-gray-dim leading-snug">
-            💡 <strong>Nota sobre el Apodo:</strong> El apodo es de carácter público. Será visible para tu entrenador y otros arqueros durante duelos competitivos en vivo.
+          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[10px] text-gray-dim leading-snug">
+            <strong className="text-white uppercase tracking-wider">Nota sobre el Apodo:</strong> El apodo es de carácter público. Será visible para tu entrenador y otros arqueros durante duelos competitivos en vivo.
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full py-3.5 bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition-all duration-200"
+            className="mt-2 w-full py-3.5 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all duration-200"
           >
             {loading ? "Guardando..." : "Guardar y Continuar"}
           </button>

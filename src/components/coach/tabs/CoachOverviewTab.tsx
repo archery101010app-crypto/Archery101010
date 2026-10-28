@@ -10,7 +10,8 @@ import {
   Calendar, 
   AlertTriangle,
   ArrowRight,
-  Plus
+  Plus,
+  Target
 } from "lucide-react";
 
 interface CoachOverviewTabProps {
@@ -52,7 +53,7 @@ export default function CoachOverviewTab({
   return (
     <div className="flex flex-col gap-5">
       {/* Saludo de contexto */}
-      <div className="bg-gradient-to-br from-cyan-brand/10 to-transparent p-4 rounded-2xl border border-cyan-brand/10">
+      <div className="bg-[#0D0F12] p-4 rounded-2xl border border-white/[0.08]">
         <h3 className="text-white text-sm font-bold">
           ¡Hola, Coach {user.fullName}!
         </h3>
@@ -180,8 +181,8 @@ export default function CoachOverviewTab({
               return (
                 <div key={act.id || act.uid} className="flex gap-3 relative">
                   {/* Timeline dot */}
-                  <div className="w-7 h-7 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-[10px] z-10 shrink-0">
-                    🎯
+                  <div className="w-7 h-7 rounded-full bg-[#0D0F12] border border-white/10 flex items-center justify-center text-cyan-neon z-10 shrink-0">
+                    <Target size={12} />
                   </div>
                   
                   <div className="flex-1 flex flex-col">
@@ -217,7 +218,7 @@ export default function CoachOverviewTab({
       {/* Programar Control Botón */}
       <button
         onClick={() => onNavigate("CALENDAR")}
-        className="w-full py-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-xs tracking-wider uppercase shadow-glow-cyan transition-all cursor-pointer flex justify-center items-center gap-1.5"
+        className="w-full py-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs tracking-wider uppercase transition-all cursor-pointer flex justify-center items-center gap-2"
       >
         <Calendar size={14} />
         <span>Programar Control en Calendario</span>

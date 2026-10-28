@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { loginUser, loginSocialUser, sendPasswordReset, UserProfile } from "@/lib/authService";
-import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff, Smartphone, Unlock, Share, Plus, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
@@ -339,16 +339,18 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-gradient-to-r from-neutral-900/90 to-neutral-950/90 border border-cyan-neon/30 p-4 rounded-3xl flex flex-col gap-2 shadow-[0_0_20px_rgba(0,229,255,0.05)] relative overflow-hidden"
+            className="w-full bg-[#0D0F12] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5 relative overflow-hidden"
           >
             <div className="flex justify-between items-start">
-              <div className="flex gap-2">
-                <span className="text-base">📱</span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon shrink-0">
+                  <Smartphone size={15} />
+                </div>
                 <div className="flex flex-col">
                   <span className="text-white text-xs font-black uppercase tracking-wider">
                     Instalar como App Local
                   </span>
-                  <span className="text-[8px] text-cyan-neon font-black uppercase tracking-widest mt-0.5 animate-pulse">
+                  <span className="text-[8px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
                     Recomendado · Velocidad 10x
                   </span>
                 </div>
@@ -367,7 +369,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={handleInstallClick}
-              className="w-full py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/30 hover:border-cyan-neon text-cyan-neon hover:text-white text-xs font-bold transition-all cursor-pointer text-center"
+              className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-center"
             >
               Instalar Ahora
             </button>
@@ -375,9 +377,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         )}
 
         {!isOnline && (
-          <div className="bg-yellow-gold/10 border border-yellow-gold/30 rounded-2xl p-3.5 flex flex-col gap-1.5 shadow-[0_0_15px_rgba(255,229,0,0.05)]">
+          <div className="bg-[#0D0F12] border border-yellow-gold/30 rounded-2xl p-3.5 flex flex-col gap-1.5">
             <span className="text-yellow-gold text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              ⚠️ {language === "es" ? "Modo Desconectado" : "Offline Mode"}
+              <AlertCircle size={14} className="shrink-0" />
+              {language === "es" ? "Modo Desconectado" : "Offline Mode"}
             </span>
             <p className="text-[10px] text-gray-dim leading-snug">
               {language === "es" 
@@ -416,7 +419,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("emailPlaceholder")}
-              className="w-full bg-neutral-900/60 border border-cyan-brand text-white placeholder-gray-dim text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition-all duration-200 caret-yellow-gold"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-gray-dim text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
           </div>
 
@@ -430,7 +433,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholder")}
-              className="w-full bg-neutral-900/60 border border-cyan-brand text-white placeholder-gray-dim text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition-all duration-200 caret-yellow-gold"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-gray-dim text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
             <button
               type="button"
@@ -453,25 +456,24 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
           {/* Login button */}
           <motion.button
-            whileHover={{ scale: 1.02, filter: "brightness(1.15)" }}
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 mt-2 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm uppercase tracking-wider shadow-glow-cyan transition-all duration-200 cursor-pointer flex justify-center items-center"
+            className="w-full py-3.5 mt-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest transition-all duration-200 cursor-pointer flex justify-center items-center"
           >
             {loading ? t("loading") : t("loginBtn")}
           </motion.button>
           
           {isSocialBypassAvailable && (
             <motion.button
-              whileHover={{ scale: 1.02, filter: "brightness(1.15)" }}
               whileTap={{ scale: 0.98 }}
               type="button"
               onClick={handleBypassLogin}
               disabled={loading}
-              className="w-full py-3.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all duration-200 cursor-pointer flex justify-center items-center mt-2 border border-purple-400/20"
+              className="w-full py-3.5 rounded-xl bg-[#0D0F12] hover:bg-white/[0.04] text-cyan-neon font-black text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer flex justify-center items-center gap-2 mt-2 border border-cyan-neon/30"
             >
-              🔓 Ingresar en Modo Local (Sin Contraseña)
+              <Unlock size={14} />
+              <span>Ingresar en Modo Local (Sin Contraseña)</span>
             </motion.button>
           )}
         </form>
@@ -565,8 +567,8 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Presiona el botón de compartir 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white">
-                      Compartir 📤
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white inline-flex items-center gap-1">
+                      Compartir <Share size={10} />
                     </span> 
                     abajo en la barra del sistema.
                   </p>
@@ -577,8 +579,8 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Desliza hacia abajo y pulsa 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white font-bold">
-                      Añadir a pantalla de inicio ➕
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] text-white font-bold inline-flex items-center gap-1">
+                      Añadir a pantalla de inicio <Plus size={10} />
                     </span>.
                   </p>
                 </div>
@@ -592,9 +594,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 </div>
               </div>
 
-              <div className="bg-cyan-neon/5 border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2 mt-2">
-                <span className="text-lg">⚡</span>
-                <span className="text-[9px] text-[#00E5FF] font-medium leading-tight">
+              <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2.5 mt-2">
+                <Zap size={14} className="text-cyan-neon shrink-0" />
+                <span className="text-[9px] text-cyan-neon font-medium leading-tight">
                   Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
                 </span>
               </div>

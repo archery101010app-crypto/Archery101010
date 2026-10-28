@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  ArrowLeft, Mic, Gauge, Trash2, Sparkles, Volume2, Target,
+  ArrowLeft, Mic, Gauge, Trash2, Volume2, Target,
   Info, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
   RotateCcw, Save, Smartphone, ExternalLink, Zap, BookOpen, Settings, X, ShieldCheck
 } from "lucide-react";
@@ -456,9 +456,9 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <button
             type="button"
             onClick={() => setShowSpecsModal(true)}
-            className="py-2.5 px-2 rounded-2xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 border border-orange-500/35 text-orange-300 font-black transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center gap-1.5 text-center min-w-0"
+            className="py-2.5 px-2 rounded-2xl bg-[#0D0F12] hover:bg-neutral-800 border border-white/10 hover:border-yellow-gold/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0"
           >
-            <Settings size={13} className="text-orange-400 shrink-0" />
+            <Settings size={13} className="text-yellow-gold shrink-0" />
             <span className="text-[9.5px] min-[380px]:text-[10.5px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
               Configurar Flecha
             </span>
@@ -467,28 +467,26 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       </div>
 
       {/* Active Specs Bar Banner */}
-      <div className="bg-neutral-950/80 border border-white/5 rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs">
+      <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full">
-            18 Metros
+            {distanceMeters} Metros
           </span>
-          <span className="text-white/80 font-mono text-[11px]">
+          <span className="text-white/80 font-mono text-[11px] tabular-nums">
             {arrowWeight} gr · {arrowLength}" · {temperature}°{tempUnit}
           </span>
         </div>
         <button
           type="button"
           onClick={() => setShowSpecsModal(true)}
-          className="text-[10px] text-orange-400 hover:text-orange-300 font-bold uppercase underline cursor-pointer"
+          className="text-[10px] text-yellow-gold hover:text-white font-bold uppercase underline cursor-pointer"
         >
           Editar
         </button>
       </div>
 
-      {/* MAIN SPEEDOMETER & MEASUREMENT CARD (A 18 METROS) */}
-      <div className="bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[36px] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-[0_0_40px_rgba(0,229,255,0.08)] gap-4">
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
-
+      {/* MAIN SPEEDOMETER & MEASUREMENT CARD */}
+      <div className="bg-[#0D0F12] border border-white/[0.08] p-6 rounded-3xl flex flex-col items-center justify-center text-center relative overflow-hidden gap-4">
         {/* Distance Selector Pills (5m, 10m, 18m) & Unit Switcher */}
         <div className="flex items-center justify-between w-full gap-2">
           <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-xl border border-white/10">
@@ -542,7 +540,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
         {/* Big Speed Number */}
         <div className="flex items-baseline gap-2 my-1">
-          <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(0,229,255,0.4)] font-mono">
+          <span className="text-6xl md:text-7xl font-black text-white tracking-tighter font-mono tabular-nums">
             {lastShotResult 
               ? (speedUnit === "FPS" 
                   ? Math.round(lastShotResult.launchSpeedFps) 
@@ -1032,7 +1030,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     handleSaveSpecs(arrowWeight, arrowLength, temperature, tempUnit);
                     setShowSpecsModal(false);
                   }}
-                  className="w-full mt-2 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-lg cursor-pointer hover:brightness-105 active:scale-98 transition flex items-center justify-center gap-2"
+                  className="w-full mt-2 py-3.5 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition flex items-center justify-center gap-2"
                 >
                   <Save size={15} />
                   <span>Guardar Parámetros de Flecha</span>

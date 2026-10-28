@@ -394,8 +394,8 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
                     <div className="flex items-center gap-2">
                       {isPB && (
-                        <span className="bg-yellow-gold/15 text-yellow-gold font-black border border-yellow-gold/25 text-[8px] px-2 py-0.5 rounded-full shadow-glow-yellow animate-pulse uppercase">
-                          🏆 PB
+                        <span className="bg-yellow-gold/10 text-yellow-gold font-black border border-yellow-gold/25 text-[8px] px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1">
+                          <Award size={10} /> PB
                         </span>
                       )}
                       <ChevronRight size={16} className="text-gray-dim group-hover:text-white transition-colors" />
@@ -667,7 +667,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     </div>
                     {e.note && (
                       <p className="text-[10px] text-gray-dim italic mt-1 pl-1">
-                        📝 "{e.note}"
+                        "{e.note}"
                       </p>
                     )}
                   </div>
@@ -767,7 +767,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                         type="button"
                         onClick={() => handleShareSessionShotChart(selectedSession)}
                         disabled={isGeneratingImage}
-                        className="w-full py-3 mt-1 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.2)] transition active:scale-95 cursor-pointer disabled:opacity-50"
+                        className="w-full py-3 mt-1 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         <Camera size={15} />
                         <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Foto Diana (HD)"}</span>

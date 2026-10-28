@@ -218,7 +218,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                       if (currentLevel >= 8) {
                         return (
                           <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2 rounded-xl text-[9px] text-center text-cyan-neon font-black uppercase">
-                            ⭐ Estrella Máxima Alcanzada ⭐
+                            Estrella Máxima Alcanzada
                           </div>
                         );
                       }
@@ -452,7 +452,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
                                         <div className="flex items-center justify-between">
                                           <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider">
-                                            🎯 Análisis de Grupo y Mira
+                                            Análisis de Grupo y Mira
                                           </span>
                                           <span className="text-[10px] font-mono font-black text-white">
                                             Ø {analysis.spreadCm.toFixed(1)} cm
@@ -464,8 +464,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                             {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
                                           </span>
                                         </div>
-                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5 flex items-start gap-1.5">
-                                          <span className="text-xs leading-none mt-0.5">💡</span>
+                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
                                           <span>{analysis.adviceText}</span>
                                         </div>
                                       </div>
@@ -650,7 +649,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
                                         <div className="flex items-center justify-between">
                                           <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider">
-                                            🎯 Análisis de Grupo y Mira
+                                            Análisis de Grupo y Mira
                                           </span>
                                           <span className="text-[10px] font-mono font-black text-white">
                                             Ø {analysis.spreadCm.toFixed(1)} cm
@@ -662,8 +661,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                             {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
                                           </span>
                                         </div>
-                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5 flex items-start gap-1.5">
-                                          <span className="text-xs leading-none mt-0.5">💡</span>
+                                        <div className="text-[10px] text-neutral-300 leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
                                           <span>{analysis.adviceText}</span>
                                         </div>
                                       </div>

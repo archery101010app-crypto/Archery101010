@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, deleteUserAccount, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Sparkles, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Lock, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -680,12 +680,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             onClick={() => handleSelectUserRole("coach")}
             className={`relative px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
               user.role === "coach" || user.role === "team_admin_coach"
-                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                ? "bg-cyan-neon text-black font-extrabold"
                 : "text-gray-dim hover:text-white"
             }`}
           >
             Coach
-            <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+            <span className="absolute -top-1.5 -right-2 text-[7px] bg-yellow-gold text-black font-black px-1 rounded-sm uppercase scale-90 z-20">
               PRO
             </span>
           </button>
@@ -695,36 +695,36 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Subscription Card PRO paywall trigger */}
       <div className={`p-4 rounded-3xl border transition-all duration-300 ${
         user.plan === "PRO"
-          ? "bg-neutral-900/40 border-yellow-gold/20 shadow-[0_0_12px_rgba(255,242,0,0.03)]"
-          : "bg-neutral-900/60 border-white/5"
+          ? "bg-[#0D0F12] border-yellow-gold/25"
+          : "bg-[#0D0F12] border-white/[0.08]"
       }`}>
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-          <Sparkles size={14} className="text-yellow-gold" />
+          <Shield size={14} className="text-yellow-gold" />
           {t("subCardTitle")}
         </h4>
         {user.plan === "FREE" ? (
           <div className="flex flex-col gap-2 mt-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-[8.5px] bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow animate-pulse">
-                🎉 PROMO DE LANZAMIENTO
+              <span className="text-[8.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30">
+                PROMO DE LANZAMIENTO
               </span>
             </div>
             <p className="text-[10px] text-gray-dim leading-snug">
-              ¡Por motivo de lanzamiento oficial, obtén acceso ilimitado a todas las herramientas PRO (Ciclos, Spine Tuning, Cronógrafo y Portal Coach) 100% gratis!
+              Por motivo de lanzamiento oficial, obtén acceso ilimitado a todas las herramientas PRO (Ciclos, Spine Tuning, Cronógrafo y Portal Coach) 100% gratis.
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
-              className="w-full py-2.5 mt-1 rounded-xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 mt-1 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5"
             >
-              <Sparkles size={14} />
-              <span>Activar PRO Gratis (Promo Pioneros) ✦</span>
+              <Check size={14} />
+              <span>Activar PRO Gratis (Promo Pioneros)</span>
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-1.5 mt-2">
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-[8.5px] bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shadow-glow-yellow">
-                ✦ ACCESO PIONERO ACTIVO
+              <span className="text-[8.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30">
+                ACCESO PIONERO ACTIVO
               </span>
             </div>
             <div className="flex justify-between text-[10px] text-gray-dim font-bold">
@@ -1245,14 +1245,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         borderColor: isUnlocked ? star.color : '#2d2d2d',
                         color: isUnlocked ? star.color : '#3d3d3d',
                         backgroundColor: isUnlocked ? `${star.color}12` : 'rgba(0,0,0,0.2)',
-                        boxShadow: isUnlocked ? `0 0 12px ${star.color}25` : undefined
                       }}
                       title={`${star.name}: ${star.minScore}+ pts`}
                     >
                       ★
                       {!isUnlocked && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-                          <span className="text-[8px] opacity-70">🔒</span>
+                          <Lock size={9} className="text-white/50" />
                         </div>
                       )}
                     </div>
@@ -1345,7 +1344,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   <span className="text-[10px] text-gray-dim">{coachProfile?.email || "En línea"}</span>
                 </div>
                 <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[10px] text-cyan-300 leading-snug flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
                   <span>Tus planillas y series se sincronizan en tiempo real con el panel de tu coach.</span>
                 </div>
               </div>
@@ -1788,11 +1787,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <span className="text-[9px] text-yellow-gold font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20 shadow-glow-yellow">
-                    🎉 PROMOCIÓN DE LANZAMIENTO
+                  <span className="text-[9px] text-yellow-gold font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20">
+                    PROMOCIÓN DE LANZAMIENTO
                   </span>
                   <h3 className="text-white text-lg font-black uppercase tracking-wide mt-1.5">
-                    Acceso PRO Pionero ✦
+                    Acceso PRO Pionero
                   </h3>
                 </div>
                 <button
@@ -1823,8 +1822,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <div className="bg-neutral-950 p-4 rounded-2xl border border-yellow-gold/30 flex justify-between items-center shadow-inner">
                 <div className="flex flex-col">
                   <span className="text-[9px] text-gray-dim uppercase font-bold line-through">Precio regular: $4.99 USD</span>
-                  <span className="text-2xl font-black text-yellow-gold flex items-center gap-1.5">
-                    $0.00 <span className="text-xs text-white font-bold uppercase tracking-wider">¡GRATIS!</span>
+                  <span className="text-2xl font-black text-yellow-gold flex items-center gap-1.5 tabular-nums">
+                    $0.00 <span className="text-xs text-white font-bold uppercase tracking-wider">GRATIS</span>
                   </span>
                 </div>
                 <span className="text-[10px] text-cyan-neon font-black bg-cyan-neon/10 border border-cyan-neon/30 px-2.5 py-1 rounded-full">
@@ -1835,10 +1834,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {/* Free Launch Activation Button */}
               <button
                 onClick={handlePaypalUpgrade}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-yellow-gold via-amber-400 to-yellow-500 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-glow-yellow transition active:scale-95"
+                className="w-full py-3.5 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
               >
-                <Sparkles size={16} />
-                <span>Activar Mi Cuenta PRO Gratis ✦</span>
+                <Check size={16} />
+                <span>Activar Mi Cuenta PRO Gratis</span>
               </button>
             </motion.div>
           </motion.div>

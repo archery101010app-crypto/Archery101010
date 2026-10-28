@@ -32,7 +32,6 @@ import {
   X, 
   Clock,
   Target,
-  Sparkles,
   CheckCircle2,
   Shield,
   Flame,
@@ -1025,9 +1024,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {coachAssignment && coachAssignment.targetArrows ? (
                   <span 
                     style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                    className="text-[9px] sm:text-[10px] font-black tracking-tight leading-none truncate max-w-full px-0.5 text-center"
+                    className="text-[9px] sm:text-[10px] font-black tracking-tight leading-none truncate max-w-full px-0.5 text-center tabular-nums"
                   >
-                    🎯{coachAssignment.targetArrows}
+                    {coachAssignment.targetArrows} fl.
                   </span>
                 ) : activePhaseInfo ? (
                   <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
@@ -1532,7 +1531,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             setShowDayModal(false);
                             if (onNavigate) onNavigate("TARGET");
                           }}
-                          className="w-full mt-1 py-3 rounded-2xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
+                          className="w-full mt-1 py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
                         >
                           <Target size={14} />
                           <span>Iniciar Práctica de Hoy</span>
@@ -1748,9 +1747,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   type="button"
                   disabled={isSyncing || macrocycles.length === 0}
                   onClick={handleSyncCycleToMonth}
-                  className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-glow-yellow flex items-center justify-center gap-2 cursor-pointer hover:brightness-105 active:scale-98 transition disabled:opacity-40"
+                  className="w-full mt-2 py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40"
                 >
-                  <Sparkles size={14} />
+                  <RefreshCw size={14} />
                   <span>{isSyncing ? "Sincronizando..." : "Sincronizar y Publicar en Calendario"}</span>
                 </button>
               </div>
@@ -1949,7 +1948,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 mt-2 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer transition active:scale-[0.98]"
+                  className="w-full py-3.5 mt-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-[0.98]"
                 >
                   {modalMode === "add" ? "Programar Evento" : "Guardar Cambios"}
                 </button>

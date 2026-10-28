@@ -18,7 +18,6 @@ import {
   ShieldAlert, 
   ArrowUpRight, 
   Lock, 
-  Sparkles,
   Users,
   Calendar,
   CheckCircle2,
@@ -643,14 +642,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            {/* Glowing Star Icon */}
+                            {/* Star Icon */}
                             <div 
                               className={`w-10 h-10 rounded-xl flex items-center justify-center border text-lg transition-transform group-hover:scale-105 ${
                                 isUnlocked 
-                                  ? "bg-neutral-900 border-white/5 shadow-md" 
+                                  ? "bg-[#0D0F12] border-white/10" 
                                   : "bg-neutral-950 border-white/5"
                               }`}
-                              style={{ color: star.color, textShadow: isUnlocked ? `0 0 10px ${star.color}` : "none" }}
+                              style={{ color: star.color }}
                             >
                               ★
                             </div>
@@ -678,8 +677,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                                 LOGRADO
                               </span>
                             ) : (
-                              <div className="text-[10px] text-gray-dim bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase">
-                                🔒
+                              <div className="text-[10px] text-gray-dim bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
+                                <Lock size={11} />
                               </div>
                             )}
                           </div>
@@ -702,34 +701,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-neutral-950 border border-yellow-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative shadow-[0_0_50px_rgba(255,229,0,0.15)] overflow-hidden"
+              className="bg-[#0A0B0E] border border-white/10 rounded-3xl p-6 w-full max-w-sm text-center relative overflow-hidden"
             >
-              <div 
-                className="absolute inset-0 opacity-15 pointer-events-none"
-                style={{ background: `radial-gradient(circle, ${selectedDetailStar.star.color} 0%, transparent 70%)` }}
-              />
-
               <div className="relative z-10 flex flex-col items-center">
-                {/* Large Glowing Star Icon */}
-                <motion.div
-                  animate={selectedDetailStar.isUnlocked ? { 
-                    scale: [1, 1.15, 1],
-                    rotate: [0, 10, -10, 0]
-                  } : {}}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-24 h-24 flex items-center justify-center rounded-2xl bg-neutral-900 border border-white/5 shadow-2xl text-5xl mb-4 relative"
-                  style={{ 
-                    color: selectedDetailStar.star.color, 
-                    textShadow: `0 0 20px ${selectedDetailStar.star.color}`
-                  }}
+                {/* Large Star Icon */}
+                <div
+                  className="w-20 h-20 flex items-center justify-center rounded-2xl bg-[#0D0F12] border border-white/10 text-4xl mb-4 relative"
+                  style={{ color: selectedDetailStar.star.color }}
                 >
                   ★
                   {!selectedDetailStar.isUnlocked && (
-                    <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 px-1.5 py-0.5 rounded-lg text-xs leading-none">
-                      🔒
+                    <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 p-1 rounded-lg text-gray-dim leading-none">
+                      <Lock size={11} />
                     </div>
                   )}
-                </motion.div>
+                </div>
 
                 <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase block mb-1">
                   REGLAMENTO OFICIAL WA
@@ -738,7 +724,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   {selectedDetailStar.star.name}
                 </h3>
                 
-                <div className="my-4 bg-neutral-900/60 border border-white/5 rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
+                <div className="my-4 bg-[#0D0F12] border border-white/[0.06] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
                     <span className="text-[10px] text-gray-dim uppercase font-bold">Modalidad</span>
                     <span className="text-xs font-black text-white">
@@ -780,8 +766,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                               className="h-full rounded-full transition-all duration-500"
                               style={{ 
                                 width: `${percentage}%`,
-                                backgroundColor: selectedDetailStar.star.color,
-                                boxShadow: `0 0 6px ${selectedDetailStar.star.color}`
+                                backgroundColor: selectedDetailStar.star.color
                               }}
                             />
                           </div>
@@ -810,13 +795,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                       setIsStarsDrawerOpen(false);
                       onNavigate("TARGET");
                     }}
-                    className="w-full py-3 bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-yellow hover:brightness-110 active:scale-95 transition"
+                    className="w-full py-3 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5"
                   >
-                    🎯 Entrenar para Lograrlo
+                    <Target size={14} />
+                    <span>Entrenar para Lograrlo</span>
                   </button>
                   <button
                     onClick={() => setSelectedDetailStar(null)}
-                    className="w-full py-3 bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition"
+                    className="w-full py-3 bg-[#0D0F12] border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition"
                   >
                     Volver al Listado
                   </button>

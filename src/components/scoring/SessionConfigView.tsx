@@ -176,7 +176,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             
             <button
               onClick={handleResumeDraft}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer shadow-md hover:brightness-105 transition"
+              className="w-full py-2.5 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition"
             >
               <RotateCcw size={13} />
               <span>Reanudar Entrenamiento</span>
@@ -206,8 +206,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 }}
                 className={`py-3 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer ${
                   practiceType === type
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
-                    : "border-white/10 bg-neutral-900/40 text-gray-dim hover:text-white"
+                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >
                 {type === "Control" ? t("practiceControl") : type === "Práctica" ? t("practicePractice") : t("practiceVolume")}
@@ -225,7 +225,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <select
               value={format}
               onChange={(e) => handleFormatChange(e.target.value)}
-              className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon focus:shadow-glow-cyan transition duration-200 appearance-none font-bold"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition duration-200 appearance-none font-bold"
             >
               <option value="Libre" className="bg-black text-white">Ajuste libre</option>
               <option value="WA 360" className="bg-black text-white">WA 360</option>
@@ -259,8 +259,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 onClick={() => setBowType(type)}
                 className={`py-3 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer ${
                   bowType === type
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
-                    : "border-white/10 bg-neutral-900/40 text-gray-dim hover:text-white"
+                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >
                 {type === "Recurve" ? "Recurvo" : type === "Compound" ? "Compuesto" : "Barebow"}
@@ -293,8 +293,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 }}
                 className={`py-3 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center ${
                   distance === d
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
-                    : "border-white/10 bg-neutral-900/40 text-gray-dim hover:text-white"
+                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >
                 {d}m
@@ -312,7 +312,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           >
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-gray-dim font-bold">{t("rounds")} (Ends)</label>
-              <div className="flex items-center bg-neutral-900/60 border border-cyan-brand rounded-xl">
+              <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setEndsCount(Math.max(1, endsCount - 1))}
@@ -320,7 +320,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-bold text-white text-sm">{endsCount}</span>
+                <span className="flex-1 text-center font-bold text-white text-sm tabular-nums">{endsCount}</span>
                 <button
                   type="button"
                   onClick={() => setEndsCount(endsCount + 1)}
@@ -333,7 +333,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-gray-dim font-bold">Flechas / End</label>
-              <div className="flex items-center bg-neutral-900/60 border border-cyan-brand rounded-xl">
+              <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setArrowsPerEnd(Math.max(1, arrowsPerEnd - 1))}
@@ -341,7 +341,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-bold text-white text-sm">{arrowsPerEnd}</span>
+                <span className="flex-1 text-center font-bold text-white text-sm tabular-nums">{arrowsPerEnd}</span>
                 <button
                   type="button"
                   onClick={() => setArrowsPerEnd(Math.min(12, arrowsPerEnd + 1))}
@@ -356,10 +356,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Start button */}
         <motion.button
-          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-3.5 mt-2 mb-4 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-extrabold text-sm tracking-wider uppercase shadow-glow-cyan cursor-pointer flex justify-center items-center gap-1.5"
+          className="w-full py-3.5 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs tracking-widest uppercase cursor-pointer flex justify-center items-center gap-2 transition-colors"
         >
           <Target size={16} />
           <span>{t("startSessionBtn")}</span>
@@ -369,8 +368,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       {/* MODAL: Practice Info Explanation */}
       <AnimatePresence>
         {showPracticeInfoModal && (
-          <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
+          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
               <div>
                 <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
                   Metodología de Práctica
@@ -408,7 +407,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <div className="flex gap-2 mt-1">
                 <button
                   onClick={handleConfirmPracticeInfo}
-                  className="flex-1 py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                  className="flex-1 py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer transition-colors"
                 >
                   Entendido, Iniciar
                 </button>

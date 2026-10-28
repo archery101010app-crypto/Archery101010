@@ -168,7 +168,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t("emailPlaceholder")}
-                className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3.5 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
               <div className="relative flex items-center">
                 <input
@@ -176,7 +176,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("passwordPlaceholder")}
-                  className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
@@ -192,7 +192,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmar contraseña"
-                  className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
@@ -223,7 +223,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder=""
-                  className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-yellow-gold"
+                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
               </div>
 
@@ -234,7 +234,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full bg-neutral-900/60 border border-cyan-brand focus:border-cyan-neon focus:shadow-glow-cyan text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
+                    className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
                   />
                 </div>
 
@@ -243,7 +243,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                    className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
                   >
                     {COUNTRIES.map((c) => (
                       <option key={c.code} value={c.code} className="bg-black text-white">
@@ -259,7 +259,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="w-full bg-neutral-900/60 border border-cyan-brand text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
                 >
                   <option value="M" className="bg-black text-white">{t("genderM")}</option>
                   <option value="F" className="bg-black text-white">{t("genderF")}</option>
@@ -276,7 +276,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         {step > 1 ? (
           <button
             onClick={handlePrev}
-            className="flex-1 py-3.5 rounded-full border border-gray-border text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-neutral-900/60 transition-all duration-200 cursor-pointer"
+            className="flex-1 py-3.5 rounded-xl border border-white/10 bg-[#0D0F12] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
           >
             <ArrowLeft size={16} />
             <span>{t("prev")}</span>
@@ -288,7 +288,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         {step < 2 ? (
           <button
             onClick={handleNext}
-            className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-glow-cyan hover:brightness-110 transition-all duration-200 cursor-pointer"
+            className="flex-1 py-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer"
           >
             <span>{t("next")}</span>
             <ArrowRight size={16} />
@@ -297,7 +297,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
           <button
             onClick={handleRegister}
             disabled={loading}
-            className="flex-1 py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-yellow-gold font-black text-xs uppercase tracking-wider flex items-center justify-center shadow-glow-cyan hover:brightness-110 transition-all duration-200 cursor-pointer"
+            className="flex-1 py-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center transition-all duration-200 cursor-pointer"
           >
             {loading ? t("loading") : t("confirm")}
           </button>

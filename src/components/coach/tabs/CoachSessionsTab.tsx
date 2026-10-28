@@ -91,10 +91,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
     <div className="flex flex-col gap-4">
       {/* Podio Semanal */}
       {ranking.length > 0 && (
-        <div className="bg-gradient-to-br from-yellow-gold/15 via-neutral-900/40 to-neutral-900/60 p-4 rounded-3xl border border-yellow-gold/20 flex flex-col gap-3">
+        <div className="bg-[#0D0F12] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <Award size={14} className="text-yellow-gold animate-bounce" />
+              <Award size={14} className="text-yellow-gold" />
               Podio de Puntuaciones de la Semana
             </h4>
             <button
