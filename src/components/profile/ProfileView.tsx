@@ -21,12 +21,12 @@ interface ProfileViewProps {
 }
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "CRC" },
-  { code: "ES", name: "España", flag: "ESP" },
-  { code: "MX", name: "México", flag: "MEX" },
-  { code: "CO", name: "Colombia", flag: "COL" },
-  { code: "AR", name: "Argentina", flag: "ARG" },
-  { code: "US", name: "United States", flag: "USA" }
+  { code: "CR", name: "Costa Rica", flag: "🇨🇷 CRC" },
+  { code: "ES", name: "España", flag: "🇪🇸 ESP" },
+  { code: "MX", name: "México", flag: "🇲🇽 MEX" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴 COL" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷 ARG" },
+  { code: "US", name: "United States", flag: "🇺🇸 USA" }
 ];
 
 export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, onNavigate }: ProfileViewProps) {
@@ -1311,7 +1311,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <div className="flex flex-col min-w-0">
                   <span className="text-white text-xs font-black truncate">{user.clubName || "Club Deportivo"}</span>
                   <span className="text-[10px] text-gray-dim flex items-center gap-1 mt-0.5">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/80">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "CRC"}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
                     <span>·</span>
                     <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || user.country}</span>
                   </span>
@@ -1490,7 +1490,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   <div className="flex flex-col overflow-hidden">
                     <span className="text-white text-xs font-black truncate">{user.clubName || "Club Olímpico"}</span>
                     <span className="text-[10px] text-gray-dim mt-0.5 flex items-center gap-1">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/80">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "CRC"}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
                       <span>·</span>
                       <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || "Costa Rica"}</span>
                     </span>

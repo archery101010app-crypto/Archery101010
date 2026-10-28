@@ -49,12 +49,12 @@ interface DashboardViewProps {
 }
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica" },
-  { code: "ES", name: "España" },
-  { code: "MX", name: "México" },
-  { code: "CO", name: "Colombia" },
-  { code: "AR", name: "Argentina" },
-  { code: "US", name: "United States" }
+  { code: "CR", olympic: "CRC", name: "Costa Rica", flag: "🇨🇷" },
+  { code: "ES", olympic: "ESP", name: "España", flag: "🇪🇸" },
+  { code: "MX", olympic: "MEX", name: "México", flag: "🇲🇽" },
+  { code: "CO", olympic: "COL", name: "Colombia", flag: "🇨🇴" },
+  { code: "AR", olympic: "ARG", name: "Argentina", flag: "🇦🇷" },
+  { code: "US", olympic: "USA", name: "United States", flag: "🇺🇸" }
 ];
 
 export default function DashboardView({ user, coachViewMode = false, onNavigate, onUserUpdate }: DashboardViewProps) {
@@ -246,7 +246,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     animate: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  const clubCountryCode = COUNTRIES.find(c => c.code === user.clubCountry)?.code || COUNTRIES.find(c => c.code === user.country)?.code || "CR";
+  const clubCountryObj = COUNTRIES.find(c => c.code === user.clubCountry) || COUNTRIES.find(c => c.code === user.country) || COUNTRIES[0];
 
   if (coachViewMode) {
     return (
@@ -415,7 +415,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               {user.clubName || t("myClub")}
             </span>
             <span className="text-[10px] text-neutral-400 truncate flex items-center gap-1 mt-0.5 font-medium">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/80 shrink-0">{clubCountryCode}</span>
+              <span className="shrink-0">{clubCountryObj.flag}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{clubCountryObj.olympic}</span>
               <span className="text-white/30">·</span>
               <span className="truncate">
                 {user.role === "coach" 

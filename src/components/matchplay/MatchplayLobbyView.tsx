@@ -16,12 +16,12 @@ interface MatchplayLobbyViewProps {
 }
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "CRC" },
-  { code: "ES", name: "España", flag: "ESP" },
-  { code: "MX", name: "México", flag: "MEX" },
-  { code: "CO", name: "Colombia", flag: "COL" },
-  { code: "AR", name: "Argentina", flag: "ARG" },
-  { code: "US", name: "United States", flag: "USA" }
+  { code: "CR", name: "Costa Rica", flag: "🇨🇷 CRC" },
+  { code: "ES", name: "España", flag: "🇪🇸 ESP" },
+  { code: "MX", name: "México", flag: "🇲🇽 MEX" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴 COL" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷 ARG" },
+  { code: "US", name: "United States", flag: "🇺🇸 USA" }
 ];
 
 const isMockUser = (uid: string, email: string = "", fullName: string = "") => {
@@ -945,7 +945,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     </motion.div>
                   ) : (
                     filteredRivals.map((riv) => {
-                      const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "CRC";
+                      const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
                       return (
                         <motion.div
                           key={riv.uid}
@@ -958,7 +958,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                               <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.1] flex items-center justify-center text-white font-black text-xs">
                                 {riv.fullName.substring(0, 2).toUpperCase()}
                               </div>
-                              <span className="absolute -bottom-1 -right-1 text-[7px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">{flag}</span>
+                              <span className="absolute -bottom-1 -right-1 text-[8px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                             </div>
                             
                             <div className="flex flex-col min-w-0">
@@ -1010,7 +1010,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 className="flex flex-col gap-2"
               >
                 {practiceBots.map((riv) => {
-                  const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "CRC";
+                  const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
                   return (
                     <motion.div
                       key={riv.uid}
@@ -1022,7 +1022,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white/75 font-bold text-xs">
                             {riv.fullName.substring(0, 2).toUpperCase()}
                           </div>
-                          <span className="absolute -bottom-1 -right-1 text-[7px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white/70 px-1 py-0.5 rounded leading-none">{flag}</span>
+                          <span className="absolute -bottom-1 -right-1 text-[8px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white/80 px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                         </div>
                         
                         <div className="flex flex-col min-w-0">
@@ -1145,7 +1145,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               </div>
             ) : (
               history.map((h) => {
-                const flag = COUNTRIES.find((c) => c.code === h.opponentCountry)?.flag || "MEX";
+                const flag = COUNTRIES.find((c) => c.code === h.opponentCountry)?.flag || "🇲🇽 MEX";
                 return (
                   <div
                     key={h.uid}

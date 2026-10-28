@@ -14,12 +14,12 @@ import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, getExactTargetDimensions } from "@/lib/scoring/dispersionAnalytics";
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "CRC" },
-  { code: "ES", name: "España", flag: "ESP" },
-  { code: "MX", name: "México", flag: "MEX" },
-  { code: "CO", name: "Colombia", flag: "COL" },
-  { code: "AR", name: "Argentina", flag: "ARG" },
-  { code: "US", name: "United States", flag: "USA" }
+  { code: "CR", name: "Costa Rica", flag: "🇨🇷 CRC" },
+  { code: "ES", name: "España", flag: "🇪🇸 ESP" },
+  { code: "MX", name: "México", flag: "🇲🇽 MEX" },
+  { code: "CO", name: "Colombia", flag: "🇨🇴 COL" },
+  { code: "AR", name: "Argentina", flag: "🇦🇷 ARG" },
+  { code: "US", name: "United States", flag: "🇺🇸 USA" }
 ];
 
 interface MatchplayGameViewProps {
@@ -2151,8 +2151,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const currentRivalName = config.rival.fullName;
-  const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "MEX";
-  const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "CRC";
+  const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "🇲🇽 MEX";
+  const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷 CRC";
 
   // Confirm and go back warning if match in progress
   const handleBackWithConfirm = () => {
@@ -2211,7 +2211,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <div className="w-12 h-12 rounded-xl bg-cyan-neon/10 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon font-black text-sm relative">
                 {user.fullName.substring(0, 2).toUpperCase()}
               </div>
-              <span className="absolute -bottom-1 -right-1 text-[11px] drop-shadow-md bg-neutral-950/80 px-0.5 rounded">{userFlag}</span>
+              <span className="absolute -bottom-1 -right-2 text-[8px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{userFlag}</span>
             </div>
             <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               Tú ({config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType})
@@ -2256,7 +2256,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <div className="w-12 h-12 rounded-xl bg-red-rival/10 border border-red-rival/35 flex items-center justify-center text-red-rival font-black text-sm relative">
                 {currentRivalName.substring(0, 2).toUpperCase()}
               </div>
-              <span className="absolute -bottom-1 -right-1 text-[11px] drop-shadow-md bg-neutral-950/80 px-0.5 rounded">{currentRivalFlag}</span>
+              <span className="absolute -bottom-1 -right-2 text-[8px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-red-rival px-1 py-0.5 rounded leading-none whitespace-nowrap">{currentRivalFlag}</span>
             </div>
             <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               {currentRivalName}
