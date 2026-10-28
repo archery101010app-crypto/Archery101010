@@ -882,12 +882,6 @@ export async function authenticateWithSocialProvider(
   const isCapacitorNative =
     typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
 
-  if (isCapacitorNative) {
-    throw new Error(
-      "En la aplicación nativa de Android, el acceso se realiza con tu Correo y Contraseña para permitir el uso 100% Offline en el campo de tiro.\n\nSi creaste tu cuenta con Google o Facebook en la web, pulsa '¿Olvidaste tu contraseña?' para asignarle una clave."
-    );
-  }
-
   auth.languageCode = "es";
 
   const provider =
@@ -900,7 +894,19 @@ export async function authenticateWithSocialProvider(
   } else {
     (provider as FacebookAuthProvider).addScope("email");
     (provider as FacebookAuthProvider).addScope("public_profile");
-    (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
+    if (!isCapacitorNative) {
+      (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
+    }
+  }
+
+  // Inside native Android APK WebView, use same-window redirect flow so OAuth completes seamlessly
+  if (isCapacitorNative) {
+    try {
+      await signInWithRedirect(auth, provider);
+      return null;
+    } catch (redirectErr: any) {
+      throw new Error(translateFirebaseAuthError(redirectErr));
+    }
   }
 
   try {

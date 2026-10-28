@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   loginUser,
+  loginSocialUser,
   sendPasswordReset,
   authenticateWithSocialProvider,
   processSocialRedirectResult,
@@ -12,6 +13,7 @@ import {
 import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff, Smartphone, Unlock, Share, Plus, Zap, KeyRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { getLocalSetting } from "@/lib/db/indexedDB";
 
 interface LoginViewProps {
@@ -96,10 +98,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
   // Check for OAuth redirect completion (Google & Facebook)
   useEffect(() => {
+    let resolved = false;
+
     async function checkRedirect() {
       try {
         const user = await processSocialRedirectResult();
-        if (user) {
+        if (user && !resolved) {
+          resolved = true;
           setLoading(true);
           onLoginSuccess(user);
         }
@@ -108,6 +113,36 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       }
     }
     checkRedirect();
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (
+        firebaseUser &&
+        !resolved &&
+        firebaseUser.providerData.some(
+          (p) => p.providerId === "google.com" || p.providerId === "facebook.com"
+        )
+      ) {
+        resolved = true;
+        setLoading(true);
+        try {
+          const email =
+            firebaseUser.email ||
+            firebaseUser.providerData?.find((p) => p.email)?.email ||
+            `${firebaseUser.uid}@social.archery101010.com`;
+          const displayName =
+            firebaseUser.displayName ||
+            firebaseUser.providerData?.find((p) => p.displayName)?.displayName ||
+            "Arquero";
+          const user = await loginSocialUser(email, displayName, firebaseUser.uid);
+          onLoginSuccess(user);
+        } catch (err) {
+          console.error("Error en sincronización de sesión social:", err);
+          setLoading(false);
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, [onLoginSuccess]);
 
   // Check if offline and typed email matches the active Firebase Auth session on this device
