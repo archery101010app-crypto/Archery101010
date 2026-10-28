@@ -750,36 +750,36 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   return (
     <div className="flex flex-col gap-4 py-4 min-h-full">
       {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white cursor-pointer active:scale-95 transition"
+            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
           >
             <ArrowLeft size={16} />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-white text-lg font-black uppercase tracking-wide">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
                 {language === "es" ? "Calendario" : "Calendar"}
               </h2>
               {isCoach && (
-                <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30">
-                  Director / Coach
+                <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
+                  Coach
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-gray-dim uppercase tracking-wider">
-              {language === "es" ? "Planificación y Tareas Diarias" : "Planning & Daily Tasks"}
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">
+              {language === "es" ? "Planificación y Tareas" : "Planning & Tasks"}
             </p>
           </div>
         </div>
 
         {/* Action buttons: Import Excel/Sheets + Sync Cycle (Coach) + Add Event */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleOpenImportModal}
-            className="px-2.5 py-2 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition whitespace-nowrap"
+            className="h-9 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
             title="Importar Plan desde Excel o Google Sheets"
           >
             <FileSpreadsheet size={13} />
@@ -790,7 +790,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           {isCoach && (
             <button
               onClick={() => setShowSyncModal(true)}
-              className="px-2.5 py-2 rounded-2xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 border border-yellow-gold/40 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition whitespace-nowrap"
+              className="h-9 px-2.5 rounded-xl bg-yellow-gold/15 hover:bg-yellow-gold/25 border border-yellow-gold/35 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
               title="Sincronizar ciclo con el mes"
             >
               <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
@@ -801,7 +801,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
           <button
             onClick={handleOpenAdd}
-            className="p-2.5 rounded-2xl bg-cyan-neon/15 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon cursor-pointer active:scale-95 transition shrink-0"
+            className="w-9 h-9 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon flex items-center justify-center cursor-pointer active:scale-95 transition shrink-0"
             title="Planificar Evento"
           >
             <Plus size={16} />
@@ -963,7 +963,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     : cell.hasSession && !activePhaseInfo && !coachAssignment
                     ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                     : "text-white/90 hover:bg-neutral-900/80 border-white/[0.06] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
-                } ${isToday ? "border-cyan-neon shadow-glow-cyan bg-cyan-neon/15" : ""} ${
+                } ${isToday ? "border-cyan-neon bg-cyan-neon/15" : ""} ${
                   coachAssignment ? "shadow-[0_0_10px_rgba(255,255,255,0.03)]" : ""
                 }`}
                 title={cell.isCurrentMonth ? "Toca para ver la asignación de este día" : ""}
@@ -1965,7 +1965,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         onClose={() => setShowImportModal(false)}
         user={user}
         onSuccess={handleImportSuccess}
-        titleOverride="Calendario & Planificaci�n"
+        titleOverride="Calendario y Planificación"
       />
 
       {/* Unlink Plan Confirmation Modal */}

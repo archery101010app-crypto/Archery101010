@@ -410,27 +410,27 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   return (
     <div className="flex flex-col gap-4 py-4 max-w-xl mx-auto pb-16 px-1 w-full max-w-full overflow-x-hidden">
       {/* Top Header (Matched with Calendar / Home header style & height) */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white cursor-pointer active:scale-95 transition"
+            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
           >
             <ArrowLeft size={16} />
           </button>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-white text-lg font-black uppercase tracking-wide leading-tight">
+              <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide leading-tight truncate">
                 Cronógrafo
               </h2>
             </div>
-            <p className="text-[10px] text-gray-dim uppercase tracking-wider">
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">
               Medición Balística
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-neutral-900/80 border border-cyan-neon/25 px-3 py-1.5 rounded-2xl text-[10px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
+        <div className="flex items-center gap-1.5 bg-[#0D1017] border border-cyan-neon/25 h-9 px-3 rounded-xl text-[10px] text-cyan-neon font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
           <Target size={13} />
           <span>{distanceMeters} Metros</span>
         </div>
@@ -444,11 +444,11 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <button
             type="button"
             onClick={() => setShowInstructionsModal(true)}
-            className="py-2.5 px-2 rounded-2xl bg-neutral-900/90 hover:bg-neutral-800 border border-white/10 hover:border-cyan-neon/40 text-white font-black transition cursor-pointer active:scale-95 shadow-lg flex items-center justify-center gap-1.5 text-center min-w-0"
+            className="h-11 px-2.5 rounded-2xl bg-[#0D1017] hover:bg-neutral-800 border border-white/[0.08] hover:border-cyan-neon/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0 whitespace-nowrap"
           >
             <BookOpen size={13} className="text-cyan-neon shrink-0" />
-            <span className="text-[9.5px] min-[380px]:text-[10.5px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
-              Instrucciones (18mts)
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+              Instrucciones (18 m)
             </span>
           </button>
 
@@ -456,10 +456,10 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <button
             type="button"
             onClick={() => setShowSpecsModal(true)}
-            className="py-2.5 px-2 rounded-2xl bg-[#0D0F12] hover:bg-neutral-800 border border-white/10 hover:border-yellow-gold/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0"
+            className="h-11 px-2.5 rounded-2xl bg-[#0D1017] hover:bg-neutral-800 border border-white/[0.08] hover:border-yellow-gold/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0 whitespace-nowrap"
           >
             <Settings size={13} className="text-yellow-gold shrink-0" />
-            <span className="text-[9.5px] min-[380px]:text-[10.5px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
               Configurar Flecha
             </span>
           </button>
@@ -500,25 +500,25 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                   setDistanceMeters(dist);
                   handleSaveSpecs(arrowWeight, arrowLength, temperature, tempUnit, dist);
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                className={`h-7 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap tabular-nums transition cursor-pointer ${
                   distanceMeters === dist
-                    ? "bg-cyan-neon/20 text-cyan-neon border border-cyan-neon/40 shadow-glow-cyan"
+                    ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/40"
                     : "text-gray-dim hover:text-white"
                 }`}
               >
-                {dist}m
+                {dist} m
               </button>
             ))}
           </div>
 
           {/* Unit Toggle Option: FPS vs KM/H */}
-          <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-white/10">
+          <div className="flex bg-[#090B0E] p-1 rounded-xl border border-white/[0.08]">
             <button
               type="button"
               onClick={() => setSpeedUnit("FPS")}
-              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+              className={`h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                 speedUnit === "FPS" 
-                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  ? "bg-cyan-neon text-black" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
@@ -527,9 +527,9 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <button
               type="button"
               onClick={() => setSpeedUnit("KMH")}
-              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+              className={`h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                 speedUnit === "KMH" 
-                  ? "bg-cyan-neon text-black shadow-glow-cyan" 
+                  ? "bg-cyan-neon text-black" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
@@ -654,12 +654,12 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <button
             type="button"
             onClick={handleRequestMeasurement}
-            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-glow-cyan ${
+            className={`w-full h-12 rounded-2xl text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-[0.99] cursor-pointer ${
               isRecording 
                 ? listenStage === "CAPTURING_IMPACT"
                   ? "bg-amber-500 text-black animate-pulse"
                   : "bg-red-500 text-white animate-pulse" 
-                : "bg-cyan-neon text-black hover:brightness-110"
+                : "bg-cyan-neon text-black hover:bg-cyan-neon/90"
             }`}
           >
             {isRecording ? (

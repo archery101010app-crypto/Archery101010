@@ -76,7 +76,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
       }
     } else {
       const bowLabel = session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : (session.bowType || "Barebow");
-      const text = `🎯 *ARCHERY 101010 - Planilla de Tiro*\n🏹 *Arquero:* ${user.fullName || "Arquero"}\n📋 *Formato:* ${session.format} · ${bowLabel} · ${session.distance}m\n🏆 *Puntaje:* ${session.score} / ${session.maxScore} pts (${session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0}%)`;
+      const text = `*ARCHERY 101010 · Planilla de Tiro*\n• *Arquero:* ${user.fullName || "Arquero"}\n• *Formato:* ${session.format} · ${bowLabel} · ${session.distance}m\n• *Puntaje:* ${session.score} / ${session.maxScore} pts (${session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0}%)`;
       if (typeof navigator !== "undefined" && navigator.share) {
         navigator.share({ title: "Planilla - Archery 101010", text }).catch(() => {});
       } else {
@@ -232,36 +232,36 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   return (
     <div className="flex flex-col gap-4 py-4 min-h-full">
       {/* Header with Navigation Tabs */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
+            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center cursor-pointer shrink-0 transition"
           >
             <ArrowLeft size={16} />
           </button>
-          <div>
-            <h2 className="text-white text-lg font-black uppercase tracking-wide">
+          <div className="min-w-0">
+            <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
               {t("historyTitle")}
             </h2>
-            <p className="text-[10px] text-gray-dim uppercase tracking-wider">Historial</p>
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">Historial</p>
           </div>
         </div>
 
         {/* Tab Selector Buttons */}
-        <div className="flex bg-neutral-900 p-0.5 rounded-full border border-gray-border">
+        <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
           <button
             onClick={() => setActiveTab("SESSIONS")}
-            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide cursor-pointer transition ${
-              activeTab === "SESSIONS" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+              activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
             }`}
           >
             Sesiones
           </button>
           <button
             onClick={() => setActiveTab("VOLUME")}
-            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide cursor-pointer transition ${
-              activeTab === "VOLUME" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+              activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
             }`}
           >
             Volumen
@@ -272,7 +272,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
       {activeTab === "SESSIONS" ? (
         <>
           {/* Filter Panel */}
-          <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
+          <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
             {/* Date Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
@@ -287,10 +287,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setDateFilter(f.id as any)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       dateFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
                     }`}
                   >
                     {f.label}
@@ -314,10 +314,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setPracticeFilter(f.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       practiceFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
                     }`}
                   >
                     {f.label}
@@ -341,10 +341,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setBowFilter(f.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       bowFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 shadow-glow-cyan"
-                        : "bg-neutral-950 border border-white/5 text-gray-dim"
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
                     }`}
                   >
                     {f.label}

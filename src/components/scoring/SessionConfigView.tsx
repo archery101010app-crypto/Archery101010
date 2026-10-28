@@ -123,18 +123,18 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   return (
     <div className="flex flex-col gap-4 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onBack}
-          className="p-2 rounded-xl bg-neutral-900 border border-gray-border hover:border-white/10 text-gray-dim hover:text-white cursor-pointer"
+          className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
           <ArrowLeft size={16} />
         </button>
-        <div>
-          <h2 className="text-white text-lg font-black uppercase tracking-wide">
+        <div className="min-w-0">
+          <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[10px] text-gray-dim uppercase tracking-wider">Configuración</p>
+          <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">Configuración</p>
         </div>
       </div>
 
@@ -145,15 +145,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="p-4 rounded-2xl border border-yellow-gold/30 bg-yellow-gold/5 flex flex-col gap-3 shadow-sm relative overflow-hidden"
+            className="p-4 rounded-2xl border border-yellow-gold/30 bg-[#0D1017] flex flex-col gap-3 shadow-sm relative overflow-hidden"
           >
-            <div className="flex justify-between items-start">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5 animate-pulse">
+            <div className="flex justify-between items-start gap-2">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
                   <RotateCcw size={11} />
                   Sesión Pausada
                 </span>
-                <h4 className="text-white text-xs font-bold mt-1">
+                <h4 className="text-white text-xs font-bold mt-1 truncate">
                   {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
                 </h4>
                 <p className="text-[9px] text-gray-dim">
@@ -167,7 +167,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               </div>
               <button
                 onClick={handleDiscardDraft}
-                className="p-1.5 rounded-lg border border-red-rival/20 bg-red-rival/5 text-red-rival hover:bg-red-rival/10 transition cursor-pointer"
+                className="w-8 h-8 rounded-lg border border-red-rival/25 bg-red-rival/10 text-red-rival hover:bg-red-rival/20 flex items-center justify-center shrink-0 transition cursor-pointer"
                 title="Descartar Borrador"
               >
                 <Trash2 size={13} />
@@ -176,7 +176,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             
             <button
               onClick={handleResumeDraft}
-              className="w-full py-2.5 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition"
+              className="w-full h-10 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
             >
               <RotateCcw size={13} />
               <span>Reanudar Entrenamiento</span>
@@ -204,9 +204,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     setShowPracticeInfoModal(true);
                   }
                 }}
-                className={`py-3 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer ${
+                className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
                   practiceType === type
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >
@@ -225,7 +225,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <select
               value={format}
               onChange={(e) => handleFormatChange(e.target.value)}
-              className="w-full bg-[#0D0F12] border border-white/10 text-white text-sm px-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition duration-200 appearance-none font-bold"
+              className="w-full h-11 bg-[#0D0F12] border border-white/10 text-white text-xs sm:text-sm px-4 rounded-xl outline-none focus:border-cyan-neon transition duration-200 appearance-none font-bold"
             >
               <option value="Libre" className="bg-black text-white">Ajuste libre</option>
               <option value="WA 360" className="bg-black text-white">WA 360</option>
@@ -240,7 +240,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-dim pointer-events-none" />
           </div>
           {format !== "Libre" && (
-            <p className="text-[10px] text-cyan-neon font-mono font-bold px-1">
+            <p className="text-[10px] text-cyan-neon font-mono font-bold px-1 tabular-nums">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
             </p>
           )}
@@ -257,9 +257,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`py-3 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer ${
+                className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
                   bowType === type
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >
@@ -291,9 +291,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     }
                   }
                 }}
-                className={`py-3 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center ${
+                className={`h-11 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
                   distance === d
-                    ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
+                    ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
                 }`}
               >

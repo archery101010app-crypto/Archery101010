@@ -535,20 +535,20 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       .join("\n");
 
     const message = 
-      `🎯 *PLANILLA OFICIAL ARCHERY 101010*\n` +
+      `*PLANILLA OFICIAL ARCHERY 101010*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Arquero:* ${user.fullName || "Arquero"}\n` +
-      `🏹 *Arco:* ${config.bowType || user.bowConfig?.type || "Barebow"}\n` +
-      `📏 *Modalidad:* ${config.format} · ${config.distance}m\n` +
-      `🎯 *Flechas Tiradas:* ${totalArrows}\n` +
+      `• *Arquero:* ${user.fullName || "Arquero"}\n` +
+      `• *Arco:* ${config.bowType || user.bowConfig?.type || "Barebow"}\n` +
+      `• *Modalidad:* ${config.format} · ${config.distance}m\n` +
+      `• *Flechas Tiradas:* ${totalArrows}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `🏆 *PUNTUACIÓN TOTAL:* *${totalScore}* / ${maxScore} pts (*${pct}%*)\n` +
-      `⭐ *10s:* ${count10} | *Xs:* ${countX}\n` +
-      `📊 *Promedio/Flecha:* ${avgPerArrow} pts\n` +
-      (endsDetail ? `\n📋 *Desglose de Tiradas:*\n${endsDetail}\n` : "") +
-      (sessionNote ? `\n📝 *Notas:* ${sessionNote}\n` : "") +
+      `*PUNTUACIÓN TOTAL:* *${totalScore}* / ${maxScore} pts (*${pct}%*)\n` +
+      `• *10s:* ${count10} | *Xs:* ${countX}\n` +
+      `• *Promedio/Flecha:* ${avgPerArrow} pts\n` +
+      (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
+      (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📲 *App Oficial:* https://archery101010.com`;
+      `*App Oficial:* https://archery101010.com`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
@@ -1191,60 +1191,45 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   return (
     <div className="flex flex-col gap-2.5 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Top Config info Header */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={() => setIsExitModalOpen(true)}
-            className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
+            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
           >
             <ArrowLeft size={16} />
           </button>
-          <div>
-            <h3 className="text-white text-sm font-black uppercase tracking-wide">
+          <div className="min-w-0">
+            <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate leading-tight">
               {config.format === "Libre" ? "Ajuste libre" : config.format} · {config.distance}m
               {presetType === "WA_300_COMPOUND" && " · 10 Oficial"}
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
-            <p className="text-[10px] text-gray-dim uppercase tracking-wider">
+            <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">
               {config.practiceType === "Control" ? t("practiceControl") : config.practiceType} · {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType}
             </p>
           </div>
         </div>
 
-        {/* Tab Selection Mode buttons with pulsing neon cyan glow */}
-        <motion.div
-          animate={{
-            borderColor: ["rgba(63, 63, 70, 0.4)", "rgba(0, 229, 255, 0.7)", "rgba(63, 63, 70, 0.4)"],
-            boxShadow: [
-              "0 0 0 rgba(0, 229, 255, 0)",
-              "0 0 10px rgba(0, 229, 255, 0.3)",
-              "0 0 0 rgba(0, 229, 255, 0)"
-            ]
-          }}
-          transition={{
-            duration: 2.5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="flex bg-neutral-900 p-0.5 rounded-full border"
-        >
+        {/* Tab Selection Mode buttons */}
+        <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
           <button
             onClick={() => setMode("TARGET")}
-            className={`p-2 rounded-full cursor-pointer transition ${
-              mode === "TARGET" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
+              mode === "TARGET" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
             }`}
           >
-            <Target size={16} />
+            <Target size={15} />
           </button>
           <button
             onClick={() => setMode("KEYBOARD")}
-            className={`p-2 rounded-full cursor-pointer transition ${
-              mode === "KEYBOARD" ? "bg-cyan-neon/10 text-cyan-neon" : "text-gray-dim hover:text-white"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
+              mode === "KEYBOARD" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
             }`}
           >
-            <Keyboard size={16} />
+            <Keyboard size={15} />
           </button>
-        </motion.div>
+        </div>
       </div>
 
       {/* Floating clock controller integration */}
@@ -1262,36 +1247,36 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       {/* Mini Clock display widget (visible when floating clock is running and overlay minimized) */}
       {clockTimeStr && (
         <div
-          className={`w-full bg-neutral-900/90 backdrop-blur border rounded-xl px-4 py-2 flex items-center justify-between shadow-lg transition-colors ${
+          className={`w-full bg-[#0D1017] border rounded-xl px-4 py-2 flex items-center justify-between shadow-lg transition-colors ${
             clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-              ? "border-red-500/50"
+              ? "border-red-500/40"
               : clockIsWarn
-              ? "border-yellow-gold/50"
-              : "border-green-success/50"
+              ? "border-yellow-gold/40"
+              : "border-green-success/40"
           }`}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <span
-              className={`w-3 h-3 rounded-full animate-pulse ${
+              className={`w-2.5 h-2.5 rounded-full shrink-0 animate-pulse ${
                 clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-                  ? "bg-red-600 shadow-[0_0_10px_#dc2626]"
+                  ? "bg-red-600"
                   : clockIsWarn
-                  ? "bg-yellow-gold shadow-[0_0_10px_#FFE500]"
-                  : "bg-green-success shadow-[0_0_10px_#00C853]"
+                  ? "bg-yellow-gold"
+                  : "bg-green-success"
               }`}
             />
-            <span className="text-xs text-white font-bold uppercase tracking-wider">
+            <span className="text-xs text-white font-bold uppercase tracking-wider truncate">
               {clockPhase === "prep"
-                ? "🔴 Preparación (Ir a la línea)"
+                ? "Preparación (Ir a la línea)"
                 : clockPhase === "stop" || clockIsOver
-                ? "🔴 Fin de Tiempo (Alto)"
+                ? "Fin de Tiempo (Alto)"
                 : clockIsWarn
-                ? "🟡 Últimos 30s de Tiro"
-                : "🟢 Tiempo de Tiro"}
+                ? "Últimos 30s de Tiro"
+                : "Tiempo de Tiro"}
             </span>
           </div>
           <span
-            className={`text-lg font-black font-mono leading-none ${
+            className={`text-lg font-black font-mono leading-none tabular-nums shrink-0 ${
               clockPhase === "prep" || clockPhase === "stop" || clockIsOver
                 ? "text-red-500"
                 : clockIsWarn
@@ -1306,35 +1291,35 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
       {/* Total score box */}
       {config.practiceType === "Volumen" ? (
-        <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex justify-between items-center">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center gap-2">
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase">
               Distancia
             </span>
-            <span className="text-2xl font-black text-white leading-tight">
+            <span className="text-2xl font-black text-white leading-tight tabular-nums">
               {config.distance} <span className="text-xs text-gray-dim">metros</span>
             </span>
           </div>
           <div className="text-right flex flex-col items-end">
-            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/20 shadow-glow-cyan">
+            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
               Práctica de Volumen
             </span>
           </div>
         </div>
       ) : (
-        <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-dim font-bold tracking-widest uppercase">
               Puntuación
             </span>
             <div className="flex items-center gap-3">
-              <span className="text-2xl font-black text-white leading-tight">
+              <span className="text-2xl font-black text-white leading-tight tabular-nums">
                 {calculateTotalScore()} <span className="text-xs text-gray-dim">/ {config.maxScore}</span>
               </span>
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
                 <button
                   onClick={handleFinishFirstBlockOnly}
-                  className="text-[9px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer animate-pulse"
+                  className="text-[9px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
                 >
                   Finalizar en 1er Bloque
                 </button>
@@ -1342,10 +1327,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </div>
           </div>
           <div className="text-right flex flex-col items-end">
-            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+            <span className="text-[10px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
               End {currentEndIdx + 1} / {config.endsCount}
             </span>
-            <span className="text-xs text-gray-dim font-bold mt-1">
+            <span className="text-xs text-gray-dim font-bold mt-1 tabular-nums">
               Flecha {currentArrowIdx + 1} / {config.arrowsPerEnd}
             </span>
           </div>
@@ -1475,7 +1460,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </button>
               <button
                 onClick={() => setIsFinishing(true)}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer shadow-glow-cyan"
+                className="px-4 py-2 bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer transition"
               >
                 Finalizar Práctica
               </button>
@@ -1747,9 +1732,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 onClick={handleConfirmEnd}
                 disabled={!isCurrentEndComplete}
-                className={`flex-1.5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 ${
+                className={`flex-1.5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap transition active:scale-95 ${
                   isCurrentEndComplete
-                    ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-110 cursor-pointer animate-pulse"
+                    ? "bg-cyan-neon hover:bg-[#19c8ff] text-black cursor-pointer"
                     : "bg-neutral-900 border border-white/5 text-neutral-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
                 }`}
               >
@@ -1933,9 +1918,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 onClick={handleConfirmEnd}
                 disabled={!isCurrentEndComplete}
-                className={`col-span-2 py-3.5 min-h-[48px] rounded-xl font-black text-xs flex items-center justify-center uppercase transition gap-1.5 active:scale-95 ${
+                className={`col-span-2 py-3.5 min-h-[48px] rounded-xl font-black text-xs flex items-center justify-center uppercase whitespace-nowrap transition gap-1.5 active:scale-95 ${
                   isCurrentEndComplete
-                    ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan hover:brightness-110 cursor-pointer animate-pulse"
+                    ? "bg-cyan-neon hover:bg-[#19c8ff] text-black cursor-pointer"
                     : "bg-neutral-900 border border-white/5 text-neutral-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
                 }`}
               >
@@ -2097,28 +2082,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   onClick={handleShareShotChart}
                   disabled={isGeneratingImage || impacts.length === 0}
-                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.25)] transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Camera size={16} />
-                  <span>{isGeneratingImage ? "Generando Imagen..." : "Compartir Diana Gráfica (Foto / HD)"}</span>
+                  <span>{isGeneratingImage ? "Generando Imagen..." : "Compartir Diana Gráfica (HD)"}</span>
                 </button>
                 <button
                   onClick={handleShareScorecardWhatsApp}
-                  className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition active:scale-95 cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
                 >
                   <Share2 size={16} />
                   <span>Compartir Planilla por WhatsApp</span>
                 </button>
                 <button
                   onClick={handleFinishAndSave}
-                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
+                  className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 transition"
                 >
                   <Save size={15} />
                   <span>Guardar Entrenamiento</span>
                 </button>
                 <button
                   onClick={() => setIsFinishing(false)}
-                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-transparent border border-white/10 text-gray-dim hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer"
                 >
                   Seguir Tirando
                 </button>
@@ -2132,28 +2117,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       <AnimatePresence>
         {isExitModalOpen && (
           <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
-              <h3 className="text-white text-base font-black uppercase">¿Pausar Sesión?</h3>
-              <p className="text-xs text-gray-dim">
+            <div className="bg-[#0D1017] border border-white/10 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
+              <h3 className="text-white text-base font-black uppercase [text-wrap:balance]">¿Pausar Sesión?</h3>
+              <p className="text-xs text-gray-dim [text-wrap:pretty]">
                 Puedes guardar el progreso actual como borrador para reanudarlo más tarde, o descartar la sesión por completo.
               </p>
               
               <div className="flex flex-col gap-2.5 mt-2">
                 <button
                   onClick={handleSaveDraft}
-                  className="w-full py-3 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition"
                 >
-                  Pausar & Guardar Borrador
+                  Pausar y Guardar Borrador
                 </button>
                 <button
                   onClick={handleDiscard}
-                  className="w-full py-3 rounded-full bg-red-rival/20 border border-red-rival/35 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/30 transition"
+                  className="w-full h-11 rounded-xl bg-red-rival/15 border border-red-rival/35 text-red-rival font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer hover:bg-red-rival/25 transition"
                 >
                   Descartar Entrenamiento
                 </button>
                 <button
                   onClick={() => setIsExitModalOpen(false)}
-                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-transparent border border-white/10 text-gray-dim hover:text-white font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer transition"
                 >
                   Seguir Tirando
                 </button>
@@ -2210,13 +2195,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <div className="flex flex-col gap-2 mt-4">
                 <button
                   onClick={() => executeFinalSave(confirmedVolume)}
-                  className="w-full py-3.5 rounded-full bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition"
                 >
                   Confirmar y Guardar
                 </button>
                 <button
                   onClick={() => setIsConfirmingVolume(false)}
-                  className="w-full py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+                  className="w-full h-11 rounded-xl bg-transparent border border-white/10 text-gray-dim hover:text-white font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer transition"
                 >
                   Regresar
                 </button>
@@ -2236,55 +2221,55 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 w-full max-w-sm flex flex-col gap-4 text-left shadow-2xl"
+              className="bg-[#0D1017] border border-white/10 rounded-3xl p-5 w-full max-w-sm flex flex-col gap-4 text-left shadow-2xl"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon shrink-0">
                     <Crosshair size={18} />
                   </div>
-                  <div>
-                    <h3 className="text-white text-sm font-black uppercase tracking-wide">
-                      Centro & Ajuste de Mira
+                  <div className="min-w-0">
+                    <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate">
+                      Centro y Ajuste de Mira
                     </h3>
-                    <p className="text-[10px] text-gray-dim">
-                      {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} • {config.distance || 70}m • Dianas WA
+                    <p className="text-[10px] text-gray-dim truncate">
+                      {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} · {config.distance || 70}m · Dianas WA
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowDispersionDrawer(false)}
-                  className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-dim hover:text-white transition cursor-pointer"
+                  className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-dim hover:text-white transition cursor-pointer shrink-0"
                 >
                   <X size={16} />
                 </button>
               </div>
 
               {/* Scope Switcher: End actual vs Toda la sesión */}
-              <div className="grid grid-cols-2 gap-1.5 bg-neutral-950 p-1 rounded-xl border border-white/5">
+              <div className="grid grid-cols-2 gap-1.5 bg-[#090B0E] p-1 rounded-xl border border-white/5">
                 <button
                   type="button"
                   onClick={() => setDispersionScope("END")}
-                  className={`py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                     dispersionScope === "END"
-                      ? "bg-cyan-neon text-black shadow-glow-cyan"
+                      ? "bg-cyan-neon text-black"
                       : "text-gray-dim hover:text-white"
                   }`}
                 >
-                  End {currentEndIdx + 1} ({currentEndImpacts.length} flechas)
+                  End {currentEndIdx + 1} ({currentEndImpacts.length} fl.)
                 </button>
                 <button
                   type="button"
                   onClick={() => setDispersionScope("GLOBAL")}
-                  className={`py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                     dispersionScope === "GLOBAL"
-                      ? "bg-cyan-neon text-black shadow-glow-cyan"
+                      ? "bg-cyan-neon text-black"
                       : "text-gray-dim hover:text-white"
                   }`}
                 >
-                  Toda la Sesión ({impacts.length} flechas)
+                  Sesión ({impacts.length} fl.)
                 </button>
               </div>
 
@@ -2292,19 +2277,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {activeAnalysis && activeAnalysis.count > 0 ? (
                 <div className="flex flex-col gap-3">
                   {/* Compass / Direction Card */}
-                  <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between">
+                  <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between gap-2">
                     <div>
                       <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
                         Desviación del Grupo
                       </span>
                       <div className="text-xl font-black text-white mt-0.5 flex items-center gap-2">
                         <span>{activeAnalysis.clockDirection}</span>
-                        <span className="text-xs font-bold text-cyan-neon">
+                        <span className="text-xs font-bold text-cyan-neon tabular-nums">
                           ({activeAnalysis.distanceFromCenterCm.toFixed(1)} cm del centro)
                         </span>
                       </div>
                     </div>
-                    <div className="px-2.5 py-1 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] text-center">
+                    <div className="px-2.5 py-1 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] text-center shrink-0">
                       {activeAnalysis.groupQuality}
                     </div>
                   </div>
@@ -2314,9 +2299,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     {/* Horizontal */}
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
                       <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
-                        ↔️ Deriva Horizontal
+                        Deriva Horizontal
                       </span>
-                      <span className="text-xs font-bold text-white">
+                      <span className="text-xs font-bold text-white tabular-nums">
                         {activeAnalysis.deltaXCm === 0 
                           ? "Centrado" 
                           : `${Math.abs(activeAnalysis.deltaXCm).toFixed(1)} cm ${activeAnalysis.deltaXCm > 0 ? "Derecha" : "Izquierda"}`}
@@ -2333,9 +2318,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     {/* Vertical */}
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
                       <span className="text-[9px] font-black uppercase text-gray-dim tracking-wider">
-                        ↕️ Elevación Vertical
+                        Elevación Vertical
                       </span>
-                      <span className="text-xs font-bold text-white">
+                      <span className="text-xs font-bold text-white tabular-nums">
                         {activeAnalysis.deltaYCm === 0 
                           ? "Centrado" 
                           : `${Math.abs(activeAnalysis.deltaYCm).toFixed(1)} cm ${activeAnalysis.deltaYCm > 0 ? "Arriba" : "Abajo"}`}
@@ -2359,19 +2344,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   {/* Dispersion spread card */}
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
                     <span className="text-gray-dim font-medium">Diámetro Máximo de Grupo:</span>
-                    <span className="font-mono font-black text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
+                    <span className="font-mono font-black text-cyan-neon tabular-nums">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
                   </div>
 
-                  {/* Summary Tip (Cuadro con el mismo estilo oscuro y bombillo) */}
+                  {/* Summary Tip */}
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 text-xs text-neutral-300 font-medium leading-relaxed flex items-start gap-2.5">
-                    <span className="text-base select-none leading-none mt-0.5">💡</span>
-                    <span className="leading-snug">{activeAnalysis.adviceText}</span>
+                    <Compass size={15} className="text-cyan-neon shrink-0 mt-0.5" />
+                    <span className="leading-snug [text-wrap:pretty]">{activeAnalysis.adviceText}</span>
                   </div>
                 </div>
               ) : (
                 <div className="py-8 text-center text-xs text-gray-dim flex flex-col items-center gap-2">
                   <Target size={28} className="text-gray-dim/40" />
-                  <span>Aún no hay impactos registrados en este ámbito. Dispara y marca tus flechas en la diana.</span>
+                  <span className="[text-wrap:pretty]">Aún no hay impactos registrados en este ámbito. Dispara y marca tus flechas en la diana.</span>
                 </div>
               )}
 
@@ -2379,7 +2364,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 type="button"
                 onClick={() => setShowDispersionDrawer(false)}
-                className="w-full py-3 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs uppercase cursor-pointer transition"
+                className="w-full h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer transition"
               >
                 Cerrar Análisis
               </button>

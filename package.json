@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.144.0",
+  "version": "2.145.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

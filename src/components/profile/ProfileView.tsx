@@ -608,32 +608,32 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   return (
     <div className="flex flex-col gap-5 py-4 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onBack}
-          className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
+          className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
           <ArrowLeft size={16} />
         </button>
-        <div>
-          <h2 className="text-white text-lg font-black uppercase tracking-wide">
+        <div className="min-w-0">
+          <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
             {t("settingsTitle")}
           </h2>
-          <p className="text-[10px] text-gray-dim uppercase tracking-wider">Ajustes</p>
+          <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">Ajustes</p>
         </div>
       </div>
 
       {/* User Header Profile Card */}
-      <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/10 flex items-center gap-4 relative overflow-hidden">
-        <div className="w-16 h-16 rounded-full bg-cyan-brand/20 border-2 border-cyan-neon flex items-center justify-center text-cyan-neon font-black text-xl shadow-glow-cyan">
+      <div className="bg-[#0D1017] p-4 rounded-3xl border border-white/[0.08] flex items-center gap-4 relative overflow-hidden">
+        <div className="w-16 h-16 rounded-full bg-cyan-neon/10 border-2 border-cyan-neon/50 flex items-center justify-center text-cyan-neon font-black text-xl shrink-0">
           {user.fullName.substring(0, 2).toUpperCase()}
         </div>
-        <div className="flex flex-col">
-          <span className="text-white font-extrabold text-base truncate max-w-[180px]">{user.fullName}</span>
-          <span className="text-[10px] text-gray-dim mt-0.5 truncate max-w-[180px]">{user.email}</span>
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-white font-extrabold text-base truncate">{user.fullName}</span>
+          <span className="text-[10px] text-gray-dim mt-0.5 truncate">{user.email}</span>
           
-          <div className="flex items-center gap-1.5 mt-2">
-            <span className="text-[9px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black px-2 py-0.5 rounded-full uppercase">
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span className="text-[9px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
               {user.role === "archer"
                 ? "Atleta"
                 : user.role === "coach"
@@ -646,9 +646,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 ? "Super Admin"
                 : user.role}
             </span>
-            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
+            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap ${
               user.plan === "PRO" 
-                ? "bg-yellow-gold/10 border border-yellow-gold/20 text-yellow-gold shadow-glow-yellow"
+                ? "bg-yellow-gold/10 border border-yellow-gold/25 text-yellow-gold"
                 : "bg-neutral-800 border border-neutral-700 text-gray-dim"
             }`}>
               {user.plan}
@@ -658,18 +658,18 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* Role Selection Switcher Card */}
-      <div className="p-4 rounded-3xl bg-neutral-900/60 border border-white/5 flex items-center justify-between gap-3">
+      <div className="p-4 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex items-center justify-between gap-3">
         <div className="flex flex-col min-w-0">
           <span className="text-white text-xs font-black uppercase tracking-wider">Rol de Cuenta</span>
-          <span className="text-[10px] text-gray-dim leading-snug">Selecciona si entrenas como Atleta o gestionas como Coach</span>
+          <span className="text-[10px] text-gray-dim leading-snug [text-wrap:pretty]">Selecciona si entrenas como Atleta o gestionas como Coach</span>
         </div>
-        <div className="flex bg-neutral-950 p-1 rounded-2xl border border-white/10 shrink-0">
+        <div className="flex bg-[#090B0E] p-1 rounded-2xl border border-white/10 shrink-0">
           <button
             type="button"
             onClick={() => handleSelectUserRole("archer")}
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+            className={`h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
               user.role === "archer" || user.role === "team_admin"
-                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                ? "bg-cyan-neon text-black font-extrabold"
                 : "text-gray-dim hover:text-white"
             }`}
           >
@@ -678,7 +678,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <button
             type="button"
             onClick={() => handleSelectUserRole("coach")}
-            className={`relative px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+            className={`relative h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
               user.role === "coach" || user.role === "team_admin_coach"
                 ? "bg-cyan-neon text-black font-extrabold"
                 : "text-gray-dim hover:text-white"
@@ -908,9 +908,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`h-10 flex items-center justify-center rounded-xl text-[11px] font-black uppercase tracking-wider transition border cursor-pointer ${
+                            className={`h-10 flex items-center justify-center rounded-xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                               isSelected
-                                ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                                ? "bg-cyan-neon text-black border-cyan-neon"
                                 : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
                             }`}
                           >
@@ -998,9 +998,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "RH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                           (bow.hand || "RH") === "RH"
-                            ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                            ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
                         }`}
                       >
@@ -1009,9 +1009,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "LH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                           bow.hand === "LH"
-                            ? "bg-cyan-neon text-black border-cyan-neon shadow-glow-cyan"
+                            ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-gray-dim border-white/5 hover:border-white/15 hover:text-white"
                         }`}
                       >
