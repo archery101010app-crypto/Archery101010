@@ -44,7 +44,7 @@ export default function CoachPaymentModal({
     setStatusMessage(null);
     try {
       const res = await activateCoachLaunchPromo(user, selectedProduct.sku);
-      setStatusMessage({ text: "Suscripción Coach PRO activada con éxito." });
+      setStatusMessage({ text: "Suscripción activada con éxito." });
       setTimeout(() => {
         onSuccess(res.updatedUser);
       }, 500);
@@ -96,15 +96,28 @@ export default function CoachPaymentModal({
           {/* Header */}
           <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-cyan-neon block">
-                Archery 101010 • Modo Entrenador
-              </span>
-              <h2 className="text-lg font-black uppercase tracking-tight text-white mt-1">
-                Suscripción Coach PRO
-              </h2>
-              <p className="text-xs text-white/50 mt-0.5 leading-relaxed">
-                Herramientas de dirección, macroestructuras y seguimiento de alumnos.
-              </p>
+              {/* Branding Oficial ARCHERY 101010 */}
+              <div 
+                className="flex items-center gap-1.5 select-none"
+                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              >
+                <span className="text-white tracking-widest font-extrabold text-xs sm:text-sm">ARCHERY</span>
+                <span className="inline-flex tracking-tight font-extrabold text-xs sm:text-sm">
+                  <span className="text-cyan-neon">10</span>
+                  <span className="text-red-rival">10</span>
+                  <span className="text-yellow-gold">10</span>
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-2 mt-1.5">
+                <span className="text-[11px] text-white/50 font-bold uppercase tracking-wider">SUSCRIPCIÓN</span>
+                <h2 
+                  className="text-base sm:text-lg font-extrabold text-white tracking-wider uppercase"
+                  style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                >
+                  COACH PRO
+                </h2>
+              </div>
             </div>
 
             <button
@@ -158,7 +171,13 @@ export default function CoachPaymentModal({
                   </div>
 
                   <span className="text-xs font-bold text-white mt-1 block">
-                    {prod.title}
+                    <span 
+                      style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                      className="font-extrabold tracking-wide uppercase"
+                    >
+                      COACH PRO
+                    </span>{" "}
+                    <span className="text-[10px] text-white/70 font-bold uppercase">{prod.period === "monthly" ? "MENSUAL" : "ANUAL"}</span>
                   </span>
 
                   <div className="mt-3 pt-2 border-t border-white/5 flex flex-col">
@@ -225,9 +244,21 @@ export default function CoachPaymentModal({
               type="button"
               onClick={handleActivate}
               disabled={isProcessing}
-              className="w-full py-3.5 rounded-xl bg-yellow-gold hover:bg-yellow-400 active:scale-[0.99] text-black font-black text-xs uppercase tracking-wider transition cursor-pointer disabled:opacity-50"
+              className="w-full py-3.5 rounded-xl bg-yellow-gold hover:bg-yellow-400 active:scale-[0.99] text-black font-bold text-xs uppercase tracking-wider transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
-              {isProcessing ? "Activando..." : "Activar Acceso Coach PRO"}
+              {isProcessing ? (
+                <span>ACTIVANDO...</span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  ACTIVAR ACCESO{" "}
+                  <span 
+                    className="font-extrabold tracking-wider" 
+                    style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                  >
+                    COACH PRO
+                  </span>
+                </span>
+              )}
             </button>
             <span className="text-[10px] text-center text-white/40">
               Sin tarjeta de crédito requerida • Acceso inmediato

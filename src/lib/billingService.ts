@@ -19,7 +19,7 @@ export const COACH_STORE_PRODUCTS: StoreProduct[] = [
   {
     id: "coach_pro_monthly",
     sku: "archery101010_coach_pro_monthly",
-    title: "Coach PRO Mensual",
+    title: "COACH PRO Mensual",
     description: "Acceso total para entrenadores y directores de tiro (facturación mensual).",
     regularPrice: "$9.99 USD",
     promoPrice: "$0.00 USD",
@@ -35,7 +35,7 @@ export const COACH_STORE_PRODUCTS: StoreProduct[] = [
   {
     id: "coach_pro_annual",
     sku: "archery101010_coach_pro_annual",
-    title: "Coach PRO Anual",
+    title: "COACH PRO Anual",
     description: "Temporada completa de alto rendimiento con 33% de ahorro.",
     regularPrice: "$79.99 USD",
     promoPrice: "$0.00 USD",
