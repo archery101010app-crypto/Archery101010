@@ -2,11 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { loginUser, loginSocialUser, sendPasswordReset, UserProfile } from "@/lib/authService";
-import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff, Smartphone, Unlock, Share, Plus, Zap } from "lucide-react";
+import {
+  loginUser,
+  sendPasswordReset,
+  authenticateWithSocialProvider,
+  processSocialRedirectResult,
+  UserProfile,
+} from "@/lib/authService";
+import { Mail, Lock, AlertCircle, CheckCircle2, X, Eye, EyeOff, Smartphone, Unlock, Share, Plus, Zap, KeyRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
-import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 import { getLocalSetting } from "@/lib/db/indexedDB";
 
 interface LoginViewProps {
@@ -32,6 +37,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showIOSModal, setShowIOSModal] = useState(false);
+
+  // Password recovery modal states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetModalError, setResetModalError] = useState("");
+  const [resetModalSuccess, setResetModalSuccess] = useState("");
 
   // Capture beforeinstallprompt and check if app is already standalone
   useEffect(() => {
@@ -82,26 +94,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     };
   }, []);
 
-  // Check for OAuth redirect completion
+  // Check for OAuth redirect completion (Google & Facebook)
   useEffect(() => {
     async function checkRedirect() {
       try {
-        const isLocalhost = typeof window !== "undefined" && 
-                            (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-        const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                               process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
-        if (isMockFirebase) return;
-
-        const result = await getRedirectResult(auth);
-        if (result && result.user && result.user.email) {
+        const user = await processSocialRedirectResult();
+        if (user) {
           setLoading(true);
-          const user = await loginSocialUser(result.user.email, result.user.displayName || "");
-          onLoginSuccess(user);
-          return;
-        }
-        if (auth.currentUser && auth.currentUser.email && auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
-          setLoading(true);
-          const user = await loginSocialUser(auth.currentUser.email, auth.currentUser.displayName || "");
           onLoginSuccess(user);
         }
       } catch (err: any) {
@@ -136,26 +135,38 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     checkOfflineSessionResume();
   }, [email, isOnline]);
 
-  const handlePasswordReset = async () => {
+  const handleOpenPasswordReset = () => {
     setError("");
     setResetSuccessMsg("");
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      setError("Por favor escribe tu correo electrónico en la casilla de arriba y luego presiona '¿Olvidaste tu contraseña?'.");
+    setResetModalError("");
+    setResetModalSuccess("");
+    setResetEmail(email.trim());
+    setShowResetModal(true);
+  };
+
+  const handleConfirmPasswordReset = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setResetModalError("");
+    setResetModalSuccess("");
+    const targetEmail = (resetEmail || email).trim().toLowerCase();
+    if (!targetEmail) {
+      setResetModalError("Ingresa el correo electrónico de tu cuenta.");
       return;
     }
-    setLoading(true);
+    setResetLoading(true);
     try {
-      await sendPasswordReset(cleanEmail);
-      setResetSuccessMsg(
-        `Enlace de recuperación enviado a:\n${cleanEmail}\n\n` +
-        `• Revisa tu bandeja de entrada o Spam.\n` +
-        `• Si aún no tienes cuenta, pulsa 'Regístrate' abajo.`
-      );
+      await sendPasswordReset(targetEmail);
+      setEmail(targetEmail);
+      const msg =
+        `Enlace enviado a ${targetEmail}.\n\n` +
+        `• Revisa tu Bandeja de Entrada, Promociones o Spam.\n` +
+        `• Abre el enlace para elegir tu nueva contraseña.`;
+      setResetModalSuccess(msg);
+      setResetSuccessMsg(msg);
     } catch (err: any) {
-      setError(err.message || "No se pudo enviar el correo de recuperación.");
+      setResetModalError(err.message || "No se pudo enviar el correo de recuperación.");
     } finally {
-      setLoading(false);
+      setResetLoading(false);
     }
   };
 
@@ -214,86 +225,18 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     }
   };
 
-  const handleSocialLogin = async (providerName: string) => {
-    if (providerName === "facebook") {
-      setError(
-        "El inicio de sesión con Facebook requiere configuración en Meta Developers.\n\n" +
-        "Por favor ingresa o regístrate con tu correo electrónico y contraseña."
-      );
-      return;
-    }
-
-    // Check if running inside native Capacitor environment where popups are blocked by Android WebView
-    const isCapacitorNative = typeof window !== "undefined" && 
-                              !!(window as any).Capacitor?.isNativePlatform?.();
-
-    if (isCapacitorNative) {
-      setError(
-        "En la aplicación instalada de Android, el acceso se realiza con tu Correo y Contraseña para permitir el uso 100% Offline en el campo de tiro.\n\n" +
-        "Si aún no tienes cuenta, pulsa 'Regístrate' abajo para crearla en 30 segundos."
-      );
-      return;
-    }
-
+  const handleSocialLogin = async (providerName: "google" | "facebook") => {
     setLoading(true);
     setError("");
+    setResetSuccessMsg("");
     try {
-      const isLocalhost = typeof window !== "undefined" && 
-                          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-      const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                             process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
-
-      let email = "";
-      let displayName = "";
-
-      if (!isMockFirebase) {
-        const provider = providerName === "google" 
-          ? new GoogleAuthProvider() 
-          : new FacebookAuthProvider();
-
-        if (providerName === "google") {
-          (provider as GoogleAuthProvider).setCustomParameters({ prompt: "select_account" });
-        }
-          
-        try {
-          const result = await signInWithPopup(auth, provider);
-          email = result.user.email || "";
-          displayName = result.user.displayName || "";
-        } catch (popupErr: any) {
-          if (popupErr.code === "auth/popup-blocked") {
-            // Popup was blocked by mobile browser - fallback to same-domain redirect
-            await signInWithRedirect(auth, provider);
-            return;
-          }
-          throw popupErr;
-        }
-      } else {
-        // Fallback simulated logic for developer local testing
-        email = providerName === "google" ? "google-user@archery101010.com" : "facebook-user@archery101010.com";
-        displayName = providerName === "google" ? "Google User" : "Facebook User";
+      const user = await authenticateWithSocialProvider(providerName);
+      if (user) {
+        onLoginSuccess(user);
       }
-
-      if (!email) {
-        throw new Error("No se pudo obtener el correo de la cuenta social.");
-      }
-
-      const user = await loginSocialUser(email, displayName);
-      onLoginSuccess(user);
     } catch (err: any) {
       console.error("Error en autenticación social:", err);
-      let msg = "Error en autenticación social.";
-      if (err.code === "auth/popup-closed-by-user") {
-        msg = "Inicio de sesión cancelado.";
-      } else if (err.code === "auth/popup-blocked") {
-        msg = "Las ventanas emergentes están bloqueadas en tu navegador. Puedes ingresar o registrarte con tu correo y contraseña.";
-      } else if (err.code === "auth/missing-initial-state" || err.code === "auth/web-storage-unsupported") {
-        msg = "El navegador tiene bloqueado el almacenamiento de sesión. Te recomendamos ingresar con tu correo y contraseña.";
-      } else if (err.code === "auth/configuration-not-found" || err.code === "auth/operation-not-allowed") {
-        msg = `El acceso con ${providerName === "google" ? "Google" : "Facebook"} no está disponible. Por favor regístrate normalmente.`;
-      } else if (err.message) {
-        msg = err.message;
-      }
-      setError(msg);
+      setError(err.message || "Error en autenticación social.");
     } finally {
       setLoading(false);
     }
@@ -447,7 +390,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           <div className="flex justify-end -mt-1.5">
             <button
               type="button"
-              onClick={handlePasswordReset}
+              onClick={handleOpenPasswordReset}
               className="text-[11px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
               ¿Olvidaste tu contraseña?
@@ -496,10 +439,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         {/* Social login buttons */}
         <div className="flex flex-col gap-3">
           <button
+            type="button"
+            disabled={loading}
             onClick={() => handleSocialLogin("google")}
-            className="w-full py-3 rounded-xl bg-neutral-900/60 border border-white/10 hover:border-cyan-brand/40 text-white font-medium text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer"
+            className="w-full py-3 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
@@ -508,16 +453,114 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <span>{t("googleLogin")}</span>
           </button>
           <button
+            type="button"
+            disabled={loading}
             onClick={() => handleSocialLogin("facebook")}
-            className="w-full py-3 rounded-xl bg-neutral-900/60 border border-white/10 hover:border-cyan-brand/40 text-white/50 font-medium text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer"
+            className="w-full py-3 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
-            <svg className="w-4 h-4 text-[#1877F2] opacity-60" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-4 h-4 text-[#1877F2] shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
             </svg>
-            <span>{t("facebookLogin")} (Próximamente)</span>
+            <span>{t("facebookLogin")}</span>
           </button>
         </div>
       </div>
+
+      {/* Password Recovery Modal */}
+      <AnimatePresence>
+        {showResetModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 10 }}
+              className="w-full max-w-[360px] bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-4 relative shadow-2xl"
+            >
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-neon">
+                    <KeyRound size={15} />
+                  </div>
+                  <h3 className="text-white text-xs font-black uppercase tracking-wider">
+                    Recuperar Contraseña
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
+                  className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <p className="text-xs text-white/60 leading-relaxed">
+                Ingresa el correo electrónico de tu cuenta y te enviaremos un enlace automático para crear o restablecer tu contraseña.
+              </p>
+
+              {resetModalError && (
+                <div className="bg-red-rival/10 border border-red-rival/30 rounded-xl p-3 flex items-start gap-2 text-red-rival text-xs leading-relaxed">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                  <span>{resetModalError}</span>
+                </div>
+              )}
+
+              {resetModalSuccess ? (
+                <div className="flex flex-col gap-4">
+                  <div className="bg-cyan-neon/10 border border-cyan-neon/30 rounded-xl p-3.5 flex items-start gap-2.5 text-cyan-neon text-xs whitespace-pre-line leading-relaxed">
+                    <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+                    <span>{resetModalSuccess}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="w-full py-3 rounded-xl bg-white text-black font-black text-xs uppercase tracking-wider cursor-pointer text-center"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleConfirmPasswordReset} className="flex flex-col gap-3.5">
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3.5 text-white/40">
+                      <Mail size={16} />
+                    </span>
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="correo@ejemplo.com"
+                      autoFocus
+                      className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm pl-10 pr-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
+                    />
+                  </div>
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetModal(false)}
+                      className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/70 hover:text-white text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className="flex-[1.5] py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer text-center disabled:opacity-50"
+                    >
+                      {resetLoading ? "Enviando..." : "Enviar Enlace"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Footer copyright */}
       <footer className="text-center text-[10px] text-gray-dim tracking-wider mt-8">

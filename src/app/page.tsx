@@ -157,23 +157,23 @@ export default function Home() {
         // Helper to check for simulated/demo or legacy non-Firebase-Auth accounts
         const isLegacyOrDemoUser = (u: any) => {
           if (!u) return false;
-          const name = (u.fullName || "").toLowerCase();
-          const email = (u.email || "").toLowerCase();
+          const email = (u.email || "").trim().toLowerCase();
           const uid = String(u.uid || "");
           const uidLower = uid.toLowerCase();
           const isSyntheticLegacyUid = uid.startsWith("USR-") && uid !== "USR-GUEST-OFFLINE";
           const hasPlaintextPassword = typeof u.password === "string" && u.password.length > 0;
-          return isSyntheticLegacyUid ||
-                 hasPlaintextPassword ||
-                 name.includes("demo") || 
-                 name.includes("google-user") || 
-                 name.includes("facebook-user") ||
-                 email.includes("demo") || 
-                 email.includes("google-user") || 
-                 email.includes("facebook-user") ||
-                 uidLower.includes("demo") ||
-                 uidLower.includes("google-user") ||
-                 uidLower.includes("facebook-user");
+          const isMockEmail =
+            email === "demo@archery101010.com" ||
+            email === "google-user@archery101010.com" ||
+            email === "facebook-user@archery101010.com";
+          return (
+            isSyntheticLegacyUid ||
+            hasPlaintextPassword ||
+            isMockEmail ||
+            uidLower === "usr-demo" ||
+            uidLower.includes("google-user") ||
+            uidLower.includes("facebook-user")
+          );
         };
 
         // Helper to check for incomplete registration that was abandoned or never finished

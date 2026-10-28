@@ -220,7 +220,9 @@ service cloud.firestore {
         request.auth.token.get('role', '') == 'superadmin' ||
         (request.auth.token.email != null &&
           (request.auth.token.email == 'admin@archery101010.com' ||
-           request.auth.token.email == 'admin101010@archery101010.com'))
+           request.auth.token.email == 'admin101010@archery101010.com' ||
+           request.auth.token.email == 'archery101010app@gmail.com' ||
+           request.auth.token.email == 'info@archery101010.com'))
       );
     }
 

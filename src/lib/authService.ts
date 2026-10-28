@@ -1,10 +1,15 @@
 import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
 import { auth, db } from "./firebase";
-import { collection, doc, getDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, query, where, getDocs } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
   signOut,
   deleteUser,
   updateProfile as updateFirebaseAuthProfile
@@ -67,10 +72,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 function isProfileValid(u: UserProfile | null | undefined): boolean {
   if (!u) return false;
   return !!(
-    u.nickname?.trim() &&
     u.fullName?.trim() &&
     u.birthDate &&
-    u.city?.trim() &&
     u.country &&
     u.gender
   );
@@ -83,17 +86,21 @@ function sanitizeUserProfile(u: any): UserProfile {
   return copy as UserProfile;
 }
 
-function translateFirebaseAuthError(err: any): string {
+export function translateFirebaseAuthError(err: any): string {
   const code = err?.code || "";
   if (
     code === "auth/invalid-credential" ||
     code === "auth/wrong-password" ||
-    code === "auth/user-not-found"
+    code === "auth/user-not-found" ||
+    code === "auth/invalid-login-credentials"
   ) {
-    return "Correo o contraseña incorrectos. Si aún no tienes cuenta, pulsa 'Registrarse'.";
+    return "Correo o contraseña incorrectos. Si creaste tu cuenta con Google o Facebook, usa el botón de acceso social o pulsa '¿Olvidaste tu contraseña?' para asignarle una clave.";
   }
   if (code === "auth/email-already-in-use") {
     return "Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.";
+  }
+  if (code === "auth/account-exists-with-different-credential") {
+    return "Ya existe una cuenta con este correo vinculada a otro método de ingreso (Google o Correo). Inicia sesión con el método que usaste originalmente.";
   }
   if (code === "auth/weak-password") {
     return "La contraseña debe tener al menos 6 caracteres.";
@@ -101,11 +108,23 @@ function translateFirebaseAuthError(err: any): string {
   if (code === "auth/invalid-email") {
     return "El formato del correo electrónico no es válido.";
   }
+  if (code === "auth/user-disabled") {
+    return "Esta cuenta ha sido deshabilitada temporalmente. Contacta al soporte de Archery 101010.";
+  }
   if (code === "auth/too-many-requests") {
     return "Demasiados intentos fallidos. Por seguridad, espera unos minutos o restablece tu contraseña.";
   }
   if (code === "auth/network-request-failed") {
     return "Error de conexión. Verifica tu acceso a internet e inténtalo de nuevo.";
+  }
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+    return "Inicio de sesión cancelado.";
+  }
+  if (code === "auth/popup-blocked") {
+    return "Las ventanas emergentes están bloqueadas en tu navegador. Permítelas o ingresa con tu correo y contraseña.";
+  }
+  if (code === "auth/operation-not-allowed" || code === "auth/configuration-not-found") {
+    return "Este método de inicio de sesión aún no está habilitado en el servidor. Por favor ingresa con tu correo y contraseña.";
   }
   if (code === "auth/requires-recent-login") {
     return "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta.";
@@ -141,8 +160,32 @@ export async function sendPasswordReset(email: string): Promise<void> {
   if (!cleanEmail) {
     throw new Error("Ingresa tu correo electrónico para enviarte el enlace de recuperación.");
   }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    throw new Error("El formato del correo electrónico no es válido.");
+  }
   try {
-    await sendPasswordResetEmail(auth, cleanEmail);
+    auth.languageCode = "es";
+    const continueUrl =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : "https://archery101010-c0bb4.web.app";
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail, {
+        url: continueUrl,
+        handleCodeInApp: false,
+      });
+    } catch (innerErr: any) {
+      if (
+        innerErr?.code === "auth/invalid-continue-uri" ||
+        innerErr?.code === "auth/unauthorized-continue-uri" ||
+        innerErr?.code === "auth/missing-continue-uri"
+      ) {
+        await sendPasswordResetEmail(auth, cleanEmail);
+      } else {
+        throw innerErr;
+      }
+    }
   } catch (err: any) {
     throw new Error(translateFirebaseAuthError(err));
   }
@@ -229,11 +272,14 @@ export async function loginUser(email: string, password?: string): Promise<UserP
 
   // 4. If authenticated in Firebase Auth but profile doc doesn't exist yet, initialize it
   if (!user && authUid) {
+    const autoNickname = isAdminEmail
+      ? "admin"
+      : targetEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
     user = {
       uid: authUid,
       email: targetEmail,
       fullName: auth.currentUser?.displayName || (isAdminEmail ? "Admin101010" : "Arquero"),
-      nickname: isAdminEmail ? "admin" : "",
+      nickname: autoNickname,
       birthDate: "1995-05-15",
       country: "CR",
       city: "San José",
@@ -256,11 +302,13 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       role: isAdminEmail ? "superadmin" : "archer",
       plan: "PRO",
       isClubCreator: false,
-      profileSetupCompleted: isAdminEmail,
+      profileSetupCompleted: true,
       createdAt: Date.now()
     };
 
-    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", []))
+      .filter((u) => u.uid !== authUid && (u.email || "").toLowerCase() !== targetEmail)
+      .map(sanitizeUserProfile);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
@@ -272,6 +320,10 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       payload: user,
       timestamp: Date.now()
     });
+
+    if (isOnline) {
+      withTimeout(setDoc(doc(db, "users", user.uid), user, { merge: true }), LOGIN_TIMEOUT_MS).catch(() => {});
+    }
   }
 
   if (!user) {
@@ -415,6 +467,10 @@ export async function registerUser(
     payload: newProfile,
     timestamp: Date.now()
   });
+
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    withTimeout(setDoc(doc(db, "users", newProfile.uid), newProfile, { merge: true }), LOGIN_TIMEOUT_MS).catch(() => {});
+  }
 
   await migrateOfflineGuestData(newProfile.uid);
   await saveLocalSetting("current_user", newProfile);
@@ -633,10 +689,16 @@ export function isSuperAdmin(user: UserProfile | null): boolean {
   return user?.role === "superadmin";
 }
 
-export async function loginSocialUser(email: string, displayName: string): Promise<UserProfile> {
+export async function loginSocialUser(email: string, displayName: string, explicitUid?: string): Promise<UserProfile> {
   const targetEmail = email.trim().toLowerCase();
-  const authUid = auth.currentUser?.uid || generateResilientId("USR");
+  const isAdminEmail = isSuperAdminEmail(targetEmail);
+  const authUid = explicitUid || auth.currentUser?.uid || generateResilientId("USR");
   let user: UserProfile | undefined = undefined;
+
+  const cleanDisplay = (displayName || targetEmail.split("@")[0] || "Arquero").trim();
+  const autoNickname = isAdminEmail
+    ? "admin"
+    : cleanDisplay.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
 
   // 1. Try to fetch from Firestore if online
   if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -665,6 +727,17 @@ export async function loginSocialUser(email: string, displayName: string): Promi
           user = sanitizeUserProfile({ ...user, ...localUser, uid: authUid, profileSetupCompleted: true });
         }
 
+        if (!user.nickname?.trim()) {
+          user.nickname = autoNickname;
+        }
+        if (!user.fullName?.trim()) {
+          user.fullName = cleanDisplay;
+        }
+        if (isAdminEmail && user.role !== "superadmin") {
+          user.role = "superadmin";
+          user.plan = "PRO";
+        }
+
         const idx = localUsers.findIndex((u) => u.uid === user!.uid);
         if (idx !== -1) {
           localUsers[idx] = user;
@@ -682,6 +755,16 @@ export async function loginSocialUser(email: string, displayName: string): Promi
   if (!user) {
     const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
     user = usersList.find((u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail);
+    if (user) {
+      user = sanitizeUserProfile({
+        ...user,
+        uid: authUid || user.uid,
+        nickname: user.nickname?.trim() || autoNickname,
+        fullName: user.fullName?.trim() || cleanDisplay,
+        role: isAdminEmail ? "superadmin" : user.role,
+        plan: isAdminEmail ? "PRO" : user.plan,
+      });
+    }
   }
 
   // 3. Create default profile if user doesn't exist anywhere
@@ -689,8 +772,8 @@ export async function loginSocialUser(email: string, displayName: string): Promi
     user = {
       uid: authUid,
       email: targetEmail,
-      fullName: displayName || "Usuario Social",
-      nickname: "",
+      fullName: cleanDisplay,
+      nickname: autoNickname,
       birthDate: "1995-05-15",
       country: "CR",
       city: "",
@@ -710,14 +793,16 @@ export async function loginSocialUser(email: string, displayName: string): Promi
       },
       clubId: null,
       clubName: null,
-      role: "archer",
+      role: isAdminEmail ? "superadmin" : "archer",
       plan: "PRO",
       isClubCreator: false,
-      profileSetupCompleted: false,
+      profileSetupCompleted: true,
       createdAt: Date.now()
     };
 
-    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", []))
+      .filter((u) => u.uid !== authUid && (u.email || "").toLowerCase() !== targetEmail)
+      .map(sanitizeUserProfile);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
@@ -729,11 +814,115 @@ export async function loginSocialUser(email: string, displayName: string): Promi
       payload: user,
       timestamp: Date.now()
     });
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      withTimeout(setDoc(doc(db, "users", user.uid), user, { merge: true }), LOGIN_TIMEOUT_MS).catch(() => {});
+    }
+  }
+
+  if (isAdminEmail && user.role !== "superadmin") {
+    user.role = "superadmin";
+    user.plan = "PRO";
   }
 
   await migrateOfflineGuestData(user.uid);
   await saveLocalSetting("current_user", user);
   return user;
+}
+
+export async function processSocialRedirectResult(): Promise<UserProfile | null> {
+  if (typeof window === "undefined") return null;
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const isMockFirebase =
+    (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) &&
+    isLocalhost;
+  if (isMockFirebase) return null;
+
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      const u = result.user;
+      const email =
+        u.email ||
+        u.providerData?.find((p) => p.email)?.email ||
+        `${u.uid}@social.archery101010.com`;
+      const displayName =
+        u.displayName ||
+        u.providerData?.find((p) => p.displayName)?.displayName ||
+        "Arquero";
+      return await loginSocialUser(email, displayName, u.uid);
+    }
+
+    if (
+      auth.currentUser &&
+      auth.currentUser.providerData.some(
+        (p) => p.providerId === "google.com" || p.providerId === "facebook.com"
+      )
+    ) {
+      const u = auth.currentUser;
+      const email =
+        u.email ||
+        u.providerData?.find((p) => p.email)?.email ||
+        `${u.uid}@social.archery101010.com`;
+      const displayName =
+        u.displayName ||
+        u.providerData?.find((p) => p.displayName)?.displayName ||
+        "Arquero";
+      return await loginSocialUser(email, displayName, u.uid);
+    }
+  } catch (err) {
+    console.error("Error procesando redirección social:", err);
+  }
+  return null;
+}
+
+export async function authenticateWithSocialProvider(
+  providerName: "google" | "facebook"
+): Promise<UserProfile | null> {
+  const isCapacitorNative =
+    typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+
+  if (isCapacitorNative) {
+    throw new Error(
+      "En la aplicación nativa de Android, el acceso se realiza con tu Correo y Contraseña para permitir el uso 100% Offline en el campo de tiro.\n\nSi creaste tu cuenta con Google o Facebook en la web, pulsa '¿Olvidaste tu contraseña?' para asignarle una clave."
+    );
+  }
+
+  auth.languageCode = "es";
+
+  const provider =
+    providerName === "google" ? new GoogleAuthProvider() : new FacebookAuthProvider();
+
+  if (providerName === "google") {
+    (provider as GoogleAuthProvider).addScope("email");
+    (provider as GoogleAuthProvider).addScope("profile");
+    (provider as GoogleAuthProvider).setCustomParameters({ prompt: "select_account" });
+  } else {
+    (provider as FacebookAuthProvider).addScope("email");
+    (provider as FacebookAuthProvider).addScope("public_profile");
+    (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
+  }
+
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const u = result.user;
+    const email =
+      u.email ||
+      u.providerData?.find((p) => p.email)?.email ||
+      `${u.uid}@${providerName}.archery101010.com`;
+    const displayName =
+      u.displayName ||
+      u.providerData?.find((p) => p.displayName)?.displayName ||
+      (providerName === "google" ? "Arquero Google" : "Arquero Facebook");
+
+    return await loginSocialUser(email, displayName, u.uid);
+  } catch (popupErr: any) {
+    if (popupErr?.code === "auth/popup-blocked") {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw new Error(translateFirebaseAuthError(popupErr));
+  }
 }
 
 export async function loginGuestOffline(): Promise<UserProfile> {
