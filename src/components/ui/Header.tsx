@@ -89,7 +89,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               onClick={() => onToggleCoachViewMode(false)}
               className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                 !coachViewMode 
-                  ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan" 
+                  ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
@@ -99,12 +99,12 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               onClick={() => onToggleCoachViewMode(true)}
               className={`relative px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                 coachViewMode 
-                  ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan" 
+                  ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
               Coach
-              <span className="absolute -top-1.5 -right-2 text-[7px] bg-gradient-to-r from-yellow-gold to-amber-500 text-black font-black px-1 rounded-full uppercase scale-90 z-20 shadow-glow-yellow">
+              <span className="absolute -top-1.5 -right-2 text-[7px] bg-yellow-gold text-black font-black px-1 rounded-full uppercase scale-90 z-20">
                 PRO
               </span>
             </button>
