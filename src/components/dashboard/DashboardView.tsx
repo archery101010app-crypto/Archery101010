@@ -263,16 +263,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       variants={containerVariants}
       initial="initial"
       animate="animate"
-      className="flex flex-col gap-3.5 sm:gap-4 py-3 w-full max-w-full overflow-x-hidden"
+      className="flex flex-col gap-4 sm:gap-5 py-3 w-full max-w-full overflow-x-hidden"
     >
-      {/* 1. Titular Oficial de Marca: ARCHERY 101010 / THE APP */}
+      {/* Titular Oficial: ARCHERY 101010 / THE APP */}
       <div 
-        className="w-full flex flex-col justify-center items-center pt-1 pb-2 select-none gap-1.5"
+        className="w-full flex flex-col justify-center items-center pt-2 pb-3 sm:pb-5 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <span className="font-sans text-[8px] sm:text-[9px] text-white/40 font-black tracking-[0.32em] uppercase text-center whitespace-nowrap">
-          OLYMPIC &amp; WA PERFORMANCE SYSTEM
-        </span>
         <h1 className="flex items-baseline justify-center gap-x-2 sm:gap-x-3.5 text-[23px] sm:text-[36px] md:text-[46px] leading-tight text-center whitespace-nowrap">
           <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
@@ -281,234 +278,69 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             <span className="text-yellow-gold">10</span>
           </span>
         </h1>
-        {/* Tricolor Brand Signature Hairline */}
-        <div className="w-24 sm:w-32 h-[2px] flex rounded-full overflow-hidden my-0.5">
-          <div className="flex-1 bg-cyan-neon" />
-          <div className="flex-1 bg-red-rival" />
-          <div className="flex-1 bg-yellow-gold" />
-        </div>
-        <span className="text-[9px] sm:text-[11px] text-white/75 font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
+        <span className="text-[10px] sm:text-[12px] text-white/70 font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
           THE APP
         </span>
       </div>
 
-      {/* 2. Tarjeta de Identidad del Atleta y Nivel Estrellas 101010 */}
-      <motion.div
-        variants={cardVariants}
-        className="bg-[#0D1017] rounded-2xl border border-white/[0.09] p-3 sm:p-3.5 flex items-center justify-between gap-2.5"
-      >
-        <div
-          onClick={() => onNavigate("PROFILE")}
-          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-[#080A0F] border border-cyan-neon/35 flex items-center justify-center text-cyan-neon font-black text-xs shrink-0 group-hover:border-cyan-neon transition-colors">
-            {(user.fullName || "AR").substring(0, 2).toUpperCase()}
-          </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-white text-xs sm:text-sm font-black tracking-tight truncate">
-                {user.fullName?.split(" ")[0] || user.fullName}
+      {/* Cabecera Editorial Limpia (Estilo Apple Fitness / WHOOP) */}
+      <div className="flex items-end justify-between px-0.5 gap-3">
+        <div className="flex flex-col min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-white text-lg sm:text-xl font-bold tracking-tight truncate">
+              {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
+            </h2>
+            {user.plan === "PRO" && (
+              <span className="text-yellow-gold text-[9px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
+                {t("proBadge")}
               </span>
-              {user.plan === "PRO" && (
-                <span className="text-yellow-gold text-[8px] font-black bg-yellow-gold/10 px-1.5 py-0.5 rounded border border-yellow-gold/25 tracking-wider uppercase shrink-0">
-                  {t("proBadge")}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-white/55 font-medium truncate mt-0.5">
-              <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">
-                {clubCountryObj.olympic}
-              </span>
-              <span className="text-white/25">·</span>
-              {needsSetup ? (
-                <span className="text-red-rival font-bold truncate">
-                  {language === "es" ? "Completar perfil" : "Complete profile"}
-                </span>
-              ) : (
-                <span className="text-white/75 font-semibold truncate">
-                  {user?.bowConfig?.type === "Recurve"
-                    ? "Recurvo"
-                    : user?.bowConfig?.type === "Compound"
-                      ? "Compuesto"
-                      : user?.bowConfig?.type || "Barebow"}{" "}
-                  · {user?.bowConfig?.defaultDistance || 18} m
-                </span>
-              )}
-            </div>
+            )}
           </div>
+          <p className="text-xs text-white/50 mt-0.5 truncate flex items-center gap-1.5 font-medium">
+            <span className="shrink-0">{clubCountryObj.flag}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 shrink-0">
+              {clubCountryObj.olympic}
+            </span>
+            <span className="text-white/25">·</span>
+            {needsSetup ? (
+              <span 
+                onClick={() => onNavigate("PROFILE")} 
+                className="text-red-rival hover:text-red-400 font-semibold cursor-pointer border-b border-red-rival/60 truncate"
+              >
+                {language === "es" ? "Completar perfil" : "Complete profile"}
+              </span>
+            ) : (
+              <span className="text-white/65 truncate">
+                {user?.bowConfig?.type === "Recurve"
+                  ? "Recurvo"
+                  : user?.bowConfig?.type === "Compound"
+                    ? "Compuesto"
+                    : user?.bowConfig?.type || "Barebow"}{" "}
+                · {user?.bowConfig?.defaultDistance || 18} m
+              </span>
+            )}
+          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsStarsDrawerOpen(true)}
-          className="h-9 px-3 rounded-xl bg-[#080A0F] border border-yellow-gold/30 hover:border-yellow-gold/60 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors whitespace-nowrap"
-        >
-          <Star size={12} strokeWidth={2.5} className="fill-yellow-gold text-yellow-gold shrink-0" />
-          <span>
-            {athleteStar?.highestStarLevel
-              ? `Nivel ${athleteStar.highestStarLevel}`
-              : "Estrellas"}
-          </span>
-        </button>
-      </motion.div>
-
-      {/* 3. Centro de Mando Principal: Nueva Sesión + Accesos Rápidos (Calendario y Cronógrafo) */}
-      <motion.div
-        variants={cardVariants}
-        className="flex flex-col gap-2"
-      >
-        <button
-          type="button"
-          onClick={() => onNavigate("TARGET")}
-          className="w-full bg-cyan-neon hover:bg-[#19c8ff] text-black rounded-2xl p-3.5 sm:p-4 cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3 group"
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-black/15 flex items-center justify-center shrink-0">
-              <Target size={20} strokeWidth={2.5} className="text-black" />
-            </div>
-            <div className="flex flex-col text-left min-w-0">
-              <span className="text-sm sm:text-base font-black uppercase tracking-wider text-black leading-tight whitespace-nowrap">
-                {t("newSession")}
-              </span>
-              <span className="text-[10px] font-bold text-black/70 truncate">
-                {language === "es"
-                  ? "Planilla WA · Diana interactiva y reloj oficial"
-                  : "WA Scorecard · Interactive target & official clock"}
-              </span>
-            </div>
-          </div>
-          <div className="h-9 px-3 rounded-xl bg-black text-cyan-neon font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 shrink-0 whitespace-nowrap">
-            <span>{language === "es" ? "Tirar" : "Shoot"}</span>
-            <ChevronRight size={13} strokeWidth={2.5} />
-          </div>
-        </button>
-
-        {/* Barra de Acceso Rápido en 1 Toque: Misión de Hoy (Calendario) + Cronógrafo */}
-        <div className="grid grid-cols-2 gap-2.5">
+        {todayMission && (
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-10 bg-[#0D1017] hover:border-cyan-neon/40 border border-white/[0.08] rounded-xl px-3 flex items-center justify-between gap-2 cursor-pointer transition-colors min-w-0"
+            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[10px] font-semibold text-white/80 flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Calendar size={13} className="text-cyan-neon shrink-0" />
-              <span className="text-[10px] font-bold text-white/85 truncate">
-                {todayMission
-                  ? todayMission.title
-                  : language === "es"
-                    ? "Plan y Calendario"
-                    : "Plan & Calendar"}
-              </span>
-            </div>
-            <ChevronRight size={12} className="text-white/40 shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
+            <span className="truncate">{todayMission.title}</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigate("CHRONOGRAPH")}
-            className="h-10 bg-[#0D1017] hover:border-yellow-gold/40 border border-white/[0.08] rounded-xl px-3 flex items-center justify-between gap-2 cursor-pointer transition-colors min-w-0"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Gauge size={13} className="text-yellow-gold shrink-0" />
-              <span className="text-[10px] font-bold text-white/85 truncate">
-                {language === "es" ? "Cronógrafo FPS" : "FPS Chronograph"}
-              </span>
-            </div>
-            <ChevronRight size={12} className="text-white/40 shrink-0" />
-          </button>
-        </div>
-      </motion.div>
-
-      {/* 4. Telemetría Rápida 101010 (Tricolor Cyan / Red / Gold) */}
-      <div className="grid grid-cols-3 gap-2.5">
-        {/* Card 1: Última Sesión (Cyan) */}
-        <motion.div
-          variants={cardVariants}
-          onClick={() => onNavigate("HISTORY")}
-          className="bg-[#0D1017] rounded-2xl border border-white/[0.08] hover:border-cyan-neon/40 p-3 flex flex-col justify-between cursor-pointer transition-colors relative overflow-hidden min-w-0"
-        >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-cyan-neon" />
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[9px] font-black uppercase tracking-wider text-white/50 whitespace-nowrap">
-              {language === "es" ? "Última" : "Latest"}
-            </span>
-            <Activity size={11} className="text-cyan-neon shrink-0" />
-          </div>
-          <div className="my-1.5 flex items-baseline gap-1 min-w-0">
-            <span className="text-lg sm:text-xl font-black text-white tabular-nums leading-none truncate">
-              {stats.lastScore > 0 ? stats.lastScore : "—"}
-            </span>
-            {stats.lastMax > 0 && stats.lastScore > 0 && (
-              <span className="text-[9px] font-bold text-white/40 tabular-nums shrink-0">
-                /{stats.lastMax}
-              </span>
-            )}
-          </div>
-          <span className="text-[9px] font-bold text-cyan-neon tabular-nums truncate">
-            {stats.lastScore > 0 ? `${lastPercentage}% ${t("precisionLabel")}` : (language === "es" ? "Sin registro" : "No record")}
-          </span>
-        </motion.div>
-
-        {/* Card 2: Volumen de Flechas (Red Rival) */}
-        <motion.div
-          variants={cardVariants}
-          onClick={() => onNavigate("HISTORY", "VOLUME")}
-          className="bg-[#0D1017] rounded-2xl border border-white/[0.08] hover:border-red-rival/40 p-3 flex flex-col justify-between cursor-pointer transition-colors relative overflow-hidden min-w-0"
-        >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-rival" />
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[9px] font-black uppercase tracking-wider text-white/50 whitespace-nowrap">
-              {language === "es" ? "Volumen" : "Volume"}
-            </span>
-            <Flame size={11} className="text-red-rival shrink-0" />
-          </div>
-          <div className="my-1.5 flex items-baseline gap-1 min-w-0">
-            <span className="text-lg sm:text-xl font-black text-white tabular-nums leading-none truncate">
-              {stats.totalArrows}
-            </span>
-          </div>
-          <span className="text-[9px] font-bold text-white/55 truncate">
-            {language === "es" ? "Flechas totales" : "Total arrows"}
-          </span>
-        </motion.div>
-
-        {/* Card 3: Mejor Marca Personal (Yellow Gold) */}
-        <motion.div
-          variants={cardVariants}
-          onClick={() => onNavigate("HISTORY")}
-          className="bg-[#0D1017] rounded-2xl border border-white/[0.08] hover:border-yellow-gold/40 p-3 flex flex-col justify-between cursor-pointer transition-colors relative overflow-hidden min-w-0"
-        >
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-yellow-gold" />
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[9px] font-black uppercase tracking-wider text-white/50 whitespace-nowrap">
-              {language === "es" ? "Récord" : "Best"}
-            </span>
-            <Trophy size={11} className="text-yellow-gold shrink-0" />
-          </div>
-          <div className="my-1.5 flex items-baseline gap-1 min-w-0">
-            <span className="text-lg sm:text-xl font-black text-yellow-gold tabular-nums leading-none truncate">
-              {stats.bestScore > 0 ? stats.bestScore : "—"}
-            </span>
-            {stats.bestMax > 0 && stats.bestScore > 0 && (
-              <span className="text-[9px] font-bold text-white/40 tabular-nums shrink-0">
-                /{stats.bestMax}
-              </span>
-            )}
-          </div>
-          <span className="text-[9px] font-bold text-white/55 truncate">
-            {t("personalBest")}
-          </span>
-        </motion.div>
+        )}
       </div>
 
-      {/* 5. Bento Grid Principal: Progreso Semanal + Mi Club + Eliminatorias Online */}
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-        {/* Progreso Semanal (Conectado a sesiones reales) */}
+      {/* Bento Grid Principal (3 Tarjetas Limpias y Balanceadas) */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        {/* 1. Progreso Semanal + Telemetría Esencial Integrada */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
-          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
+          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-40 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
         >
           {(() => {
             const scored = sessions
@@ -524,14 +356,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               ? scored.map((s, idx) => {
                   const x = scored.length === 1 ? 50 : 6 + (idx * 88) / (scored.length - 1);
                   const ratio = Math.max(0, Math.min(1, s.score / s.maxScore));
-                  const y = 34 - ratio * 24;
+                  const y = 32 - ratio * 22;
                   return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
                 })
               : [
-                  { x: 6, y: 28 },
-                  { x: 35, y: 24 },
-                  { x: 65, y: 20 },
-                  { x: 94, y: 14 }
+                  { x: 6, y: 27 },
+                  { x: 35, y: 23 },
+                  { x: 65, y: 19 },
+                  { x: 94, y: 13 }
                 ];
 
             const linePath = points
@@ -539,44 +371,40 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               .join(" ");
             const areaPath =
               points.length > 1
-                ? `${linePath} L ${points[points.length - 1].x},38 L ${points[0].x},38 Z`
+                ? `${linePath} L ${points[points.length - 1].x},36 L ${points[0].x},36 Z`
                 : "";
 
             return (
               <>
-                <div className="flex items-center justify-between gap-1.5 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <TrendingUp size={12} className="text-cyan-neon shrink-0" />
-                    <span className="text-[11px] sm:text-xs text-white/80 font-bold tracking-tight truncate">
-                      {t("weeklyProgress")}
-                    </span>
-                  </div>
+                <div className="flex items-baseline justify-between gap-2 min-w-0">
+                  <span className="text-[11px] sm:text-xs text-white/55 font-semibold tracking-tight truncate">
+                    {t("weeklyProgress")}
+                  </span>
                   {hasData ? (
-                    <span className="text-[10px] sm:text-xs font-black text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-1.5 py-0.5 rounded-md tabular-nums whitespace-nowrap shrink-0">
-                      {latestPct}%
+                    <span className="text-xs font-bold text-white tabular-nums whitespace-nowrap shrink-0">
+                      {latest.score}<span className="text-white/40 font-medium">/{latest.maxScore}</span>{" "}
+                      <span className="text-cyan-neon">({latestPct}%)</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] text-neutral-500 font-medium whitespace-nowrap shrink-0">
+                    <span className="text-[10px] text-white/35 font-medium whitespace-nowrap shrink-0">
                       {language === "es" ? "Sin rondas" : "No rounds"}
                     </span>
                   )}
                 </div>
-                <div className="w-full h-20 mt-1 relative">
-                  <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
-                    <line x1="0" y1="12" x2="100" y2="12" stroke="rgba(255,255,255,0.04)" strokeWidth="0.6" />
-                    <line x1="0" y1="24" x2="100" y2="24" stroke="rgba(255,255,255,0.04)" strokeWidth="0.6" />
-                    <line x1="0" y1="36" x2="100" y2="36" stroke="rgba(255,255,255,0.04)" strokeWidth="0.6" />
+
+                <div className="w-full h-16 my-0.5 relative">
+                  <svg viewBox="0 0 100 38" className="w-full h-full overflow-visible">
                     {areaPath && (
                       <path
                         d={areaPath}
-                        fill="rgba(0, 191, 255, 0.08)"
+                        fill="rgba(0, 191, 255, 0.06)"
                       />
                     )}
                     <path
                       d={linePath}
                       fill="none"
-                      stroke={hasData ? "#00BFFF" : "rgba(255,255,255,0.15)"}
-                      strokeWidth="2"
+                      stroke={hasData ? "#00BFFF" : "rgba(255,255,255,0.14)"}
+                      strokeWidth="1.8"
                       strokeDasharray={hasData ? undefined : "3 3"}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -587,40 +415,54 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           key={idx}
                           cx={p.x}
                           cy={p.y}
-                          r="2.2"
+                          r="2"
                           className="fill-cyan-neon stroke-[#0D1017] stroke-[1.2px]"
                         />
                       ))}
                   </svg>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[10px] text-white/50 tabular-nums">
+                  <span className="truncate">
+                    {language === "es" ? "Récord:" : "Best:"}{" "}
+                    <strong className="text-white/85 font-bold">
+                      {stats.bestScore > 0 ? `${stats.bestScore} pts` : "—"}
+                    </strong>
+                  </span>
+                  <span className="shrink-0">
+                    {language === "es" ? "Volumen:" : "Volume:"}{" "}
+                    <strong className="text-white/85 font-bold">
+                      {stats.totalArrows} fl.
+                    </strong>
+                  </span>
                 </div>
               </>
             );
           })()}
         </motion.div>
 
-        {/* Mi Club */}
+        {/* 2. Mi Club */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
+          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-40 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
           onClick={() => onNavigate("PROFILE")}
         >
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[11px] sm:text-xs text-white/80 font-bold tracking-tight leading-tight truncate">
-              {language === "es" ? "Mi Club" : "My Club"}
-            </span>
-            <ArrowUpRight size={12} className="text-white/35 group-hover:text-cyan-neon transition-colors shrink-0" />
-          </div>
-          <div className="w-9 h-9 rounded-xl bg-[#080A0F] flex items-center justify-center border border-white/[0.08] group-hover:border-cyan-neon/30 transition-colors">
+          <span className="text-[11px] sm:text-xs text-white/55 font-semibold tracking-tight leading-tight truncate">
+            {language === "es" ? "Mi Club" : "My Club"}
+          </span>
+
+          <div className="w-9 h-9 rounded-xl bg-[#080A0F] flex items-center justify-center border border-white/[0.08] group-hover:border-white/20 transition-colors">
             <ClubLogoIcon logo={user.clubLogo || "0"} className="w-5 h-5 p-0.5" />
           </div>
+
           <div className="flex flex-col gap-0.5 overflow-hidden min-w-0">
-            <span className="text-white text-[11px] sm:text-xs font-black truncate group-hover:text-cyan-neon transition-colors">
+            <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[9px] text-neutral-400 truncate flex items-center gap-1 font-medium">
+            <span className="text-[10px] text-white/50 truncate flex items-center gap-1 font-medium">
               <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="text-[8px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{clubCountryObj.olympic}</span>
-              <span className="text-white/30">·</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-white/75 shrink-0">{clubCountryObj.olympic}</span>
+              <span className="text-white/25">·</span>
               <span className="truncate">
                 {user.role === "coach" 
                   ? "Coach" 
@@ -636,7 +478,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </div>
         </motion.div>
 
-        {/* Eliminatorias Online 1v1 (Featured Competitive Card - SIN CAMBIOS) */}
+        {/* 3. Eliminatorias Online 1v1 (SIN CAMBIOS) */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
@@ -700,6 +542,18 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </div>
         </motion.div>
       </div>
+
+      {/* Botón Principal de Entrenamiento (Limpio y Directo) */}
+      <motion.button
+        variants={cardVariants}
+        whileHover={{ scale: 1.005 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={() => onNavigate("TARGET")}
+        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-wider uppercase transition-colors cursor-pointer flex justify-center items-center gap-2.5 mt-1 active:scale-[0.99]"
+      >
+        <Target size={18} strokeWidth={2.5} className="text-black shrink-0" />
+        <span>{t("newSession")}</span>
+      </motion.button>
 
       {/* Floating stars tab on the left edge */}
       <div className="fixed left-0 top-[calc(50%-112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
