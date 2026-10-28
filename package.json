@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.140.0",
+  "version": "2.141.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -31,7 +31,8 @@
     "next": "16.2.6",
     "pdf-lib": "^1.17.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

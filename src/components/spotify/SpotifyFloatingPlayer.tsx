@@ -3,16 +3,31 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { motion } from "framer-motion";
-import { X, Play, Pause, Music, Plus, Globe, Check, ExternalLink, Trash2, Minimize2 } from "lucide-react";
+import {
+  X,
+  Play,
+  Pause,
+  Music,
+  Plus,
+  Globe,
+  Check,
+  ExternalLink,
+  Trash2,
+  Minimize2,
+  ListMusic,
+  ClipboardPaste
+} from "lucide-react";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 // Predefined verified shared playlists for archery sessions
 const DEFAULT_PLAYLIST_ID = "37i9dQZF1DWZeKCadgRdKQ"; // Deep Focus
 
+export type SpotifyEntityType = "playlist" | "album" | "track" | "artist" | "show" | "episode";
+
 export interface SpotifyItem {
   id: string;
   name: string;
-  type?: "playlist" | "album" | "track";
+  type?: SpotifyEntityType;
   creator?: string;
   description?: string;
 }
@@ -47,6 +62,15 @@ const OLD_INVALID_IDS = [
   "37i9dQZF1DWZqd5JICZI01"
 ];
 
+const ENTITY_TYPE_LABELS: Record<SpotifyEntityType, string> = {
+  playlist: "Playlist",
+  album: "Álbum",
+  track: "Canción",
+  artist: "Artista",
+  show: "Podcast",
+  episode: "Episodio"
+};
+
 interface SpotifyFloatingPlayerProps {
   showSideTab?: boolean;
 }
@@ -55,12 +79,15 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
   const [isOpen, setIsOpen] = useState(false);
   const [hasLoadedIframe, setHasLoadedIframe] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState(DEFAULT_PLAYLIST_ID);
-  const [activeType, setActiveType] = useState<"playlist" | "album" | "track">("playlist");
+  const [activeType, setActiveType] = useState<SpotifyEntityType>("playlist");
   const [userPlaylistUrl, setUserPlaylistUrl] = useState("");
   const [customPlaylistName, setCustomPlaylistName] = useState("");
   const [customPlaylists, setCustomPlaylists] = useState<SpotifyItem[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSavingLink, setIsSavingLink] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [isEnabledByAdmin, setIsEnabledByAdmin] = useState(true);
+  const [isCompactPlayer, setIsCompactPlayer] = useState(false);
 
   // Playback & Mini-Bar states
   const [isPlaying, setIsPlaying] = useState(false);
@@ -80,12 +107,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
         await saveLocalSetting("spotify_active_id", DEFAULT_PLAYLIST_ID);
       }
 
-      const savedType = await getLocalSetting<"playlist" | "album" | "track">("spotify_active_type", "playlist");
+      const savedType = await getLocalSetting<SpotifyEntityType>("spotify_active_type", "playlist");
       const savedCustom = await getLocalSetting<SpotifyItem[]>("spotify_custom_lists", []);
 
       setActivePlaylistId(savedId);
       setActiveType(savedType || "playlist");
-      setCustomPlaylists(savedCustom);
+      setCustomPlaylists(Array.isArray(savedCustom) ? savedCustom : []);
     }
     loadSpotifyConfig();
 
@@ -138,7 +165,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
   }, []);
 
   // Send command to Spotify Embed IFrame
-  const sendSpotifyCommand = (command: "toggle" | "pause" | "resume") => {
+  const sendSpotifyCommand = (command: "toggle" | "pause" | "resume" | "play") => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ command }, "*");
@@ -153,25 +180,29 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
     setIsPlaying(prev => !prev);
   };
 
-  // Helper to extract Spotify ID and type (playlist, album, track) from any Spotify URL or URI
-  const extractSpotifyItem = (input: string): { id: string; type: "playlist" | "album" | "track" } | null => {
+  // Universal Spotify extractor: supports URLs, regional /intl-xx/, /embed/, URIs, mobile share text, and raw 22-char IDs
+  const extractSpotifyItem = (input: string): { id: string; type: SpotifyEntityType } | null => {
     if (!input) return null;
     const trimmed = input.trim();
 
-    // 1. Standard or regional URL: https://open.spotify.com/(intl-xx/)?(playlist|album|track)/ID
-    const urlMatch = trimmed.match(/spotify\.com\/(?:intl-[a-zA-Z-]+\/)?(playlist|album|track)\/([a-zA-Z0-9]{22})/);
+    // 1. Standard, regional (/intl-es/), or /embed/ Spotify URL anywhere inside the pasted text
+    const urlMatch = trimmed.match(
+      /spotify\.com\/(?:intl-[a-zA-Z0-9-]+\/)?(?:embed\/)?(playlist|album|track|artist|show|episode)\/([a-zA-Z0-9]{22})/i
+    );
     if (urlMatch) {
       return {
-        type: urlMatch[1] as "playlist" | "album" | "track",
+        type: urlMatch[1].toLowerCase() as SpotifyEntityType,
         id: urlMatch[2]
       };
     }
 
-    // 2. Spotify URI: spotify:(playlist|album|track):ID
-    const uriMatch = trimmed.match(/spotify:(playlist|album|track):([a-zA-Z0-9]{22})/);
+    // 2. Spotify URI: spotify:(playlist|album|track|artist|show|episode):ID
+    const uriMatch = trimmed.match(
+      /spotify:(playlist|album|track|artist|show|episode):([a-zA-Z0-9]{22})/i
+    );
     if (uriMatch) {
       return {
-        type: uriMatch[1] as "playlist" | "album" | "track",
+        type: uriMatch[1].toLowerCase() as SpotifyEntityType,
         id: uriMatch[2]
       };
     }
@@ -184,38 +215,91 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
     return null;
   };
 
+  // Fetch official title from Spotify's public oEmbed endpoint when user doesn't specify a custom name
+  const fetchSpotifyTitle = async (type: SpotifyEntityType, id: string): Promise<string | null> => {
+    try {
+      const targetUrl = `https://open.spotify.com/${type}/${id}`;
+      const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(targetUrl)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data && typeof data.title === "string" && data.title.trim()) {
+        return data.title.trim();
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          setUserPlaylistUrl(text);
+          setLinkError(null);
+          const extracted = extractSpotifyItem(text);
+          if (extracted && !customPlaylistName.trim()) {
+            const autoTitle = await fetchSpotifyTitle(extracted.type, extracted.id);
+            if (autoTitle) {
+              setCustomPlaylistName(autoTitle.slice(0, 45));
+            }
+          }
+        }
+      }
+    } catch {
+      // Clipboard permission denied or unsupported; user can paste manually
+    }
+  };
+
   const handleAddPlaylist = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userPlaylistUrl) return;
-
-    const extracted = extractSpotifyItem(userPlaylistUrl);
-    if (!extracted) {
-      alert("Por favor, pega un enlace válido de Spotify (Playlist, Álbum o Canción desde Compartir ➔ Copiar enlace).");
+    setLinkError(null);
+    if (!userPlaylistUrl.trim()) {
+      setLinkError("Pega un enlace de Spotify para continuar.");
       return;
     }
 
-    const cleanName = customPlaylistName.trim() || `Mi Playlist (${customPlaylists.length + 1})`;
+    const extracted = extractSpotifyItem(userPlaylistUrl);
+    if (!extracted) {
+      setLinkError(
+        "Enlace no reconocido. En Spotify toca Compartir ➔ Copiar enlace en cualquier playlist, álbum, canción o artista."
+      );
+      return;
+    }
+
+    setIsSavingLink(true);
+    let cleanName = customPlaylistName.trim();
+    if (!cleanName) {
+      const fetchedTitle = await fetchSpotifyTitle(extracted.type, extracted.id);
+      cleanName =
+        fetchedTitle ||
+        `${ENTITY_TYPE_LABELS[extracted.type]} (${customPlaylists.length + 1})`;
+    }
+
     const newItem: SpotifyItem = {
       id: extracted.id,
       type: extracted.type,
       name: cleanName
     };
-    const newList = [...customPlaylists.filter(p => p.id !== extracted.id), newItem];
+    const newList = [newItem, ...customPlaylists.filter(p => p.id !== extracted.id)];
 
     setCustomPlaylists(newList);
     setActivePlaylistId(extracted.id);
     setActiveType(extracted.type);
+    setHasLoadedIframe(true);
     setIsMiniBarActive(true);
     await saveLocalSetting("spotify_custom_lists", newList);
     await saveLocalSetting("spotify_active_id", extracted.id);
     await saveLocalSetting("spotify_active_type", extracted.type);
 
+    setIsSavingLink(false);
     setUserPlaylistUrl("");
     setCustomPlaylistName("");
     setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2000);
+    setTimeout(() => setSaveSuccess(false), 2500);
 
-    // Scroll up to the active player so user sees it loaded
+    // Scroll up to the active player so user sees it loaded immediately
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -236,11 +320,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
     const itemType = item.type || "playlist";
     setActivePlaylistId(item.id);
     setActiveType(itemType);
+    setHasLoadedIframe(true);
     setIsMiniBarActive(true);
     await saveLocalSetting("spotify_active_id", item.id);
     await saveLocalSetting("spotify_active_type", itemType);
 
-    // Scroll to top of modal so user can press play or see the loaded widget
+    // Scroll to top of modal so user can press play or pick a track
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -259,7 +344,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
 
   return (
     <>
-      {/* 1. Spotify Collapsible Folding Tab on the Left Edge (Visible on Home) */}
+      {/* 1. Spotify Collapsible Folding Tab on the Left Edge */}
       {showSideTab && !isOpen && !isMiniBarActive && (
         <div className="fixed left-0 top-[calc(50%+112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
           <button
@@ -268,7 +353,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
               setIsOpen(true);
             }}
             aria-label="Abrir Spotify"
-            className="h-28 w-8 md:w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-[#1DB954] border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 active:scale-95 transition-all duration-200 select-none shadow-md shadow-[#1DB954]/20"
+            className="h-28 w-8 md:w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-[#1DB954] border-y border-r border-black/20 cursor-pointer text-black hover:brightness-105 active:scale-95 transition-all duration-200 select-none shadow-md"
           >
             <div className="text-black flex items-center justify-center shrink-0">
               <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
@@ -294,24 +379,20 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-neutral-950/95 backdrop-blur-md border border-neutral-800 rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/30 transition-all max-w-md mx-auto"
+          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.08] rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/40 transition-all max-w-md mx-auto"
         >
           <div
             onClick={() => setIsOpen(true)}
             className="flex items-center gap-2.5 overflow-hidden w-[62%] cursor-pointer"
           >
-            <div
-              className={`w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-black shrink-0 ${
-                isPlaying ? "animate-spin [animation-duration:8s]" : ""
-              }`}
-            >
+            <div className="w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-black shrink-0">
               <Music size={14} />
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="text-[9px] text-[#1DB954] font-black uppercase tracking-widest leading-none">
-                {isPlaying ? "Reproduciendo en vivo" : "Spotify Listo"}
+                {isPlaying ? "Reproduciendo" : "Spotify Activo"}
               </span>
-              <span className="text-[10px] text-white font-bold truncate leading-snug mt-0.5">
+              <span className="text-[11px] text-white font-bold truncate leading-snug mt-0.5">
                 {activePlaylistObj ? activePlaylistObj.name : "Focus Olímpico"}
               </span>
             </div>
@@ -320,7 +401,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             {/* Play/Pause Real Control Button */}
             <button
               onClick={handleTogglePlayPause}
-              className="p-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-[#1DB954] hover:text-white cursor-pointer hover:bg-neutral-800 transition"
+              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-[#1DB954] hover:text-white cursor-pointer hover:bg-[#1B2230] transition"
               title={isPlaying ? "Pausar" : "Reproducir"}
             >
               {isPlaying ? (
@@ -333,7 +414,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             {/* Expand Button */}
             <button
               onClick={() => setIsOpen(true)}
-              className="text-[9px] bg-neutral-900 border border-neutral-800 text-gray-300 px-2 py-1 rounded-lg uppercase font-black cursor-pointer hover:text-white transition"
+              className="text-[9px] bg-[#141923] border border-white/[0.08] text-white/80 px-2.5 py-1 rounded-lg uppercase font-black cursor-pointer hover:text-white transition"
               title="Abrir panel de Spotify"
             >
               Abrir
@@ -346,7 +427,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
               }}
-              className="p-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-red-rival cursor-pointer transition"
+              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-white/50 hover:text-red-400 cursor-pointer transition"
               title="Cerrar reproductor"
             >
               <X size={12} />
@@ -355,10 +436,10 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
         </motion.div>
       )}
 
-      {/* 2. Persistent Glassmorphic Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
+      {/* 2. Persistent Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
       {(hasLoadedIframe || isOpen || isMiniBarActive) && (
         <div
-          className={`fixed inset-0 z-[99999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 transition-all duration-300 ${
+          className={`fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-200 ${
             isOpen
               ? "opacity-100 pointer-events-auto visible"
               : "opacity-0 pointer-events-none invisible"
@@ -366,22 +447,22 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
           aria-hidden={!isOpen}
         >
           <div
-            className={`w-full max-w-[390px] max-h-[88vh] h-[760px] bg-neutral-950 border border-neutral-800 rounded-[36px] flex flex-col overflow-hidden relative shadow-2xl transition-transform duration-300 ${
+            className={`w-full max-w-[400px] max-h-[90vh] h-[780px] bg-[#0B0E14] border border-white/[0.08] rounded-[28px] flex flex-col overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
           >
             {/* Header */}
-            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-neutral-900 bg-neutral-900/40 shrink-0">
+            <div className="p-4 flex items-center justify-between border-b border-white/[0.07] bg-[#111620] shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black shadow-[0_0_12px_rgba(29,185,84,0.4)]">
+                <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black">
                   <Music size={16} />
                 </div>
                 <div>
                   <h3 className="text-white text-sm font-black uppercase tracking-wider leading-none">
-                    Spotify Sync
+                    Spotify
                   </h3>
                   <span className="text-[9px] text-[#1DB954] font-bold tracking-widest uppercase">
-                    Audio continuo en segundo plano
+                    Audio continuo en tus rondas
                   </span>
                 </div>
               </div>
@@ -391,7 +472,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     setIsMiniBarActive(true);
                     setIsOpen(false);
                   }}
-                  className="px-2.5 py-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-gray-300 hover:text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                  className="px-2.5 py-1.5 rounded-xl bg-[#161C28] border border-white/[0.08] text-white/80 hover:text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
                   title="Minimizar manteniendo la música"
                 >
                   <Minimize2 size={12} />
@@ -402,7 +483,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     setIsMiniBarActive(true);
                     setIsOpen(false);
                   }}
-                  className="p-2 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-white cursor-pointer transition"
+                  className="p-2 rounded-xl bg-[#161C28] border border-white/[0.08] text-white/60 hover:text-white cursor-pointer transition"
                   title="Cerrar ventana"
                 >
                   <X size={16} />
@@ -413,115 +494,152 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             {/* Scrollable Content */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-5 pb-8 scrollbar-none"
+              className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 pb-8 scrollbar-none"
             >
               {/* 1. Main Spotify Web Player Widget */}
-              <div className="bg-[#181818] border border-neutral-800 rounded-3xl p-3 shadow-lg flex flex-col gap-2.5">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[9px] text-[#1DB954] font-extrabold tracking-widest uppercase flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${isPlaying ? "bg-[#1DB954] animate-ping" : "bg-gray-500"}`} />
-                    <span>Reproductor Integrado</span>
-                  </span>
-                  <span className="text-[9px] text-gray-400 font-bold truncate max-w-[160px]">
-                    {activePlaylistObj ? activePlaylistObj.name : "Playlist Activa"}
-                  </span>
+              <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between px-0.5 gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${isPlaying ? "bg-[#1DB954]" : "bg-white/30"}`} />
+                    <span className="text-[11px] text-white font-bold truncate">
+                      {activePlaylistObj ? activePlaylistObj.name : "Playlist Activa"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCompactPlayer(prev => !prev)}
+                    className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[9px] font-bold text-white/80 flex items-center gap-1 shrink-0 cursor-pointer transition"
+                  >
+                    <ListMusic size={11} className="text-[#1DB954]" />
+                    <span>{isCompactPlayer ? "Ver Canciones" : "Vista Compacta"}</span>
+                  </button>
                 </div>
 
-                {/* Embedded Iframe Player - Persistent */}
-                <div className="w-full rounded-2xl overflow-hidden bg-neutral-900 h-[152px]">
+                {/* Embedded Iframe Player - Persistent & Full Tracklist Enabled */}
+                <div
+                  className={`w-full rounded-xl overflow-hidden bg-[#0B0E14] transition-all duration-200 ${
+                    isCompactPlayer ? "h-[152px]" : "h-[352px]"
+                  }`}
+                >
                   <iframe
+                    key={`${activeType}-${activePlaylistId}`}
                     ref={iframeRef}
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
-                    height="152"
+                    height={isCompactPlayer ? "152" : "352"}
                     frameBorder="0"
                     allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="eager"
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
-                  <p className="text-[9px] text-gray-400 leading-tight flex-1">
-                    Minimiza esta ventana para seguir escuchando mientras anotas flechas, o ábrelo en tu app de Spotify.
+                <div className="flex items-center justify-between pt-1 gap-2">
+                  <p className="text-[10px] text-white/60 leading-snug flex-1">
+                    Toca <strong className="text-white">Minimizar</strong> para seguir escuchando en la app o ábrelo en tu app de Spotify.
                   </p>
                   <button
                     type="button"
                     onClick={handleOpenInNativeSpotify}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black text-[10px] font-black uppercase tracking-wider transition cursor-pointer shrink-0 shadow-md"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black text-[10px] font-black uppercase tracking-wider transition cursor-pointer shrink-0"
                     title="Abrir directamente en la aplicación de Spotify"
                   >
-                    <span>Abrir App Spotify</span>
+                    <span>App Spotify</span>
                     <ExternalLink size={11} />
                   </button>
                 </div>
               </div>
 
-              {/* 2. Playlists Compartidas del Club */}
-              <div className="flex flex-col gap-2.5">
+              {/* 2. Vincular Mi Música de Spotify (Placed prominently for easy access) */}
+              <div className="bg-[#121722] border border-white/[0.08] p-3.5 rounded-2xl flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Plus size={14} className="text-[#1DB954]" />
+                    Vincular Mi Playlist o Canción
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handlePasteFromClipboard}
+                    className="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[9px] font-bold text-[#1DB954] flex items-center gap-1 cursor-pointer transition"
+                  >
+                    <ClipboardPaste size={11} />
+                    <span>Pegar enlace</span>
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddPlaylist} className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={userPlaylistUrl}
+                    onChange={(e) => {
+                      setUserPlaylistUrl(e.target.value);
+                      if (linkError) setLinkError(null);
+                    }}
+                    placeholder="Pega aquí el enlace de Spotify (Playlist, Álbum o Canción)"
+                    className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
+                  />
+                  <input
+                    type="text"
+                    value={customPlaylistName}
+                    onChange={(e) => setCustomPlaylistName(e.target.value)}
+                    placeholder="Nombre opcional (se detecta automático si lo dejas vacío)"
+                    maxLength={45}
+                    className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
+                  />
+                  {linkError && (
+                    <p className="text-[10px] text-red-400 font-semibold leading-snug px-1">
+                      {linkError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isSavingLink}
+                    className="w-full py-2.5 rounded-xl bg-[#1DB954] text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 transition flex justify-center items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {saveSuccess ? (
+                      <>
+                        <Check size={14} />
+                        <span>Música Cargada en el Reproductor</span>
+                      </>
+                    ) : isSavingLink ? (
+                      <span>Cargando música...</span>
+                    ) : (
+                      <span>Cargar y Guardar en Mi Lista</span>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* 3. Mis Playlists y Playlists de Tiro */}
+              <div className="flex flex-col gap-2">
                 <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 pl-1">
                   <Globe size={13} className="text-[#1DB954]" />
-                  Playlists Oficiales de Tiro
+                  Tus Listas y Playlists de Tiro
                 </h4>
 
                 <div className="flex flex-col gap-2">
-                  {SHARED_PLAYLISTS.map((list) => {
-                    const isActive = activePlaylistId === list.id;
-                    return (
-                      <div
-                        key={list.id}
-                        onClick={() => handleSelectPlaylist(list)}
-                        className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between group ${
-                          isActive
-                            ? "bg-[#1DB954]/10 border-[#1DB954]/50"
-                            : "bg-neutral-900/50 border-white/5 hover:border-neutral-800"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-1 w-[82%]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors">
-                              {list.name}
-                            </span>
-                            <span className="text-[8px] bg-neutral-950 text-gray-400 px-1.5 py-0.5 rounded font-extrabold uppercase scale-90">
-                              {list.creator}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-gray-400 leading-snug">
-                            {list.description}
-                          </p>
-                        </div>
-
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-neutral-950 border border-neutral-800 text-gray-400 shrink-0">
-                          {isActive ? (
-                            <Check size={12} className="text-[#1DB954]" />
-                          ) : (
-                            <Play size={10} className="fill-current pl-0.5" />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Custom user added playlists */}
+                  {/* Custom user added playlists first so they are immediately visible */}
                   {customPlaylists.map((list) => {
                     const isActive = activePlaylistId === list.id;
+                    const typeLabel = ENTITY_TYPE_LABELS[list.type || "playlist"] || "Playlist";
                     return (
                       <div
                         key={list.id}
                         onClick={() => handleSelectPlaylist(list)}
-                        className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between group ${
+                        className={`p-3 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center justify-between group ${
                           isActive
                             ? "bg-[#1DB954]/10 border-[#1DB954]/50"
-                            : "bg-neutral-900/50 border-white/5 hover:border-neutral-800"
+                            : "bg-[#121722] border-white/[0.06] hover:border-white/15"
                         }`}
                       >
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1 pr-2">
                           <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors flex items-center gap-1.5 truncate">
                             <span className="truncate">{list.name}</span>
-                            <span className="text-[8px] bg-neutral-950 text-yellow-gold px-1.5 py-0.5 rounded font-extrabold uppercase shrink-0">
+                            <span className="text-[8px] bg-[#0B0E14] text-yellow-gold border border-yellow-gold/25 px-1.5 py-0.5 rounded font-extrabold uppercase shrink-0">
                               MÍA
                             </span>
                           </span>
-                          <span className="text-[9px] text-gray-500 font-mono">
-                            {list.type === "album" ? "Álbum" : list.type === "track" ? "Canción" : "Playlist"} · {list.id.substring(0, 8)}...
+                          <span className="text-[10px] text-white/50">
+                            {typeLabel} guardada
                           </span>
                         </div>
 
@@ -529,12 +647,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomPlaylist(e, list.id)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center bg-neutral-950 border border-neutral-800 text-gray-500 hover:text-red-400 transition"
+                            className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/50 hover:text-red-400 transition"
                             title="Eliminar de mi lista"
                           >
                             <Trash2 size={11} />
                           </button>
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-neutral-950 border border-neutral-800 text-gray-400">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/70">
                             {isActive ? (
                               <Check size={12} className="text-[#1DB954]" />
                             ) : (
@@ -545,55 +663,51 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                       </div>
                     );
                   })}
+
+                  {/* Official Archery Playlists */}
+                  {SHARED_PLAYLISTS.map((list) => {
+                    const isActive = activePlaylistId === list.id;
+                    return (
+                      <div
+                        key={list.id}
+                        onClick={() => handleSelectPlaylist(list)}
+                        className={`p-3 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center justify-between group ${
+                          isActive
+                            ? "bg-[#1DB954]/10 border-[#1DB954]/50"
+                            : "bg-[#121722] border-white/[0.06] hover:border-white/15"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-0.5 w-[82%]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors">
+                              {list.name}
+                            </span>
+                            <span className="text-[8px] bg-[#0B0E14] text-white/60 border border-white/[0.06] px-1.5 py-0.5 rounded font-extrabold uppercase">
+                              {list.creator}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-white/60 leading-snug">
+                            {list.description}
+                          </p>
+                        </div>
+
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/70 shrink-0">
+                          {isActive ? (
+                            <Check size={12} className="text-[#1DB954]" />
+                          ) : (
+                            <Play size={10} className="fill-current pl-0.5" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-
-              {/* 3. Vincular Mi Playlist */}
-              <div className="bg-neutral-900/40 border border-white/5 p-4 rounded-3xl flex flex-col gap-2.5">
-                <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <Plus size={14} className="text-[#1DB954]" />
-                  Vincular Mi Música de Spotify
-                </h4>
-
-                <form onSubmit={handleAddPlaylist} className="flex flex-col gap-2">
-                  <input
-                    type="text"
-                    value={customPlaylistName}
-                    onChange={(e) => setCustomPlaylistName(e.target.value)}
-                    placeholder="Nombre opcional (ej. Mi Playlist de Entreno)"
-                    maxLength={35}
-                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
-                  />
-                  <input
-                    type="text"
-                    value={userPlaylistUrl}
-                    onChange={(e) => setUserPlaylistUrl(e.target.value)}
-                    placeholder="Pegar enlace de Spotify (Playlist, Álbum o Canción)"
-                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-[#1DB954] text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 transition flex justify-center items-center gap-1.5 shadow-md shadow-[#1DB954]/15"
-                  >
-                    {saveSuccess ? (
-                      <>
-                        <Check size={14} />
-                        <span>¡Música Vinculada y Cargada!</span>
-                      </>
-                    ) : (
-                      <span>Cargar y Guardar en Mi Lista</span>
-                    )}
-                  </button>
-                </form>
-                <p className="text-[9px] text-gray-500 leading-snug">
-                  En Spotify toca <strong>Compartir ➔ Copiar enlace</strong> en cualquier playlist, álbum o canción y pégalo aquí.
-                </p>
               </div>
             </div>
 
-            {/* Bottom Decorative Indicator */}
-            <div className="h-5 bg-neutral-950 flex justify-center items-center pb-1.5 shrink-0">
-              <div className="w-24 h-1 bg-neutral-800 rounded-full" />
+            {/* Bottom Indicator */}
+            <div className="h-4 bg-[#0B0E14] flex justify-center items-center pb-1 shrink-0">
+              <div className="w-20 h-1 bg-white/10 rounded-full" />
             </div>
           </div>
         </div>

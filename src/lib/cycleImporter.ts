@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
 
 export interface ParsedDailyEntry {
@@ -6,6 +7,7 @@ export interface ParsedDailyEntry {
   targetArrows: number;
   focusPoints: string[];
   notes: string;
+  customFields?: Array<{ label: string; value: string }>;
   type: "training" | "competition" | "meeting" | "other";
   isRestDay: boolean;
   stageName?: string;
@@ -20,75 +22,130 @@ export interface ParsedCycleResult {
   totalVolumeGoal: number;
   stages: MacrocyclePhase[];
   dailyEntries: ParsedDailyEntry[];
+  headers?: string[];
   warnings: string[];
   error?: string;
 }
 
 const SPANISH_MONTHS: Record<string, string> = {
-  ene: "01", enero: "01", jan: "01",
-  feb: "02", febrero: "02",
-  mar: "03", marzo: "03",
-  abr: "04", abril: "04", apr: "04",
+  ene: "01", enero: "01", jan: "01", january: "01",
+  feb: "02", febrero: "02", february: "02",
+  mar: "03", marzo: "03", march: "03",
+  abr: "04", abril: "04", apr: "04", april: "04",
   may: "05", mayo: "05",
-  jun: "06", junio: "06",
-  jul: "07", julio: "07",
-  ago: "08", agosto: "08", aug: "08",
-  sep: "09", sept: "09", septiembre: "09", set: "09",
-  oct: "10", octubre: "10",
-  nov: "11", noviembre: "11",
-  dic: "12", diciembre: "12", dec: "12"
+  jun: "06", junio: "06", june: "06",
+  jul: "07", julio: "07", july: "07",
+  ago: "08", agosto: "08", aug: "08", august: "08",
+  sep: "09", sept: "09", septiembre: "09", set: "09", september: "09",
+  oct: "10", octubre: "10", october: "10",
+  nov: "11", noviembre: "11", november: "11",
+  dic: "12", diciembre: "12", dec: "12", december: "12"
 };
+
+const DAY_NAMES_REGEX = /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom|mon|tue|wed|thu|fri|sat|sun)\b[\s,\.\-:]*/i;
+
+/**
+ * Converts an Excel serial date number (e.g. 46323) to YYYY-MM-DD
+ */
+export function excelSerialToYMD(serial: number): string | null {
+  if (isNaN(serial) || serial < 40000 || serial > 60000) return null;
+  const utcDays = Math.floor(serial - 25569);
+  const utcValue = utcDays * 86400 * 1000;
+  const dateInfo = new Date(utcValue);
+  if (isNaN(dateInfo.getTime())) return null;
+  const y = dateInfo.getUTCFullYear();
+  const m = String(dateInfo.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(dateInfo.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 /**
  * Checks if a raw cell string looks like a valid calendar date
  */
 export function isValidDateCell(raw?: string): boolean {
   if (!raw) return false;
-  const trimmed = raw.trim().toLowerCase();
-  if (!trimmed) return false;
+  const cleaned = raw.trim().replace(DAY_NAMES_REGEX, "").trim().toLowerCase();
+  if (!cleaned) return false;
+
+  // Excel serial date (40000..60000)
+  if (/^\d{5}(?:\.\d+)?$/.test(cleaned)) {
+    const num = parseFloat(cleaned);
+    if (num >= 43000 && num <= 55000) return true;
+  }
 
   // YYYY-MM-DD or YYYY/MM/DD
-  if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(trimmed)) return true;
+  if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(cleaned)) return true;
+
   // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY
-  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(trimmed)) return true;
-  // DD de mes de YYYY or DD mes YYYY (e.g., "15 oct 2026", "15-oct-26", "Lunes 15/10/2026")
-  if (/\d{1,2}[\/\-\.\s]+([a-záéíóú]{3,10})[\/\-\.\s]*(\d{2,4})?/.test(trimmed)) {
-    const match = trimmed.match(/\d{1,2}[\/\-\.\s]+([a-záéíóú]{3,10})/);
-    if (match && SPANISH_MONTHS[match[1]]) return true;
+  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(cleaned)) return true;
+
+  // Short DD/MM or DD-MM (without year, e.g. "28/10" or "05-11")
+  const dmMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (dmMatch) {
+    const d = parseInt(dmMatch[1], 10);
+    const m = parseInt(dmMatch[2], 10);
+    if ((d >= 1 && d <= 31 && m >= 1 && m <= 12) || (m >= 1 && m <= 31 && d >= 1 && d <= 12)) {
+      return true;
+    }
   }
-  // Day name prefix + numeric date (e.g. "Lun 26/10/2026")
-  if (/\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(trimmed)) return true;
+
+  // DD de mes de YYYY or DD mes YYYY or DD-mes (e.g., "15 oct 2026", "15-oct", "28 de octubre")
+  const textMonthMatch = cleaned.match(/^(\d{1,2})(?:\s*de\s*|[\/\-\.\s]+)([a-záéíóú]{3,12})(?:(?:\s*de\s*|[\/\-\.\s]+)(\d{2,4}))?$/);
+  if (textMonthMatch) {
+    const monthWord = textMonthMatch[2];
+    if (SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)]) return true;
+  }
+
+  // Month DD, YYYY or Month DD (e.g. "Oct 28", "Octubre 28, 2026")
+  const monthFirstMatch = cleaned.match(/^([a-záéíóú]{3,12})[\s\-\.]+(\d{1,2})(?:[\s,\-\.]+(\d{2,4}))?$/);
+  if (monthFirstMatch) {
+    const monthWord = monthFirstMatch[1];
+    if (SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)]) return true;
+  }
+
+  // Embedded full date inside text (e.g. "Lunes 26/10/2026")
+  if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cleaned)) return true;
+  if (/\b\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}\b/.test(cleaned)) return true;
 
   return false;
 }
 
 /**
- * Normalizes dates from formats like DD/MM/YYYY, DD/MM/YY, "15 oct 2026", "Lun 15/10/2026", or YYYY-MM-DD into standard YYYY-MM-DD
+ * Normalizes dates from any common format into YYYY-MM-DD
  */
-export function normalizeDateString(raw: string, fallbackDate: string): string {
+export function normalizeDateString(raw: string, fallbackDate: string, referenceYear?: number, referenceMonth?: number): string {
   if (!raw) return fallbackDate;
-  const trimmed = raw.trim().toLowerCase();
+  const refY = referenceYear || new Date().getFullYear();
+  const refM = referenceMonth || (new Date().getMonth() + 1);
+
+  const trimmed = raw.trim().replace(DAY_NAMES_REGEX, "").trim().toLowerCase();
+  if (!trimmed) return fallbackDate;
+
+  // Excel serial number
+  if (/^\d{5}(?:\.\d+)?$/.test(trimmed)) {
+    const serialDate = excelSerialToYMD(parseFloat(trimmed));
+    if (serialDate) return serialDate;
+  }
 
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return trimmed;
   }
 
-  // Extract embedded YYYY-MM-DD or YYYY/MM/DD
+  // Embedded YYYY-MM-DD or YYYY/MM/DD
   const ymdMatch = trimmed.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (ymdMatch) {
     const [, y, m, d] = ymdMatch;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY (even with day prefix like "Lun 26/10/2026")
+  // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY
   const dmyMatch = trimmed.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
   if (dmyMatch) {
     let [, d, m, y] = dmyMatch;
     if (y.length === 2) {
       y = `20${y}`;
     }
-    // Handle case where someone wrote MM/DD/YYYY (if m > 12 and d <= 12)
     const mNum = parseInt(m, 10);
     const dNum = parseInt(d, 10);
     if (mNum > 12 && dNum <= 12) {
@@ -97,16 +154,49 @@ export function normalizeDateString(raw: string, fallbackDate: string): string {
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  // DD mes YYYY or DD-mes-YY (e.g. "26 oct 2026", "26 de octubre 2026", "26-oct")
-  const textMonthMatch = trimmed.match(/(\d{1,2})(?:\s*de\s*|[\/\-\.\s]+)([a-záéíóú]{3,10})(?:\s*de\s*|[\/\-\.\s]+)?(\d{2,4})?/);
+  // DD mes YYYY or DD-mes (e.g. "26 oct 2026", "26 de octubre", "26-oct")
+  const textMonthMatch = trimmed.match(/(\d{1,2})(?:\s*de\s*|[\/\-\.\s]+)([a-záéíóú]{3,12})(?:(?:\s*de\s*|[\/\-\.\s]+)(\d{2,4}))?/);
   if (textMonthMatch) {
     const [, d, monthWord, rawYear] = textMonthMatch;
     const monthCode = SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)];
     if (monthCode) {
-      const currentYear = String(new Date().getFullYear());
-      let y = rawYear || currentYear;
+      let y = rawYear || String(refY);
       if (y.length === 2) y = `20${y}`;
       return `${y}-${monthCode}-${d.padStart(2, "0")}`;
+    }
+  }
+
+  // Month DD, YYYY (e.g. "Oct 28", "Octubre 28 2026")
+  const monthFirstMatch = trimmed.match(/^([a-záéíóú]{3,12})[\s\-\.]+(\d{1,2})(?:[\s,\-\.]+(\d{2,4}))?/);
+  if (monthFirstMatch) {
+    const [, monthWord, d, rawYear] = monthFirstMatch;
+    const monthCode = SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)];
+    if (monthCode) {
+      let y = rawYear || String(refY);
+      if (y.length === 2) y = `20${y}`;
+      return `${y}-${monthCode}-${d.padStart(2, "0")}`;
+    }
+  }
+
+  // Short DD/MM or DD-MM (without year, e.g. "28/10")
+  const dmMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (dmMatch) {
+    const dNum = parseInt(dmMatch[1], 10);
+    const mNum = parseInt(dmMatch[2], 10);
+    if (dNum >= 1 && dNum <= 31 && mNum >= 1 && mNum <= 12) {
+      return `${refY}-${String(mNum).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
+    }
+    if (mNum >= 1 && mNum <= 31 && dNum >= 1 && dNum <= 12) {
+      return `${refY}-${String(dNum).padStart(2, "0")}-${String(mNum).padStart(2, "0")}`;
+    }
+  }
+
+  // Plain day of month number (1..31) e.g. "28" or "Lunes 28"
+  const dayOnlyMatch = trimmed.match(/^(\d{1,2})$/);
+  if (dayOnlyMatch) {
+    const dayNum = parseInt(dayOnlyMatch[1], 10);
+    if (dayNum >= 1 && dayNum <= 31) {
+      return `${refY}-${String(refM).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
     }
   }
 
@@ -114,11 +204,74 @@ export function normalizeDateString(raw: string, fallbackDate: string): string {
 }
 
 /**
- * Extracts a Google Sheets ID from a shared URL and fetches its CSV content directly.
+ * Parses an Excel (.xlsx / .xls / .csv) ArrayBuffer using SheetJS (XLSX)
+ * Returns the list of sheet names and a helper to extract TSV text from any sheet.
+ */
+export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
+  sheetNames: string[];
+  getSheetTsv: (sheetName: string) => string;
+} {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: false });
+  const sheetNames = workbook.SheetNames || [];
+
+  const getSheetTsv = (sheetName: string): string => {
+    const ws = workbook.Sheets[sheetName];
+    if (!ws) return "";
+
+    // Convert worksheet to 2D array of values
+    const rawMatrix = XLSX.utils.sheet_to_json<any[]>(ws, {
+      header: 1,
+      defval: "",
+      raw: false,
+      dateNF: "yyyy-mm-dd"
+    });
+
+    const formattedRows = rawMatrix
+      .map((row) => {
+        if (!Array.isArray(row)) return "";
+        return row
+          .map((cell) => {
+            if (cell === null || cell === undefined) return "";
+            if (cell instanceof Date && !isNaN(cell.getTime())) {
+              const y = cell.getFullYear();
+              const m = String(cell.getMonth() + 1).padStart(2, "0");
+              const d = String(cell.getDate()).padStart(2, "0");
+              return `${y}-${m}-${d}`;
+            }
+            // Replace internal tabs or newlines with space/comma so TSV stays clean
+            return String(cell).replace(/\t/g, " ").replace(/\r?\n/g, " · ").trim();
+          })
+          .join("\t");
+      })
+      .filter((line) => line.replace(/\t/g, "").trim().length > 0);
+
+    return formattedRows.join("\n");
+  };
+
+  return { sheetNames, getSheetTsv };
+}
+
+/**
+ * Extracts a Google Sheets ID from any shared URL and fetches its CSV content directly.
+ * Uses multiple fallback endpoints (/gviz/tq and /export?format=csv) for maximum compatibility.
  */
 export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boolean; csv?: string; error?: string }> {
   try {
     const trimmed = sheetUrl.trim();
+
+    // Support published links (/spreadsheets/d/e/2PACX-.../pub)
+    if (trimmed.includes("/spreadsheets/d/e/")) {
+      const pubBase = trimmed.split("?")[0].replace(/\/pubhtml$/, "/pub");
+      const pubUrl = `${pubBase}?output=csv`;
+      const resp = await fetch(pubUrl);
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && !text.trim().startsWith("<!DOCTYPE html>") && !text.trim().startsWith("<html")) {
+          return { ok: true, csv: text };
+        }
+      }
+    }
+
     const idMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
     if (!idMatch) {
       return {
@@ -126,42 +279,151 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
         error: "El enlace no parece ser un documento válido de Google Sheets."
       };
     }
+
     const sheetId = idMatch[1];
     const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
-    const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
+    const gid = gidMatch ? gidMatch[1] : "";
 
-    const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`;
-    const response = await fetch(exportUrl);
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: "No se pudo leer la hoja. Asegúrate de que el permiso en Google Sheets sea 'Cualquier persona con el enlace puede ver' o copia y pega las celdas directamente."
-      };
+    // Candidate URLs in order of reliability across mobile/desktop browsers
+    const candidateUrls = [
+      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ""}`,
+      `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gid ? `&gid=${gid}` : ""}`
+    ];
+
+    for (const url of candidateUrls) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const csvText = await response.text();
+        const csvLower = (csvText || "").toLowerCase();
+        if (
+          csvText &&
+          csvText.trim().length > 0 &&
+          !csvText.trim().startsWith("<!DOCTYPE html>") &&
+          !csvText.trim().startsWith("<html") &&
+          !csvLower.includes("offline mode active") &&
+          !csvLower.includes("connect to the internet") &&
+          !csvLower.includes("accounts.google.com/servicelogin")
+        ) {
+          return { ok: true, csv: csvText };
+        }
+      } catch {
+        // try next endpoint
+      }
     }
-    const csvText = await response.text();
-    const csvLower = (csvText || "").toLowerCase();
-    if (!csvText || csvText.trim().startsWith("<!DOCTYPE html>") || csvLower.includes("offline mode active") || csvLower.includes("connect to the internet")) {
-      return {
-        ok: false,
-        error: "No se pudo leer la hoja. Asegúrate de tener conexión a internet y de que el permiso en Google Sheets sea 'Cualquier persona con el enlace puede ver'."
-      };
-    }
-    return { ok: true, csv: csvText };
+
+    return {
+      ok: false,
+      error: "No se pudo leer la hoja. En Google Sheets toca 'Compartir' y cámbialo a 'Cualquier persona con el enlace (Lector)', o copia y pega las celdas directamente."
+    };
   } catch {
     return {
       ok: false,
-      error: "No se pudo conectar con Google Sheets. Puedes copiar las celdas de tu hoja y pegarlas directamente en el recuadro de abajo."
+      error: "No se pudo conectar con Google Sheets. Puedes copiar las celdas de tu hoja y pegarlas directamente en la pestaña 'Pegar Celdas'."
     };
   }
 }
 
 /**
- * Parses raw text copied and pasted from Excel, Google Sheets, or CSV file.
- * Automatically detects:
- * 1) "daily" mode (Day-by-Day schedule: each row has a single date, activity, arrows, focus/notes)
- * 2) "stages" mode (Macrocycle stages/ranges: each row has Stage, Start Date, End Date, Weekly Sessions, Weekly Arrows, Notes)
+ * RFC-4180 compliant multi-line CSV / TSV parser.
+ * Properly preserves multi-line quoted cells without splitting rows prematurely.
  */
-export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo Plan Importado"): ParsedCycleResult {
+export function parseDelimitedTextToMatrix(rawText: string): string[][] {
+  const text = rawText.replace(/^\uFEFF/, "").trim();
+  if (!text) return [];
+
+  // Determine delimiter by inspecting outside quotes in the first 1000 chars
+  const sample = text.slice(0, 1500);
+  let tabCount = 0;
+  let semiCount = 0;
+  let commaCount = 0;
+  let inQuotes = false;
+
+  for (let i = 0; i < sample.length; i++) {
+    const ch = sample[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes) {
+      if (ch === "\t") tabCount++;
+      else if (ch === ";") semiCount++;
+      else if (ch === ",") commaCount++;
+    }
+  }
+
+  let delimiter = "\t";
+  if (tabCount > 0 && tabCount >= semiCount && tabCount >= commaCount) {
+    delimiter = "\t";
+  } else if (semiCount > commaCount && semiCount > 0) {
+    delimiter = ";";
+  } else if (commaCount > 0) {
+    delimiter = ",";
+  }
+
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
+  inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        currentCell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (!inQuotes && ch === delimiter) {
+      currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+      currentCell = "";
+    } else if (!inQuotes && (ch === "\n" || (ch === "\r" && next === "\n"))) {
+      if (ch === "\r") i++;
+      currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+      if (currentRow.some((c) => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = "";
+    } else {
+      currentCell += ch;
+    }
+  }
+
+  // Push last cell/row
+  currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+  if (currentRow.some((c) => c.length > 0)) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
+/**
+ * Helper to check if a header cell represents a specific semantic column
+ */
+function classifyHeader(hRaw: string): "date" | "startDate" | "endDate" | "title" | "arrows" | "focus" | "notes" | "sessions" | "unknown" {
+  const h = hRaw.trim().toLowerCase();
+  if (!h) return "unknown";
+
+  if (h.includes("inicio") || h.includes("desde") || h.includes("start")) return "startDate";
+  if (h.includes("fin") || h.includes("hasta") || h.includes("end")) return "endDate";
+  if (h === "fecha" || h.includes("fecha") || h === "día" || h === "dia" || h.startsWith("día ") || h.startsWith("dia ") || h === "date" || h === "day") return "date";
+  if (h.includes("sesion") || h.includes("sesión") && h.includes("sem")) return "sessions";
+  if (h.includes("flecha") || h.includes("volumen") || h.includes("tiros") || h.includes("arrows") || h.includes("cant")) return "arrows";
+  if (h.includes("actividad") || h.includes("tarea") || h.includes("entrenamiento") || h.includes("trabajo") || h.includes("ejercicio") || h.includes("rutina") || h.includes("sesión") || h.includes("sesion") || h.includes("título") || h.includes("titulo") || h.includes("etapa") || h.includes("fase") || h.includes("nombre") || h.includes("plan")) return "title";
+  if (h.includes("enfoque") || h.includes("técnica") || h.includes("tecnica") || h.includes("foco") || h.includes("objetivo")) return "focus";
+  if (h.includes("nota") || h.includes("indicacion") || h.includes("indicación") || h.includes("observacion") || h.includes("observación") || h.includes("detalle") || h.includes("comentario") || h.includes("descrip")) return "notes";
+
+  return "unknown";
+}
+
+/**
+ * Parses raw text from Excel, Google Sheets, or CSV file.
+ * Preserves 100% literal text from the user's spreadsheet without inventing any text or fake arrow counts.
+ */
+export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan Importado"): ParsedCycleResult {
   const warnings: string[] = [];
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -169,7 +431,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
   if (!rawText || !rawText.trim() || cleanRawLower.includes("offline mode active") || cleanRawLower.includes("connect to the internet")) {
     return {
       success: false,
-      mode: "stages",
+      mode: "daily",
       planName: defaultCycleName,
       startDate: todayStr,
       endDate: todayStr,
@@ -178,20 +440,16 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       dailyEntries: [],
       warnings: [],
       error: cleanRawLower.includes("offline mode active") || cleanRawLower.includes("connect to the internet")
-        ? "No se pudo acceder a la hoja de Google Sheets porque no hay conexión a internet activa."
-        : "No se encontró texto o celdas para importar. Copia las celdas de Excel o Google Sheets."
+        ? "No se pudo acceder a la hoja porque no hay conexión a internet activa."
+        : "No se encontraron celdas para importar."
     };
   }
 
-  const lines = rawText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  if (lines.length === 0) {
+  const rows = parseDelimitedTextToMatrix(rawText);
+  if (rows.length === 0) {
     return {
       success: false,
-      mode: "stages",
+      mode: "daily",
       planName: defaultCycleName,
       startDate: todayStr,
       endDate: todayStr,
@@ -199,59 +457,60 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       stages: [],
       dailyEntries: [],
       warnings: [],
-      error: "El texto ingresado está vacío."
+      error: "El documento está vacío."
     };
   }
 
-  // Detect delimiter: check first two lines
-  const sampleLine = lines[0];
-  let delimiter = "\t";
-  if (sampleLine.includes("\t")) {
-    delimiter = "\t";
-  } else if (sampleLine.includes(";")) {
-    delimiter = ";";
-  } else if (sampleLine.includes(",")) {
-    delimiter = ",";
+  // Try to detect reference month/year if mentioned in a top banner row (e.g. "NOVIEMBRE 2026" or "Plan Octubre")
+  let refYear = new Date().getFullYear();
+  let refMonth = new Date().getMonth() + 1;
+  for (let r = 0; r < Math.min(5, rows.length); r++) {
+    const joined = rows[r].join(" ").toLowerCase();
+    const yearMatch = joined.match(/\b(202\d|203\d)\b/);
+    if (yearMatch) refYear = parseInt(yearMatch[1], 10);
+    for (const [mWord, mCode] of Object.entries(SPANISH_MONTHS)) {
+      if (mWord.length >= 4 && joined.includes(mWord)) {
+        refMonth = parseInt(mCode, 10);
+        break;
+      }
+    }
   }
 
-  // Split lines into cell rows
-  const rows = lines.map((line) => {
-    if (delimiter === "," || delimiter === ";") {
-      const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^${delimiter}]*))`, "g");
-      const cells: string[] = [];
-      let match;
-      while ((match = regex.exec(line)) !== null) {
-        cells.push((match[1] || match[2] || "").trim());
-      }
-      return cells;
+  // Find the first row that looks like either a header row or a data row with a date
+  let headerRowIdx = -1;
+  let firstDataRowIdx = 0;
+
+  for (let r = 0; r < Math.min(10, rows.length); r++) {
+    const row = rows[r];
+    const nonEmptyCount = row.filter((c) => c.trim().length > 0).length;
+    if (nonEmptyCount === 0) continue;
+
+    const classifications = row.map(classifyHeader);
+    const recognizedHeaders = classifications.filter((c) => c !== "unknown").length;
+    const hasDateCellInRow = row.some((c) => isValidDateCell(c));
+
+    if (recognizedHeaders >= 1 && !hasDateCellInRow) {
+      headerRowIdx = r;
+      firstDataRowIdx = r + 1;
+      break;
     }
-    return line.split(delimiter).map((c) => c.trim().replace(/^"|"$/g, ""));
-  });
 
-  // Inspect header row vs data rows
-  const firstRowLower = rows[0].map((c) => c.toLowerCase());
-  const isHeader = firstRowLower.some(
-    (c) =>
-      c.includes("fecha") ||
-      c.includes("día") ||
-      c.includes("dia") ||
-      c.includes("date") ||
-      c.includes("etapa") ||
-      c.includes("fase") ||
-      c.includes("nombre") ||
-      c.includes("actividad") ||
-      c.includes("tarea") ||
-      c.includes("inicio") ||
-      c.includes("flecha") ||
-      c.includes("sesion") ||
-      c.includes("nota")
-  );
+    if (hasDateCellInRow) {
+      firstDataRowIdx = r;
+      if (r > 0 && rows[r - 1].filter((c) => c.trim().length > 0).length >= 2) {
+        headerRowIdx = r - 1;
+      }
+      break;
+    }
+  }
 
-  const dataRows = isHeader ? rows.slice(1) : rows;
+  const headerRow = headerRowIdx >= 0 ? rows[headerRowIdx] : [];
+  const dataRows = rows.slice(firstDataRowIdx).filter((r) => r.some((c) => c.trim().length > 0));
+
   if (dataRows.length === 0) {
     return {
       success: false,
-      mode: "stages",
+      mode: "daily",
       planName: defaultCycleName,
       startDate: todayStr,
       endDate: todayStr,
@@ -259,100 +518,243 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       stages: [],
       dailyEntries: [],
       warnings: [],
-      error: "Solo se detectó la fila de encabezados. Agrega al menos una fila con datos."
+      error: "Solo se encontró la fila de encabezados. Agrega al menos una fila con datos."
     };
   }
 
-  // Determine whether this sheet is DAY-BY-DAY ("daily") or STAGE RANGES ("stages")
-  // Rule:
-  // - If header has both "inicio"/"desde" and "fin"/"hasta", it's "stages".
-  // - If data rows have TWO valid date columns in the first 3 columns, it's "stages".
-  // - If data rows have ONE valid date column (typically column 0 or column 1), it's "daily"!
+  // Check if this is a STAGE RANGES table (explicit Start Date AND End Date columns)
+  const headerClasses = headerRow.map(classifyHeader);
   const hasStartAndEndHeaders =
-    isHeader &&
-    firstRowLower.some((h) => h.includes("inicio") || h.includes("desde") || h.includes("start")) &&
-    firstRowLower.some((h) => h.includes("fin") || h.includes("hasta") || h.includes("end"));
+    headerClasses.includes("startDate") && headerClasses.includes("endDate");
 
-  const sampleDataRow = dataRows.find((r) => r.some((cell) => cell.length > 0)) || dataRows[0];
-  const dateColIndicesInSample = sampleDataRow
-    .map((cell, idx) => (isValidDateCell(cell) ? idx : -1))
-    .filter((idx) => idx !== -1);
+  // Count how many rows have 2 valid dates vs 1 valid date
+  let rowsWithTwoDates = 0;
+  let rowsWithOneDate = 0;
+  for (const r of dataRows.slice(0, 15)) {
+    const dateCols = r.filter((c) => isValidDateCell(c)).length;
+    if (dateCols >= 2) rowsWithTwoDates++;
+    else if (dateCols === 1) rowsWithOneDate++;
+  }
 
-  const isDailyMode = !hasStartAndEndHeaders && dateColIndicesInSample.length === 1;
+  const isStagesMode = hasStartAndEndHeaders || (rowsWithTwoDates > rowsWithOneDate && rowsWithTwoDates >= 1);
 
   // ============================================================================
-  // MODE 1: DAY-BY-DAY ("daily") IMPORT
+  // MODE 1: DAY-BY-DAY ("daily") LITERAL IMPORT (Default & Most Common)
   // ============================================================================
-  if (isDailyMode) {
-    let dateCol = dateColIndicesInSample[0] ?? 0;
-    let titleCol = dateCol === 0 ? 1 : 0;
-    let arrowsCol = 2;
-    let focusCol = 3;
-    let notesCol = 4;
-
-    if (isHeader) {
-      firstRowLower.forEach((h, idx) => {
-        if (h.includes("fecha") || h.includes("date") || h.includes("día") || h.includes("dia")) dateCol = idx;
-        else if (h.includes("actividad") || h.includes("tarea") || h.includes("sesion") || h.includes("sesión") || h.includes("titulo") || h.includes("título") || h.includes("entrenamiento") || h.includes("etapa") || h.includes("nombre")) titleCol = idx;
-        else if (h.includes("flecha") || h.includes("volumen") || h.includes("tiros") || h.includes("meta") || h.includes("cantidad")) arrowsCol = idx;
-        else if (h.includes("enfoque") || h.includes("tecnica") || h.includes("técnica") || h.includes("foco") || h.includes("objetivo")) focusCol = idx;
-        else if (h.includes("nota") || h.includes("indicacion") || h.includes("observacion") || h.includes("detalle") || h.includes("comentario")) notesCol = idx;
-      });
+  if (!isStagesMode) {
+    // Identify which column is the Date column
+    let dateCol = headerClasses.indexOf("date");
+    if (dateCol === -1) {
+      // Score each column by how many rows have a valid date in that column
+      const maxCols = Math.max(...dataRows.map((r) => r.length), 1);
+      let bestCol = 0;
+      let bestScore = -1;
+      for (let c = 0; c < maxCols; c++) {
+        let score = 0;
+        for (const r of dataRows) {
+          if (isValidDateCell(r[c])) score += 3;
+          else if (r[c] && /^\d{1,2}$/.test(r[c].trim())) score += 1;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestCol = c;
+        }
+      }
+      dateCol = bestCol;
     }
 
-    const dailyEntries: ParsedDailyEntry[] = [];
-    let rollingDate = todayStr;
+    let titleCol = headerClasses.indexOf("title");
+    let arrowsCol = headerClasses.indexOf("arrows");
+    let focusCol = headerClasses.indexOf("focus");
+    let notesCol = headerClasses.indexOf("notes");
 
-    dataRows.forEach((row, idx) => {
-      if (row.length === 0 || row.every((c) => !c)) return;
+    // If no header explicitly matched arrows, check if there is a purely numeric column (other than dateCol)
+    const maxCols = Math.max(...dataRows.map((r) => r.length), headerRow.length, 1);
+    if (arrowsCol === -1 && maxCols >= 3) {
+      for (let c = 0; c < maxCols; c++) {
+        if (c === dateCol || c === titleCol || c === focusCol || c === notesCol) continue;
+        const hText = (headerRow[c] || "").toLowerCase();
+        if (hText && !hText.includes("flecha") && !hText.includes("volumen") && !hText.includes("tiro") && !hText.includes("cant") && !hText.includes("meta")) {
+          // If it has a specific non-arrow header (like "Distancia" or "Series"), don't guess it as arrowsCol
+          continue;
+        }
+        const nonEmptyVals = dataRows.map((r) => (r[c] || "").trim()).filter(Boolean);
+        if (nonEmptyVals.length > 0 && nonEmptyVals.every((v) => /^\d+(\s*(fl|flechas|tiros))?$/i.test(v))) {
+          arrowsCol = c;
+          break;
+        }
+      }
+    }
 
-      const rawDate = row[dateCol] || "";
-      const date = normalizeDateString(rawDate, rollingDate);
-      // Advance rolling fallback by 1 day
-      rollingDate = new Date(new Date(date + "T12:00:00").getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // If titleCol not explicitly found by header, pick the first non-date text column
+    if (titleCol === -1) {
+      for (let c = 0; c < maxCols; c++) {
+        if (c !== dateCol && c !== arrowsCol) {
+          titleCol = c;
+          break;
+        }
+      }
+    }
 
-      const rawTitle = (row[titleCol] || "").trim();
-      const rawArrowsStr = row[arrowsCol] !== undefined ? row[arrowsCol] : "";
-      const parsedArrows = parseInt(String(rawArrowsStr).replace(/[^0-9]/g, ""), 10);
+    const dailyMap = new Map<string, ParsedDailyEntry>();
+    let rollingDate = `${refYear}-${String(refMonth).padStart(2, "0")}-01`;
 
-      // Detect if rest day
-      const lowerTitle = rawTitle.toLowerCase();
-      const isRestWord = lowerTitle.includes("descanso") || lowerTitle.includes("recuperación") || lowerTitle.includes("recuperacion") || lowerTitle.includes("libre") || lowerTitle === "rest";
-      const targetArrows = !isNaN(parsedArrows) ? parsedArrows : (isRestWord ? 0 : 120);
-      const isRestDay = targetArrows === 0 || isRestWord;
+    dataRows.forEach((row) => {
+      if (row.every((c) => !c || !c.trim())) return;
 
-      const finalTitle = rawTitle || (isRestDay ? "Descanso" : (targetArrows > 0 ? `Entrenamiento (${targetArrows} flechas)` : "Entrenamiento"));
+      const rawDateCell = (row[dateCol] || "").trim();
 
-      // Focus points: Solo los que vengan explícitamente en el documento original. NUNCA inventar.
-      const rawFocus = row[focusCol] || "";
+      // Skip repeated header rows inside the sheet
+      if (classifyHeader(rawDateCell) === "date" && !isValidDateCell(rawDateCell)) {
+        return;
+      }
+
+      // Check if this row has a valid date or day number
+      const hasValidDate = isValidDateCell(rawDateCell) || /^\d{1,2}$/.test(rawDateCell.replace(DAY_NAMES_REGEX, "").trim());
+      if (!hasValidDate && dataRows.length > 1) {
+        // Check if any OTHER cell in the row has a date (in case of shifted columns)
+        const altDateIdx = row.findIndex((c) => isValidDateCell(c));
+        if (altDateIdx === -1) {
+          // If row has no date at all, skip section dividers that have only 1 cell
+          const nonEmptyCells = row.filter((c) => c && c.trim().length > 0);
+          if (nonEmptyCells.length <= 1) return;
+        }
+      }
+
+      const date = normalizeDateString(rawDateCell, rollingDate, refYear, refMonth);
+      const nextDayObj = new Date(new Date(date + "T12:00:00").getTime() + 24 * 60 * 60 * 1000);
+      if (!isNaN(nextDayObj.getTime())) {
+        rollingDate = nextDayObj.toISOString().split("T")[0];
+      }
+
+      // Extract arrows ONLY if explicitly present in the sheet (NEVER invent 120!)
+      let targetArrows = 0;
+      if (arrowsCol !== -1 && row[arrowsCol] !== undefined) {
+        const rawArrowsStr = String(row[arrowsCol]).trim();
+        const numMatch = rawArrowsStr.match(/\d+/);
+        if (numMatch) {
+          targetArrows = parseInt(numMatch[0], 10) || 0;
+        }
+      }
+
+      // Collect all literal columns from this row
+      const rawTitle = titleCol !== -1 && row[titleCol] ? row[titleCol].trim() : "";
+      const rawFocus = focusCol !== -1 && row[focusCol] ? row[focusCol].trim() : "";
+      const rawNotes = notesCol !== -1 && row[notesCol] ? row[notesCol].trim() : "";
+
+      // Also collect any OTHER columns in the sheet so 100% of the user's columns are preserved literally!
+      const customFields: Array<{ label: string; value: string }> = [];
+      const extraTextParts: string[] = [];
+
+      for (let c = 0; c < row.length; c++) {
+        if (c === dateCol) continue;
+        const val = (row[c] || "").trim();
+        if (!val) continue;
+
+        const colHeader = (headerRow[c] || "").trim();
+        if (colHeader) {
+          customFields.push({ label: colHeader, value: val });
+        }
+
+        if (c !== titleCol && c !== arrowsCol && c !== focusCol && c !== notesCol) {
+          if (colHeader) {
+            extraTextParts.push(`${colHeader}: ${val}`);
+          } else {
+            extraTextParts.push(val);
+          }
+        }
+      }
+
+      // If arrows wasn't in a dedicated column, check if the title or another cell mentions "120 flechas" or "120 fl"
+      if (targetArrows === 0) {
+        const joinedRowText = row.filter((_, idx) => idx !== dateCol).join(" ");
+        const inlineArrowsMatch = joinedRowText.match(/\b(\d{1,4})\s*(?:flechas|flecha|fl\.?|tiros|arrows)\b/i);
+        if (inlineArrowsMatch) {
+          targetArrows = parseInt(inlineArrowsMatch[1], 10) || 0;
+        }
+      }
+
+      // Build literal title:
+      // 1. Exact rawTitle if present
+      // 2. Otherwise first non-empty extra column text
+      // 3. Otherwise if targetArrows > 0, literal number from the arrow cell
+      let literalTitle = rawTitle;
+      if (!literalTitle && extraTextParts.length > 0) {
+        literalTitle = extraTextParts.shift()!;
+      }
+      if (!literalTitle && rawFocus) {
+        literalTitle = rawFocus;
+      }
+      if (!literalTitle && rawNotes) {
+        literalTitle = rawNotes;
+      }
+      if (!literalTitle && arrowsCol !== -1 && row[arrowsCol]?.trim()) {
+        literalTitle = row[arrowsCol].trim();
+      }
+
+      // If the entire row apart from the date was empty, skip it so we don't invent fake tasks on blank calendar rows!
+      if (!literalTitle && targetArrows === 0 && !rawFocus && !rawNotes && extraTextParts.length === 0) {
+        return;
+      }
+
+      const lowerAll = `${literalTitle} ${rawNotes} ${rawFocus}`.toLowerCase();
+      const isRestWord =
+        lowerAll === "descanso" ||
+        lowerAll.includes("descanso") ||
+        lowerAll.includes("libre") ||
+        lowerAll === "rest" ||
+        lowerAll === "off";
+
+      const isRestDay = isRestWord && targetArrows === 0;
+
       const focusPoints = rawFocus
         ? rawFocus.split(/[,;•|]/).map((s) => s.trim()).filter(Boolean)
         : [];
 
-      // Notes: Solo lo que venga en el documento original. NUNCA inventar.
-      const rawNotes = row[notesCol] || "";
-      const notes = rawNotes.trim();
+      const combinedNotes = [rawNotes, ...extraTextParts].filter(Boolean).join(" · ");
 
-      // Detect event type
       let type: "training" | "competition" | "meeting" | "other" = "training";
       if (isRestDay) {
         type = "other";
-      } else if (lowerTitle.includes("torneo") || lowerTitle.includes("competencia") || lowerTitle.includes("campeonato") || lowerTitle.includes("clasificatorio")) {
+      } else if (lowerAll.includes("torneo") || lowerAll.includes("competencia") || lowerAll.includes("campeonato") || lowerAll.includes("clasificatorio")) {
         type = "competition";
-      } else if (lowerTitle.includes("reunión") || lowerTitle.includes("reunion") || lowerTitle.includes("charla") || lowerTitle.includes("junta")) {
+      } else if (lowerAll.includes("reunión") || lowerAll.includes("reunion") || lowerAll.includes("charla") || lowerAll.includes("junta")) {
         type = "meeting";
       }
 
-      dailyEntries.push({
-        date,
-        title: finalTitle,
-        targetArrows: isRestDay ? 0 : targetArrows,
-        focusPoints,
-        notes,
-        type,
-        isRestDay
-      });
+      if (dailyMap.has(date)) {
+        // Merge with existing entry on the same date so multiple rows for the same day are never lost
+        const existing = dailyMap.get(date)!;
+        if (literalTitle && !existing.title.includes(literalTitle)) {
+          existing.title = existing.title ? `${existing.title} / ${literalTitle}` : literalTitle;
+        }
+        existing.targetArrows += targetArrows;
+        focusPoints.forEach((fp) => {
+          if (!existing.focusPoints.includes(fp)) existing.focusPoints.push(fp);
+        });
+        if (combinedNotes && !existing.notes.includes(combinedNotes)) {
+          existing.notes = existing.notes ? `${existing.notes} | ${combinedNotes}` : combinedNotes;
+        }
+        if (customFields.length > 0) {
+          existing.customFields = [...(existing.customFields || []), ...customFields];
+        }
+        existing.isRestDay = existing.isRestDay && isRestDay;
+        if (type === "competition") existing.type = "competition";
+      } else {
+        dailyMap.set(date, {
+          date,
+          title: literalTitle,
+          targetArrows,
+          focusPoints,
+          notes: combinedNotes,
+          customFields: customFields.length > 0 ? customFields : undefined,
+          type,
+          isRestDay
+        });
+      }
     });
+
+    const dailyEntries = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
     if (dailyEntries.length === 0) {
       return {
@@ -365,21 +767,18 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
         stages: [],
         dailyEntries: [],
         warnings: [],
-        error: "No se pudieron identificar días válidos en las filas proporcionadas."
+        error: "No se encontraron filas con fechas o actividades válidas en el documento."
       };
     }
-
-    // Sort chronologically
-    dailyEntries.sort((a, b) => a.date.localeCompare(b.date));
 
     const startDate = dailyEntries[0].date;
     const endDate = dailyEntries[dailyEntries.length - 1].date;
     const totalVolumeGoal = dailyEntries.reduce((sum, d) => sum + d.targetArrows, 0);
 
-    // Also synthesize summary stages by month/week so the plan can be viewed in the Macrocycle tab
+    // Group by month for Macrocycle timeline compatibility without inventing fake notes
     const monthGroups = new Map<string, ParsedDailyEntry[]>();
     dailyEntries.forEach((entry) => {
-      const ym = entry.date.slice(0, 7); // YYYY-MM
+      const ym = entry.date.slice(0, 7);
       if (!monthGroups.has(ym)) monthGroups.set(ym, []);
       monthGroups.get(ym)!.push(entry);
     });
@@ -393,20 +792,16 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       const totalArrowsInGroup = entries.reduce((s, e) => s + e.targetArrows, 0);
       const spanWeeks = Math.max(1, entries.length / 7);
       const weeklySessions = Math.min(7, Math.max(1, Math.round(trainingDays.length / spanWeeks)));
-      const weeklyArrows = Math.max(60, Math.round(totalArrowsInGroup / spanWeeks));
-
-      const dateObj = new Date(firstD + "T12:00:00");
-      const monthLabel = dateObj.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-      const capitalizedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+      const weeklyArrows = Math.round(totalArrowsInGroup / spanWeeks);
 
       synthesizedStages.push({
         id: `etapa-daily-${ym}-${colorIdx}`,
-        name: `Plan Diario · ${capitalizedMonth}`,
+        name: defaultCycleName,
         startDate: firstD,
         endDate: lastD,
         weeklySessionGoal: weeklySessions,
         weeklyArrowGoal: weeklyArrows,
-        notes: `${entries.length} días programados (${trainingDays.length} días de tiro, ${totalArrowsInGroup} flechas en total).`,
+        notes: "",
         color: ETAPA_COLORS[colorIdx % ETAPA_COLORS.length].color
       });
       colorIdx++;
@@ -418,75 +813,67 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       planName: defaultCycleName,
       startDate,
       endDate,
-      totalVolumeGoal: Math.max(totalVolumeGoal, 100),
+      totalVolumeGoal,
       stages: synthesizedStages,
       dailyEntries,
+      headers: headerRow.length > 0 ? headerRow : undefined,
       warnings
     };
   }
 
   // ============================================================================
-  // MODE 2: STAGE / RANGE ("stages") IMPORT
+  // MODE 2: STAGE / RANGE ("stages") LITERAL IMPORT
   // ============================================================================
-  let nameCol = 0;
-  let startCol = 1;
-  let endCol = 2;
-  let sessionsCol = 3;
-  let arrowsCol = 4;
-  let notesCol = 5;
+  let nameCol = headerClasses.indexOf("title");
+  let startCol = headerClasses.indexOf("startDate");
+  let endCol = headerClasses.indexOf("endDate");
+  let sessionsCol = headerClasses.indexOf("sessions");
+  let arrowsCol = headerClasses.indexOf("arrows");
+  let notesCol = headerClasses.indexOf("notes");
 
-  if (isHeader) {
-    firstRowLower.forEach((header, idx) => {
-      if (header.includes("etapa") || header.includes("nombre") || header.includes("fase")) nameCol = idx;
-      else if (header.includes("inicio") || (header.includes("desde") && !header.includes("fin"))) startCol = idx;
-      else if (header.includes("fin") || header.includes("hasta")) endCol = idx;
-      else if (header.includes("sesion") || header.includes("dias") || header.includes("días")) sessionsCol = idx;
-      else if (header.includes("flecha") || header.includes("tiros") || header.includes("volumen")) arrowsCol = idx;
-      else if (header.includes("nota") || header.includes("enfoque") || header.includes("indicacion") || header.includes("detalle")) notesCol = idx;
-    });
-  }
+  if (nameCol === -1) nameCol = 0;
+  if (startCol === -1) startCol = 1;
+  if (endCol === -1) endCol = 2;
+  if (sessionsCol === -1) sessionsCol = 3;
+  if (arrowsCol === -1) arrowsCol = 4;
+  if (notesCol === -1) notesCol = 5;
 
   const parsedStages: MacrocyclePhase[] = [];
   let currentEstimatedStartDate = todayStr;
 
   dataRows.forEach((row, idx) => {
-    if (row.length === 0 || (row.length === 1 && !row[0])) return;
+    if (row.every((c) => !c || !c.trim())) return;
 
-    const rawName = row[nameCol] || `Etapa ${idx + 1}`;
-    const rawStart = row[startCol];
-    const rawEnd = row[endCol];
+    const rawName = (row[nameCol] || "").trim();
+    const rawStart = (row[startCol] || "").trim();
+    const rawEnd = (row[endCol] || "").trim();
+    if (!rawName && !rawStart && !rawEnd) return;
 
-    const startDate = normalizeDateString(rawStart, currentEstimatedStartDate);
-    let endDate = normalizeDateString(
-      rawEnd,
-      new Date(new Date(startDate).getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-    );
+    const startDate = normalizeDateString(rawStart, currentEstimatedStartDate, refYear, refMonth);
+    let endDate = normalizeDateString(rawEnd, startDate, refYear, refMonth);
+    if (endDate < startDate) endDate = startDate;
 
-    if (endDate < startDate) {
-      endDate = new Date(new Date(startDate).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    }
+    const rawSessions = row[sessionsCol] || "";
+    const sessions = parseInt(String(rawSessions).replace(/[^0-9]/g, ""), 10) || 0;
 
-    const rawSessions = row[sessionsCol];
-    const sessions = parseInt(rawSessions || "3", 10) || 3;
+    const rawArrows = row[arrowsCol] || "";
+    const arrows = parseInt(String(rawArrows).replace(/[^0-9]/g, ""), 10) || 0;
 
-    const rawArrows = row[arrowsCol];
-    const arrows = parseInt((rawArrows || "300").replace(/[^0-9]/g, ""), 10) || 300;
-
-    const notes = row[notesCol] || "";
+    const notes = (row[notesCol] || "").trim();
     const color = ETAPA_COLORS[idx % ETAPA_COLORS.length].color;
 
     parsedStages.push({
       id: `etapa-imp-${Date.now()}-${idx + 1}`,
-      name: rawName,
+      name: rawName || `${defaultCycleName} (${startDate})`,
       startDate,
       endDate,
-      weeklySessionGoal: Math.min(7, Math.max(1, sessions)),
+      weeklySessionGoal: sessions > 0 ? Math.min(7, sessions) : 0,
       weeklyArrowGoal: Math.max(0, arrows),
       notes,
       color
     });
 
-    currentEstimatedStartDate = new Date(new Date(endDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    currentEstimatedStartDate = new Date(new Date(endDate + "T12:00:00").getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   });
 
   if (parsedStages.length === 0) {
@@ -500,7 +887,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
       stages: [],
       dailyEntries: [],
       warnings: [],
-      error: "No se pudieron identificar etapas válidas en las filas proporcionadas."
+      error: "No se pudieron identificar filas válidas en el documento."
     };
   }
 
@@ -521,9 +908,10 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Nuevo 
     planName: defaultCycleName,
     startDate: cycleStartDate,
     endDate: cycleEndDate,
-    totalVolumeGoal: Math.max(1000, totalVolumeGoal),
+    totalVolumeGoal,
     stages: parsedStages,
     dailyEntries: [],
+    headers: headerRow.length > 0 ? headerRow : undefined,
     warnings
   };
 }
@@ -560,9 +948,9 @@ export function generateDailySampleCsvTemplate(): string {
     "Fecha,Actividad,Flechas,Enfoque Técnico,Notas del Entrenador",
     `${dayStr(0)},Volumen Técnico 70m,120,"Anclaje firme, Expansión dorsal","Tirar en series de 6 flechas controlando el ritmo"`,
     `${dayStr(1)},Trabajo con Liga y 18m,90,"Alineación de hombros, Soltada limpia","15 min de banda elástica antes de tirar"`,
-    `${dayStr(2)},Descanso Activo,0,"Movilidad articular, Estiramiento","Recuperación muscular e hidratación"`,
+    `${dayStr(2)},Descanso,0,"",""`,
     `${dayStr(3)},Control Oficial WA 720,144,"Tiempo oficial 240s, Enfoque en el clic","Anotar las 2 rondas completas en la app"`,
-    `${dayStr(4)},Simulacro de Duelos (Matchplay),96,"Respiración bajo presión, Primera flecha fuerte","Disparar sets de 3 flechas en 20 segundos por flecha"`
+    `${dayStr(4)},Simulacro de Duelos,96,"Respiración bajo presión, Primera flecha fuerte","Disparar sets de 3 flechas en 20 segundos por flecha"`
   ].join("\r\n");
 }
 

@@ -79,6 +79,7 @@ export interface CalendarEvent {
   assignedAthleteIds?: string[];
   focusPoints?: string[];
   coachNotes?: string;
+  customFields?: Array<{ label: string; value: string }>;
   isRestDay?: boolean;
   isCompleted?: boolean;
 }

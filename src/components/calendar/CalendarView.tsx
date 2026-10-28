@@ -180,45 +180,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       if (isCoach) {
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        let athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
-        if (athletes.length === 0) {
-          athletes = [
-            {
-              uid: "USR-ATHLETE-DANIELA",
-              email: "daniela@archery101010.com",
-              fullName: "Daniela Rivas",
-              nickname: "daniela",
-              birthDate: "2000-08-12",
-              country: "CR",
-              city: "San José",
-              gender: "F",
-              bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 38, defaultDistance: 70 },
-              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId || "CLB-DEMO",
-              clubName: user.clubName || "Club Deportivo",
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            },
-            {
-              uid: "USR-ATHLETE-CARLOS",
-              email: "carlos@archery101010.com",
-              fullName: "Carlos Mendoza",
-              nickname: "carlosm",
-              birthDate: "1998-04-25",
-              country: "CR",
-              city: "Cartago",
-              gender: "M",
-              bowConfig: { type: "Compound", brand: "Hoyt", model: "Stratum", poundage: 58, defaultDistance: 50 },
-              physicalData: { height: 175, weight: 74, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId || "CLB-DEMO",
-              clubName: user.clubName || "Club Deportivo",
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            }
-          ];
-        }
+        const athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
         setRoster(athletes);
       }
       
@@ -1020,17 +982,34 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   {cell.day}
                 </span>
 
-                {/* Target Arrows or Phase label (+20% larger) */}
-                {coachAssignment && coachAssignment.targetArrows ? (
-                  <span 
-                    style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                    className="text-[9px] sm:text-[10px] font-black tracking-tight leading-none truncate max-w-full px-0.5 text-center tabular-nums"
-                  >
-                    {coachAssignment.targetArrows} fl.
-                  </span>
+                {/* Literal Title / Target Arrows / Phase label from Excel/Sheet */}
+                {coachAssignment ? (
+                  <div className="flex flex-col items-center justify-center w-full px-0.5 gap-0.5 overflow-hidden">
+                    {coachAssignment.title &&
+                      coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` && (
+                        <span
+                          style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
+                          className="text-[8px] sm:text-[9px] font-bold tracking-tight leading-none truncate max-w-full text-center"
+                        >
+                          {coachAssignment.title}
+                        </span>
+                      )}
+                    {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
+                      <span
+                        style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
+                        className="text-[8px] sm:text-[9px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
+                      >
+                        {coachAssignment.targetArrows} fl.
+                      </span>
+                    ) : null}
+                  </div>
                 ) : activePhaseInfo ? (
                   <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
                     {activePhaseInfo.phase.name}
+                  </span>
+                ) : cell.dayEvents.length > 0 && cell.dayEvents[0].title ? (
+                  <span className="text-[8px] sm:text-[9px] font-bold text-white/75 tracking-tight leading-none truncate max-w-[94%] text-center">
+                    {cell.dayEvents[0].title}
                   </span>
                 ) : null}
 
@@ -1396,7 +1375,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             )}
                           </div>
 
-                          <h4 className="text-white text-sm font-black uppercase mt-1">
+                          <h4 className="text-white text-sm font-black mt-1">
                             {coachAssignment.title}
                           </h4>
                         </div>
@@ -1448,15 +1427,15 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         </div>
                       </div>
 
-                      {/* Meta de Flechas */}
-                      {!coachAssignment.isRestDay && coachAssignment.targetArrows ? (
+                      {/* Meta de Flechas (solo si el Excel/Sheet o el Coach indicó un número > 0) */}
+                      {!coachAssignment.isRestDay && coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                         <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] text-gray-dim uppercase font-bold flex items-center gap-1">
                               <Target size={12} className="text-cyan-neon" />
-                              <span>Meta de Flechas Asignada</span>
+                              <span>Flechas</span>
                             </span>
-                            <span className="text-xs font-black text-cyan-neon">
+                            <span className="text-xs font-black text-cyan-neon tabular-nums">
                               {coachAssignment.targetArrows} flechas
                             </span>
                           </div>
@@ -1464,8 +1443,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           {/* Progress bar comparing with arrows shot */}
                           <div className="flex flex-col gap-1">
                             <div className="flex justify-between text-[9px]">
-                              <span className="text-white/40">Progreso del arquero hoy:</span>
-                              <span className="text-white font-extrabold">
+                              <span className="text-white/40">Progreso registrado hoy:</span>
+                              <span className="text-white font-extrabold tabular-nums">
                                 {arrowsShot} / {coachAssignment.targetArrows} (
                                 {Math.min(100, Math.round((arrowsShot / coachAssignment.targetArrows) * 100))}%)
                               </span>
@@ -1476,7 +1455,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                   width: `${Math.min(100, Math.round((arrowsShot / coachAssignment.targetArrows) * 100))}%`,
                                   backgroundColor: coachAssignment.phaseColor || "#00E5FF"
                                 }}
-                                className="h-full rounded-full transition-all duration-500 shadow-glow-cyan"
+                                className="h-full rounded-full transition-all duration-500"
                               />
                             </div>
                           </div>
@@ -1484,16 +1463,35 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           {arrowsShot >= coachAssignment.targetArrows && (
                             <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-xl border border-green-500/20">
                               <CheckCircle2 size={12} />
-                              <span>¡Meta de flechas cumplida con éxito!</span>
+                              <span>Meta de flechas completada</span>
                             </div>
                           )}
                         </div>
-                      ) : coachAssignment.isRestDay ? (
-                        <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/5 text-xs text-green-400 flex items-center gap-2">
-                          <Flame size={14} className="text-green-400" />
-                          <span>Día de Descanso y Recuperación Activa asignado por tu entrenador.</span>
-                        </div>
                       ) : null}
+
+                      {/* Campos literales del Excel / Google Sheet */}
+                      {coachAssignment.customFields && coachAssignment.customFields.length > 0 && (
+                        <div className="flex flex-col gap-1.5 border-t border-white/[0.06] pt-2.5">
+                          <span className="text-[9px] text-white/40 uppercase font-black tracking-widest">
+                            Datos del Plan
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {coachAssignment.customFields.map((field, idx) => (
+                              <div
+                                key={idx}
+                                className="bg-neutral-950/70 px-3 py-2 rounded-xl border border-white/[0.05] flex flex-col gap-0.5"
+                              >
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+                                  {field.label}
+                                </span>
+                                <span className="text-xs font-bold text-white/95 break-words">
+                                  {field.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Technical & Physical Focus Points */}
                       {coachAssignment.focusPoints && coachAssignment.focusPoints.length > 0 && (

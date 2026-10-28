@@ -107,8 +107,12 @@ export async function syncCycleToMonthCalendar(
     }
 
     const dayOfWeek = new Date(year, month, day).getDay();
-    const isTraining = isTrainingDayForWeeklyGoal(dayOfWeek, phase.weeklySessionGoal);
-    const arrowsPerSession = isTraining 
+    const isTraining = phase.weeklySessionGoal > 0 ? isTrainingDayForWeeklyGoal(dayOfWeek, phase.weeklySessionGoal) : true;
+    if (!isTraining) {
+      restDaysCount++;
+      continue;
+    }
+    const arrowsPerSession = phase.weeklyArrowGoal > 0 && phase.weeklySessionGoal > 0
       ? Math.round(phase.weeklyArrowGoal / Math.max(1, phase.weeklySessionGoal))
       : 0;
 
@@ -119,7 +123,7 @@ export async function syncCycleToMonthCalendar(
       ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${dateStr}` 
       : `EVT-MAC-${macrocycle.id}-${dateStr}`;
 
-    const title = phase.name || (isTraining ? `Entrenamiento (${arrowsPerSession} flechas)` : "Descanso");
+    const title = phase.name || macrocycle.name;
     const description = options?.customNotes || phase.notes || "";
     const coachNotes = options?.customNotes || phase.notes || "";
 
@@ -236,6 +240,7 @@ export async function saveDailyEntriesToCalendar(
       assignedAthleteIds: macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []),
       focusPoints: entry.focusPoints,
       coachNotes: entry.notes,
+      customFields: entry.customFields,
       isRestDay: entry.isRestDay,
       isCompleted: false
     };

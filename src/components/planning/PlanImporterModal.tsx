@@ -16,8 +16,8 @@ import {
 } from "@/lib/cycleCalendarSync";
 import { 
   parseSpreadsheetData, 
+  parseExcelWorkbookBuffer,
   ParsedCycleResult, 
-  ParsedDailyEntry,
   downloadSampleTemplate, 
   downloadDailySampleTemplate,
   fetchGoogleSheetCsv
@@ -27,26 +27,21 @@ import {
   UploadCloud, 
   ClipboardPaste, 
   Download, 
-  Sparkles, 
   CheckCircle2, 
   AlertCircle, 
   X, 
-  Calendar, 
-  Flame, 
-  Target, 
   Table as TableIcon, 
   LayoutList, 
-  Layers, 
   Link2, 
   RefreshCw, 
   Info, 
   ArrowRight,
-  ShieldAlert,
   FileCheck2,
   Users,
-  User
+  User,
+  Check
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 interface PlanImporterModalProps {
   isOpen: boolean;
@@ -59,7 +54,7 @@ interface PlanImporterModalProps {
   titleOverride?: string;
 }
 
-type UploadTab = "paste" | "file" | "sheets";
+type UploadTab = "file" | "sheets" | "paste";
 type PreviewViewMode = "table" | "cards";
 
 export default function PlanImporterModal({
@@ -69,7 +64,7 @@ export default function PlanImporterModal({
   onSuccess,
   titleOverride
 }: PlanImporterModalProps) {
-  const [activeTab, setActiveTab] = useState<UploadTab>("paste");
+  const [activeTab, setActiveTab] = useState<UploadTab>("file");
   const [importText, setImportText] = useState("");
   const [importPlanName, setImportPlanName] = useState("");
   const [importPreview, setImportPreview] = useState<ParsedCycleResult | null>(null);
@@ -81,6 +76,11 @@ export default function PlanImporterModal({
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
+  // Multi-sheet Excel workbook states
+  const [excelSheets, setExcelSheets] = useState<string[]>([]);
+  const [selectedExcelSheet, setSelectedExcelSheet] = useState<string>("");
+  const workbookExtractorRef = useRef<((sheetName: string) => string) | null>(null);
+
   // Recipient assignment state (Coach role)
   const [assignTarget, setAssignTarget] = useState<"all" | "single">("all");
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>("");
@@ -90,48 +90,10 @@ export default function PlanImporterModal({
 
   useEffect(() => {
     async function loadClubAthletes() {
-      if (user.role !== "coach") return;
+      if (user.role !== "coach" && user.role !== "team_admin_coach") return;
       try {
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        let athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
-        if (athletes.length === 0) {
-          athletes = [
-            {
-              uid: "USR-ATHLETE-DANIELA",
-              email: "daniela@archery101010.com",
-              fullName: "Daniela Rivas",
-              nickname: "daniela",
-              birthDate: "2000-08-12",
-              country: "CR",
-              city: "San José",
-              gender: "F",
-              bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 38, defaultDistance: 70 },
-              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId || "CLB-DEMO",
-              clubName: user.clubName || "Club Deportivo",
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            },
-            {
-              uid: "USR-ATHLETE-CARLOS",
-              email: "carlos@archery101010.com",
-              fullName: "Carlos Mendoza",
-              nickname: "carlosm",
-              birthDate: "1998-04-25",
-              country: "CR",
-              city: "Cartago",
-              gender: "M",
-              bowConfig: { type: "Compound", brand: "Hoyt", model: "Stratum", poundage: 58, defaultDistance: 50 },
-              physicalData: { height: 175, weight: 74, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId || "CLB-DEMO",
-              clubName: user.clubName || "Club Deportivo",
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            }
-          ];
-        }
+        const athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
         setClubAthletes(athletes);
         if (athletes.length > 0 && !selectedAthleteId) {
           setSelectedAthleteId(athletes[0].uid);
@@ -141,7 +103,7 @@ export default function PlanImporterModal({
       }
     }
     loadClubAthletes();
-  }, [user.clubId, user.role, isOpen]);
+  }, [user.clubId, user.role, isOpen, selectedAthleteId]);
 
   if (!isOpen) return null;
 
@@ -161,7 +123,7 @@ export default function PlanImporterModal({
       return;
     }
 
-    const fallbackName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan de Entrenamiento 2026");
+    const fallbackName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan Importado");
     const result = parseSpreadsheetData(clean, fallbackName);
 
     if (result.success && (result.stages.length > 0 || result.dailyEntries.length > 0)) {
@@ -171,7 +133,7 @@ export default function PlanImporterModal({
       }
     } else {
       setImportPreview(null);
-      setImportError(result.error || "No se detectaron columnas válidas. Copia las celdas directamente de tu Excel o Google Sheets.");
+      setImportError(result.error || "No se detectaron fechas o filas válidas en el archivo. Revisa que tu hoja tenga una columna de Fecha o Día.");
     }
   };
 
@@ -181,29 +143,77 @@ export default function PlanImporterModal({
         const text = await navigator.clipboard.readText();
         if (text && text.trim()) {
           setUploadedFileName(null);
+          setExcelSheets([]);
           handleParseText(text);
           return;
         }
       }
       alert("Copia las celdas de tu hoja (Ctrl+C o Copiar) y pégalas directamente en el recuadro.");
     } catch {
-      alert("Tu navegador bloqueó el portapapeles automático. Pega las celdas manualmente en el recuadro.");
+      alert("Pega las celdas manteniendo presionado dentro del recuadro de texto.");
     }
   };
 
   const handleFileChange = (file?: File | null) => {
     if (!file) return;
     setUploadedFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      if (content) {
-        const defaultName = file.name.replace(/\.[^/.]+$/, "");
-        setImportPlanName(defaultName);
-        handleParseText(content, defaultName);
-      }
-    };
-    reader.readAsText(file);
+    setImportError(null);
+
+    const defaultName = file.name.replace(/\.[^/.]+$/, "");
+    setImportPlanName(defaultName);
+
+    const lowerName = file.name.toLowerCase();
+    const isBinaryExcel = lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls") || lowerName.endsWith(".ods");
+
+    if (isBinaryExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target?.result as ArrayBuffer;
+          if (!buffer) return;
+          const { sheetNames, getSheetTsv } = parseExcelWorkbookBuffer(buffer);
+          workbookExtractorRef.current = getSheetTsv;
+          setExcelSheets(sheetNames);
+
+          // Automatically pick the first non-empty sheet
+          let chosenSheet = sheetNames[0] || "";
+          let extractedTsv = "";
+          for (const sName of sheetNames) {
+            const candidate = getSheetTsv(sName);
+            if (candidate && candidate.trim().length > 0) {
+              chosenSheet = sName;
+              extractedTsv = candidate;
+              break;
+            }
+          }
+          setSelectedExcelSheet(chosenSheet);
+          handleParseText(extractedTsv, defaultName);
+        } catch (err) {
+          console.error("Error parsing Excel file:", err);
+          setImportError("No se pudo leer el archivo Excel (.xlsx). Verifica que no esté protegido con contraseña.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      setExcelSheets([]);
+      workbookExtractorRef.current = null;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        if (content) {
+          handleParseText(content, defaultName);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleSelectExcelSheet = (sheetName: string) => {
+    setSelectedExcelSheet(sheetName);
+    if (workbookExtractorRef.current) {
+      const tsv = workbookExtractorRef.current(sheetName);
+      handleParseText(tsv, importPlanName || sheetName);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -228,14 +238,15 @@ export default function PlanImporterModal({
     if (!sheetUrlInput.trim()) return;
     setIsFetchingSheet(true);
     setImportError(null);
+    setExcelSheets([]);
     try {
       const res = await fetchGoogleSheetCsv(sheetUrlInput);
       setIsFetchingSheet(false);
       if (res.ok && res.csv) {
         setUploadedFileName("Google Sheets Vinculado");
-        handleParseText(res.csv);
+        handleParseText(res.csv, importPlanName || "Plan Google Sheets");
       } else {
-        setImportError(res.error || "No se pudo leer la hoja de Google Sheets. Asegúrate de que esté configurada como pública.");
+        setImportError(res.error || "No se pudo leer la hoja de Google Sheets. Asegúrate de que esté configurada como 'Cualquier persona con el enlace puede ver'.");
       }
     } catch {
       setIsFetchingSheet(false);
@@ -250,9 +261,9 @@ export default function PlanImporterModal({
     try {
       const nowStr = new Date().toISOString();
       const planId = generateResilientId("MAC");
-      const finalName = (importPlanName.trim() || importPreview.planName || "Plan de Entrenamiento").trim();
+      const finalName = (importPlanName.trim() || importPreview.planName || "Plan Importado").trim();
 
-      const isCoach = user.role === "coach";
+      const isCoach = user.role === "coach" || user.role === "team_admin_coach";
       const isSingle = isCoach && assignTarget === "single" && Boolean(selectedAthleteId);
       const targetAthletes = isSingle ? [selectedAthleteId] : (user.role === "archer" ? [user.uid] : []);
       const assignmentType: "club" | "individual" = (isSingle || user.role === "archer") ? "individual" : "club";
@@ -312,7 +323,7 @@ export default function PlanImporterModal({
   const totalArrows = importPreview?.totalVolumeGoal || 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
       <div className="absolute inset-0" onClick={() => !isSubmitting && onClose()} />
 
       <motion.div
@@ -320,23 +331,23 @@ export default function PlanImporterModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-[#0A0A0C] border border-cyan-neon/30 rounded-3xl w-full max-w-2xl flex flex-col max-h-[92vh] shadow-[0_0_60px_rgba(0,229,255,0.08)] z-10 overflow-hidden text-left"
+        className="relative bg-[#0A0B0E] border border-white/10 rounded-3xl w-full max-w-2xl flex flex-col max-h-[92vh] shadow-2xl z-10 overflow-hidden text-left"
       >
-        {/* Glow Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex justify-between items-start bg-gradient-to-r from-neutral-900/80 via-neutral-900/40 to-neutral-950">
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] flex justify-between items-start bg-[#0D0F12]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon shadow-glow-cyan shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon shrink-0">
               <FileSpreadsheet size={20} />
             </div>
             <div>
               <span className="text-[9px] text-cyan-neon uppercase font-black tracking-widest block">
-                {titleOverride || "Gestión de Planes & Calendario"}
+                {titleOverride || "Calendario y Planificación"}
               </span>
               <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-wide">
-                Subir Plan de Entrenamiento
+                Importar Excel o Google Sheets
               </h2>
               <p className="text-[11px] text-white/50 leading-tight mt-0.5">
-                Carga tu Excel, Google Sheets o CSV con la estructura exacta de tu documento.
+                Lectura 100% literal de tus fechas, actividades, flechas y columnas sin modificar tu texto.
               </p>
             </div>
           </div>
@@ -345,7 +356,7 @@ export default function PlanImporterModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-white/40 hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-white/50 hover:text-white hover:bg-neutral-800 transition cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -354,101 +365,48 @@ export default function PlanImporterModal({
         {/* Modal Body (Scrollable) */}
         <div className="p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto flex-1">
           {/* Method Selection Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-neutral-900/80 rounded-2xl border border-white/5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("paste")}
-              className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
-                activeTab === "paste"
-                  ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              <ClipboardPaste size={14} />
-              <span>Pegar Celdas</span>
-            </button>
-
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0D0F12] rounded-2xl border border-white/[0.08]">
             <button
               type="button"
               onClick={() => setActiveTab("file")}
-              className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === "file"
-                  ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan"
+                  ? "bg-cyan-neon text-black"
                   : "text-white/60 hover:text-white"
               }`}
             >
               <UploadCloud size={14} />
-              <span>Subir Archivo</span>
+              <span>Subir Excel</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("sheets")}
-              className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === "sheets"
-                  ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black shadow-glow-cyan"
+                  ? "bg-cyan-neon text-black"
                   : "text-white/60 hover:text-white"
               }`}
             >
               <Link2 size={14} />
               <span>Google Sheets</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("paste")}
+              className={`py-2 px-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === "paste"
+                  ? "bg-cyan-neon text-black"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              <ClipboardPaste size={14} />
+              <span>Pegar Celdas</span>
+            </button>
           </div>
 
-          {/* Quick Model Download Pill Buttons */}
-          <div className="flex items-center justify-between text-[10px] text-white/50 px-1 flex-wrap gap-2">
-            <span className="flex items-center gap-1 font-bold">
-              <Info size={12} className="text-cyan-neon" />
-              <span>Plantillas de referencia:</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={downloadDailySampleTemplate}
-                className="text-[10px] text-white/70 hover:text-cyan-neon flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-neon/30 transition"
-              >
-                <Download size={11} className="text-cyan-neon" />
-                <span>Modelo Día x Día (.csv)</span>
-              </button>
-              <button
-                type="button"
-                onClick={downloadSampleTemplate}
-                className="text-[10px] text-white/70 hover:text-purple-300 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 hover:border-purple-400/30 transition"
-              >
-                <Download size={11} className="text-purple-400" />
-                <span>Modelo Etapas (.csv)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* TAB 1: PASTE CELLS */}
-          {activeTab === "paste" && (
-            <div className="flex flex-col gap-3 animate-fadeIn">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
-                  Copia las filas en Excel o Sheets y pégalas aquí:
-                </span>
-                <button
-                  type="button"
-                  onClick={handlePasteClipboard}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
-                >
-                  <ClipboardPaste size={13} />
-                  <span>Pegar desde Portapapeles</span>
-                </button>
-              </div>
-
-              <textarea
-                value={importText}
-                onChange={(e) => handleParseText(e.target.value)}
-                placeholder={`Formato Día por Día recomendado:\nFecha\tActividad\tFlechas\tEnfoque\tNotas\n26/10/2026\tVolumen 70m\t120\tAnclaje firme\tSeries de 6 flechas\n27/10/2026\tControl WA 720\t144\tTiempo oficial\tAnotar en la app\n28/10/2026\tDescanso\t0\t\tRecuperación activa`}
-                rows={5}
-                className="bg-neutral-900/90 border border-white/10 rounded-2xl p-3.5 text-xs font-mono text-white/90 outline-none focus:border-cyan-neon transition placeholder:text-white/20 resize-none leading-relaxed"
-              />
-            </div>
-          )}
-
-          {/* TAB 2: DRAG & DROP FILE */}
+          {/* TAB 1: UPLOAD EXCEL (.XLSX / .XLS / .CSV) */}
           {activeTab === "file" && (
             <div className="flex flex-col gap-3 animate-fadeIn">
               <div
@@ -456,90 +414,159 @@ export default function PlanImporterModal({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`p-6 sm:p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 text-center transition cursor-pointer ${
+                className={`p-5 sm:p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2.5 text-center transition cursor-pointer ${
                   isDraggingFile
-                    ? "border-cyan-neon bg-cyan-neon/10 scale-[1.01]"
-                    : "border-white/15 bg-neutral-900/40 hover:border-cyan-neon/40 hover:bg-neutral-900/80"
+                    ? "border-cyan-neon bg-cyan-neon/10"
+                    : "border-white/15 bg-[#0D0F12] hover:border-cyan-neon/40"
                 }`}
               >
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.tsv,.txt"
+                  accept=".xlsx,.xls,.ods,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                   onChange={(e) => handleFileChange(e.target.files?.[0])}
                   className="hidden"
                 />
 
-                <div className="w-12 h-12 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon">
-                  <UploadCloud size={24} />
+                <div className="w-11 h-11 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon">
+                  <UploadCloud size={22} />
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-black text-white uppercase tracking-wide">
-                    {uploadedFileName ? uploadedFileName : "Arrastra tu archivo aquí o haz clic para examinar"}
+                  <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wide">
+                    {uploadedFileName ? uploadedFileName : "Toca aquí para elegir tu archivo Excel o CSV"}
                   </h4>
-                  <p className="text-xs text-white/50 mt-1">
-                    Formatos compatibles: <strong className="text-cyan-neon">.CSV</strong>, <strong className="text-cyan-neon">.TSV</strong> o archivo de texto de Excel
+                  <p className="text-[11px] text-white/50 mt-1">
+                    Compatible con <strong className="text-cyan-neon">Excel (.xlsx, .xls)</strong> y <strong className="text-cyan-neon">.CSV</strong> directamente desde tu celular o PC
                   </p>
                 </div>
 
-                <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/80 font-bold text-[10px] uppercase tracking-wider">
-                  Seleccionar Archivo de tu Dispositivo
+                <span className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-[10px] uppercase tracking-wider">
+                  {uploadedFileName ? "Cambiar Archivo" : "Seleccionar Archivo"}
                 </span>
               </div>
+
+              {/* Multi-sheet selector if the Excel file has multiple tabs */}
+              {excelSheets.length > 1 && (
+                <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2">
+                  <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">
+                    Pestañas detectadas en tu Excel ({excelSheets.length}) — Elige cuál aplicar:
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {excelSheets.map((sName) => (
+                      <button
+                        key={sName}
+                        type="button"
+                        onClick={() => handleSelectExcelSheet(sName)}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition cursor-pointer ${
+                          selectedExcelSheet === sName
+                            ? "bg-cyan-neon text-black border-cyan-neon"
+                            : "bg-neutral-900 border-white/10 text-white/60 hover:text-white"
+                        }`}
+                      >
+                        {sName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 3: GOOGLE SHEETS */}
+          {/* TAB 2: GOOGLE SHEETS */}
           {activeTab === "sheets" && (
             <div className="flex flex-col gap-3 animate-fadeIn">
-              <div className="bg-neutral-900/40 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
                 <label className="text-[10px] text-white/70 uppercase font-black tracking-wider flex items-center gap-1.5">
                   <Link2 size={13} className="text-cyan-neon" />
-                  <span>Enlace Compartido de Google Sheets</span>
+                  <span>Enlace de Google Sheets</span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={sheetUrlInput}
                     onChange={(e) => setSheetUrlInput(e.target.value)}
-                    placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms/..."
-                    className="flex-1 bg-neutral-950 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white/20 min-w-0"
+                    placeholder="Pega aquí el enlace de tu Google Sheets..."
+                    className="flex-1 bg-neutral-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white/25 min-w-0"
                   />
                   <button
                     type="button"
                     disabled={!sheetUrlInput.trim() || isFetchingSheet}
                     onClick={handleFetchGoogleSheets}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider shrink-0 transition disabled:opacity-40 cursor-pointer shadow-glow-cyan flex items-center gap-1.5"
+                    className="px-4 py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider shrink-0 transition disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    {isFetchingSheet ? (
-                      <>
-                        <RefreshCw size={13} className="animate-spin" />
-                        <span>Conectando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw size={13} />
-                        <span>Conectar & Leer</span>
-                      </>
-                    )}
+                    <RefreshCw size={13} className={isFetchingSheet ? "animate-spin" : ""} />
+                    <span>{isFetchingSheet ? "Leyendo..." : "Leer Google Sheet"}</span>
                   </button>
                 </div>
 
                 <div className="flex items-start gap-2 bg-neutral-950/60 p-2.5 rounded-xl border border-white/5 text-[10px] text-white/60">
                   <Info size={14} className="text-cyan-neon shrink-0 mt-0.5" />
                   <p className="leading-relaxed">
-                    Asegúrate de que en Google Sheets hayas pulsado <strong>Compartir</strong> y configurado el acceso en <strong>"Cualquier persona con el enlace (Lector)"</strong>.
+                    En la app de Google Sheets toca <strong>Compartir</strong> y asegúrate de que diga <strong>&ldquo;Cualquier persona con el enlace (Lector)&rdquo;</strong>, o usa la pestaña <strong>Pegar Celdas</strong>.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
+          {/* TAB 3: PASTE CELLS */}
+          {activeTab === "paste" && (
+            <div className="flex flex-col gap-2.5 animate-fadeIn">
+              <div className="flex justify-between items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
+                  Copia las celdas en Excel o Sheets y pégalas aquí:
+                </span>
+                <button
+                  type="button"
+                  onClick={handlePasteClipboard}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                >
+                  <ClipboardPaste size={13} />
+                  <span>Pegar del Portapapeles</span>
+                </button>
+              </div>
+
+              <textarea
+                value={importText}
+                onChange={(e) => handleParseText(e.target.value)}
+                placeholder={`Ejemplo:\nFecha\tActividad\tFlechas\tNotas\n28/10/2026\tVolumen 70m\t120\tSeries de 6 flechas\n29/10/2026\tControl 720\t72\tAnotar en la app\n30/10/2026\tDescanso\t0\t`}
+                rows={5}
+                className="bg-[#0D0F12] border border-white/10 rounded-2xl p-3.5 text-xs font-mono text-white/90 outline-none focus:border-cyan-neon transition placeholder:text-white/20 resize-none leading-relaxed"
+              />
+            </div>
+          )}
+
+          {/* Quick Reference Templates */}
+          <div className="flex items-center justify-between text-[10px] text-white/50 px-1 flex-wrap gap-2">
+            <span className="flex items-center gap-1 font-bold">
+              <Info size={12} className="text-cyan-neon" />
+              <span>Plantillas opcionales de ejemplo:</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={downloadDailySampleTemplate}
+                className="text-[10px] text-white/70 hover:text-cyan-neon flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-cyan-neon/30 transition cursor-pointer"
+              >
+                <Download size={11} className="text-cyan-neon" />
+                <span>Día x Día (.csv)</span>
+              </button>
+              <button
+                type="button"
+                onClick={downloadSampleTemplate}
+                className="text-[10px] text-white/70 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-white/30 transition cursor-pointer"
+              >
+                <Download size={11} />
+                <span>Por Etapas (.csv)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Optional Plan Name Edit */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             <label className="text-[9px] text-white/50 uppercase font-black tracking-widest">
-              Nombre Oficial del Plan
+              Nombre del Plan
             </label>
             <input
               type="text"
@@ -550,8 +577,8 @@ export default function PlanImporterModal({
                   handleParseText(importText, e.target.value);
                 }
               }}
-              placeholder="Ej. Plan Mensual de Tiro - Noviembre 2026"
-              className="bg-neutral-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white/20 font-bold"
+              placeholder="Ej. Plan Mensual Octubre - Noviembre"
+              className="bg-[#0D0F12] border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white/25 font-bold"
             />
           </div>
 
@@ -563,44 +590,44 @@ export default function PlanImporterModal({
             </div>
           )}
 
-          {/* PARSED PREVIEW - HIGH LEVEL ORGANIZED DISPLAY */}
+          {/* PARSED PREVIEW - LITERAL DISPLAY */}
           {importPreview && (importPreview.dailyEntries.length > 0 || importPreview.stages.length > 0) && (
-            <div className="flex flex-col gap-3.5 bg-neutral-950 border border-white/10 rounded-2xl p-4 shadow-xl animate-fadeIn">
+            <div className="flex flex-col gap-3.5 bg-[#0D0F12] border border-white/10 rounded-2xl p-4 animate-fadeIn">
               {/* Header with Mode Badge & View Switcher */}
-              <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/[0.08]">
                 <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
+                  <span className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400">
                     <FileCheck2 size={16} />
                   </span>
                   <div>
                     <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider block">
-                      {importPreview.mode === "daily" ? "Plan Día por Día Detectado" : "Plan por Etapas Detectado"}
+                      {importPreview.mode === "daily" ? "Lectura Literal Día por Día Lista" : "Lectura Literal por Etapas Lista"}
                     </span>
-                    <span className="text-[11px] text-white/60 font-mono">
-                      Rango: {importPreview.startDate} al {importPreview.endDate}
+                    <span className="text-[11px] text-white/60 font-mono tabular-nums">
+                      Del {importPreview.startDate} al {importPreview.endDate}
                     </span>
                   </div>
                 </div>
 
                 {/* View Switcher: Table vs Cards */}
                 {importPreview.mode === "daily" && (
-                  <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/[0.08]">
                     <button
                       type="button"
                       onClick={() => setViewMode("table")}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition ${
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
                         viewMode === "table"
                           ? "bg-cyan-neon text-black font-black"
                           : "text-white/60 hover:text-white"
                       }`}
                     >
                       <TableIcon size={12} />
-                      <span>Tabla Original</span>
+                      <span>Tabla</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode("cards")}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition ${
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
                         viewMode === "cards"
                           ? "bg-cyan-neon text-black font-black"
                           : "text-white/60 hover:text-white"
@@ -615,31 +642,31 @@ export default function PlanImporterModal({
 
               {/* 4 Key Metrics Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Días Totales</span>
-                  <span className="text-xs font-black text-white mt-0.5 block">{totalEntries || importPreview.stages.length} días</span>
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
+                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Días Leídos</span>
+                  <span className="text-xs font-black text-white mt-0.5 block tabular-nums">{totalEntries || importPreview.stages.length} días</span>
                 </div>
-                <div className="bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Entrenamientos</span>
-                  <span className="text-xs font-black text-cyan-neon mt-0.5 block">{trainingCount} sesiones</span>
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
+                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Actividades</span>
+                  <span className="text-xs font-black text-cyan-neon mt-0.5 block tabular-nums">{trainingCount} días</span>
                 </div>
-                <div className="bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
                   <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Descansos</span>
-                  <span className="text-xs font-black text-emerald-400 mt-0.5 block">{restCount} días</span>
+                  <span className="text-xs font-black text-emerald-400 mt-0.5 block tabular-nums">{restCount} días</span>
                 </div>
-                <div className="bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Flechas Totales</span>
-                  <span className="text-xs font-black text-yellow-gold mt-0.5 block">{totalArrows.toLocaleString()}</span>
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
+                  <span className="text-[8px] text-white/40 uppercase font-black tracking-widest block">Flechas Indicadas</span>
+                  <span className="text-xs font-black text-yellow-gold mt-0.5 block tabular-nums">{totalArrows > 0 ? totalArrows.toLocaleString() : "—"}</span>
                 </div>
               </div>
 
               {/* Coach Recipient Selector: Send to 1 athlete or all */}
-              {user.role === "coach" && (
-                <div className="p-3 sm:p-3.5 rounded-2xl bg-neutral-900/90 border border-cyan-neon/30 flex flex-col gap-2.5 shadow-[0_0_25px_rgba(0,229,255,0.06)]">
+              {(user.role === "coach" || user.role === "team_admin_coach") && clubAthletes.length > 0 && (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-neutral-950 border border-white/10 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
                       <Users size={13} className="text-cyan-neon" />
-                      <span>Destinatario del Plan & Calendario</span>
+                      <span>Destinatario del Plan</span>
                     </span>
                     <span className="text-[9px] text-white/60 font-bold uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
                       {assignTarget === "all" ? "Todo el Club" : "1 Alumno"}
@@ -652,8 +679,8 @@ export default function PlanImporterModal({
                       onClick={() => setAssignTarget("all")}
                       className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
                         assignTarget === "all"
-                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                          : "bg-neutral-950/70 border-white/10 text-white/40 hover:text-white"
+                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
+                          : "bg-neutral-900 border-white/10 text-white/40 hover:text-white"
                       }`}
                     >
                       <Users size={13} />
@@ -665,8 +692,8 @@ export default function PlanImporterModal({
                       onClick={() => setAssignTarget("single")}
                       className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
                         assignTarget === "single"
-                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                          : "bg-neutral-950/70 border-white/10 text-white/40 hover:text-white"
+                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
+                          : "bg-neutral-900 border-white/10 text-white/40 hover:text-white"
                       }`}
                     >
                       <User size={13} />
@@ -676,13 +703,13 @@ export default function PlanImporterModal({
 
                   {assignTarget === "single" && (
                     <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
-                      <label className="text-[9px] text-white/60 uppercase font-black tracking-widest flex items-center gap-1">
-                        <span>Selecciona el alumno de tu lista:</span>
+                      <label className="text-[9px] text-white/60 uppercase font-black tracking-widest">
+                        Selecciona el alumno:
                       </label>
                       <select
                         value={selectedAthleteId}
                         onChange={(e) => setSelectedAthleteId(e.target.value)}
-                        className="bg-neutral-950 border border-cyan-neon/40 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
+                        className="bg-neutral-900 border border-white/15 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
                       >
                         {clubAthletes.map((ath) => (
                           <option key={ath.uid} value={ath.uid}>
@@ -690,9 +717,6 @@ export default function PlanImporterModal({
                           </option>
                         ))}
                       </select>
-                      <span className="text-[10px] text-cyan-neon/80 italic">
-                        El plan y sus tareas se sincronizarán únicamente en el calendario del alumno seleccionado.
-                      </span>
                     </div>
                   )}
                 </div>
@@ -701,45 +725,40 @@ export default function PlanImporterModal({
               {/* PREVIEW CONTAINER */}
               {importPreview.mode === "daily" ? (
                 viewMode === "table" ? (
-                  /* SPREADSHEET TABLE VIEW - IDENTICAL TO EXCEL/GOOGLE SHEETS */
-                  <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-56 overflow-y-auto">
+                  <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-60 overflow-y-auto">
                     <table className="w-full text-left border-collapse text-[11px]">
                       <thead className="bg-neutral-900 sticky top-0 z-10 border-b border-white/10">
                         <tr>
-                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50 w-10 text-center">#</th>
+                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50 w-8 text-center">#</th>
                           <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Fecha</th>
-                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Actividad</th>
+                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Texto / Actividad Literal</th>
                           <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50 text-right">Flechas</th>
-                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Enfoque</th>
-                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Notas</th>
+                          <th className="py-2 px-2.5 text-[9px] font-black uppercase tracking-wider text-white/50">Columnas Adicionales / Notas</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-mono">
                         {importPreview.dailyEntries.map((row, idx) => (
                           <tr 
                             key={`${row.date}-${idx}`}
-                            className={`hover:bg-white/[0.03] transition ${row.isRestDay ? "bg-emerald-500/[0.02]" : ""}`}
+                            className={`hover:bg-white/[0.03] transition ${row.isRestDay ? "bg-emerald-500/[0.03]" : ""}`}
                           >
-                            <td className="py-2 px-2.5 text-[10px] text-white/30 text-center">{idx + 1}</td>
-                            <td className="py-2 px-2.5 text-white/90 whitespace-nowrap font-bold">{row.date}</td>
-                            <td className="py-2 px-2.5 text-white">
-                              <span className="flex items-center gap-1.5">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.isRestDay ? "bg-emerald-400" : row.type === "competition" ? "bg-rose-400" : "bg-cyan-neon"}`} />
-                                <span className="truncate max-w-[140px] font-sans font-medium">{row.title}</span>
-                              </span>
+                            <td className="py-2 px-2.5 text-[10px] text-white/30 text-center tabular-nums">{idx + 1}</td>
+                            <td className="py-2 px-2.5 text-white/90 whitespace-nowrap font-bold tabular-nums">{row.date}</td>
+                            <td className="py-2 px-2.5 text-white font-sans font-semibold">
+                              {row.title}
                             </td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap">
-                              {row.isRestDay ? (
-                                <span className="text-emerald-400 text-[10px] font-bold">Descanso</span>
-                              ) : (
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap tabular-nums">
+                              {row.targetArrows > 0 ? (
                                 <span className="text-cyan-neon font-black">{row.targetArrows}</span>
+                              ) : (
+                                <span className="text-white/30">—</span>
                               )}
                             </td>
-                            <td className="py-2 px-2.5 text-white/60 font-sans truncate max-w-[120px]">
-                              {row.focusPoints && row.focusPoints.length > 0 ? row.focusPoints.join(", ") : "-"}
-                            </td>
-                            <td className="py-2 px-2.5 text-white/60 font-sans italic truncate max-w-[140px]">
-                              {row.notes ? row.notes : "-"}
+                            <td className="py-2 px-2.5 text-white/60 font-sans text-[10px]">
+                              {[
+                                row.focusPoints && row.focusPoints.length > 0 ? row.focusPoints.join(", ") : "",
+                                row.notes || ""
+                              ].filter(Boolean).join(" · ") || "—"}
                             </td>
                           </tr>
                         ))}
@@ -747,12 +766,11 @@ export default function PlanImporterModal({
                     </table>
                   </div>
                 ) : (
-                  /* CARDS VIEW */
-                  <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
                     {importPreview.dailyEntries.map((dayItem, i) => (
                       <div
                         key={`${dayItem.date}-${i}`}
-                        className="p-2.5 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between gap-3 text-xs"
+                        className="p-2.5 rounded-xl bg-neutral-950 border border-white/[0.06] flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <span
@@ -762,23 +780,19 @@ export default function PlanImporterModal({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="font-bold text-white truncate text-xs">{dayItem.title}</div>
-                            <div className="text-[10px] text-white/50 font-mono truncate">
+                            <div className="text-[10px] text-white/50 font-mono truncate tabular-nums">
                               {dayItem.date} {dayItem.focusPoints && dayItem.focusPoints.length > 0 ? `· ${dayItem.focusPoints.join(", ")}` : ""}
                             </div>
                             {dayItem.notes && (
                               <div className="text-[10px] text-white/40 italic truncate mt-0.5">
-                                "{dayItem.notes}"
+                                {dayItem.notes}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-cyan-neon font-black font-mono whitespace-nowrap text-xs">
-                            {dayItem.isRestDay ? (
-                              <span className="text-emerald-400">Descanso</span>
-                            ) : (
-                              `🎯 ${dayItem.targetArrows} fl`
-                            )}
+                          <div className="text-cyan-neon font-black font-mono whitespace-nowrap text-xs tabular-nums">
+                            {dayItem.targetArrows > 0 ? `${dayItem.targetArrows} fl.` : ""}
                           </div>
                         </div>
                       </div>
@@ -786,12 +800,11 @@ export default function PlanImporterModal({
                   </div>
                 )
               ) : (
-                /* STAGES VIEW */
-                <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
                   {importPreview.stages.map((stg, i) => (
                     <div
                       key={stg.id || i}
-                      className="p-2.5 rounded-xl bg-neutral-900/60 border border-white/5 flex items-center justify-between text-xs"
+                      className="p-2.5 rounded-xl bg-neutral-950 border border-white/[0.06] flex items-center justify-between text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <span
@@ -800,21 +813,24 @@ export default function PlanImporterModal({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-white truncate">{stg.name}</div>
-                          <div className="text-[10px] text-white/40 font-mono">
-                            {stg.startDate} al {stg.endDate} · {stg.weeklySessionGoal} sesiones/sem
+                          <div className="text-[10px] text-white/40 font-mono tabular-nums">
+                            {stg.startDate} al {stg.endDate}
+                            {stg.weeklySessionGoal > 0 ? ` · ${stg.weeklySessionGoal} sesiones/sem` : ""}
                           </div>
                           {stg.notes && (
                             <div className="text-[10px] text-white/40 italic truncate mt-0.5">
-                              "{stg.notes}"
+                              {stg.notes}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-cyan-neon font-black font-mono">
-                          {stg.weeklyArrowGoal} fl/sem
+                      {stg.weeklyArrowGoal > 0 && (
+                        <div className="text-right shrink-0">
+                          <div className="text-cyan-neon font-black font-mono tabular-nums">
+                            {stg.weeklyArrowGoal} fl/sem
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -824,12 +840,12 @@ export default function PlanImporterModal({
         </div>
 
         {/* Modal Footer Controls */}
-        <div className="p-4 sm:p-5 border-t border-white/10 bg-neutral-950 flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#0D0F12] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-white/70 hover:text-white font-bold text-xs uppercase cursor-pointer transition border border-white/5"
+            className="py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white/70 hover:text-white font-bold text-xs uppercase cursor-pointer transition border border-white/10"
           >
             Cancelar
           </button>
@@ -838,20 +854,20 @@ export default function PlanImporterModal({
             type="button"
             disabled={!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0) || isSubmitting}
             onClick={handleConfirmImport}
-            className="flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-cyan-brand via-cyan-neon to-emerald-400 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-glow-cyan disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:scale-98"
+            className="flex-1 py-3 px-5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:scale-98"
           >
             {isSubmitting ? (
               <>
                 <RefreshCw size={15} className="animate-spin" />
-                <span>Vinculando Plan al Calendario...</span>
+                <span>Aplicando al Calendario...</span>
               </>
             ) : (
               <>
-                <Sparkles size={15} />
+                <Check size={15} />
                 <span>
-                  {user.role === "coach" && assignTarget === "single"
-                    ? `Publicar y Enviar a ${clubAthletes.find(a => a.uid === selectedAthleteId)?.fullName || "Alumno"}`
-                    : "Vincular y Publicar al Calendario"}
+                  {(user.role === "coach" || user.role === "team_admin_coach") && assignTarget === "single"
+                    ? `Aplicar al Calendario de ${clubAthletes.find(a => a.uid === selectedAthleteId)?.fullName || "Alumno"}`
+                    : "Aplicar Literalmente al Calendario"}
                 </span>
                 <ArrowRight size={15} />
               </>
