@@ -11,14 +11,7 @@ interface RegisterViewProps {
   onNavigateToLogin: () => void;
 }
 
-const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "🇨🇷 CRC" },
-  { code: "ES", name: "España", flag: "🇪🇸 ESP" },
-  { code: "MX", name: "México", flag: "🇲🇽 MEX" },
-  { code: "CO", name: "Colombia", flag: "🇨🇴 COL" },
-  { code: "AR", name: "Argentina", flag: "🇦🇷 ARG" },
-  { code: "US", name: "United States", flag: "🇺🇸 USA" }
-];
+import { COUNTRIES } from "@/lib/countries";
 
 export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: RegisterViewProps) {
   const { t } = useLanguage();

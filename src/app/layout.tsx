@@ -3,21 +3,22 @@ import "./globals.css";
 import IPhoneFrame from "@/components/ui/IPhoneFrame";
 
 export const metadata: Metadata = {
-  title: "Archery 10 10 10 - App para Arqueros y Coaches",
-  description: "App para arqueros y coach: diana, duelos, cronógrafo, planificación ¡y más!",
+  metadataBase: new URL("https://archery101010-c0bb4.web.app"),
+  title: "Archery 101010 · The App",
+  description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias 1v1 en vivo, cronógrafo acústico y portal de entrenadores.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
     apple: "/images/logo_final.png",
   },
   openGraph: {
-    title: "Archery 10 10 10 - App para Arqueros y Coaches",
-    description: "App para arqueros y coach: diana, duelos, cronógrafo, planificación ¡y más!",
-    url: "https://archery101010.com",
+    title: "Archery 101010 · The App",
+    description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias 1v1 en vivo, cronógrafo acústico y portal de entrenadores.",
+    url: "https://archery101010-c0bb4.web.app",
     siteName: "Archery 101010",
     images: [
       {
-        url: "https://archery101010.com/images/logo_final.png",
+        url: "https://archery101010-c0bb4.web.app/images/logo_final.png",
         width: 800,
         height: 200,
         alt: "Archery 101010 Logo",

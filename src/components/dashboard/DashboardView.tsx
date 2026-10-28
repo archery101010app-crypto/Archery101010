@@ -48,14 +48,7 @@ interface DashboardViewProps {
   onUserUpdate?: (updated: UserProfile) => void;
 }
 
-const COUNTRIES = [
-  { code: "CR", olympic: "CRC", name: "Costa Rica", flag: "🇨🇷" },
-  { code: "ES", olympic: "ESP", name: "España", flag: "🇪🇸" },
-  { code: "MX", olympic: "MEX", name: "México", flag: "🇲🇽" },
-  { code: "CO", olympic: "COL", name: "Colombia", flag: "🇨🇴" },
-  { code: "AR", olympic: "ARG", name: "Argentina", flag: "🇦🇷" },
-  { code: "US", olympic: "USA", name: "United States", flag: "🇺🇸" }
-];
+import { COUNTRIES } from "@/lib/countries";
 
 export default function DashboardView({ user, coachViewMode = false, onNavigate, onUserUpdate }: DashboardViewProps) {
   const { language, t } = useLanguage();
@@ -297,9 +290,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             )}
           </div>
           <p className="text-xs text-white/50 mt-0.5 truncate flex items-center gap-1.5 font-medium">
-            <span className="shrink-0">{clubCountryObj.flag}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/70 shrink-0">
-              {clubCountryObj.olympic}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/80 shrink-0">
+              {clubCountryObj.flag}
             </span>
             <span className="text-white/25">·</span>
             {needsSetup ? (

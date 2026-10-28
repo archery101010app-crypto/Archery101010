@@ -21,19 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 
-const COUNTRIES: Record<string, { name: string; flag: string }> = {
-  CR: { name: "Costa Rica", flag: "🇨🇷 CRC" },
-  ES: { name: "España", flag: "🇪🇸 ESP" },
-  MX: { name: "México", flag: "🇲🇽 MEX" },
-  CO: { name: "Colombia", flag: "🇨🇴 COL" },
-  AR: { name: "Argentina", flag: "🇦🇷 ARG" },
-  US: { name: "Estados Unidos", flag: "🇺🇸 USA" },
-  CL: { name: "Chile", flag: "🇨🇱 CHI" },
-  PE: { name: "Perú", flag: "🇵🇪 PER" },
-  GT: { name: "Guatemala", flag: "🇬🇹 GUA" },
-  PA: { name: "Panamá", flag: "🇵🇦 PAN" },
-  BR: { name: "Brasil", flag: "🇧🇷 BRA" },
-};
+import { COUNTRIES_MAP as COUNTRIES } from "@/lib/countries";
 
 export default function AdminUsersTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);

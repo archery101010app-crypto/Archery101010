@@ -113,10 +113,27 @@ function translateFirebaseAuthError(err: any): string {
   return err?.message || "Error de autenticación.";
 }
 
+function isSuperAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return (
+    clean === "admin101010" ||
+    clean === "admin@archery101010.com" ||
+    clean === "admin101010@archery101010.com" ||
+    clean === "info@archery101010.com" ||
+    clean === "archery101010app@gmail.com"
+  );
+}
+
 export async function getLoggedUser(): Promise<UserProfile | null> {
   const u = await getLocalSetting<UserProfile | null>("current_user", null);
   if (!u) return null;
-  return sanitizeUserProfile(u);
+  const sanitized = sanitizeUserProfile(u);
+  if (isSuperAdminEmail(sanitized.email) && sanitized.role !== "superadmin") {
+    sanitized.role = "superadmin";
+    sanitized.plan = "PRO";
+  }
+  return sanitized;
 }
 
 export async function sendPasswordReset(email: string): Promise<void> {
@@ -133,10 +150,7 @@ export async function sendPasswordReset(email: string): Promise<void> {
 
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
   const normalizedEmail = email.trim().toLowerCase();
-  const isAdminEmail =
-    normalizedEmail === "admin101010" ||
-    normalizedEmail === "admin@archery101010.com" ||
-    normalizedEmail === "admin101010@archery101010.com";
+  const isAdminEmail = isSuperAdminEmail(normalizedEmail);
 
   const targetEmail = normalizedEmail === "admin101010" ? "admin@archery101010.com" : normalizedEmail;
 
@@ -313,9 +327,7 @@ export async function registerUser(
   }
 
   const isAdult = age >= 18;
-  const isAdminEmail =
-    normalizedEmail === "admin@archery101010.com" ||
-    normalizedEmail === "admin101010@archery101010.com";
+  const isAdminEmail = isSuperAdminEmail(normalizedEmail);
 
   let finalRole: UserProfile["role"] = isAdminEmail ? "superadmin" : "archer";
   let isCreator = false;

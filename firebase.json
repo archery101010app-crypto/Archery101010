@@ -3,9 +3,23 @@
     "public": "out",
     "ignore": [
       "firebase.json",
-      "**/.*",
       "**/node_modules/**",
       "**/*.apk"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      }
     ],
     "redirects": [
       {
