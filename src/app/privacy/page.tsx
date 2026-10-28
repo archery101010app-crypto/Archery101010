@@ -189,13 +189,13 @@ export default function PrivacyPolicyPage() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mt-1">
             <div className="bg-neutral-900/50 p-3.5 rounded-2xl border border-white/5">
-              <strong className="text-white block mb-1">❌ No vendemos tus datos</strong>
+              <strong className="text-white block mb-1">No vendemos tus datos</strong>
               <p className="text-neutral-400">
                 Nunca vendemos, alquilamos ni comercializamos tu información personal ni tus estadísticas de tiro con corredores de datos ni redes publicitarias.
               </p>
             </div>
             <div className="bg-neutral-900/50 p-3.5 rounded-2xl border border-white/5">
-              <strong className="text-white block mb-1">🎯 Privacidad entre Alumno y Coach</strong>
+              <strong className="text-white block mb-1">Privacidad entre Alumno y Coach</strong>
               <p className="text-neutral-400">
                 Si estás vinculado a un club o entrenador suscrito, tus resultados de puntuación y ciclos de entrenamiento son compartidos únicamente con tu entrenador designado.
               </p>

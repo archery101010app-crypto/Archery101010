@@ -70,7 +70,7 @@ export const translations = {
     bestSession: "Mejor Sesión",
     advAnalytics: "Análisis Avanzado - PRO",
     lockMessage: "Desbloquea análisis avanzados con el plan PRO",
-    upgradeToProBtn: "Actualizar a PRO ✦",
+    upgradeToProBtn: "Actualizar a PRO",
     clubsPrograms: "Clubes y Programas",
     weeklyProgress: "Progreso Semanal",
     syncText: "Sincronización",
@@ -143,7 +143,7 @@ export const translations = {
     last7Days: "Últimos 7 días",
     thisMonth: "Este mes",
     allTime: "Todo el tiempo",
-    personalBest: "🏆 Mejor Marca",
+    personalBest: "Mejor Marca",
     details: "Detalles",
     arrowsDistribution: "Distribución de Flechas",
     impactsMap: "Mapa de Impactos",
@@ -211,7 +211,7 @@ export const translations = {
     skip: "Skip",
     active: "Active",
     back: "Back",
-    proBadge: "PRO ✦",
+    proBadge: "PRO",
     freeBadge: "FREE",
 
     // Login
@@ -268,7 +268,7 @@ export const translations = {
     bestSession: "Best Session",
     advAnalytics: "Advanced Analytics - PRO",
     lockMessage: "Unlock advanced analytics with the PRO plan",
-    upgradeToProBtn: "Upgrade to PRO ✦",
+    upgradeToProBtn: "Upgrade to PRO",
     clubsPrograms: "Clubs & Programs",
     weeklyProgress: "Weekly Progress",
     syncText: "Synchronization",
@@ -341,7 +341,7 @@ export const translations = {
     last7Days: "Last 7 days",
     thisMonth: "This month",
     allTime: "All time",
-    personalBest: "🏆 Personal Best",
+    personalBest: "Personal Best",
     details: "Details",
     arrowsDistribution: "Arrow Distribution",
     impactsMap: "Impact Map",
@@ -392,7 +392,7 @@ export const translations = {
     lockedStarNotice: "Complete an official WA 720 shooting session (72 arrows) at the regulatory distance (Recurve at 70m or Compound at 50m) with a minimum score of 500 to earn your first 101010 star.",
     recordLabel: "Record:",
     nextLabel: "Next:",
-    maxStarAchieved: "🏆 You have reached the maximum Star (Diamond)! 🏆",
+    maxStarAchieved: "You have reached the maximum Star (Diamond)",
     pointsToNextStar: "points needed to upgrade your star level."
   }
 };

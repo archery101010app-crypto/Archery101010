@@ -116,7 +116,7 @@ export default function AdminSubscriptionsTab() {
                   <div className="text-left md:text-right">
                     <span className="text-[8px] text-white/30 uppercase font-black tracking-widest block">Plan Activo</span>
                     <span className={`text-[10px] font-black ${user.plan === "PRO" ? "text-yellow-gold" : "text-white/60"}`}>
-                      {user.plan === "PRO" ? "👑 COACH PRO" : "⚡ GRATUITO / FREE"}
+                      {user.plan === "PRO" ? "COACH PRO" : "GRATUITO / FREE"}
                     </span>
                   </div>
 

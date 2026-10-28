@@ -84,10 +84,10 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Coach View Switcher Toggle */}
         {user && onToggleCoachViewMode && (
-          <div className="flex bg-neutral-950 p-0.5 rounded-full border border-gray-border/60">
+          <div className="flex bg-[#090B0E] p-1 rounded-full border border-white/[0.08] items-center">
             <button
               onClick={() => onToggleCoachViewMode(false)}
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-gray-dim hover:text-white"
@@ -97,14 +97,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
-              className={`relative px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-gray-dim hover:text-white"
               }`}
             >
-              Coach
-              <span className="absolute -top-1.5 -right-2 text-[7px] bg-yellow-gold text-black font-black px-1 rounded-full uppercase scale-90 z-20">
+              <span>Coach</span>
+              <span className="text-[7px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
                 PRO
               </span>
             </button>

@@ -231,7 +231,27 @@ export async function recordClick(campaignId: string, slideId: string): Promise<
 export async function seedDemoAdCampaigns(): Promise<void> {
   try {
     const count = await adCampaignsStore.keys();
-    if (count.length > 0) return;
+    if (count.length > 0) {
+      // Sanitize any existing campaigns that still contain legacy emojis in their titles
+      for (const k of count) {
+        const existing = await adCampaignsStore.getItem<AdCampaign>(k);
+        if (existing?.slides?.length) {
+          let modified = false;
+          const cleanedSlides = existing.slides.map((s) => {
+            const cleanedTitle = (s.title || "").replace(/[\p{Extended_Pictographic}\u2600-\u27BF]/gu, "").trim();
+            if (cleanedTitle !== s.title) {
+              modified = true;
+              return { ...s, title: cleanedTitle };
+            }
+            return s;
+          });
+          if (modified) {
+            await adCampaignsStore.setItem(k, { ...existing, slides: cleanedSlides });
+          }
+        }
+      }
+      return;
+    }
 
     const demoCampaigns: AdCampaign[] = [
       {
@@ -324,7 +344,7 @@ export async function seedDemoAdCampaigns(): Promise<void> {
           {
             id: "SLIDE-BAR-1",
             imageUrl: "",
-            title: "🎯 Seminario de Técnica Olímpica con Coach Invitado el 15 de Junio. ¡Reserva tu lugar ahora! 🎯",
+            title: "Seminario de Técnica Olímpica con Coach Invitado el 15 de Junio · Reserva tu lugar",
             linkUrl: "https://archery101010.com/seminar",
             backgroundColor: "#00BFFF" // Cyan oficial
           }

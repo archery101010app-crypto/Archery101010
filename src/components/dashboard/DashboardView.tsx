@@ -30,7 +30,9 @@ import {
   Zap,
   Swords,
   Flame,
-  ChevronRight
+  ChevronRight,
+  Star,
+  X
 } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
@@ -47,12 +49,12 @@ interface DashboardViewProps {
 }
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
-  { code: "ES", name: "España", flag: "🇪🇸" },
-  { code: "MX", name: "México", flag: "🇲🇽" },
-  { code: "CO", name: "Colombia", flag: "🇨🇴" },
-  { code: "AR", name: "Argentina", flag: "🇦🇷" },
-  { code: "US", name: "United States", flag: "🇺🇸" }
+  { code: "CR", name: "Costa Rica" },
+  { code: "ES", name: "España" },
+  { code: "MX", name: "México" },
+  { code: "CO", name: "Colombia" },
+  { code: "AR", name: "Argentina" },
+  { code: "US", name: "United States" }
 ];
 
 export default function DashboardView({ user, coachViewMode = false, onNavigate, onUserUpdate }: DashboardViewProps) {
@@ -244,8 +246,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     animate: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  const clubFlag = COUNTRIES.find(c => c.code === user.clubCountry)?.flag || COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
-  const clubCountryName = COUNTRIES.find(c => c.code === user.clubCountry)?.name || COUNTRIES.find(c => c.code === user.country)?.name || "Costa Rica";
+  const clubCountryCode = COUNTRIES.find(c => c.code === user.clubCountry)?.code || COUNTRIES.find(c => c.code === user.country)?.code || "CR";
 
   if (coachViewMode) {
     return (
@@ -264,37 +265,37 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-5 sm:gap-6 py-4 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY APP / by 101010 (+25% de tamaño) */}
+      {/* Titular Oficial: ARCHERY 101010 / THE APP */}
       <div 
-        className="w-full flex flex-col justify-center items-center pt-2 pb-5 sm:pb-7 select-none gap-1.5"
+        className="w-full flex flex-col justify-center items-center pt-2 pb-4 sm:pb-6 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <h1 className="flex flex-wrap items-baseline justify-center gap-x-2.5 sm:gap-x-4 text-[26px] sm:text-[38px] md:text-[48px] leading-tight text-center">
-          <span className="text-white tracking-widest font-extrabold">ARCHERY</span>
+        <h1 className="flex items-baseline justify-center gap-x-2 sm:gap-x-3.5 text-[22px] sm:text-[36px] md:text-[46px] leading-tight text-center whitespace-nowrap">
+          <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </span>
         </h1>
-        <span className="text-[10px] sm:text-[12px] md:text-[14px] text-white/80 font-bold tracking-[0.45em] uppercase text-center pl-1">
+        <span className="text-[10px] sm:text-[12px] md:text-[14px] text-white/80 font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
           THE APP
         </span>
       </div>
 
       <div className="flex items-center justify-between mb-1 gap-2">
-        <div className="flex flex-col min-w-0">
+        <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-white text-lg font-bold tracking-tight">
               {t("dashHome")}
             </h2>
             {user.plan === "PRO" && (
-              <span className="text-yellow-gold text-[10px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase">
+              <span className="text-yellow-gold text-[10px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase whitespace-nowrap">
                 {t("proBadge")}
               </span>
             )}
           </div>
-          <p className="text-xs text-neutral-400 mt-0.5">
+          <p className="text-xs text-neutral-400 mt-0.5 truncate">
             {t("helloLabel")}{user.fullName} · {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
@@ -310,12 +311,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 sm:gap-5">
+      <div className="grid grid-cols-3 gap-3 sm:gap-5">
         {/* Progreso Semanal (Conectado a sesiones reales) */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
-          className="col-span-2 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group"
+          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
         >
           {(() => {
             const scored = sessions
@@ -351,18 +352,18 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
             return (
               <>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-neutral-400 font-semibold tracking-tight">
+                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <span className="text-[11px] sm:text-xs text-neutral-400 font-semibold tracking-tight truncate">
                     {t("weeklyProgress")}
                   </span>
                   {hasData ? (
-                    <span className="text-xs font-bold text-white tabular-nums">
-                      {latest.score} <span className="text-neutral-500 font-medium">/ {latest.maxScore}</span>{" "}
-                      <span className="text-cyan-neon ml-0.5">({latestPct}%)</span>
+                    <span className="text-[11px] sm:text-xs font-bold text-white tabular-nums whitespace-nowrap shrink-0">
+                      {latest.score}<span className="text-neutral-500 font-medium">/{latest.maxScore}</span>{" "}
+                      <span className="text-cyan-neon">({latestPct}%)</span>
                     </span>
                   ) : (
-                    <span className="text-[11px] text-neutral-500 font-medium">
-                      {language === "es" ? "Sin rondas aún" : "No rounds yet"}
+                    <span className="text-[10px] sm:text-[11px] text-neutral-500 font-medium whitespace-nowrap shrink-0">
+                      {language === "es" ? "Sin rondas" : "No rounds"}
                     </span>
                   )}
                 </div>
@@ -390,7 +391,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           cx={p.x}
                           cy={p.y}
                           r="2"
-                          className="fill-cyan-neon stroke-[#0D0F12] stroke-[1.2px]"
+                          className="fill-cyan-neon stroke-[#0D1017] stroke-[1.2px]"
                         />
                       ))}
                   </svg>
@@ -403,33 +404,34 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         {/* Clubes y Programas */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group"
+          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between h-36 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-xs text-neutral-400 font-semibold tracking-tight leading-snug">
-            {t("clubsPrograms")}
+          <span className="text-[11px] sm:text-xs text-neutral-400 font-semibold tracking-tight leading-tight truncate">
+            {language === "es" ? "Mi Club" : "My Club"}
           </span>
-          <div className="flex flex-col gap-0.5 overflow-hidden">
+          <div className="flex flex-col gap-0.5 overflow-hidden min-w-0">
             <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[11px] text-neutral-400 truncate flex items-center gap-1 mt-0.5">
-              <span>{clubFlag}</span>
+            <span className="text-[10px] text-neutral-400 truncate flex items-center gap-1 mt-0.5 font-medium">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-neon/80 shrink-0">{clubCountryCode}</span>
+              <span className="text-white/30">·</span>
               <span className="truncate">
                 {user.role === "coach" 
                   ? "Coach" 
                   : user.role === "team_admin" 
                     ? t("roleAdmin") 
                     : user.role === "team_admin_coach" 
-                      ? "Admin / Coach" 
+                      ? "Admin" 
                       : user.role === "superadmin" 
-                        ? "Super Admin" 
+                        ? "Admin" 
                         : t("roleMember")}
               </span>
             </span>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-neutral-950 flex items-center justify-center border border-white/[0.07] group-hover:border-white/20 transition-colors">
-            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-6 h-6 p-0.5" />
+          <div className="w-8 h-8 rounded-xl bg-[#090B0E] flex items-center justify-center border border-white/[0.08] group-hover:border-white/20 transition-colors">
+            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-5 h-5 p-0.5" />
           </div>
         </motion.div>
 
@@ -456,7 +458,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </div>
 
             <span className="text-[9px] font-bold uppercase tracking-wider text-white/45 whitespace-nowrap">
-              {language === "es" ? "Sets & Acumulado" : "Sets & Cumulative"}
+              {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
 
@@ -515,9 +517,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           onClick={() => setIsStarsDrawerOpen(true)}
           className="h-28 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none"
         >
-          <span className="text-sm text-black font-black leading-none">
-            ★
-          </span>
+          <Star size={12} strokeWidth={2.5} className="fill-black text-black shrink-0" />
           <span 
             className="text-[8px] font-black tracking-[0.18em] uppercase text-black" 
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
@@ -547,7 +547,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               <div className="px-5 pb-4 border-b border-white/5 flex items-center justify-between">
                 <div>
                   <h3 className="text-white text-sm font-black uppercase tracking-wide flex items-center gap-1.5">
-                    <span className="text-yellow-gold">★</span>
+                    <Star size={14} className="text-yellow-gold fill-yellow-gold shrink-0" />
                     <span>Estrellas 101010</span>
                   </h3>
                   <p className="text-[9px] text-gray-dim uppercase tracking-wider mt-0.5">
@@ -556,39 +556,39 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
                 <button
                   onClick={() => setIsStarsDrawerOpen(false)}
-                  className="p-1.5 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 text-gray-dim hover:text-white transition cursor-pointer text-xs font-bold"
+                  className="w-8 h-8 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 text-gray-dim hover:text-white transition cursor-pointer flex items-center justify-center"
                 >
-                  ✕
+                  <X size={14} />
                 </button>
               </div>
 
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-                <p className="text-[10px] text-gray-dim leading-relaxed">
-                  Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70m o Compuesto 50m) con un puntaje mínimo de 500 para ganar estrellas.
+                <p className="text-[10px] text-gray-dim leading-relaxed [text-wrap:pretty]">
+                  Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70 m o Compuesto 50 m) con un puntaje mínimo de 500 para ganar estrellas.
                 </p>
 
                 {/* Bow type tabs */}
-                <div className="flex bg-neutral-905 p-0.5 rounded-lg border border-white/5 w-full bg-neutral-900">
+                <div className="grid grid-cols-2 gap-1 bg-[#090B0E] p-1 rounded-xl border border-white/[0.08] w-full">
                   <button
                     onClick={() => setActiveStarTab("Recurve")}
-                    className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition ${
+                    className={`h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Recurve"
-                        ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
+                        ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
                         : "text-gray-dim hover:text-white"
                     }`}
                   >
-                    Recurvo (70m)
+                    Recurvo (70 m)
                   </button>
                   <button
                     onClick={() => setActiveStarTab("Compound")}
-                    className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition ${
+                    className={`h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Compound"
-                        ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
+                        ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
                         : "text-gray-dim hover:text-white"
                     }`}
                   >
-                    Compuesto (50m)
+                    Compuesto (50 m)
                   </button>
                 </div>
 
@@ -615,20 +615,20 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           <div className="flex items-center gap-3">
                             {/* Star Icon */}
                             <div 
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center border text-lg transition-transform group-hover:scale-105 ${
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-transform group-hover:scale-105 ${
                                 isUnlocked 
-                                  ? "bg-[#0D0F12] border-white/10" 
+                                  ? "bg-[#0D1017] border-white/10" 
                                   : "bg-neutral-950 border-white/5"
                               }`}
                               style={{ color: star.color }}
                             >
-                              ★
+                              <Star size={18} className="fill-current" />
                             </div>
                             <div className="flex flex-col text-left">
                               <span className="text-xs font-black text-white group-hover:text-yellow-gold transition-colors">
                                 {star.name}
                               </span>
-                              <span className="text-[9px] text-gray-dim font-bold mt-0.5">
+                              <span className="text-[9px] text-gray-dim font-bold mt-0.5 tabular-nums">
                                 Mínimo: {star.minScore} pts
                               </span>
                             </div>
@@ -638,7 +638,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           <div>
                             {isUnlocked ? (
                               <span 
-                                className="text-[8px] font-black px-2 py-0.5 rounded-full border"
+                                className="text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider"
                                 style={{ 
                                   borderColor: `${star.color}30`, 
                                   backgroundColor: `${star.color}10`, 
@@ -672,15 +672,15 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#0A0B0E] border border-white/10 rounded-3xl p-6 w-full max-w-sm text-center relative overflow-hidden"
+              className="bg-[#0B0E14] border border-white/10 rounded-3xl p-6 w-full max-w-sm text-center relative overflow-hidden"
             >
               <div className="relative z-10 flex flex-col items-center">
                 {/* Large Star Icon */}
                 <div
-                  className="w-20 h-20 flex items-center justify-center rounded-2xl bg-[#0D0F12] border border-white/10 text-4xl mb-4 relative"
+                  className="w-20 h-20 flex items-center justify-center rounded-2xl bg-[#111620] border border-white/10 mb-4 relative"
                   style={{ color: selectedDetailStar.star.color }}
                 >
-                  ★
+                  <Star size={34} className="fill-current" />
                   {!selectedDetailStar.isUnlocked && (
                     <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 p-1 rounded-lg text-gray-dim leading-none">
                       <Lock size={11} />
@@ -695,7 +695,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   {selectedDetailStar.star.name}
                 </h3>
                 
-                <div className="my-4 bg-[#0D0F12] border border-white/[0.06] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
+                <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
                     <span className="text-[10px] text-gray-dim uppercase font-bold">Modalidad</span>
                     <span className="text-xs font-black text-white">
@@ -710,12 +710,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
                     <span className="text-[10px] text-gray-dim uppercase font-bold">Marca Mínima</span>
-                    <span className="text-xs font-black text-white">{selectedDetailStar.star.minScore} / 720 pts</span>
+                    <span className="text-xs font-black text-white tabular-nums">{selectedDetailStar.star.minScore} / 720 pts</span>
                   </div>
                   <div className="flex flex-col pt-1">
                     <div className="flex justify-between items-center text-[10px] text-gray-dim font-bold mb-1">
                       <span>Progreso de Puntuación</span>
-                      <span className="text-white font-extrabold">
+                      <span className="text-white font-extrabold tabular-nums">
                         {athleteStar && athleteStar.bowType === selectedDetailStar.bowType
                           ? `${athleteStar.highestScore} pts`
                           : "Sin Récord"
@@ -743,10 +743,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           </div>
                           <span className="text-[9px] font-bold text-gray-dim mt-0.5">
                             {selectedDetailStar.isUnlocked 
-                              ? "✓ ¡Estrella obtenida y superada!" 
+                              ? "Estrella obtenida y superada" 
                               : pointsNeeded > 0 
                                 ? `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`
-                                : "✓ ¡Estrella lograda!"
+                                : "Estrella lograda"
                             }
                           </span>
                         </div>
@@ -755,7 +755,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </div>
                 </div>
 
-                <p className="text-[10px] text-gray-dim leading-relaxed px-2">
+                <p className="text-[10px] text-gray-dim leading-relaxed px-2 [text-wrap:pretty]">
                   {selectedDetailStar.star.description || `Se obtiene con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
                 </p>
 
@@ -766,14 +766,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                       setIsStarsDrawerOpen(false);
                       onNavigate("TARGET");
                     }}
-                    className="w-full py-3 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5"
+                    className="w-full h-11 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     <Target size={14} />
                     <span>Entrenar para Lograrlo</span>
                   </button>
                   <button
                     onClick={() => setSelectedDetailStar(null)}
-                    className="w-full py-3 bg-[#0D0F12] border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition"
+                    className="w-full h-11 bg-[#111620] border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center justify-center whitespace-nowrap"
                   >
                     Volver al Listado
                   </button>

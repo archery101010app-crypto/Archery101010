@@ -120,8 +120,10 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
                 transition={{ duration: 0.2 }}
                 className={`${sizeClass} font-black select-none tracking-wide flex items-center gap-1.5`}
               >
-                <span>{currentSlide.title || "Anuncio Importante"}</span>
-                {currentSlide.linkUrl && <ExternalLink size={10} className="inline opacity-80" />}
+                <span className="truncate">
+                  {(currentSlide.title || "Anuncio Importante").replace(/[\p{Extended_Pictographic}\u2600-\u27BF]/gu, "").trim()}
+                </span>
+                {currentSlide.linkUrl && <ExternalLink size={10} className="inline opacity-80 shrink-0" />}
               </motion.div>
             </AnimatePresence>
           </div>

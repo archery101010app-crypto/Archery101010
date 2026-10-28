@@ -275,7 +275,7 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   drawStatBox(ctx, 385, cardY, 310, cardHeight, "AGRUPACIÓN", spreadText, groupQuality);
 
   // Card 3: Centro & Ajuste de Mira (Dirección únicamente)
-  const centerText = dispersion ? dispersion.clockDirection : "Centro 🎯";
+  const centerText = dispersion ? dispersion.clockDirection : "Centro";
   let directionAdvice = "Mira centrada";
   if (dispersion) {
     const hasV = dispersion.verticalDirection !== "CENTRADO";
@@ -347,7 +347,7 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
       await navigator.share({
         files: [file],
         title: `Diana ${params.archerName || "Arquero"} - Archery 101010`,
-        text: `🎯 Mi diana de tiro en Archery 101010: ${params.score}/${params.maxScore} pts (${params.tensCount} 10s, ${params.xsCount} Xs). ¡Mira la agrupación!`
+        text: `Mi diana de tiro en Archery 101010: ${params.score}/${params.maxScore} pts (${params.tensCount} 10s, ${params.xsCount} Xs).`
       });
       return true;
     } else {

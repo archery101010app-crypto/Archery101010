@@ -232,24 +232,10 @@ export function calculateDispersionAnalysis(
   let clockHour = Math.round((450 - angleDeg) / 30) % 12;
   if (clockHour === 0) clockHour = 12;
 
-  let clockDirection = "Centro 🎯";
+  let clockDirection = "Centro";
   // Si el grupo se aleja más de un cuarto del radio del 10, indicar reloj
   if (distanceFromCenterCm > dims.tenRingDiameterCm * 0.15) {
-    const arrowsClock: Record<number, string> = {
-      12: "12:00 ⬆",
-      1: "1:00 ↗",
-      2: "2:00 ↗",
-      3: "3:00 ➡",
-      4: "4:00 ↘",
-      5: "5:00 ↘",
-      6: "6:00 ⬇",
-      7: "7:00 ↙",
-      8: "8:00 ↙",
-      9: "9:00 ⬅",
-      10: "10:00 ↖",
-      11: "11:00 ↖"
-    };
-    clockDirection = arrowsClock[clockHour] || `${clockHour}:00`;
+    clockDirection = `${clockHour}:00`;
   }
 
   // Diámetro Máximo de Grupo (Distancia extrema entre cualquier par de flechas)

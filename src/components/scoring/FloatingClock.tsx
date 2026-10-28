@@ -421,7 +421,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Official Phase & Signal Banner */}
                 <div className="text-center flex flex-col items-center gap-1">
                   <span
-                    className={`px-4 py-1 rounded-full text-xs font-black uppercase tracking-[0.18em] border ${
+                    className={`px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wider border inline-flex items-center justify-center gap-2 whitespace-nowrap ${
                       lightState === "RED"
                         ? "bg-red-600/20 border-red-500/50 text-red-400"
                         : lightState === "YELLOW"
@@ -429,13 +429,24 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                         : "bg-green-success/20 border-green-success/50 text-green-success"
                     }`}
                   >
-                    {phase === "prep"
-                      ? "🔴 LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)"
-                      : phase === "stop"
-                      ? "🔴 LUZ ROJA · FIN DE TIEMPO (3 PITIDOS)"
-                      : lightState === "YELLOW"
-                      ? `🟡 LUZ AMARILLA · ÚLTIMOS ${getWarningThreshold(shootTime)}s`
-                      : "🟢 LUZ VERDE · TIEMPO DE TIRO (1 PITIDO)"}
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        lightState === "RED"
+                          ? "bg-red-500"
+                          : lightState === "YELLOW"
+                          ? "bg-yellow-gold"
+                          : "bg-green-success"
+                      }`}
+                    />
+                    <span>
+                      {phase === "prep"
+                        ? "LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)"
+                        : phase === "stop"
+                        ? "LUZ ROJA · FIN DE TIEMPO (3 PITIDOS)"
+                        : lightState === "YELLOW"
+                        ? `LUZ AMARILLA · ÚLTIMOS ${getWarningThreshold(shootTime)}s`
+                        : "LUZ VERDE · TIEMPO DE TIRO (1 PITIDO)"}
+                    </span>
                   </span>
                   <p className="text-white/70 text-xs font-bold mt-0.5">
                     {phase === "prep"
@@ -448,12 +459,12 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
                 {/* Display giant clock digits */}
                 <div
-                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none font-mono transition-colors duration-200 ${
+                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none font-mono tabular-nums transition-colors duration-200 ${
                     lightState === "RED"
-                      ? "text-red-500 drop-shadow-[0_0_35px_rgba(239,68,68,0.45)]"
+                      ? "text-red-500"
                       : lightState === "YELLOW"
-                      ? "text-yellow-gold drop-shadow-[0_0_35px_rgba(255,229,0,0.45)]"
-                      : "text-green-success drop-shadow-[0_0_35px_rgba(0,200,83,0.45)]"
+                      ? "text-yellow-gold"
+                      : "text-green-success"
                   }`}
                 >
                   {formatTime(timeLeft)}
@@ -478,7 +489,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   {phase !== "stop" ? (
                     <button
                       onClick={handlePauseToggle}
-                      className="px-5 py-3 rounded-2xl bg-yellow-gold text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                      className="h-11 px-5 rounded-xl bg-yellow-gold text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
                     >
                       {isPaused ? <Play size={15} /> : <Pause size={15} />}
                       <span>{isPaused ? t("resume") : t("pause")}</span>
@@ -486,7 +497,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   ) : (
                     <button
                       onClick={handleStart}
-                      className="px-5 py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-glow-cyan hover:brightness-110 active:scale-95 transition"
+                      className="h-11 px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition"
                     >
                       <Play size={15} />
                       <span>Nueva Ronda (2 Pitidos)</span>
@@ -494,21 +505,21 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   )}
                   <button
                     onClick={handleResetPhase}
-                    className="px-5 py-3 rounded-2xl bg-green-success text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition"
+                    className="h-11 px-5 rounded-xl bg-green-success text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
                   >
                     <RotateCw size={15} />
                     <span>{t("resetPhase")}</span>
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="px-5 py-3 rounded-2xl bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-white/25 active:scale-95 transition"
+                    className="h-11 px-5 rounded-xl bg-white/15 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-white/25 active:scale-95 transition"
                   >
                     <Minimize2 size={15} />
                     <span>{t("minimize")}</span>
                   </button>
                   <button
                     onClick={handleStop}
-                    className="px-5 py-3 rounded-2xl bg-neutral-800 border border-white/20 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-neutral-700 active:scale-95 transition"
+                    className="h-11 px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition"
                   >
                     <Square size={15} />
                     <span>Configurar</span>
@@ -518,11 +529,11 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Emergency Stop / Alto al Fuego (WA Rule 13.4 - 5 rapid horn blasts) */}
                 <button
                   onClick={handleEmergencyStop}
-                  className="px-6 py-3 rounded-full bg-red-600/90 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-red-400/40 shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-95 transition cursor-pointer"
+                  className="h-11 px-6 rounded-full bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-red-400/40 active:scale-95 transition cursor-pointer"
                   title="Detención inmediata de tiro según reglamento World Archery"
                 >
                   <AlertTriangle size={16} />
-                  <span>🚨 Alto al Fuego (5 Pitidos)</span>
+                  <span>Alto al Fuego (5 Pitidos)</span>
                 </button>
               </div>
             ) : (
@@ -538,7 +549,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 </div>
 
                 {/* Official WA Quick Presets */}
-                <div className="w-full bg-neutral-950/90 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-1.5">
+                <div className="w-full bg-[#0D1017] border border-white/[0.08] rounded-2xl p-2.5 flex flex-col gap-1.5">
                   <span className="text-[9px] font-black uppercase text-cyan-neon tracking-wider px-1">
                     Formatos Oficiales World Archery
                   </span>
@@ -558,8 +569,8 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                             preset.id === "WA_20" ? "col-span-2" : ""
                           } ${
                             isSelected
-                              ? "bg-cyan-neon/15 border-cyan-neon text-white shadow-glow-cyan"
-                              : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white"
+                              ? "bg-cyan-neon/15 border-cyan-neon/50 text-white"
+                              : "bg-[#090B0E] border-white/[0.06] text-gray-dim hover:text-white"
                           }`}
                         >
                           <span className="text-[11px] font-black uppercase text-white leading-tight">
@@ -575,7 +586,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 </div>
 
                 {/* Sound Mode Selector Pills */}
-                <div className="w-full bg-neutral-950/90 border border-white/10 rounded-2xl p-2.5 flex flex-col gap-2">
+                <div className="w-full bg-[#0D1017] border border-white/[0.08] rounded-2xl p-2.5 flex flex-col gap-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[10px] font-black uppercase text-gray-dim tracking-wider flex items-center gap-1">
                       <Radio size={12} className="text-cyan-neon" />
@@ -594,35 +605,35 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("horn")}
-                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "horn"
-                          ? "bg-cyan-neon text-black shadow-glow-cyan"
-                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                          ? "bg-cyan-neon text-black font-extrabold"
+                          : "bg-[#090B0E] text-gray-dim hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>📢 Bocina WA</span>
+                      <span>Bocina WA</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("whistle")}
-                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "whistle"
-                          ? "bg-cyan-neon text-black shadow-glow-cyan"
-                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                          ? "bg-cyan-neon text-black font-extrabold"
+                          : "bg-[#090B0E] text-gray-dim hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>🎷 Silbato</span>
+                      <span>Silbato</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("mute")}
-                      className={`py-2 px-1 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[11px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "mute"
-                          ? "bg-red-500 text-white"
-                          : "bg-white/5 text-gray-dim hover:text-white border border-white/5"
+                          ? "bg-red-500 text-white font-extrabold"
+                          : "bg-[#090B0E] text-gray-dim hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>🔇 Silencio</span>
+                      <span>Silencio</span>
                     </button>
                   </div>
 
@@ -660,7 +671,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                       onChange={(e) => setPrepTime(Math.max(5, Number(e.target.value)))}
                       min="5"
                       max="30"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-[#0D1017] border border-white/[0.12] text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon tabular-nums transition duration-200"
                     />
                   </div>
 
@@ -674,7 +685,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                       onChange={(e) => setShootTime(Math.max(10, Number(e.target.value)))}
                       min="10"
                       max="300"
-                      className="w-full bg-white/10 border border-white/20 text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon focus:bg-white/15 transition duration-200"
+                      className="w-full bg-[#0D1017] border border-white/[0.12] text-white text-center text-lg font-black py-2 rounded-2xl outline-none focus:border-cyan-neon tabular-nums transition duration-200"
                     />
                   </div>
                 </div>
@@ -682,11 +693,11 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* GIANT START BUTTON */}
                 <motion.button
                   onClick={handleStart}
-                  whileHover={{ scale: 1.06, boxShadow: "0 0 30px rgba(0,229,255,0.4)" }}
-                  whileTap={{ scale: 0.92 }}
-                  className="w-[116px] h-[116px] rounded-full bg-gradient-to-br from-cyan-brand to-cyan-neon border-4 border-white/10 shadow-[0_10px_25px_rgba(0,162,232,0.3)] flex flex-col items-center justify-center gap-1 cursor-pointer text-white"
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.94 }}
+                  className="w-[112px] h-[112px] rounded-full bg-cyan-neon hover:bg-[#19c8ff] border-4 border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer text-black"
                 >
-                  <Play size={28} fill="white" className="ml-1" />
+                  <Play size={28} fill="black" className="ml-1" />
                   <span className="text-[11px] font-black tracking-widest uppercase">{t("startClock")}</span>
                 </motion.button>
 
@@ -694,13 +705,13 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 <div className="grid grid-cols-2 gap-2 w-full">
                   <button
                     onClick={handleDisableToggle}
-                    className="w-full py-2.5 rounded-2xl bg-yellow-gold/80 hover:bg-yellow-gold text-black font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                    className="w-full h-11 rounded-2xl bg-yellow-gold hover:brightness-105 text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer"
                   >
-                    🚫 {t("noClock")}
+                    {t("noClock")}
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="w-full py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    className="w-full h-11 rounded-2xl bg-[#0D1017] border border-white/[0.1] hover:bg-white/[0.06] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap transition cursor-pointer"
                   >
                     <X size={14} />
                     <span>{t("closeClock")}</span>

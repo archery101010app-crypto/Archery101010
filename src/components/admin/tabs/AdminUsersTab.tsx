@@ -22,17 +22,17 @@ import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 
 const COUNTRIES: Record<string, { name: string; flag: string }> = {
-  CR: { name: "Costa Rica", flag: "🇨🇷" },
-  ES: { name: "España", flag: "🇪🇸" },
-  MX: { name: "México", flag: "🇲🇽" },
-  CO: { name: "Colombia", flag: "🇨🇴" },
-  AR: { name: "Argentina", flag: "🇦🇷" },
-  US: { name: "Estados Unidos", flag: "🇺🇸" },
-  CL: { name: "Chile", flag: "🇨🇱" },
-  PE: { name: "Perú", flag: "🇵🇪" },
-  GT: { name: "Guatemala", flag: "🇬🇹" },
-  PA: { name: "Panamá", flag: "🇵🇦" },
-  BR: { name: "Brasil", flag: "🇧🇷" },
+  CR: { name: "Costa Rica", flag: "CRC" },
+  ES: { name: "España", flag: "ESP" },
+  MX: { name: "México", flag: "MEX" },
+  CO: { name: "Colombia", flag: "COL" },
+  AR: { name: "Argentina", flag: "ARG" },
+  US: { name: "Estados Unidos", flag: "USA" },
+  CL: { name: "Chile", flag: "CHI" },
+  PE: { name: "Perú", flag: "PER" },
+  GT: { name: "Guatemala", flag: "GUA" },
+  PA: { name: "Panamá", flag: "PAN" },
+  BR: { name: "Brasil", flag: "BRA" },
 };
 
 export default function AdminUsersTab() {
@@ -477,7 +477,7 @@ export default function AdminUsersTab() {
         ) : (
           <div className="flex flex-col gap-2.5">
             {filteredUsers.map((u) => {
-              const countryInfo = COUNTRIES[u.country] || { flag: "🏹", name: u.country || "Desconocido" };
+              const countryInfo = COUNTRIES[u.country] || { flag: u.country || "INT", name: u.country || "Desconocido" };
               const isRecent = isRecentUser(u);
 
               return (
@@ -601,8 +601,8 @@ export default function AdminUsersTab() {
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-brand/20 to-cyan-neon/30 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-lg">
                     {getInitials(selectedUser.fullName)}
                   </div>
-                  <span className="absolute -bottom-1 -right-1 text-base">
-                    {COUNTRIES[selectedUser.country]?.flag || "🏹"}
+                  <span className="absolute -bottom-1 -right-1 text-[9px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
+                    {COUNTRIES[selectedUser.country]?.flag || selectedUser.country || "INT"}
                   </span>
                 </div>
                 <div className="min-w-0">

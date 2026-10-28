@@ -14,12 +14,12 @@ interface ProfileCompletionModalProps {
 }
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
-  { code: "ES", name: "España", flag: "🇪🇸" },
-  { code: "MX", name: "México", flag: "🇲🇽" },
-  { code: "CO", name: "Colombia", flag: "🇨🇴" },
-  { code: "AR", name: "Argentina", flag: "🇦🇷" },
-  { code: "US", name: "United States", flag: "🇺🇸" }
+  { code: "CR", name: "Costa Rica", flag: "CRC" },
+  { code: "ES", name: "España", flag: "ESP" },
+  { code: "MX", name: "México", flag: "MEX" },
+  { code: "CO", name: "Colombia", flag: "COL" },
+  { code: "AR", name: "Argentina", flag: "ARG" },
+  { code: "US", name: "United States", flag: "USA" }
 ];
 
 export default function ProfileCompletionModal({ user, onComplete, onClose, onReturnToLogin }: ProfileCompletionModalProps) {

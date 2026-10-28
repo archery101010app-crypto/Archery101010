@@ -14,12 +14,12 @@ import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, getExactTargetDimensions } from "@/lib/scoring/dispersionAnalytics";
 
 const COUNTRIES = [
-  { code: "CR", name: "Costa Rica", flag: "🇨🇷" },
-  { code: "ES", name: "España", flag: "🇪🇸" },
-  { code: "MX", name: "México", flag: "🇲🇽" },
-  { code: "CO", name: "Colombia", flag: "🇨🇴" },
-  { code: "AR", name: "Argentina", flag: "🇦🇷" },
-  { code: "US", name: "United States", flag: "🇺🇸" }
+  { code: "CR", name: "Costa Rica", flag: "CRC" },
+  { code: "ES", name: "España", flag: "ESP" },
+  { code: "MX", name: "México", flag: "MEX" },
+  { code: "CO", name: "Colombia", flag: "COL" },
+  { code: "AR", name: "Argentina", flag: "ARG" },
+  { code: "US", name: "United States", flag: "USA" }
 ];
 
 interface MatchplayGameViewProps {
@@ -2151,8 +2151,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const currentRivalName = config.rival.fullName;
-  const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "🇲🇽";
-  const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷";
+  const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "MEX";
+  const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "CRC";
 
   // Confirm and go back warning if match in progress
   const handleBackWithConfirm = () => {
