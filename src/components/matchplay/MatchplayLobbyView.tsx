@@ -121,7 +121,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
   const [customDistance, setCustomDistance] = useState<number>(user?.bowConfig?.defaultDistance || 70);
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
-  const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("BOT");
+  const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("FRIEND");
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
@@ -481,7 +481,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         ? `${window.location.origin}?join=${generatedCode}`
         : `https://archery101010.com?join=${generatedCode}`;
 
-      const shareText = `🎯 ¡Te desafío a un duelo de eliminación en Archery 101010!\n\n🏹 Formato: ${customBow} a ${customDistance}m\n🔑 Código: ${generatedCode}\n\n👉 Toca aquí para unirte al duelo en vivo:\n${shareUrl}`;
+      const shareText = `Te desafio a una Eliminatoria Online 1 vs 1 en Archery 101010.\n\nFormato: ${customBow} a ${customDistance}m\nCodigo de Sala: ${generatedCode}\n\nEntra al duelo en vivo aqui:\n${shareUrl}`;
 
       // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
       setDoc(doc(db, "active_duels", generatedCode), {
@@ -596,117 +596,112 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   };
 
   return (
-    <div className="flex flex-col gap-5 py-4 min-h-full relative overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 z-10">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-xl bg-neutral-900/60 backdrop-blur-md border border-white/10 text-gray-dim hover:text-white cursor-pointer transition"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h2 className="text-white text-lg font-black uppercase tracking-wide flex items-center gap-1.5">
-            Duelos de Eliminación
-          </h2>
-          <p className="text-[10px] text-cyan-neon uppercase tracking-widest font-black">
-            Lobby de Competencia 1v1
-          </p>
+    <div className="flex flex-col gap-4 py-4 min-h-full relative overflow-hidden">
+      {/* Hero Header: Eliminatorias Online 1v1 */}
+      <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 relative overflow-hidden z-10 flex flex-col gap-3">
+        <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+          <div className="flex-1 bg-cyan-neon" />
+          <div className="flex-1 bg-red-rival" />
+          <div className="flex-1 bg-yellow-gold" />
         </div>
-      </div>
 
-      {/* Competitor Gamertag / Alias Card */}
-      <div className="bg-neutral-900/80 border border-white/10 rounded-2xl px-3.5 py-2.5 flex items-center justify-between z-10 shadow-sm backdrop-blur-md">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon text-xs font-black shrink-0">
-            @
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onBack}
+              className="p-2 rounded-xl bg-[#141923] border border-white/[0.08] text-white/70 hover:text-white cursor-pointer transition"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div>
+              <div className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="text-[9px] text-emerald-400 uppercase tracking-widest font-black">
+                  LIVE MATCHPLAY · 1 VS 1 ONLINE
+                </span>
+              </div>
+              <h2
+                className="text-white text-base sm:text-lg font-black uppercase tracking-wide leading-tight mt-0.5"
+                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              >
+                ELIMINATORIAS ONLINE
+              </h2>
+            </div>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[9px] text-gray-dim uppercase font-black tracking-wider">Tu Alias para Retos</span>
+
+          {/* Compact Gamertag / Alias Pill */}
+          <div className="flex items-center gap-1.5 bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 py-1.5">
             {isEditingAlias ? (
-              <form onSubmit={handleSaveAlias} className="flex items-center gap-1.5 mt-0.5">
+              <form onSubmit={handleSaveAlias} className="flex items-center gap-1">
                 <input
                   type="text"
                   autoFocus
                   value={currentAlias}
                   onChange={(e) => setCurrentAlias(e.target.value)}
-                  className="h-7 w-32 bg-neutral-950 border border-cyan-neon text-cyan-neon font-mono font-bold text-xs px-2 rounded-lg outline-none"
+                  className="h-6 w-24 bg-[#121722] border border-cyan-neon text-cyan-neon font-mono font-bold text-xs px-1.5 rounded outline-none"
                   placeholder="alias"
                 />
                 <button
                   type="submit"
-                  className="h-7 px-2.5 rounded-lg bg-cyan-neon hover:bg-cyan-brand text-black font-black text-[10px] flex items-center gap-1 cursor-pointer transition active:scale-95"
+                  className="h-6 px-2 rounded bg-cyan-neon text-black font-black text-[9px] flex items-center cursor-pointer"
                 >
-                  <Check size={12} />
-                  <span>Ok</span>
+                  <Check size={11} />
                 </button>
               </form>
             ) : (
-              <span className="text-white text-xs font-mono font-black truncate text-cyan-neon">
-                @{currentAlias}
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsEditingAlias(true)}
+                className="flex items-center gap-1.5 text-left cursor-pointer group"
+                title="Cambiar tu alias para retos online"
+              >
+                <span className="text-[11px] font-mono font-black text-cyan-neon">
+                  @{currentAlias}
+                </span>
+                <Edit3 size={10} className="text-white/40 group-hover:text-white transition" />
+              </button>
             )}
           </div>
         </div>
 
-        {!isEditingAlias && (
-          <button
-            type="button"
-            onClick={() => setIsEditingAlias(true)}
-            className="h-7 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-neon text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
-          >
-            <Edit3 size={11} />
-            <span>Cambiar</span>
-          </button>
-        )}
-      </div>
-
-      {/* Stats / Intro banner */}
-      <div className="bg-neutral-900/60 backdrop-blur-md border border-white/10 p-4 rounded-3xl z-10 flex items-center shadow-sm">
-        <div className="flex flex-col gap-1 w-full">
-          <h3 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1">
-            <Trophy size={14} className="text-yellow-gold" />
-            Normas Olímpicas WA
-          </h3>
-          <p className="text-[10px] text-gray-dim leading-snug">
-            Recurvo compite a sets de 6 puntos. Compuesto compite por puntos acumulados de 15 flechas.
-          </p>
-        </div>
+        <p className="text-[11px] text-white/65 leading-snug">
+          Compite flecha a flecha en tiempo real bajo reglamento WA (Recurvo y Barebow a 6 pts de set · Compuesto a 15 flechas acumuladas).
+        </p>
       </div>
 
       {/* Lobby Tab Bar */}
-      <div className="flex bg-neutral-900 border border-white/5 p-0.5 rounded-xl z-10 relative">
+      <div className="flex bg-[#0D1017] border border-white/[0.08] p-1 rounded-xl z-10 relative gap-1">
         <button
           onClick={() => setActiveTab("SEARCH")}
-          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
+          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === "SEARCH"
-              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
-              : "text-gray-dim hover:text-white"
+              ? "bg-cyan-neon text-black"
+              : "text-white/60 hover:text-white"
           }`}
         >
-          Buscar
+          Arena Online
         </button>
         <button
           onClick={() => setActiveTab("DRAFTS")}
-          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all relative ${
+          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all relative cursor-pointer ${
             activeTab === "DRAFTS"
-              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
-              : "text-gray-dim hover:text-white"
+              ? "bg-cyan-neon text-black"
+              : "text-white/60 hover:text-white"
           }`}
         >
-          Activos
+          En Curso
           {drafts.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-cyan-neon border border-neutral-950 text-black text-[9px] font-black flex items-center justify-center shadow-glow-cyan animate-pulse">
+            <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-yellow-gold text-black text-[9px] font-black">
               {drafts.length}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("HISTORY")}
-          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
+          className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
             activeTab === "HISTORY"
-              ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
-              : "text-gray-dim hover:text-white"
+              ? "bg-cyan-neon text-black"
+              : "text-white/60 hover:text-white"
           }`}
         >
           Historial
@@ -716,136 +711,174 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       {/* Tab Contents */}
       {activeTab === "SEARCH" && (
         <div className="flex flex-col gap-4 z-10">
-          {/* Room Controls (Create / Join) */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setIsCreatingRoom(!isCreatingRoom)}
-              className="bg-neutral-900/60 backdrop-blur-md border border-white/5 hover:border-cyan-neon/40 p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer transition group"
-            >
-              <Plus size={18} className="text-cyan-neon group-hover:scale-110 transition" />
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider">Crear Duelo</span>
-            </button>
-            
-            <div className="bg-neutral-900/60 backdrop-blur-md border border-white/5 p-3 rounded-2xl flex flex-col justify-center gap-1">
-              <form onSubmit={handleJoinRoomSubmit} className="flex gap-1.5 items-center w-full">
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Código Duelo"
-                  className="flex-1 bg-neutral-950 border border-white/5 focus:border-cyan-neon text-white text-[10px] p-2 rounded-xl outline-none transition uppercase text-center font-mono"
-                />
-                <button
-                  type="submit"
-                  className="p-2 rounded-xl bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon cursor-pointer transition active:scale-95 shrink-0"
-                  title="Unirse"
-                >
-                  <Play size={10} className="fill-current" />
-                </button>
-              </form>
+          {/* 1. Direct Match Creator Card (Always visible & intuitive) */}
+          <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 flex flex-col gap-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-white">
+                Configurar Eliminatoria 1 vs 1
+              </span>
+              <span className="text-[10px] font-bold text-cyan-neon">
+                {customBow === "Compound" ? "15 Flechas · Acumulado" : "Sistema de Sets · 6 Pts"}
+              </span>
             </div>
+
+            <form onSubmit={handleCreateRoomSubmit} className="flex flex-col gap-3">
+              {/* Selector de Modo: Amigo Online vs Bot Olímpico */}
+              <div className="grid grid-cols-2 gap-2 bg-[#080A0F] p-1 rounded-xl border border-white/[0.07]">
+                <button
+                  type="button"
+                  onClick={() => setDuelMode("FRIEND")}
+                  className={`py-2 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    duelMode === "FRIEND"
+                      ? "bg-cyan-neon text-black"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Vs Amigo Online
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDuelMode("BOT")}
+                  className={`py-2 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    duelMode === "BOT"
+                      ? "bg-yellow-gold text-black"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Vs Bot Olímpico
+                </button>
+              </div>
+
+              {/* Tactile Bow & Distance Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-white/50 font-bold uppercase tracking-wider">
+                    Modalidad de Arco
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(["Recurve", "Compound", "Barebow"] as const).map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setCustomBow(b)}
+                        className={`py-2 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer ${
+                          customBow === b
+                            ? "bg-white/[0.12] border-cyan-neon text-white"
+                            : "bg-[#080A0F] border-white/[0.06] text-white/50 hover:text-white"
+                        }`}
+                      >
+                        {b === "Recurve" ? "Recurvo" : b === "Compound" ? "Compuesto" : "Barebow"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-white/50 font-bold uppercase tracking-wider">
+                    Distancia Oficial
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([18, 50, 70] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setCustomDistance(d)}
+                        className={`py-2 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer tabular-nums ${
+                          customDistance === d
+                            ? "bg-white/[0.12] border-cyan-neon text-white"
+                            : "bg-[#080A0F] border-white/[0.06] text-white/50 hover:text-white"
+                        }`}
+                      >
+                        {d}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bot Level Pills or Online Explanation */}
+              {duelMode === "BOT" ? (
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] text-white/50 font-bold uppercase tracking-wider">
+                    Nivel del Oponente Simulado
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(
+                      [
+                        { id: "Rookie", label: "Novato", avg: "7.2" },
+                        { id: "Medium", label: "Medio", avg: "8.3" },
+                        { id: "High", label: "Alto", avg: "9.2" },
+                        { id: "Olympic", label: "Olímpico", avg: "9.8" }
+                      ] as const
+                    ).map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => setBotLevel(lvl.id)}
+                        className={`py-1.5 px-1 rounded-xl border flex flex-col items-center transition cursor-pointer ${
+                          botLevel === lvl.id
+                            ? "bg-yellow-gold/15 border-yellow-gold text-yellow-gold"
+                            : "bg-[#080A0F] border-white/[0.06] text-white/55 hover:text-white"
+                        }`}
+                      >
+                        <span className="text-[9px] font-black uppercase">{lvl.label}</span>
+                        <span className="text-[8px] font-bold opacity-80">Prom. {lvl.avg}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#080A0F] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-white/70 leading-snug">
+                    Crea una sala en vivo con código y enlace directo para enviar por WhatsApp a tu rival.
+                  </span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition text-center ${
+                  duelMode === "FRIEND"
+                    ? "bg-cyan-neon hover:bg-[#19c8ff] text-black"
+                    : "bg-yellow-gold hover:brightness-105 text-black"
+                }`}
+              >
+                {duelMode === "FRIEND"
+                  ? "Crear Sala Online 1v1 y Enviar Reto"
+                  : "Iniciar Eliminatoria vs Bot Ahora"}
+              </button>
+            </form>
           </div>
 
-          {/* Create Room Drawer Form */}
-          <AnimatePresence>
-            {isCreatingRoom && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-neutral-900/40 border border-white/10 rounded-3xl p-4 flex flex-col gap-3 overflow-hidden shadow-inner"
+          {/* 2. Quick Join by Room Code Bar */}
+          <div className="bg-[#0D1017] border border-white/[0.08] p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black uppercase tracking-wider text-white">
+                ¿Tienes un Código de Sala Online?
+              </span>
+              <span className="text-[10px] text-white/50">
+                Pega el código que te envió tu rival para entrar directo a la arena.
+              </span>
+            </div>
+            <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center sm:w-auto w-full">
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Ej. INV-R70-X9A"
+                className="flex-1 sm:w-36 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 py-2.5 rounded-xl outline-none transition uppercase text-center font-mono font-bold"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-white/[0.1] hover:bg-cyan-neon hover:text-black border border-white/[0.12] text-white font-black text-[10px] uppercase tracking-wider cursor-pointer transition active:scale-95 shrink-0"
               >
-                <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración del Duelo</h4>
-                <form onSubmit={handleCreateRoomSubmit} className="flex flex-col gap-3">
-                  {/* Duel Mode Selector */}
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[8px] text-gray-dim font-bold uppercase">Modo de Duelo</span>
-                    <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-0.5 rounded-xl border border-white/5">
-                      <button
-                        type="button"
-                        onClick={() => setDuelMode("BOT")}
-                        className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
-                          duelMode === "BOT"
-                            ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
-                            : "text-gray-dim hover:text-white"
-                        }`}
-                      >
-                        Entrenar con Bot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDuelMode("FRIEND")}
-                        className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
-                          duelMode === "FRIEND"
-                            ? "bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black shadow-glow-cyan"
-                            : "text-gray-dim hover:text-white"
-                        }`}
-                      >
-                        Desafiar Amigo
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[8px] text-gray-dim font-bold uppercase">Formato de Arco</span>
-                      <select
-                        value={customBow}
-                        onChange={(e) => setCustomBow(e.target.value as any)}
-                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2 rounded-xl outline-none"
-                      >
-                        <option value="Recurve">Recurvo (Set System)</option>
-                        <option value="Compound">Compuesto (Acumulado)</option>
-                        <option value="Barebow">Barebow (Set System)</option>
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[8px] text-gray-dim font-bold uppercase">Distancia</span>
-                      <select
-                        value={customDistance}
-                        onChange={(e) => setCustomDistance(Number(e.target.value))}
-                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2 rounded-xl outline-none"
-                      >
-                        <option value="18">18 metros</option>
-                        <option value="50">50 metros</option>
-                        <option value="70">70 metros</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Bot Level Selector */}
-                  {duelMode === "BOT" ? (
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[8px] text-gray-dim font-bold uppercase">Nivel del Bot Oponente</span>
-                      <select
-                        value={botLevel}
-                        onChange={(e) => setBotLevel(e.target.value as any)}
-                        className="w-full bg-neutral-950 border border-white/5 text-white text-xs p-2.5 rounded-xl outline-none focus:border-cyan-neon transition"
-                      >
-                        <option value="Rookie">Novato (Rookie Bot - 7.2 Promedio)</option>
-                        <option value="Medium">Nivel Medio (Medium Archer Bot - 8.3 Promedio)</option>
-                        <option value="High">Alto Nivel (High Level Bot - 9.2 Promedio)</option>
-                        <option value="Olympic">Arquero Olímpico (Olympic Bot - 9.8 Promedio)</option>
-                      </select>
-                    </div>
-                  ) : (
-                    <p className="text-[9.5px] text-cyan-neon/90 leading-snug">
-                      Genera una invitación abierta con un código QR y enlace para compartir por WhatsApp con cualquier arquero real.
-                    </p>
-                  )}
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition text-center"
-                  >
-                    {duelMode === "BOT" ? "Lanzar Duelo y Esperar Rival" : "Generar Invitación Abierta"}
-                  </button>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                Unirse
+              </button>
+            </form>
+          </div>
 
           {/* Search and Filters */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 pt-1">
             <div className="relative flex items-center">
               <span className="absolute left-3 text-gray-dim">
                 <Search size={14} />
@@ -854,24 +887,23 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar arquero o club..."
-                className="w-full bg-neutral-900/60 border border-white/5 text-white text-xs pl-10 pr-4 py-2.5 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
+                placeholder="Filtrar rivales por nombre o club..."
+                className="w-full bg-[#0D1017] border border-white/[0.08] text-white text-xs pl-10 pr-4 py-2.5 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
               />
             </div>
 
-            {/* Filter Badges - Adjusted and Centered */}
-            <div className="flex flex-col items-center justify-center gap-2 py-1 w-full">
-              {/* Bow Type Filters */}
-              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            {/* Filter Badges */}
+            <div className="flex items-center justify-between gap-2 py-0.5 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {(["Recurve", "Compound", "Barebow"] as const).map((bow) => (
                   <button
                     key={bow}
                     type="button"
                     onClick={() => setBowFilter(bowFilter === bow ? "ALL" : bow)}
-                    className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-200 border cursor-pointer text-center active:scale-95 ${
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-150 border cursor-pointer ${
                       bowFilter === bow
-                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                        : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white hover:border-white/10"
+                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
+                        : "bg-[#0D1017] border-white/[0.07] text-white/60 hover:text-white"
                     }`}
                   >
                     {bow === "Recurve" ? "Recurvo" : bow === "Compound" ? "Compuesto" : "Barebow"}
@@ -879,17 +911,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 ))}
               </div>
 
-              {/* Distance Filters */}
-              <div className="flex items-center justify-center gap-1.5">
+              <div className="flex items-center gap-1.5">
                 {(["18", "50", "70"] as const).map((dist) => (
                   <button
                     key={dist}
                     type="button"
                     onClick={() => setDistanceFilter(distanceFilter === dist ? "ALL" : dist)}
-                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-200 border cursor-pointer text-center active:scale-95 ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-150 border cursor-pointer tabular-nums ${
                       distanceFilter === dist
-                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                        : "bg-neutral-900/60 border-white/5 text-gray-dim hover:text-white hover:border-white/10"
+                        ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
+                        : "bg-[#0D1017] border-white/[0.07] text-white/60 hover:text-white"
                     }`}
                   >
                     {dist}m
@@ -901,12 +932,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
           {/* Rivals List */}
           <div className="flex flex-col gap-5 flex-1 pb-6">
-            
             {/* Real Online Archers */}
             <div className="flex flex-col gap-2.5">
               <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
-                Arqueros en Línea ({filteredRivals.length})
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                Arqueros Conectados en Línea ({filteredRivals.length})
               </h4>
 
               <motion.div
@@ -919,10 +949,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   {filteredRivals.length === 0 ? (
                     <motion.div
                       variants={cardVariants}
-                      className="bg-neutral-900/20 border border-white/[0.03] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
+                      className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
                     >
-                      <Users size={16} className="text-gray-dim/60" />
-                      <p className="text-[10px] text-gray-dim">No hay otros arqueros en línea en este momento.</p>
+                      <Users size={16} className="text-white/40" />
+                      <p className="text-[11px] text-white/60 font-semibold">
+                        No hay otros arqueros en el lobby público en este instante.
+                      </p>
+                      <p className="text-[10px] text-white/40">
+                        Usa &ldquo;Crear Sala Online 1v1&rdquo; arriba para enviar un enlace directo por WhatsApp a tu amigo.
+                      </p>
                     </motion.div>
                   ) : (
                     filteredRivals.map((riv) => {
@@ -932,11 +967,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           key={riv.uid}
                           variants={cardVariants}
                           exit={{ opacity: 0, scale: 0.95 }}
-                          className="bg-neutral-900/60 backdrop-blur-md border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-cyan-neon/30 transition-all duration-200"
+                          className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 flex justify-between items-center hover:border-cyan-neon/40 transition-all duration-150"
                         >
                           <div className="flex items-center gap-3 w-[70%]">
                             <div className="relative shrink-0">
-                              <div className="w-10 h-10 rounded-full bg-neutral-950 border border-neutral-800 flex items-center justify-center text-white font-black text-xs">
+                              <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.1] flex items-center justify-center text-white font-black text-xs">
                                 {riv.fullName.substring(0, 2).toUpperCase()}
                               </div>
                               <span className="absolute bottom-0 right-0 text-[10px]">{flag}</span>
@@ -948,11 +983,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                 {riv.nickname && (
                                   <span className="text-cyan-neon font-mono text-[9px] font-bold">@{riv.nickname}</span>
                                 )}
-                                <span className="text-[8px] px-1 py-0.2 rounded bg-neutral-950 text-yellow-gold font-extrabold uppercase shrink-0">
+                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
                                   {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim">
+                              <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white/50">
                                 <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
                                 <span className="truncate">{riv.clubName}</span>
                                 <span>·</span>
@@ -962,12 +997,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           </div>
 
                           <div className="flex flex-col items-end gap-1.5">
-                            <span className="text-[9px] text-cyan-neon font-black tracking-tight">Activo ahora</span>
+                            <span className="text-[9px] text-emerald-400 font-black tracking-tight">En línea</span>
                             <button
                               onClick={() => handleChallengeRealUser(riv)}
-                              className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
+                              className="px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
                             >
-                              Retar
+                              Retar 1v1
                             </button>
                           </div>
                         </motion.div>
@@ -979,16 +1014,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             </div>
 
             {/* Simulated Practice Bots */}
-            <div className="flex flex-col gap-2.5 mt-2">
-              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 text-gray-dim">
-                Oponentes de Práctica (Bots)
+            <div className="flex flex-col gap-2.5 mt-1">
+              <h4 className="text-white/70 text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                Simuladores de Eliminatoria (Bots WA)
               </h4>
 
               <motion.div
                 variants={containerVariants}
                 initial="initial"
                 animate="animate"
-                className="flex flex-col gap-2.5"
+                className="flex flex-col gap-2"
               >
                 {practiceBots.map((riv) => {
                   const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷";
@@ -996,28 +1031,25 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <motion.div
                       key={riv.uid}
                       variants={cardVariants}
-                      className="bg-neutral-900/30 border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-white/10 transition-all duration-200 opacity-80"
+                      className="bg-[#0D1017]/80 border border-white/[0.06] rounded-2xl p-3 flex justify-between items-center hover:border-white/15 transition-all duration-150"
                     >
                       <div className="flex items-center gap-3 w-[70%]">
                         <div className="relative shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-neutral-950 border border-neutral-900 flex items-center justify-center text-gray-400 font-bold text-xs">
+                          <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white/75 font-bold text-xs">
                             {riv.fullName.substring(0, 2).toUpperCase()}
                           </div>
-                          <span className="absolute bottom-0 right-0 text-[10px] filter grayscale">{flag}</span>
+                          <span className="absolute bottom-0 right-0 text-[10px]">{flag}</span>
                         </div>
                         
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-gray-300 text-xs font-medium truncate">{riv.fullName}</span>
-                            {riv.nickname && (
-                              <span className="text-cyan-neon/80 font-mono text-[9px] font-semibold">@{riv.nickname}</span>
-                            )}
-                            <span className="text-[7px] px-1 py-0.2 rounded bg-neutral-950 text-gray-500 font-bold uppercase shrink-0">
+                            <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white/60 font-bold uppercase shrink-0">
                               {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5 truncate text-[9px] text-gray-dim/75">
-                            <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 filter opacity-55" />
+                          <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white/50">
+                            <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
                             <span className="truncate">{riv.clubName}</span>
                             <span>·</span>
                             <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
@@ -1026,12 +1058,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       </div>
 
                       <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-[8px] text-gray-dim font-bold tracking-tight">RMS {riv.rating}</span>
+                        <span className="text-[9px] text-yellow-gold font-bold tracking-tight tabular-nums">
+                          Prom. {riv.rating}
+                        </span>
                         <button
                           onClick={() => handleStartSimulatedDuel(riv)}
-                          className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-neutral-900 border border-white/10 text-gray-dim hover:text-white"
+                          className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
                         >
-                          Entrenar
+                          Competir
                         </button>
                       </div>
                     </motion.div>
@@ -1039,7 +1073,6 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 })}
               </motion.div>
             </div>
-
           </div>
         </div>
       )}

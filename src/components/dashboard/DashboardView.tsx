@@ -212,74 +212,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     async function loadAthletes() {
       if ((user.role === "coach" || user.role === "team_admin_coach") && user.clubId) {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        let clubArchers = list.filter(u => u.clubId === user.clubId && u.role === "archer");
-        
-        if (clubArchers.length === 0) {
-          const demoArchers: UserProfile[] = [
-            {
-              uid: "USR-D-ATHLETE-1",
-              email: "daniela@archery101010.com",
-              fullName: "Daniela Solano",
-              nickname: "daniela",
-              birthDate: "2002-08-12",
-              country: user.country,
-              city: "San José",
-              gender: "F",
-              bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 42, defaultDistance: 70 },
-              physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId,
-              clubName: user.clubName,
-              clubLogo: user.clubLogo,
-              clubCountry: user.clubCountry,
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            },
-            {
-              uid: "USR-D-ATHLETE-2",
-              email: "carlos@archery101010.com",
-              fullName: "Carlos Ruiz",
-              nickname: "carlos",
-              birthDate: "1998-04-25",
-              country: user.country,
-              city: "Cartago",
-              gender: "M",
-              bowConfig: { type: "Compound", brand: "Mathews", model: "TRX", poundage: 58, defaultDistance: 50 },
-              physicalData: { height: 178, weight: 76, dominantEye: "R", dominantHand: "R" },
-              clubId: user.clubId,
-              clubName: user.clubName,
-              clubLogo: user.clubLogo,
-              clubCountry: user.clubCountry,
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            },
-            {
-              uid: "USR-D-ATHLETE-3",
-              email: "sebastian@archery101010.com",
-              fullName: "Sebastián Castro",
-              nickname: "sebas",
-              birthDate: "2005-11-03",
-              country: user.country,
-              city: "Alajuela",
-              gender: "M",
-              bowConfig: { type: "Barebow", brand: "Gillo", model: "G1", poundage: 36, defaultDistance: 18 },
-              physicalData: { height: 172, weight: 64, dominantEye: "L", dominantHand: "R" },
-              clubId: user.clubId,
-              clubName: user.clubName,
-              clubLogo: user.clubLogo,
-              clubCountry: user.clubCountry,
-              role: "archer",
-              plan: "FREE",
-              isClubCreator: false
-            }
-          ];
-
-          const updatedList = [...list, ...demoArchers];
-          await saveLocalSetting("simulated_users", updatedList);
-          clubArchers = demoArchers;
-        }
-        
+        const clubArchers = list.filter(u => u.clubId === user.clubId && u.role === "archer");
         setAthletes(clubArchers);
 
         const dateKey = new Date().toISOString().split("T")[0];
@@ -500,30 +433,83 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </div>
         </motion.div>
 
-        {/* Duelos de Eliminación */}
+        {/* Eliminatorias Online 1v1 (Featured Competitive Card) */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
-          className="col-span-3 bg-[#0D0F12] rounded-2xl border border-white/[0.08] p-4 cursor-pointer hover:border-white/20 transition-colors duration-200 relative overflow-hidden group flex justify-between items-center h-28"
+          className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.12] hover:border-cyan-neon/50 p-4 sm:p-5 cursor-pointer transition-all duration-200 relative overflow-hidden group flex flex-col gap-3.5"
         >
-          <div className="flex flex-col gap-1 z-10 w-[78%]">
-            <span className="text-[11px] text-cyan-neon font-semibold tracking-tight flex items-center gap-1.5">
-              <span className="inline-flex rounded-full h-1.5 w-1.5 bg-cyan-neon" />
-              {t("liveArenaTitle")}
-            </span>
-            <h3 className="text-white text-base font-bold tracking-tight mt-0.5 group-hover:text-cyan-neon transition-colors">
-              {t("duelsTitle")}
-            </h3>
-            <p className="text-xs text-neutral-400 leading-snug">
-              {t("duelsDesc")}
-            </p>
+          {/* Top Accent Hairline (WA Target Trio: Cyan / Red / Gold) */}
+          <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+            <div className="flex-1 bg-cyan-neon" />
+            <div className="flex-1 bg-red-rival" />
+            <div className="flex-1 bg-yellow-gold" />
           </div>
 
-          <div className="w-11 h-11 rounded-xl bg-neutral-950 border border-white/[0.07] flex items-center justify-center text-cyan-neon group-hover:border-white/20 transition-colors shrink-0">
-            <Trophy size={19} strokeWidth={2} />
+          {/* Top Status Row */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                {t("liveArenaTitle")}
+              </span>
+            </div>
+
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 group-hover:text-white transition-colors flex items-center gap-1">
+              <span>{language === "es" ? "Entrar a la Arena" : "Enter Arena"}</span>
+              <ChevronRight size={14} className="text-cyan-neon group-hover:translate-x-0.5 transition-transform" />
+            </span>
           </div>
-          
-          <ArrowUpRight size={15} className="absolute top-3.5 right-3.5 text-neutral-500 group-hover:text-white transition-colors" />
+
+          {/* Center Main Content + Visual 1v1 Face-Off */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0 flex-1">
+              <h3
+                className="text-white text-lg sm:text-xl font-black uppercase tracking-wide leading-tight group-hover:text-cyan-neon transition-colors"
+                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              >
+                {t("duelsTitle")}
+              </h3>
+              <p className="text-xs text-white/65 leading-snug">
+                {t("duelsDesc")}
+              </p>
+            </div>
+
+            {/* Visual 1v1 Scoreboard Badge */}
+            <div className="shrink-0 bg-[#080A0F] border border-white/[0.09] rounded-xl px-3 py-2 flex items-center gap-2.5">
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] font-black uppercase tracking-wider text-cyan-neon">TÚ</span>
+                <span className="text-sm font-black text-white tabular-nums leading-tight">6</span>
+              </div>
+              <div className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[9px] font-black text-red-rival tracking-wider">
+                VS
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] font-black uppercase tracking-wider text-yellow-gold">RIVAL</span>
+                <span className="text-sm font-black text-white/75 tabular-nums leading-tight">4</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Quick Feature Pills + Action Button */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
+                {language === "es" ? "Retar Amigo (Código / WhatsApp)" : "Challenge Friend"}
+              </span>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
+                {language === "es" ? "Rivales en Línea" : "Live Opponents"}
+              </span>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-white/80">
+                {language === "es" ? "Audio en Vivo" : "Live Voice"}
+              </span>
+            </div>
+
+            <div className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[11px] uppercase tracking-wider group-hover:bg-[#19c8ff] transition-colors">
+              <Swords size={13} strokeWidth={2.5} />
+              <span>{language === "es" ? "Jugar 1 vs 1" : "Play 1v1"}</span>
+            </div>
+          </div>
         </motion.div>
       </div>
 
