@@ -79,7 +79,7 @@ export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOve
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           transition={{ type: "spring", duration: 0.5 }}
-          className="relative w-full max-w-lg aspect-[4/5] md:aspect-square overflow-hidden rounded-3xl border border-white/10 bg-[#0A0A0C] shadow-[0_20px_50px_rgba(0,191,255,0.15)] flex flex-col justify-between"
+          className="relative w-full max-w-lg aspect-[4/5] md:aspect-square overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0B0D12] shadow-2xl flex flex-col justify-between"
         >
           {/* Close Button / Countdown */}
           <div className="absolute top-4 right-4 z-20">

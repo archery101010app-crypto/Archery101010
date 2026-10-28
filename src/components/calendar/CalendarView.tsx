@@ -1329,7 +1329,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   </span>
 
                   {coachAssignment ? (
-                    <div className="bg-gradient-to-br from-neutral-900/90 to-neutral-950 border border-white/10 rounded-3xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-xl">
+                    <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-xl">
                       {/* Left accent color bar */}
                       <div
                         style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }}

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, deleteUserAccount, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Lock, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
+import { ArrowLeft, User, Settings, ShieldAlert, Lock, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -693,48 +693,32 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* Subscription Card PRO paywall trigger */}
-      <div className={`p-4 rounded-3xl border transition-all duration-300 ${
-        user.plan === "PRO"
-          ? "bg-[#0D0F12] border-yellow-gold/25"
-          : "bg-[#0D0F12] border-white/[0.08]"
-      }`}>
-        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-          <Shield size={14} className="text-yellow-gold" />
-          {t("subCardTitle")}
-        </h4>
+      <div className="p-5 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
+            <Shield size={14} className="text-cyan-neon" />
+            {t("subCardTitle")}
+          </h4>
+          <span className="text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/[0.05] text-white/70 border border-white/[0.08]">
+            {user.plan === "FREE" ? "Lanzamiento" : "Pro Activo"}
+          </span>
+        </div>
         {user.plan === "FREE" ? (
-          <div className="flex flex-col gap-2 mt-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[8.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30">
-                PROMO DE LANZAMIENTO
-              </span>
-            </div>
-            <p className="text-[10px] text-gray-dim leading-snug">
-              Por motivo de lanzamiento oficial, obtén acceso ilimitado a todas las herramientas PRO (Ciclos, Spine Tuning, Cronógrafo y Portal Coach) 100% gratis.
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-white/50 leading-relaxed">
+              Desbloquea planificación de macrociclos, Spine Tuning, cronógrafo acústico y herramientas avanzadas sin costo por lanzamiento.
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
-              className="w-full py-2.5 mt-1 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5"
+              className="h-11 w-full rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest cursor-pointer active:scale-[0.99] transition flex items-center justify-center gap-1.5"
             >
-              <Check size={14} />
-              <span>Activar PRO Gratis (Promo Pioneros)</span>
+              <span>Activar Pro Gratis</span>
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5 mt-2">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-[8.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30">
-                ACCESO PIONERO ACTIVO
-              </span>
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-dim font-bold">
-              <span>Estado:</span>
-              <span className="text-cyan-neon font-black">Activo · Ilimitado Gratuito</span>
-            </div>
-            <div className="flex justify-between text-[10px] text-gray-dim font-bold">
-              <span>Beneficios:</span>
-              <span className="text-white">Todas las herramientas PRO desbloqueadas</span>
-            </div>
+          <div className="flex items-center justify-between pt-2 border-t border-white/[0.05] text-xs">
+            <span className="text-white/45">Acceso completo desbloqueado</span>
+            <span className="text-cyan-neon font-bold">Ilimitado</span>
           </div>
         )}
       </div>
@@ -1121,7 +1105,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 4: Preferences Notifications */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex items-center justify-between gap-3">
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex items-center justify-between gap-3">
         <div className="flex flex-col min-w-0">
           <span className="text-white text-xs font-black uppercase tracking-wider">{t("pushNotif")}</span>
           <span className="text-[10px] text-gray-dim leading-snug">Alertas de retos, duelos 1v1 y recordatorios</span>
@@ -1129,7 +1113,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         <button
           onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
           className={`w-10 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 ${
-            pushNotif ? "bg-cyan-neon shadow-glow-cyan" : "bg-neutral-800 border border-white/10"
+            pushNotif ? "bg-cyan-neon" : "bg-neutral-800 border border-white/10"
           }`}
         >
           <div
@@ -1140,32 +1124,31 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 3.8: Estrellas 101010 720 */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
-        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-          <span className="text-yellow-gold text-lg">★</span>
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-3">
+        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
+          <Star size={14} className="text-yellow-gold fill-yellow-gold" />
           {t("starsShelfTitle")}
         </h4>
 
         {maxStar ? (
           <div className="flex flex-col gap-3">
             {/* Medalla estrella activa */}
-            <div className="flex items-center gap-3.5 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-3.5 bg-[#090B0E] p-3.5 rounded-2xl border border-white/[0.06]">
               <div 
-                className="w-12 h-12 rounded-full border flex items-center justify-center text-xl font-black shadow-md shrink-0 animate-pulse"
+                className="w-12 h-12 rounded-full border flex items-center justify-center shrink-0"
                 style={{ 
                   borderColor: maxStar.starColor,
                   color: maxStar.starColor,
-                  backgroundColor: `${maxStar.starColor}15`,
-                  boxShadow: `0 0 15px ${maxStar.starColor}35`
+                  backgroundColor: `${maxStar.starColor}15`
                 }}
               >
-                ★
+                <Star size={20} fill="currentColor" />
               </div>
               <div className="flex flex-col overflow-hidden">
                 <span className="text-white text-xs font-black uppercase tracking-wide truncate">
                   {maxStar.starName}
                 </span>
-                <span className="text-[9px] text-gray-dim mt-0.5 font-bold uppercase">
+                <span className="text-[10px] text-gray-dim mt-0.5 font-bold uppercase tabular-nums">
                   {t("recordLabel")} {maxStar.highestScore} pts ({maxStar.bowType === "Compound" ? "Compuesto" : maxStar.bowType === "Recurve" ? "Recurvo" : maxStar.bowType})
                 </span>
               </div>
@@ -1194,21 +1177,20 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               
               return (
                 <div className="flex flex-col gap-1.5 mt-1">
-                  <div className="flex justify-between text-[9px] text-gray-dim font-black uppercase tracking-wider">
+                  <div className="flex justify-between text-[9px] text-gray-dim font-black uppercase tracking-wider tabular-nums">
                     <span>{t("nextLabel")} {nextStar.name}</span>
                     <span className="text-white">{highestScore} / {targetMin} pts</span>
                   </div>
-                  <div className="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5 relative">
+                  <div className="w-full h-2 bg-neutral-950 rounded-full overflow-hidden border border-white/5 relative">
                     <div 
                       className="h-full rounded-full transition-all duration-500"
                       style={{ 
                         width: `${percent}%`,
-                        backgroundColor: nextStar.color,
-                        boxShadow: `0 0 10px ${nextStar.color}`
+                        backgroundColor: nextStar.color
                       }}
                     />
                   </div>
-                  <span className="text-[8px] text-gray-dim leading-none">
+                  <span className="text-[9px] text-gray-dim leading-none tabular-nums">
                     Faltan {targetMin - highestScore} {t("pointsToNextStar")}
                   </span>
                 </div>
@@ -1217,7 +1199,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </div>
         ) : (
           <div className="flex flex-col gap-2.5 py-1">
-            <p className="text-[10px] text-gray-dim leading-snug">
+            <p className="text-[11px] text-gray-dim leading-snug">
               {t("lockedStarNotice")}
             </p>
           </div>
@@ -1230,15 +1212,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           const highestLevel = maxStar ? maxStar.highestStarLevel : 0;
           
           return (
-            <div className="grid grid-cols-4 gap-3.5 mt-3 pt-3 border-t border-white/[0.04]">
+            <div className="grid grid-cols-4 gap-3.5 mt-2 pt-3 border-t border-white/[0.05]">
               {starsList.map((star) => {
                 const isUnlocked = star.level <= highestLevel;
                 return (
                   <div key={star.level} className="flex flex-col items-center gap-1 text-center group">
                     <div 
-                      className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-black transition-all duration-300 relative ${
+                      className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 relative ${
                         isUnlocked 
-                          ? "shadow-[0_0_10px_rgba(255,255,255,0.05)]" 
+                          ? "" 
                           : "grayscale opacity-35 bg-neutral-950 border-neutral-850"
                       }`}
                       style={{
@@ -1248,7 +1230,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       }}
                       title={`${star.name}: ${star.minScore}+ pts`}
                     >
-                      ★
+                      <Star size={14} fill="currentColor" />
                       {!isUnlocked && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
                           <Lock size={9} className="text-white/50" />
@@ -1262,7 +1244,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     >
                       {star.name.replace("Estrella de ", "").replace("Estrella ", "")}
                     </span>
-                    <span className="text-[7px] text-gray-dim/80 font-bold leading-none">
+                    <span className="text-[8px] text-gray-dim/80 font-bold leading-none tabular-nums">
                       {star.minScore}+
                     </span>
                   </div>
@@ -1735,26 +1717,26 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
           >
             <motion.div
-              initial={{ scale: 0.9, y: 15 }}
+              initial={{ scale: 0.96, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 15 }}
-              className="w-full max-w-sm bg-neutral-900 border border-red-rival/30 p-6 rounded-3xl flex flex-col gap-4 shadow-2xl text-center"
+              exit={{ scale: 0.96, y: 10 }}
+              className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-4 shadow-2xl text-center"
             >
-              <div className="w-12 h-12 rounded-full bg-red-rival/10 border border-red-rival/30 flex items-center justify-center mx-auto text-red-rival">
-                <Trash2 size={22} />
+              <div className="w-11 h-11 rounded-2xl bg-red-rival/10 border border-red-rival/25 flex items-center justify-center mx-auto text-red-rival">
+                <Trash2 size={20} />
               </div>
-              <h3 className="text-white text-base font-black uppercase tracking-wide">
-                ¿Eliminar Cuenta Permanentemente?
+              <h3 className="text-white text-base font-black tracking-tight">
+                ¿Eliminar cuenta permanentemente?
               </h3>
-              <p className="text-xs text-gray-dim leading-relaxed">
-                Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán de forma definitiva tu perfil (<span className="text-white font-mono">{user.email}</span>), configuraciones de arco, planillas de entrenamiento, historial de duelos y récords tanto de este dispositivo como de la nube.
+              <p className="text-xs text-white/50 leading-relaxed">
+                Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán tu perfil (<span className="text-white font-mono">{user.email}</span>), arcos, sesiones, historial de duelos y récords.
               </p>
               <div className="flex gap-2.5 mt-2">
                 <button
                   type="button"
                   disabled={isDeletingAccount}
                   onClick={() => setIsDeleteAccountOpen(false)}
-                  className="flex-1 py-3 rounded-full bg-neutral-800 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                  className="flex-1 h-11 rounded-2xl bg-[#121620] border border-white/[0.08] text-white/70 hover:text-white font-bold text-xs uppercase tracking-wider cursor-pointer transition"
                 >
                   Cancelar
                 </button>
@@ -1762,9 +1744,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   type="button"
                   disabled={isDeletingAccount}
                   onClick={handleConfirmDeleteAccount}
-                  className="flex-1 py-3 rounded-full bg-red-rival hover:brightness-110 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
+                  className="flex-1 h-11 rounded-2xl bg-red-rival hover:brightness-110 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
                 >
-                  {isDeletingAccount ? "Eliminando..." : "Sí, Eliminar"}
+                  {isDeletingAccount ? "Eliminando..." : "Eliminar"}
                 </button>
               </div>
             </motion.div>
@@ -1772,7 +1754,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         )}
       </AnimatePresence>
 
-      {/* PAYWALL DIALOG (PayPal SDK simulation modal) */}
+      {/* PAYWALL DIALOG */}
       <AnimatePresence>
         {isPaywallOpen && (
           <motion.div
@@ -1782,64 +1764,68 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
           >
             <motion.div
-              initial={{ scale: 0.9, y: 15 }}
+              initial={{ scale: 0.96, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 15 }}
-              className="w-full max-w-sm bg-neutral-900 border border-gray-border p-6 rounded-3xl flex flex-col gap-5 shadow-2xl text-left"
+              exit={{ scale: 0.96, y: 10 }}
+              className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-5 shadow-2xl text-left"
             >
               <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-[9px] text-yellow-gold font-black bg-yellow-gold/10 px-2 py-0.5 rounded-full border border-yellow-gold/20">
-                    PROMOCIÓN DE LANZAMIENTO
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] text-cyan-neon font-bold uppercase tracking-widest">
+                    Lanzamiento Oficial
                   </span>
-                  <h3 className="text-white text-lg font-black uppercase tracking-wide mt-1.5">
-                    Acceso PRO Pionero
+                  <h3 className="text-white text-xl font-black tracking-tight">
+                    Archery Pro
                   </h3>
                 </div>
                 <button
                   onClick={() => setIsPaywallOpen(false)}
-                  className="p-1.5 rounded-lg bg-neutral-800 text-gray-dim hover:text-white cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] text-white/50 hover:text-white flex items-center justify-center cursor-pointer transition"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
 
               {/* Benefits checklist */}
-              <div className="flex flex-col gap-2.5">
+              <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-2.5">
                 {[
-                  "Acceso completo a planificación de Ciclos y Macroestructuras",
-                  "Módulo de Spine Matching (Tuning balístico de flechas)",
-                  "Cronógrafo Acústico de alta precisión sin restricciones",
-                  "Portal Coach: Seguimiento de atletas y asistencias en vivo",
-                  "Analytics y reportes avanzados de dispersión olímpica"
+                  "Planificación de ciclos y macroestructuras",
+                  "Spine Matching y ajuste balístico de flechas",
+                  "Cronógrafo acústico de alta precisión",
+                  "Portal Coach con seguimiento en vivo",
+                  "Analítica avanzada de dispersión olímpica"
                 ].map((b, idx) => (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-white/90">
-                    <Check size={16} className="text-yellow-gold mt-0.5 shrink-0" />
+                  <div key={idx} className="flex items-start gap-2.5 text-xs text-white/80">
+                    <Check size={14} className="text-cyan-neon mt-0.5 shrink-0" />
                     <span>{b}</span>
                   </div>
                 ))}
               </div>
 
               {/* Price card: Launch special */}
-              <div className="bg-neutral-950 p-4 rounded-2xl border border-yellow-gold/30 flex justify-between items-center shadow-inner">
+              <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[9px] text-gray-dim uppercase font-bold line-through">Precio regular: $4.99 USD</span>
-                  <span className="text-2xl font-black text-yellow-gold flex items-center gap-1.5 tabular-nums">
-                    $0.00 <span className="text-xs text-white font-bold uppercase tracking-wider">GRATIS</span>
-                  </span>
+                  <span className="text-[10px] text-white/35 line-through font-mono tabular-nums">$4.99 USD / mes</span>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-2xl font-black text-white tabular-nums tracking-tight">
+                      $0.00
+                    </span>
+                    <span className="text-[10px] text-cyan-neon font-bold uppercase tracking-wider">
+                      Bonificado
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-cyan-neon font-black bg-cyan-neon/10 border border-cyan-neon/30 px-2.5 py-1 rounded-full">
-                  Acceso Especial
+                <span className="text-[9px] text-white/60 font-bold uppercase tracking-wider bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-lg">
+                  Pioneros
                 </span>
               </div>
 
               {/* Free Launch Activation Button */}
               <button
                 onClick={handlePaypalUpgrade}
-                className="w-full py-3.5 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
+                className="h-12 w-full rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition active:scale-[0.99]"
               >
-                <Check size={16} />
-                <span>Activar Mi Cuenta PRO Gratis</span>
+                <span>Activar Cuenta Pro</span>
               </button>
             </motion.div>
           </motion.div>

@@ -1343,78 +1343,42 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           <div className="flex-1 flex flex-col items-center justify-center gap-6 py-6">
             {/* Tally Counter Casing Container */}
             <div className="relative flex flex-col items-center select-none">
-              
-              {/* Metal hanger loop at the top */}
-              <div className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-zinc-400 bg-transparent relative z-0 flex items-center justify-center animate-pulse">
-                <div className="w-10 h-6 rounded-t-full bg-zinc-900 border-2 border-zinc-600 shadow-inner" />
-              </div>
-
-              {/* Reset Knob on the side (top right position) */}
-              <div className="absolute right-[-32px] top-[48px] z-10 flex items-center">
-                <div className="w-3 h-5 bg-zinc-500 border-y border-l border-zinc-400 rounded-l shadow" />
+              {/* Reset Button at top-right */}
+              <div className="w-full flex justify-end mb-2">
                 <button
                   type="button"
                   onClick={handleTallyReset}
-                  className="w-8 h-8 rounded-full bg-gradient-to-r from-zinc-300 via-white to-zinc-500 border-2 border-zinc-400 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
+                  className="px-3 py-1.5 rounded-full bg-[#0D1017] border border-white/[0.08] text-[10px] font-bold uppercase tracking-wider text-white/50 hover:text-white transition cursor-pointer"
                   title="Reiniciar contador"
                 >
-                  <div className="w-3 h-3 rounded-full bg-zinc-700 border border-zinc-500 flex items-center justify-center font-bold text-[8px] text-white">
-                    R
-                  </div>
+                  Reiniciar (0)
                 </button>
               </div>
 
-              {/* Main counter circular case */}
+              {/* Minimalist Tactical Counter (WHOOP / Apple Fitness+ style) */}
               <button
                 type="button"
                 onClick={handleTallyIncrement}
-                className="w-60 h-60 rounded-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-200 via-zinc-400 to-zinc-600 border-[8px] border-zinc-300 flex flex-col items-center justify-center gap-2 relative z-10 cursor-pointer shadow-[0_25px_50px_rgba(0,0,0,0.7),inset_0_4px_12px_rgba(255,255,255,0.85)] hover:brightness-105 active:scale-[0.98] transition group"
+                className="w-60 h-60 rounded-full bg-[#0D1017] border-2 border-white/[0.08] hover:border-cyan-neon/40 flex flex-col items-center justify-center gap-3 relative z-10 cursor-pointer shadow-2xl active:scale-[0.98] transition group"
               >
-                {/* Shiny highlight reflection */}
-                <div className="absolute inset-2 rounded-full bg-gradient-to-tr from-white/20 via-white/5 to-transparent pointer-events-none" />
+                <span className="text-[10px] text-white/40 font-bold tracking-widest uppercase">
+                  Flechas Lanzadas
+                </span>
 
-                {/* Lever/Button at the top center of the case */}
-                <div className="absolute top-[12px] w-24 h-5 rounded bg-gradient-to-b from-zinc-100 via-zinc-300 to-zinc-500 border border-zinc-400 shadow-[0_3px_5px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.8)] group-active:translate-y-0.5 transition" />
+                <span className="text-5xl font-black text-white font-mono tabular-nums tracking-tight">
+                  {String(tallyCount).padStart(3, "0")}
+                </span>
 
-                {/* Display Window */}
-                <div className="w-40 bg-zinc-950 border-4 border-zinc-700 p-3.5 rounded-2xl shadow-[inset_0_4px_10px_rgba(0,0,0,0.95)] mt-4 flex flex-col items-center gap-1.5 relative overflow-hidden">
-                  {/* Subtle inner reflection */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
-                  
-                  {/* Label */}
-                  <span className="text-[8px] text-cyan-neon font-black tracking-widest uppercase">
-                    FLECHAS LANZADAS
-                  </span>
-
-                  {/* Digits Roller Board */}
-                  <div className="flex gap-1.5 mt-0.5">
-                    {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
-                      <div
-                        key={idx}
-                        className="w-7 h-10 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-900 border border-zinc-800 rounded flex items-center justify-center font-black text-2xl text-white font-mono shadow-[inset_0_2px_5px_rgba(0,0,0,0.9)] relative"
-                      >
-                        {/* Horizontal divider for roller visual look */}
-                        <div className="absolute inset-x-0 h-[1px] bg-zinc-800/40 top-1/2" />
-                        <span className="relative z-10">{digit}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Big neon target ring details around counter to make it look premium */}
-                <div className="text-[10px] text-zinc-900 font-black tracking-wider uppercase mt-2 group-hover:text-cyan-neon transition">
-                  PULSAR PARA CONTAR
-                </div>
+                <span className="text-[10px] text-cyan-neon font-bold tracking-widest uppercase mt-1">
+                  Tocar para sumar +1
+                </span>
               </button>
             </div>
 
             {/* Helper status text */}
             <div className="flex flex-col items-center text-center gap-1">
-              <span className="text-xs text-gray-dim font-semibold">
-                Distancia de Tiro: <span className="text-cyan-neon font-bold">{config.distance}m</span>
-              </span>
-              <span className="text-[10px] text-gray-dim italic">
-                (Registra cada tiro presionando el contador metálico)
+              <span className="text-xs text-white/50 font-medium">
+                Distancia: <span className="text-white font-bold">{config.distance} m</span>
               </span>
             </div>
 
@@ -1488,14 +1452,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   }}
                   className={`px-6 py-4 rounded-3xl border-2 font-black text-4xl shadow-2xl flex items-center justify-center ${
                     animatingValue.value === "X" || animatingValue.value === "10" || animatingValue.value === "9"
-                      ? "bg-yellow-gold border-yellow-gold text-black shadow-[0_0_30px_rgba(255,242,0,0.5)]"
+                      ? "bg-yellow-gold border-yellow-gold text-black"
                       : animatingValue.value === "8" || animatingValue.value === "7"
-                      ? "bg-red-500 border-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+                      ? "bg-red-500 border-red-500 text-white"
                       : animatingValue.value === "6" || animatingValue.value === "5"
-                      ? "bg-blue-500 border-blue-500 text-white shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                      ? "bg-blue-500 border-blue-500 text-white"
                       : animatingValue.value === "4" || animatingValue.value === "3"
-                      ? "bg-neutral-900 border-neutral-700 text-white shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-                      : "bg-red-rival border-red-rival text-white shadow-[0_0_30px_rgba(255,59,48,0.5)]"
+                      ? "bg-neutral-900 border-neutral-700 text-white"
+                      : "bg-red-rival border-red-rival text-white"
                   }`}
                 >
                   {animatingValue.value}
@@ -1825,7 +1789,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-yellow-gold/80 bg-yellow-gold/10 text-yellow-gold font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(255,242,0,0.12)] hover:bg-yellow-gold/20 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border border-yellow-gold/60 bg-yellow-gold/10 text-yellow-gold font-black text-base flex items-center justify-center cursor-pointer hover:bg-yellow-gold/20 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1833,7 +1797,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Backspace */}
               <button
                 onClick={handleBackspace}
-                className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white hover:bg-neutral-850 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-[#0D1017] text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white active:scale-95 transition"
               >
                 ⌫
               </button>
@@ -1843,7 +1807,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   key={key}
                   onClick={() => handleScoreInput(key)}
-                  className="py-3.5 min-h-[48px] rounded-xl border-2 border-red-rival/80 bg-red-rival/10 text-red-rival font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.12)] hover:bg-red-rival/20 active:scale-95 transition"
+                  className="py-3.5 min-h-[48px] rounded-xl border border-red-rival/60 bg-red-rival/10 text-red-rival font-black text-base flex items-center justify-center cursor-pointer hover:bg-red-rival/20 active:scale-95 transition"
                 >
                   {key}
                 </button>
@@ -1857,9 +1821,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     key={key}
                     onClick={() => handleScoreInput(key)}
                     disabled={!isEnabled}
-                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-blue-500/80 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center transition ${
+                    className={`py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center transition ${
                       isEnabled
-                        ? "cursor-pointer shadow-[0_0_12px_rgba(59,130,246,0.12)] hover:bg-blue-500/20 active:scale-95"
+                        ? "cursor-pointer hover:bg-blue-500/20 active:scale-95"
                         : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
                     }`}
                   >
@@ -1876,7 +1840,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     key={key}
                     onClick={() => handleScoreInput(key)}
                     disabled={!isEnabled}
-                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900/80 text-neutral-300 font-black text-base flex items-center justify-center transition ${
+                    className={`py-3.5 min-h-[48px] rounded-xl border border-white/15 bg-[#0D1017] text-neutral-300 font-black text-base flex items-center justify-center transition ${
                       isEnabled
                         ? "cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95"
                         : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
@@ -1895,9 +1859,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     key={key}
                     onClick={() => handleScoreInput(key)}
                     disabled={!isEnabled}
-                    className={`py-3.5 min-h-[48px] rounded-xl border-2 border-white/50 bg-white/5 text-white font-black text-base flex items-center justify-center transition ${
+                    className={`py-3.5 min-h-[48px] rounded-xl border border-white/40 bg-white/[0.06] text-white font-black text-base flex items-center justify-center transition ${
                       isEnabled
-                        ? "cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.08)] hover:bg-white/15 active:scale-95"
+                        ? "cursor-pointer hover:bg-white/15 active:scale-95"
                         : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-neutral-600"
                     }`}
                   >

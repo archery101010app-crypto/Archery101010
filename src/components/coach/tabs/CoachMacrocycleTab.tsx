@@ -654,7 +654,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleOpenSyncModal(selectedMacro)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-gold/20 to-amber-500/20 hover:from-yellow-gold/30 hover:to-amber-500/30 text-yellow-gold border border-yellow-gold/35 text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition shadow-sm"
+                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 text-cyan-neon border border-cyan-neon/25 text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition"
                   title="Sincronizar con el Calendario de la App"
                 >
                   <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />

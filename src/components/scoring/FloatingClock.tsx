@@ -308,11 +308,11 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
   // FAB color reflects official WA light when active
   const fabColorClass = isActive
     ? lightState === "RED"
-      ? "bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)]"
+      ? "bg-red-600 text-white"
       : lightState === "YELLOW"
-      ? "bg-yellow-gold text-black shadow-[0_0_20px_rgba(255,229,0,0.6)]"
-      : "bg-green-success text-white shadow-[0_0_20px_rgba(0,200,83,0.6)]"
-    : "bg-cyan-brand text-white shadow-[0_0_15px_rgba(0,162,232,0.3)] animate-fab-pulse";
+      ? "bg-yellow-gold text-black"
+      : "bg-green-success text-white"
+    : "bg-[#121620] border border-white/15 text-cyan-neon";
 
   return (
     <>
@@ -364,9 +364,9 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   ARCHERY
                 </span>
                 <div className="flex items-center tracking-tight font-extrabold text-xs sm:text-sm">
-                  <span className="text-cyan-neon drop-shadow-[0_0_8px_rgba(0,191,255,0.45)]">10</span>
-                  <span className="text-red-rival drop-shadow-[0_0_8px_rgba(255,0,0,0.35)]">10</span>
-                  <span className="text-yellow-gold drop-shadow-[0_0_8px_rgba(255,229,0,0.35)]">10</span>
+                  <span className="text-cyan-neon">10</span>
+                  <span className="text-red-rival">10</span>
+                  <span className="text-yellow-gold">10</span>
                 </div>
                 <span className="text-white/80 text-[11px] sm:text-xs font-black tracking-widest uppercase pl-0.5">
                   WA TIMER

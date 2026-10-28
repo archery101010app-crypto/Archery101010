@@ -332,7 +332,7 @@ export default function AdminUsersTab() {
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan hover:brightness-110 active:scale-95 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
             title="Descargar tabla en formato Excel / CSV"
           >
             <FileSpreadsheet size={14} />
@@ -489,7 +489,7 @@ export default function AdminUsersTab() {
                   {/* Left: Archer Identity, Flag, Country & Nickname */}
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className="relative shrink-0">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-brand/20 to-cyan-neon/30 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-sm">
+                      <div className="w-12 h-12 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-sm">
                         {getInitials(u.fullName)}
                       </div>
                       <span className="absolute -bottom-1 -right-1 text-sm drop-shadow-md">
@@ -598,7 +598,7 @@ export default function AdminUsersTab() {
               {/* Profile Header */}
               <div className="flex items-center gap-4 border-b border-white/5 pb-4">
                 <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-brand/20 to-cyan-neon/30 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-lg">
+                  <div className="w-14 h-14 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-lg">
                     {getInitials(selectedUser.fullName)}
                   </div>
                   <span className="absolute -bottom-1 -right-1 text-[9px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">

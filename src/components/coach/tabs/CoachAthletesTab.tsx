@@ -181,7 +181,7 @@ export default function CoachAthletesTab({
           {/* Primary CTA: Create Athlete Profile */}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-brand to-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan hover:brightness-110 active:scale-95 transition cursor-pointer shrink-0"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer shrink-0"
           >
             <UserPlus size={14} className="stroke-[2.5]" />
             <span>Crear Alumno</span>
@@ -224,11 +224,11 @@ export default function CoachAthletesTab({
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 flex items-center justify-center font-black text-xs text-white">
+                    <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/10 flex items-center justify-center font-black text-xs text-white">
                       {ath.fullName.substring(0, 2).toUpperCase()}
                     </div>
                     {isOnlineSim && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-cyan-neon border-2 border-neutral-950 animate-pulse shadow-glow-cyan" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-cyan-neon border-2 border-[#0B0D12]" />
                     )}
                   </div>
 

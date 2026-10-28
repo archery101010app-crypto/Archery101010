@@ -2168,11 +2168,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   return (
     <div className="flex flex-col gap-4 py-3 min-h-full relative overflow-hidden select-none">
-      
-      {/* Background neon dynamic blobs */}
-      <div className="absolute top-[-10%] left-[-15%] w-[70%] aspect-square rounded-full bg-cyan-neon/5 blur-[100px] pointer-events-none z-0" />
-      <div className="absolute bottom-[-10%] right-[-15%] w-[70%] aspect-square rounded-full bg-cyan-neon/10 blur-[100px] pointer-events-none z-0" />
-
       {/* Arena Header Status bar */}
       <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 z-10">
         <button
@@ -2584,14 +2579,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 }}
                 className={`px-6 py-4 rounded-3xl border-2 font-black text-4xl shadow-2xl flex items-center justify-center ${
                   animatingValue.value === "X" || animatingValue.value === "10" || animatingValue.value === "9"
-                    ? "bg-yellow-gold border-yellow-gold text-black shadow-[0_0_30px_rgba(255,242,0,0.5)]"
+                    ? "bg-yellow-gold border-yellow-gold text-black"
                     : animatingValue.value === "8" || animatingValue.value === "7"
-                    ? "bg-red-500 border-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+                    ? "bg-red-500 border-red-500 text-white"
                     : animatingValue.value === "6" || animatingValue.value === "5"
-                    ? "bg-blue-500 border-blue-500 text-white shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                    ? "bg-blue-500 border-blue-500 text-white"
                     : animatingValue.value === "4" || animatingValue.value === "3"
-                    ? "bg-neutral-900 border-neutral-700 text-white shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-                    : "bg-red-rival border-red-rival text-white shadow-[0_0_30px_rgba(255,59,48,0.5)]"
+                    ? "bg-neutral-900 border-neutral-700 text-white"
+                    : "bg-red-rival border-red-rival text-white"
                 }`}
               >
                 {animatingValue.value}
@@ -2899,7 +2894,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border-2 border-yellow-gold/80 bg-yellow-gold/10 text-yellow-gold font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(255,242,0,0.12)] hover:bg-yellow-gold/20 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-yellow-gold/60 bg-yellow-gold/10 text-yellow-gold font-black text-base flex items-center justify-center cursor-pointer hover:bg-yellow-gold/20 active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2907,7 +2902,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {/* Backspace */}
             <button
               onClick={handleBackspace}
-              className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-neutral-900 text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white hover:bg-neutral-850 active:scale-95 transition"
+              className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-[#0D1017] text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white active:scale-95 transition"
             >
               ⌫
             </button>
@@ -2917,7 +2912,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border-2 border-red-rival/80 bg-red-rival/10 text-red-rival font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.12)] hover:bg-red-rival/20 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-red-rival/60 bg-red-rival/10 text-red-rival font-black text-base flex items-center justify-center cursor-pointer hover:bg-red-rival/20 active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2928,7 +2923,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border-2 border-blue-500/80 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(59,130,246,0.12)] hover:bg-blue-500/20 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center cursor-pointer hover:bg-blue-500/20 active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2939,7 +2934,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border-2 border-neutral-700 bg-neutral-900/80 text-neutral-300 font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-white/15 bg-[#0D1017] text-neutral-300 font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2950,7 +2945,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border-2 border-white/50 bg-white/5 text-white font-black text-base flex items-center justify-center cursor-pointer shadow-[0_0_10px_rgba(255,255,255,0.08)] hover:bg-white/15 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-white/40 bg-white/[0.06] text-white font-black text-base flex items-center justify-center cursor-pointer hover:bg-white/15 active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2959,7 +2954,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {/* Miss */}
             <button
               onClick={() => handleScoreInput("M")}
-              className="col-span-4 py-3.5 min-h-[44px] rounded-xl border-2 border-neutral-700 bg-neutral-900 text-neutral-400 font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-neutral-200 active:scale-95 transition"
+              className="col-span-4 py-3.5 min-h-[44px] rounded-xl border border-white/10 bg-[#0D1017] text-neutral-400 font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-neutral-200 active:scale-95 transition"
             >
               Miss (M)
             </button>
@@ -3107,27 +3102,25 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               initial="initial"
               animate="animate"
               exit="initial"
-              className="w-full max-w-[300px] bg-neutral-950 border border-cyan-neon/30 p-6 rounded-[32px] flex flex-col items-center text-center gap-5 shadow-2xl relative"
+              className="w-full max-w-[300px] bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col items-center text-center gap-5 shadow-2xl relative"
             >
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-cyan-brand to-cyan-neon" />
-              
-              <div className="w-16 h-16 rounded-full bg-neutral-900 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon animate-pulse mt-2 shadow-[0_0_20px_rgba(0,229,255,0.2)]">
-                <Phone size={28} className="animate-bounce" />
+              <div className="w-14 h-14 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon mt-1">
+                <Phone size={24} />
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block animate-pulse">
+                <span className="text-[10px] text-cyan-neon font-bold tracking-widest uppercase block">
                   {callState === "RINGING" ? "Llamada Entrante" : "Llamando..."}
                 </span>
-                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                <h3 className="text-white text-base font-black tracking-tight">
                   {config.rival.fullName}
                 </h3>
-                <p className="text-[9px] text-gray-dim uppercase font-bold">
-                  {callState === "RINGING" ? "Llamada manos libres por datos" : "Esperando respuesta..."}
+                <p className="text-[10px] text-white/45 font-medium">
+                  {callState === "RINGING" ? "Voz en directo P2P" : "Esperando respuesta..."}
                 </p>
               </div>
 
-              <div className="flex w-full gap-3 mt-2">
+              <div className="flex w-full gap-3 mt-1">
                 {callState === "RINGING" ? (
                   <>
                     <button
@@ -3138,7 +3131,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     </button>
                     <button
                       onClick={acceptCall}
-                      className="flex-1 py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider transition active:scale-95 shadow-glow-cyan"
+                      className="flex-1 py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider transition active:scale-95"
                     >
                       Contestar
                     </button>
@@ -3171,11 +3164,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               initial="initial"
               animate="animate"
               exit="initial"
-              className="w-full max-w-[340px] bg-neutral-950 border border-white/10 p-5 rounded-[32px] flex flex-col gap-4 shadow-2xl relative overflow-hidden"
+              className="w-full max-w-[340px] bg-[#0B0D12] border border-white/[0.08] p-5 rounded-3xl flex flex-col gap-4 shadow-2xl relative overflow-hidden"
             >
-              {/* Header effect */}
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
-
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <div>
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
@@ -3614,12 +3604,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               initial="initial"
               animate="animate"
               exit="initial"
-              className="w-full max-w-[320px] bg-neutral-950 border border-white/10 p-6 rounded-[32px] flex flex-col items-center text-center gap-5 shadow-2xl relative"
+              className="w-full max-w-[320px] bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col items-center text-center gap-5 shadow-2xl relative"
             >
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-brand via-cyan-neon to-yellow-gold" />
-              
-              <div className="w-12 h-12 rounded-full bg-yellow-gold/10 border border-yellow-gold/30 flex items-center justify-center text-yellow-gold">
-                <RefreshCw size={22} className="animate-spin text-cyan-neon" />
+              <div className="w-12 h-12 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon">
+                <RefreshCw size={20} className="animate-spin text-cyan-neon" />
               </div>
               
               <div className="flex flex-col gap-1">
