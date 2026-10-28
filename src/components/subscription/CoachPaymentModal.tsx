@@ -96,28 +96,25 @@ export default function CoachPaymentModal({
           {/* Header */}
           <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
             <div>
-              {/* Branding Oficial ARCHERY 101010 */}
+              {/* Branding Oficial ARCHERY 101010 (+40% tamaño) */}
               <div 
-                className="flex items-center gap-1.5 select-none"
+                className="flex items-center gap-2 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
               >
-                <span className="text-white tracking-widest font-extrabold text-xs sm:text-sm">ARCHERY</span>
-                <span className="inline-flex tracking-tight font-extrabold text-xs sm:text-sm">
+                <span className="text-white tracking-widest font-extrabold text-[17px] sm:text-[20px]">ARCHERY</span>
+                <span className="inline-flex tracking-tight font-extrabold text-[17px] sm:text-[20px]">
                   <span className="text-cyan-neon">10</span>
                   <span className="text-red-rival">10</span>
                   <span className="text-yellow-gold">10</span>
                 </span>
               </div>
 
-              <div className="flex items-baseline gap-2 mt-1.5">
-                <span className="text-[11px] text-white/50 font-bold uppercase tracking-wider">SUSCRIPCIÓN</span>
-                <h2 
-                  className="text-base sm:text-lg font-extrabold text-white tracking-wider uppercase"
-                  style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-                >
-                  COACH PRO
-                </h2>
-              </div>
+              <h2 
+                className="text-base sm:text-lg font-extrabold text-white tracking-wider uppercase mt-1.5"
+                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              >
+                COACH PRO
+              </h2>
             </div>
 
             <button
