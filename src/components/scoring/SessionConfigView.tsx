@@ -134,7 +134,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[10px] text-white uppercase tracking-wider truncate">Configuración</p>
+          <p className="text-[12px] text-white uppercase tracking-wider truncate">Configuración</p>
         </div>
       </div>
 
@@ -149,14 +149,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           >
             <div className="flex justify-between items-start gap-2">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[10px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
+                <span className="text-[12px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
                   <RotateCcw size={11} />
                   Sesión Pausada
                 </span>
                 <h4 className="text-white text-xs font-bold mt-1 truncate">
                   {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
                 </h4>
-                <p className="text-[9px] text-white">
+                <p className="text-[10.8px] text-white">
                   Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
                     month: "short",
                     day: "numeric",
@@ -204,7 +204,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     setShowPracticeInfoModal(true);
                   }
                 }}
-                className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -240,7 +240,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none" />
           </div>
           {format !== "Libre" && (
-            <p className="text-[10px] text-cyan-neon font-mono font-bold px-1 tabular-nums">
+            <p className="text-[12px] text-cyan-neon font-mono font-bold px-1 tabular-nums">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
             </p>
           )}
@@ -257,7 +257,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -370,7 +370,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
               <div>
-                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
+                <span className="text-[12px] text-cyan-neon font-black tracking-widest uppercase">
                   Metodología de Práctica
                 </span>
                 <h3 className="text-white text-base font-black uppercase mt-1">
@@ -398,7 +398,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   onChange={(e) => setDontShowAgainPractice(e.target.checked)}
                   className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                 />
-                <label htmlFor="dontShowAgain" className="text-[10px] text-white font-bold cursor-pointer uppercase select-none">
+                <label htmlFor="dontShowAgain" className="text-[12px] text-white font-bold cursor-pointer uppercase select-none">
                   No volver a mostrar
                 </label>
               </div>

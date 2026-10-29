@@ -60,7 +60,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Debug Code Block */}
-            <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[10px] font-mono text-left max-h-[110px] overflow-y-auto scrollbar-thin">
+            <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[12px] font-mono text-left max-h-[110px] overflow-y-auto scrollbar-thin">
               <span className="text-red-rival font-bold">Detalle técnico:</span>
               <span className="text-white break-all">{this.state.error?.toString() || "Error desconocido"}</span>
             </div>

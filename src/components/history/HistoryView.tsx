@@ -244,7 +244,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
               {t("historyTitle")}
             </h2>
-            <p className="text-[10px] text-white uppercase tracking-wider truncate">Historial</p>
+            <p className="text-[12px] text-white uppercase tracking-wider truncate">Historial</p>
           </div>
         </div>
 
@@ -252,7 +252,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
           <button
             onClick={() => setActiveTab("SESSIONS")}
-            className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`h-8 px-3 rounded-lg text-[12px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
             }`}
           >
@@ -260,7 +260,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           </button>
           <button
             onClick={() => setActiveTab("VOLUME")}
-            className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`h-8 px-3 rounded-lg text-[12px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
             }`}
           >
@@ -275,7 +275,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
             {/* Date Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[12px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Fecha:
               </span>
               <div className="flex gap-1.5">
@@ -287,7 +287,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setDateFilter(f.id as any)}
-                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[12px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       dateFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                         : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -301,7 +301,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Practice Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[12px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Tipo:
               </span>
               <div className="flex gap-1.5">
@@ -314,7 +314,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setPracticeFilter(f.id)}
-                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[12px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       practiceFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                         : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -328,7 +328,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Bow Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[12px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Arco:
               </span>
               <div className="flex gap-1.5">
@@ -341,7 +341,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <button
                     key={f.id}
                     onClick={() => setBowFilter(f.id)}
-                    className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                    className={`h-7 px-3 rounded-lg text-[12px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       bowFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                         : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -373,28 +373,28 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   >
                     <div className="flex flex-col gap-1 w-[70%] min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-white font-bold">{formatDate(session.timestamp)}</span>
-                        <span className="text-[8px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
+                        <span className="text-[12px] text-white font-bold">{formatDate(session.timestamp)}</span>
+                        <span className="text-[9.6px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
                           {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
                         <span className="text-xl font-black text-white">{session.score}</span>
-                        <span className="text-[10px] text-white">/ {session.maxScore}</span>
+                        <span className="text-[12px] text-white">/ {session.maxScore}</span>
                         {session.maxScore > 0 && (
-                          <span className="text-[11px] text-yellow-gold font-bold ml-1">
+                          <span className="text-[13.2px] text-yellow-gold font-bold ml-1">
                             {Math.round((session.score / session.maxScore) * 100)}%
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-white truncate">
+                      <span className="text-[12px] text-white truncate">
                         {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {isPB && (
-                        <span className="bg-yellow-gold/10 text-yellow-gold font-black border border-yellow-gold/25 text-[8px] px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1">
+                        <span className="bg-yellow-gold/10 text-yellow-gold font-black border border-yellow-gold/25 text-[9.6px] px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1">
                           <Award size={10} /> PB
                         </span>
                       )}
@@ -412,14 +412,14 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           
           {/* Card Volume Giant */}
           <div className="bg-neutral-900/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-1.5 relative overflow-hidden shadow-sm">
-            <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase">
+            <span className="text-[12px] text-cyan-neon font-black tracking-widest uppercase">
               Volumen Acumulado
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-white">{volStats.total}</span>
               <span className="text-xs text-white font-bold">flechas registradas</span>
             </div>
-            <p className="text-[10px] text-white leading-relaxed">
+            <p className="text-[12px] text-white leading-relaxed">
               Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.
             </p>
           </div>
@@ -429,7 +429,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             
             {/* Widget: Arco Volumen */}
             <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-              <span className="text-[9px] text-yellow-gold font-black tracking-wider uppercase">Por Tipo de Arco</span>
+              <span className="text-[10.8px] text-yellow-gold font-black tracking-wider uppercase">Por Tipo de Arco</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
@@ -440,7 +440,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
                     <div key={item.name} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[10px] font-bold text-white">
+                      <div className="flex justify-between text-[12px] font-bold text-white">
                         <span>{item.name}</span>
                         <span className="text-yellow-gold">{item.val} ({percent}%)</span>
                       </div>
@@ -458,7 +458,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Widget: Práctica Volumen */}
             <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-              <span className="text-[9px] text-cyan-brand font-black tracking-wider uppercase">Por Práctica</span>
+              <span className="text-[10.8px] text-cyan-brand font-black tracking-wider uppercase">Por Práctica</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
@@ -469,7 +469,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
                     <div key={item.name} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[10px] font-bold text-white">
+                      <div className="flex justify-between text-[12px] font-bold text-white">
                         <span>{item.name}</span>
                         <span className="text-cyan-neon">{item.val} ({percent}%)</span>
                       </div>
@@ -507,12 +507,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       className="bg-neutral-900/40 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center"
                     >
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] text-white font-bold">{formatDate(s.timestamp)}</span>
+                        <span className="text-[10.8px] text-white font-bold">{formatDate(s.timestamp)}</span>
                         <span className="text-xs font-bold text-white uppercase">{s.format} ({s.distance}m)</span>
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-cyan-neon">+{arrows}</span>
-                        <span className="text-[9px] text-white block font-bold uppercase">{s.practiceType}</span>
+                        <span className="text-[10.8px] text-white block font-bold uppercase">{s.practiceType}</span>
                       </div>
                     </div>
                   );
@@ -572,13 +572,13 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Giant Score Summary */}
             <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
               <div className="flex flex-col">
-                <span className="text-[9px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
+                <span className="text-[10.8px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
                 <span className="text-3xl font-black text-white">
                   {selectedSession.score} <span className="text-xs text-white">/ {selectedSession.maxScore}</span>
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[9px] text-white font-bold uppercase tracking-widest">Precisión</span>
+                <span className="text-[10.8px] text-white font-bold uppercase tracking-widest">Precisión</span>
                 <p className="text-2xl font-black text-yellow-gold leading-tight">
                   {selectedSession.maxScore > 0 ? Math.round((selectedSession.score / selectedSession.maxScore) * 100) : 0}%
                 </p>
@@ -588,23 +588,23 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-white uppercase block">Distancia</span>
+                <span className="text-[9.6px] text-white uppercase block">Distancia</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.distance}m</span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-white uppercase block">Arco</span>
+                <span className="text-[9.6px] text-white uppercase block">Arco</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.bowType === "Recurve" ? "Recurvo" : selectedSession.bowType === "Compound" ? "Compuesto" : selectedSession.bowType}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-white uppercase block">Tipo</span>
+                <span className="text-[9.6px] text-white uppercase block">Tipo</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.practiceType === "Control" ? t("practiceControl") : selectedSession.practiceType}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-white uppercase block">Rondas</span>
+                <span className="text-[9.6px] text-white uppercase block">Rondas</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.endsCount} Ends</span>
               </div>
             </div>
@@ -612,7 +612,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Bloques y Fatiga report (para WA600/720 en Historial) */}
             {selectedSession.blockStats && (
               <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
-                <span className="text-[9px] text-white uppercase font-bold">Rendimiento por Bloques</span>
+                <span className="text-[10.8px] text-white uppercase font-bold">Rendimiento por Bloques</span>
                 <div className="flex justify-between text-white">
                   <span>Bloque 1 (Primera Mitad):</span>
                   <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b1Score} pts</span>
@@ -625,13 +625,13 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     </div>
                     <div className="flex justify-between border-t border-white/5 pt-1.5 mt-0.5">
                       <span>Consistencia:</span>
-                      <span className={`font-black uppercase text-[10px] ${selectedSession.blockStats.diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
+                      <span className={`font-black uppercase text-[12px] ${selectedSession.blockStats.diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
                         {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? "(Fatiga)" : "(Excelente)"}
                       </span>
                     </div>
                   </>
                 ) : (
-                  <div className="text-[10px] text-yellow-gold italic mt-0.5 border-t border-white/5 pt-1">
+                  <div className="text-[12px] text-yellow-gold italic mt-0.5 border-t border-white/5 pt-1">
                     Sesión finalizada anticipadamente (Bloque 2 no realizado).
                   </div>
                 )}
@@ -666,7 +666,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       </span>
                     </div>
                     {e.note && (
-                      <p className="text-[10px] text-white italic mt-1 pl-1">
+                      <p className="text-[12px] text-white italic mt-1 pl-1">
                         "{e.note}"
                       </p>
                     )}
@@ -752,11 +752,11 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       {disp && (
                         <div className="w-full grid grid-cols-2 gap-2 mt-2 text-center">
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[8px] text-white uppercase font-bold block">Agrupación Real</span>
+                            <span className="text-[9.6px] text-white uppercase font-bold block">Agrupación Real</span>
                             <span className="text-xs font-black text-cyan-neon">{disp.groupRadiusCm} cm</span>
                           </div>
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[8px] text-white uppercase font-bold block">Centro (+) vs X</span>
+                            <span className="text-[9.6px] text-white uppercase font-bold block">Centro (+) vs X</span>
                             <span className="text-xs font-black text-white">
                               {Math.hypot(disp.offsetCmX, disp.offsetCmY).toFixed(1)} cm
                             </span>

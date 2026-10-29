@@ -36,7 +36,7 @@ export default function PrivacyPolicyPage() {
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </div>
-          <span className="text-white text-[9px] font-black tracking-[0.25em] uppercase pl-1.5 border-l border-white/10">
+          <span className="text-white text-[10.8px] font-black tracking-[0.25em] uppercase pl-1.5 border-l border-white/10">
             PRIVACY
           </span>
         </div>
@@ -54,7 +54,7 @@ export default function PrivacyPolicyPage() {
         <p className="text-xs sm:text-sm text-white leading-relaxed">
           En <strong>Archery 101010</strong> nos tomamos la privacidad de los arqueros y entrenadores con máxima seriedad. Esta política explica cómo recopilamos, usamos, protegemos y gestionamos tu información de acuerdo con las normativas internacionales de protección de datos (incluyendo RGPD/GDPR, CCPA y los requerimientos oficiales de <strong>Google Play Store</strong> y <strong>Apple App Store</strong>).
         </p>
-        <span className="text-[11px] text-white font-mono">
+        <span className="text-[13.2px] text-white font-mono">
           Última actualización: {lastUpdated} · Versión oficial aplicable
         </span>
       </div>
@@ -281,7 +281,7 @@ export default function PrivacyPolicyPage() {
 
         <Link
           href="/"
-          className="text-cyan-neon hover:underline font-bold uppercase tracking-wider text-[11px]"
+          className="text-cyan-neon hover:underline font-bold uppercase tracking-wider text-[13.2px]"
         >
           Ir a la Aplicación
         </Link>

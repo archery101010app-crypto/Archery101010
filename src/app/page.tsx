@@ -1022,7 +1022,7 @@ export default function Home() {
                   ★
                 </div>
 
-                <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
+                <span className="text-[12px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
                   NUEVA MARCA HISTÓRICA
                 </span>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -1030,13 +1030,13 @@ export default function Home() {
                 </h3>
                 
                 <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full">
-                  <span className="text-[9px] text-white uppercase font-bold block">
+                  <span className="text-[10.8px] text-white uppercase font-bold block">
                     Puntuación Registrada
                   </span>
                   <span className="text-2xl font-black text-white block mt-0.5 tabular-nums">
                     {unlockedStar.score} <span className="text-xs text-white">/ 720</span>
                   </span>
-                  <span className="text-[9px] text-cyan-neon uppercase font-black tracking-wider block mt-1">
+                  <span className="text-[10.8px] text-cyan-neon uppercase font-black tracking-wider block mt-1">
                     {unlockedStar.bowType === "Recurve" ? "Recurvo" : unlockedStar.bowType === "Compound" ? "Compuesto" : unlockedStar.bowType} · {unlockedStar.distance} m (72 flechas)
                   </span>
                 </div>
@@ -1070,7 +1070,7 @@ export default function Home() {
               <div className="relative z-10 flex flex-col items-center">
                 {!showDiscardConfirm ? (
                   <>
-                    <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
+                    <span className="text-[12px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
                       SESIÓN EN PAUSA
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -1079,15 +1079,15 @@ export default function Home() {
                     
                     <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full text-left">
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white uppercase font-bold">Formato WA</span>
+                        <span className="text-[12px] text-white uppercase font-bold">Formato WA</span>
                         <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance} m</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white uppercase font-bold">Puntuación</span>
+                        <span className="text-[12px] text-white uppercase font-bold">Puntuación</span>
                         <span className="text-xs font-black text-cyan-neon tabular-nums">{activeDraft.score} pts</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white uppercase font-bold">Progreso</span>
+                        <span className="text-[12px] text-white uppercase font-bold">Progreso</span>
                         <span className="text-xs font-black text-white tabular-nums">
                           {(() => {
                             const shotCount = activeDraft.ends.reduce((sum: number, e: any) => sum + e.arrows.filter((a: string) => a !== "").length, 0);
@@ -1097,8 +1097,8 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] text-white uppercase font-bold">Guardado</span>
-                        <span className="text-[10px] text-white font-medium">
+                        <span className="text-[12px] text-white uppercase font-bold">Guardado</span>
+                        <span className="text-[12px] text-white font-medium">
                           {activeDraft.timestamp ? (
                             (() => {
                               const date = new Date(activeDraft.timestamp);
@@ -1130,7 +1130,7 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <span className="text-[10px] text-red-rival font-black tracking-widest uppercase block mb-1">
+                    <span className="text-[12px] text-red-rival font-black tracking-widest uppercase block mb-1">
                       CONFIRMACIÓN DE DESCARTE
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -1193,7 +1193,7 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-1.5 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                <span className="text-[12px] font-black uppercase tracking-widest text-emerald-400">
                   ELIMINATORIA ONLINE 1 VS 1
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">

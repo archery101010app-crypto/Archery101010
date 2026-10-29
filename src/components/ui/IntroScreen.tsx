@@ -35,7 +35,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
       {/* Skip Button */}
       <button
         onClick={handleSkip}
-        className="absolute top-6 right-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[9px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
+        className="absolute top-6 right-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[10.8px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
       >
         Saltar
       </button>
@@ -83,7 +83,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.8, ease: "easeOut" }}
-          className="text-white text-[15px] sm:text-[18px] font-black uppercase tracking-[0.28em] text-center"
+          className="text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-[0.28em] text-center"
           style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
         >
           Your Archery App

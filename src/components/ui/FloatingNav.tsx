@@ -60,8 +60,8 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
   );
 
   return (
-    <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-[390px]">
-      <div className="bg-[#0A0B0E]/95 backdrop-blur-md rounded-2xl border border-white/[0.08] px-2.5 sm:px-3.5 py-2 flex items-center justify-around shadow-[0_12px_32px_rgba(0,0,0,0.85)]">
+    <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[96%] max-w-[390px]">
+      <div className="bg-[#0A0B0E]/95 backdrop-blur-md rounded-2xl border border-white/[0.08] px-1.5 sm:px-3 py-2 flex items-center justify-around shadow-[0_12px_32px_rgba(0,0,0,0.85)]">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
@@ -79,7 +79,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               }}
               title={item.label}
               aria-label={item.label}
-              className="relative flex flex-col items-center justify-center py-1 px-1 cursor-pointer outline-none group flex-1"
+              className="relative flex flex-col items-center justify-center py-1 px-0.5 cursor-pointer outline-none group flex-1 min-w-0"
             >
               {/* Active matte surface indicator */}
               {isActive && (
@@ -103,7 +103,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                   }`}
                 />
                 {item.isPro && (
-                  <span className="absolute -top-1.5 -right-2.5 text-[7px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wider">
+                  <span className="absolute -top-1.5 -right-2.5 text-[8px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wide">
                     PRO
                   </span>
                 )}
@@ -111,7 +111,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[8px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 ${
+                className={`text-[9.5px] font-bold tracking-tighter mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

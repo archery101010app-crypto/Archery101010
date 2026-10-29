@@ -124,7 +124,7 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
 
               {/* Text content */}
               <div className="relative z-10 px-4 md:px-8 flex flex-col justify-center max-w-[80%]">
-                <span className="text-[7px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-neon/10 px-1.5 py-0.5 rounded w-max mb-1">
+                <span className="text-[8.4px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-neon/10 px-1.5 py-0.5 rounded w-max mb-1">
                   Patrocinador
                 </span>
                 {currentSlide.title && (
@@ -134,7 +134,7 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
                   </h4>
                 )}
                 {currentSlide.subtitle && (
-                  <p className="text-[10px] md:text-sm text-white truncate font-medium">
+                  <p className="text-[12px] md:text-sm text-white truncate font-medium">
                     {currentSlide.subtitle}
                   </p>
                 )}

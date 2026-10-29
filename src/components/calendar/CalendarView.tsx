@@ -764,12 +764,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {language === "es" ? "Calendario" : "Calendar"}
               </h2>
               {isCoach && (
-                <span className="text-[8px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
+                <span className="text-[9.6px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
                   Coach
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-white uppercase tracking-wider truncate">
+            <p className="text-[12px] text-white uppercase tracking-wider truncate">
               {language === "es" ? "Planificación y Tareas" : "Planning & Tasks"}
             </p>
           </div>
@@ -779,7 +779,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleOpenImportModal}
-            className="h-9 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
+            className="h-9 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
             title="Importar Plan desde Excel o Google Sheets"
           >
             <FileSpreadsheet size={13} />
@@ -790,7 +790,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           {isCoach && (
             <button
               onClick={() => setShowSyncModal(true)}
-              className="h-9 px-2.5 rounded-xl bg-yellow-gold/15 hover:bg-yellow-gold/25 border border-yellow-gold/35 text-yellow-gold font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
+              className="h-9 px-2.5 rounded-xl bg-yellow-gold/15 hover:bg-yellow-gold/25 border border-yellow-gold/35 text-yellow-gold font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
               title="Sincronizar ciclo con el mes"
             >
               <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
@@ -819,7 +819,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         </button>
         <div className="text-center">
           <span className="text-white font-extrabold text-base sm:text-lg capitalize block leading-tight">{monthName}</span>
-          <span className="text-[11px] text-white mt-0.5 block">Toca cualquier día para ver las tareas</span>
+          <span className="text-[13.2px] text-white mt-0.5 block">Toca cualquier día para ver las tareas</span>
         </div>
         <button
           onClick={nextMonth}
@@ -887,7 +887,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               <button
                 type="button"
                 onClick={() => handleRequestUnlink(currentPlan)}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[12px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
                 title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
               >
                 <Unlink size={11} />
@@ -978,7 +978,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 )}
 
                 {/* Day Number (+20% larger and squarely centered) */}
-                <span className={`text-[13px] sm:text-[15px] leading-none text-center ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
+                <span className={`text-[14.3px] sm:text-[16.5px] leading-none text-center ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
                   {cell.day}
                 </span>
 
@@ -989,7 +989,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` && (
                         <span
                           style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
-                          className="text-[8px] sm:text-[9px] font-bold tracking-tight leading-none truncate max-w-full text-center"
+                          className="text-[9.6px] sm:text-[10.8px] font-bold tracking-tight leading-none truncate max-w-full text-center"
                         >
                           {coachAssignment.title}
                         </span>
@@ -997,18 +997,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                       <span
                         style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                        className="text-[8px] sm:text-[9px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
+                        className="text-[9.6px] sm:text-[10.8px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
                       >
                         {coachAssignment.targetArrows} fl.
                       </span>
                     ) : null}
                   </div>
                 ) : activePhaseInfo ? (
-                  <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
+                  <span className="text-[9.6px] sm:text-[10.8px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
                     {activePhaseInfo.phase.name}
                   </span>
                 ) : cell.dayEvents.length > 0 && cell.dayEvents[0].title ? (
-                  <span className="text-[8px] sm:text-[9px] font-bold text-white tracking-tight leading-none truncate max-w-[94%] text-center">
+                  <span className="text-[9.6px] sm:text-[10.8px] font-bold text-white tracking-tight leading-none truncate max-w-[94%] text-center">
                     {cell.dayEvents[0].title}
                   </span>
                 ) : null}
@@ -1048,17 +1048,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             />
             <div className="flex justify-between items-start gap-2 flex-wrap">
               <div className="min-w-0 flex-1">
-                <span className="text-[8px] font-black uppercase text-cyan-neon tracking-widest block">
+                <span className="text-[9.6px] font-black uppercase text-cyan-neon tracking-widest block">
                   {language === "es" ? "Fase Activa Hoy" : "Active Phase Today"}
                 </span>
                 <h4 className="text-sm font-black text-white uppercase mt-0.5 truncate">{phase.name}</h4>
-                <span className="text-[9px] text-white block mt-0.5 truncate">
+                <span className="text-[10.8px] text-white block mt-0.5 truncate">
                   Plan: {macroName}
                 </span>
               </div>
               <span 
                 style={{ color: phase.color, borderColor: `${phase.color}30`, backgroundColor: `${phase.color}15` }}
-                className="text-[9px] font-bold px-2.5 py-0.5 rounded-full border uppercase shrink-0 whitespace-nowrap"
+                className="text-[10.8px] font-bold px-2.5 py-0.5 rounded-full border uppercase shrink-0 whitespace-nowrap"
               >
                 {phase.startDate} al {phase.endDate}
               </span>
@@ -1066,23 +1066,23 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
             <div className="grid grid-cols-2 gap-3 bg-neutral-950/40 p-3 rounded-2xl border border-white/5 mt-1">
               <div>
-                <span className="text-[8px] text-white font-black uppercase tracking-wider block">Sesiones Semanales</span>
+                <span className="text-[9.6px] text-white font-black uppercase tracking-wider block">Sesiones Semanales</span>
                 <span className="text-xs font-bold text-white mt-0.5 block">{phase.weeklySessionGoal} sesiones</span>
               </div>
               <div>
-                <span className="text-[8px] text-white font-black uppercase tracking-wider block">Volumen de Flechas</span>
+                <span className="text-[9.6px] text-white font-black uppercase tracking-wider block">Volumen de Flechas</span>
                 <span className="text-xs font-bold text-cyan-neon mt-0.5 block">{phase.weeklyArrowGoal} flechas</span>
               </div>
             </div>
 
             {phase.notes && (
-              <p className="text-[10px] text-white leading-relaxed italic border-t border-white/[0.03] pt-2.5 mt-0.5">
+              <p className="text-[12px] text-white leading-relaxed italic border-t border-white/[0.03] pt-2.5 mt-0.5">
                 &ldquo;{phase.notes}&rdquo;
               </p>
             )}
 
             <div className="flex items-center justify-between border-t border-white/[0.04] pt-2.5 mt-1">
-              <span className="text-[9px] text-white">Plan vinculado</span>
+              <span className="text-[10.8px] text-white">Plan vinculado</span>
               <button
                 type="button"
                 onClick={() => {
@@ -1090,7 +1090,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   if (m) handleRequestUnlink(m);
                   else if (macrocycles.length > 0) handleRequestUnlink(macrocycles[0]);
                 }}
-                className="text-[10px] text-rose-400 hover:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                className="text-[12px] text-rose-400 hover:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
               >
                 <Unlink size={11} />
                 <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
@@ -1103,14 +1103,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       {/* Attendance Stats Widget */}
       <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center gap-4">
         <div className="flex flex-col gap-1.5 w-[65%]">
-          <span className="text-[9px] text-white font-bold uppercase tracking-widest flex items-center gap-1">
+          <span className="text-[10.8px] text-white font-bold uppercase tracking-widest flex items-center gap-1">
             <Award size={12} className="text-cyan-neon" />
             {language === "es" ? "Constancia Mensual" : "Monthly Attendance"}
           </span>
           <h4 className="text-white text-xs font-extrabold leading-tight">
             {language === "es" ? "Tu constancia de entrenamiento" : "Your training consistency"}
           </h4>
-          <p className="text-[10px] text-white leading-snug">
+          <p className="text-[12px] text-white leading-snug">
             {attendanceRate >= 80 
               ? (language === "es" ? "¡Excelente consistencia olímpica! Estás entrenando al nivel planeado." : "Excellent Olympic consistency! You are training at the planned level.")
               : (language === "es" ? "Continúa asistiendo regularmente para completar tus metas del club." : "Continue attending regularly to complete your club goals.")}
@@ -1142,7 +1142,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center pt-0.5">
-            <span className="text-[10px] font-black text-white">{attendanceRate}%</span>
+            <span className="text-[12px] font-black text-white">{attendanceRate}%</span>
           </div>
         </div>
       </div>
@@ -1153,7 +1153,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <span className="text-xs text-white font-bold uppercase tracking-wider">
             {language === "es" ? "Eventos de este mes" : "Events this month"}
           </span>
-          <span className="text-[10px] text-white">
+          <span className="text-[12px] text-white">
             {monthEvents.length} {monthEvents.length === 1 ? "evento" : "eventos"}
           </span>
         </div>
@@ -1183,14 +1183,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getEventBadgeColor(ev.type)}`}>
+                        <span className={`text-[10.8px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getEventBadgeColor(ev.type)}`}>
                           {ev.type === "competition" ? "Competencia" :
                            ev.type === "training" ? "Entrenamiento" :
                            ev.type === "meeting" ? "Reunión" : "Otro"}
                         </span>
                         
                         {isCoachEvent && (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full border border-yellow-gold/25 text-yellow-gold bg-yellow-gold/5 uppercase tracking-wider font-extrabold flex items-center gap-1">
+                          <span className="text-[10.8px] px-2 py-0.5 rounded-full border border-yellow-gold/25 text-yellow-gold bg-yellow-gold/5 uppercase tracking-wider font-extrabold flex items-center gap-1">
                             <Shield size={9} />
                             <span>Asignado por Coach</span>
                           </span>
@@ -1199,7 +1199,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         {ev.phaseName && (
                           <span 
                             style={{ color: ev.phaseColor, backgroundColor: `${ev.phaseColor}15`, borderColor: `${ev.phaseColor}30` }}
-                            className="text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase"
+                            className="text-[10.8px] px-2 py-0.5 rounded-full border font-bold uppercase"
                           >
                             {ev.phaseName}
                           </span>
@@ -1208,7 +1208,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                       <h4 className="text-white text-xs font-black mt-1">{ev.title}</h4>
                       
-                      <div className="flex items-center gap-1 text-[9px] text-white">
+                      <div className="flex items-center gap-1 text-[10.8px] text-white">
                         <Clock size={10} />
                         <span>
                           {new Date(ev.date + "T00:00:00").toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
@@ -1224,13 +1224,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     </div>
 
                     {/* Countdown Badge */}
-                    <span className={`text-[10px] px-2.5 py-1 rounded-xl font-extrabold uppercase border shrink-0 whitespace-nowrap ${countdown.colorClass}`}>
+                    <span className={`text-[12px] px-2.5 py-1 rounded-xl font-extrabold uppercase border shrink-0 whitespace-nowrap ${countdown.colorClass}`}>
                       {countdown.text}
                     </span>
                   </div>
 
                   {ev.description && (
-                    <p className="text-[10px] text-white leading-relaxed border-t border-white/[0.02] pt-2">
+                    <p className="text-[12px] text-white leading-relaxed border-t border-white/[0.02] pt-2">
                       {ev.description}
                     </p>
                   )}
@@ -1255,7 +1255,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         </button>
                       </>
                     ) : (
-                      <span className="text-[9px] text-white flex items-center gap-1">
+                      <span className="text-[10.8px] text-white flex items-center gap-1">
                         <Lock size={10} />
                         <span>Solo lectura (Coach)</span>
                       </span>
@@ -1301,7 +1301,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* Header */}
                 <div className="flex justify-between items-start border-b border-white/5 pb-3">
                   <div>
-                    <span className="text-[9px] text-cyan-neon font-black uppercase tracking-widest block">
+                    <span className="text-[10.8px] text-cyan-neon font-black uppercase tracking-widest block">
                       Detalle del Día
                     </span>
                     <h3 className="text-sm font-black text-white capitalize mt-0.5">
@@ -1309,7 +1309,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     </h3>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase border ${countdown.colorClass}`}>
+                    <span className={`text-[12px] px-2.5 py-0.5 rounded-full font-bold uppercase border ${countdown.colorClass}`}>
                       {countdown.text}
                     </span>
                     <button
@@ -1323,7 +1323,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 {/* 1. SECCIÓN PRINCIPAL: ASIGNACIÓN DEL ENTRENADOR */}
                 <div className="flex flex-col gap-2">
-                  <span className="text-[9px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
+                  <span className="text-[10.8px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
                     <Shield size={12} className="text-yellow-gold" />
                     <span>Plan del Entrenador para este Día</span>
                   </span>
@@ -1340,13 +1340,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30 flex items-center gap-1">
+                            <span className="text-[9.6px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30 flex items-center gap-1">
                               <Shield size={9} />
                               <span>Asignado por: {coachAssignment.createdByName}</span>
                             </span>
 
                             {coachAssignment.assignedAthleteIds && coachAssignment.assignedAthleteIds.length > 0 ? (
-                              <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 flex items-center gap-1">
+                              <span className="text-[9.6px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30 flex items-center gap-1">
                                 <User size={9} />
                                 <span>
                                   {isCoach 
@@ -1355,7 +1355,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 </span>
                               </span>
                             ) : (
-                              <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white/5 text-white border border-white/5 flex items-center gap-1">
+                              <span className="text-[9.6px] font-black uppercase px-2 py-0.5 rounded-full bg-white/5 text-white border border-white/5 flex items-center gap-1">
                                 <Users size={9} />
                                 <span>Todo el Club</span>
                               </span>
@@ -1368,7 +1368,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                   backgroundColor: `${coachAssignment.phaseColor}15`,
                                   borderColor: `${coachAssignment.phaseColor}30`
                                 }}
-                                className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border"
+                                className="text-[9.6px] font-black uppercase px-2 py-0.5 rounded-full border"
                               >
                                 {coachAssignment.phaseName}
                               </span>
@@ -1386,7 +1386,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             <button
                               type="button"
                               onClick={() => handleOpenEditAssignment(coachAssignment)}
-                              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[9px] font-bold flex items-center gap-1 cursor-pointer"
+                              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[10.8px] font-bold flex items-center gap-1 cursor-pointer"
                             >
                               <Edit2 size={11} />
                               <span>Editar</span>
@@ -1418,7 +1418,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 });
                               }
                             }}
-                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition text-[9px] font-bold flex items-center gap-1 cursor-pointer"
+                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition text-[10.8px] font-bold flex items-center gap-1 cursor-pointer"
                             title="Desvincular Plan"
                           >
                             <Unlink size={11} />
@@ -1431,7 +1431,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {!coachAssignment.isRestDay && coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                         <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-white uppercase font-bold flex items-center gap-1">
+                            <span className="text-[12px] text-white uppercase font-bold flex items-center gap-1">
                               <Target size={12} className="text-cyan-neon" />
                               <span>Flechas</span>
                             </span>
@@ -1442,7 +1442,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                           {/* Progress bar comparing with arrows shot */}
                           <div className="flex flex-col gap-1">
-                            <div className="flex justify-between text-[9px]">
+                            <div className="flex justify-between text-[10.8px]">
                               <span className="text-white">Progreso registrado hoy:</span>
                               <span className="text-white font-extrabold tabular-nums">
                                 {arrowsShot} / {coachAssignment.targetArrows} (
@@ -1461,7 +1461,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           </div>
 
                           {arrowsShot >= coachAssignment.targetArrows && (
-                            <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-xl border border-green-500/20">
+                            <div className="flex items-center gap-1 text-[10.8px] text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-xl border border-green-500/20">
                               <CheckCircle2 size={12} />
                               <span>Meta de flechas completada</span>
                             </div>
@@ -1472,7 +1472,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {/* Campos literales del Excel / Google Sheet */}
                       {coachAssignment.customFields && coachAssignment.customFields.length > 0 && (
                         <div className="flex flex-col gap-1.5 border-t border-white/[0.06] pt-2.5">
-                          <span className="text-[9px] text-white uppercase font-black tracking-widest">
+                          <span className="text-[10.8px] text-white uppercase font-black tracking-widest">
                             Datos del Plan
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -1481,7 +1481,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 key={idx}
                                 className="bg-neutral-950/70 px-3 py-2 rounded-xl border border-white/[0.05] flex flex-col gap-0.5"
                               >
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-white">
+                                <span className="text-[10.8px] font-bold uppercase tracking-wider text-white">
                                   {field.label}
                                 </span>
                                 <span className="text-xs font-bold text-white break-words">
@@ -1496,7 +1496,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {/* Technical & Physical Focus Points */}
                       {coachAssignment.focusPoints && coachAssignment.focusPoints.length > 0 && (
                         <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
-                          <span className="text-[9px] text-white uppercase font-black tracking-widest">
+                          <span className="text-[10.8px] text-white uppercase font-black tracking-widest">
                             Enfoque Técnico y Físico
                           </span>
                           <div className="flex flex-col gap-1">
@@ -1513,7 +1513,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {/* Coach Notes */}
                       {Boolean(coachAssignment.coachNotes && coachAssignment.coachNotes.trim()) && (
                         <div className="flex flex-col gap-1 border-t border-white/[0.04] pt-2">
-                          <span className="text-[9px] text-white uppercase font-black tracking-widest">
+                          <span className="text-[10.8px] text-white uppercase font-black tracking-widest">
                             Indicaciones del Entrenador
                           </span>
                           <p className="text-xs text-white italic leading-relaxed bg-neutral-950/50 p-2.5 rounded-xl border border-white/[0.03]">
@@ -1547,28 +1547,28 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           <span style={{ backgroundColor: activePhaseInfo.phase.color }} className="w-2 h-2 rounded-full" />
                           Fase Activa: {activePhaseInfo.phase.name}
                         </span>
-                        <span className="text-[9px] text-white">Plan: {activePhaseInfo.macroName}</span>
+                        <span className="text-[10.8px] text-white">Plan: {activePhaseInfo.macroName}</span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-[10px] bg-neutral-950/50 p-2 rounded-xl border border-white/5">
+                      <div className="grid grid-cols-2 gap-2 text-[12px] bg-neutral-950/50 p-2 rounded-xl border border-white/5">
                         <div>
-                          <span className="text-white block uppercase font-bold text-[8px]">Meta Semanal</span>
+                          <span className="text-white block uppercase font-bold text-[9.6px]">Meta Semanal</span>
                           <span className="text-white font-medium">{activePhaseInfo.phase.weeklySessionGoal} sesiones</span>
                         </div>
                         <div>
-                          <span className="text-white block uppercase font-bold text-[8px]">Flechas Semanales</span>
+                          <span className="text-white block uppercase font-bold text-[9.6px]">Flechas Semanales</span>
                           <span className="text-cyan-neon font-medium">{activePhaseInfo.phase.weeklyArrowGoal} flechas</span>
                         </div>
                       </div>
 
                       {activePhaseInfo.phase.notes && (
-                        <p className="text-[10px] text-white italic">&ldquo;{activePhaseInfo.phase.notes}&rdquo;</p>
+                        <p className="text-[12px] text-white italic">&ldquo;{activePhaseInfo.phase.notes}&rdquo;</p>
                       )}
 
                       {isCoach && (
                         <button
                           onClick={() => handleOpenCreateAssignment(selectedDay, activePhaseInfo)}
-                          className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
+                          className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
                         >
                           <Plus size={12} />
                           <span>Asignar Tarea Específica para este Día</span>
@@ -1581,7 +1581,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {isCoach && (
                         <button
                           onClick={() => handleOpenCreateAssignment(selectedDay, null)}
-                          className="py-1.5 px-3 rounded-xl bg-cyan-neon text-black font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-glow-cyan cursor-pointer"
+                          className="py-1.5 px-3 rounded-xl bg-cyan-neon text-black font-black text-[12px] uppercase tracking-wider flex items-center gap-1 shadow-glow-cyan cursor-pointer"
                         >
                           <Plus size={12} />
                           <span>Asignar Tarea del Día</span>
@@ -1593,13 +1593,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 {/* 2. REGISTRO DE TIRO EN ESTA FECHA */}
                 <div className="flex flex-col gap-2 border-t border-white/5 pt-3">
-                  <span className="text-[9px] text-white uppercase font-black tracking-widest flex items-center justify-between">
+                  <span className="text-[10.8px] text-white uppercase font-black tracking-widest flex items-center justify-between">
                     <span>Sesiones Realizadas en esta Fecha</span>
                     <span className="text-cyan-neon font-black">{arrowsShot} flechas totales</span>
                   </span>
 
                   {daySessions.length === 0 ? (
-                    <p className="text-[11px] text-white py-2 text-center bg-neutral-950/30 rounded-2xl">
+                    <p className="text-[13.2px] text-white py-2 text-center bg-neutral-950/30 rounded-2xl">
                       No hay registros de tiro guardados en esta fecha.
                     </p>
                   ) : (
@@ -1613,7 +1613,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             <span className="text-xs font-bold text-white">
                               {ses.practiceType || "Práctica"} ({ses.bowType || "Arco"})
                             </span>
-                            <span className="text-[9px] text-white">
+                            <span className="text-[10.8px] text-white">
                               {ses.distance ? `${ses.distance}m · ` : ""}
                               {ses.endsCount && ses.arrowsPerEnd ? `${ses.endsCount * ses.arrowsPerEnd} flechas` : ""}
                             </span>
@@ -1633,7 +1633,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* 3. OTROS EVENTOS DEL DÍA */}
                 {dayEvents.filter(e => !e.macrocycleId && e.targetArrows === undefined).length > 0 && (
                   <div className="flex flex-col gap-2 border-t border-white/5 pt-3">
-                    <span className="text-[9px] text-white uppercase font-black tracking-widest">
+                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest">
                       Otros Eventos Programados
                     </span>
                     <div className="flex flex-col gap-1.5">
@@ -1641,9 +1641,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         <div key={ev.id} className="bg-neutral-950/40 p-2.5 rounded-xl border border-white/5 flex justify-between items-center">
                           <div>
                             <span className="text-xs font-bold text-white block">{ev.title}</span>
-                            <span className="text-[9px] text-white">{ev.description}</span>
+                            <span className="text-[10.8px] text-white">{ev.description}</span>
                           </div>
-                          <span className={`text-[8px] px-2 py-0.5 rounded-full border uppercase font-bold ${getEventBadgeColor(ev.type)}`}>
+                          <span className={`text-[9.6px] px-2 py-0.5 rounded-full border uppercase font-bold ${getEventBadgeColor(ev.type)}`}>
                             {ev.type}
                           </span>
                         </div>
@@ -1679,7 +1679,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">
                       Sincronizar Calendario
                     </h3>
-                    <span className="text-[9px] text-white block">
+                    <span className="text-[10.8px] text-white block">
                       Mes: <strong className="text-white capitalize">{monthName}</strong>
                     </span>
                   </div>
@@ -1693,7 +1693,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               </div>
 
               <div className="flex flex-col gap-3 text-xs">
-                <p className="text-[11px] text-white leading-relaxed">
+                <p className="text-[13.2px] text-white leading-relaxed">
                   Esta acción sincronizará el ciclo con el calendario de la app para todos los días de{" "}
                   <strong className="text-cyan-neon capitalize">{monthName}</strong>. 
                   Tus arqueros podrán entrar a cada día y ver sus metas de flechas, puntos técnicos y notas asignadas.
@@ -1701,7 +1701,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 {/* Macrocycle Selector */}
                 <div className="flex flex-col gap-1 mt-1">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Seleccionar Plan / Ciclo
                   </label>
                   <select
@@ -1724,13 +1724,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                   return (
                     <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
-                      <span className="text-[9px] text-white uppercase font-bold">Fases Configurada(s)</span>
+                      <span className="text-[10.8px] text-white uppercase font-bold">Fases Configurada(s)</span>
                       <div className="flex flex-wrap gap-1.5">
                         {macro.phases?.map((p) => (
                           <span
                             key={p.id}
                             style={{ color: p.color, borderColor: `${p.color}30`, backgroundColor: `${p.color}15` }}
-                            className="text-[9px] font-bold px-2 py-0.5 border rounded-full uppercase"
+                            className="text-[10.8px] font-bold px-2 py-0.5 border rounded-full uppercase"
                           >
                             {p.name} ({p.weeklyArrowGoal} flechas/sem)
                           </span>
@@ -1774,7 +1774,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
                     {assignmentEventId ? "Editar Asignación del Día" : "Crear Asignación del Día"}
                   </h3>
-                  <span className="text-[9px] text-cyan-neon font-black block mt-0.5">
+                  <span className="text-[10.8px] text-cyan-neon font-black block mt-0.5">
                     Fecha: {assignDate}
                   </span>
                 </div>
@@ -1788,7 +1788,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
               <form onSubmit={handleSaveDailyAssignment} className="flex flex-col gap-3.5">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Título de la Tarea / Sesión
                   </label>
                   <input
@@ -1802,7 +1802,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Meta de Flechas para este Día (0 = Descanso)
                   </label>
                   <input
@@ -1815,7 +1815,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Puntos de Enfoque Técnico (separados por coma)
                   </label>
                   <input
@@ -1828,7 +1828,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Indicaciones / Notas para tus Alumnos
                   </label>
                   <textarea
@@ -1878,7 +1878,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
               <form onSubmit={handleSave} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white font-bold uppercase tracking-wider">
+                  <label className="text-[12px] text-white font-bold uppercase tracking-wider">
                     Título
                   </label>
                   <input
@@ -1892,7 +1892,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white font-bold uppercase tracking-wider">
+                  <label className="text-[12px] text-white font-bold uppercase tracking-wider">
                     Tipo de Evento
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1906,7 +1906,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         key={type.value}
                         type="button"
                         onClick={() => setEventType(type.value as any)}
-                        className={`py-2 rounded-xl border text-[10px] font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
+                        className={`py-2 rounded-xl border text-[12px] font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           eventType === type.value
                             ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
                             : "border-white/5 bg-neutral-950 text-white hover:text-white"
@@ -1919,7 +1919,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white font-bold uppercase tracking-wider">
+                  <label className="text-[12px] text-white font-bold uppercase tracking-wider">
                     Fecha
                   </label>
                   <input
@@ -1932,7 +1932,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-white font-bold uppercase tracking-wider">
+                  <label className="text-[12px] text-white font-bold uppercase tracking-wider">
                     Notas / Detalles
                   </label>
                   <textarea
@@ -2011,7 +2011,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <p className="text-xs text-white mt-1 leading-relaxed">
                   Plan: <strong className="text-white">{macroToUnlink.name}</strong>
                 </p>
-                <p className="text-[11px] text-rose-400/90 mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                <p className="text-[13.2px] text-rose-400/90 mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
                   Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.
                 </p>
               </div>
@@ -2019,7 +2019,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               {/* If Coach and multiple athletes are assigned */}
               {isCoach && macroToUnlink.assignedAthleteIds && macroToUnlink.assignedAthleteIds.length > 0 && (
                 <div className="flex flex-col gap-1.5 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
-                  <label className="text-[9px] text-white uppercase font-black tracking-widest">
+                  <label className="text-[10.8px] text-white uppercase font-black tracking-widest">
                     Desvincular a:
                   </label>
                   <select

@@ -317,7 +317,7 @@ export default function AdminCampaignsTab() {
           >
             {/* Status indicator */}
             <div className="absolute top-4 right-4">
-              <span className={`text-[9px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
+              <span className={`text-[10.8px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
                 camp.status === "active"
                   ? "bg-green-500/10 text-green-400 border-green-500/20"
                   : "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20"
@@ -329,14 +329,14 @@ export default function AdminCampaignsTab() {
 
             <div>
               {/* Type Badge */}
-              <span className="text-[8px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-md border border-cyan-neon/10">
+              <span className="text-[9.6px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-md border border-cyan-neon/10">
                 {camp.type === "popup" ? "Popup Modal" : camp.type === "banner_widget" ? "Banner Widget" : "Barra Notificación"}
               </span>
 
               <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">{camp.name}</h3>
               
               {/* Dates */}
-              <div className="flex items-center gap-1 text-[10px] text-white mt-1">
+              <div className="flex items-center gap-1 text-[12px] text-white mt-1">
                 <Calendar size={12} />
                 <span>{camp.startDate} al {camp.endDate}</span>
               </div>
@@ -344,15 +344,15 @@ export default function AdminCampaignsTab() {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-2 bg-neutral-950/40 border border-white/5 rounded-xl p-2.5 mt-4">
                 <div>
-                  <span className="text-[8px] text-white uppercase font-bold block">Impresiones</span>
+                  <span className="text-[9.6px] text-white uppercase font-bold block">Impresiones</span>
                   <span className="text-xs font-black text-white">{camp.totalImpressions || 0}</span>
                 </div>
                 <div>
-                  <span className="text-[8px] text-white uppercase font-bold block">Clics</span>
+                  <span className="text-[9.6px] text-white uppercase font-bold block">Clics</span>
                   <span className="text-xs font-black text-white">{camp.totalClicks || 0}</span>
                 </div>
                 <div>
-                  <span className="text-[8px] text-white uppercase font-bold block">CTR</span>
+                  <span className="text-[9.6px] text-white uppercase font-bold block">CTR</span>
                   <span className="text-xs font-black text-cyan-neon">
                     {camp.totalImpressions > 0 
                       ? `${((camp.totalClicks / camp.totalImpressions) * 100).toFixed(1)}%`
@@ -362,7 +362,7 @@ export default function AdminCampaignsTab() {
               </div>
 
               {/* Config Details */}
-              <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[10px]">
+              <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[12px]">
                 <div className="flex justify-between items-center text-white">
                   <span>Frecuencia:</span>
                   <span className="font-bold text-white">
@@ -387,19 +387,19 @@ export default function AdminCampaignsTab() {
                 )}
                 <div className="flex justify-between items-start text-white">
                   <span>Pantallas:</span>
-                  <span className="font-bold text-white text-[9px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
+                  <span className="font-bold text-white text-[10.8px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
                     {camp.targetScreens.join(", ")}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-white">
                   <span>Roles:</span>
-                  <span className="font-bold text-white uppercase text-[9px]">
+                  <span className="font-bold text-white uppercase text-[10.8px]">
                     {camp.targetRoles.map(r => r === "archer" ? "Arq" : "Coach").join(", ")}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-white">
                   <span>Planes:</span>
-                  <span className="font-bold text-white uppercase text-[9px]">
+                  <span className="font-bold text-white uppercase text-[10.8px]">
                     {(camp.targetPlans || ["FREE"]).join(", ")}
                   </span>
                 </div>
@@ -460,7 +460,7 @@ export default function AdminCampaignsTab() {
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
                     {editingCampaignId ? "Editar Campaña" : "Crear Campaña"}
                   </h3>
-                  <span className="text-[9px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5">Paso {step} de 5</span>
+                  <span className="text-[10.8px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5">Paso {step} de 5</span>
                 </div>
                 <button
                   onClick={() => setShowCreateModal(false)}
@@ -474,7 +474,7 @@ export default function AdminCampaignsTab() {
               {step === 1 && (
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Nombre de la Campaña</label>
+                    <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Nombre de la Campaña</label>
                     <input
                       type="text"
                       placeholder="Ej. Campaña Invierno Hoyt 2026"
@@ -485,7 +485,7 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2.5">
-                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Formato de Anuncio</label>
+                    <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Formato de Anuncio</label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
                         { id: "popup", label: "Popup Modal", desc: "Pantalla completa al abrir la app" },
@@ -501,8 +501,8 @@ export default function AdminCampaignsTab() {
                               : "bg-neutral-900/40 border-white/10 hover:border-white/20"
                           }`}
                         >
-                          <span className="text-[10px] font-black text-white block truncate uppercase">{t.label}</span>
-                          <span className="text-[8px] text-white font-medium block leading-tight mt-2">{t.desc}</span>
+                          <span className="text-[12px] font-black text-white block truncate uppercase">{t.label}</span>
+                          <span className="text-[9.6px] text-white font-medium block leading-tight mt-2">{t.desc}</span>
                         </div>
                       ))}
                     </div>
@@ -514,11 +514,11 @@ export default function AdminCampaignsTab() {
               {step === 2 && (
                 <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-white uppercase font-black tracking-widest">Edición de Slides ({slides.length})</span>
+                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest">Edición de Slides ({slides.length})</span>
                     <button
                       type="button"
                       onClick={handleAddSlide}
-                      className="text-[9px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
+                      className="text-[10.8px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
                     >
                       + Agregar Slide
                     </button>
@@ -536,75 +536,75 @@ export default function AdminCampaignsTab() {
                         </button>
                       )}
 
-                      <span className="text-[8px] font-black text-white uppercase">Slide #{idx + 1}</span>
+                      <span className="text-[9.6px] font-black text-white uppercase">Slide #{idx + 1}</span>
 
                       <div className="grid grid-cols-2 gap-2">
                         {type !== "notification_bar" && (
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white uppercase font-bold">URL Imagen</label>
+                            <label className="text-[9.6px] text-white uppercase font-bold">URL Imagen</label>
                             <input
                               type="text"
                               placeholder="https://..."
                               value={slide.imageUrl}
                               onChange={(e) => handleUpdateSlideField(slide.id, "imageUrl", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                             />
                           </div>
                         )}
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[8px] text-white uppercase font-bold">Enlace de Destino (Destoy URL)</label>
+                          <label className="text-[9.6px] text-white uppercase font-bold">Enlace de Destino (Destoy URL)</label>
                           <input
                             type="text"
                             placeholder="https://..."
                             value={slide.linkUrl}
                             onChange={(e) => handleUpdateSlideField(slide.id, "linkUrl", e.target.value)}
-                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                           />
                         </div>
                         {type !== "notification_bar" && (
                           <>
                             <div className="flex flex-col gap-0.5">
-                              <label className="text-[8px] text-white uppercase font-bold">Título</label>
+                              <label className="text-[9.6px] text-white uppercase font-bold">Título</label>
                               <input
                                 type="text"
                                 placeholder="Título superpuesto"
                                 value={slide.title}
                                 onChange={(e) => handleUpdateSlideField(slide.id, "title", e.target.value)}
-                                className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                                className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                               />
                             </div>
                             <div className="flex flex-col gap-0.5">
-                              <label className="text-[8px] text-white uppercase font-bold">Subtítulo</label>
+                              <label className="text-[9.6px] text-white uppercase font-bold">Subtítulo</label>
                               <input
                                 type="text"
                                 placeholder="Subtítulo secundario"
                                 value={slide.subtitle}
                                 onChange={(e) => handleUpdateSlideField(slide.id, "subtitle", e.target.value)}
-                                className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                                className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                               />
                             </div>
                           </>
                         )}
                         {type === "notification_bar" && (
                           <div className="col-span-2 flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white uppercase font-bold">Texto de la Barra</label>
+                            <label className="text-[9.6px] text-white uppercase font-bold">Texto de la Barra</label>
                             <input
                               type="text"
                               placeholder="Ej. Evento Especial de Tiro con Arco..."
                               value={slide.title}
                               onChange={(e) => handleUpdateSlideField(slide.id, "title", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                             />
                           </div>
                         )}
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[8px] text-white uppercase font-bold">Color de Fondo (Opcional)</label>
+                          <label className="text-[9.6px] text-white uppercase font-bold">Color de Fondo (Opcional)</label>
                           <input
                             type="text"
                             placeholder="Ej. #00BFFF"
                             value={slide.backgroundColor}
                             onChange={(e) => handleUpdateSlideField(slide.id, "backgroundColor", e.target.value)}
-                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] outline-none"
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[12px] outline-none"
                           />
                         </div>
                       </div>
@@ -618,7 +618,7 @@ export default function AdminCampaignsTab() {
                 <div className="flex flex-col gap-3 py-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
+                      <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
                       <input
                         type="date"
                         value={startDate}
@@ -627,7 +627,7 @@ export default function AdminCampaignsTab() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
+                      <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
                       <input
                         type="date"
                         value={endDate}
@@ -639,7 +639,7 @@ export default function AdminCampaignsTab() {
 
                   <div className="grid grid-cols-2 gap-3 bg-neutral-950/40 p-4 border border-white/5 rounded-2xl mt-1">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white uppercase font-bold">Max Impresiones Diario</label>
+                      <label className="text-[10.8px] text-white uppercase font-bold">Max Impresiones Diario</label>
                       <input
                         type="number"
                         value={maxImpressionsPerDay}
@@ -648,7 +648,7 @@ export default function AdminCampaignsTab() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white uppercase font-bold">Frecuencia (Minutos)</label>
+                      <label className="text-[10.8px] text-white uppercase font-bold">Frecuencia (Minutos)</label>
                       <input
                         type="number"
                         value={frequencyMinutes}
@@ -659,7 +659,7 @@ export default function AdminCampaignsTab() {
                     </div>
                     {(type === "banner_widget" || type === "notification_bar") && (
                       <div className="flex flex-col gap-1 col-span-2">
-                        <label className="text-[9px] text-white uppercase font-bold">Intervalo de Transición (Segundos)</label>
+                        <label className="text-[10.8px] text-white uppercase font-bold">Intervalo de Transición (Segundos)</label>
                         <input
                           type="number"
                           value={slideIntervalSeconds}
@@ -669,7 +669,7 @@ export default function AdminCampaignsTab() {
                       </div>
                     )}
                     
-                    <div className="flex justify-between items-center col-span-2 bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[10px] mt-1">
+                    <div className="flex justify-between items-center col-span-2 bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[12px] mt-1">
                       <span className="text-white">¿Probando en tiempo real? Configura valores para testeo:</span>
                       <button
                         type="button"
@@ -677,7 +677,7 @@ export default function AdminCampaignsTab() {
                           setFrequencyMinutes(0);
                           setMaxImpressionsPerDay(999);
                         }}
-                        className="px-2.5 py-1 bg-cyan-neon text-black font-black uppercase rounded-lg hover:scale-102 transition cursor-pointer text-[9px]"
+                        className="px-2.5 py-1 bg-cyan-neon text-black font-black uppercase rounded-lg hover:scale-102 transition cursor-pointer text-[10.8px]"
                       >
                         Valores de Prueba
                       </button>
@@ -688,7 +688,7 @@ export default function AdminCampaignsTab() {
                     <div className="flex items-center justify-between bg-neutral-950/40 p-3.5 border border-white/5 rounded-2xl">
                       <div>
                         <span className="text-xs font-bold text-white block">Mostrar al abrir app</span>
-                        <span className="text-[9px] text-white block">Desplegar en el inicio de sesión.</span>
+                        <span className="text-[10.8px] text-white block">Desplegar en el inicio de sesión.</span>
                       </div>
                       <input
                         type="checkbox"
@@ -701,7 +701,7 @@ export default function AdminCampaignsTab() {
 
                   {type === "notification_bar" && (
                     <div className="flex flex-col gap-3 bg-neutral-950/40 p-4 border border-white/5 rounded-2xl">
-                      <span className="text-[9px] text-cyan-neon font-black uppercase tracking-widest block">Estilo de Píldora Superior</span>
+                      <span className="text-[10.8px] text-cyan-neon font-black uppercase tracking-widest block">Estilo de Píldora Superior</span>
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           { id: "solid", label: "Sólido" },
@@ -712,7 +712,7 @@ export default function AdminCampaignsTab() {
                             key={style.id}
                             type="button"
                             onClick={() => setPillStyle(style.id as any)}
-                            className={`py-1.5 rounded-lg border text-[10px] font-bold transition ${
+                            className={`py-1.5 rounded-lg border text-[12px] font-bold transition ${
                               pillStyle === style.id
                                 ? "bg-cyan-brand/10 border-cyan-neon text-white"
                                 : "bg-neutral-900 border-white/5 text-white"
@@ -725,7 +725,7 @@ export default function AdminCampaignsTab() {
 
                       <div className="grid grid-cols-2 gap-2 mt-1">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[9px] text-white uppercase font-bold">Tamaño de Fuente</label>
+                          <label className="text-[10.8px] text-white uppercase font-bold">Tamaño de Fuente</label>
                           <select
                             value={fontSize}
                             onChange={(e) => setFontSize(e.target.value as any)}
@@ -737,7 +737,7 @@ export default function AdminCampaignsTab() {
                           </select>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <label className="text-[9px] text-white uppercase font-bold">Altura (px)</label>
+                          <label className="text-[10.8px] text-white uppercase font-bold">Altura (px)</label>
                           <input
                             type="number"
                             value={customHeight}
@@ -757,7 +757,7 @@ export default function AdminCampaignsTab() {
               {step === 4 && (
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Pantallas Autorizadas</label>
+                    <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Pantallas Autorizadas</label>
                     <div className="grid grid-cols-2 gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
                       {["HOME", "TARGET", "HISTORY", "CALENDAR", "PROFILE"].map((screen) => (
                         <div
@@ -782,7 +782,7 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Roles Destinatarios</label>
+                    <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Roles Destinatarios</label>
                     <div className="flex gap-3 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                       {["archer", "coach"].map((role) => (
                         <div
@@ -807,7 +807,7 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Planes de Suscripción Objetivos</label>
+                    <label className="text-[10.8px] text-white uppercase font-black tracking-widest">Planes de Suscripción Objetivos</label>
                     <div className="flex gap-3 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                       {["FREE", "PRO"].map((plan) => {
                         const active = targetPlans.includes(plan as any);
@@ -845,20 +845,20 @@ export default function AdminCampaignsTab() {
               {/* STEP 5: PREVIEW */}
               {step === 5 && (
                 <div className="flex flex-col gap-3 py-2">
-                  <span className="text-[9px] text-white uppercase font-black tracking-widest">Vista Previa del Anuncio</span>
+                  <span className="text-[10.8px] text-white uppercase font-black tracking-widest">Vista Previa del Anuncio</span>
                   
                   <div className="border border-white/10 rounded-3xl p-4 bg-neutral-950/80 aspect-video flex items-center justify-center relative overflow-hidden">
                     {/* Mockup for Popup */}
                     {type === "popup" && (
                       <div className="w-4/5 aspect-[4/5] bg-[#0E0E12] border border-white/15 rounded-2xl relative shadow-2xl flex flex-col justify-between overflow-hidden">
-                        <div className="absolute top-2 right-2 text-[7px] bg-black/60 px-1.5 py-0.5 rounded text-white">Cerrar en 3s</div>
+                        <div className="absolute top-2 right-2 text-[8.4px] bg-black/60 px-1.5 py-0.5 rounded text-white">Cerrar en 3s</div>
                         <div 
                           className="flex-1 bg-cover bg-center" 
                           style={{ backgroundImage: `url(${slides[0]?.imageUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"})` }} 
                         />
                         <div className="p-3 bg-[#0F0F12] border-t border-white/5">
-                          <h4 className="text-[10px] font-black text-white">{slides[0]?.title || "Título del Anuncio"}</h4>
-                          <p className="text-[8px] text-white">{slides[0]?.subtitle || "Subtítulo secundario..."}</p>
+                          <h4 className="text-[12px] font-black text-white">{slides[0]?.title || "Título del Anuncio"}</h4>
+                          <p className="text-[9.6px] text-white">{slides[0]?.subtitle || "Subtítulo secundario..."}</p>
                         </div>
                       </div>
                     )}
@@ -871,10 +871,10 @@ export default function AdminCampaignsTab() {
                           style={{ backgroundImage: `url(${slides[0]?.imageUrl || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop"})` }} 
                         />
                         <div className="relative z-10 flex flex-col justify-center max-w-[80%]">
-                          <span className="text-[6px] font-black text-cyan-neon tracking-widest block uppercase">Patrocinador</span>
-                          <span className="text-[9px] font-bold text-white truncate">{slides[0]?.title || "Título del Banner"}</span>
+                          <span className="text-[7.2px] font-black text-cyan-neon tracking-widest block uppercase">Patrocinador</span>
+                          <span className="text-[10.8px] font-bold text-white truncate">{slides[0]?.title || "Título del Banner"}</span>
                         </div>
-                        <span className="text-[7px] text-white">✕</span>
+                        <span className="text-[8.4px] text-white">✕</span>
                       </div>
                     )}
 
@@ -893,7 +893,7 @@ export default function AdminCampaignsTab() {
                         className="w-full max-w-xs rounded-full relative flex items-center justify-between px-3 overflow-hidden font-black text-center"
                       >
                         <span className="truncate">{slides[0]?.title || "Notificación de Alerta de Publicidad..."}</span>
-                        <span className="text-[8px] opacity-60">✕</span>
+                        <span className="text-[9.6px] opacity-60">✕</span>
                       </div>
                     )}
                   </div>
