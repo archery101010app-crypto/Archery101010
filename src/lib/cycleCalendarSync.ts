@@ -247,6 +247,8 @@ export async function saveDailyEntriesToCalendar(
       focusPoints: entry.focusPoints,
       coachNotes: entry.notes,
       customFields: entry.customFields,
+      dailyItems: entry.dailyItems && entry.dailyItems.length > 0 ? entry.dailyItems : [entry.title],
+      completedItems: [],
       isRestDay: entry.isRestDay,
       isCompleted: false
     };

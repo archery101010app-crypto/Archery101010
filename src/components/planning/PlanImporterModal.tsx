@@ -20,6 +20,7 @@ import {
   ParsedCycleResult, 
   downloadSampleTemplate, 
   downloadDailySampleTemplate,
+  downloadFormattedExcelTemplate,
   fetchGoogleSheetCsv
 } from "@/lib/cycleImporter";
 import { 
@@ -93,6 +94,15 @@ export default function PlanImporterModal({
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>([]);
   const [clubAthletes, setClubAthletes] = useState<UserProfile[]>([]);
 
+  // Reference Month & Year for sheets that use day numbers (1..31) or short dates
+  const [refMonth, setRefMonth] = useState<number>(new Date().getMonth() + 1);
+  const [refYear, setRefYear] = useState<number>(new Date().getFullYear());
+
+  const MONTH_NAMES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleAthleteSelection = (uid: string) => {
@@ -144,7 +154,7 @@ export default function PlanImporterModal({
 
   if (!isOpen) return null;
 
-  const handleParseText = (text: string, nameOverride?: string) => {
+  const handleParseText = (text: string, nameOverride?: string, customYear?: number, customMonth?: number) => {
     setImportText(text);
     setImportError(null);
 
@@ -160,8 +170,11 @@ export default function PlanImporterModal({
       return;
     }
 
-    const fallbackName = nameOverride !== undefined ? nameOverride : (importPlanName || "Plan Importado");
-    const result = parseSpreadsheetData(clean, fallbackName);
+    const fallbackName = nameOverride !== undefined ? nameOverride : (importPlanName || `Plan ${MONTH_NAMES[(customMonth || refMonth) - 1]} ${customYear || refYear}`);
+    const result = parseSpreadsheetData(clean, fallbackName, {
+      referenceYear: customYear || refYear,
+      referenceMonth: customMonth || refMonth
+    });
 
     if (result.success && (result.stages.length > 0 || result.dailyEntries.length > 0)) {
       setImportPreview(result);
@@ -170,8 +183,26 @@ export default function PlanImporterModal({
       }
     } else {
       setImportPreview(null);
-      setImportError(result.error || "No se detectaron fechas o filas válidas en el archivo. Revisa que tu hoja tenga una columna de Fecha o Día.");
+      setImportError(result.error || "No se detectaron fechas o filas válidas en el archivo. Revisa que tu hoja tenga una columna de Fecha o Número de Día.");
     }
+  };
+
+  const handleLoadGuidedMonthTemplate = () => {
+    const daysInMonth = new Date(refYear, refMonth, 0).getDate();
+    const weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const lines = ["Fecha\tActividad 1 (Tiro / Distancia)\tActividad 2 (Técnica / Liga)\tActividad 3 (Físico / Notas)\tFlechas"];
+    for (let d = 1; d <= Math.min(7, daysInMonth); d++) {
+      const dow = new Date(refYear, refMonth - 1, d).getDay();
+      const dateStr = `${refYear}-${String(refMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      if (dow === 0) {
+        lines.push(`${dateStr}\tDescanso\t\t\t0`);
+      } else {
+        lines.push(`${dateStr}\tVolumen 70m (${weekdayNames[dow]} ${d})\t15 min calentamiento con liga\tCore y estabilidad\t120`);
+      }
+    }
+    const sample = lines.join("\n");
+    setActiveTab("paste");
+    handleParseText(sample, `Plan ${MONTH_NAMES[refMonth - 1]} ${refYear}`);
   };
 
   const handlePasteClipboard = async () => {
@@ -705,29 +736,77 @@ export default function PlanImporterModal({
             </div>
           )}
 
-          {/* Quick Reference Templates */}
-          <div className="flex items-center justify-between text-[11.6px] text-white px-1 flex-wrap gap-2">
-            <span className="flex items-center gap-1 font-bold">
-              <Info size={12} className="text-cyan-neon" />
-              <span>Plantillas opcionales de ejemplo:</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={downloadDailySampleTemplate}
-                className="text-[11.6px] text-white hover:text-cyan-neon flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-cyan-neon/30 transition cursor-pointer"
-              >
-                <Download size={11} className="text-cyan-neon" />
-                <span>Día x Día (.csv)</span>
-              </button>
-              <button
-                type="button"
-                onClick={downloadSampleTemplate}
-                className="text-[11.6px] text-white hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-white/30 transition cursor-pointer"
-              >
-                <Download size={11} />
-                <span>Por Etapas (.csv)</span>
-              </button>
+          {/* Quick Format Guide & Month/Year Selector */}
+          <div className="bg-[#0D1017] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-[11px] text-cyan-neon font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet size={13} />
+                  <span>Formato Inteligente por Fecha / Número de Día</span>
+                </span>
+                <p className="text-[11.5px] text-white mt-0.5 leading-snug">
+                  Escribe la <strong>Fecha</strong> (ej. <code className="text-cyan-neon">05/11/2026</code>) o solo el <strong>Número de Día</strong> (<code className="text-cyan-neon">1, 2, 3... 31</code>) y al lado las actividades de ese día. Al abrir ese día en el calendario aparecerá la lista completa.
+                </p>
+              </div>
+            </div>
+
+            {/* Month & Year Selector + Excel Template Download */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <span className="text-[10.5px] text-white font-black uppercase tracking-wider shrink-0">
+                  Mes del Plan:
+                </span>
+                <select
+                  value={refMonth}
+                  onChange={(e) => {
+                    const m = Number(e.target.value);
+                    setRefMonth(m);
+                    if (importText.trim()) {
+                      handleParseText(importText, importPlanName, refYear, m);
+                    }
+                  }}
+                  className="bg-neutral-950 border border-white/15 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon cursor-pointer flex-1"
+                >
+                  {MONTH_NAMES.map((mName, idx) => (
+                    <option key={mName} value={idx + 1}>
+                      {mName}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={2025}
+                  max={2035}
+                  value={refYear}
+                  onChange={(e) => {
+                    const y = Number(e.target.value) || new Date().getFullYear();
+                    setRefYear(y);
+                    if (importText.trim()) {
+                      handleParseText(importText, importPlanName, y, refMonth);
+                    }
+                  }}
+                  className="w-20 bg-neutral-950 border border-white/15 rounded-xl px-2 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon text-center tabular-nums"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 justify-end">
+                <button
+                  type="button"
+                  onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
+                  className="flex-1 sm:flex-initial text-[11px] font-black uppercase tracking-wider text-black bg-cyan-neon hover:bg-[#19c8ff] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                >
+                  <Download size={12} />
+                  <span>Descargar Formato Excel (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadGuidedMonthTemplate}
+                  className="text-[11px] font-bold uppercase tracking-wider text-cyan-neon bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0"
+                  title="Ver ejemplo listo para editar aquí mismo"
+                >
+                  <span>Ver Ejemplo</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -831,78 +910,90 @@ export default function PlanImporterModal({
               {/* PREVIEW CONTAINER */}
               {importPreview.mode === "daily" ? (
                 viewMode === "table" ? (
-                  <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-60 overflow-y-auto">
+                  <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-64 overflow-y-auto">
                     <table className="w-full text-left border-collapse text-[12.8px]">
                       <thead className="bg-neutral-900 sticky top-0 z-10 border-b border-white/10">
                         <tr>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white w-8 text-center">#</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-cyan-neon w-16 text-center">Día #</th>
                           <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Fecha</th>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Texto / Actividad Literal</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Lista de lo que corresponde ese día</th>
                           <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white text-right">Flechas</th>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Columnas Adicionales / Notas</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 tabular-nums">
-                        {importPreview.dailyEntries.map((row, idx) => (
-                          <tr 
-                            key={`${row.date}-${idx}`}
-                            className={`hover:bg-white/[0.03] transition ${row.isRestDay ? "bg-emerald-500/[0.03]" : ""}`}
-                          >
-                            <td className="py-2 px-2.5 text-[11.6px] text-white text-center tabular-nums">{idx + 1}</td>
-                            <td className="py-2 px-2.5 text-white whitespace-nowrap font-bold tabular-nums">{row.date}</td>
-                            <td className="py-2 px-2.5 text-white font-sans font-semibold">
-                              {row.title}
-                            </td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap tabular-nums">
-                              {row.targetArrows > 0 ? (
-                                <span className="text-cyan-neon font-black">{row.targetArrows}</span>
-                              ) : (
-                                <span className="text-white">—</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-2.5 text-white font-sans text-[11.6px]">
-                              {[
-                                row.focusPoints && row.focusPoints.length > 0 ? row.focusPoints.join(", ") : "",
-                                row.notes || ""
-                              ].filter(Boolean).join(" · ") || "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {importPreview.dailyEntries.map((row, idx) => {
+                          const dayNumber = parseInt(row.date.split("-")[2], 10) || (idx + 1);
+                          const itemsList = row.dailyItems && row.dailyItems.length > 0 ? row.dailyItems : [row.title];
+                          return (
+                            <tr 
+                              key={`${row.date}-${idx}`}
+                              className={`hover:bg-white/[0.03] transition align-top ${row.isRestDay ? "bg-emerald-500/[0.03]" : ""}`}
+                            >
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-cyan-neon/15 border border-cyan-neon/35 text-cyan-neon font-black text-xs tabular-nums">
+                                  Día {dayNumber}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-white whitespace-nowrap font-bold tabular-nums text-xs">
+                                {row.date}
+                              </td>
+                              <td className="py-2.5 px-2.5 text-white font-sans">
+                                <ul className="flex flex-col gap-1">
+                                  {itemsList.map((item, itemIdx) => (
+                                    <li key={itemIdx} className="flex items-start gap-1.5 text-xs text-white leading-snug">
+                                      <span className="text-cyan-neon font-black shrink-0">{itemIdx + 1}.</span>
+                                      <span className="font-semibold">{item}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-right whitespace-nowrap tabular-nums">
+                                {row.targetArrows > 0 ? (
+                                  <span className="text-cyan-neon font-black">{row.targetArrows}</span>
+                                ) : (
+                                  <span className="text-white">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
-                    {importPreview.dailyEntries.map((dayItem, i) => (
-                      <div
-                        key={`${dayItem.date}-${i}`}
-                        className="p-2.5 rounded-xl bg-neutral-950 border border-white/[0.06] flex items-center justify-between gap-3 text-xs"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${
-                              dayItem.isRestDay ? "bg-emerald-400" : dayItem.type === "competition" ? "bg-rose-400" : "bg-cyan-neon"
-                            }`}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-white truncate text-xs">{dayItem.title}</div>
-                            <div className="text-[11.6px] text-white tabular-nums truncate tabular-nums">
-                              {dayItem.date} {dayItem.focusPoints && dayItem.focusPoints.length > 0 ? `· ${dayItem.focusPoints.join(", ")}` : ""}
+                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+                    {importPreview.dailyEntries.map((dayItem, i) => {
+                      const dayNumber = parseInt(dayItem.date.split("-")[2], 10) || (i + 1);
+                      const itemsList = dayItem.dailyItems && dayItem.dailyItems.length > 0 ? dayItem.dailyItems : [dayItem.title];
+                      return (
+                        <div
+                          key={`${dayItem.date}-${i}`}
+                          className="p-3 rounded-xl bg-neutral-950 border border-white/[0.08] flex flex-col gap-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-white/[0.05] pb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-lg bg-cyan-neon/15 border border-cyan-neon/35 text-cyan-neon font-black text-xs tabular-nums">
+                                Día {dayNumber}
+                              </span>
+                              <span className="text-white font-bold tabular-nums">{dayItem.date}</span>
                             </div>
-                            {dayItem.notes && (
-                              <div className="text-[11.6px] text-white italic truncate mt-0.5">
-                                {dayItem.notes}
-                              </div>
+                            {dayItem.targetArrows > 0 && (
+                              <span className="text-cyan-neon font-black tabular-nums">
+                                {dayItem.targetArrows} flechas
+                              </span>
                             )}
                           </div>
+                          <ul className="flex flex-col gap-1 pl-1">
+                            {itemsList.map((it, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-white">
+                                <span className="text-cyan-neon font-black">{idx + 1}.</span>
+                                <span className="font-semibold">{it}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-cyan-neon font-black tabular-nums whitespace-nowrap text-xs tabular-nums">
-                            {dayItem.targetArrows > 0 ? `${dayItem.targetArrows} fl.` : ""}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )
               ) : (

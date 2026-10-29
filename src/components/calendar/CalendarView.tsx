@@ -596,8 +596,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setAssignmentEventId(event.id);
     setAssignDate(event.date);
     setAssignTitle(event.title);
-    setAssignTargetArrows(event.targetArrows || 100);
-    setAssignFocusPoint(event.focusPoints ? event.focusPoints.join(", ") : "");
+    setAssignTargetArrows(event.targetArrows || 0);
+    setAssignFocusPoint(
+      event.dailyItems && event.dailyItems.length > 0
+        ? event.dailyItems.join(", ")
+        : event.focusPoints
+        ? event.focusPoints.join(", ")
+        : ""
+    );
     setAssignNotes(event.coachNotes || event.description || "");
     setShowAssignmentModal(true);
   };
@@ -609,7 +615,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setAssignTitle(pName);
     const defaultArrows = phaseInfo?.phase 
       ? Math.round(phaseInfo.phase.weeklyArrowGoal / Math.max(1, phaseInfo.phase.weeklySessionGoal)) 
-      : 100;
+      : 0;
     setAssignTargetArrows(defaultArrows);
     setAssignFocusPoint("");
     setAssignNotes(phaseInfo?.phase?.notes || "");
@@ -620,11 +626,29 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     e.preventDefault();
     if (!assignDate || !assignTitle.trim()) return;
 
+    const existingEv = assignmentEventId ? events.find((ev) => ev.id === assignmentEventId) : undefined;
     const eventId = assignmentEventId || `EVT-MAC-ASSIGN-${Date.now()}`;
     const focusArr = assignFocusPoint
-      .split(",")
+      .split(/[,;\n]/)
       .map((s) => s.trim())
       .filter(Boolean);
+
+    const notesArr = assignNotes
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const combinedDailyItems: string[] = [];
+    if (focusArr.length > 0) {
+      focusArr.forEach((f) => {
+        if (!combinedDailyItems.includes(f)) combinedDailyItems.push(f);
+      });
+    } else if (assignTitle.trim()) {
+      combinedDailyItems.push(assignTitle.trim());
+    }
+    notesArr.forEach((n) => {
+      if (!combinedDailyItems.includes(n)) combinedDailyItems.push(n);
+    });
 
     const activePhaseInfo = getPhaseOnDate(assignDate);
 
@@ -639,15 +663,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       clubId: user.clubId || undefined,
       type: "training",
       timestamp: Date.now(),
-      macrocycleId: activePhaseInfo?.macrocycle?.id,
-      phaseId: activePhaseInfo?.phase?.id,
-      phaseName: activePhaseInfo?.phase?.name || "Entrenamiento",
-      phaseType: activePhaseInfo?.phase?.type,
-      phaseColor: activePhaseInfo?.phase?.color || "#00BFFF",
+      macrocycleId: existingEv?.macrocycleId || activePhaseInfo?.macrocycle?.id,
+      phaseId: existingEv?.phaseId || activePhaseInfo?.phase?.id,
+      phaseName: existingEv?.phaseName || activePhaseInfo?.phase?.name || "Entrenamiento",
+      phaseType: existingEv?.phaseType || activePhaseInfo?.phase?.type,
+      phaseColor: existingEv?.phaseColor || activePhaseInfo?.phase?.color || "#00BFFF",
       targetArrows: assignTargetArrows,
+      assignedAthleteIds: existingEv?.assignedAthleteIds || (selectedAthleteFilter !== "ALL" ? [selectedAthleteFilter] : []),
       focusPoints: focusArr,
       coachNotes: assignNotes,
-      isRestDay: assignTargetArrows === 0,
+      dailyItems: combinedDailyItems,
+      completedItems: existingEv?.completedItems || [],
+      isRestDay: assignTargetArrows === 0 && assignTitle.toLowerCase().includes("descanso"),
       isCompleted: false
     };
 
@@ -1007,7 +1034,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   {cell.day}
                 </span>
 
-                {/* Literal Title / Target Arrows / Phase label from Excel/Sheet */}
+                {/* Literal Title / List Preview / Target Arrows from Excel/Sheet */}
                 {coachAssignment ? (
                   <div className="flex flex-col items-center justify-center w-full px-0.5 gap-0.5 overflow-hidden">
                     {coachAssignment.title &&
@@ -1016,7 +1043,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
                           className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-none truncate max-w-full text-center"
                         >
-                          {coachAssignment.title}
+                          {coachAssignment.dailyItems && coachAssignment.dailyItems.length > 0
+                            ? coachAssignment.dailyItems[0]
+                            : coachAssignment.title}
                         </span>
                       )}
                     {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
@@ -1025,6 +1054,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
                       >
                         {coachAssignment.targetArrows} fl.
+                      </span>
+                    ) : coachAssignment.dailyItems && coachAssignment.dailyItems.length > 1 ? (
+                      <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-none truncate max-w-full text-center tabular-nums">
+                        +{coachAssignment.dailyItems.length - 1} más
                       </span>
                     ) : null}
                   </div>
@@ -1451,13 +1484,109 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         </div>
                       </div>
 
+                      {/* LISTA DE LO QUE CORRESPONDE ESTE DÍA */}
+                      {(() => {
+                        const rawList: string[] = [];
+                        const addUniqueItem = (text?: string) => {
+                          if (!text) return;
+                          const clean = text.trim();
+                          if (clean && !rawList.includes(clean)) {
+                            rawList.push(clean);
+                          }
+                        };
+
+                        if (coachAssignment.dailyItems && coachAssignment.dailyItems.length > 0) {
+                          coachAssignment.dailyItems.forEach((it) => addUniqueItem(it));
+                        } else {
+                          if (coachAssignment.customFields && coachAssignment.customFields.length > 0) {
+                            coachAssignment.customFields.forEach((f) => {
+                              const isGeneric = /^(actividad|tarea|entrenamiento|trabajo|ejercicio|plan)$/i.test(f.label.trim());
+                              addUniqueItem(isGeneric ? f.value : `${f.label}: ${f.value}`);
+                            });
+                          }
+                          if (coachAssignment.title) {
+                            coachAssignment.title.split(/\s*\/\s*|\s*·\s*/).forEach((part) => addUniqueItem(part));
+                          }
+                          if (coachAssignment.focusPoints && coachAssignment.focusPoints.length > 0) {
+                            coachAssignment.focusPoints.forEach((fp) => addUniqueItem(fp));
+                          }
+                          if (coachAssignment.coachNotes && coachAssignment.coachNotes.trim()) {
+                            coachAssignment.coachNotes.split(/\s*\|\s*|\s*·\s*/).forEach((n) => addUniqueItem(n));
+                          }
+                        }
+
+                        if (rawList.length === 0) return null;
+
+                        const completedSet = new Set<number>(coachAssignment.completedItems || []);
+                        const dayNumber = parseInt(selectedDay.split("-")[2], 10) || "";
+
+                        const handleToggleChecklistItem = async (itemIdx: number) => {
+                          const nextCompleted = completedSet.has(itemIdx)
+                            ? (coachAssignment.completedItems || []).filter((i) => i !== itemIdx)
+                            : [...(coachAssignment.completedItems || []), itemIdx];
+
+                          const updatedEv: CalendarEvent = {
+                            ...coachAssignment,
+                            completedItems: nextCompleted,
+                            isCompleted: nextCompleted.length === rawList.length
+                          };
+                          await saveLocalEvent(updatedEv.id, updatedEv);
+                          setEvents((prev) => prev.map((ev) => (ev.id === updatedEv.id ? updatedEv : ev)));
+                        };
+
+                        return (
+                          <div className="flex flex-col gap-2 border-t border-white/[0.08] pt-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-cyan-neon uppercase font-black tracking-wider flex items-center gap-1.5">
+                                <CheckCircle2 size={13} className="text-cyan-neon shrink-0" />
+                                <span>Lo que corresponde este día (Día {dayNumber})</span>
+                              </span>
+                              <span className="text-[10.5px] text-white font-bold tabular-nums bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                                {completedSet.size}/{rawList.length} {rawList.length === 1 ? "tarea" : "tareas"}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              {rawList.map((itemText, idx) => {
+                                const isDone = completedSet.has(idx);
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => handleToggleChecklistItem(idx)}
+                                    className={`w-full text-left px-3 py-2.5 rounded-2xl border flex items-start gap-2.5 transition cursor-pointer ${
+                                      isDone
+                                        ? "bg-emerald-500/10 border-emerald-500/35 text-white"
+                                        : "bg-neutral-950/90 border-white/[0.08] hover:border-cyan-neon/40 text-white"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-5 h-5 rounded-lg border flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5 transition ${
+                                        isDone
+                                          ? "bg-emerald-400 border-emerald-400 text-black"
+                                          : "bg-cyan-neon/15 border-cyan-neon/40 text-cyan-neon"
+                                      }`}
+                                    >
+                                      {isDone ? "✓" : idx + 1}
+                                    </span>
+                                    <span className={`text-xs font-bold leading-snug break-words flex-1 ${isDone ? "line-through opacity-80" : "text-white"}`}>
+                                      {itemText}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* Meta de Flechas (solo si el Excel/Sheet o el Coach indicó un número > 0) */}
                       {!coachAssignment.isRestDay && coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                         <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
                           <div className="flex justify-between items-center">
                             <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
                               <Target size={12} className="text-cyan-neon" />
-                              <span>Flechas</span>
+                              <span>Flechas del Día</span>
                             </span>
                             <span className="text-xs font-black text-cyan-neon tabular-nums">
                               {coachAssignment.targetArrows} flechas
@@ -1492,59 +1621,6 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           )}
                         </div>
                       ) : null}
-
-                      {/* Campos literales del Excel / Google Sheet */}
-                      {coachAssignment.customFields && coachAssignment.customFields.length > 0 && (
-                        <div className="flex flex-col gap-1.5 border-t border-white/[0.06] pt-2.5">
-                          <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                            Datos del Plan
-                          </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {coachAssignment.customFields.map((field, idx) => (
-                              <div
-                                key={idx}
-                                className="bg-neutral-950/70 px-3 py-2 rounded-xl border border-white/[0.05] flex flex-col gap-0.5"
-                              >
-                                <span className="text-[10.5px] font-bold uppercase tracking-wider text-white">
-                                  {field.label}
-                                </span>
-                                <span className="text-xs font-bold text-white break-words">
-                                  {field.value}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Technical & Physical Focus Points */}
-                      {coachAssignment.focusPoints && coachAssignment.focusPoints.length > 0 && (
-                        <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
-                          <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                            Enfoque Técnico y Físico
-                          </span>
-                          <div className="flex flex-col gap-1">
-                            {coachAssignment.focusPoints.map((pt, i) => (
-                              <div key={i} className="flex items-center gap-2 text-xs text-white">
-                                <CheckCircle2 size={12} className="text-cyan-neon shrink-0" />
-                                <span>{pt}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Coach Notes */}
-                      {Boolean(coachAssignment.coachNotes && coachAssignment.coachNotes.trim()) && (
-                        <div className="flex flex-col gap-1 border-t border-white/[0.04] pt-2">
-                          <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                            Indicaciones del Entrenador
-                          </span>
-                          <p className="text-xs text-white italic leading-relaxed bg-neutral-950/50 p-2.5 rounded-xl border border-white/[0.03]">
-                            &ldquo;{coachAssignment.coachNotes?.trim()}&rdquo;
-                          </p>
-                        </div>
-                      )}
 
                       {/* Action Button for Archer: Start Practice */}
                       {!isCoach && !coachAssignment.isRestDay && (

@@ -80,6 +80,8 @@ export interface CalendarEvent {
   focusPoints?: string[];
   coachNotes?: string;
   customFields?: Array<{ label: string; value: string }>;
+  dailyItems?: string[];
+  completedItems?: number[];
   isRestDay?: boolean;
   isCompleted?: boolean;
 }

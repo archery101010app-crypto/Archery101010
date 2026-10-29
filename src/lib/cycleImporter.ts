@@ -7,10 +7,16 @@ export interface ParsedDailyEntry {
   targetArrows: number;
   focusPoints: string[];
   notes: string;
+  dailyItems: string[];
   customFields?: Array<{ label: string; value: string }>;
   type: "training" | "competition" | "meeting" | "other";
   isRestDay: boolean;
   stageName?: string;
+}
+
+export interface ParseSpreadsheetOptions {
+  referenceYear?: number;
+  referenceMonth?: number; // 1..12
 }
 
 export interface ParsedCycleResult {
@@ -42,7 +48,25 @@ const SPANISH_MONTHS: Record<string, string> = {
   dic: "12", diciembre: "12", dec: "12", december: "12"
 };
 
-const DAY_NAMES_REGEX = /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom|mon|tue|wed|thu|fri|sat|sun)\b[\s,\.\-:]*/i;
+const DAY_NAMES_REGEX = /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom|mon|tue|wed|thu|fri|sat|sun|d[ií]a|day|fecha)\b[\s,\.\-:#°º]*/i;
+
+/**
+ * Checks if a cell represents a plain day-of-month number (1..31), optionally prefixed by a weekday name (e.g. "15", "Lunes 15", "Día 15", "15.")
+ */
+export function extractDayOfMonthNumber(raw?: string): number | null {
+  if (!raw) return null;
+  const cleaned = raw
+    .trim()
+    .replace(DAY_NAMES_REGEX, "")
+    .replace(/^(d[ií]a|day)\s*/i, "")
+    .replace(/[\.\-º°#]+$/, "")
+    .trim();
+  if (/^\d{1,2}$/.test(cleaned)) {
+    const n = parseInt(cleaned, 10);
+    if (n >= 1 && n <= 31) return n;
+  }
+  return null;
+}
 
 /**
  * Converts an Excel serial date number (e.g. 46323) to YYYY-MM-DD
@@ -191,13 +215,10 @@ export function normalizeDateString(raw: string, fallbackDate: string, reference
     }
   }
 
-  // Plain day of month number (1..31) e.g. "28" or "Lunes 28"
-  const dayOnlyMatch = trimmed.match(/^(\d{1,2})$/);
-  if (dayOnlyMatch) {
-    const dayNum = parseInt(dayOnlyMatch[1], 10);
-    if (dayNum >= 1 && dayNum <= 31) {
-      return `${refY}-${String(refM).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    }
+  // Plain day of month number (1..31) e.g. "28" or "Lunes 28" or "Día 28"
+  const dayNum = extractDayOfMonthNumber(raw);
+  if (dayNum !== null) {
+    return `${refY}-${String(refM).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
   }
 
   return fallbackDate;
@@ -211,19 +232,18 @@ export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
   sheetNames: string[];
   getSheetTsv: (sheetName: string) => string;
 } {
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: false });
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheetNames = workbook.SheetNames || [];
 
   const getSheetTsv = (sheetName: string): string => {
     const ws = workbook.Sheets[sheetName];
     if (!ws) return "";
 
-    // Convert worksheet to 2D array of values
+    // Use raw: true so Date objects stay real Date instances (avoids US M/D/YY locale ambiguity)
     const rawMatrix = XLSX.utils.sheet_to_json<any[]>(ws, {
       header: 1,
       defval: "",
-      raw: false,
-      dateNF: "yyyy-mm-dd"
+      raw: true
     });
 
     const formattedRows = rawMatrix
@@ -233,13 +253,15 @@ export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
           .map((cell) => {
             if (cell === null || cell === undefined) return "";
             if (cell instanceof Date && !isNaN(cell.getTime())) {
-              const y = cell.getFullYear();
-              const m = String(cell.getMonth() + 1).padStart(2, "0");
-              const d = String(cell.getDate()).padStart(2, "0");
+              // Add 12 hours before reading UTC date so UTC-6 timezone never shifts a date back 1 day
+              const safeUtc = new Date(cell.getTime() + 12 * 3600 * 1000);
+              const y = safeUtc.getUTCFullYear();
+              const m = String(safeUtc.getUTCMonth() + 1).padStart(2, "0");
+              const d = String(safeUtc.getUTCDate()).padStart(2, "0");
               return `${y}-${m}-${d}`;
             }
-            // Replace internal tabs or newlines with space/comma so TSV stays clean
-            return String(cell).replace(/\t/g, " ").replace(/\r?\n/g, " · ").trim();
+            // Preserve internal newlines inside a cell with " ||| " so each line becomes a distinct list item
+            return String(cell).replace(/\t/g, " ").replace(/\r?\n/g, " ||| ").trim();
           })
           .join("\t");
       })
@@ -376,11 +398,11 @@ export function parseDelimitedTextToMatrix(rawText: string): string[][] {
         inQuotes = !inQuotes;
       }
     } else if (!inQuotes && ch === delimiter) {
-      currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+      currentRow.push(currentCell.replace(/\r?\n/g, " ||| ").trim());
       currentCell = "";
     } else if (!inQuotes && (ch === "\n" || (ch === "\r" && next === "\n"))) {
       if (ch === "\r") i++;
-      currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+      currentRow.push(currentCell.replace(/\r?\n/g, " ||| ").trim());
       if (currentRow.some((c) => c.length > 0)) {
         rows.push(currentRow);
       }
@@ -392,7 +414,7 @@ export function parseDelimitedTextToMatrix(rawText: string): string[][] {
   }
 
   // Push last cell/row
-  currentRow.push(currentCell.replace(/\r?\n/g, " · ").trim());
+  currentRow.push(currentCell.replace(/\r?\n/g, " ||| ").trim());
   if (currentRow.some((c) => c.length > 0)) {
     rows.push(currentRow);
   }
@@ -420,10 +442,43 @@ function classifyHeader(hRaw: string): "date" | "startDate" | "endDate" | "title
 }
 
 /**
- * Parses raw text from Excel, Google Sheets, or CSV file.
- * Preserves 100% literal text from the user's spreadsheet without inventing any text or fake arrow counts.
+ * Splits a cell value into clean individual list items (handling multi-line cells separated by "|||" or "\n")
  */
-export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan Importado"): ParsedCycleResult {
+function splitCellIntoListItems(cellValue: string, headerLabel?: string): string[] {
+  if (!cellValue || !cellValue.trim()) return [];
+  const rawParts = cellValue
+    .split(/\s*\|\|\|\s*|\r?\n/)
+    .map((p) => p.replace(/^[•\-\*▪▸]\s*/, "").trim())
+    .filter(Boolean);
+
+  if (rawParts.length === 0) return [];
+
+  const isGenericHeader =
+    !headerLabel ||
+    /^(actividad|actividades|tarea|tareas|entrenamiento|trabajo|ejercicio|ejercicios|rutina|descripci[oó]n|detalle|plan|lista|columna\s*\d+|item\s*\d+)$/i.test(
+      headerLabel.trim()
+    );
+
+  if (isGenericHeader) {
+    return rawParts;
+  }
+
+  if (rawParts.length === 1) {
+    return [`${headerLabel.trim()}: ${rawParts[0]}`];
+  }
+
+  return rawParts.map((p) => `${headerLabel.trim()}: ${p}`);
+}
+
+/**
+ * Parses raw text from Excel, Google Sheets, or CSV file.
+ * Reads dates or day-of-month numbers (1..31) and builds an exact list of items (`dailyItems`) for each date.
+ */
+export function parseSpreadsheetData(
+  rawText: string,
+  defaultCycleName = "Plan Importado",
+  options?: ParseSpreadsheetOptions
+): ParsedCycleResult {
   const warnings: string[] = [];
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -461,22 +516,161 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
     };
   }
 
-  // Try to detect reference month/year if mentioned in a top banner row (e.g. "NOVIEMBRE 2026" or "Plan Octubre")
-  let refYear = new Date().getFullYear();
-  let refMonth = new Date().getMonth() + 1;
-  for (let r = 0; r < Math.min(5, rows.length); r++) {
-    const joined = rows[r].join(" ").toLowerCase();
-    const yearMatch = joined.match(/\b(202\d|203\d)\b/);
-    if (yearMatch) refYear = parseInt(yearMatch[1], 10);
-    for (const [mWord, mCode] of Object.entries(SPANISH_MONTHS)) {
-      if (mWord.length >= 4 && joined.includes(mWord)) {
-        refMonth = parseInt(mCode, 10);
-        break;
+  // Try to detect reference month/year if mentioned in a top banner row or plan name (e.g. "NOVIEMBRE 2026" or "Plan Octubre")
+  let refYear = options?.referenceYear || new Date().getFullYear();
+  let refMonth = options?.referenceMonth || (new Date().getMonth() + 1);
+
+  if (!options?.referenceYear || !options?.referenceMonth) {
+    const searchSpace = [defaultCycleName, ...rows.slice(0, 6).map((r) => r.join(" "))].join(" ").toLowerCase();
+    if (!options?.referenceYear) {
+      const yearMatch = searchSpace.match(/\b(202\d|203\d)\b/);
+      if (yearMatch) refYear = parseInt(yearMatch[1], 10);
+    }
+    if (!options?.referenceMonth) {
+      for (const [mWord, mCode] of Object.entries(SPANISH_MONTHS)) {
+        if (mWord.length >= 4 && searchSpace.includes(mWord)) {
+          refMonth = parseInt(mCode, 10);
+          break;
+        }
       }
     }
   }
 
-  // Find the first row that looks like either a header row or a data row with a date
+  // Also check if any cell in the sheet has a full YYYY-MM-DD or DD/MM/YYYY date to anchor refYear & refMonth automatically
+  if (!options?.referenceYear || !options?.referenceMonth) {
+    outerDateScan: for (const r of rows.slice(0, 20)) {
+      for (const c of r) {
+        if (isValidDateCell(c)) {
+          const norm = normalizeDateString(c, "", refYear, refMonth);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) {
+            const [yStr, mStr] = norm.split("-");
+            if (!options?.referenceYear) refYear = parseInt(yStr, 10);
+            if (!options?.referenceMonth) refMonth = parseInt(mStr, 10);
+            break outerDateScan;
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  // CHECK FOR CALENDAR GRID FORMAT (7-column or multi-column monthly calendar)
+  // Where rows contain 3+ day numbers (1..31) across columns and rows below have the tasks
+  // ============================================================================
+  const dayNumberRowIndices: number[] = [];
+  rows.forEach((row, rIdx) => {
+    const dayCellsInRow = row.filter((c) => {
+      const dNum = extractDayOfMonthNumber(c);
+      return dNum !== null || isValidDateCell(c);
+    });
+    const pureDayNums = row.filter((c) => extractDayOfMonthNumber(c) !== null);
+    if (pureDayNums.length >= 3 || (dayCellsInRow.length >= 4 && row.length >= 5)) {
+      dayNumberRowIndices.push(rIdx);
+    }
+  });
+
+  if (dayNumberRowIndices.length >= 2) {
+    const gridDailyMap = new Map<string, ParsedDailyEntry>();
+
+    for (let idx = 0; idx < dayNumberRowIndices.length; idx++) {
+      const dayRowIdx = dayNumberRowIndices[idx];
+      const nextDayRowIdx = idx + 1 < dayNumberRowIndices.length ? dayNumberRowIndices[idx + 1] : rows.length;
+      const dayRow = rows[dayRowIdx];
+
+      for (let col = 0; col < dayRow.length; col++) {
+        const rawDayCell = (dayRow[col] || "").trim();
+        if (!rawDayCell) continue;
+
+        const dNum = extractDayOfMonthNumber(rawDayCell);
+        const isFullDate = isValidDateCell(rawDayCell);
+        if (dNum === null && !isFullDate) continue;
+
+        const date = normalizeDateString(rawDayCell, "", refYear, refMonth);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+
+        // Collect any text written in the same cell after the day number (if multi-line) + all cells below in this column
+        const itemsForDay: string[] = [];
+        const sameCellParts = rawDayCell.split(/\s*\|\|\|\s*|\r?\n/).map((s) => s.trim()).filter(Boolean);
+        if (sameCellParts.length > 1) {
+          sameCellParts.slice(1).forEach((p) => itemsForDay.push(p));
+        }
+
+        for (let subR = dayRowIdx + 1; subR < nextDayRowIdx; subR++) {
+          const cellVal = (rows[subR]?.[col] || "").trim();
+          if (!cellVal) continue;
+          // Ignore weekday header rows (e.g. Lunes, Martes...)
+          if (/^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom)$/i.test(cellVal)) {
+            continue;
+          }
+          const subItems = splitCellIntoListItems(cellVal);
+          subItems.forEach((si) => {
+            if (!itemsForDay.includes(si)) itemsForDay.push(si);
+          });
+        }
+
+        if (itemsForDay.length === 0) continue;
+
+        const joinedAll = itemsForDay.join(" · ");
+        let targetArrows = 0;
+        const arrowMatches = joinedAll.match(/\b(\d{1,4})\s*(?:flechas|flecha|fl\.?|tiros|arrows)\b/i);
+        if (arrowMatches) {
+          targetArrows = parseInt(arrowMatches[1], 10) || 0;
+        }
+
+        const lowerAll = joinedAll.toLowerCase();
+        const isRestDay =
+          (lowerAll === "descanso" || lowerAll.includes("descanso") || lowerAll === "libre" || lowerAll === "rest") &&
+          targetArrows === 0;
+
+        gridDailyMap.set(date, {
+          date,
+          title: itemsForDay[0],
+          targetArrows,
+          focusPoints: itemsForDay,
+          notes: itemsForDay.slice(1).join(" · "),
+          dailyItems: itemsForDay,
+          customFields: itemsForDay.map((item, i) => ({
+            label: `Tarea ${i + 1}`,
+            value: item
+          })),
+          type: isRestDay ? "other" : lowerAll.includes("torneo") || lowerAll.includes("competencia") ? "competition" : "training",
+          isRestDay
+        });
+      }
+    }
+
+    const gridEntries = Array.from(gridDailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    if (gridEntries.length > 0) {
+      const startDate = gridEntries[0].date;
+      const endDate = gridEntries[gridEntries.length - 1].date;
+      const totalVolumeGoal = gridEntries.reduce((sum, d) => sum + d.targetArrows, 0);
+
+      return {
+        success: true,
+        mode: "daily",
+        planName: defaultCycleName,
+        startDate,
+        endDate,
+        totalVolumeGoal,
+        stages: [
+          {
+            id: `etapa-grid-${startDate.slice(0, 7)}`,
+            name: defaultCycleName,
+            startDate,
+            endDate,
+            weeklySessionGoal: 5,
+            weeklyArrowGoal: Math.round(totalVolumeGoal / 4),
+            notes: "",
+            color: ETAPA_COLORS[0].color
+          }
+        ],
+        dailyEntries: gridEntries,
+        warnings
+      };
+    }
+  }
+
+  // Find the first row that looks like either a header row or a data row with a date/day number
   let headerRowIdx = -1;
   let firstDataRowIdx = 0;
 
@@ -487,9 +681,9 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
 
     const classifications = row.map(classifyHeader);
     const recognizedHeaders = classifications.filter((c) => c !== "unknown").length;
-    const hasDateCellInRow = row.some((c) => isValidDateCell(c));
+    const hasDateCellInRow = row.some((c) => isValidDateCell(c) || extractDayOfMonthNumber(c) !== null);
 
-    if (recognizedHeaders >= 1 && !hasDateCellInRow) {
+    if (recognizedHeaders >= 1 && !row.some((c) => isValidDateCell(c))) {
       headerRowIdx = r;
       firstDataRowIdx = r + 1;
       break;
@@ -527,7 +721,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
   const hasStartAndEndHeaders =
     headerClasses.includes("startDate") && headerClasses.includes("endDate");
 
-  // Count how many rows have 2 valid dates vs 1 valid date
+  // Count how many rows have 2 valid full dates vs 1 valid date
   let rowsWithTwoDates = 0;
   let rowsWithOneDate = 0;
   for (const r of dataRows.slice(0, 15)) {
@@ -536,24 +730,23 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
     else if (dateCols === 1) rowsWithOneDate++;
   }
 
-  const isStagesMode = hasStartAndEndHeaders || (rowsWithTwoDates > rowsWithOneDate && rowsWithTwoDates >= 1);
+  const isStagesMode = hasStartAndEndHeaders || (rowsWithTwoDates > rowsWithOneDate && rowsWithTwoDates >= 2);
 
   // ============================================================================
   // MODE 1: DAY-BY-DAY ("daily") LITERAL IMPORT (Default & Most Common)
   // ============================================================================
   if (!isStagesMode) {
-    // Identify which column is the Date column
+    // Identify which column is the Date / Day Number column
     let dateCol = headerClasses.indexOf("date");
     if (dateCol === -1) {
-      // Score each column by how many rows have a valid date in that column
       const maxCols = Math.max(...dataRows.map((r) => r.length), 1);
       let bestCol = 0;
       let bestScore = -1;
       for (let c = 0; c < maxCols; c++) {
         let score = 0;
         for (const r of dataRows) {
-          if (isValidDateCell(r[c])) score += 3;
-          else if (r[c] && /^\d{1,2}$/.test(r[c].trim())) score += 1;
+          if (isValidDateCell(r[c])) score += 4;
+          else if (extractDayOfMonthNumber(r[c]) !== null) score += 2;
         }
         if (score > bestScore) {
           bestScore = score;
@@ -568,14 +761,12 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
     let focusCol = headerClasses.indexOf("focus");
     let notesCol = headerClasses.indexOf("notes");
 
-    // If no header explicitly matched arrows, check if there is a purely numeric column (other than dateCol)
     const maxCols = Math.max(...dataRows.map((r) => r.length), headerRow.length, 1);
     if (arrowsCol === -1 && maxCols >= 3) {
       for (let c = 0; c < maxCols; c++) {
         if (c === dateCol || c === titleCol || c === focusCol || c === notesCol) continue;
         const hText = (headerRow[c] || "").toLowerCase();
         if (hText && !hText.includes("flecha") && !hText.includes("volumen") && !hText.includes("tiro") && !hText.includes("cant") && !hText.includes("meta")) {
-          // If it has a specific non-arrow header (like "Distancia" or "Series"), don't guess it as arrowsCol
           continue;
         }
         const nonEmptyVals = dataRows.map((r) => (r[c] || "").trim()).filter(Boolean);
@@ -586,7 +777,6 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
       }
     }
 
-    // If titleCol not explicitly found by header, pick the first non-date text column
     if (titleCol === -1) {
       for (let c = 0; c < maxCols; c++) {
         if (c !== dateCol && c !== arrowsCol) {
@@ -597,37 +787,44 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
     }
 
     const dailyMap = new Map<string, ParsedDailyEntry>();
-    let rollingDate = `${refYear}-${String(refMonth).padStart(2, "0")}-01`;
+    let lastValidDate: string | null = null;
 
-    dataRows.forEach((row) => {
+    dataRows.forEach((row, rowIdx) => {
       if (row.every((c) => !c || !c.trim())) return;
 
-      const rawDateCell = (row[dateCol] || "").trim();
+      let activeDateCol = dateCol;
+      let rawDateCell = (row[activeDateCol] || "").trim();
 
       // Skip repeated header rows inside the sheet
-      if (classifyHeader(rawDateCell) === "date" && !isValidDateCell(rawDateCell)) {
+      if (classifyHeader(rawDateCell) === "date" && !isValidDateCell(rawDateCell) && extractDayOfMonthNumber(rawDateCell) === null) {
         return;
       }
 
-      // Check if this row has a valid date or day number
-      const hasValidDate = isValidDateCell(rawDateCell) || /^\d{1,2}$/.test(rawDateCell.replace(DAY_NAMES_REGEX, "").trim());
-      if (!hasValidDate && dataRows.length > 1) {
-        // Check if any OTHER cell in the row has a date (in case of shifted columns)
-        const altDateIdx = row.findIndex((c) => isValidDateCell(c));
-        if (altDateIdx === -1) {
-          // If row has no date at all, skip section dividers that have only 1 cell
-          const nonEmptyCells = row.filter((c) => c && c.trim().length > 0);
-          if (nonEmptyCells.length <= 1) return;
+      const hasExplicitDateInCol = isValidDateCell(rawDateCell) || extractDayOfMonthNumber(rawDateCell) !== null;
+
+      if (!hasExplicitDateInCol) {
+        // Check if another cell in the first 2 columns has a date (in case of a leading weekday column like "Lunes" | "01/11/2026")
+        const altIdx = row.findIndex((c, idx) => idx <= 1 && (isValidDateCell(c) || extractDayOfMonthNumber(c) !== null));
+        if (altIdx !== -1) {
+          activeDateCol = altIdx;
+          rawDateCell = (row[activeDateCol] || "").trim();
         }
       }
 
-      const date = normalizeDateString(rawDateCell, rollingDate, refYear, refMonth);
-      const nextDayObj = new Date(new Date(date + "T12:00:00").getTime() + 24 * 60 * 60 * 1000);
-      if (!isNaN(nextDayObj.getTime())) {
-        rollingDate = nextDayObj.toISOString().split("T")[0];
+      let date: string;
+      if (rawDateCell && (isValidDateCell(rawDateCell) || extractDayOfMonthNumber(rawDateCell) !== null)) {
+        const fallback = `${refYear}-${String(refMonth).padStart(2, "0")}-${String(Math.min(31, rowIdx + 1)).padStart(2, "0")}`;
+        date = normalizeDateString(rawDateCell, fallback, refYear, refMonth);
+        lastValidDate = date;
+      } else if (!rawDateCell && lastValidDate) {
+        // Continuation row! The user left the date blank to add more items to the same date's list
+        date = lastValidDate;
+      } else {
+        // Skip section headers or rows without any date
+        return;
       }
 
-      // Extract arrows ONLY if explicitly present in the sheet (NEVER invent 120!)
+      // Extract arrows ONLY if explicitly present in the sheet
       let targetArrows = 0;
       if (arrowsCol !== -1 && row[arrowsCol] !== undefined) {
         const rawArrowsStr = String(row[arrowsCol]).trim();
@@ -637,48 +834,67 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
         }
       }
 
-      // Collect all literal columns from this row
-      const rawTitle = titleCol !== -1 && row[titleCol] ? row[titleCol].trim() : "";
-      const rawFocus = focusCol !== -1 && row[focusCol] ? row[focusCol].trim() : "";
-      const rawNotes = notesCol !== -1 && row[notesCol] ? row[notesCol].trim() : "";
+      const rawTitle = titleCol !== -1 && row[titleCol] ? row[titleCol].replace(/\s*\|\|\|\s*/g, " · ").trim() : "";
+      const rawFocus = focusCol !== -1 && row[focusCol] ? row[focusCol].replace(/\s*\|\|\|\s*/g, " · ").trim() : "";
+      const rawNotes = notesCol !== -1 && row[notesCol] ? row[notesCol].replace(/\s*\|\|\|\s*/g, " · ").trim() : "";
 
-      // Also collect any OTHER columns in the sheet so 100% of the user's columns are preserved literally!
+      // Build the structured list of items (`rowItems`) and `customFields` for this row
+      const rowItems: string[] = [];
       const customFields: Array<{ label: string; value: string }> = [];
       const extraTextParts: string[] = [];
 
       for (let c = 0; c < row.length; c++) {
-        if (c === dateCol) continue;
-        const val = (row[c] || "").trim();
-        if (!val) continue;
+        if (c === activeDateCol) continue;
+        const rawCellVal = (row[c] || "").trim();
+        if (!rawCellVal) continue;
+
+        // Skip if this column is just a standalone weekday name next to the date column (e.g. "Lunes")
+        if (c <= 1 && /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom)$/i.test(rawCellVal)) {
+          continue;
+        }
 
         const colHeader = (headerRow[c] || "").trim();
+        const cleanDisplayVal = rawCellVal.replace(/\s*\|\|\|\s*/g, " · ");
+
         if (colHeader) {
-          customFields.push({ label: colHeader, value: val });
+          customFields.push({ label: colHeader, value: cleanDisplayVal });
+        }
+
+        // Convert cell into clean list item(s) for the day's checklist
+        if (c === arrowsCol) {
+          if (targetArrows > 0) {
+            rowItems.push(`Flechas: ${targetArrows} flechas`);
+          } else {
+            rowItems.push(...splitCellIntoListItems(rawCellVal, colHeader || "Flechas"));
+          }
+        } else {
+          const splitItems = splitCellIntoListItems(rawCellVal, colHeader);
+          splitItems.forEach((item) => {
+            if (!rowItems.includes(item)) rowItems.push(item);
+          });
         }
 
         if (c !== titleCol && c !== arrowsCol && c !== focusCol && c !== notesCol) {
           if (colHeader) {
-            extraTextParts.push(`${colHeader}: ${val}`);
+            extraTextParts.push(`${colHeader}: ${cleanDisplayVal}`);
           } else {
-            extraTextParts.push(val);
+            extraTextParts.push(cleanDisplayVal);
           }
         }
       }
 
-      // If arrows wasn't in a dedicated column, check if the title or another cell mentions "120 flechas" or "120 fl"
       if (targetArrows === 0) {
-        const joinedRowText = row.filter((_, idx) => idx !== dateCol).join(" ");
+        const joinedRowText = row.filter((_, idx) => idx !== activeDateCol).join(" ");
         const inlineArrowsMatch = joinedRowText.match(/\b(\d{1,4})\s*(?:flechas|flecha|fl\.?|tiros|arrows)\b/i);
         if (inlineArrowsMatch) {
           targetArrows = parseInt(inlineArrowsMatch[1], 10) || 0;
         }
       }
 
-      // Build literal title:
-      // 1. Exact rawTitle if present
-      // 2. Otherwise first non-empty extra column text
-      // 3. Otherwise if targetArrows > 0, literal number from the arrow cell
       let literalTitle = rawTitle;
+      if (!literalTitle && rowItems.length > 0) {
+        literalTitle = rowItems[0];
+      }
       if (!literalTitle && extraTextParts.length > 0) {
         literalTitle = extraTextParts.shift()!;
       }
@@ -692,8 +908,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
         literalTitle = row[arrowsCol].trim();
       }
 
-      // If the entire row apart from the date was empty, skip it so we don't invent fake tasks on blank calendar rows!
-      if (!literalTitle && targetArrows === 0 && !rawFocus && !rawNotes && extraTextParts.length === 0) {
+      if (!literalTitle && targetArrows === 0 && rowItems.length === 0) {
         return;
       }
 
@@ -723,8 +938,12 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
       }
 
       if (dailyMap.has(date)) {
-        // Merge with existing entry on the same date so multiple rows for the same day are never lost
         const existing = dailyMap.get(date)!;
+        rowItems.forEach((item) => {
+          if (!existing.dailyItems.includes(item)) {
+            existing.dailyItems.push(item);
+          }
+        });
         if (literalTitle && !existing.title.includes(literalTitle)) {
           existing.title = existing.title ? `${existing.title} / ${literalTitle}` : literalTitle;
         }
@@ -747,6 +966,7 @@ export function parseSpreadsheetData(rawText: string, defaultCycleName = "Plan I
           targetArrows,
           focusPoints,
           notes: combinedNotes,
+          dailyItems: rowItems.length > 0 ? rowItems : [literalTitle],
           customFields: customFields.length > 0 ? customFields : undefined,
           type,
           isRestDay
@@ -984,6 +1204,121 @@ export function downloadDailySampleTemplate(): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates and downloads a formatted .xlsx Excel workbook with two ready-to-use sheets:
+ * 1. "Lista por Fecha" (Every day of the selected month with columns for multiple tasks/items per day)
+ * 2. "Calendario Mensual" (7-column Lunes-Domingo grid where tasks are written under each day number)
+ */
+export function downloadFormattedExcelTemplate(year?: number, month?: number): void {
+  const y = year || new Date().getFullYear();
+  const m = month || (new Date().getMonth() + 1); // 1..12
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const monthNames = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+  const mName = monthNames[m - 1] || "Mes";
+
+  // Sheet 1: Clean Row-by-Row Date List (Recommended)
+  const listAoA: string[][] = [
+    [
+      "Fecha",
+      "Día",
+      "Actividad 1 (Tiro / Distancia)",
+      "Actividad 2 (Técnica / Liga)",
+      "Actividad 3 (Físico / Gimnasio)",
+      "Flechas",
+      "Notas / Indicaciones"
+    ]
+  ];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(y, m - 1, d);
+    const dow = dateObj.getDay();
+    const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dayLabel = `${weekdayNames[dow]} ${d}`;
+
+    if (d === 1) {
+      listAoA.push([
+        dateStr,
+        dayLabel,
+        "Volumen Técnico 70m (series de 6 flechas)",
+        "15 min calentamiento con banda elástica",
+        "Core y estabilidad de hombros (20 min)",
+        "120",
+        "Mantener ritmo constante de disparo"
+      ]);
+    } else if (d === 2) {
+      listAoA.push([
+        dateStr,
+        dayLabel,
+        "Control WA 720 (2 rondas de 36 flechas)",
+        "Revisión de postura y suelta",
+        "Estiramiento completo al finalizar",
+        "72",
+        "Registrar puntuación en Archery 101010"
+      ]);
+    } else if (dow === 0) {
+      listAoA.push([dateStr, dayLabel, "Descanso", "", "", "0", "Recuperación activa"]);
+    } else {
+      listAoA.push([dateStr, dayLabel, "", "", "", "", ""]);
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  const wsList = XLSX.utils.aoa_to_sheet(listAoA);
+  wsList["!cols"] = [
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 38 },
+    { wch: 34 },
+    { wch: 32 },
+    { wch: 10 },
+    { wch: 34 }
+  ];
+  XLSX.utils.book_append_sheet(wb, wsList, `Lista ${mName}`);
+
+  // Sheet 2: Visual 7-Column Monthly Calendar Grid (Lunes..Domingo)
+  const gridAoA: string[][] = [
+    [`PLAN MENSUAL - ${mName.toUpperCase()} ${y}`, "", "", "", "", "", ""],
+    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+  ];
+
+  let currentDay = 1;
+  while (currentDay <= daysInMonth) {
+    const numberRow = ["", "", "", "", "", "", ""];
+    const taskRow1 = ["", "", "", "", "", "", ""];
+    const taskRow2 = ["", "", "", "", "", "", ""];
+    const taskRow3 = ["", "", "", "", "", "", ""];
+
+    for (let col = 0; col < 7 && currentDay <= daysInMonth; col++) {
+      const dateObj = new Date(y, m - 1, currentDay);
+      // Convert JS getDay (0=Sun..6=Sat) to Monday-first (0=Mon..6=Sun)
+      const monFirstCol = (dateObj.getDay() + 6) % 7;
+      if (monFirstCol === col) {
+        numberRow[col] = String(currentDay);
+        if (currentDay === 1) {
+          taskRow1[col] = "Calentamiento con liga 15 min";
+          taskRow2[col] = "120 flechas a 70m";
+          taskRow3[col] = "Físico: Core y hombro";
+        } else if (monFirstCol === 6) {
+          taskRow1[col] = "Descanso";
+        }
+        currentDay++;
+      }
+    }
+
+    gridAoA.push(numberRow, taskRow1, taskRow2, taskRow3);
+  }
+
+  const wsGrid = XLSX.utils.aoa_to_sheet(gridAoA);
+  wsGrid["!cols"] = Array.from({ length: 7 }, () => ({ wch: 26 }));
+  XLSX.utils.book_append_sheet(wb, wsGrid, `Calendario ${mName}`);
+
+  XLSX.writeFile(wb, `Formato_Plan_${mName}_${y}_Archery101010.xlsx`);
 }
 
 /**
