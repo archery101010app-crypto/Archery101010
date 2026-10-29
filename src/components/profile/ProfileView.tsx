@@ -618,15 +618,24 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
       {/* User Header Profile Card */}
       <div className="bg-[#0D1017] p-4 rounded-3xl border border-white/[0.08] flex items-center gap-4 relative overflow-hidden">
-        <div className="w-16 h-16 rounded-full bg-cyan-neon/10 border-2 border-cyan-neon/50 flex items-center justify-center text-cyan-neon font-black text-xl shrink-0">
+        <div className="w-15 h-15 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/40 flex items-center justify-center text-cyan-neon font-black text-lg shrink-0">
           {user.fullName.substring(0, 2).toUpperCase()}
         </div>
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-white font-extrabold text-base truncate">{user.fullName}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-white font-extrabold text-base truncate">{user.fullName}</span>
+            <span className={`text-[10.5px] font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap shrink-0 ${
+              user.plan === "PRO" 
+                ? "bg-yellow-gold/10 border border-yellow-gold/30 text-yellow-gold"
+                : "bg-white/[0.06] border border-white/15 text-white"
+            }`}>
+              {user.plan}
+            </span>
+          </div>
           <span className="text-[11.6px] text-white mt-0.5 truncate">{user.email}</span>
           
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <span className="text-[10.5px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="text-[10.5px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap">
               {user.role === "archer"
                 ? "Atleta"
                 : user.role === "coach"
@@ -639,54 +648,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 ? "Super Admin"
                 : user.role}
             </span>
-            <span className={`text-[10.5px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap ${
-              user.plan === "PRO" 
-                ? "bg-yellow-gold/10 border border-yellow-gold/25 text-yellow-gold"
-                : "bg-neutral-800 border border-neutral-700 text-white"
-            }`}>
-              {user.plan}
-            </span>
+            {user.nickname && (
+              <span className="text-[10.5px] text-white font-bold tabular-nums truncate">
+                @{user.nickname}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Role Selection Switcher Card */}
-      <div className="p-4 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex items-center justify-between gap-3">
-        <div className="flex flex-col min-w-0">
-          <span className="text-white text-xs font-black uppercase tracking-wider">Rol de Cuenta</span>
-          <span className="text-[11.6px] text-white leading-snug [text-wrap:pretty]">Selecciona si entrenas como Atleta o gestionas como Coach</span>
-        </div>
-        <div className="flex bg-[#090B0E] p-1 rounded-2xl border border-white/10 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleSelectUserRole("archer")}
-            className={`h-8 px-3 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
-              user.role === "archer" || user.role === "team_admin"
-                ? "bg-cyan-neon text-black font-extrabold"
-                : "text-white hover:text-white"
-            }`}
-          >
-            Atleta
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectUserRole("coach")}
-            className={`relative h-8 px-3 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
-              user.role === "coach" || user.role === "team_admin_coach"
-                ? "bg-cyan-neon text-black font-extrabold"
-                : "text-white hover:text-white"
-            }`}
-          >
-            Coach
-            <span className="absolute -top-1.5 -right-2 text-[8.1px] bg-yellow-gold text-black font-black px-1 rounded-sm uppercase scale-90 z-20">
-              PRO
-            </span>
-          </button>
-        </div>
-      </div>
-
       {/* Subscription Card PRO paywall trigger */}
-      <div className="p-5 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex flex-col gap-3">
+      <div className="p-4 sm:p-5 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
             <Shield size={14} className="text-cyan-neon" />
@@ -699,7 +671,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         {user.plan === "FREE" ? (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-white leading-relaxed">
-              Desbloquea planificación de macrociclos, Spine Tuning y herramientas avanzadas sin costo por lanzamiento.
+              Desbloquea planificación de macrociclos, análisis de agrupación y herramientas avanzadas sin costo por lanzamiento.
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
