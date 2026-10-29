@@ -290,7 +290,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         console.warn("Cloud sync skipped:", syncErr);
       }
 
-      alert(`✓ ¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`);
+      alert(`¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`);
     } catch (err) {
       console.error("Error creating athlete:", err);
       alert("Error al guardar el perfil del alumno.");
@@ -393,7 +393,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           <div className="flex flex-col">
             <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">Código para Alumnos</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-sm font-mono font-black text-cyan-neon tracking-widest select-all">
+              <span className="text-sm tabular-nums font-black text-cyan-neon tracking-widest select-all">
                 {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
                   ? user.clubInviteCode 
                   : "101010"}

@@ -219,8 +219,8 @@ export default function AdminDashboardTab() {
       value: sessions.length.toString(),
       subtitle: sessions.length === 1 ? "1 entrenamiento guardado" : `${sessions.length} entrenamientos guardados`,
       icon: Target,
-      colorClass: "text-purple-500 bg-purple-500/10 border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]",
-      textColor: "text-purple-400"
+      colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]",
+      textColor: "text-cyan-neon"
     }
   ];
 
@@ -330,7 +330,7 @@ export default function AdminDashboardTab() {
                       <p className="text-xs text-white leading-relaxed font-medium">
                         <span className="font-bold text-white">{act.user}</span> {act.action}
                       </p>
-                      <span className="text-[11.6px] text-cyan-neon/80 font-bold mt-0.5 truncate">{act.detail}</span>
+                      <span className="text-[11.6px] text-cyan-neon font-bold mt-0.5 truncate">{act.detail}</span>
                     </div>
 
                     <div className="text-[10.5px] text-white font-semibold self-start whitespace-nowrap pt-1">
@@ -360,7 +360,7 @@ export default function AdminDashboardTab() {
                 <span className={`text-[11.6px] px-2 py-0.5 rounded-full font-black border ${
                   isOnline 
                     ? "text-green-400 bg-green-500/10 border-green-500/20" 
-                    : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                    : "text-yellow-gold bg-amber-500/10 border-amber-500/20"
                 }`}>
                   {isOnline ? "ONLINE" : "OFFLINE"}
                 </span>
@@ -379,7 +379,7 @@ export default function AdminDashboardTab() {
               </div>
               <div className="flex justify-between items-center mt-1.5">
                 <span className="text-xs text-white font-medium">Cola de Sincronización</span>
-                <span className={`text-xs font-bold ${syncQueueCount > 0 ? "text-amber-400" : "text-green-400"}`}>
+                <span className={`text-xs font-bold ${syncQueueCount > 0 ? "text-yellow-gold" : "text-green-400"}`}>
                   {syncQueueCount} {syncQueueCount === 1 ? "Item" : "Items"}
                 </span>
               </div>

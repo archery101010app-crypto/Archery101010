@@ -113,7 +113,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setSelectedMacrocycleId(macrocycle.id);
 
     alert(
-      `✓ ¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
+      `¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
       `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
       `Toca cualquier fecha en el calendario para ver el detalle exacto de cada día.`
@@ -160,8 +160,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       alert(
         targetAthlete 
-          ? `✓ Se ha desvinculado al alumno del plan "${planName}" y se retiraron sus tareas del calendario.`
-          : `✓ El plan "${planName}" ha sido desvinculado y se eliminaron ${res.deletedEventsCount} eventos del calendario.`
+          ? `Se ha desvinculado al alumno del plan "${planName}" y se retiraron sus tareas del calendario.`
+          : `El plan "${planName}" ha sido desvinculado y se eliminaron ${res.deletedEventsCount} eventos del calendario.`
       );
     } catch (e) {
       console.error("Error unlinking plan:", e);
@@ -475,7 +475,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     if (diffDays === 0) {
       return { 
         text: language === "es" ? "Hoy" : "Today", 
-        colorClass: "text-amber-500 bg-amber-500/10 border-amber-500/25 shadow-sm", 
+        colorClass: "text-yellow-gold bg-amber-500/10 border-amber-500/25 shadow-sm", 
         isPast: false 
       };
     } else if (diffDays === 1) {
@@ -512,9 +512,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       case "training":
         return "bg-cyan-500/15 text-cyan-400 border-cyan-500/20";
       case "meeting":
-        return "bg-amber-500/15 text-amber-400 border-amber-500/20";
+        return "bg-amber-500/15 text-yellow-gold border-amber-500/20";
       default:
-        return "bg-purple-500/15 text-purple-400 border-purple-500/20";
+        return "bg-cyan-neon/15 text-cyan-neon border-cyan-neon/20";
     }
   };
 
@@ -551,7 +551,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       setShowSyncModal(false);
 
       alert(
-        `✓ ¡Calendario Sincronizado con Éxito!\n\n` +
+        `¡Calendario Sincronizado con Éxito!\n\n` +
         `• Plan: ${summary.macrocycleName}\n` +
         `• Mes: ${summary.monthName} ${summary.year}\n` +
         `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
@@ -646,7 +646,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       setSelectedDay(assignDate);
     }
 
-    alert("✓ Asignación del día guardada y notificada a los arqueros.");
+    alert("Asignación del día guardada y notificada a los arqueros.");
   };
 
   // Form handlers for regular events
@@ -887,7 +887,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               <button
                 type="button"
                 onClick={() => handleRequestUnlink(currentPlan)}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-red-rival font-bold text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
                 title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
               >
                 <Unlink size={11} />
@@ -1090,7 +1090,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   if (m) handleRequestUnlink(m);
                   else if (macrocycles.length > 0) handleRequestUnlink(macrocycles[0]);
                 }}
-                className="text-[11.6px] text-rose-400 hover:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                className="text-[11.6px] text-red-rival hover:text-red-rival font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
               >
                 <Unlink size={11} />
                 <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
@@ -1103,8 +1103,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       {/* Attendance Stats Widget */}
       <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center gap-4">
         <div className="flex flex-col gap-1.5 w-[65%]">
-          <span className="text-[10.5px] text-white font-bold uppercase tracking-widest flex items-center gap-1">
-            <Award size={12} className="text-cyan-neon" />
+          <span className="text-[10.5px] text-cyan-neon font-bold uppercase tracking-widest flex items-center">
             {language === "es" ? "Constancia Mensual" : "Monthly Attendance"}
           </span>
           <h4 className="text-white text-xs font-extrabold leading-tight">
@@ -1418,7 +1417,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 });
                               }
                             }}
-                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/25 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
                             title="Desvincular Plan"
                           >
                             <Unlink size={11} />
@@ -2000,7 +1999,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <X size={16} />
               </button>
 
-              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-red-rival">
                 <Unlink size={24} />
               </div>
 
@@ -2011,7 +2010,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <p className="text-xs text-white mt-1 leading-relaxed">
                   Plan: <strong className="text-white">{macroToUnlink.name}</strong>
                 </p>
-                <p className="text-[12.8px] text-rose-400/90 mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                <p className="text-[12.8px] text-red-rival mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
                   Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.
                 </p>
               </div>

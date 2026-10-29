@@ -184,7 +184,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               {/* World Archery Stars */}
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
                 <span className="text-[11.6px] text-yellow-gold font-black tracking-wider uppercase flex items-center gap-1">
-                  ★ Estrellas 101010 720
+                  Estrellas 101010 720
                 </span>
                 {maxStar ? (
                   <div className="flex flex-col gap-3">
@@ -197,8 +197,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           backgroundColor: `${maxStar.starColor}15`
                         }}
                       >
-                        ★
-                      </div>
+                        </div>
                       <div className="flex flex-col overflow-hidden">
                         <span className="text-white text-xs font-black uppercase tracking-wide truncate">
                           {maxStar.starName}
@@ -454,7 +453,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                           <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
                                             Análisis de Grupo y Mira
                                           </span>
-                                          <span className="text-[11.6px] font-mono font-black text-white">
+                                          <span className="text-[11.6px] tabular-nums font-black text-white">
                                             Ø {analysis.spreadCm.toFixed(1)} cm
                                           </span>
                                         </div>
@@ -651,7 +650,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                           <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
                                             Análisis de Grupo y Mira
                                           </span>
-                                          <span className="text-[11.6px] font-mono font-black text-white">
+                                          <span className="text-[11.6px] tabular-nums font-black text-white">
                                             Ø {analysis.spreadCm.toFixed(1)} cm
                                           </span>
                                         </div>

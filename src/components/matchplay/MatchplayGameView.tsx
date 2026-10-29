@@ -2265,7 +2265,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 {userShootOffShot !== null ? userShootOffShot : "—"}
               </span>
               {userShootOffDistCm !== null && (
-                <span className="text-[10.5px] font-mono font-bold text-cyan-neon/80">
+                <span className="text-[10.5px] tabular-nums font-bold text-cyan-neon">
                   a {userShootOffDistCm.toFixed(1)} cm del centro
                 </span>
               )}
@@ -2282,7 +2282,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 )}
               </span>
               {!rivalThinking && rivalShootOffDistCm !== null && (
-                <span className="text-[10.5px] font-mono font-bold text-red-rival/80">
+                <span className="text-[10.5px] tabular-nums font-bold text-red-rival">
                   a {rivalShootOffDistCm.toFixed(1)} cm del centro
                 </span>
               )}
@@ -2465,7 +2465,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   initial={{ scale: 0.6, opacity: 0 }}
                   animate={{ scale: 1.2, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                  className="text-4xl font-black text-white font-mono tabular-nums"
+                  className="text-4xl font-black text-white tabular-nums tabular-nums"
                 >
                   {readyCountdown > 0 ? readyCountdown : "¡TIRO!"}
                 </motion.div>
@@ -2916,7 +2916,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center cursor-pointer hover:bg-blue-500/20 active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-cyan-neon font-black text-base flex items-center justify-center cursor-pointer hover:bg-blue-500/20 active:scale-95 transition"
               >
                 {key}
               </button>
@@ -3168,7 +3168,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     Revisión de Impactos del Turno
                   </p>
                 </div>
-                <span className="text-[11.6px] text-cyan-neon font-mono font-bold bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+                <span className="text-[11.6px] text-cyan-neon tabular-nums font-bold bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
                   {config.distance}m
                 </span>
               </div>
@@ -3409,10 +3409,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               className="w-full max-w-[320px] bg-[#0D1017] border border-white/10 p-5 rounded-[32px] flex flex-col items-center text-center gap-4 shadow-2xl relative overflow-hidden"
             >
               <div className="absolute top-0 inset-x-0 h-1 bg-cyan-neon" />
-              <div className="w-12 h-12 rounded-full bg-yellow-gold/10 border border-yellow-gold/30 flex items-center justify-center text-yellow-gold">
-                <Sparkles size={20} />
-              </div>
-              <h3 className="text-white text-xs font-black uppercase tracking-wider">
+              <h3 className="text-white text-xs font-black uppercase tracking-wider pt-2">
                 Fin del Set {currentEnd + 1}
               </h3>
               <p className="text-xs text-white leading-relaxed px-1 [text-wrap:pretty]">

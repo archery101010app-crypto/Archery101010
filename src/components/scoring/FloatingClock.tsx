@@ -459,7 +459,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
                 {/* Display giant clock digits */}
                 <div
-                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none font-mono tabular-nums transition-colors duration-200 ${
+                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none tabular-nums tabular-nums transition-colors duration-200 ${
                     lightState === "RED"
                       ? "text-red-500"
                       : lightState === "YELLOW"
@@ -576,7 +576,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                           <span className="text-[12.8px] font-black uppercase text-white leading-tight">
                             {preset.label}
                           </span>
-                          <span className="text-[10.5px] text-cyan-neon/80 font-bold">
+                          <span className="text-[10.5px] text-cyan-neon font-bold">
                             {preset.sub}
                           </span>
                         </button>

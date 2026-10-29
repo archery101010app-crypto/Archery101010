@@ -793,7 +793,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-white">Alias para Retos:</span>
-              <span className="text-cyan-neon font-mono font-bold">@{user.nickname || "arquero"}</span>
+              <span className="text-cyan-neon tabular-nums font-bold">@{user.nickname || "arquero"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-white">Nacimiento:</span>
@@ -1286,12 +1286,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <div className="flex flex-col min-w-0">
                   <span className="text-white text-xs font-black truncate">{user.clubName || "Club Deportivo"}</span>
                   <span className="text-[11.6px] text-white flex items-center gap-1 mt-0.5">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
                     <span>·</span>
                     <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || user.country}</span>
                   </span>
                   {user.clubInviteCode && (
-                    <span className="text-[10.5px] font-mono text-cyan-neon/90 mt-0.5">
+                    <span className="text-[10.5px] tabular-nums text-cyan-neon mt-0.5">
                       Código: {user.clubInviteCode}
                     </span>
                   )}
@@ -1349,7 +1349,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   value={athleteInviteCode}
                   onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9a-zA-Z]/g, "").slice(0, 6))}
                   placeholder="Código de 6 dígitos"
-                  className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase font-mono tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
+                  className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
                 />
                 <button
                   type="button"
@@ -1465,7 +1465,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   <div className="flex flex-col overflow-hidden">
                     <span className="text-white text-xs font-black truncate">{user.clubName || "Club Olímpico"}</span>
                     <span className="text-[11.6px] text-white mt-0.5 flex items-center gap-1">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon/90 shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
                       <span>·</span>
                       <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || "Costa Rica"}</span>
                     </span>
@@ -1478,7 +1478,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             <div className="flex flex-col gap-1 border-t border-white/[0.03] pt-2">
               <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">{t("inviteCode")} (6 dígitos)</span>
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm font-mono font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
+                <span className="flex-1 text-sm tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
                   {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
                     ? user.clubInviteCode 
                     : "101010"}
@@ -1609,7 +1609,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {(user.role === "superadmin" || user.email?.toLowerCase().includes("admin") || devSimulateSuperAdmin) && onNavigate && (
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 flex flex-col gap-2.5">
           <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
-            <Shield size={14} className="text-purple-400" />
+            <Shield size={14} className="text-cyan-neon" />
             <span>Panel de Administración</span>
           </h3>
           <p className="text-[11.6px] text-white leading-relaxed">
@@ -1617,7 +1617,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </p>
           <button
             onClick={() => onNavigate("ADMIN")}
-            className="w-full py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 font-bold text-xs uppercase cursor-pointer hover:bg-purple-500/20 transition active:scale-98"
+            className="w-full py-2.5 rounded-xl bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-bold text-xs uppercase cursor-pointer hover:bg-cyan-neon/20 transition active:scale-98"
           >
             Abrir Panel Admin
           </button>
@@ -1627,10 +1627,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* DEV TOOLS Simulator PRO Toggle */}
       {user.role === "superadmin" && (
         <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-3 bg-neutral-950/40">
-          <span className="text-xs text-red-rival font-mono font-bold leading-none">{t("devMode")}</span>
+          <span className="text-xs text-red-rival tabular-nums font-bold leading-none">{t("devMode")}</span>
           
           <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
-            <span className="text-[11.6px] text-white font-mono">Simulate PRO Account</span>
+            <span className="text-[11.6px] text-white tabular-nums">Simulate PRO Account</span>
             <button
               onClick={handleDevProToggle}
               className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
@@ -1645,7 +1645,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-[11.6px] text-white font-mono">Simulate SuperAdmin Role</span>
+            <span className="text-[11.6px] text-white tabular-nums">Simulate SuperAdmin Role</span>
             <button
               onClick={handleDevSuperAdminToggle}
               className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
@@ -1722,7 +1722,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 ¿Eliminar cuenta permanentemente?
               </h3>
               <p className="text-xs text-white leading-relaxed">
-                Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán tu perfil (<span className="text-white font-mono">{user.email}</span>), arcos, sesiones, historial de duelos y récords.
+                Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán tu perfil (<span className="text-white tabular-nums">{user.email}</span>), arcos, sesiones, historial de duelos y récords.
               </p>
               <div className="flex gap-2.5 mt-2">
                 <button
@@ -1797,7 +1797,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {/* Price card: Launch special */}
               <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[11.6px] text-white line-through font-mono tabular-nums">$4.99 USD / mes</span>
+                  <span className="text-[11.6px] text-white line-through tabular-nums tabular-nums">$4.99 USD / mes</span>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-2xl font-black text-white tabular-nums tracking-tight">
                       $0.00

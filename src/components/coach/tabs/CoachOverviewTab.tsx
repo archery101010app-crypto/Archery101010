@@ -156,8 +156,7 @@ export default function CoachOverviewTab({
                   onClick={() => onViewAthlete(ath)}
                   className="text-[10.5px] bg-red-950/40 text-red-rival hover:text-white border border-red-500/20 px-2 py-0.5 rounded-full font-bold transition"
                 >
-                  {ath.fullName} ➔
-                </button>
+                  {ath.fullName} → </button>
               ))}
             </div>
           </div>
@@ -195,7 +194,7 @@ export default function CoachOverviewTab({
                     <p className="text-[11.6px] text-white mt-0.5">
                       {act.isDuel ? (
                         <span>
-                          Completó un Duelo con <span className="text-purple-400 font-extrabold">{act.opponent}</span> · Resultado:{" "}
+                          Completó un Duelo con <span className="text-cyan-neon font-extrabold">{act.opponent}</span> · Resultado:{" "}
                           <span className={act.outcome === "win" ? "text-cyan-neon font-black" : act.outcome === "loss" ? "text-red-rival font-black" : "text-yellow-gold font-black"}>
                             {act.outcome === "win" ? "Ganó" : act.outcome === "loss" ? "Perdió" : "Empató"}
                           </span>

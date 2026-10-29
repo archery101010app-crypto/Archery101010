@@ -152,7 +152,7 @@ export default function CoachPaymentModal({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-col">
-                    <span className="text-[11.6px] text-white line-through font-mono tabular-nums">
+                    <span className="text-[11.6px] text-white line-through tabular-nums tabular-nums">
                       {prod.regularPrice}
                     </span>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -237,7 +237,7 @@ export default function CoachPaymentModal({
                 <span>Restaurar compras</span>
               </button>
 
-              <span className="font-mono text-[10.5px] text-white uppercase">
+              <span className="tabular-nums text-[10.5px] text-white uppercase">
                 {selectedProduct.sku}
               </span>
             </div>

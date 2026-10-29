@@ -394,8 +394,8 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
                     <div className="flex items-center gap-2">
                       {isPB && (
-                        <span className="bg-yellow-gold/10 text-yellow-gold font-black border border-yellow-gold/25 text-[9.3px] px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1">
-                          <Award size={10} /> PB
+                        <span className="bg-yellow-gold/10 text-yellow-gold font-black border border-yellow-gold/25 text-[9.3px] px-2 py-0.5 rounded-full uppercase inline-flex items-center">
+                          PB
                         </span>
                       )}
                       <ChevronRight size={16} className="text-white group-hover:text-white transition-colors" />

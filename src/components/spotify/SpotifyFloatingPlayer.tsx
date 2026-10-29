@@ -435,7 +435,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
     const extracted = extractSpotifyItem(userPlaylistUrl);
     if (!extracted) {
       setLinkError(
-        "Enlace no reconocido. En Spotify toca Compartir ➔ Copiar enlace en cualquier playlist, álbum, canción o artista."
+        "Enlace no reconocido. En Spotify toca Compartir → Copiar enlace en cualquier playlist, álbum, canción o artista."
       );
       return;
     }
@@ -535,7 +535,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             <span
               className="text-[13.8px] sm:text-[13.6px] font-bold text-black select-none tracking-[-0.03em] leading-none"
               style={{
-                fontFamily: "'Circular Std', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontFamily: "'Outfit', sans-serif",
                 writingMode: "vertical-rl",
                 textOrientation: "mixed",
               }}

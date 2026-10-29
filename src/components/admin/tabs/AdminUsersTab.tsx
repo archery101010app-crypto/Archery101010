@@ -112,9 +112,9 @@ export default function AdminUsersTab() {
 
           setUsers(finalList);
           await saveLocalSetting("simulated_users", finalList);
-          setSyncMessage(`✓ ${finalList.length} arqueros sincronizados`);
+          setSyncMessage(`${finalList.length} arqueros sincronizados`);
         } else {
-          setSyncMessage(`✓ ${localList.length} arqueros locales cargados`);
+          setSyncMessage(`${localList.length} arqueros locales cargados`);
         }
       } else {
         setSyncMessage(`Modo offline: ${localList.length} arqueros cargados`);
@@ -353,13 +353,13 @@ export default function AdminUsersTab() {
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
-            <Flame size={12} className="text-orange-400" />
+            
             Nuevos (48h)
           </span>
-          <span className="text-xl font-black text-orange-400 mt-1 flex items-center gap-1.5">
+          <span className="text-xl font-black text-yellow-gold mt-1 flex items-center gap-1.5">
             {recentCount}
             {recentCount > 0 && (
-              <span className="text-[10.5px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-orange-300 font-bold uppercase">
+              <span className="text-[10.5px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-yellow-gold font-bold uppercase">
                 Reciente
               </span>
             )}
@@ -368,7 +368,7 @@ export default function AdminUsersTab() {
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
-            <Sparkles size={12} className="text-yellow-gold" />
+            
             Suscripciones PRO
           </span>
           <span className="text-xl font-black text-yellow-gold mt-1">{proCount}</span>
@@ -376,10 +376,10 @@ export default function AdminUsersTab() {
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
-            <Shield size={12} className="text-purple-400" />
+            <Shield size={12} className="text-cyan-neon" />
             Coaches / Clubes
           </span>
-          <span className="text-xl font-black text-purple-400 mt-1">{coachCount}</span>
+          <span className="text-xl font-black text-cyan-neon mt-1">{coachCount}</span>
         </div>
       </div>
 
@@ -489,7 +489,7 @@ export default function AdminUsersTab() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="text-xs font-bold text-white truncate">{u.fullName}</h4>
                         {u.nickname && (
-                          <span className="text-[11.6px] text-purple-400 font-mono font-semibold">
+                          <span className="text-[11.6px] text-cyan-neon tabular-nums font-semibold">
                             @{u.nickname}
                           </span>
                         )}
@@ -523,7 +523,7 @@ export default function AdminUsersTab() {
                     {/* Role badge */}
                     <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-bold uppercase border ${
                       u.role === "superadmin" 
-                        ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                        ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
                         : u.role === "coach" || u.role === "team_admin_coach"
                         ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
                         : "bg-neutral-500/10 text-white border-neutral-500/20"
@@ -551,17 +551,17 @@ export default function AdminUsersTab() {
                       </button>
                       <button
                         onClick={() => handleToggleRole(u.uid)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon/80 hover:text-cyan-neon transition cursor-pointer"
+                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon hover:text-cyan-neon transition cursor-pointer"
                         title="Cambiar Rol (Atleta / Coach / Admin)"
                       >
                         <Shield size={13} />
                       </button>
                       <button
                         onClick={() => handleTogglePlan(u.uid)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold/80 hover:text-yellow-gold transition cursor-pointer"
+                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold hover:text-yellow-gold transition cursor-pointer"
                         title="Alternar Plan (FREE / PRO)"
                       >
-                        <Sparkles size={13} />
+                        
                       </button>
                     </div>
                   </div>
@@ -597,7 +597,7 @@ export default function AdminUsersTab() {
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-bold text-white truncate">{selectedUser.fullName}</h3>
                     {selectedUser.nickname && (
-                      <span className="text-[12.8px] text-purple-400 font-mono font-semibold">
+                      <span className="text-[12.8px] text-cyan-neon tabular-nums font-semibold">
                         @{selectedUser.nickname}
                       </span>
                     )}
@@ -633,7 +633,7 @@ export default function AdminUsersTab() {
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
-                    <span className="text-white font-mono text-[10.5px] truncate block">{selectedUser.uid}</span>
+                    <span className="text-white tabular-nums text-[10.5px] truncate block">{selectedUser.uid}</span>
                   </div>
                 </div>
 

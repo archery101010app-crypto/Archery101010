@@ -240,7 +240,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none" />
           </div>
           {format !== "Libre" && (
-            <p className="text-[11.6px] text-cyan-neon font-mono font-bold px-1 tabular-nums">
+            <p className="text-[11.6px] text-cyan-neon tabular-nums font-bold px-1 tabular-nums">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
             </p>
           )}

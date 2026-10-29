@@ -195,7 +195,7 @@ export default function CoachAthletesTab({
           <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
             Alumnos Registrados ({filteredAthletes.length})
           </span>
-          <span className="text-[10.5px] text-cyan-neon/80 font-bold">
+          <span className="text-[10.5px] text-cyan-neon font-bold">
             Toca a un alumno para ver sus puntuaciones
           </span>
         </div>

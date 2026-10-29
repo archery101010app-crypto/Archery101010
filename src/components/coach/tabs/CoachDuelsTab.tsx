@@ -49,7 +49,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
       {/* Tabla de Clasificación de Duelos (Standings) */}
       <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/10 flex flex-col gap-3">
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-          <Trophy size={14} className="text-purple-400" />
+          <Trophy size={14} className="text-cyan-neon" />
           Tabla de Rendimiento en Duelos
         </h4>
 
@@ -72,7 +72,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                 </div>
 
                 <div className="flex flex-col items-end shrink-0 pl-2">
-                  <span className="text-xs font-black text-purple-400">{winRate}%</span>
+                  <span className="text-xs font-black text-cyan-neon">{winRate}%</span>
                   <span className="text-[9.3px] text-white uppercase">Efectividad</span>
                 </div>
               </div>
@@ -106,7 +106,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                     {duel.userName || "Arquero"}
                   </span>
                   <span className="text-[10.5px] text-white truncate">
-                    vs <span className="text-purple-400 font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
+                    vs <span className="text-cyan-neon font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
                   </span>
                 </div>
                 

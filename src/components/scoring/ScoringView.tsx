@@ -1276,7 +1276,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </span>
           </div>
           <span
-            className={`text-lg font-black font-mono leading-none tabular-nums shrink-0 ${
+            className={`text-lg font-black tabular-nums leading-none tabular-nums shrink-0 ${
               clockPhase === "prep" || clockPhase === "stop" || clockIsOver
                 ? "text-red-500"
                 : clockIsWarn
@@ -1365,7 +1365,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   Flechas Lanzadas
                 </span>
 
-                <span className="text-5xl font-black text-white font-mono tabular-nums tracking-tight">
+                <span className="text-5xl font-black text-white tabular-nums tabular-nums tracking-tight">
                   {String(tallyCount).padStart(3, "0")}
                 </span>
 
@@ -1509,7 +1509,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <Crosshair size={13} className="text-cyan-neon animate-pulse" />
                 <span>Ajuste de Mira</span>
                 {activeAnalysis && activeAnalysis.count > 0 && (
-                  <span className="text-[10.5px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
+                  <span className="text-[10.5px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon tabular-nums">
                     {activeAnalysis.clockDirection}
                   </span>
                 )}
@@ -1821,7 +1821,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     key={key}
                     onClick={() => handleScoreInput(key)}
                     disabled={!isEnabled}
-                    className={`py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-blue-400 font-black text-base flex items-center justify-center transition ${
+                    className={`py-3.5 min-h-[48px] rounded-xl border border-blue-500/60 bg-blue-500/10 text-cyan-neon font-black text-base flex items-center justify-center transition ${
                       isEnabled
                         ? "cursor-pointer hover:bg-blue-500/20 active:scale-95"
                         : "opacity-20 pointer-events-none line-through border-neutral-800 bg-neutral-950 text-white"
@@ -2027,7 +2027,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       <Crosshair size={11} className="text-cyan-neon" />
                       Agrupación & Mira
                     </span>
-                    <span className="text-cyan-neon font-mono font-bold text-[11.6px]">
+                    <span className="text-cyan-neon tabular-nums font-bold text-[11.6px]">
                       Ø {globalDispersion.spreadCm.toFixed(1)} cm
                     </span>
                   </div>
@@ -2302,13 +2302,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   {/* Target Face Official Dimension Card */}
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
                     <span className="text-white font-medium">Diana Reglamentaria:</span>
-                    <span className="font-mono font-bold text-white">{activeAnalysis.targetName}</span>
+                    <span className="tabular-nums font-bold text-white">{activeAnalysis.targetName}</span>
                   </div>
 
                   {/* Dispersion spread card */}
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
                     <span className="text-white font-medium">Diámetro Máximo de Grupo:</span>
-                    <span className="font-mono font-black text-cyan-neon tabular-nums">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
+                    <span className="tabular-nums font-black text-cyan-neon tabular-nums">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
                   </div>
 
                   {/* Summary Tip */}

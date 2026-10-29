@@ -143,7 +143,7 @@ export default function AdminSubscriptionsTab() {
         {/* Change logs timeline audit */}
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-4 h-max">
           <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2.5 flex items-center gap-1.5">
-            <Clock size={14} className="text-purple-500" />
+            <Clock size={14} className="text-cyan-neon" />
             <span>Registro de Auditoría</span>
           </h3>
 
@@ -162,7 +162,7 @@ export default function AdminSubscriptionsTab() {
                     Cambió de <span className="font-bold text-white">{log.previousPlan}</span> a{" "}
                     <span className="font-black text-yellow-gold">{log.newPlan}</span>
                   </p>
-                  <span className="text-[10.5px] text-cyan-neon/80 font-bold mt-0.5">{log.reason}</span>
+                  <span className="text-[10.5px] text-cyan-neon font-bold mt-0.5">{log.reason}</span>
                 </div>
               ))
             )}

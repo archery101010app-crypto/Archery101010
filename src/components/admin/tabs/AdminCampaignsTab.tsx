@@ -936,7 +936,7 @@ export default function AdminCampaignsTab() {
                     onClick={handleSaveCampaign}
                     className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase shadow-[0_0_15px_rgba(34,197,94,0.3)] flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Sparkles size={14} />
+                    
                     <span>Guardar Campaña</span>
                   </button>
                 )}

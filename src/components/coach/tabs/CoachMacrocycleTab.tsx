@@ -108,7 +108,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
       : "Todos los alumnos del Club";
 
     alert(
-      `✓ ¡Plan "${macrocycle.name}" Importado y Publicado en el Calendario!\n\n` +
+      `¡Plan "${macrocycle.name}" Importado y Publicado en el Calendario!\n\n` +
       `• Asignado a: ${athleteName}\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
       `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
@@ -147,7 +147,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
         : "Todos los alumnos del Club";
 
       alert(
-        `✓ ¡Calendario Sincronizado con Éxito!\n\n` +
+        `¡Calendario Sincronizado con Éxito!\n\n` +
         `• Plan: ${summary.macrocycleName}\n` +
         `• Destinatario: ${targetText}\n` +
         `• Mes: ${summary.monthName} ${summary.year}\n` +
@@ -417,7 +417,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     const updated = await getLocalMacrocycles();
     setMacrocycles(updated);
     if (selectedMacro?.id === id) setSelectedMacro(null);
-    alert(`✓ El plan "${planName}" ha sido desvinculado y eliminado por completo.`);
+    alert(`El plan "${planName}" ha sido desvinculado y eliminado por completo.`);
   };
 
   const handleUnlinkAthlete = async (macro: Macrocycle, athlete: UserProfile) => {
@@ -430,7 +430,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     const refreshedSelected = updated.find((m) => m.id === macro.id) || null;
     setSelectedMacro(refreshedSelected);
 
-    alert(`✓ ${athlete.fullName} ha sido desvinculado(a) del plan exitosamente.`);
+    alert(`${athlete.fullName} ha sido desvinculado(a) del plan exitosamente.`);
   };
 
   const handleDuplicate = async (macro: Macrocycle) => {
@@ -683,7 +683,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </button>
                 <button
                   onClick={() => handleDelete(selectedMacro.id)}
-                  className="px-2.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition cursor-pointer flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                  className="px-2.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/25 transition cursor-pointer flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
                   title="Desvincular y eliminar este plan"
                 >
                   <Unlink size={13} />
@@ -823,7 +823,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                           <button
                             type="button"
                             onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
-                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/20 active:scale-95 transition cursor-pointer"
                             title={`Desvincular a ${athlete.fullName} de este plan`}
                           >
                             <UserMinus size={14} />
@@ -1321,7 +1321,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         <Users size={12} className="text-cyan-neon" />
                         <span>Sincronizar con:</span>
                       </span>
-                      <span className="text-[10.5px] text-cyan-neon font-mono font-bold">
+                      <span className="text-[10.5px] text-cyan-neon tabular-nums font-bold">
                         {syncTargetType === "all" ? "Todo el Club" : "1 Alumno"}
                       </span>
                     </div>

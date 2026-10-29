@@ -1011,8 +1011,7 @@ export default function Home() {
                   className="w-16 h-16 flex items-center justify-center rounded-2xl bg-[#111620] border border-white/10 text-3xl mb-4"
                   style={{ color: unlockedStar.star.color }}
                 >
-                  ★
-                </div>
+                  </div>
 
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
                   NUEVA MARCA HISTÓRICA

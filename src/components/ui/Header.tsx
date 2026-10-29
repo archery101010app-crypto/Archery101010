@@ -47,7 +47,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
 
   const getSyncColorClass = () => {
     if (isSyncing) return "text-yellow-gold";
-    if (pendingCount > 0) return "text-orange-500";
+    if (pendingCount > 0) return "text-yellow-gold";
     if (syncStatus === "Sin conexión") return "text-red-rival animate-pulse";
     return "text-cyan-neon";
   };
@@ -71,7 +71,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </div>
-          <span className="text-cyan-neon/60 text-[13.2px] font-black tracking-wider pl-0.5">
+          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider pl-0.5 tabular-nums">
             v{APP_VERSION}
           </span>
         </div>

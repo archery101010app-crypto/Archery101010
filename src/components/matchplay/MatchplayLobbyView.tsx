@@ -625,7 +625,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   autoFocus
                   value={currentAlias}
                   onChange={(e) => setCurrentAlias(e.target.value)}
-                  className="h-6 w-24 bg-[#121722] border border-cyan-neon text-cyan-neon font-mono font-bold text-xs px-1.5 rounded outline-none"
+                  className="h-6 w-24 bg-[#121722] border border-cyan-neon text-cyan-neon tabular-nums font-bold text-xs px-1.5 rounded outline-none"
                   placeholder="alias"
                 />
                 <button
@@ -642,7 +642,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 className="flex items-center gap-1.5 text-left cursor-pointer group"
                 title="Cambiar tu alias para retos online"
               >
-                <span className="text-[12.8px] font-mono font-bold text-cyan-neon truncate max-w-[110px]">
+                <span className="text-[12.8px] tabular-nums font-bold text-cyan-neon truncate max-w-[110px]">
                   @{currentAlias}
                 </span>
                 <Edit3 size={10} className="text-white group-hover:text-white transition shrink-0" />
@@ -862,7 +862,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="Ej. INV-R70-X9A"
-                className="flex-1 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center font-mono font-bold"
+                className="flex-1 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
               />
               <button
                 type="submit"
@@ -958,7 +958,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
                                 {riv.nickname && (
-                                  <span className="text-cyan-neon font-mono text-[10.5px] font-bold">@{riv.nickname}</span>
+                                  <span className="text-cyan-neon tabular-nums text-[10.5px] font-bold">@{riv.nickname}</span>
                                 )}
                                 <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
                                   {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
@@ -1210,7 +1210,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">
                     Código Oficial de Sala
                   </span>
-                  <span className="text-white text-lg font-mono font-black tracking-widest uppercase">
+                  <span className="text-white text-lg tabular-nums font-black tracking-widest uppercase">
                     {generatedInvite.code}
                   </span>
                   <span className="text-[11.6px] text-cyan-neon font-bold">

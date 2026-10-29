@@ -126,7 +126,7 @@ export default function AdminSettingsTab() {
         {/* Section: Feature Flags */}
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-4">
           <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2 flex items-center gap-1.5">
-            <Settings size={14} className="text-purple-500" />
+            <Settings size={14} className="text-cyan-neon" />
             <span>Módulos y Funcionalidades</span>
           </h3>
 

@@ -54,7 +54,7 @@ export default function PrivacyPolicyPage() {
         <p className="text-xs sm:text-sm text-white leading-relaxed">
           En <strong>Archery 101010</strong> nos tomamos la privacidad de los arqueros y entrenadores con máxima seriedad. Esta política explica cómo recopilamos, usamos, protegemos y gestionamos tu información de acuerdo con las normativas internacionales de protección de datos (incluyendo RGPD/GDPR, CCPA y los requerimientos oficiales de <strong>Google Play Store</strong> y <strong>Apple App Store</strong>).
         </p>
-        <span className="text-[12.8px] text-white font-mono">
+        <span className="text-[12.8px] text-white tabular-nums">
           Última actualización: {lastUpdated} · Versión oficial aplicable
         </span>
       </div>
@@ -74,7 +74,7 @@ export default function PrivacyPolicyPage() {
             <Mail size={16} className="text-cyan-neon shrink-0" />
             <a 
               href="mailto:info@archery101010.com" 
-              className="text-cyan-neon font-mono text-xs hover:underline font-bold"
+              className="text-cyan-neon tabular-nums text-xs hover:underline font-bold"
             >
               info@archery101010.com
             </a>

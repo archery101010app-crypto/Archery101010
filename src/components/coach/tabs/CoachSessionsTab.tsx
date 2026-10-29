@@ -299,7 +299,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[9.3px] text-white uppercase font-bold">Xs</span>
-                          <span className="text-xs font-black text-amber-500">{countX}</span>
+                          <span className="text-xs font-black text-yellow-gold">{countX}</span>
                         </div>
                       </div>
 
@@ -336,7 +336,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                             : arrowVal === "9" || arrowVal === "8"
                                             ? "bg-red-500/20 text-red-400 border border-red-500/30"
                                             : arrowVal === "7" || arrowVal === "6"
-                                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                            ? "bg-blue-500/20 text-cyan-neon border border-blue-500/30"
                                             : "bg-neutral-800 text-white border border-neutral-700"
                                         }`}
                                       >
@@ -406,8 +406,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     }}
                     title={rank.starName}
                   >
-                    ★
-                  </div>
+                    </div>
 
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-extrabold truncate">{rank.userName}</span>

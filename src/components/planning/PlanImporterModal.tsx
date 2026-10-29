@@ -532,7 +532,7 @@ export default function PlanImporterModal({
                 onChange={(e) => handleParseText(e.target.value)}
                 placeholder={`Ejemplo:\nFecha\tActividad\tFlechas\tNotas\n28/10/2026\tVolumen 70m\t120\tSeries de 6 flechas\n29/10/2026\tControl 720\t72\tAnotar en la app\n30/10/2026\tDescanso\t0\t`}
                 rows={5}
-                className="bg-[#0D0F12] border border-white/10 rounded-2xl p-3.5 text-xs font-mono text-white outline-none focus:border-cyan-neon transition placeholder:text-white resize-none leading-relaxed"
+                className="bg-[#0D0F12] border border-white/10 rounded-2xl p-3.5 text-xs tabular-nums text-white outline-none focus:border-cyan-neon transition placeholder:text-white resize-none leading-relaxed"
               />
             </div>
           )}
@@ -584,7 +584,7 @@ export default function PlanImporterModal({
 
           {/* Error Message */}
           {importError && (
-            <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs flex items-center gap-2.5 animate-fadeIn">
+            <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-red-rival text-xs flex items-center gap-2.5 animate-fadeIn">
               <AlertCircle size={16} className="shrink-0" />
               <span className="leading-snug">{importError}</span>
             </div>
@@ -603,7 +603,7 @@ export default function PlanImporterModal({
                     <span className="text-[11.6px] font-black uppercase text-emerald-400 tracking-wider block">
                       {importPreview.mode === "daily" ? "Lectura Literal Día por Día Lista" : "Lectura Literal por Etapas Lista"}
                     </span>
-                    <span className="text-[12.8px] text-white font-mono tabular-nums">
+                    <span className="text-[12.8px] text-white tabular-nums tabular-nums">
                       Del {importPreview.startDate} al {importPreview.endDate}
                     </span>
                   </div>
@@ -736,7 +736,7 @@ export default function PlanImporterModal({
                           <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Columnas Adicionales / Notas</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5 font-mono">
+                      <tbody className="divide-y divide-white/5 tabular-nums">
                         {importPreview.dailyEntries.map((row, idx) => (
                           <tr 
                             key={`${row.date}-${idx}`}
@@ -780,7 +780,7 @@ export default function PlanImporterModal({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="font-bold text-white truncate text-xs">{dayItem.title}</div>
-                            <div className="text-[11.6px] text-white font-mono truncate tabular-nums">
+                            <div className="text-[11.6px] text-white tabular-nums truncate tabular-nums">
                               {dayItem.date} {dayItem.focusPoints && dayItem.focusPoints.length > 0 ? `· ${dayItem.focusPoints.join(", ")}` : ""}
                             </div>
                             {dayItem.notes && (
@@ -791,7 +791,7 @@ export default function PlanImporterModal({
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-cyan-neon font-black font-mono whitespace-nowrap text-xs tabular-nums">
+                          <div className="text-cyan-neon font-black tabular-nums whitespace-nowrap text-xs tabular-nums">
                             {dayItem.targetArrows > 0 ? `${dayItem.targetArrows} fl.` : ""}
                           </div>
                         </div>
@@ -813,7 +813,7 @@ export default function PlanImporterModal({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-white truncate">{stg.name}</div>
-                          <div className="text-[11.6px] text-white font-mono tabular-nums">
+                          <div className="text-[11.6px] text-white tabular-nums tabular-nums">
                             {stg.startDate} al {stg.endDate}
                             {stg.weeklySessionGoal > 0 ? ` · ${stg.weeklySessionGoal} sesiones/sem` : ""}
                           </div>
@@ -826,7 +826,7 @@ export default function PlanImporterModal({
                       </div>
                       {stg.weeklyArrowGoal > 0 && (
                         <div className="text-right shrink-0">
-                          <div className="text-cyan-neon font-black font-mono tabular-nums">
+                          <div className="text-cyan-neon font-black tabular-nums tabular-nums">
                             {stg.weeklyArrowGoal} fl/sem
                           </div>
                         </div>

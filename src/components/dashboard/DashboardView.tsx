@@ -260,7 +260,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     >
       {/* Titular Oficial: ARCHERY 101010 / THE APP (+12% Size) */}
       <div 
-        className="w-full flex flex-col justify-center items-center pt-2 pb-3 sm:pb-5 select-none gap-1.5"
+        className="w-full flex flex-col justify-center items-center pt-1 pb-2 sm:pb-4 select-none gap-1"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
         <h1 className="flex items-baseline justify-center gap-x-1.5 sm:gap-x-3.5 text-[25.8px] sm:text-[40.3px] md:text-[51.5px] leading-tight text-center whitespace-nowrap">
@@ -277,7 +277,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       </div>
 
       {/* Cabecera Editorial Limpia (Estilo Apple Fitness / WHOOP) */}
-      <div className="flex items-end justify-between px-0.5 gap-3">
+      <div className="flex items-center justify-between px-1 gap-3">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-white text-[19.8px] sm:text-[22px] font-bold tracking-tight truncate">
@@ -289,7 +289,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             )}
           </div>
-          <p className="text-xs text-white mt-0.5 truncate flex items-center gap-1.5 font-medium">
+          <p className="text-xs text-white mt-0.5 truncate flex items-center gap-1.5 font-semibold">
             <span className="text-[11.6px] font-bold uppercase tracking-wider text-white shrink-0">
               {clubCountryObj.flag}
             </span>
@@ -297,7 +297,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
-                className="text-red-rival hover:text-red-400 font-semibold cursor-pointer border-b border-red-rival/60 truncate"
+                className="text-red-rival font-bold cursor-pointer border-b border-red-rival/60 truncate"
               >
                 {language === "es" ? "Completar perfil" : "Complete profile"}
               </span>
@@ -318,7 +318,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[11.6px] font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
+            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[11.6px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
             <span className="truncate">{todayMission.title}</span>
@@ -326,13 +326,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         )}
       </div>
 
-      {/* Bento Grid Principal (3 Tarjetas Limpias y Balanceadas) */}
+      {/* Bento Grid Principal (Estilo Nike Fitness / WHOOP / Apple Fitness+) */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {/* 1. Progreso Semanal + Telemetría Esencial Integrada */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
-          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between min-h-[180px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between min-h-[178px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
         >
           {(() => {
             const scored = sessions
@@ -368,23 +368,29 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
             return (
               <>
-                <div className="flex items-baseline justify-between gap-2 min-w-0">
-                  <span className="text-[12.8px] sm:text-xs text-white font-semibold tracking-tight truncate">
-                    {t("weeklyProgress")}
-                  </span>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-white font-extrabold uppercase tracking-[0.08em] leading-none">
+                      {t("weeklyProgress")}
+                    </span>
+                    {hasData && (
+                      <span className="text-[11px] font-black text-cyan-neon tabular-nums leading-none">
+                        {latestPct}%
+                      </span>
+                    )}
+                  </div>
                   {hasData ? (
-                    <span className="text-xs font-bold text-white tabular-nums whitespace-nowrap shrink-0">
-                      {latest.score}<span className="text-white font-medium">/{latest.maxScore}</span>{" "}
-                      <span className="text-cyan-neon">({latestPct}%)</span>
+                    <span className="text-xs font-black text-white tabular-nums leading-tight">
+                      {latest.score}<span className="text-white font-semibold"> / {latest.maxScore} pts</span>
                     </span>
                   ) : (
-                    <span className="text-[11.6px] text-white font-medium whitespace-nowrap shrink-0">
-                      {language === "es" ? "Sin rondas" : "No rounds"}
+                    <span className="text-[11px] text-white font-semibold leading-tight">
+                      {language === "es" ? "Sin rondas registradas" : "No rounds logged"}
                     </span>
                   )}
                 </div>
 
-                <div className="w-full h-16 my-0.5 relative">
+                <div className="w-full h-14 my-1 relative">
                   <svg viewBox="0 0 100 38" className="w-full h-full overflow-visible">
                     {areaPath && (
                       <path
@@ -395,7 +401,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     <path
                       d={linePath}
                       fill="none"
-                      stroke={hasData ? "#00BFFF" : "rgba(255,255,255,0.14)"}
+                      stroke={hasData ? "#00BFFF" : "rgba(255,255,255,0.18)"}
                       strokeWidth="1.8"
                       strokeDasharray={hasData ? undefined : "3 3"}
                       strokeLinecap="round"
@@ -414,16 +420,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </svg>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[11.6px] text-white tabular-nums">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.07] text-[11px] text-white tabular-nums leading-none">
                   <span className="truncate">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
-                    <strong className="text-white font-bold">
+                    <strong className="text-white font-black">
                       {stats.bestScore > 0 ? `${stats.bestScore} pts` : "—"}
                     </strong>
                   </span>
                   <span className="shrink-0">
                     {language === "es" ? "Volumen:" : "Volume:"}{" "}
-                    <strong className="text-white font-bold">
+                    <strong className="text-white font-black">
                       {stats.totalArrows} fl.
                     </strong>
                   </span>
@@ -436,41 +442,29 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         {/* 2. Mi Club */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col items-center justify-between text-center min-h-[180px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col items-center justify-between text-center min-h-[178px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-[12.6px] sm:text-xs text-white font-semibold tracking-tight leading-tight truncate w-full text-center">
+          <span className="text-[11px] text-white font-extrabold uppercase tracking-[0.08em] leading-none w-full text-center">
             {language === "es" ? "Mi Club" : "My Club"}
           </span>
 
-          <div className="w-10 h-10 rounded-xl bg-[#080A0F] flex items-center justify-center border border-white/[0.08] group-hover:border-white/20 transition-colors shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-[#080A0F] flex items-center justify-center border border-white/[0.08] group-hover:border-white/20 transition-colors shrink-0 my-1">
             <ClubLogoIcon logo={user.clubLogo || "0"} className="w-5 h-5 p-0.5" />
           </div>
 
-          <div className="flex flex-col items-center gap-0.5 overflow-hidden min-w-0 w-full">
-            <span className="text-white text-[12.6px] font-bold truncate w-full text-center group-hover:text-cyan-neon transition-colors">
+          <div className="flex flex-col items-center gap-1 pt-2 border-t border-white/[0.07] overflow-hidden min-w-0 w-full">
+            <span className="text-white text-[11.5px] font-bold truncate w-full text-center group-hover:text-cyan-neon transition-colors leading-tight">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[10.6px] text-white truncate flex items-center justify-center gap-1 font-medium w-full">
+            <span className="text-[10px] text-white truncate flex items-center justify-center gap-1 font-semibold w-full leading-none">
               <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="text-[9.7px] font-bold uppercase tracking-wide text-white shrink-0">{clubCountryObj.olympic}</span>
-              <span className="text-white">·</span>
-              <span className="truncate">
-                {user.role === "coach" 
-                  ? "Coach" 
-                  : user.role === "team_admin" 
-                    ? t("roleAdmin") 
-                    : user.role === "team_admin_coach" 
-                      ? "Admin" 
-                      : user.role === "superadmin" 
-                        ? "Admin" 
-                        : t("roleMember")}
-              </span>
+              <span className="font-bold uppercase tracking-wide text-white shrink-0">{clubCountryObj.olympic}</span>
             </span>
           </div>
         </motion.div>
 
-        {/* 3. Eliminatorias Online 1v1 */}
+        {/* 3. Eliminatorias Online */}
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("MATCHPLAY_LOBBY")}
@@ -485,20 +479,20 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
           {/* Row 1: Single-line Status Pill + Format Label */}
           <div className="flex items-center justify-between gap-2 pt-0.5 min-w-0">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-[10.2px] font-black uppercase tracking-wide text-emerald-400 whitespace-nowrap">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#080A0F] border border-white/[0.12] shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-success shrink-0" />
+              <span className="text-[10.2px] font-black uppercase tracking-wider text-white whitespace-nowrap">
                 {t("liveArenaTitle")}
               </span>
             </div>
 
-            <span className="text-[10.2px] font-bold uppercase tracking-wide text-white truncate">
+            <span className="text-[10.2px] font-extrabold uppercase tracking-[0.08em] text-white truncate">
               {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
 
           {/* Row 2: Full-width Centered Title */}
-          <div className="flex items-center justify-center w-full text-center py-1">
+          <div className="flex items-center justify-center w-full text-center py-1.5">
             <h3
               className="w-full text-white text-[17px] sm:text-[22px] font-black uppercase tracking-wider leading-tight group-hover:text-cyan-neon transition-colors text-center mx-auto"
               style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
@@ -507,7 +501,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </h3>
           </div>
 
-          {/* Row 3: Symmetrical 2-Column Footer (1v1 Scoreboard + Primary CTA Button) */}
+          {/* Row 3: Symmetrical 2-Column Footer (Scoreboard + Clean CTA Button without icons) */}
           <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
             <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
               <div className="flex items-baseline gap-1">
@@ -523,8 +517,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </div>
             </div>
 
-            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[11.6px] sm:text-[12.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap px-3 overflow-hidden">
-              <Swords size={14} strokeWidth={2.5} className="shrink-0" />
+            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
               <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
             </div>
           </div>
@@ -537,7 +530,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         whileHover={{ scale: 1.005 }}
         whileTap={{ scale: 0.99 }}
         onClick={() => onNavigate("TARGET")}
-        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-wider uppercase transition-colors cursor-pointer flex justify-center items-center mt-1 active:scale-[0.99] text-center px-4"
+        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center mt-0.5 active:scale-[0.99] text-center px-4"
       >
         <span className="truncate">{t("newSession")}</span>
       </motion.button>
@@ -797,9 +790,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                       setIsStarsDrawerOpen(false);
                       onNavigate("TARGET");
                     }}
-                    className="w-full h-11 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    className="w-full h-11 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap"
                   >
-                    <Target size={14} />
                     <span>Entrenar para Lograrlo</span>
                   </button>
                   <button

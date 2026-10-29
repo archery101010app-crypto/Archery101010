@@ -426,7 +426,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={handleOpenPasswordReset}
-              className="text-[12.8px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
+              className="text-[12.8px] text-cyan-neon hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
               ¿Olvidaste tu contraseña?
             </button>
@@ -672,8 +672,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 </div>
               </div>
 
-              <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2.5 mt-2">
-                <Zap size={14} className="text-cyan-neon shrink-0" />
+              <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center justify-center text-center mt-2">
                 <span className="text-[10.5px] text-cyan-neon font-medium leading-tight">
                   Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
                 </span>
