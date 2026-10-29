@@ -531,7 +531,18 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           })()}
         </motion.div>
 
-        {/* 4. Barra Integrada Estrellas 101010 (Reemplaza la pestaña flotante lateral) */}
+        {/* 4. Botón Principal de Entrenamiento (Limpio y Directo) */}
+        <motion.button
+          variants={cardVariants}
+          whileHover={{ scale: 1.005 }}
+          whileTap={{ scale: 0.99 }}
+          onClick={() => onNavigate("TARGET")}
+          className="col-span-3 w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center active:scale-[0.99] text-center px-4"
+        >
+          <span className="truncate">{t("newSession")}</span>
+        </motion.button>
+
+        {/* 5. Barra Integrada Estrellas 101010 */}
         <motion.div
           variants={cardVariants}
           onClick={() => setIsStarsDrawerOpen(true)}
@@ -558,17 +569,6 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </span>
         </motion.div>
       </div>
-
-      {/* Botón Principal de Entrenamiento (Limpio y Directo) */}
-      <motion.button
-        variants={cardVariants}
-        whileHover={{ scale: 1.005 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={() => onNavigate("TARGET")}
-        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center mt-0.5 active:scale-[0.99] text-center px-4"
-      >
-        <span className="truncate">{t("newSession")}</span>
-      </motion.button>
 
       {/* Drawer Backdrop and Drawer Container */}
       <AnimatePresence>

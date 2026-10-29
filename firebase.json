@@ -24,12 +24,17 @@
     "redirects": [
       {
         "source": "/archery-app.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.167.0.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.168.0.apk",
         "type": 302
       },
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.167.0.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.168.0.apk",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.168.0.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.168.0.apk",
         "type": 302
       },
       {
