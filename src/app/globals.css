@@ -22,22 +22,22 @@
   --color-gray-border: #2C2F33;
   --color-gray-dim: #FFFFFF;
 
-  /* Typography scale: +32% total (+20% then +10%) on smallest text (xs), +10% on all larger text (sm -> 4xl) */
-  --text-xs: 0.99rem;
+  /* Typography scale: -12% across body/general text while headers & Good Times stay preserved */
+  --text-xs: 0.8712rem;
   --text-xs--line-height: 1.35;
-  --text-sm: 0.9625rem;
+  --text-sm: 0.847rem;
   --text-sm--line-height: 1.4;
-  --text-base: 1.1rem;
+  --text-base: 0.968rem;
   --text-base--line-height: 1.45;
-  --text-lg: 1.2375rem;
+  --text-lg: 1.089rem;
   --text-lg--line-height: 1.4;
-  --text-xl: 1.375rem;
+  --text-xl: 1.21rem;
   --text-xl--line-height: 1.35;
-  --text-2xl: 1.65rem;
+  --text-2xl: 1.452rem;
   --text-2xl--line-height: 1.3;
-  --text-3xl: 2.0625rem;
+  --text-3xl: 1.815rem;
   --text-3xl--line-height: 1.2;
-  --text-4xl: 2.475rem;
+  --text-4xl: 2.178rem;
   --text-4xl--line-height: 1.15;
 
   --shadow-glow-cyan: none;

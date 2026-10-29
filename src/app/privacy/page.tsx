@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
         {/* Brand Logo */}
         <div className="flex items-baseline gap-1 select-none">
           <div 
-            className="flex text-lg tracking-tighter font-extrabold brand-logo-101010" 
+            className="flex text-[19.8px] tracking-tighter font-extrabold brand-logo-101010" 
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
             <span className="text-cyan-neon">10</span>
@@ -48,13 +48,13 @@ export default function PrivacyPolicyPage() {
           <ShieldCheck size={14} />
           <span>Transparencia y Seguridad</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+        <h1 className="text-[33px] sm:text-[39.6px] font-black text-white tracking-tight">
           Política de Privacidad
         </h1>
         <p className="text-xs sm:text-sm text-white leading-relaxed">
           En <strong>Archery 101010</strong> nos tomamos la privacidad de los arqueros y entrenadores con máxima seriedad. Esta política explica cómo recopilamos, usamos, protegemos y gestionamos tu información de acuerdo con las normativas internacionales de protección de datos (incluyendo RGPD/GDPR, CCPA y los requerimientos oficiales de <strong>Google Play Store</strong> y <strong>Apple App Store</strong>).
         </p>
-        <span className="text-[14.5px] text-white font-mono">
+        <span className="text-[12.8px] text-white font-mono">
           Última actualización: {lastUpdated} · Versión oficial aplicable
         </span>
       </div>
@@ -264,7 +264,7 @@ export default function PrivacyPolicyPage() {
       <div className="border-t border-white/10 pt-6 pb-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white">
         <div className="flex items-center gap-2">
           <div 
-            className="flex text-sm tracking-tighter font-extrabold brand-logo-101010" 
+            className="flex text-[15.4px] tracking-tighter font-extrabold brand-logo-101010" 
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
             <span className="text-cyan-neon">10</span>
@@ -276,7 +276,7 @@ export default function PrivacyPolicyPage() {
 
         <Link
           href="/"
-          className="text-cyan-neon hover:underline font-bold uppercase tracking-wider text-[14.5px]"
+          className="text-cyan-neon hover:underline font-bold uppercase tracking-wider text-[12.8px]"
         >
           Ir a la Aplicación
         </Link>

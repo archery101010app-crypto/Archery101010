@@ -78,7 +78,7 @@ export default function AdminSubscriptionsTab() {
     <div className="flex flex-col gap-6 w-full p-4 md:p-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
+        <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
         <p className="text-xs text-white">Gestiona accesos premium, métodos de pago simulados y overrides de planes.</p>
       </div>
 
@@ -107,22 +107,22 @@ export default function AdminSubscriptionsTab() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white leading-tight">{user.fullName}</h4>
-                    <p className="text-[13.2px] text-white mt-0.5">{user.email}</p>
+                    <p className="text-[11.6px] text-white mt-0.5">{user.email}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-6 pt-2.5 md:pt-0 border-t border-white/5 md:border-t-0">
                   {/* Current Plan Display */}
                   <div className="text-left md:text-right">
-                    <span className="text-[10.6px] text-white uppercase font-black tracking-widest block">Plan Activo</span>
-                    <span className={`text-[13.2px] font-black ${user.plan === "PRO" ? "text-yellow-gold" : "text-white"}`}>
+                    <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Plan Activo</span>
+                    <span className={`text-[11.6px] font-black ${user.plan === "PRO" ? "text-yellow-gold" : "text-white"}`}>
                       {user.plan === "PRO" ? "COACH PRO" : "GRATUITO / FREE"}
                     </span>
                   </div>
 
                   {/* Toggle Switch Override */}
                   <div className="flex items-center gap-2">
-                    <span className="text-[11.9px] text-white uppercase font-bold hidden sm:inline">PRO Override</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold hidden sm:inline">PRO Override</span>
                     <button
                       onClick={() => handleTogglePlan(user.uid)}
                       className="text-cyan-neon hover:text-white transition cursor-pointer"
@@ -155,14 +155,14 @@ export default function AdminSubscriptionsTab() {
                 <div key={log.id} className="relative pl-4 border-l border-white/5 flex flex-col gap-1">
                   <div className="absolute left-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
                   <div className="flex justify-between items-center">
-                    <span className="text-[13.2px] font-bold text-white">{log.userName}</span>
-                    <span className="text-[10.6px] text-white font-semibold">{log.timestamp}</span>
+                    <span className="text-[11.6px] font-bold text-white">{log.userName}</span>
+                    <span className="text-[9.3px] text-white font-semibold">{log.timestamp}</span>
                   </div>
-                  <p className="text-[13.2px] text-white leading-normal">
+                  <p className="text-[11.6px] text-white leading-normal">
                     Cambió de <span className="font-bold text-white">{log.previousPlan}</span> a{" "}
                     <span className="font-black text-yellow-gold">{log.newPlan}</span>
                   </p>
-                  <span className="text-[11.9px] text-cyan-neon/80 font-bold mt-0.5">{log.reason}</span>
+                  <span className="text-[10.5px] text-cyan-neon/80 font-bold mt-0.5">{log.reason}</span>
                 </div>
               ))
             )}

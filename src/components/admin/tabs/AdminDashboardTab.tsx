@@ -246,7 +246,7 @@ export default function AdminDashboardTab() {
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">Dashboard de Administración</h2>
+          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Dashboard de Administración</h2>
           <p className="text-xs text-white">Métricas y registros reales calculados desde la base de datos.</p>
         </div>
         <button
@@ -272,7 +272,7 @@ export default function AdminDashboardTab() {
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
               
               <div className="flex justify-between items-start mb-4">
-                <span className="text-[13.2px] md:text-xs font-bold text-white uppercase tracking-widest">{kpi.title}</span>
+                <span className="text-[11.6px] md:text-xs font-bold text-white uppercase tracking-widest">{kpi.title}</span>
                 <div className={`p-2 rounded-xl border flex items-center justify-center ${kpi.colorClass}`}>
                   <Icon size={18} />
                 </div>
@@ -282,7 +282,7 @@ export default function AdminDashboardTab() {
                 <h3 className={`text-2xl md:text-3xl font-black tracking-tight ${kpi.textColor}`}>
                   {kpi.value}
                 </h3>
-                <span className="text-[11.9px] md:text-xs text-white font-medium block mt-1">{kpi.subtitle}</span>
+                <span className="text-[10.5px] md:text-xs text-white font-medium block mt-1">{kpi.subtitle}</span>
               </div>
             </motion.div>
           );
@@ -301,7 +301,7 @@ export default function AdminDashboardTab() {
               <Activity size={16} className="text-cyan-neon" />
               <span>Actividad Registrada en Base de Datos</span>
             </h3>
-            <span className="text-[13.2px] font-bold text-white">
+            <span className="text-[11.6px] font-bold text-white">
               {recentActivities.length} {recentActivities.length === 1 ? "evento" : "eventos"}
             </span>
           </div>
@@ -311,7 +311,7 @@ export default function AdminDashboardTab() {
               <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
                 <Database size={32} className="text-white" />
                 <p className="text-xs text-white font-medium">No hay registros de actividad aún en la base de datos.</p>
-                <p className="text-[13.2px] text-white">A medida que los arqueros completen entrenamientos o se registren, aparecerán aquí.</p>
+                <p className="text-[11.6px] text-white">A medida que los arqueros completen entrenamientos o se registren, aparecerán aquí.</p>
               </div>
             ) : (
               recentActivities.map((act, index) => {
@@ -330,10 +330,10 @@ export default function AdminDashboardTab() {
                       <p className="text-xs text-white leading-relaxed font-medium">
                         <span className="font-bold text-white">{act.user}</span> {act.action}
                       </p>
-                      <span className="text-[13.2px] text-cyan-neon/80 font-bold mt-0.5 truncate">{act.detail}</span>
+                      <span className="text-[11.6px] text-cyan-neon/80 font-bold mt-0.5 truncate">{act.detail}</span>
                     </div>
 
-                    <div className="text-[11.9px] text-white font-semibold self-start whitespace-nowrap pt-1">
+                    <div className="text-[10.5px] text-white font-semibold self-start whitespace-nowrap pt-1">
                       {act.timeAgo}
                     </div>
                   </div>
@@ -354,10 +354,10 @@ export default function AdminDashboardTab() {
 
           <div className="flex flex-col gap-4 mt-2">
             <div className="bg-neutral-950/60 rounded-2xl p-4 border border-white/5">
-              <span className="text-[11.9px] text-white uppercase font-black tracking-widest">Conexión</span>
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Conexión</span>
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-white font-bold">Estado de Red</span>
-                <span className={`text-[13.2px] px-2 py-0.5 rounded-full font-black border ${
+                <span className={`text-[11.6px] px-2 py-0.5 rounded-full font-black border ${
                   isOnline 
                     ? "text-green-400 bg-green-500/10 border-green-500/20" 
                     : "text-amber-400 bg-amber-500/10 border-amber-500/20"
@@ -367,12 +367,12 @@ export default function AdminDashboardTab() {
               </div>
               <div className="flex justify-between items-center mt-2.5">
                 <span className="text-xs text-white font-bold">Modo Offline-First</span>
-                <span className="text-[13.2px] text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-full font-black border border-cyan-neon/20">ACTIVO</span>
+                <span className="text-[11.6px] text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-full font-black border border-cyan-neon/20">ACTIVO</span>
               </div>
             </div>
 
             <div className="bg-neutral-950/60 rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
-              <span className="text-[11.9px] text-white uppercase font-black tracking-widest">Almacenamiento Local (IndexedDB)</span>
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Almacenamiento Local (IndexedDB)</span>
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-white font-medium">Sesiones Guardadas</span>
                 <span className="text-xs text-white font-bold">{sessions.length}</span>

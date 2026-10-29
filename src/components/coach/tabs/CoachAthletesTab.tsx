@@ -192,10 +192,10 @@ export default function CoachAthletesTab({
       {/* Roster list */}
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center px-1">
-          <span className="text-[13.2px] text-white font-black uppercase tracking-wider">
+          <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
             Alumnos Registrados ({filteredAthletes.length})
           </span>
-          <span className="text-[11.9px] text-cyan-neon/80 font-bold">
+          <span className="text-[10.5px] text-cyan-neon/80 font-bold">
             Toca a un alumno para ver sus puntuaciones
           </span>
         </div>
@@ -206,7 +206,7 @@ export default function CoachAthletesTab({
             <p className="text-xs text-white font-bold">No hay alumnos que coincidan con la búsqueda.</p>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="mt-2 text-[13.2px] text-cyan-neon uppercase tracking-wider font-extrabold border-b border-cyan-neon/50 hover:border-cyan-neon transition cursor-pointer"
+              className="mt-2 text-[11.6px] text-cyan-neon uppercase tracking-wider font-extrabold border-b border-cyan-neon/50 hover:border-cyan-neon transition cursor-pointer"
             >
               + Crear el primer alumno ahora
             </button>
@@ -238,12 +238,12 @@ export default function CoachAthletesTab({
                         {ath.fullName}
                       </span>
                       {ath.nickname && (
-                        <span className="text-[11.9px] text-white font-medium truncate">
+                        <span className="text-[10.5px] text-white font-medium truncate">
                           (@{ath.nickname})
                         </span>
                       )}
                     </div>
-                    <span className="text-[11.9px] text-white mt-0.5 truncate">
+                    <span className="text-[10.5px] text-white mt-0.5 truncate">
                       {ath.bowConfig?.type === "Recurve" ? "Recurvo" : ath.bowConfig?.type === "Compound" ? "Compuesto" : (ath.bowConfig?.type || "Barebow")} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
                     </span>
                   </div>
@@ -253,7 +253,7 @@ export default function CoachAthletesTab({
                   {stats.averageScore > 0 && (
                     <div className="flex flex-col text-right shrink-0">
                       <span className="text-xs font-black text-yellow-gold whitespace-nowrap">{stats.averageScore} pts</span>
-                      <span className="text-[10.6px] text-white leading-none">Promedio</span>
+                      <span className="text-[9.3px] text-white leading-none">Promedio</span>
                     </div>
                   )}
                   <ChevronRight size={14} className="text-white group-hover:text-cyan-neon transition-colors shrink-0" />
@@ -284,7 +284,7 @@ export default function CoachAthletesTab({
                     <h3 className="text-white text-sm font-black uppercase tracking-wider">
                       Crear Perfil de Alumno
                     </h3>
-                    <p className="text-[13.2px] text-white">
+                    <p className="text-[11.6px] text-white">
                       Registra a un nuevo atleta bajo tu dirección
                     </p>
                   </div>
@@ -301,7 +301,7 @@ export default function CoachAthletesTab({
               <form onSubmit={handleCreateSubmit} className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5 text-left">
                 {/* Nombre Completo */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                  <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                     Nombre Completo *
                   </label>
                   <input
@@ -317,7 +317,7 @@ export default function CoachAthletesTab({
                 {/* Nickname & Género */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Apodo / Alias
                     </label>
                     <input
@@ -330,7 +330,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Género
                     </label>
                     <select
@@ -347,7 +347,7 @@ export default function CoachAthletesTab({
                 {/* Tipo de Arco & Libras */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Tipo de Arco
                     </label>
                     <select
@@ -362,7 +362,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Potencia (Libras #)
                     </label>
                     <input
@@ -380,7 +380,7 @@ export default function CoachAthletesTab({
                 {/* Distancia Principal & Correo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Distancia Reglamentaria
                     </label>
                     <select
@@ -397,7 +397,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Teléfono / WhatsApp
                     </label>
                     <input
@@ -413,7 +413,7 @@ export default function CoachAthletesTab({
                 {/* Marca & Modelo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Marca de Arco (opcional)
                     </label>
                     <input
@@ -425,7 +425,7 @@ export default function CoachAthletesTab({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                       Modelo (opcional)
                     </label>
                     <input
@@ -440,7 +440,7 @@ export default function CoachAthletesTab({
 
                 {/* Correo Electrónico */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                  <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                     Correo del Alumno (opcional)
                   </label>
                   <input
@@ -454,7 +454,7 @@ export default function CoachAthletesTab({
 
                 {/* Notas Iniciales */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[13.2px] text-white font-black uppercase tracking-wider">
+                  <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
                     Notas Técnicas Iniciales
                   </label>
                   <textarea

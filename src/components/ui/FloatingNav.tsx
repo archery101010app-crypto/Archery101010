@@ -102,7 +102,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[10.5px] font-bold tracking-tighter mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                className={`text-[9.2px] font-bold tracking-tighter mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

@@ -325,7 +325,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
       >
         <Clock size={24} />
         {isActive && (
-          <span className="text-[13.2px] font-black mt-0.5 leading-none">
+          <span className="text-[11.6px] font-black mt-0.5 leading-none">
             {formatTime(timeLeft)}
           </span>
         )}
@@ -360,15 +360,15 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 className="flex items-center gap-1.5 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
               >
-                <span className="text-white text-xs sm:text-sm font-black tracking-wider uppercase">
+                <span className="text-white text-[15.8px] sm:text-[15.4px] font-black tracking-wider uppercase">
                   ARCHERY
                 </span>
-                <div className="flex items-center tracking-tight font-extrabold text-xs sm:text-sm">
+                <div className="flex items-center tracking-tight font-extrabold text-[15.8px] sm:text-[15.4px]">
                   <span className="text-cyan-neon">10</span>
                   <span className="text-red-rival">10</span>
                   <span className="text-yellow-gold">10</span>
                 </div>
-                <span className="text-white text-[14.5px] sm:text-xs font-black tracking-widest uppercase pl-0.5">
+                <span className="text-white text-[14.5px] sm:text-[15.8px] font-black tracking-widest uppercase pl-0.5">
                   WA TIMER
                 </span>
               </div>
@@ -540,17 +540,17 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
               // Config Panel (Idle Configuration State)
               <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-4 relative z-10 my-2">
                 <div className="text-center">
-                  <h2 className="text-white text-xl font-black tracking-wide uppercase">
+                  <h2 className="text-white text-[22px] font-black tracking-wide uppercase">
                     Reloj Oficial World Archery
                   </h2>
-                  <p className="text-white text-[14.5px] mt-0.5">
+                  <p className="text-white text-[12.8px] mt-0.5">
                     Reglamento WA: 2 pitidos (Rojo) · 1 pitido (Verde) · 30s (Amarillo) · 3 pitidos (Fin)
                   </p>
                 </div>
 
                 {/* Official WA Quick Presets */}
                 <div className="w-full bg-[#0D1017] border border-white/[0.08] rounded-2xl p-2.5 flex flex-col gap-1.5">
-                  <span className="text-[11.9px] font-black uppercase text-cyan-neon tracking-wider px-1">
+                  <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider px-1">
                     Formatos Oficiales World Archery
                   </span>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -573,10 +573,10 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                               : "bg-[#090B0E] border-white/[0.06] text-white hover:text-white"
                           }`}
                         >
-                          <span className="text-[14.5px] font-black uppercase text-white leading-tight">
+                          <span className="text-[12.8px] font-black uppercase text-white leading-tight">
                             {preset.label}
                           </span>
-                          <span className="text-[11.9px] text-cyan-neon/80 font-bold">
+                          <span className="text-[10.5px] text-cyan-neon/80 font-bold">
                             {preset.sub}
                           </span>
                         </button>
@@ -588,13 +588,13 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Sound Mode Selector Pills */}
                 <div className="w-full bg-[#0D1017] border border-white/[0.08] rounded-2xl p-2.5 flex flex-col gap-2">
                   <div className="flex items-center justify-between px-1">
-                    <span className="text-[13.2px] font-black uppercase text-white tracking-wider flex items-center gap-1">
+                    <span className="text-[11.6px] font-black uppercase text-white tracking-wider flex items-center gap-1">
                       <Radio size={12} className="text-cyan-neon" />
                       Señal Acústica WA
                     </span>
                     <button
                       onClick={() => playWATestTone(soundMode)}
-                      className="text-[13.2px] font-bold text-cyan-neon hover:text-white flex items-center gap-1 cursor-pointer"
+                      className="text-[11.6px] font-bold text-cyan-neon hover:text-white flex items-center gap-1 cursor-pointer"
                     >
                       <Volume2 size={12} />
                       <span>Probar</span>
@@ -605,7 +605,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("horn")}
-                      className={`h-9 px-2 rounded-xl font-bold text-[14.5px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[12.8px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "horn"
                           ? "bg-cyan-neon text-black font-extrabold"
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
@@ -616,7 +616,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("whistle")}
-                      className={`h-9 px-2 rounded-xl font-bold text-[14.5px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[12.8px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "whistle"
                           ? "bg-cyan-neon text-black font-extrabold"
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
@@ -627,7 +627,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <button
                       type="button"
                       onClick={() => handleSoundModeChange("mute")}
-                      className={`h-9 px-2 rounded-xl font-bold text-[14.5px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                      className={`h-9 px-2 rounded-xl font-bold text-[12.8px] uppercase tracking-wider transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                         soundMode === "mute"
                           ? "bg-red-500 text-white font-extrabold"
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
@@ -639,7 +639,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
                   {/* Voice countdown toggle */}
                   <div className="flex items-center justify-between border-t border-white/5 pt-2 px-1">
-                    <span className="text-[13.2px] text-white font-medium">
+                    <span className="text-[11.6px] text-white font-medium">
                       Voz opcional en últimos 10s (Entrenamiento)
                     </span>
                     <button
@@ -662,7 +662,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Manual adjust input fields */}
                 <div className="grid grid-cols-2 gap-3 w-full">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[14.5px] text-white text-center font-bold">
+                    <label className="text-[12.8px] text-white text-center font-bold">
                       Preparación (Rojo · s)
                     </label>
                     <input
@@ -676,7 +676,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[14.5px] text-white text-center font-bold">
+                    <label className="text-[12.8px] text-white text-center font-bold">
                       Tiro (Verde/Amarillo · s)
                     </label>
                     <input
@@ -698,7 +698,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   className="w-[112px] h-[112px] rounded-full bg-cyan-neon hover:bg-[#19c8ff] border-4 border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer text-black"
                 >
                   <Play size={28} fill="black" className="ml-1" />
-                  <span className="text-[14.5px] font-black tracking-widest uppercase">{t("startClock")}</span>
+                  <span className="text-[12.8px] font-black tracking-widest uppercase">{t("startClock")}</span>
                 </motion.button>
 
                 {/* Sin Reloj & Cerrar Action Toggles */}
@@ -721,7 +721,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
             )}
 
             {/* Bottom Brand */}
-            <div className="text-center text-[13.2px] text-white uppercase tracking-widest mt-2 relative z-10">
+            <div className="text-center text-[11.6px] text-white uppercase tracking-widest mt-2 relative z-10">
               Archery 101010 · World Archery Official Timing System
             </div>
           </motion.div>

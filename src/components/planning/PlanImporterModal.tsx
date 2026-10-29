@@ -340,13 +340,13 @@ export default function PlanImporterModal({
               <FileSpreadsheet size={20} />
             </div>
             <div>
-              <span className="text-[11.9px] text-cyan-neon uppercase font-black tracking-widest block">
+              <span className="text-[10.5px] text-cyan-neon uppercase font-black tracking-widest block">
                 {titleOverride || "Calendario y Planificación"}
               </span>
-              <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-wide">
+              <h2 className="text-[17.6px] sm:text-[19.8px] font-black text-white uppercase tracking-wide">
                 Importar Excel o Google Sheets
               </h2>
-              <p className="text-[14.5px] text-white leading-tight mt-0.5">
+              <p className="text-[12.8px] text-white leading-tight mt-0.5">
                 Lectura 100% literal de tus fechas, actividades, flechas y columnas sin modificar tu texto.
               </p>
             </div>
@@ -369,7 +369,7 @@ export default function PlanImporterModal({
             <button
               type="button"
               onClick={() => setActiveTab("file")}
-              className={`py-2 px-2.5 rounded-xl text-[14.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === "file"
                   ? "bg-cyan-neon text-black"
                   : "text-white hover:text-white"
@@ -382,7 +382,7 @@ export default function PlanImporterModal({
             <button
               type="button"
               onClick={() => setActiveTab("sheets")}
-              className={`py-2 px-2.5 rounded-xl text-[14.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === "sheets"
                   ? "bg-cyan-neon text-black"
                   : "text-white hover:text-white"
@@ -395,7 +395,7 @@ export default function PlanImporterModal({
             <button
               type="button"
               onClick={() => setActiveTab("paste")}
-              className={`py-2 px-2.5 rounded-xl text-[14.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === "paste"
                   ? "bg-cyan-neon text-black"
                   : "text-white hover:text-white"
@@ -436,12 +436,12 @@ export default function PlanImporterModal({
                   <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wide">
                     {uploadedFileName ? uploadedFileName : "Toca aquí para elegir tu archivo Excel o CSV"}
                   </h4>
-                  <p className="text-[14.5px] text-white mt-1">
+                  <p className="text-[12.8px] text-white mt-1">
                     Compatible con <strong className="text-cyan-neon">Excel (.xlsx, .xls)</strong> y <strong className="text-cyan-neon">.CSV</strong> directamente desde tu celular o PC
                   </p>
                 </div>
 
-                <span className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-[13.2px] uppercase tracking-wider">
+                <span className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-[11.6px] uppercase tracking-wider">
                   {uploadedFileName ? "Cambiar Archivo" : "Seleccionar Archivo"}
                 </span>
               </div>
@@ -449,7 +449,7 @@ export default function PlanImporterModal({
               {/* Multi-sheet selector if the Excel file has multiple tabs */}
               {excelSheets.length > 1 && (
                 <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2">
-                  <span className="text-[11.9px] text-white uppercase font-black tracking-widest">
+                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
                     Pestañas detectadas en tu Excel ({excelSheets.length}) — Elige cuál aplicar:
                   </span>
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -458,7 +458,7 @@ export default function PlanImporterModal({
                         key={sName}
                         type="button"
                         onClick={() => handleSelectExcelSheet(sName)}
-                        className={`px-3 py-1.5 rounded-xl text-[13.2px] font-black uppercase tracking-wider border transition cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider border transition cursor-pointer ${
                           selectedExcelSheet === sName
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 border-white/10 text-white hover:text-white"
@@ -477,7 +477,7 @@ export default function PlanImporterModal({
           {activeTab === "sheets" && (
             <div className="flex flex-col gap-3 animate-fadeIn">
               <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
-                <label className="text-[13.2px] text-white uppercase font-black tracking-wider flex items-center gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-wider flex items-center gap-1.5">
                   <Link2 size={13} className="text-cyan-neon" />
                   <span>Enlace de Google Sheets</span>
                 </label>
@@ -500,7 +500,7 @@ export default function PlanImporterModal({
                   </button>
                 </div>
 
-                <div className="flex items-start gap-2 bg-neutral-950/60 p-2.5 rounded-xl border border-white/5 text-[13.2px] text-white">
+                <div className="flex items-start gap-2 bg-neutral-950/60 p-2.5 rounded-xl border border-white/5 text-[11.6px] text-white">
                   <Info size={14} className="text-cyan-neon shrink-0 mt-0.5" />
                   <p className="leading-relaxed">
                     En la app de Google Sheets toca <strong>Compartir</strong> y asegúrate de que diga <strong>&ldquo;Cualquier persona con el enlace (Lector)&rdquo;</strong>, o usa la pestaña <strong>Pegar Celdas</strong>.
@@ -514,13 +514,13 @@ export default function PlanImporterModal({
           {activeTab === "paste" && (
             <div className="flex flex-col gap-2.5 animate-fadeIn">
               <div className="flex justify-between items-center gap-2 flex-wrap">
-                <span className="text-[13.2px] font-black uppercase tracking-widest text-white">
+                <span className="text-[11.6px] font-black uppercase tracking-widest text-white">
                   Copia las celdas en Excel o Sheets y pégalas aquí:
                 </span>
                 <button
                   type="button"
                   onClick={handlePasteClipboard}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon font-black text-[13.2px] uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                 >
                   <ClipboardPaste size={13} />
                   <span>Pegar del Portapapeles</span>
@@ -538,7 +538,7 @@ export default function PlanImporterModal({
           )}
 
           {/* Quick Reference Templates */}
-          <div className="flex items-center justify-between text-[13.2px] text-white px-1 flex-wrap gap-2">
+          <div className="flex items-center justify-between text-[11.6px] text-white px-1 flex-wrap gap-2">
             <span className="flex items-center gap-1 font-bold">
               <Info size={12} className="text-cyan-neon" />
               <span>Plantillas opcionales de ejemplo:</span>
@@ -547,7 +547,7 @@ export default function PlanImporterModal({
               <button
                 type="button"
                 onClick={downloadDailySampleTemplate}
-                className="text-[13.2px] text-white hover:text-cyan-neon flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-cyan-neon/30 transition cursor-pointer"
+                className="text-[11.6px] text-white hover:text-cyan-neon flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-cyan-neon/30 transition cursor-pointer"
               >
                 <Download size={11} className="text-cyan-neon" />
                 <span>Día x Día (.csv)</span>
@@ -555,7 +555,7 @@ export default function PlanImporterModal({
               <button
                 type="button"
                 onClick={downloadSampleTemplate}
-                className="text-[13.2px] text-white hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-white/30 transition cursor-pointer"
+                className="text-[11.6px] text-white hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0D0F12] border border-white/10 hover:border-white/30 transition cursor-pointer"
               >
                 <Download size={11} />
                 <span>Por Etapas (.csv)</span>
@@ -565,7 +565,7 @@ export default function PlanImporterModal({
 
           {/* Optional Plan Name Edit */}
           <div className="flex flex-col gap-1">
-            <label className="text-[11.9px] text-white uppercase font-black tracking-widest">
+            <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
               Nombre del Plan
             </label>
             <input
@@ -600,10 +600,10 @@ export default function PlanImporterModal({
                     <FileCheck2 size={16} />
                   </span>
                   <div>
-                    <span className="text-[13.2px] font-black uppercase text-emerald-400 tracking-wider block">
+                    <span className="text-[11.6px] font-black uppercase text-emerald-400 tracking-wider block">
                       {importPreview.mode === "daily" ? "Lectura Literal Día por Día Lista" : "Lectura Literal por Etapas Lista"}
                     </span>
-                    <span className="text-[14.5px] text-white font-mono tabular-nums">
+                    <span className="text-[12.8px] text-white font-mono tabular-nums">
                       Del {importPreview.startDate} al {importPreview.endDate}
                     </span>
                   </div>
@@ -615,7 +615,7 @@ export default function PlanImporterModal({
                     <button
                       type="button"
                       onClick={() => setViewMode("table")}
-                      className={`px-2.5 py-1 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg text-[11.6px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
                         viewMode === "table"
                           ? "bg-cyan-neon text-black font-black"
                           : "text-white hover:text-white"
@@ -627,7 +627,7 @@ export default function PlanImporterModal({
                     <button
                       type="button"
                       onClick={() => setViewMode("cards")}
-                      className={`px-2.5 py-1 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg text-[11.6px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
                         viewMode === "cards"
                           ? "bg-cyan-neon text-black font-black"
                           : "text-white hover:text-white"
@@ -643,19 +643,19 @@ export default function PlanImporterModal({
               {/* 4 Key Metrics Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[10.6px] text-white uppercase font-black tracking-widest block">Días Leídos</span>
+                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Días Leídos</span>
                   <span className="text-xs font-black text-white mt-0.5 block tabular-nums">{totalEntries || importPreview.stages.length} días</span>
                 </div>
                 <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[10.6px] text-white uppercase font-black tracking-widest block">Actividades</span>
+                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Actividades</span>
                   <span className="text-xs font-black text-cyan-neon mt-0.5 block tabular-nums">{trainingCount} días</span>
                 </div>
                 <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[10.6px] text-white uppercase font-black tracking-widest block">Descansos</span>
+                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Descansos</span>
                   <span className="text-xs font-black text-emerald-400 mt-0.5 block tabular-nums">{restCount} días</span>
                 </div>
                 <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[10.6px] text-white uppercase font-black tracking-widest block">Flechas Indicadas</span>
+                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Flechas Indicadas</span>
                   <span className="text-xs font-black text-yellow-gold mt-0.5 block tabular-nums">{totalArrows > 0 ? totalArrows.toLocaleString() : "—"}</span>
                 </div>
               </div>
@@ -664,11 +664,11 @@ export default function PlanImporterModal({
               {(user.role === "coach" || user.role === "team_admin_coach") && clubAthletes.length > 0 && (
                 <div className="p-3 sm:p-3.5 rounded-2xl bg-neutral-950 border border-white/10 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[13.2px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
+                    <span className="text-[11.6px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
                       <Users size={13} className="text-cyan-neon" />
                       <span>Destinatario del Plan</span>
                     </span>
-                    <span className="text-[11.9px] text-white font-bold uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                    <span className="text-[10.5px] text-white font-bold uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
                       {assignTarget === "all" ? "Todo el Club" : "1 Alumno"}
                     </span>
                   </div>
@@ -703,7 +703,7 @@ export default function PlanImporterModal({
 
                   {assignTarget === "single" && (
                     <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
-                      <label className="text-[11.9px] text-white uppercase font-black tracking-widest">
+                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
                         Selecciona el alumno:
                       </label>
                       <select
@@ -726,14 +726,14 @@ export default function PlanImporterModal({
               {importPreview.mode === "daily" ? (
                 viewMode === "table" ? (
                   <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-60 overflow-y-auto">
-                    <table className="w-full text-left border-collapse text-[14.5px]">
+                    <table className="w-full text-left border-collapse text-[12.8px]">
                       <thead className="bg-neutral-900 sticky top-0 z-10 border-b border-white/10">
                         <tr>
-                          <th className="py-2 px-2.5 text-[11.9px] font-black uppercase tracking-wider text-white w-8 text-center">#</th>
-                          <th className="py-2 px-2.5 text-[11.9px] font-black uppercase tracking-wider text-white">Fecha</th>
-                          <th className="py-2 px-2.5 text-[11.9px] font-black uppercase tracking-wider text-white">Texto / Actividad Literal</th>
-                          <th className="py-2 px-2.5 text-[11.9px] font-black uppercase tracking-wider text-white text-right">Flechas</th>
-                          <th className="py-2 px-2.5 text-[11.9px] font-black uppercase tracking-wider text-white">Columnas Adicionales / Notas</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white w-8 text-center">#</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Fecha</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Texto / Actividad Literal</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white text-right">Flechas</th>
+                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Columnas Adicionales / Notas</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-mono">
@@ -742,7 +742,7 @@ export default function PlanImporterModal({
                             key={`${row.date}-${idx}`}
                             className={`hover:bg-white/[0.03] transition ${row.isRestDay ? "bg-emerald-500/[0.03]" : ""}`}
                           >
-                            <td className="py-2 px-2.5 text-[13.2px] text-white text-center tabular-nums">{idx + 1}</td>
+                            <td className="py-2 px-2.5 text-[11.6px] text-white text-center tabular-nums">{idx + 1}</td>
                             <td className="py-2 px-2.5 text-white whitespace-nowrap font-bold tabular-nums">{row.date}</td>
                             <td className="py-2 px-2.5 text-white font-sans font-semibold">
                               {row.title}
@@ -754,7 +754,7 @@ export default function PlanImporterModal({
                                 <span className="text-white">—</span>
                               )}
                             </td>
-                            <td className="py-2 px-2.5 text-white font-sans text-[13.2px]">
+                            <td className="py-2 px-2.5 text-white font-sans text-[11.6px]">
                               {[
                                 row.focusPoints && row.focusPoints.length > 0 ? row.focusPoints.join(", ") : "",
                                 row.notes || ""
@@ -780,11 +780,11 @@ export default function PlanImporterModal({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="font-bold text-white truncate text-xs">{dayItem.title}</div>
-                            <div className="text-[13.2px] text-white font-mono truncate tabular-nums">
+                            <div className="text-[11.6px] text-white font-mono truncate tabular-nums">
                               {dayItem.date} {dayItem.focusPoints && dayItem.focusPoints.length > 0 ? `· ${dayItem.focusPoints.join(", ")}` : ""}
                             </div>
                             {dayItem.notes && (
-                              <div className="text-[13.2px] text-white italic truncate mt-0.5">
+                              <div className="text-[11.6px] text-white italic truncate mt-0.5">
                                 {dayItem.notes}
                               </div>
                             )}
@@ -813,12 +813,12 @@ export default function PlanImporterModal({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-white truncate">{stg.name}</div>
-                          <div className="text-[13.2px] text-white font-mono tabular-nums">
+                          <div className="text-[11.6px] text-white font-mono tabular-nums">
                             {stg.startDate} al {stg.endDate}
                             {stg.weeklySessionGoal > 0 ? ` · ${stg.weeklySessionGoal} sesiones/sem` : ""}
                           </div>
                           {stg.notes && (
-                            <div className="text-[13.2px] text-white italic truncate mt-0.5">
+                            <div className="text-[11.6px] text-white italic truncate mt-0.5">
                               {stg.notes}
                             </div>
                           )}

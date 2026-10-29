@@ -328,7 +328,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   <span className="text-white text-xs font-black uppercase tracking-wider">
                     Instalar como App Local
                   </span>
-                  <span className="text-[10.6px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
+                  <span className="text-[9.3px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
                     Recomendado · Velocidad 10x
                   </span>
                 </div>
@@ -341,7 +341,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 <X size={14} />
               </button>
             </div>
-            <p className="text-[13.2px] text-white leading-snug">
+            <p className="text-[11.6px] text-white leading-snug">
               Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.
             </p>
             <button
@@ -360,7 +360,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <AlertCircle size={14} className="shrink-0" />
               {language === "es" ? "Modo Desconectado" : "Offline Mode"}
             </span>
-            <p className="text-[13.2px] text-white leading-snug">
+            <p className="text-[11.6px] text-white leading-snug">
               {language === "es" 
                 ? "No tienes conexión a internet. Puedes ingresar usando tus credenciales guardadas previamente en este dispositivo." 
                 : "No internet connection detected. You can sign in using credentials previously saved on this device."}
@@ -368,7 +368,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           </div>
         )}
 
-        <h2 className="text-white font-bold text-center text-sm tracking-wider uppercase">
+        <h2 className="text-white font-bold text-center text-[15.4px] tracking-wider uppercase">
           {t("loginTitle")}
         </h2>
 
@@ -426,7 +426,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={handleOpenPasswordReset}
-              className="text-[14.5px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
+              className="text-[12.8px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
               ¿Olvidaste tu contraseña?
             </button>
@@ -598,7 +598,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       </AnimatePresence>
 
       {/* Footer copyright */}
-      <footer className="text-center text-[13.2px] text-white tracking-wider mt-8">
+      <footer className="text-center text-[11.6px] text-white tracking-wider mt-8">
         {t("copyright")}
       </footer>
 
@@ -632,7 +632,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
               <div className="flex flex-col gap-3.5 text-xs text-white leading-relaxed">
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[11.6px] text-cyan-neon">
                     1
                   </div>
                   <p>
@@ -640,30 +640,30 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[11.6px] text-cyan-neon">
                     2
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Presiona el botón de compartir 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[13.2px] text-white inline-flex items-center gap-1">
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[11.6px] text-white inline-flex items-center gap-1">
                       Compartir <Share size={10} />
                     </span> 
                     abajo en la barra del sistema.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[11.6px] text-cyan-neon">
                     3
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Desliza hacia abajo y pulsa 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[13.2px] text-white font-bold inline-flex items-center gap-1">
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[11.6px] text-white font-bold inline-flex items-center gap-1">
                       Añadir a pantalla de inicio <Plus size={10} />
                     </span>.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[11.6px] text-cyan-neon">
                     4
                   </div>
                   <p>
@@ -674,7 +674,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
               <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2.5 mt-2">
                 <Zap size={14} className="text-cyan-neon shrink-0" />
-                <span className="text-[11.9px] text-cyan-neon font-medium leading-tight">
+                <span className="text-[10.5px] text-cyan-neon font-medium leading-tight">
                   Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
                 </span>
               </div>

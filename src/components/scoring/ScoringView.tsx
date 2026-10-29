@@ -1205,7 +1205,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {presetType === "WA_300_COMPOUND" && " · 10 Oficial"}
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
-            <p className="text-[13.2px] text-white uppercase tracking-wider truncate">
+            <p className="text-[11.6px] text-white uppercase tracking-wider truncate">
               {config.practiceType === "Control" ? t("practiceControl") : config.practiceType} · {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType}
             </p>
           </div>
@@ -1293,7 +1293,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       {config.practiceType === "Volumen" ? (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center gap-2">
           <div className="flex flex-col">
-            <span className="text-[13.2px] text-white font-bold tracking-widest uppercase">
+            <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
               Distancia
             </span>
             <span className="text-2xl font-black text-white leading-tight tabular-nums">
@@ -1301,7 +1301,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </span>
           </div>
           <div className="text-right flex flex-col items-end">
-            <span className="text-[13.2px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
+            <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
               Práctica de Volumen
             </span>
           </div>
@@ -1309,7 +1309,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       ) : (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
           <div className="flex flex-col">
-            <span className="text-[13.2px] text-white font-bold tracking-widest uppercase">
+            <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
               Puntuación
             </span>
             <div className="flex items-center gap-3">
@@ -1319,7 +1319,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
                 <button
                   onClick={handleFinishFirstBlockOnly}
-                  className="text-[11.9px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
+                  className="text-[10.5px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
                 >
                   Finalizar en 1er Bloque
                 </button>
@@ -1327,7 +1327,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             </div>
           </div>
           <div className="text-right flex flex-col items-end">
-            <span className="text-[13.2px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
+            <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
               End {currentEndIdx + 1} / {config.endsCount}
             </span>
             <span className="text-xs text-white font-bold mt-1 tabular-nums">
@@ -1348,7 +1348,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={handleTallyReset}
-                  className="px-3 py-1.5 rounded-full bg-[#0D1017] border border-white/[0.08] text-[13.2px] font-bold uppercase tracking-wider text-white hover:text-white transition cursor-pointer"
+                  className="px-3 py-1.5 rounded-full bg-[#0D1017] border border-white/[0.08] text-[11.6px] font-bold uppercase tracking-wider text-white hover:text-white transition cursor-pointer"
                   title="Reiniciar contador"
                 >
                   Reiniciar (0)
@@ -1361,7 +1361,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 onClick={handleTallyIncrement}
                 className="w-60 h-60 rounded-full bg-[#0D1017] border-2 border-white/[0.08] hover:border-cyan-neon/40 flex flex-col items-center justify-center gap-3 relative z-10 cursor-pointer shadow-2xl active:scale-[0.98] transition group"
               >
-                <span className="text-[13.2px] text-white font-bold tracking-widest uppercase">
+                <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
                   Flechas Lanzadas
                 </span>
 
@@ -1369,7 +1369,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   {String(tallyCount).padStart(3, "0")}
                 </span>
 
-                <span className="text-[13.2px] text-cyan-neon font-bold tracking-widest uppercase mt-1">
+                <span className="text-[11.6px] text-cyan-neon font-bold tracking-widest uppercase mt-1">
                   Tocar para sumar +1
                 </span>
               </button>
@@ -1418,13 +1418,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   }
                 }}
                 disabled={tallyCount === 0}
-                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-red-rival/30 hover:bg-red-rival/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-white/5 text-red-rival text-[13.2px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
+                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-red-rival/30 hover:bg-red-rival/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-white/5 text-red-rival text-[11.6px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
               >
                 Restar Flecha (-1)
               </button>
               <button
                 onClick={() => setIsFinishing(true)}
-                className="px-4 py-2 bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-[13.2px] uppercase tracking-wider rounded-xl cursor-pointer transition"
+                className="px-4 py-2 bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-[11.6px] uppercase tracking-wider rounded-xl cursor-pointer transition"
               >
                 Finalizar Práctica
               </button>
@@ -1470,7 +1470,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             {/* Parciales del End Activo (Optimizado) */}
             <div className="w-full flex justify-between items-center gap-1.5 py-2 px-3 bg-neutral-900/60 rounded-2xl border border-white/10 shadow-inner">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11.9px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
+                <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
                   ACTUAL:
                 </span>
                 <div className="flex gap-1">
@@ -1494,7 +1494,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   })}
                 </div>
               </div>
-              <div className="px-2 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[13.2px] text-cyan-neon shadow-sm shrink-0 whitespace-nowrap">
+              <div className="px-2 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11.6px] text-cyan-neon shadow-sm shrink-0 whitespace-nowrap">
                 Suma: {calculateEndTotal(currentEndIdx)} pts
               </div>
             </div>
@@ -1504,12 +1504,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 type="button"
                 onClick={() => setShowDispersionDrawer(true)}
-                className="flex-1 py-1.5 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[14.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
+                className="flex-1 py-1.5 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
               >
                 <Crosshair size={13} className="text-cyan-neon animate-pulse" />
                 <span>Ajuste de Mira</span>
                 {activeAnalysis && activeAnalysis.count > 0 && (
-                  <span className="text-[11.9px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
+                  <span className="text-[10.5px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon font-mono">
                     {activeAnalysis.clockDirection}
                   </span>
                 )}
@@ -1519,7 +1519,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 type="button"
                 onClick={handleShareShotChart}
                 disabled={isGeneratingImage || impacts.length === 0}
-                className="py-1.5 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[14.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                className="py-1.5 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 title="Generar y compartir imagen de la diana con impactos"
               >
                 <Camera size={13} />
@@ -1640,7 +1640,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
             {/* Historial de Ends Scrollable en Diana */}
             <div className="w-full flex flex-col gap-1 z-10 px-0.5">
-              <div className="flex justify-between items-center text-[11.9px] font-black uppercase text-white tracking-widest px-1">
+              <div className="flex justify-between items-center text-[10.5px] font-black uppercase text-white tracking-widest px-1">
                 <span>Historial de Tiradas (Ends)</span>
                 <span className="text-cyan-neon font-bold">Total: {calculateTotalScore()} pts</span>
               </div>
@@ -1667,7 +1667,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                             : "border-neutral-900/35 bg-neutral-950/45 text-white"
                       }`}
                     >
-                      <span className="text-[10.6px] uppercase font-black tracking-wider opacity-60">End {idx + 1}</span>
+                      <span className="text-[9.3px] uppercase font-black tracking-wider opacity-60">End {idx + 1}</span>
                       <span className="text-xs font-black mt-0.5">
                         {isCompleted || (idx === currentEndIdx && total > 0) ? total : "—"}
                       </span>
@@ -1717,7 +1717,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             >
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-neutral-900 text-white font-bold uppercase text-[11.9px] tracking-wider border-b border-gray-border/40">
+                  <tr className="bg-neutral-900 text-white font-bold uppercase text-[10.5px] tracking-wider border-b border-gray-border/40">
                     <th className="py-2 px-3 text-center">End</th>
                     <th className="py-2 px-3 text-center">Flechas</th>
                     <th className="py-2 px-3 text-center">Total</th>
@@ -1733,7 +1733,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                       <React.Fragment key={idx}>
                         {isBlockFormat && idx === halfEnds && (
                           <tr className="bg-neutral-900/80 border-y border-cyan-neon/20">
-                            <td colSpan={4} className="py-1.5 px-3 text-center text-[11.9px] font-black text-cyan-neon tracking-widest uppercase">
+                            <td colSpan={4} className="py-1.5 px-3 text-center text-[10.5px] font-black text-cyan-neon tracking-widest uppercase">
                               --- Bloque 2 (Segunda Mitad) ---
                             </td>
                           </tr>
@@ -1942,13 +1942,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {config.practiceType === "Volumen" ? (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
-                    <span className="text-[11.9px] text-white uppercase font-bold">Total Flechas</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">Total Flechas</span>
                     <p className="text-2xl font-black text-cyan-neon mt-0.5">
                       {tallyCount}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11.9px] text-white uppercase font-bold">Distancia</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">Distancia</span>
                     <p className="text-2xl font-black text-yellow-gold mt-0.5">
                       {config.distance}m
                     </p>
@@ -1957,13 +1957,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               ) : (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
-                    <span className="text-[11.9px] text-white uppercase font-bold">Puntaje Total</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">Puntaje Total</span>
                     <p className="text-2xl font-black text-cyan-neon mt-0.5">
                       {calculateTotalScore()}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11.9px] text-white uppercase font-bold">Precisión</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">Precisión</span>
                     <p className="text-2xl font-black text-yellow-gold mt-0.5">
                       {config.maxScore > 0 ? Math.round((calculateTotalScore() / config.maxScore) * 100) : 0}%
                     </p>
@@ -1974,7 +1974,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {/* Bloques y Fatiga report (para WA600/720) */}
               {isBlockFormat && (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
-                  <span className="text-[11.9px] text-white uppercase font-bold">Rendimiento por Bloques</span>
+                  <span className="text-[10.5px] text-white uppercase font-bold">Rendimiento por Bloques</span>
                   <div className="flex justify-between text-white">
                     <span>Bloque 1 (Mitad 1):</span>
                     <span className="font-extrabold text-cyan-neon">
@@ -1994,7 +1994,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     return (
                       <div className="flex justify-between border-t border-white/5 pt-1.5 mt-0.5">
                         <span>Consistencia:</span>
-                        <span className={`font-black uppercase text-[13.2px] ${diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
+                        <span className={`font-black uppercase text-[11.6px] ${diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
                           {diff > 0 ? `+${diff}` : diff} pts {diff < 0 ? "(Fatiga)" : "(Excelente)"}
                         </span>
                       </div>
@@ -2015,7 +2015,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     placeholder={t("sessionNotePlaceholder")}
                     className="w-full bg-neutral-950/60 border border-cyan-brand focus:border-cyan-neon text-white text-xs p-3.5 rounded-2xl outline-none transition duration-200 min-h-[100px] resize-none caret-yellow-gold"
                   />
-                  <p className="text-[11.9px] text-white">Estas notas se guardan en tu historial y son visibles para el Coach.</p>
+                  <p className="text-[10.5px] text-white">Estas notas se guardan en tu historial y son visibles para el Coach.</p>
                 </div>
               )}
 
@@ -2023,19 +2023,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {globalDispersion && impacts.length > 0 && (
                 <div className="bg-neutral-950/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-[11.9px] text-white uppercase font-bold flex items-center gap-1">
+                    <span className="text-[10.5px] text-white uppercase font-bold flex items-center gap-1">
                       <Crosshair size={11} className="text-cyan-neon" />
                       Agrupación & Mira
                     </span>
-                    <span className="text-cyan-neon font-mono font-bold text-[13.2px]">
+                    <span className="text-cyan-neon font-mono font-bold text-[11.6px]">
                       Ø {globalDispersion.spreadCm.toFixed(1)} cm
                     </span>
                   </div>
-                  <div className="flex justify-between text-white text-[14.5px]">
+                  <div className="flex justify-between text-white text-[12.8px]">
                     <span>Centro del grupo:</span>
                     <span className="font-bold text-yellow-gold">{globalDispersion.clockDirection}</span>
                   </div>
-                  <p className="text-[13.2px] text-white leading-snug">
+                  <p className="text-[11.6px] text-white leading-snug">
                     {globalDispersion.adviceText}
                   </p>
                 </div>
@@ -2118,7 +2118,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
               <div>
-                <span className="text-[13.2px] text-cyan-neon font-black tracking-widest uppercase">
+                <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
                   Control de Carga Física
                 </span>
                 <h3 className="text-white text-base font-black uppercase mt-1">
@@ -2197,7 +2197,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate">
                       Centro y Ajuste de Mira
                     </h3>
-                    <p className="text-[13.2px] text-white truncate">
+                    <p className="text-[11.6px] text-white truncate">
                       {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} · {config.distance || 70}m · Dianas WA
                     </p>
                   </div>
@@ -2216,7 +2216,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={() => setDispersionScope("END")}
-                  className={`h-9 rounded-lg font-black text-[13.2px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                     dispersionScope === "END"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
@@ -2227,7 +2227,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={() => setDispersionScope("GLOBAL")}
-                  className={`h-9 rounded-lg font-black text-[13.2px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                     dispersionScope === "GLOBAL"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
@@ -2243,7 +2243,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   {/* Compass / Direction Card */}
                   <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-[11.9px] font-black uppercase text-white tracking-wider">
+                      <span className="text-[10.5px] font-black uppercase text-white tracking-wider">
                         Desviación del Grupo
                       </span>
                       <div className="text-xl font-black text-white mt-0.5 flex items-center gap-2">
@@ -2253,7 +2253,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                         </span>
                       </div>
                     </div>
-                    <div className="px-2.5 py-1 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black text-[13.2px] text-center shrink-0">
+                    <div className="px-2.5 py-1 rounded-xl bg-cyan-neon/10 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] text-center shrink-0">
                       {activeAnalysis.groupQuality}
                     </div>
                   </div>
@@ -2262,7 +2262,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Horizontal */}
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
-                      <span className="text-[11.9px] font-black uppercase text-white tracking-wider">
+                      <span className="text-[10.5px] font-black uppercase text-white tracking-wider">
                         Deriva Horizontal
                       </span>
                       <span className="text-xs font-bold text-white tabular-nums">
@@ -2271,7 +2271,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           : `${Math.abs(activeAnalysis.deltaXCm).toFixed(1)} cm ${activeAnalysis.deltaXCm > 0 ? "Derecha" : "Izquierda"}`}
                       </span>
                       <div className="mt-1 pt-1 border-t border-white/5">
-                        <span className="text-[13.2px] font-black text-yellow-gold uppercase">
+                        <span className="text-[11.6px] font-black text-yellow-gold uppercase">
                           {activeAnalysis.horizontalDirection !== "CENTRADO"
                             ? `Mover a la ${activeAnalysis.horizontalDirection}`
                             : "Centrado"}
@@ -2281,7 +2281,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                     {/* Vertical */}
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
-                      <span className="text-[11.9px] font-black uppercase text-white tracking-wider">
+                      <span className="text-[10.5px] font-black uppercase text-white tracking-wider">
                         Elevación Vertical
                       </span>
                       <span className="text-xs font-bold text-white tabular-nums">
@@ -2290,7 +2290,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           : `${Math.abs(activeAnalysis.deltaYCm).toFixed(1)} cm ${activeAnalysis.deltaYCm > 0 ? "Arriba" : "Abajo"}`}
                       </span>
                       <div className="mt-1 pt-1 border-t border-white/5">
-                        <span className="text-[13.2px] font-black text-yellow-gold uppercase">
+                        <span className="text-[11.6px] font-black text-yellow-gold uppercase">
                           {activeAnalysis.verticalDirection !== "CENTRADO"
                             ? `Mover hacia ${activeAnalysis.verticalDirection}`
                             : "Centrado"}
@@ -2436,7 +2436,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             <div className="w-1.5 h-1.5 rounded-full bg-cyan-neon border border-black absolute" />
           </div>
 
-          <div className="absolute bottom-1 bg-black/80 border border-cyan-neon/30 px-2 py-0.5 rounded-md text-[11.9px] font-black text-cyan-neon uppercase tracking-wider">
+          <div className="absolute bottom-1 bg-black/80 border border-cyan-neon/30 px-2 py-0.5 rounded-md text-[10.5px] font-black text-cyan-neon uppercase tracking-wider">
             {lupaState.value}
           </div>
         </div>
