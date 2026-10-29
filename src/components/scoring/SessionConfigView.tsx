@@ -358,9 +358,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-3.5 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs tracking-widest uppercase cursor-pointer flex justify-center items-center gap-2 transition-colors"
+          className="w-full py-3.5 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
         >
-          <Target size={16} />
           <span>{t("startSessionBtn")}</span>
         </motion.button>
       </div>

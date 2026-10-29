@@ -541,9 +541,8 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         whileHover={{ scale: 1.005 }}
         whileTap={{ scale: 0.99 }}
         onClick={() => onNavigate("TARGET")}
-        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-wider uppercase transition-colors cursor-pointer flex justify-center items-center gap-2.5 mt-1 active:scale-[0.99]"
+        className="w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-wider uppercase transition-colors cursor-pointer flex justify-center items-center mt-1 active:scale-[0.99]"
       >
-        <Target size={18} strokeWidth={2.5} className="text-black shrink-0" />
         <span>{t("newSession")}</span>
       </motion.button>
 

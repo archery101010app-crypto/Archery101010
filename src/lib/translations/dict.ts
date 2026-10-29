@@ -97,7 +97,7 @@ export const translations = {
     logout: "Cerrar Sesión",
 
     // Scoring
-    newSession: "Nueva Sesión",
+    newSession: "Nuevo Entrenamiento",
     practiceType: "Tipo de Práctica",
     practiceControl: "Puntuación",
     practicePractice: "Práctica",
@@ -295,7 +295,7 @@ export const translations = {
     logout: "Log Out",
 
     // Scoring
-    newSession: "New Session",
+    newSession: "New Training",
     practiceType: "Practice Type",
     practiceControl: "Scoring",
     practicePractice: "Practice",
