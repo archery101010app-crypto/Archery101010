@@ -131,9 +131,6 @@ public class MainActivity extends BridgeActivity {
                             host.endsWith(".googleusercontent.com") ||
                             host.endsWith(".gstatic.com") ||
                             host.endsWith(".youtube.com") ||
-                            host.equals("facebook.com") ||
-                            host.endsWith(".facebook.com") ||
-                            host.endsWith(".fbcdn.net") ||
                             host.equals("archery101010-c0bb4.firebaseapp.com") ||
                             host.equals("archery101010-c0bb4.web.app")) {
                             return false;

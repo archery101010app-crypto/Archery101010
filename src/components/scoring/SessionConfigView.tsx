@@ -38,13 +38,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   useEffect(() => {
     async function checkDrafts() {
       const list = await getLocalSessions();
-      const draft = list.find((s) => s.isDraft === true);
+      const draft = list.find((s) => s.isDraft === true && (s.userId === user.uid || s.userUid === user.uid));
       if (draft) {
         setDraftSession(draft);
       }
     }
     checkDrafts();
-  }, []);
+  }, [user.uid]);
 
   // Automatically adjust parameters based on Format selection
   const handleFormatChange = (newFormat: string) => {

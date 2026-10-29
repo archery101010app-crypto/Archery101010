@@ -23,7 +23,6 @@ export const translations = {
     loginBtn: "Iniciar Sesión",
     signUpLink: "¿No tienes cuenta? Regístrate aquí",
     googleLogin: "Iniciar con Google",
-    facebookLogin: "Iniciar con Facebook",
 
     // Onboarding / Register
     registerTitle: "Crear Cuenta",
@@ -221,7 +220,6 @@ export const translations = {
     loginBtn: "Sign In",
     signUpLink: "Don't have an account? Sign up here",
     googleLogin: "Sign in with Google",
-    facebookLogin: "Sign in with Facebook",
 
     // Onboarding / Register
     registerTitle: "Create Account",

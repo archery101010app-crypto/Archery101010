@@ -10,7 +10,6 @@ import {
   signInWithCredential,
   getRedirectResult,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   signOut,
   deleteUser,
   updateProfile as updateFirebaseAuthProfile
@@ -95,7 +94,7 @@ export function translateFirebaseAuthError(err: any): string {
     code === "auth/user-not-found" ||
     code === "auth/invalid-login-credentials"
   ) {
-    return "Correo o contraseña incorrectos. Si creaste tu cuenta con Google o Facebook, usa el botón de acceso social o pulsa '¿Olvidaste tu contraseña?' para asignarle una clave.";
+    return "Correo o contraseña incorrectos. Si creaste tu cuenta con Google, usa el botón 'Iniciar con Google' o pulsa '¿Olvidaste tu contraseña?' para asignarle una clave.";
   }
   if (code === "auth/email-already-in-use") {
     return "Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.";
@@ -550,53 +549,6 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   throw new Error("User not found");
 }
 
-export async function transferCoachRole(newCoachUid: string): Promise<boolean> {
-  const currentLogged = await getLoggedUser();
-  if (!currentLogged || currentLogged.role !== "coach" || !currentLogged.clubId) {
-    return false;
-  }
-
-  const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
-  const newCoachIndex = usersList.findIndex((u) => u.uid === newCoachUid && u.clubId === currentLogged.clubId);
-
-  if (newCoachIndex === -1) {
-    return false;
-  }
-
-  const birthDate = new Date(usersList[newCoachIndex].birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-
-  if (age < 18) {
-    return false;
-  }
-
-  const oldCoachIndex = usersList.findIndex((u) => u.uid === currentLogged.uid);
-
-  if (oldCoachIndex !== -1) {
-    usersList[oldCoachIndex].role = "archer";
-    usersList[oldCoachIndex].isClubCreator = false;
-  }
-
-  usersList[newCoachIndex].role = "coach";
-  usersList[newCoachIndex].isClubCreator = true;
-
-  await saveLocalSetting("simulated_users", usersList);
-
-  const updatedCurrentLogged: UserProfile = {
-    ...currentLogged,
-    role: "archer",
-    isClubCreator: false
-  };
-  await saveLocalSetting("current_user", updatedCurrentLogged);
-
-  return true;
-}
-
 export async function logoutUser(): Promise<void> {
   try {
     await signOut(auth);
@@ -768,14 +720,14 @@ export async function loginSocialUser(email: string, displayName: string, explic
     }
   }
 
-  // 3. Create default profile if user doesn't exist anywhere
+  // 3. Create default profile if user doesn't exist anywhere (leave birthDate empty so ProfileCompletionModal prompts them once)
   if (!user) {
     user = {
       uid: authUid,
       email: targetEmail,
       fullName: cleanDisplay,
       nickname: autoNickname,
-      birthDate: "1995-05-15",
+      birthDate: isAdminEmail ? "1995-05-15" : "",
       country: "CR",
       city: "",
       gender: "M",
@@ -797,7 +749,7 @@ export async function loginSocialUser(email: string, displayName: string, explic
       role: isAdminEmail ? "superadmin" : "archer",
       plan: "PRO",
       isClubCreator: false,
-      profileSetupCompleted: true,
+      profileSetupCompleted: isAdminEmail,
       createdAt: Date.now()
     };
 
@@ -807,17 +759,19 @@ export async function loginSocialUser(email: string, displayName: string, explic
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "INSERT",
-      payloadId: user.uid,
-      payload: user,
-      timestamp: Date.now()
-    });
+    if (isProfileValid(user)) {
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "INSERT",
+        payloadId: user.uid,
+        payload: user,
+        timestamp: Date.now()
+      });
 
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      withTimeout(setDoc(doc(db, "users", user.uid), user, { merge: true }), LOGIN_TIMEOUT_MS).catch(() => {});
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        withTimeout(setDoc(doc(db, "users", user.uid), user, { merge: true }), LOGIN_TIMEOUT_MS).catch(() => {});
+      }
     }
   }
 
@@ -833,7 +787,6 @@ export async function loginSocialUser(email: string, displayName: string, explic
 
 const GOOGLE_WEB_CLIENT_ID = "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
 const FIREBASE_AUTH_HANDLER_URI = "https://archery101010-c0bb4.firebaseapp.com/__/auth/handler";
-const FIREBASE_PUBLIC_API_KEY = "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE";
 
 export async function processSocialRedirectResult(): Promise<UserProfile | null> {
   if (typeof window === "undefined") return null;
@@ -844,17 +797,16 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
   if (isMockFirebase) return null;
 
   try {
-    // 1. Check direct OAuth token in URL hash/query (intercepted by Android MainActivity WebViewClient)
+    // 1. Check direct Google OAuth token in URL hash/query (intercepted by Android MainActivity WebViewClient)
     const rawHash = window.location.hash ? window.location.hash.substring(1) : "";
     const rawSearch = window.location.search ? window.location.search.substring(1) : "";
     const hashParams = new URLSearchParams(rawHash);
     const searchParams = new URLSearchParams(rawSearch);
 
     const idToken = hashParams.get("id_token") || searchParams.get("id_token");
-    const accessToken = hashParams.get("access_token") || searchParams.get("access_token");
     const oauthError = hashParams.get("error") || searchParams.get("error");
 
-    if (idToken || accessToken || oauthError) {
+    if (idToken || oauthError) {
       window.history.replaceState(null, "", window.location.pathname);
     }
 
@@ -878,21 +830,6 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
       return await loginSocialUser(email, displayName, u.uid);
     }
 
-    if (accessToken) {
-      const credential = FacebookAuthProvider.credential(accessToken);
-      const result = await signInWithCredential(auth, credential);
-      const u = result.user;
-      const email =
-        u.email ||
-        u.providerData?.find((p) => p.email)?.email ||
-        `${u.uid}@facebook.archery101010.com`;
-      const displayName =
-        u.displayName ||
-        u.providerData?.find((p) => p.displayName)?.displayName ||
-        "Arquero Facebook";
-      return await loginSocialUser(email, displayName, u.uid);
-    }
-
     // 2. Standard Firebase Redirect Result fallback
     const result = await getRedirectResult(auth);
     if (result && result.user) {
@@ -910,9 +847,7 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
 
     if (
       auth.currentUser &&
-      auth.currentUser.providerData.some(
-        (p) => p.providerId === "google.com" || p.providerId === "facebook.com"
-      )
+      auth.currentUser.providerData.some((p) => p.providerId === "google.com")
     ) {
       const u = auth.currentUser;
       const email =
@@ -932,50 +867,12 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
 }
 
 export async function authenticateWithSocialProvider(
-  providerName: "google" | "facebook"
+  providerName: "google" = "google"
 ): Promise<UserProfile | null> {
   const isCapacitorNative =
     typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
 
   auth.languageCode = "es";
-
-  // Pre-verify Facebook configuration on Firebase before attempting navigation so it never loops
-  if (providerName === "facebook") {
-    let fbAuthUri = "";
-    try {
-      const res = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${FIREBASE_PUBLIC_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            providerId: "facebook.com",
-            continueUri: FIREBASE_AUTH_HANDLER_URI,
-          }),
-        }
-      );
-      if (!res.ok) {
-        throw new Error(
-          "El acceso con Facebook requiere vincular el App ID de Meta en la consola de Firebase (Authentication → Sign-in method → Facebook).\n\nPor ahora puedes ingresar directamente con tu cuenta de Google o con tu Correo y Contraseña."
-        );
-      }
-      const data = await res.json();
-      fbAuthUri = data?.authUri || "";
-    } catch (checkErr: any) {
-      if (checkErr?.message?.includes("Meta")) {
-        throw checkErr;
-      }
-      throw new Error(
-        "El acceso con Facebook aún no está activo en el servidor. Por favor ingresa con tu cuenta de Google o con tu Correo y Contraseña."
-      );
-    }
-
-    if (isCapacitorNative && fbAuthUri) {
-      const tokenUri = fbAuthUri.replace("response_type=code", "response_type=token");
-      window.location.assign(tokenUri);
-      return null;
-    }
-  }
 
   // Inside native Android APK: use Native Android Google Account Picker (1-tap system bottom sheet, zero typing)
   if (isCapacitorNative && providerName === "google") {
@@ -1054,18 +951,10 @@ export async function authenticateWithSocialProvider(
     return null;
   }
 
-  const provider =
-    providerName === "google" ? new GoogleAuthProvider() : new FacebookAuthProvider();
-
-  if (providerName === "google") {
-    (provider as GoogleAuthProvider).addScope("email");
-    (provider as GoogleAuthProvider).addScope("profile");
-    (provider as GoogleAuthProvider).setCustomParameters({ prompt: "select_account" });
-  } else {
-    (provider as FacebookAuthProvider).addScope("email");
-    (provider as FacebookAuthProvider).addScope("public_profile");
-    (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
-  }
+  const provider = new GoogleAuthProvider();
+  provider.addScope("email");
+  provider.addScope("profile");
+  provider.setCustomParameters({ prompt: "select_account" });
 
   try {
     const result = await signInWithPopup(auth, provider);
@@ -1073,11 +962,11 @@ export async function authenticateWithSocialProvider(
     const email =
       u.email ||
       u.providerData?.find((p) => p.email)?.email ||
-      `${u.uid}@${providerName}.archery101010.com`;
+      `${u.uid}@google.archery101010.com`;
     const displayName =
       u.displayName ||
       u.providerData?.find((p) => p.displayName)?.displayName ||
-      (providerName === "google" ? "Arquero Google" : "Arquero Facebook");
+      "Arquero Google";
 
     return await loginSocialUser(email, displayName, u.uid);
   } catch (popupErr: any) {

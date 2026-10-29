@@ -111,7 +111,7 @@ export default function CoachPaymentModal({
               <h2 className="text-[22px] font-black text-white tracking-tight mt-0.5">
                 Coach Pro
               </h2>
-              <p className="text-[15.8px] text-white font-medium">
+              <p className="text-xs text-white font-medium">
                 Acceso bonificado de lanzamiento · Sin cargo hoy
               </p>
             </div>
@@ -152,7 +152,7 @@ export default function CoachPaymentModal({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-col">
-                    <span className="text-[11.6px] text-white line-through tabular-nums tabular-nums">
+                    <span className="text-[11.6px] text-white line-through tabular-nums">
                       {prod.regularPrice}
                     </span>
                     <div className="flex items-baseline gap-1.5 mt-0.5">

@@ -475,7 +475,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     if (diffDays === 0) {
       return { 
         text: language === "es" ? "Hoy" : "Today", 
-        colorClass: "text-yellow-gold bg-amber-500/10 border-amber-500/25 shadow-sm", 
+        colorClass: "text-yellow-gold bg-yellow-gold/10 border-yellow-gold/25 shadow-sm", 
         isPast: false 
       };
     } else if (diffDays === 1) {
@@ -508,11 +508,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const getEventBadgeColor = (type: string) => {
     switch (type) {
       case "competition":
-        return "bg-red-500/15 text-red-400 border-red-500/20";
+        return "bg-red-rival/15 text-red-rival border-red-rival/20";
       case "training":
-        return "bg-cyan-500/15 text-cyan-400 border-cyan-500/20";
+        return "bg-cyan-neon/15 text-cyan-neon border-cyan-neon/20";
       case "meeting":
-        return "bg-amber-500/15 text-yellow-gold border-amber-500/20";
+        return "bg-yellow-gold/15 text-yellow-gold border-yellow-gold/25";
       default:
         return "bg-cyan-neon/15 text-cyan-neon border-cyan-neon/20";
     }
@@ -520,10 +520,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
   const getEventDotColor = (type: string) => {
     switch (type) {
-      case "competition": return "bg-red-500";
-      case "training": return "bg-cyan-500";
-      case "meeting": return "bg-amber-500";
-      default: return "bg-purple-500";
+      case "competition": return "bg-red-rival";
+      case "training": return "bg-cyan-neon";
+      case "meeting": return "bg-yellow-gold";
+      default: return "bg-cyan-neon";
     }
   };
 

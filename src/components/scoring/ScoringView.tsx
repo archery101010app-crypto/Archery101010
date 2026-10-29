@@ -534,11 +534,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       .filter(Boolean)
       .join("\n");
 
+    const bowLabel =
+      (config.bowType || user.bowConfig?.type) === "Recurve"
+        ? "Recurvo"
+        : (config.bowType || user.bowConfig?.type) === "Compound"
+        ? "Compuesto"
+        : config.bowType || user.bowConfig?.type || "Barebow";
+
     const message = 
       `*PLANILLA OFICIAL ARCHERY 101010*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Arquero:* ${user.fullName || "Arquero"}\n` +
-      `• *Arco:* ${config.bowType || user.bowConfig?.type || "Barebow"}\n` +
+      `• *Arco:* ${bowLabel}\n` +
       `• *Modalidad:* ${config.format} · ${config.distance}m\n` +
       `• *Flechas Tiradas:* ${totalArrows}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +

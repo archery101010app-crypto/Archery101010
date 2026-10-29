@@ -21,6 +21,7 @@ import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
 import CoachPaymentModal from "@/components/subscription/CoachPaymentModal";
 
 import { motion, AnimatePresence } from "framer-motion";
+import { Star } from "lucide-react";
 
 // Ads & Admin Imports
 import BannerWidget from "@/components/ads/BannerWidget";
@@ -163,15 +164,13 @@ export default function Home() {
           const hasPlaintextPassword = typeof u.password === "string" && u.password.length > 0;
           const isMockEmail =
             email === "demo@archery101010.com" ||
-            email === "google-user@archery101010.com" ||
-            email === "facebook-user@archery101010.com";
+            email === "google-user@archery101010.com";
           return (
             isSyntheticLegacyUid ||
             hasPlaintextPassword ||
             isMockEmail ||
             uidLower === "usr-demo" ||
-            uidLower.includes("google-user") ||
-            uidLower.includes("facebook-user")
+            uidLower.includes("google-user")
           );
         };
 
@@ -1011,7 +1010,8 @@ export default function Home() {
                   className="w-16 h-16 flex items-center justify-center rounded-2xl bg-[#111620] border border-white/10 text-3xl mb-4"
                   style={{ color: unlockedStar.star.color }}
                 >
-                  </div>
+                  <Star size={30} className="fill-current" />
+                </div>
 
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
                   NUEVA MARCA HISTÓRICA

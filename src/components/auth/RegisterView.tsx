@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { registerUser, authenticateWithSocialProvider } from "@/lib/authService";
+import { registerUser, authenticateWithSocialProvider, processSocialRedirectResult } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ArrowLeft, ArrowRight, Check, Eye, EyeOff, X } from "lucide-react";
 
@@ -31,6 +31,23 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [country, setCountry] = useState("CR");
   const [gender, setGender] = useState("M");
 
+  useEffect(() => {
+    let resolved = false;
+    async function checkRedirect() {
+      try {
+        const user = await processSocialRedirectResult();
+        if (user && !resolved) {
+          resolved = true;
+          setLoading(true);
+          onRegisterSuccess(user);
+        }
+      } catch (err) {
+        console.error("Error procesando redirección en registro:", err);
+      }
+    }
+    checkRedirect();
+  }, [onRegisterSuccess]);
+
   const handleNext = () => {
     setError("");
     if (step === 1) {
@@ -56,16 +73,16 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
     setStep(step + 1);
   };
 
-  const handleSocialRegister = async (providerName: "google" | "facebook") => {
+  const handleSocialRegister = async () => {
     setLoading(true);
     setError("");
     try {
-      const user = await authenticateWithSocialProvider(providerName);
+      const user = await authenticateWithSocialProvider("google");
       if (user) {
         onRegisterSuccess(user);
       }
     } catch (err: any) {
-      setError(err.message || "Error al registrarse con cuenta social");
+      setError(err.message || "Error al registrarse con Google");
     } finally {
       setLoading(false);
     }
@@ -176,13 +193,15 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               exit={{ x: -30, opacity: 0 }}
               className="flex flex-col gap-4"
             >
-              <h3 className="text-white text-lg font-bold tracking-wide mb-2">{t("step1")}</h3>
+              <h3 className="text-white text-base font-black uppercase tracking-wider text-center mb-1">
+                {t("step1")}
+              </h3>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t("emailPlaceholder")}
-                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm px-4 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
               <div className="relative flex items-center">
                 <input
@@ -190,7 +209,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("passwordPlaceholder")}
-                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
@@ -206,7 +225,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmar contraseña"
-                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
@@ -217,7 +236,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </button>
               </div>
 
-              {/* 1-tap Social Registration */}
+              {/* 1-tap Social Registration (Google) */}
               <div className="flex items-center gap-4 pt-2 pb-1">
                 <div className="h-[1px] flex-1 bg-white/10" />
                 <span className="text-[11.6px] text-white font-bold uppercase tracking-widest">
@@ -230,8 +249,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={() => handleSocialRegister("google")}
-                  className="w-full py-3 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
+                  onClick={handleSocialRegister}
+                  className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -240,17 +259,6 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
                   <span>{t("googleLogin")}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => handleSocialRegister("facebook")}
-                  className="w-full py-3 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
-                >
-                  <svg className="w-4 h-4 text-[#1877F2] shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                  <span>{t("facebookLogin")}</span>
                 </button>
               </div>
             </motion.div>
@@ -265,36 +273,38 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               exit={{ x: -30, opacity: 0 }}
               className="flex flex-col gap-3.5"
             >
-              <h3 className="text-white text-lg font-bold tracking-wide mb-1">{t("step2")}</h3>
+              <h3 className="text-white text-base font-black uppercase tracking-wider text-center mb-1">
+                {t("step2")}
+              </h3>
               
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-white">{t("fullName")} *</label>
+                <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("fullName")} *</label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder=""
-                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-white">{t("birthDate")} *</label>
+                  <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("birthDate")} *</label>
                   <input
                     type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
+                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-white">{t("country")} *</label>
+                  <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("country")} *</label>
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
                   >
                     {COUNTRIES.map((c) => (
                       <option key={c.code} value={c.code} className="bg-black text-white">
@@ -306,11 +316,11 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-white">{t("gender")} *</label>
+                <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("gender")} *</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
                 >
                   <option value="M" className="bg-black text-white">{t("genderM")}</option>
                   <option value="F" className="bg-black text-white">{t("genderF")}</option>

@@ -139,7 +139,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             )}
 
             {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-orange-500 text-white font-extrabold text-[11.9px] w-4 h-4 rounded-full flex items-center justify-center border border-black animate-bounce">
+              <span className="absolute -top-1 -right-1 bg-yellow-gold text-black font-extrabold text-[11.9px] w-4 h-4 rounded-full flex items-center justify-center border border-black animate-bounce">
                 {pendingCount}
               </span>
             )}

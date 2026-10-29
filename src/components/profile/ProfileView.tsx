@@ -2,13 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, BowConfig, updateProfile, transferCoachRole, logoutUser, deleteUserAccount, getLoggedUser, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
+import { UserProfile, BowConfig, updateProfile, logoutUser, deleteUserAccount, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
-import { ArrowLeft, User, Settings, ShieldAlert, Lock, Volume2, HelpCircle, LogOut, Check, Shield, BookOpen, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, ExternalLink, MessageCircle, Star } from "lucide-react";
+import { ArrowLeft, LogOut, Check, Shield, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import confetti from "canvas-confetti";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
-import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { triggerHaptic } from "@/lib/haptics";
 
@@ -29,19 +27,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [editPersonal, setEditPersonal] = useState(false);
   const [editBow, setEditBow] = useState(false);
   const [editClubDetails, setEditClubDetails] = useState(false);
-  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Hook into mobile back button and gestures
   useEffect(() => {
-    if (isPaywallOpen) {
-      return registerModalDismiss(() => setIsPaywallOpen(false));
-    }
     if (isDeleteAccountOpen) {
       return registerModalDismiss(() => setIsDeleteAccountOpen(false));
     }
-  }, [isPaywallOpen, isDeleteAccountOpen]);
+  }, [isDeleteAccountOpen]);
 
   // Form Fields
   const [fullName, setFullName] = useState(user.fullName);
@@ -134,9 +128,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   // Notification Toggles
   const [pushNotif, setPushNotif] = useState(true);
-  
-  // Athlete Star State
-  const [maxStar, setMaxStar] = useState<any | null>(null);
 
   // Coach WhatsApp notice field
   const [clubWhatsApp, setClubWhatsApp] = useState(user.whatsappNumber || "");
@@ -147,11 +138,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [clubLogo, setClubLogo] = useState(user.clubLogo || "0");
   const [customLogoUrl, setCustomLogoUrl] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? user.clubLogo : "");
   const [isCustomLogo, setIsCustomLogo] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? true : false);
-
-  // DEV Simulate PRO flag state
-  const [devSimulatePro, setDevSimulatePro] = useState(user.plan === "PRO");
-  // DEV Simulate Superadmin flag state
-  const [devSimulateSuperAdmin, setDevSimulateSuperAdmin] = useState(user.role === "superadmin");
 
   // Club roster states
   const [clubMembers, setClubMembers] = useState<UserProfile[]>([]);
@@ -233,22 +219,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     }
   };
 
-  const handleSelectUserRole = async (targetRole: "archer" | "coach") => {
-    let nextRole: UserProfile["role"] = targetRole;
-    if (user.role === "team_admin" || user.role === "team_admin_coach") {
-      nextRole = targetRole === "coach" ? "team_admin_coach" : "team_admin";
-    } else if (user.role === "superadmin") {
-      nextRole = "superadmin";
-    }
-    const updatedUser: UserProfile = {
-      ...user,
-      role: nextRole
-    };
-    await updateProfile(user.uid, { role: nextRole });
-    onProfileUpdated(updatedUser);
-    window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
-  };
-
   const handlePromoteToCoach = async (memberUid: string) => {
     const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
     const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
@@ -327,53 +297,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     }
   };
 
-  const handleToggleAdminCoachSelf = async () => {
-    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
-    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const idx = list.findIndex((u) => u.uid === user.uid);
-    if (idx !== -1) {
-      const nextRole: UserProfile["role"] = user.role === "team_admin" ? "team_admin_coach" : "team_admin";
-      const updatedUser = {
-        ...list[idx],
-        role: nextRole
-      };
-      list[idx] = updatedUser;
-      await saveLocalSetting("simulated_users", list);
-
-      // Push to Firestore Sync Queue
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "users",
-        operation: "UPDATE",
-        payloadId: user.uid,
-        payload: updatedUser,
-        timestamp: Date.now()
-      });
-
-      // Update current user
-      await saveLocalSetting("current_user", updatedUser);
-      onProfileUpdated(updatedUser);
-      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
-      
-      // Update local state
-      setClubMembers(list.filter((u) => u.clubId === user.clubId));
-    }
-  };
-
-  // Load toggles and star data from settings
+  // Load notification toggles from settings
   useEffect(() => {
     async function loadToggles() {
       const push = await getLocalSetting("notif_push", true);
       setPushNotif(push);
-
-      // Load star achievement
-      try {
-        const { athleteStarsStore } = await import("@/lib/db/indexedDB");
-        const doc = await athleteStarsStore.getItem<any>(user.uid);
-        setMaxStar(doc);
-      } catch (err) {
-        console.error("Error loading athlete star in profile:", err);
-      }
     }
     loadToggles();
   }, [user]);
@@ -456,60 +384,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     }
   };
 
-  const handleDevProToggle = async () => {
-    const nextPlan = devSimulatePro ? "FREE" : "PRO";
-    setDevSimulatePro(!devSimulatePro);
-    
-    try {
-      const updated = await updateProfile(user.uid, {
-        plan: nextPlan
-      });
-      onProfileUpdated(updated);
-      
-      if (nextPlan === "PRO") {
-        confetti({
-          particleCount: 100,
-          spread: 50,
-          origin: { y: 0.6 }
-        });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDevSuperAdminToggle = async () => {
-    const nextRole = devSimulateSuperAdmin ? "archer" : "superadmin";
-    setDevSimulateSuperAdmin(!devSimulateSuperAdmin);
-    try {
-      const updated = await updateProfile(user.uid, {
-        role: nextRole
-      });
-      onProfileUpdated(updated);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handlePaypalUpgrade = async () => {
-    setIsPaywallOpen(false);
-    try {
-      const updated = await updateProfile(user.uid, {
-        plan: "PRO"
-      });
-      setDevSimulatePro(true);
-      onProfileUpdated(updated);
-
-      confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.7 }
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleLogoutClick = async () => {
     const confirmLogout = window.confirm("¿Seguro que deseas cerrar sesión? Cualquier sesión activa, duelo o proceso que tengas abierto se cerrará.");
     if (!confirmLogout) return;
@@ -549,51 +423,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         }
       } catch (err) {
         console.error("Error activating push notifications:", err);
-      }
-    }
-  };
-
-  const handleCoachTransfer = async () => {
-    const confirm = window.confirm("¿Seguro que deseas transferir tu rol de Coach? Al hacerlo pasarás a ser Archer de este club y ya no podrás editar la planificación.");
-    if (!confirm) return;
-
-    // Simulate transfer to a demo adult user in the club database
-    const success = await transferCoachRole("USR-DEMO-MEMBER-ADULT");
-    if (success) {
-      const updated = await getLoggedUser();
-      if (updated) onProfileUpdated(updated);
-      alert("Rol de Coach transferido con éxito");
-    } else {
-      // In demo mode, if there is no other adult member registered, we simulate it
-      // Let's create an adult member first to transfer to
-      const usersList = await getLocalSetting<any[]>("simulated_users", []);
-      const demoMember = {
-        uid: "USR-DEMO-MEMBER-ADULT",
-        email: "coach.ayudante@archery101010.com",
-        fullName: "Entrenador Asistente",
-        nickname: "ayudante",
-        birthDate: "1990-01-01",
-        country: "CR",
-        city: "San José",
-        gender: "M",
-        bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 44, defaultDistance: 70 },
-        physicalData: { height: 185, weight: 80, dominantEye: "R", dominantHand: "R" },
-        clubId: user.clubId,
-        clubName: user.clubName,
-        role: "archer",
-        plan: "FREE",
-        isClubCreator: false
-      };
-      
-      usersList.push(demoMember);
-      await saveLocalSetting("simulated_users", usersList);
-      
-      // Retry transfer
-      const retrySuccess = await transferCoachRole("USR-DEMO-MEMBER-ADULT");
-      if (retrySuccess) {
-        const updated = await getLoggedUser();
-        if (updated) onProfileUpdated(updated);
-        alert("Rol de Coach transferido con éxito al Entrenador Asistente (ayudante)");
       }
     }
   };
@@ -658,7 +487,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 1: Personal Data */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center">
           <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("personalData")}</h4>
           <button
@@ -761,7 +590,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 2: Bow configuration (Arco #1, Arco #2, Arco #3) */}
-      <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col gap-4">
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 md:p-5 flex flex-col gap-4">
         {/* Header */}
         <div className="flex justify-between items-center border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
@@ -1059,7 +888,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
       {/* SECTION 4.5: Mi Club y Entrenador (Para atletas / arqueros) */}
       {(user.role === "archer" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
-        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
               <Building2 className="w-4 h-4 text-cyan-neon" />
@@ -1176,7 +1005,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
       {/* SECTION 5: Coach/Admin management */}
       {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && user.clubId && (
-        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("clubManage")}</h4>
             <button
@@ -1391,8 +1220,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       )}
 
       {/* Superadmin Panel Direct Link */}
-      {(user.role === "superadmin" || user.email?.toLowerCase().includes("admin") || devSimulateSuperAdmin) && onNavigate && (
-        <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 flex flex-col gap-2.5">
+      {(user.role === "superadmin" || user.email?.toLowerCase().includes("admin")) && onNavigate && (
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-2.5">
           <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
             <Shield size={14} className="text-cyan-neon" />
             <span>Panel de Administración</span>
@@ -1483,27 +1312,5 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-// X Close Icon helper
-function X({ size, className, ...props }: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
   );
 }

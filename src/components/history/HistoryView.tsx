@@ -369,7 +369,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     key={session.id}
                     onClick={() => setSelectedSession(session)}
                     whileHover={{ scale: 1.01 }}
-                    className="bg-neutral-900/60 backdrop-blur border border-white/10 p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
+                    className="bg-[#0D1017] border border-white/[0.08] p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
                   >
                     <div className="flex flex-col gap-1 w-[70%] min-w-0">
                       <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         <div className="flex-1 flex flex-col gap-4">
           
           {/* Card Volume Giant */}
-          <div className="bg-neutral-900/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-1.5 relative overflow-hidden shadow-sm">
+          <div className="bg-[#0D1017] p-5 rounded-3xl border border-white/[0.08] flex flex-col gap-1.5 relative overflow-hidden shadow-sm">
             <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
               Volumen Acumulado
             </span>
@@ -428,13 +428,13 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <div className="grid grid-cols-2 gap-3">
             
             {/* Widget: Arco Volumen */}
-            <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
               <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase">Por Tipo de Arco</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
-                  { name: "Recurve", val: volStats.recurve },
-                  { name: "Compound", val: volStats.compound },
+                  { name: "Recurvo", val: volStats.recurve },
+                  { name: "Compuesto", val: volStats.compound },
                   { name: "Barebow", val: volStats.barebow }
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
@@ -457,12 +457,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             </div>
 
             {/* Widget: Práctica Volumen */}
-            <div className="bg-neutral-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
               <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase">Por Práctica</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
-                  { name: "Control", val: volStats.control },
+                  { name: t("practiceControl"), val: volStats.control },
                   { name: "Práctica", val: volStats.practice },
                   { name: "Volumen", val: volStats.volume }
                 ].map((item) => {
@@ -504,7 +504,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   return (
                     <div
                       key={s.id}
-                      className="bg-neutral-900/40 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center"
+                      className="bg-[#0D1017] border border-white/[0.08] p-3.5 rounded-2xl flex justify-between items-center"
                     >
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[10.5px] text-white font-bold">{formatDate(s.timestamp)}</span>
@@ -512,7 +512,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-cyan-neon">+{arrows}</span>
-                        <span className="text-[10.5px] text-white block font-bold uppercase">{s.practiceType}</span>
+                        <span className="text-[10.5px] text-white block font-bold uppercase">
+                          {s.practiceType === "Control" ? t("practiceControl") : s.practiceType}
+                        </span>
                       </div>
                     </div>
                   );
