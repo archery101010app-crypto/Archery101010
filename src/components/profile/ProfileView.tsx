@@ -657,37 +657,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       </div>
 
-      {/* Subscription Card PRO paywall trigger */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-[#0D1017] border border-white/[0.08] flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
-            <Shield size={14} className="text-cyan-neon" />
-            {t("subCardTitle")}
-          </h4>
-          <span className="text-[10.5px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/[0.05] text-white border border-white/[0.08]">
-            {user.plan === "FREE" ? "Lanzamiento" : "Pro Activo"}
-          </span>
-        </div>
-        {user.plan === "FREE" ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-white leading-relaxed">
-              Desbloquea planificación de macrociclos, análisis de agrupación y herramientas avanzadas sin costo por lanzamiento.
-            </p>
-            <button
-              onClick={() => setIsPaywallOpen(true)}
-              className="h-11 w-full rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest cursor-pointer active:scale-[0.99] transition flex items-center justify-center gap-1.5"
-            >
-              <span>Activar Pro Gratis</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.05] text-xs">
-            <span className="text-white">Acceso completo desbloqueado</span>
-            <span className="text-cyan-neon font-bold">Ilimitado</span>
-          </div>
-        )}
-      </div>
-
       {/* SECTION 1: Personal Data */}
       <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center">
@@ -1088,138 +1057,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </button>
       </div>
 
-      {/* SECTION 3.8: Estrellas 101010 720 */}
-      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-3">
-        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
-          <Star size={14} className="text-yellow-gold fill-yellow-gold" />
-          {t("starsShelfTitle")}
-        </h4>
-
-        {maxStar ? (
-          <div className="flex flex-col gap-3">
-            {/* Medalla estrella activa */}
-            <div className="flex items-center gap-3.5 bg-[#090B0E] p-3.5 rounded-2xl border border-white/[0.06]">
-              <div 
-                className="w-12 h-12 rounded-full border flex items-center justify-center shrink-0"
-                style={{ 
-                  borderColor: maxStar.starColor,
-                  color: maxStar.starColor,
-                  backgroundColor: `${maxStar.starColor}15`
-                }}
-              >
-                <Star size={20} fill="currentColor" />
-              </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-white text-xs font-black uppercase tracking-wide truncate">
-                  {maxStar.starName}
-                </span>
-                <span className="text-[11.6px] text-white mt-0.5 font-bold uppercase tabular-nums">
-                  {t("recordLabel")} {maxStar.highestScore} pts ({maxStar.bowType === "Compound" ? "Compuesto" : maxStar.bowType === "Recurve" ? "Recurvo" : maxStar.bowType})
-                </span>
-              </div>
-            </div>
-
-            {/* Progreso a la siguiente meta */}
-            {(() => {
-              const bow = maxStar.bowType;
-              const tiers = bow === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
-              const currentLevel = maxStar.highestStarLevel;
-              
-              if (currentLevel >= 8) {
-                return (
-                  <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[11.6px] text-center text-cyan-neon font-black uppercase tracking-wider">
-                    {t("maxStarAchieved")}
-                  </div>
-                );
-              }
-              
-              const nextStar = tiers[currentLevel]; // level is 1-indexed, so tiers[currentLevel] is level + 1
-              const prevMin = tiers[currentLevel - 1].minScore;
-              const highestScore = maxStar.highestScore;
-              const targetMin = nextStar.minScore;
-              
-              const percent = Math.min(100, Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100));
-              
-              return (
-                <div className="flex flex-col gap-1.5 mt-1">
-                  <div className="flex justify-between text-[10.5px] text-white font-black uppercase tracking-wider tabular-nums">
-                    <span>{t("nextLabel")} {nextStar.name}</span>
-                    <span className="text-white">{highestScore} / {targetMin} pts</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-950 rounded-full overflow-hidden border border-white/5 relative">
-                    <div 
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ 
-                        width: `${percent}%`,
-                        backgroundColor: nextStar.color
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10.5px] text-white leading-none tabular-nums">
-                    Faltan {targetMin - highestScore} {t("pointsToNextStar")}
-                  </span>
-                </div>
-              );
-            })()}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2.5 py-1">
-            <p className="text-[12.8px] text-white leading-snug">
-              {t("lockedStarNotice")}
-            </p>
-          </div>
-        )}
-
-        {/* Vitrina completa de 8 Estrellas (Bloqueadas/Desbloqueadas) */}
-        {(() => {
-          const bowTypeForStars = user?.bowConfig?.type === "Compound" ? "Compound" : "Recurve";
-          const starsList = bowTypeForStars === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
-          const highestLevel = maxStar ? maxStar.highestStarLevel : 0;
-          
-          return (
-            <div className="grid grid-cols-4 gap-3.5 mt-2 pt-3 border-t border-white/[0.05]">
-              {starsList.map((star) => {
-                const isUnlocked = star.level <= highestLevel;
-                return (
-                  <div key={star.level} className="flex flex-col items-center gap-1 text-center group">
-                    <div 
-                      className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-300 relative ${
-                        isUnlocked 
-                          ? "" 
-                          : "grayscale opacity-35 bg-neutral-950 border-neutral-850"
-                      }`}
-                      style={{
-                        borderColor: isUnlocked ? star.color : '#2d2d2d',
-                        color: isUnlocked ? star.color : '#3d3d3d',
-                        backgroundColor: isUnlocked ? `${star.color}12` : 'rgba(0,0,0,0.2)',
-                      }}
-                      title={`${star.name}: ${star.minScore}+ pts`}
-                    >
-                      <Star size={14} fill="currentColor" />
-                      {!isUnlocked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-                          <Lock size={9} className="text-white" />
-                        </div>
-                      )}
-                    </div>
-                    <span 
-                      className={`text-[9.3px] font-black truncate max-w-[55px] uppercase tracking-wider leading-none mt-1 ${
-                        isUnlocked ? "text-white" : "text-white"
-                      }`}
-                    >
-                      {star.name.replace("Estrella de ", "").replace("Estrella ", "")}
-                    </span>
-                    <span className="text-[9.3px] text-white font-bold leading-none tabular-nums">
-                      {star.minScore}+
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
-
       {/* SECTION 4.5: Mi Club y Entrenador (Para atletas / arqueros) */}
       {(user.role === "archer" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
         <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-4 flex flex-col gap-3">
@@ -1494,22 +1331,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
             </div>
 
-            {/* Act as Coach switcher for Team Admin */}
-            {(user.role === "team_admin" || user.role === "team_admin_coach" || user.isClubCreator) && (
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-neutral-950/60 border border-white/5 mt-1">
-                <div className="flex flex-col">
-                  <span className="text-[11.6px] text-white font-extrabold uppercase">Actuar como Coach</span>
-                  <span className="text-[9.3px] text-white mt-0.5 leading-snug">Habilita el panel de coach y la vista de atletas.</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={user.role === "team_admin_coach" || user.role === "coach"}
-                  onChange={handleToggleAdminCoachSelf}
-                  className="w-4 h-4 accent-cyan-neon cursor-pointer"
-                />
-              </div>
-            )}
-
             {/* Club Members Roster Section */}
             {user.clubId && (user.role === "team_admin" || user.role === "team_admin_coach" || user.isClubCreator) && (
               <div className="flex flex-col gap-2.5 border-t border-white/[0.03] pt-4 mt-2">
@@ -1549,7 +1370,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           ) : (
                             <button
                               type="button"
-                              disabled={isSelf && member.role === "team_admin_coach"} // cannot demote self from coach if it's the admin this way (use the toggle instead)
+                              disabled={isSelf && member.role === "team_admin_coach"}
                               onClick={() => handleDemoteToArcher(member.uid)}
                               className={`px-2 py-1 bg-yellow-gold/10 border border-yellow-gold/20 hover:bg-yellow-gold/20 text-yellow-gold font-black text-[10.5px] uppercase tracking-wider rounded-lg transition active:scale-95 ${
                                 isSelf && member.role === "team_admin_coach" ? "opacity-50 cursor-not-allowed" : ""
@@ -1565,14 +1386,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 </div>
               </div>
             )}
-
-            {/* Transfer role */}
-            <button
-              onClick={handleCoachTransfer}
-              className="w-full py-2.5 mt-1 rounded-xl bg-red-rival/10 border border-red-rival/35 text-red-rival font-bold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-98"
-            >
-              {t("transferBtn")}
-            </button>
           </div>
         </div>
       )}
@@ -1596,68 +1409,19 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       )}
 
-      {/* DEV TOOLS Simulator PRO Toggle */}
-      {user.role === "superadmin" && (
-        <div className="border border-dashed border-red-rival/40 p-4 rounded-3xl flex flex-col gap-3 bg-neutral-950/40">
-          <span className="text-xs text-red-rival tabular-nums font-bold leading-none">{t("devMode")}</span>
-          
-          <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
-            <span className="text-[11.6px] text-white tabular-nums">Simulate PRO Account</span>
-            <button
-              onClick={handleDevProToggle}
-              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                devSimulatePro ? "bg-red-rival" : "bg-gray-border"
-              }`}
-            >
-              <div
-                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-                style={{ left: devSimulatePro ? "18px" : "2px" }}
-              />
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <span className="text-[11.6px] text-white tabular-nums">Simulate SuperAdmin Role</span>
-            <button
-              onClick={handleDevSuperAdminToggle}
-              className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                devSimulateSuperAdmin ? "bg-red-rival" : "bg-gray-border"
-              }`}
-            >
-              <div
-                className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all"
-                style={{ left: devSimulateSuperAdmin ? "18px" : "2px" }}
-              />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Botones de Soporte y Legal */}
-      <div className="grid grid-cols-2 gap-2 mt-2">
-        {/* Manual de Usuario Button */}
-        <button
-          onClick={() => window.open("/manual/", "_blank")}
-          className="py-3 rounded-full border border-cyan-neon/30 hover:bg-cyan-neon/5 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
-        >
-          <BookOpen size={15} />
-          <span>Manual</span>
-        </button>
-
-        {/* Política de Privacidad Button */}
-        <button
-          onClick={() => window.open("/privacy", "_blank")}
-          className="py-3 rounded-full border border-white/10 hover:bg-white/5 text-white hover:text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
-        >
-          <Shield size={15} />
-          <span>Privacidad</span>
-        </button>
-      </div>
+      {/* Política de Privacidad Button */}
+      <button
+        onClick={() => window.open("/privacy", "_blank")}
+        className="w-full py-3 mt-1 rounded-full border border-white/10 hover:bg-white/5 text-white hover:text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+      >
+        <Shield size={15} />
+        <span>Política de Privacidad</span>
+      </button>
 
       {/* Log out Action Button */}
       <button
         onClick={handleLogoutClick}
-        className="w-full py-3.5 mt-2 rounded-full border border-red-rival/30 hover:bg-red-rival/5 text-red-rival font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-3.5 mt-1 rounded-full border border-red-rival/30 hover:bg-red-rival/5 text-red-rival font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <LogOut size={16} />
         <span>{t("logout")}</span>
@@ -1714,83 +1478,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   {isDeletingAccount ? "Eliminando..." : "Eliminar"}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* PAYWALL DIALOG */}
-      <AnimatePresence>
-        {isPaywallOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
-          >
-            <motion.div
-              initial={{ scale: 0.96, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.96, y: 10 }}
-              className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-5 shadow-2xl text-left"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11.6px] text-cyan-neon font-bold uppercase tracking-widest">
-                    Lanzamiento Oficial
-                  </span>
-                  <h3 className="text-white text-xl font-black tracking-tight">
-                    Archery Pro
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setIsPaywallOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] text-white hover:text-white flex items-center justify-center cursor-pointer transition"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              {/* Benefits checklist */}
-              <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-2.5">
-                {[
-                  "Planificación de ciclos y macroestructuras",
-                  "Spine Matching y ajuste balístico de flechas",
-                  "Portal Coach con seguimiento en vivo",
-                  "Analítica avanzada de dispersión olímpica"
-                ].map((b, idx) => (
-                  <div key={idx} className="flex items-start gap-2.5 text-xs text-white">
-                    <Check size={14} className="text-cyan-neon mt-0.5 shrink-0" />
-                    <span>{b}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Price card: Launch special */}
-              <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="text-[11.6px] text-white line-through tabular-nums tabular-nums">$4.99 USD / mes</span>
-                  <div className="flex items-baseline gap-1.5 mt-0.5">
-                    <span className="text-2xl font-black text-white tabular-nums tracking-tight">
-                      $0.00
-                    </span>
-                    <span className="text-[11.6px] text-cyan-neon font-bold uppercase tracking-wider">
-                      Bonificado
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[10.5px] text-white font-bold uppercase tracking-wider bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-lg">
-                  Pioneros
-                </span>
-              </div>
-
-              {/* Free Launch Activation Button */}
-              <button
-                onClick={handlePaypalUpgrade}
-                className="h-12 w-full rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition active:scale-[0.99]"
-              >
-                <span>Activar Cuenta Pro</span>
-              </button>
             </motion.div>
           </motion.div>
         )}
