@@ -46,6 +46,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   // Active Listening / Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [listenStage, setListenStage] = useState<"IDLE" | "SETTLING" | "ARMED" | "CAPTURING_IMPACT">("IDLE");
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(8);
   const [audioLevel, setAudioLevel] = useState(0);
   const [lastShotResult, setLastShotResult] = useState<ShotResult | null>(null);
   const [detectionError, setDetectionError] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Temperature calculations
   const tempCelsius = tempUnit === "F" 
@@ -143,11 +145,12 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     startRecording();
   };
 
-  // Start Raw PCM Audio Listening & Triggered Shot Capture at 18 Meters
+  // Start Raw PCM Audio Listening & Triggered Shot Capture at 18 Meters (Full 8-Second Window)
   const startRecording = async () => {
     try {
       setDetectionError(null);
       setIsRecording(true);
+      setRemainingSeconds(8);
       setListenStage("SETTLING");
 
       // Disable AGC, Noise Suppression & Echo Cancellation so percussive bow & target transients are NOT filtered out
@@ -200,12 +203,21 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       processor.connect(silentGain);
       silentGain.connect(audioCtx.destination);
 
+      const TOTAL_LISTEN_MS = 8000;
       const startTimeMs = performance.now();
       const settlingGuardMs = 450; // Ignore initial screen tap / finger noise
       const postTriggerDurationSec = 0.72; // 720ms after bow shot covers arrows down to 110 FPS at 18m
       const targetCaptureSamples = Math.ceil(sampleRate * (0.08 + postTriggerDurationSec));
 
+      // Live 1-second countdown timer (8s -> 1s)
+      countdownIntervalRef.current = setInterval(() => {
+        const elapsed = performance.now() - startTimeMs;
+        const left = Math.max(1, Math.ceil((TOTAL_LISTEN_MS - elapsed) / 1000));
+        setRemainingSeconds(left);
+      }, 200);
+
       let isTriggered = false;
+      let lastFailedReason: string | null = null;
       let preTriggerChunk = new Float32Array(Math.ceil(sampleRate * 0.08)); // 80ms pre-trigger rolling buffer
       let capturedChunks: Float32Array[] = [];
       let capturedSampleCount = 0;
@@ -239,8 +251,8 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         const chunkRms = Math.sqrt(sumSq / chunk.length);
 
         if (!isTriggered) {
-          // Check if this chunk contains the sharp acoustic impulse of the bow release
-          const triggerThreshold = Math.max(0.038, rollingAmbientRms * 5.5);
+          // Check if this chunk contains a sharp acoustic impulse candidate
+          const triggerThreshold = Math.max(0.065, rollingAmbientRms * 6.0);
           if (chunkPeak >= triggerThreshold) {
             isTriggered = true;
             setListenStage("CAPTURING_IMPACT");
@@ -258,7 +270,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             }
           }
         } else {
-          // Already triggered by bow shot: accumulate post-shot samples until 720ms window completes
+          // Already triggered by an impulse: accumulate post-shot samples until 720ms window completes
           capturedChunks.push(chunk);
           capturedSampleCount += chunk.length;
 
@@ -271,19 +283,39 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               offset += c.length;
             }
 
-            stopRecording();
-            processCapturedShotPCM(fullBuffer, sampleRate);
+            // Verify if this candidate window actually contains a valid bow release + target impact pair.
+            // If it was just ambient noise / bow draw without target impact, DO NOT stop early — keep listening for the full 8 seconds!
+            const candidateCheck = detectAudioPeaksFromPCM(
+              fullBuffer,
+              sampleRate,
+              distanceMeters,
+              tempCelsius,
+              0.15
+            );
+
+            if (candidateCheck.status === "OK") {
+              stopRecording();
+              processCapturedShotPCM(fullBuffer, sampleRate);
+              return;
+            } else {
+              lastFailedReason = candidateCheck.reason || null;
+              isTriggered = false;
+              capturedChunks = [];
+              capturedSampleCount = 0;
+              setListenStage("ARMED");
+            }
           }
         }
       };
 
-      // Safety timeout: keep listening in ARMED state for up to 8 seconds for the archer to aim & shoot
+      // Full 8-second listening window for the archer to aim & shoot
       timeoutRef.current = setTimeout(() => {
         stopRecording();
         setDetectionError(
-          "No se detectó ningún disparo en 8 segundos. Presiona Medir Velocidad cuando estés listo en la línea de tiro."
+          lastFailedReason ||
+            "No se detectó ningún disparo con impacto en los 8 segundos de escucha. Presiona Medir Velocidad cuando estés listo en la línea de tiro."
         );
-      }, 8000);
+      }, TOTAL_LISTEN_MS);
     } catch (err) {
       console.error("Microphone access error:", err);
       alert("No se pudo acceder al micrófono. Por favor permite los permisos de audio en tu teléfono.");
@@ -363,6 +395,10 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -667,10 +703,10 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 <Volume2 size={18} className="animate-spin" />
                 <span>
                   {listenStage === "SETTLING"
-                    ? "Calibrando silencio..."
+                    ? `Calibrando (${remainingSeconds}s)...`
                     : listenStage === "CAPTURING_IMPACT"
-                    ? "¡Disparo detectado! Midiendo impacto a 18m..."
-                    : `Armado: Esperando tu Disparo (${audioLevel}%) · Toca para cancelar`}
+                    ? `Analizando impacto (${remainingSeconds}s)...`
+                    : `Escuchando (${remainingSeconds}s) · Nivel ${audioLevel}% · Cancelar`}
                 </span>
               </>
             ) : (
