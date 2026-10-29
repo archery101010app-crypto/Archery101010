@@ -39,7 +39,7 @@ import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 
 import CoachPortalView from "../coach/CoachPortalView";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "CHRONOGRAPH";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 interface DashboardViewProps {
   user: UserProfile;

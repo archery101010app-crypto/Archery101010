@@ -134,26 +134,21 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* SECCIÓN 3: Permiso de Micrófono y Cronógrafo Acústico */}
+        {/* SECCIÓN 3: Permiso de Micrófono y Comunicaciones en Vivo */}
         <div className="bg-neutral-950 border border-cyan-neon/30 rounded-3xl p-6 flex flex-col gap-3 shadow-[0_0_30px_rgba(0,229,255,0.05)]">
           <div className="flex items-center gap-2 text-white font-bold text-base">
             <Mic size={18} className="text-cyan-neon" />
-            <h2>3. Uso Exclusivo del Micrófono (Cronógrafo Balístico 101010)</h2>
+            <h2>3. Uso Exclusivo del Micrófono (Comunicaciones en Vivo)</h2>
           </div>
           <div className="bg-cyan-neon/10 border border-cyan-neon/30 p-3.5 rounded-2xl text-xs text-cyan-neon font-bold flex items-start gap-2">
             <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
             <span>
-              Garantía de Privacidad en Audio: Ninguna conversación, voz o sonido ambiental es grabado, almacenado ni transmitido a servidores remotos.
+              Garantía de Privacidad en Audio: Ninguna conversación, voz o sonido ambiental es grabado ni almacenado en servidores remotos.
             </span>
           </div>
           <p className="text-white text-xs sm:text-sm leading-relaxed">
-            Nuestra herramienta <strong>101010 Chronograph</strong> requiere acceso temporal al micrófono de tu dispositivo única y exclusivamente para medir la velocidad de tu flecha a 18 metros:
+            El permiso de micrófono se utiliza única y exclusivamente cuando el usuario activa voluntariamente la comunicación de voz en tiempo real durante eliminatorias en línea.
           </p>
-          <ul className="list-disc pl-5 text-xs text-white space-y-1.5">
-            <li>El procesamiento de la señal de audio se realiza **100% de forma local en tiempo real** en el procesador de tu teléfono a través de la Web Audio API.</li>
-            <li>El algoritmo únicamente detecta los dos picos de decibeles de impacto acústico: el chasquido de la suelta de la cuerda y el impacto en el parapeto de tiro.</li>
-            <li>Inmediatamente después de calcular los milisegundos de vuelo, el flujo de audio se destruye en memoria sin guardar ningún archivo de voz ni sonido.</li>
-          </ul>
         </div>
 
         {/* SECCIÓN 4: Almacenamiento Local (Offline-First) y Nube */}

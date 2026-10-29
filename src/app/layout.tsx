@@ -5,7 +5,7 @@ import IPhoneFrame from "@/components/ui/IPhoneFrame";
 export const metadata: Metadata = {
   metadataBase: new URL("https://archery101010-c0bb4.web.app"),
   title: "Archery 101010 · The App",
-  description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias 1v1 en vivo, cronógrafo acústico y portal de entrenadores.",
+  description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias en vivo y portal de entrenadores.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Archery 101010 · The App",
-    description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias 1v1 en vivo, cronógrafo acústico y portal de entrenadores.",
+    description: "Plataforma de rendimiento para tiro con arco olímpico y compuesto: diana interactiva, eliminatorias en vivo y portal de entrenadores.",
     url: "https://archery101010-c0bb4.web.app",
     siteName: "Archery 101010",
     images: [

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Home, Target, History, Calendar, User, Users, Shield, Gauge } from "lucide-react";
+import { Home, Target, History, Calendar, User, Users, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 
@@ -19,7 +19,7 @@ function SpotifyNavIcon({ size = 18, className = "" }: { size?: number; classNam
   );
 }
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 interface FloatingNavProps {
   activeScreen: Screen;
@@ -45,7 +45,6 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "HOME" as Screen, icon: Home, label: "Inicio" },
         { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
         { id: "HISTORY" as Screen, icon: History, label: "Historial" },
-        { id: "CHRONOGRAPH" as Screen, icon: Gauge, label: "Crono", isPro: true },
         { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
         { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: "Perfil" }

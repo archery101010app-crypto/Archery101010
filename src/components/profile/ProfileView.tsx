@@ -699,7 +699,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         {user.plan === "FREE" ? (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-white leading-relaxed">
-              Desbloquea planificación de macrociclos, Spine Tuning, cronógrafo acústico y herramientas avanzadas sin costo por lanzamiento.
+              Desbloquea planificación de macrociclos, Spine Tuning y herramientas avanzadas sin costo por lanzamiento.
             </p>
             <button
               onClick={() => setIsPaywallOpen(true)}
@@ -1784,7 +1784,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 {[
                   "Planificación de ciclos y macroestructuras",
                   "Spine Matching y ajuste balístico de flechas",
-                  "Cronógrafo acústico de alta precisión",
                   "Portal Coach con seguimiento en vivo",
                   "Analítica avanzada de dispersión olímpica"
                 ].map((b, idx) => (

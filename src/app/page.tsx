@@ -18,7 +18,6 @@ import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal"
 import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
 import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
 import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
-import AcousticChronographView from "@/components/tools/AcousticChronographView";
 import CoachPaymentModal from "@/components/subscription/CoachPaymentModal";
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,7 +32,7 @@ import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
 import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 // Screens that the authenticated user can access
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN" | "CHRONOGRAPH";
+type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 
 export default function Home() {
@@ -951,12 +950,6 @@ export default function Home() {
             coachViewMode={coachViewMode}
           />
         )}
-        {currentScreen === "CHRONOGRAPH" && (
-          <AcousticChronographView
-            user={user}
-            onBack={() => setCurrentScreen("HOME")}
-          />
-        )}
         {currentScreen === "PROFILE" && (
           <ProfileView
             user={user}
@@ -981,8 +974,8 @@ export default function Home() {
       <FloatingNav
         activeScreen={currentScreen}
         onScreenChange={(screen) => {
-          // Block coaches from personal scoring sheets, chronograph, and duels while in coach mode
-          if (coachViewMode && (screen === "TARGET" || screen === "CHRONOGRAPH" || screen === "MATCHPLAY_LOBBY" || screen === "MATCHPLAY_ARENA")) {
+          // Block coaches from personal scoring sheets and duels while in coach mode
+          if (coachViewMode && (screen === "TARGET" || screen === "MATCHPLAY_LOBBY" || screen === "MATCHPLAY_ARENA")) {
             setCurrentScreen("HOME");
             return;
           }
@@ -999,8 +992,7 @@ export default function Home() {
           (currentScreen === "HOME" ||
             currentScreen === "TARGET" ||
             currentScreen === "CALENDAR" ||
-            currentScreen === "HISTORY" ||
-            currentScreen === "CHRONOGRAPH")
+            currentScreen === "HISTORY")
         }
       />
 
