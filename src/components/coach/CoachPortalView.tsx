@@ -26,6 +26,9 @@ import CoachAthletesTab from "./tabs/CoachAthletesTab";
 import CoachSessionsTab from "./tabs/CoachSessionsTab";
 import CoachMacrocycleTab from "./tabs/CoachMacrocycleTab";
 import AthleteDetailSheet from "./AthleteDetailSheet";
+import PlanImporterModal from "@/components/planning/PlanImporterModal";
+import { Macrocycle } from "@/lib/db/macrocycleTypes";
+import { SyncCycleSummary } from "@/lib/cycleCalendarSync";
 
 interface CoachPortalViewProps {
   user: UserProfile;
@@ -41,6 +44,28 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   const [sessions, setSessions] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [selectedAthlete, setSelectedAthlete] = useState<UserProfile | null>(null);
+  const [showPlanImporter, setShowPlanImporter] = useState(false);
+  const [importerPreselectedIds, setImporterPreselectedIds] = useState<string[]>([]);
+
+  const handleOpenPlanImporter = (preselectedAthleteId?: string) => {
+    setImporterPreselectedIds(preselectedAthleteId ? [preselectedAthleteId] : []);
+    setShowPlanImporter(true);
+  };
+
+  const handlePlanImportSuccess = ({ macrocycle, summary }: { macrocycle: Macrocycle; summary: SyncCycleSummary }) => {
+    const assignedIds = macrocycle.assignedAthleteIds || [];
+    const recipientText = assignedIds.length > 0
+      ? assignedIds.map((id) => athletes.find((a) => a.uid === id)?.fullName || id).join(", ")
+      : "Todos los alumnos del Club";
+
+    alert(
+      `¡Plan "${macrocycle.name}" cargado en formato literal!\n\n` +
+      `• Destinatario(s): ${recipientText}\n` +
+      `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+      `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+      `Ya está disponible en el calendario del alumno(s).`
+    );
+  };
 
   const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
 
@@ -477,6 +502,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             onViewAthlete={setSelectedAthlete}
             sessions={sessions}
             onCreateAthlete={handleCreateAthlete}
+            onOpenPlanImporter={handleOpenPlanImporter}
           />
         )}
 
@@ -503,6 +529,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           <CoachMacrocycleTab
             user={user}
             onUpgrade={handleUpgradeToPro}
+            athletes={athletes}
           />
         )}
       </div>
@@ -515,9 +542,25 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             onClose={() => setSelectedAthlete(null)}
             sessions={sessions}
             onRestoreSession={handleRestoreSession}
+            onOpenPlanImporter={(athleteId) => {
+              setSelectedAthlete(null);
+              handleOpenPlanImporter(athleteId);
+            }}
           />
         )}
       </AnimatePresence>
+
+      {/* Direct Plan Importer Modal (from Athletes tab or Athlete Detail Sheet) */}
+      <PlanImporterModal
+        isOpen={showPlanImporter}
+        onClose={() => setShowPlanImporter(false)}
+        user={user}
+        coachViewMode={true}
+        athletes={athletes}
+        preselectedAthleteIds={importerPreselectedIds}
+        onSuccess={handlePlanImportSuccess}
+        titleOverride="Cargar Plan al Calendario del Alumno"
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { UserProfile } from "@/lib/authService";
-import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, ChevronDown } from "lucide-react";
+import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
@@ -11,13 +11,15 @@ interface CoachAthletesTabProps {
   onViewAthlete: (athlete: UserProfile) => void;
   sessions: any[];
   onCreateAthlete?: (newAthlete: UserProfile) => void;
+  onOpenPlanImporter?: (preselectedAthleteId?: string) => void;
 }
 
 export default function CoachAthletesTab({ 
   athletes, 
   onViewAthlete, 
   sessions,
-  onCreateAthlete 
+  onCreateAthlete,
+  onOpenPlanImporter
 }: CoachAthletesTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [bowFilter, setBowFilter] = useState<string>("ALL");
@@ -187,6 +189,18 @@ export default function CoachAthletesTab({
             <span>Crear Alumno</span>
           </button>
         </div>
+
+        {/* Row 3: Quick Plan Importer CTA (Assign to 1 or several athletes) */}
+        {onOpenPlanImporter && (
+          <button
+            type="button"
+            onClick={() => onOpenPlanImporter()}
+            className="w-full py-2.5 px-3.5 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm"
+          >
+            <FileSpreadsheet size={15} className="shrink-0" />
+            <span>Cargar Plan Excel / Sheets (1 o Varios Alumnos)</span>
+          </button>
+        )}
       </div>
 
       {/* Roster list */}
@@ -249,7 +263,21 @@ export default function CoachAthletesTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  {onOpenPlanImporter && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPlanImporter(ath.uid);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95"
+                      title={`Cargar plan Excel/Sheets a ${ath.fullName}`}
+                    >
+                      <FileSpreadsheet size={12} />
+                      <span>Cargar Plan</span>
+                    </button>
+                  )}
                   {stats.averageScore > 0 && (
                     <div className="flex flex-col text-right shrink-0">
                       <span className="text-xs font-black text-yellow-gold whitespace-nowrap">{stats.averageScore} pts</span>

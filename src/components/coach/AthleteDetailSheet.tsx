@@ -15,7 +15,8 @@ import {
   ChevronUp,
   Plus,
   Send,
-  Target
+  Target,
+  FileSpreadsheet
 } from "lucide-react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -28,11 +29,12 @@ interface AthleteDetailSheetProps {
   onClose: () => void;
   sessions: any[];
   onRestoreSession?: (sessionId: string) => void;
+  onOpenPlanImporter?: (athleteId: string) => void;
 }
 
 type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
-export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession }: AthleteDetailSheetProps) {
+export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession, onOpenPlanImporter }: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   
@@ -134,18 +136,31 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
         </button>
 
         {/* Athlete Overview Card */}
-        <div className="px-5 pb-3 pt-1 flex items-center gap-3.5 shrink-0 border-b border-white/[0.05]">
-          <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon shadow-glow-cyan uppercase">
-            {athlete.fullName.substring(0, 2)}
+        <div className="px-5 pb-3 pt-1 flex flex-col gap-2.5 shrink-0 border-b border-white/[0.05]">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon shadow-glow-cyan uppercase shrink-0">
+              {athlete.fullName.substring(0, 2)}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <h3 className="text-white text-base font-black truncate uppercase tracking-wide">
+                {athlete.fullName}
+              </h3>
+              <p className="text-[11.6px] text-white leading-none mt-0.5">
+                {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col flex-1 min-w-0">
-            <h3 className="text-white text-base font-black truncate uppercase tracking-wide">
-              {athlete.fullName}
-            </h3>
-            <p className="text-[11.6px] text-white leading-none mt-0.5">
-              {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
-            </p>
-          </div>
+
+          {onOpenPlanImporter && (
+            <button
+              type="button"
+              onClick={() => onOpenPlanImporter(athlete.uid)}
+              className="w-full py-2 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
+            >
+              <FileSpreadsheet size={14} className="shrink-0" />
+              <span>Cargar Plan Excel / Sheets en su Calendario</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs navigation list */}

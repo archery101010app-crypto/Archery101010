@@ -112,8 +112,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     }
     setSelectedMacrocycleId(macrocycle.id);
 
+    const assignedIds = macrocycle.assignedAthleteIds || [];
+    const recipientText = isCoach
+      ? assignedIds.length > 0 && macrocycle.assignmentType !== "club"
+        ? assignedIds.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
+        : "Todos los alumnos del Club"
+      : "Mi Calendario Personal";
+
     alert(
       `¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
+      `• Destinatario(s): ${recipientText}\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
       `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
       `Toca cualquier fecha en el calendario para ver el detalle exacto de cada día.`
@@ -179,8 +187,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       setSessions(sessionList);
 
       if (isCoach) {
+        const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
+        const athletes = (allUsers || []).filter((u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer");
         setRoster(athletes);
       }
       
@@ -295,9 +304,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   }, [syncMacroId]);
 
   const getPhaseOnDate = (dateStr: string) => {
-    const filteredMacros = selectedMacrocycleId === "ALL" 
+    let filteredMacros = selectedMacrocycleId === "ALL" 
       ? macrocycles 
       : macrocycles.filter(m => m.id === selectedMacrocycleId);
+
+    if (isCoach && selectedAthleteFilter !== "ALL") {
+      filteredMacros = filteredMacros.filter((m) =>
+        m.assignmentType === "club" ||
+        !m.assignedAthleteIds ||
+        m.assignedAthleteIds.length === 0 ||
+        m.assignedAthleteIds.includes(selectedAthleteFilter)
+      );
+    } else if (!isCoach) {
+      filteredMacros = filteredMacros.filter((m) =>
+        m.assignmentType === "club" ||
+        !m.assignedAthleteIds ||
+        m.assignedAthleteIds.length === 0 ||
+        m.assignedAthleteIds.includes(user.uid)
+      );
+    }
 
     for (const macro of filteredMacros) {
       const phase = macro.phases?.find((p: any) => dateStr >= p.startDate && dateStr <= p.endDate);
@@ -1349,8 +1374,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 <User size={9} />
                                 <span>
                                   {isCoach 
-                                    ? `Para: ${roster.find(r => r.uid === coachAssignment.assignedAthleteIds?.[0])?.fullName || coachAssignment.assignedAthleteIds[0]}`
-                                    : "Asignación Individual"}
+                                    ? `Para: ${coachAssignment.assignedAthleteIds.map(id => roster.find(r => r.uid === id)?.fullName || id).join(", ")}`
+                                    : "Asignación Personalizada"}
                                 </span>
                               </span>
                             ) : (
@@ -1963,6 +1988,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         user={user}
+        coachViewMode={isCoach}
+        athletes={roster}
+        preselectedAthleteIds={isCoach && selectedAthleteFilter !== "ALL" ? [selectedAthleteFilter] : undefined}
         onSuccess={handleImportSuccess}
         titleOverride="Calendario y Planificación"
       />

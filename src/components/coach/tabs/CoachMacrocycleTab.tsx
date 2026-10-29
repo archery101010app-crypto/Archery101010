@@ -29,9 +29,10 @@ import PlanImporterModal from "@/components/planning/PlanImporterModal";
 interface CoachMacrocycleTabProps {
   user: UserProfile;
   onUpgrade: () => void;
+  athletes?: UserProfile[];
 }
 
-export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleTabProps) {
+export default function CoachMacrocycleTab({ user, onUpgrade, athletes: externalAthletes }: CoachMacrocycleTabProps) {
   const isPro = user.plan === "PRO";
 
   const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
@@ -61,8 +62,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   const [macroToSync, setMacroToSync] = useState<Macrocycle | null>(null);
   const [syncYear, setSyncYear] = useState(new Date().getFullYear());
   const [syncMonth, setSyncMonth] = useState(new Date().getMonth());
-  const [syncTargetType, setSyncTargetType] = useState<"all" | "single">("all");
-  const [syncSelectedAthleteId, setSyncSelectedAthleteId] = useState<string>("");
+  const [syncTargetType, setSyncTargetType] = useState<"all" | "selected">("all");
+  const [syncSelectedAthleteIds, setSyncSelectedAthleteIds] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Smart Spreadsheet Import Modal states
@@ -102,18 +103,19 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setMacrocycles(list);
     setSelectedMacro(macrocycle);
 
-    const isSingle = macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds && macrocycle.assignedAthleteIds.length > 0;
-    const athleteName = isSingle 
-      ? roster.find((r) => r.uid === macrocycle.assignedAthleteIds[0])?.fullName || macrocycle.assignedAthleteIds[0]
+    const assignedIds = macrocycle.assignedAthleteIds || [];
+    const hasSpecificAthletes = assignedIds.length > 0 && macrocycle.assignmentType !== "club";
+    const athleteNames = hasSpecificAthletes
+      ? assignedIds.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
       : "Todos los alumnos del Club";
 
     alert(
       `¡Plan "${macrocycle.name}" Importado y Publicado en el Calendario!\n\n` +
-      `• Asignado a: ${athleteName}\n` +
+      `• Asignado a: ${athleteNames}\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
       `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-      (isSingle
-        ? `Se ha sincronizado únicamente en el calendario de ${athleteName}.`
+      (hasSpecificAthletes
+        ? `Se ha sincronizado en formato literal en el calendario de: ${athleteNames}.`
         : `Tus arqueros ya pueden entrar a su calendario para ver las tareas asignadas.`)
     );
   };
@@ -122,34 +124,38 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
     setMacroToSync(macro);
     setSyncYear(new Date().getFullYear());
     setSyncMonth(new Date().getMonth());
-    if (macro.assignmentType === "individual" && macro.assignedAthleteIds && macro.assignedAthleteIds.length > 0) {
-      setSyncTargetType("single");
-      setSyncSelectedAthleteId(macro.assignedAthleteIds[0]);
+    if (macro.assignedAthleteIds && macro.assignedAthleteIds.length > 0 && macro.assignmentType !== "club") {
+      setSyncTargetType("selected");
+      setSyncSelectedAthleteIds(macro.assignedAthleteIds);
     } else {
       setSyncTargetType("all");
-      setSyncSelectedAthleteId(roster[0]?.uid || "");
+      setSyncSelectedAthleteIds(roster[0]?.uid ? [roster[0].uid] : []);
     }
     setShowSyncModal(true);
   };
 
   const handleExecuteSync = async () => {
     if (!macroToSync) return;
+    if (syncTargetType === "selected" && syncSelectedAthleteIds.length === 0) {
+      alert("Por favor marca al menos un alumno en la lista.");
+      return;
+    }
     setIsSyncing(true);
     try {
-      const targetAthlete = syncTargetType === "single" ? syncSelectedAthleteId : undefined;
+      const targetAthletes = syncTargetType === "selected" ? syncSelectedAthleteIds : undefined;
       const summary = await syncCycleToMonthCalendar(macroToSync, syncYear, syncMonth, user, {
-        targetAthleteId: targetAthlete
+        targetAthleteIds: targetAthletes
       });
       setShowSyncModal(false);
 
-      const targetText = targetAthlete 
-        ? `Alumno: ${roster.find((r) => r.uid === targetAthlete)?.fullName || targetAthlete} (Sincronizado únicamente con su calendario)`
+      const targetText = targetAthletes && targetAthletes.length > 0
+        ? targetAthletes.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
         : "Todos los alumnos del Club";
 
       alert(
         `¡Calendario Sincronizado con Éxito!\n\n` +
         `• Plan: ${summary.macrocycleName}\n` +
-        `• Destinatario: ${targetText}\n` +
+        `• Destinatario(s): ${targetText}\n` +
         `• Mes: ${summary.monthName} ${summary.year}\n` +
         `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
         `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
@@ -165,8 +171,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
   useEffect(() => {
     async function loadData() {
       // Load roster of athletes
+      const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-      const athletes = allUsers.filter((u) => u.clubId === user.clubId && u.role === "archer");
+      const athletes = externalAthletes && externalAthletes.length > 0
+        ? externalAthletes
+        : allUsers.filter((u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer");
       
       // If empty roster, add some default demo athletes for selection
       if (athletes.length === 0) {
@@ -589,22 +598,21 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       </div>
 
                       {/* Assignment Badge */}
-                      <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[10.5px] text-white">
-                        <span className="flex items-center gap-1 font-bold">
-                          {mac.assignmentType === "club" ? (
+                      <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[10.5px] text-white gap-2">
+                        <span className="flex items-center gap-1 font-bold truncate">
+                          {mac.assignmentType === "club" || (!mac.assignedAthleteIds || mac.assignedAthleteIds.length === 0) ? (
                             <>
-                              <Layout size={10} />
+                              <Layout size={10} className="shrink-0 text-cyan-neon" />
                               <span>Todo el Club</span>
-                            </>
-                          ) : mac.assignmentType === "group" ? (
-                            <>
-                              <Users size={10} />
-                              <span>Grupo: {mac.groupName}</span>
                             </>
                           ) : (
                             <>
-                              <User size={10} />
-                              <span>Individual ({mac.assignedAthleteIds.length} arqueros)</span>
+                              <Users size={10} className="shrink-0 text-cyan-neon" />
+                              <span className="truncate">
+                                {mac.assignedAthleteIds
+                                  .map((id) => roster.find((r) => r.uid === id)?.fullName || id)
+                                  .join(", ")}
+                              </span>
                             </>
                           )}
                         </span>
@@ -1314,7 +1322,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     </div>
                   </div>
 
-                  {/* Selector de Destinatario: Todos los alumnos o 1 alumno */}
+                  {/* Selector de Destinatario: Todos los alumnos o 1/varios alumnos */}
                   <div className="flex flex-col gap-2 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
                     <div className="flex items-center justify-between">
                       <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
@@ -1322,11 +1330,31 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         <span>Sincronizar con:</span>
                       </span>
                       <span className="text-[10.5px] text-cyan-neon tabular-nums font-bold">
-                        {syncTargetType === "all" ? "Todo el Club" : "1 Alumno"}
+                        {syncTargetType === "all"
+                          ? "Todo el Club"
+                          : `${syncSelectedAthleteIds.length} ${syncSelectedAthleteIds.length === 1 ? "Alumno" : "Alumnos"}`}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSyncTargetType("selected");
+                          if (syncSelectedAthleteIds.length === 0 && roster.length > 0) {
+                            setSyncSelectedAthleteIds([roster[0].uid]);
+                          }
+                        }}
+                        className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                          syncTargetType === "selected"
+                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                            : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
+                        }`}
+                      >
+                        <User size={12} />
+                        <span>Escoger 1 o Varios</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => setSyncTargetType("all")}
@@ -1339,42 +1367,69 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         <Users size={12} />
                         <span>Todos los Alumnos</span>
                       </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSyncTargetType("single");
-                          if (!syncSelectedAthleteId && roster.length > 0) {
-                            setSyncSelectedAthleteId(roster[0].uid);
-                          }
-                        }}
-                        className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
-                          syncTargetType === "single"
-                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                            : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
-                        }`}
-                      >
-                        <User size={12} />
-                        <span>1 Alumno Específico</span>
-                      </button>
                     </div>
 
-                    {syncTargetType === "single" && (
-                      <div className="flex flex-col gap-1 pt-1 animate-fadeIn">
-                        <label className="text-[10.5px] text-white uppercase font-bold">
-                          Seleccionar Alumno
-                        </label>
-                        <select
-                          value={syncSelectedAthleteId}
-                          onChange={(e) => setSyncSelectedAthleteId(e.target.value)}
-                          className="bg-neutral-950 border border-cyan-neon/40 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
-                        >
-                          {roster.map((ath) => (
-                            <option key={ath.uid} value={ath.uid}>
-                              {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
-                            </option>
-                          ))}
-                        </select>
+                    {syncTargetType === "selected" && (
+                      <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10.5px] text-white uppercase font-bold">
+                            Marca 1 o varios alumnos:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSyncSelectedAthleteIds(roster.map((r) => r.uid))}
+                              className="text-[9.5px] font-black uppercase text-cyan-neon hover:underline cursor-pointer"
+                            >
+                              Todos
+                            </button>
+                            <span className="text-white/20">·</span>
+                            <button
+                              type="button"
+                              onClick={() => setSyncSelectedAthleteIds([])}
+                              className="text-[9.5px] font-black uppercase text-white/70 hover:text-white cursor-pointer"
+                            >
+                              Limpiar
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-36 overflow-y-auto flex flex-col gap-1 pr-1">
+                          {roster.map((ath) => {
+                            const isChecked = syncSelectedAthleteIds.includes(ath.uid);
+                            return (
+                              <button
+                                key={ath.uid}
+                                type="button"
+                                onClick={() => {
+                                  setSyncSelectedAthleteIds((prev) =>
+                                    prev.includes(ath.uid)
+                                      ? prev.filter((id) => id !== ath.uid)
+                                      : [...prev, ath.uid]
+                                  );
+                                }}
+                                className={`flex items-center justify-between px-2.5 py-2 rounded-xl border text-left transition cursor-pointer ${
+                                  isChecked
+                                    ? "bg-cyan-neon/15 border-cyan-neon/50 text-white"
+                                    : "bg-neutral-950/80 border-white/10 text-white/80 hover:border-white/25"
+                                }`}
+                              >
+                                <span className="text-xs font-bold truncate">
+                                  {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
+                                </span>
+                                <div
+                                  className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                    isChecked
+                                      ? "bg-cyan-neon border-cyan-neon text-black"
+                                      : "border-white/30 bg-transparent"
+                                  }`}
+                                >
+                                  {isChecked && <Check size={11} className="stroke-[3]" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1405,8 +1460,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     <span>
                       {isSyncing 
                         ? "Sincronizando..." 
-                        : syncTargetType === "single"
-                        ? `Sincronizar con ${roster.find(r => r.uid === syncSelectedAthleteId)?.fullName || "Alumno"}`
+                        : syncTargetType === "selected"
+                        ? syncSelectedAthleteIds.length === 1
+                          ? `Sincronizar con ${roster.find(r => r.uid === syncSelectedAthleteIds[0])?.fullName || "Alumno"}`
+                          : `Sincronizar con ${syncSelectedAthleteIds.length} Alumnos`
                         : `Sincronizar con Todos (${monthNames[syncMonth]} ${syncYear})`}
                     </span>
                   </button>
@@ -1422,6 +1479,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         user={user}
+        coachViewMode={true}
+        athletes={roster}
         onSuccess={handleImportSuccess}
         titleOverride="Gestión del Entrenador"
       />

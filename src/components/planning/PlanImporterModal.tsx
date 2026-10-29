@@ -52,6 +52,9 @@ interface PlanImporterModalProps {
     summary: SyncCycleSummary;
   }) => void;
   titleOverride?: string;
+  coachViewMode?: boolean;
+  athletes?: UserProfile[];
+  preselectedAthleteIds?: string[];
 }
 
 type UploadTab = "file" | "sheets" | "paste";
@@ -62,8 +65,12 @@ export default function PlanImporterModal({
   onClose,
   user,
   onSuccess,
-  titleOverride
+  titleOverride,
+  coachViewMode = false,
+  athletes: propAthletes,
+  preselectedAthleteIds
 }: PlanImporterModalProps) {
+  const isCoachUser = Boolean(coachViewMode || user.role === "coach" || user.role === "team_admin_coach");
   const [activeTab, setActiveTab] = useState<UploadTab>("file");
   const [importText, setImportText] = useState("");
   const [importPlanName, setImportPlanName] = useState("");
@@ -81,29 +88,59 @@ export default function PlanImporterModal({
   const [selectedExcelSheet, setSelectedExcelSheet] = useState<string>("");
   const workbookExtractorRef = useRef<((sheetName: string) => string) | null>(null);
 
-  // Recipient assignment state (Coach role)
-  const [assignTarget, setAssignTarget] = useState<"all" | "single">("all");
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string>("");
+  // Recipient assignment state (Coach role: "all" vs "selected" for 1 or multiple athletes)
+  const [assignTarget, setAssignTarget] = useState<"all" | "selected">("all");
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>([]);
   const [clubAthletes, setClubAthletes] = useState<UserProfile[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const toggleAthleteSelection = (uid: string) => {
+    setSelectedAthleteIds((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
+    );
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (preselectedAthleteIds && preselectedAthleteIds.length > 0) {
+      setAssignTarget("selected");
+      setSelectedAthleteIds(preselectedAthleteIds);
+    } else {
+      setAssignTarget("all");
+    }
+  }, [isOpen, preselectedAthleteIds]);
+
   useEffect(() => {
     async function loadClubAthletes() {
-      if (user.role !== "coach" && user.role !== "team_admin_coach") return;
+      if (!isCoachUser) return;
       try {
+        const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const athletes = (allUsers || []).filter((u) => u.clubId === user.clubId && u.role === "archer");
-        setClubAthletes(athletes);
-        if (athletes.length > 0 && !selectedAthleteId) {
-          setSelectedAthleteId(athletes[0].uid);
+        const localAthletes = (allUsers || []).filter(
+          (u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer" && u.uid !== user.uid
+        );
+
+        const mergedMap = new Map<string, UserProfile>();
+        (propAthletes || []).forEach((a) => {
+          if (a && a.uid) mergedMap.set(a.uid, a);
+        });
+        localAthletes.forEach((a) => {
+          if (a && a.uid && !mergedMap.has(a.uid)) mergedMap.set(a.uid, a);
+        });
+
+        const finalAthletes = Array.from(mergedMap.values());
+        setClubAthletes(finalAthletes);
+
+        if ((!preselectedAthleteIds || preselectedAthleteIds.length === 0) && selectedAthleteIds.length === 0 && finalAthletes.length > 0) {
+          setSelectedAthleteIds([finalAthletes[0].uid]);
         }
       } catch (err) {
         console.error("Error loading club athletes in PlanImporterModal:", err);
       }
     }
     loadClubAthletes();
-  }, [user.clubId, user.role, isOpen, selectedAthleteId]);
+  }, [user.clubId, user.uid, isCoachUser, isOpen, propAthletes, preselectedAthleteIds]);
 
   if (!isOpen) return null;
 
@@ -256,6 +293,10 @@ export default function PlanImporterModal({
 
   const handleConfirmImport = async () => {
     if (!importPreview) return;
+    if (isCoachUser && assignTarget === "selected" && selectedAthleteIds.length === 0) {
+      setImportError("Por favor selecciona al menos un alumno para cargarle el plan en su calendario.");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -263,21 +304,30 @@ export default function PlanImporterModal({
       const planId = generateResilientId("MAC");
       const finalName = (importPlanName.trim() || importPreview.planName || "Plan Importado").trim();
 
-      const isCoach = user.role === "coach" || user.role === "team_admin_coach";
-      const isSingle = isCoach && assignTarget === "single" && Boolean(selectedAthleteId);
-      const targetAthletes = isSingle ? [selectedAthleteId] : (user.role === "archer" ? [user.uid] : []);
-      const assignmentType: "club" | "individual" = (isSingle || user.role === "archer") ? "individual" : "club";
+      const isSelectedMode = isCoachUser && assignTarget === "selected" && selectedAthleteIds.length > 0;
+      const targetAthletes = isSelectedMode
+        ? selectedAthleteIds
+        : (!isCoachUser ? [user.uid] : []);
+
+      const assignmentType: "club" | "group" | "individual" = isSelectedMode
+        ? (selectedAthleteIds.length === 1 ? "individual" : "group")
+        : (!isCoachUser ? "individual" : "club");
+
+      const selectedNames = selectedAthleteIds
+        .map((uid) => clubAthletes.find((a) => a.uid === uid)?.fullName?.split(" ")[0] || "Alumno")
+        .join(", ");
 
       const newCycle: Macrocycle = {
         id: planId,
         name: finalName,
-        coachId: isCoach ? user.uid : "USR-COACH-DEFAULT",
+        coachId: isCoachUser ? user.uid : "USR-COACH-DEFAULT",
         clubId: user.clubId || "CLB-DEMO",
         startDate: importPreview.startDate,
         endDate: importPreview.endDate,
         phases: importPreview.stages,
         assignmentType,
         assignedAthleteIds: targetAthletes,
+        groupName: assignmentType === "group" ? `${selectedAthleteIds.length} Alumnos (${selectedNames})` : undefined,
         volumeGoal: importPreview.totalVolumeGoal,
         currentVolume: 0,
         status: "active",
@@ -364,6 +414,124 @@ export default function PlanImporterModal({
 
         {/* Modal Body (Scrollable) */}
         <div className="p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto flex-1">
+          {/* COACH RECIPIENT SELECTOR (Always visible at top for Coach: 1 Alumno, Varios Alumnos, o Todos) */}
+          {isCoachUser && clubAthletes.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-[#0D1017] border border-cyan-neon/25 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11.6px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
+                  <Users size={14} className="text-cyan-neon" />
+                  <span>¿A quién cargar este Plan en su Calendario?</span>
+                </span>
+                <span className="text-[10.5px] text-white font-black uppercase tracking-wider bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon px-2.5 py-0.5 rounded-full">
+                  {assignTarget === "all"
+                    ? `Todos los Alumnos (${clubAthletes.length})`
+                    : selectedAthleteIds.length === 1
+                    ? `1 Alumno: ${clubAthletes.find((a) => a.uid === selectedAthleteIds[0])?.fullName || "Seleccionado"}`
+                    : `${selectedAthleteIds.length} Alumnos Seleccionados`}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAssignTarget("selected")}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                    assignTarget === "selected"
+                      ? "bg-cyan-neon text-black border-cyan-neon"
+                      : "bg-neutral-950 border-white/10 text-white hover:border-white/25"
+                  }`}
+                >
+                  <User size={13} />
+                  <span>Escoger 1 o Varios</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAssignTarget("all")}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                    assignTarget === "all"
+                      ? "bg-cyan-neon text-black border-cyan-neon"
+                      : "bg-neutral-950 border-white/10 text-white hover:border-white/25"
+                  }`}
+                >
+                  <Users size={13} />
+                  <span>Todos los Alumnos</span>
+                </button>
+              </div>
+
+              {assignTarget === "selected" && (
+                <div className="flex flex-col gap-2 pt-1 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      Toca para marcar 1 o varios alumnos ({selectedAthleteIds.length}/{clubAthletes.length}):
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAthleteIds(clubAthletes.map((a) => a.uid))}
+                        className="text-[10.5px] text-cyan-neon font-black uppercase hover:underline cursor-pointer"
+                      >
+                        Marcar Todos
+                      </button>
+                      <span className="text-white/30">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAthleteIds([])}
+                        className="text-[10.5px] text-white font-bold uppercase hover:underline cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                    {clubAthletes.map((ath) => {
+                      const isChecked = selectedAthleteIds.includes(ath.uid);
+                      const bowLabel =
+                        ath.bowConfig?.type === "Recurve"
+                          ? "Recurvo"
+                          : ath.bowConfig?.type === "Compound"
+                          ? "Compuesto"
+                          : ath.bowConfig?.type || "Barebow";
+                      return (
+                        <button
+                          key={ath.uid}
+                          type="button"
+                          onClick={() => toggleAthleteSelection(ath.uid)}
+                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition cursor-pointer ${
+                            isChecked
+                              ? "bg-cyan-neon/15 border-cyan-neon text-white"
+                              : "bg-neutral-950/80 border-white/[0.08] text-white hover:border-white/20"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
+                                isChecked
+                                  ? "bg-cyan-neon border-cyan-neon text-black"
+                                  : "bg-neutral-900 border-white/20 text-transparent"
+                              }`}
+                            >
+                              <Check size={12} strokeWidth={3} />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-black text-white block truncate">
+                                {ath.fullName || ath.email}
+                              </span>
+                              <span className="text-[10.5px] text-cyan-neon font-bold uppercase block truncate">
+                                {bowLabel} {ath.bowConfig?.defaultDistance ? `· ${ath.bowConfig.defaultDistance}m` : ""}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Method Selection Tabs */}
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0D0F12] rounded-2xl border border-white/[0.08]">
             <button
@@ -660,68 +828,6 @@ export default function PlanImporterModal({
                 </div>
               </div>
 
-              {/* Coach Recipient Selector: Send to 1 athlete or all */}
-              {(user.role === "coach" || user.role === "team_admin_coach") && clubAthletes.length > 0 && (
-                <div className="p-3 sm:p-3.5 rounded-2xl bg-neutral-950 border border-white/10 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11.6px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
-                      <Users size={13} className="text-cyan-neon" />
-                      <span>Destinatario del Plan</span>
-                    </span>
-                    <span className="text-[10.5px] text-white font-bold uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                      {assignTarget === "all" ? "Todo el Club" : "1 Alumno"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAssignTarget("all")}
-                      className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
-                        assignTarget === "all"
-                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
-                          : "bg-neutral-900 border-white/10 text-white hover:text-white"
-                      }`}
-                    >
-                      <Users size={13} />
-                      <span>Todos los Alumnos</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setAssignTarget("single")}
-                      className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer border ${
-                        assignTarget === "single"
-                          ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
-                          : "bg-neutral-900 border-white/10 text-white hover:text-white"
-                      }`}
-                    >
-                      <User size={13} />
-                      <span>1 Alumno Específico</span>
-                    </button>
-                  </div>
-
-                  {assignTarget === "single" && (
-                    <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
-                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                        Selecciona el alumno:
-                      </label>
-                      <select
-                        value={selectedAthleteId}
-                        onChange={(e) => setSelectedAthleteId(e.target.value)}
-                        className="bg-neutral-900 border border-white/15 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon font-bold cursor-pointer"
-                      >
-                        {clubAthletes.map((ath) => (
-                          <option key={ath.uid} value={ath.uid}>
-                            {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* PREVIEW CONTAINER */}
               {importPreview.mode === "daily" ? (
                 viewMode === "table" ? (
@@ -865,8 +971,12 @@ export default function PlanImporterModal({
               <>
                 <Check size={15} />
                 <span>
-                  {(user.role === "coach" || user.role === "team_admin_coach") && assignTarget === "single"
-                    ? `Aplicar al Calendario de ${clubAthletes.find(a => a.uid === selectedAthleteId)?.fullName || "Alumno"}`
+                  {isCoachUser && assignTarget === "selected"
+                    ? selectedAthleteIds.length === 1
+                      ? `Cargar al Calendario de ${clubAthletes.find((a) => a.uid === selectedAthleteIds[0])?.fullName || "Alumno"}`
+                      : `Cargar al Calendario de ${selectedAthleteIds.length} Alumnos`
+                    : isCoachUser
+                    ? "Cargar al Calendario de Todos los Alumnos"
                     : "Aplicar Literalmente al Calendario"}
                 </span>
                 <ArrowRight size={15} />

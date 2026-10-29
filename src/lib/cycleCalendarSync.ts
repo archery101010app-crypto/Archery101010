@@ -69,6 +69,7 @@ export async function syncCycleToMonthCalendar(
   options?: {
     customNotes?: string;
     targetAthleteId?: string;
+    targetAthleteIds?: string[];
   }
 ): Promise<SyncCycleSummary> {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -83,11 +84,17 @@ export async function syncCycleToMonthCalendar(
   let restDaysCount = 0;
   let totalArrowsAssigned = 0;
 
-  const targetAthlete = options?.targetAthleteId;
-  const athleteSuffix = targetAthlete || (macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds?.[0] ? macrocycle.assignedAthleteIds[0] : "");
-  const assignedAthleteIds = targetAthlete 
-    ? [targetAthlete] 
+  const explicitTargets = options?.targetAthleteIds && options.targetAthleteIds.length > 0
+    ? options.targetAthleteIds
+    : options?.targetAthleteId
+    ? [options.targetAthleteId]
+    : null;
+
+  const assignedAthleteIds = explicitTargets
+    ? explicitTargets
     : (macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []));
+
+  const athleteSuffix = assignedAthleteIds.length === 1 ? assignedAthleteIds[0] : "";
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -206,9 +213,8 @@ export async function saveDailyEntriesToCalendar(
   let restDaysCount = 0;
   let totalArrowsAssigned = 0;
 
-  const athleteSuffix = (macrocycle.assignmentType === "individual" && macrocycle.assignedAthleteIds?.[0]) 
-    ? macrocycle.assignedAthleteIds[0] 
-    : "";
+  const assignedList = macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []);
+  const athleteSuffix = assignedList.length === 1 ? assignedList[0] : "";
 
   for (const entry of dailyEntries) {
     const phase = macrocycle.phases?.find(
@@ -218,7 +224,7 @@ export async function saveDailyEntriesToCalendar(
     const eventId = athleteSuffix 
       ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${entry.date}` 
       : `EVT-MAC-${macrocycle.id}-${entry.date}`;
-    const isCoach = author.role === "coach";
+    const isCoach = author.role === "coach" || author.role === "team_admin_coach" || macrocycle.coachId === author.uid;
 
     const eventData: CalendarEvent = {
       id: eventId,
@@ -237,7 +243,7 @@ export async function saveDailyEntriesToCalendar(
       phaseType: phase?.type,
       phaseColor: phase?.color || "#00E5FF",
       targetArrows: entry.targetArrows,
-      assignedAthleteIds: macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []),
+      assignedAthleteIds: assignedList,
       focusPoints: entry.focusPoints,
       coachNotes: entry.notes,
       customFields: entry.customFields,
