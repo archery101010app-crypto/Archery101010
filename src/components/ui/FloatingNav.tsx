@@ -64,7 +64,6 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
-          const isProBlocked = item.isPro && user?.plan === "FREE";
 
           return (
             <button
@@ -89,23 +88,16 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                 />
               )}
 
-              {/* Icon wrapper with PRO badge */}
+              {/* Icon wrapper */}
               <div className="relative flex items-center justify-center">
                 <Icon
                   size={18}
                   className={`transition-colors duration-200 relative z-10 ${
                     isActive
                       ? "text-cyan-neon"
-                      : isProBlocked
-                      ? "text-yellow-gold/80 group-hover:text-yellow-gold"
                       : "text-white group-hover:text-white"
                   }`}
                 />
-                {item.isPro && (
-                  <span className="absolute -top-1.5 -right-2.5 text-[8.8px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wide">
-                    PRO
-                  </span>
-                )}
               </div>
 
               {/* Label indicator */}
