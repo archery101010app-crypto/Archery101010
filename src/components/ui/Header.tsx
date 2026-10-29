@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSync } from "@/hooks/useSync";
 import { UserProfile } from "@/lib/authService";
-import { Wifi, WifiOff, RefreshCw, Sun, Moon, Sparkles } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { APP_VERSION } from "@/lib/version";
 
@@ -80,33 +80,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         </span>
       </div>
 
-      {/* PRO Gratis Button, View Switcher, Theme Selector & Sync Wifi Button */}
-      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Botón Visible Superior de Acceso a Afiliación PRO (Gratis por ahora) */}
-        {user && (
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("open-coach-payment"))}
-            className="h-8 px-2.5 rounded-full bg-gradient-to-r from-yellow-gold/20 via-cyan-neon/15 to-emerald-500/20 hover:from-yellow-gold/30 hover:to-cyan-neon/25 border border-yellow-gold/50 flex items-center gap-1.5 cursor-pointer transition-all shadow-[0_0_12px_rgba(255,215,0,0.18)]"
-            title="Afiliarse a PRO (100% Gratis por ahora)"
-          >
-            <Sparkles size={12} className="text-yellow-gold shrink-0" />
-            <span className="text-[10.5px] font-black uppercase tracking-wider text-white whitespace-nowrap">
-              PRO
-            </span>
-            <span className="text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded-full bg-emerald-400 text-black leading-none whitespace-nowrap">
-              GRATIS
-            </span>
-          </motion.button>
-        )}
-
+      {/* View Switcher, Theme Selector & Sync Wifi Button */}
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         {/* Coach View Switcher Toggle */}
         {user && onToggleCoachViewMode && (
           <div className="flex bg-[#090B0E] p-1 rounded-full border border-white/[0.08] items-center">
             <button
               onClick={() => onToggleCoachViewMode(false)}
-              className={`h-7 px-2 sm:px-3 rounded-full text-[11.5px] font-bold uppercase tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12px] font-bold uppercase tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -116,14 +97,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
-              className={`h-7 px-2 sm:px-3 rounded-full text-[11.5px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
               }`}
             >
               <span>Coach</span>
-              <span className="text-[8.5px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
+              <span className="text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
                 PRO
               </span>
             </button>
