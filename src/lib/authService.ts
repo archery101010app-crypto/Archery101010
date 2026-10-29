@@ -977,8 +977,70 @@ export async function authenticateWithSocialProvider(
     }
   }
 
-  // Inside native Android APK: use direct Google OAuth id_token flow (intercepted by MainActivity -> signInWithCredential)
+  // Inside native Android APK: use Native Android Google Account Picker (1-tap system bottom sheet, zero typing)
   if (isCapacitorNative && providerName === "google") {
+    const nativeAuth = typeof window !== "undefined" ? (window as any).ArcheryNativeAuth : null;
+    if (nativeAuth && typeof nativeAuth.startGoogleSignIn === "function") {
+      const payload: {
+        success: boolean;
+        idToken?: string;
+        email?: string;
+        displayName?: string;
+        googleId?: string;
+        statusCode?: number;
+        error?: string;
+      } = await new Promise((resolve) => {
+        (window as any).__onNativeGoogleSignIn = (res: any) => {
+          delete (window as any).__onNativeGoogleSignIn;
+          resolve(res);
+        };
+        nativeAuth.startGoogleSignIn();
+      });
+
+      if (!payload || !payload.success) {
+        if (payload?.statusCode === 12501 || payload?.statusCode === 16) {
+          throw new Error("Inicio de sesión cancelado.");
+        }
+        throw new Error(
+          payload?.error
+            ? `No se pudo completar el acceso con Google (${payload.error}).`
+            : "Inicio de sesión con Google cancelado."
+        );
+      }
+
+      if (payload.idToken) {
+        try {
+          const credential = GoogleAuthProvider.credential(payload.idToken);
+          const result = await signInWithCredential(auth, credential);
+          const u = result.user;
+          const email =
+            payload.email ||
+            u.email ||
+            u.providerData?.find((p) => p.email)?.email ||
+            `${u.uid}@google.archery101010.com`;
+          const displayName =
+            payload.displayName ||
+            u.displayName ||
+            u.providerData?.find((p) => p.displayName)?.displayName ||
+            "Arquero Google";
+          return await loginSocialUser(email, displayName, u.uid);
+        } catch (credErr) {
+          console.warn("signInWithCredential warning, using verified native Google account:", credErr);
+        }
+      }
+
+      if (payload.email) {
+        const fallbackUid = payload.googleId ? `GGL-${payload.googleId}` : undefined;
+        return await loginSocialUser(
+          payload.email,
+          payload.displayName || "Arquero Google",
+          fallbackUid
+        );
+      }
+
+      throw new Error("No se pudo obtener el correo de la cuenta de Google seleccionada.");
+    }
+
     const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
     const oauthUrl =
       `https://accounts.google.com/o/oauth2/v2/auth` +

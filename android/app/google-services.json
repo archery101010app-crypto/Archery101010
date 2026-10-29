@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "757910399585",
+    "project_id": "archery101010-c0bb4",
+    "storage_bucket": "archery101010-c0bb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:757910399585:android:dc895713729319995b5820",
+        "android_client_info": {
+          "package_name": "com.archery101010.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "757910399585-389aelgprme1f0fe3gflktrceqda1ga6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.archery101010.app",
+            "certificate_hash": "31d871c03d201f3c24c4df5b1f7d8a5b7f7b11ca"
+          }
+        },
+        {
+          "client_id": "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbRgjXZxHZsaXynN-CpQ23wNVQUfNHZVM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
