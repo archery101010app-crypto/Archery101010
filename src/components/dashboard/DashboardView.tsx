@@ -501,26 +501,61 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </h3>
           </div>
 
-          {/* Row 3: Symmetrical 2-Column Footer (Scoreboard + Clean CTA Button without icons) */}
-          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
-            <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
-              <div className="flex items-baseline gap-1">
-                <span className="text-[10.2px] font-black uppercase tracking-wide text-cyan-neon">TÚ</span>
-                <span className="text-xs font-black text-white tabular-nums">6</span>
-              </div>
-              <span className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[9.2px] font-black text-red-rival tracking-wide leading-none shrink-0">
-                VS
-              </span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-xs font-black text-white tabular-nums">4</span>
-                <span className="text-[10.2px] font-black uppercase tracking-wide text-yellow-gold">RIVAL</span>
-              </div>
-            </div>
+          {/* Row 3: Symmetrical 2-Column Footer (Real Duel Record + Clean CTA Button) */}
+          {(() => {
+            const userDuels = sessions.filter((s) => s.isDuel);
+            const duelWins = userDuels.filter((s) => s.outcome === "win").length;
+            return (
+              <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
+                <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[10.2px] font-black uppercase tracking-wide text-cyan-neon">
+                      {language === "es" ? "VICTORIAS" : "WINS"}
+                    </span>
+                    <span className="text-xs font-black text-white tabular-nums">{duelWins}</span>
+                  </div>
+                  <span className="text-white font-bold">·</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[10.2px] font-black uppercase tracking-wide text-yellow-gold">
+                      {language === "es" ? "DUELOS" : "DUELS"}
+                    </span>
+                    <span className="text-xs font-black text-white tabular-nums">{userDuels.length}</span>
+                  </div>
+                </div>
 
-            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
-              <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
+                <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
+                  <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </motion.div>
+
+        {/* 4. Barra Integrada Estrellas 101010 (Reemplaza la pestaña flotante lateral) */}
+        <motion.div
+          variants={cardVariants}
+          onClick={() => setIsStarsDrawerOpen(true)}
+          className="col-span-3 bg-[#0D1017] rounded-2xl border border-yellow-gold/25 hover:border-yellow-gold/50 px-4 py-3 cursor-pointer transition-all duration-200 flex items-center justify-between gap-3 group"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-yellow-gold/15 border border-yellow-gold/35 flex items-center justify-center text-yellow-gold shrink-0">
+              <Star size={16} className="fill-yellow-gold text-yellow-gold" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[11px] font-black uppercase tracking-[0.1em] text-white truncate">
+                Estrellas 101010 · WA 720
+              </span>
+              <span className="text-[10.5px] font-semibold text-white truncate">
+                {athleteStar && athleteStar.highestStarLevel > 0
+                  ? `Nivel actual: Estrella ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`
+                  : "8 niveles oficiales · Recurvo 70 m y Compuesto 50 m"}
+              </span>
             </div>
           </div>
+
+          <span className="h-7 px-3 rounded-lg bg-yellow-gold text-black font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center shrink-0">
+            {language === "es" ? "Ver" : "View"}
+          </span>
         </motion.div>
       </div>
 
@@ -534,22 +569,6 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       >
         <span className="truncate">{t("newSession")}</span>
       </motion.button>
-
-      {/* Floating stars tab on the left edge */}
-      <div className="fixed left-0 top-[calc(50%-112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
-        <button
-          onClick={() => setIsStarsDrawerOpen(true)}
-          className="h-36 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none overflow-hidden"
-        >
-          <Star size={12} strokeWidth={2.5} className="fill-black text-black shrink-0" />
-          <span 
-            className="text-[9.2px] font-black tracking-[0.12em] uppercase text-black whitespace-nowrap" 
-            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-          >
-            Estrellas 101010
-          </span>
-        </button>
-      </div>
 
       {/* Drawer Backdrop and Drawer Container */}
       <AnimatePresence>
