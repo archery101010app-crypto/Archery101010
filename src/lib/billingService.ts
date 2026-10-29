@@ -26,23 +26,23 @@ export const COACH_STORE_PRODUCTS: StoreProduct[] = [
     period: "monthly",
     features: [
       "Director de Tiro y monitoreo de dianas en tiempo real",
-      "Planificador de Macroestructuras y Microciclos",
-      "Asignación de planes a 1 alumno o a todo el equipo",
-      "Sincronización automática con calendario de arqueros",
+      "Planificador de Agenda Mensual y Microciclos",
+      "Asignación de planes a 1 alumno, varios o todo el equipo",
+      "Sincronización instantánea con la agenda de los arqueros",
       "Estadísticas de agrupación y volumen World Archery"
     ]
   },
   {
     id: "coach_pro_annual",
     sku: "archery101010_coach_pro_annual",
-    title: "COACH PRO Anual",
-    description: "Temporada completa de alto rendimiento con 33% de ahorro.",
-    regularPrice: "$79.99 USD",
+    title: "COACH PRO Anual (-25%)",
+    description: "Temporada completa de alto rendimiento con 25% de rebajo ($7.49/mes).",
+    regularPrice: "$89.91 USD",
     promoPrice: "$0.00 USD",
     period: "annual",
-    savingsBadge: "Ahorra 33%",
+    savingsBadge: "-25%",
     features: [
-      "Todo lo incluido en el plan mensual",
+      "Todo lo incluido en el plan mensual con 25% de descuento",
       "Prioridad de soporte técnico y pedagógico",
       "Gestión multi-club y arqueros ilimitados",
       "Respaldo en la nube y auditoría de sesiones",

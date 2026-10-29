@@ -837,8 +837,11 @@ export default function Home() {
 
   const handleToggleCoachViewMode = (val: boolean) => {
     if (val) {
-      // Show Coach PRO payment and subscription modal
-      setShowCoachPaymentModal(true);
+      if (user?.plan === "PRO") {
+        setCoachViewMode(true);
+      } else {
+        setShowCoachPaymentModal(true);
+      }
       return;
     }
     setCoachViewMode(false);

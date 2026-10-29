@@ -399,10 +399,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               <h2 className="text-white text-[17.6px] font-black uppercase tracking-wide truncate max-w-full">
                 Coach {user.fullName || "Director"}
               </h2>
-              <span className="text-[9.3px] bg-yellow-gold/10 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/25 flex items-center gap-1 shrink-0 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-coach-payment"))}
+                className="text-[9.5px] bg-yellow-gold/15 hover:bg-yellow-gold/25 text-yellow-gold font-black uppercase px-2.5 py-0.5 rounded-full border border-yellow-gold/40 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition"
+                title="Ver membresía PRO (Gratis por ahora)"
+              >
                 <ShieldCheck size={10} />
-                <span>Coach Suscrito</span>
-              </span>
+                <span>PRO · Gratis por ahora ($0.00)</span>
+              </button>
             </div>
             <p className="text-[11.6px] text-white mt-0.5 flex items-center gap-1.5 flex-wrap">
               <Building2 size={11} className="text-cyan-neon shrink-0" />
