@@ -71,11 +71,11 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </div>
-          <span className="text-cyan-neon/60 text-[12px] font-black tracking-wider pl-0.5">
+          <span className="text-cyan-neon/60 text-[13.2px] font-black tracking-wider pl-0.5">
             v{APP_VERSION}
           </span>
         </div>
-        <span className="text-white text-[10.8px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
+        <span className="text-white text-[11.9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
           ARCHERY
         </span>
       </div>
@@ -87,7 +87,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
           <div className="flex bg-[#090B0E] p-1 rounded-full border border-white/[0.08] items-center">
             <button
               onClick={() => onToggleCoachViewMode(false)}
-              className={`h-7 px-2.5 sm:px-3 rounded-full text-[11px] font-bold uppercase tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12.1px] font-bold uppercase tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -97,14 +97,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
-              className={`h-7 px-2.5 sm:px-3 rounded-full text-[11px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12.1px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
               }`}
             >
               <span>Coach</span>
-              <span className="text-[8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
+              <span className="text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
                 PRO
               </span>
             </button>
@@ -139,7 +139,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             )}
 
             {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-orange-500 text-white font-extrabold text-[10.8px] w-4 h-4 rounded-full flex items-center justify-center border border-black animate-bounce">
+              <span className="absolute -top-1 -right-1 bg-orange-500 text-white font-extrabold text-[11.9px] w-4 h-4 rounded-full flex items-center justify-center border border-black animate-bounce">
                 {pendingCount}
               </span>
             )}
@@ -147,7 +147,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
 
           {/* Sync status tooltip */}
           {showStatusTooltip && (
-            <div className="absolute right-0 top-10 bg-neutral-900 border border-gray-border rounded-lg px-2.5 py-1 text-[12px] text-white whitespace-nowrap shadow-xl">
+            <div className="absolute right-0 top-10 bg-neutral-900 border border-gray-border rounded-lg px-2.5 py-1 text-[13.2px] text-white whitespace-nowrap shadow-xl">
               {isSyncing ? "Conectando..." : syncStatus}
             </div>
           )}

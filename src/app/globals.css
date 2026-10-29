@@ -22,8 +22,8 @@
   --color-gray-border: #2C2F33;
   --color-gray-dim: #FFFFFF;
 
-  /* Typography scale: +20% on smallest text (xs), +10% on all larger text (sm -> 4xl) */
-  --text-xs: 0.9rem;
+  /* Typography scale: +32% total (+20% then +10%) on smallest text (xs), +10% on all larger text (sm -> 4xl) */
+  --text-xs: 0.99rem;
   --text-xs--line-height: 1.35;
   --text-sm: 0.9625rem;
   --text-sm--line-height: 1.4;

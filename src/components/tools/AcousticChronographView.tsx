@@ -460,13 +460,13 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 Cronógrafo
               </h2>
             </div>
-            <p className="text-[12px] text-white uppercase tracking-wider truncate">
+            <p className="text-[13.2px] text-white uppercase tracking-wider truncate">
               Medición Balística
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-[#0D1017] border border-cyan-neon/25 h-9 px-3 rounded-xl text-[12px] text-cyan-neon font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
+        <div className="flex items-center gap-1.5 bg-[#0D1017] border border-cyan-neon/25 h-9 px-3 rounded-xl text-[13.2px] text-cyan-neon font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
           <Target size={13} />
           <span>{distanceMeters} Metros</span>
         </div>
@@ -483,7 +483,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             className="h-11 px-2.5 rounded-2xl bg-[#0D1017] hover:bg-neutral-800 border border-white/[0.08] hover:border-cyan-neon/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0 whitespace-nowrap"
           >
             <BookOpen size={13} className="text-cyan-neon shrink-0" />
-            <span className="text-[12px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+            <span className="text-[13.2px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
               Instrucciones (18 m)
             </span>
           </button>
@@ -495,7 +495,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             className="h-11 px-2.5 rounded-2xl bg-[#0D1017] hover:bg-neutral-800 border border-white/[0.08] hover:border-yellow-gold/40 text-white font-black transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 text-center min-w-0 whitespace-nowrap"
           >
             <Settings size={13} className="text-yellow-gold shrink-0" />
-            <span className="text-[12px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
+            <span className="text-[13.2px] sm:text-xs font-black uppercase tracking-tight text-center leading-none">
               Configurar Flecha
             </span>
           </button>
@@ -505,17 +505,17 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
       {/* Active Specs Bar Banner */}
       <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10.8px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full">
+          <span className="text-[11.9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full">
             {distanceMeters} Metros
           </span>
-          <span className="text-white font-mono text-[13.2px] tabular-nums">
+          <span className="text-white font-mono text-[14.5px] tabular-nums">
             {arrowWeight} gr · {arrowLength}" · {temperature}°{tempUnit}
           </span>
         </div>
         <button
           type="button"
           onClick={() => setShowSpecsModal(true)}
-          className="text-[12px] text-yellow-gold hover:text-white font-bold uppercase underline cursor-pointer"
+          className="text-[13.2px] text-yellow-gold hover:text-white font-bold uppercase underline cursor-pointer"
         >
           Editar
         </button>
@@ -536,7 +536,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                   setDistanceMeters(dist);
                   handleSaveSpecs(arrowWeight, arrowLength, temperature, tempUnit, dist);
                 }}
-                className={`h-7 px-2.5 rounded-lg text-[12px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap tabular-nums transition cursor-pointer ${
+                className={`h-7 px-2.5 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap tabular-nums transition cursor-pointer ${
                   distanceMeters === dist
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/40"
                     : "text-white hover:text-white"
@@ -552,7 +552,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <button
               type="button"
               onClick={() => setSpeedUnit("FPS")}
-              className={`h-7 px-3 rounded-lg text-[12px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+              className={`h-7 px-3 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                 speedUnit === "FPS" 
                   ? "bg-cyan-neon text-black" 
                   : "text-white hover:text-white"
@@ -563,7 +563,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <button
               type="button"
               onClick={() => setSpeedUnit("KMH")}
-              className={`h-7 px-3 rounded-lg text-[12px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+              className={`h-7 px-3 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
                 speedUnit === "KMH" 
                   ? "bg-cyan-neon text-black" 
                   : "text-white hover:text-white"
@@ -594,19 +594,19 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
             <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900/80 border border-white/10 text-xs font-bold">
               {speedUnit === "FPS" ? (
                 <>
-                  <span className="text-white">{lastShotResult.launchSpeedKmh.toFixed(1)} <span className="text-white text-[12px]">km/h</span></span>
+                  <span className="text-white">{lastShotResult.launchSpeedKmh.toFixed(1)} <span className="text-white text-[13.2px]">km/h</span></span>
                   <span className="text-gray-border">•</span>
-                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-white text-[12px]">m/s</span></span>
+                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-white text-[13.2px]">m/s</span></span>
                 </>
               ) : (
                 <>
-                  <span className="text-white">{Math.round(lastShotResult.launchSpeedFps)} <span className="text-white text-[12px]">FPS</span></span>
+                  <span className="text-white">{Math.round(lastShotResult.launchSpeedFps)} <span className="text-white text-[13.2px]">FPS</span></span>
                   <span className="text-gray-border">•</span>
-                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-white text-[12px]">m/s</span></span>
+                  <span className="text-white">{lastShotResult.launchSpeedMps.toFixed(1)} <span className="text-white text-[13.2px]">m/s</span></span>
                 </>
               )}
             </div>
-            <span className="text-[12px] text-cyan-neon/80 font-mono">
+            <span className="text-[13.2px] text-cyan-neon/80 font-mono">
               Vuelo neto: {(lastShotResult.flightTimeSec * 1000).toFixed(1)} ms · Retorno sonido: {((lastShotResult.soundReturnTimeSec ?? (lastShotResult.totalTimeSec - lastShotResult.flightTimeSec)) * 1000).toFixed(1)} ms
             </span>
           </div>
@@ -620,7 +620,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         {detectionError && (
           <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start gap-2.5 text-left">
             <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-            <span className="text-[13.2px] text-amber-200 leading-snug font-medium">
+            <span className="text-[14.5px] text-amber-200 leading-snug font-medium">
               {detectionError}
             </span>
           </div>
@@ -630,13 +630,13 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         {lastShotResult && (
           <div className="grid grid-cols-2 gap-3 w-full bg-neutral-900/60 p-3 rounded-2xl border border-white/5 text-xs">
             <div className="flex flex-col items-center">
-              <span className="text-[9.6px] text-white uppercase font-bold tracking-wider">Energía Cinética</span>
+              <span className="text-[10.6px] text-white uppercase font-bold tracking-wider">Energía Cinética</span>
               <span className="text-white font-black text-sm mt-0.5">
                 {lastShotResult.kineticEnergyFtLbs ? `${lastShotResult.kineticEnergyFtLbs.toFixed(1)} ft-lbs` : "—"}
               </span>
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-[9.6px] text-white uppercase font-bold tracking-wider">Momento</span>
+              <span className="text-[10.6px] text-white uppercase font-bold tracking-wider">Momento</span>
               <span className="text-cyan-neon font-black text-sm mt-0.5">
                 {lastShotResult.momentumSlugFtSec ? `${lastShotResult.momentumSlugFtSec.toFixed(3)} slug-ft/s` : "—"}
               </span>
@@ -647,7 +647,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         {/* Acoustic Oscilloscope Waveform (Visualizes Release & Impact Transients) */}
         {lastShotResult?.waveformBins && lastShotResult.waveformBins.length > 0 && (
           <div className="w-full bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[10.8px] font-black uppercase tracking-wider">
+            <div className="flex items-center justify-between text-[11.9px] font-black uppercase tracking-wider">
               <span className="text-cyan-neon flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-cyan-neon inline-block" />
                 Suelta (0 ms)
@@ -716,7 +716,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               </>
             )}
           </button>
-          <span className="text-[12px] text-white text-center">
+          <span className="text-[13.2px] text-white text-center">
             {isRecording 
               ? "Tienes hasta 8 segundos para apuntar con calma y disparar. Se activará al detectar la suelta." 
               : "Distancia reglamentaria: 18 metros medidos con cinta métrica."}
@@ -730,7 +730,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           <span className="text-xs font-black uppercase tracking-wider text-white">
             Historial de Mediciones
           </span>
-          <span className="text-[12px] text-white">
+          <span className="text-[13.2px] text-white">
             {shotHistory.length} {shotHistory.length === 1 ? "tiro" : "tiros"}
           </span>
         </div>
@@ -751,12 +751,12 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span className="text-white text-base font-black">
                       {Math.round(s.launchSpeedFps)} <span className="text-cyan-neon text-xs">FPS</span>
                     </span>
-                    <span className="text-white text-[12px] font-bold">
+                    <span className="text-white text-[13.2px] font-bold">
                       ({Math.round(s.launchSpeedKmh)} km/h)
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10.8px] text-white mt-0.5">
+                  <div className="flex items-center gap-2 text-[11.9px] text-white mt-0.5">
                     <span>18m</span>
                     <span>•</span>
                     <span>{s.arrowMassGrains || 420} gr</span>
@@ -810,7 +810,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">
                       Instrucciones de Uso
                     </h3>
-                    <span className="text-[12px] text-cyan-neon font-bold">
+                    <span className="text-[13.2px] text-cyan-neon font-bold">
                       Distancia Oficial: 18 Metros (18m / 20yd)
                     </span>
                   </div>
@@ -827,40 +827,40 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               <div className="flex flex-col gap-3 text-xs leading-relaxed text-white">
                 <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
                   <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[12px]">1</span>
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[13.2px]">1</span>
                     <span>Medir la distancia exacta con cinta métrica</span>
                   </h4>
-                  <p className="text-[13.2px] pl-6 text-white">
+                  <p className="text-[14.5px] pl-6 text-white">
                     Coloca el teléfono exactamente a <strong className="text-white">18 metros (18.0 m / 60 ft)</strong> de la cara de la diana. Usa cinta métrica (los telémetros no son exactos para el teléfono).
                   </p>
                 </div>
 
                 <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
                   <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[12px]">2</span>
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[13.2px]">2</span>
                     <span>Posición del Teléfono</span>
                   </h4>
-                  <p className="text-[13.2px] pl-6 text-white">
+                  <p className="text-[14.5px] pl-6 text-white">
                     Coloca el teléfono a la altura de tu flecha en apertura completa (recomendado en trípode) y a <strong className="text-cyan-neon">15 cm (6 pulg)</strong> hacia un lado del vástago de la flecha.
                   </p>
                 </div>
 
                 <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
                   <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[12px]">3</span>
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[13.2px]">3</span>
                     <span>Alineación del Arquero</span>
                   </h4>
-                  <p className="text-[13.2px] pl-6 text-white">
+                  <p className="text-[14.5px] pl-6 text-white">
                     Párate de modo que en apertura completa el culatín y el tope de cuerda queden alineados con la línea de 18 metros y parejos con el micrófono del teléfono.
                   </p>
                 </div>
 
                 <div className="bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
                   <h4 className="text-white font-bold text-xs flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[12px]">4</span>
+                    <span className="w-5 h-5 rounded-full bg-cyan-neon text-black font-black flex items-center justify-center text-[13.2px]">4</span>
                     <span>Disparo y Cálculo por Sonido</span>
                   </h4>
-                  <p className="text-[13.2px] pl-6 text-white">
+                  <p className="text-[14.5px] pl-6 text-white">
                     Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong>; el cronógrafo quedará armado hasta por 8 segundos esperando a que apuntes con calma y dispares. Al detectar la suelta, capturará automáticamente el impacto a 18 metros.
                   </p>
                 </div>
@@ -868,7 +868,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
 
               {/* DIAGRAMA OFICIAL A 18 METROS (SVG) */}
               <div className="bg-[#050507] border border-white/10 rounded-2xl p-4 flex flex-col items-center relative overflow-hidden">
-                <span className="text-[10.8px] font-black uppercase text-white tracking-widest self-start mb-2">
+                <span className="text-[11.9px] font-black uppercase text-white tracking-widest self-start mb-2">
                   Diagrama Oficial a 18 Metros
                 </span>
 
@@ -973,7 +973,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">
                       Datos de la Flecha y Entorno
                     </h3>
-                    <span className="text-[12px] text-white">
+                    <span className="text-[13.2px] text-white">
                       Distancia configurada: 18 Metros
                     </span>
                   </div>
@@ -993,7 +993,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <label className="text-xs font-bold text-white">
                       Peso de la Flecha (Grains - gr)
                     </label>
-                    <span className="text-[12px] text-orange-400 font-mono">Total en Grains</span>
+                    <span className="text-[13.2px] text-orange-400 font-mono">Total en Grains</span>
                   </div>
                   <input
                     type="number"
@@ -1004,7 +1004,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     placeholder="Total arrow weight in grains (ej. 420)"
                     className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
                   />
-                  <span className="text-[10.8px] text-white">
+                  <span className="text-[11.9px] text-white">
                     Peso completo de la flecha armada (tubo + punta + culatín + plumas). 1 gramo = 15.4 grains.
                   </span>
                 </div>
@@ -1015,7 +1015,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <label className="text-xs font-bold text-white">
                       Longitud de la Flecha (Pulgadas - in)
                     </label>
-                    <span className="text-[12px] text-orange-400 font-mono">Ranura a punta</span>
+                    <span className="text-[13.2px] text-orange-400 font-mono">Ranura a punta</span>
                   </div>
                   <input
                     type="number"
@@ -1027,7 +1027,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     placeholder="Nock groove to tip in inches (ej. 28.5)"
                     className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
                   />
-                  <span className="text-[10.8px] text-white">
+                  <span className="text-[11.9px] text-white">
                     Medida desde el fondo de la ranura del culatín hasta el extremo de la punta de tiro en pulgadas.
                   </span>
                 </div>
@@ -1041,7 +1041,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <button
                       type="button"
                       onClick={handleToggleTempUnit}
-                      className="text-[10.8px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full hover:bg-cyan-neon/20 transition cursor-pointer"
+                      className="text-[11.9px] font-black uppercase text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/30 px-2 py-0.5 rounded-full hover:bg-cyan-neon/20 transition cursor-pointer"
                     >
                       Cambiar a {tempUnit === "F" ? "°C" : "°F"}
                     </button>
@@ -1054,7 +1054,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     placeholder={tempUnit === "F" ? "Temperatura en Fahrenheit (ej. 70)" : "Temperatura en Celsius (ej. 21)"}
                     className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs outline-none focus:border-cyan-neon font-medium"
                   />
-                  <span className="text-[10.8px] text-white">
+                  <span className="text-[11.9px] text-white">
                     La temperatura del aire determina la velocidad exacta del sonido a 18 metros.
                   </span>
                 </div>
@@ -1091,7 +1091,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">Acceso al Micrófono</h3>
-                  <span className="text-[12px] text-cyan-neon font-bold">Privacidad y Procesamiento 100% Local</span>
+                  <span className="text-[13.2px] text-cyan-neon font-bold">Privacidad y Procesamiento 100% Local</span>
                 </div>
               </div>
 
@@ -1099,7 +1099,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 <strong>Archery 101010</strong> utiliza el micrófono exclusivamente para captar el intervalo acústico entre la suelta de la flecha y su impacto en la diana a 18 metros, calculando así su velocidad de vuelo (FPS).
               </p>
 
-              <div className="bg-neutral-950 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-[13.2px] text-white">
+              <div className="bg-neutral-950 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 text-[14.5px] text-white">
                 <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-0.5">
                   <ShieldCheck size={15} />
                   <span>Garantía de Privacidad y Seguridad:</span>

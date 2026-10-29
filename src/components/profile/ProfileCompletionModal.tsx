@@ -91,7 +91,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             <h3 className="text-white text-lg font-black uppercase tracking-wide">
               Completa tu Perfil
             </h3>
-            <p className="text-[10.8px] text-white uppercase tracking-wider font-bold">
+            <p className="text-[11.9px] text-white uppercase tracking-wider font-bold">
               Información obligatoria requerida
             </p>
           </div>
@@ -111,7 +111,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
         <form onSubmit={handleSave} className="flex flex-col gap-3.5 mt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("fullName")} *
               </label>
               <input
@@ -123,7 +123,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("nickname")} *
               </label>
               <input
@@ -138,7 +138,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("birthDate")} *
               </label>
               <input
@@ -149,7 +149,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("city")} *
               </label>
               <input
@@ -164,7 +164,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("country")} *
               </label>
               <select
@@ -181,7 +181,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] text-white uppercase font-bold tracking-wider">
+              <label className="text-[13.2px] text-white uppercase font-bold tracking-wider">
                 {t("gender")} *
               </label>
               <select
@@ -196,7 +196,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
           </div>
 
-          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[12px] text-white leading-snug">
+          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[13.2px] text-white leading-snug">
             <strong className="text-white uppercase tracking-wider">Nota sobre el Apodo:</strong> El apodo es de carácter público. Será visible para tu entrenador y otros arqueros durante duelos competitivos en vivo.
           </div>
 

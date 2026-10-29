@@ -35,7 +35,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
       {/* Skip Button */}
       <button
         onClick={handleSkip}
-        className="absolute top-6 right-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[10.8px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
+        className="absolute top-6 right-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[11.9px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
       >
         Saltar
       </button>

@@ -258,20 +258,20 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-4 sm:gap-5 py-3 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY 101010 / THE APP */}
+      {/* Titular Oficial: ARCHERY 101010 / THE APP (+12% Size) */}
       <div 
         className="w-full flex flex-col justify-center items-center pt-2 pb-3 sm:pb-5 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <h1 className="flex items-baseline justify-center gap-x-2 sm:gap-x-3.5 text-[23px] sm:text-[36px] md:text-[46px] leading-tight text-center whitespace-nowrap">
-          <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
+        <h1 className="flex items-baseline justify-center gap-x-1.5 sm:gap-x-3.5 text-[25.8px] sm:text-[40.3px] md:text-[51.5px] leading-tight text-center whitespace-nowrap">
+          <span className="text-white tracking-normal sm:tracking-wider font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </span>
         </h1>
-        <span className="text-[12px] sm:text-[14.4px] text-white font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
+        <span className="text-[14.8px] sm:text-[17.7px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1 whitespace-nowrap">
           THE APP
         </span>
       </div>
@@ -284,13 +284,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
             </h2>
             {user.plan === "PRO" && (
-              <span className="text-yellow-gold text-[10.8px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
+              <span className="text-yellow-gold text-[11.9px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
                 {t("proBadge")}
               </span>
             )}
           </div>
           <p className="text-xs text-white mt-0.5 truncate flex items-center gap-1.5 font-medium">
-            <span className="text-[12px] font-bold uppercase tracking-wider text-white shrink-0">
+            <span className="text-[13.2px] font-bold uppercase tracking-wider text-white shrink-0">
               {clubCountryObj.flag}
             </span>
             <span className="text-white">·</span>
@@ -318,7 +318,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[12px] font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
+            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[13.2px] font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
             <span className="truncate">{todayMission.title}</span>
@@ -332,7 +332,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
-          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between min-h-[172px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-2 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between min-h-[180px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
         >
           {(() => {
             const scored = sessions
@@ -369,7 +369,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             return (
               <>
                 <div className="flex items-baseline justify-between gap-2 min-w-0">
-                  <span className="text-[13.2px] sm:text-xs text-white font-semibold tracking-tight truncate">
+                  <span className="text-[14.5px] sm:text-xs text-white font-semibold tracking-tight truncate">
                     {t("weeklyProgress")}
                   </span>
                   {hasData ? (
@@ -378,7 +378,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                       <span className="text-cyan-neon">({latestPct}%)</span>
                     </span>
                   ) : (
-                    <span className="text-[12px] text-white font-medium whitespace-nowrap shrink-0">
+                    <span className="text-[13.2px] text-white font-medium whitespace-nowrap shrink-0">
                       {language === "es" ? "Sin rondas" : "No rounds"}
                     </span>
                   )}
@@ -414,7 +414,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </svg>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[12px] text-white tabular-nums">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[13.2px] text-white tabular-nums">
                   <span className="truncate">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
                     <strong className="text-white font-bold">
@@ -436,10 +436,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         {/* 2. Mi Club */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col items-center justify-between text-center min-h-[172px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col items-center justify-between text-center min-h-[180px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-[13px] sm:text-xs text-white font-semibold tracking-tight leading-tight truncate w-full text-center">
+          <span className="text-[14.3px] sm:text-xs text-white font-semibold tracking-tight leading-tight truncate w-full text-center">
             {language === "es" ? "Mi Club" : "My Club"}
           </span>
 
@@ -448,12 +448,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </div>
 
           <div className="flex flex-col items-center gap-0.5 overflow-hidden min-w-0 w-full">
-            <span className="text-white text-[13px] font-bold truncate w-full text-center group-hover:text-cyan-neon transition-colors">
+            <span className="text-white text-[14.3px] font-bold truncate w-full text-center group-hover:text-cyan-neon transition-colors">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[11px] text-white truncate flex items-center justify-center gap-1 font-medium w-full">
+            <span className="text-[12.1px] text-white truncate flex items-center justify-center gap-1 font-medium w-full">
               <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-white shrink-0">{clubCountryObj.olympic}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-white shrink-0">{clubCountryObj.olympic}</span>
               <span className="text-white">·</span>
               <span className="truncate">
                 {user.role === "coach" 
@@ -487,12 +487,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <div className="flex items-center justify-between gap-2 pt-0.5 min-w-0">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 shrink-0">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-[10.5px] font-black uppercase tracking-wide text-emerald-400 whitespace-nowrap">
+              <span className="text-[11.6px] font-black uppercase tracking-wide text-emerald-400 whitespace-nowrap">
                 {t("liveArenaTitle")}
               </span>
             </div>
 
-            <span className="text-[10.5px] font-bold uppercase tracking-wide text-white truncate">
+            <span className="text-[11.6px] font-bold uppercase tracking-wide text-white truncate">
               {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
@@ -514,21 +514,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
             <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
               <div className="flex items-baseline gap-1">
-                <span className="text-[10.5px] font-black uppercase tracking-wide text-cyan-neon">TÚ</span>
+                <span className="text-[11.6px] font-black uppercase tracking-wide text-cyan-neon">TÚ</span>
                 <span className="text-xs font-black text-white tabular-nums">6</span>
               </div>
-              <span className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[9.5px] font-black text-red-rival tracking-wide leading-none shrink-0">
+              <span className="px-1.5 py-0.5 rounded bg-red-rival/15 border border-red-rival/30 text-[10.5px] font-black text-red-rival tracking-wide leading-none shrink-0">
                 VS
               </span>
               <div className="flex items-baseline gap-1">
                 <span className="text-xs font-black text-white tabular-nums">4</span>
-                <span className="text-[10.5px] font-black uppercase tracking-wide text-yellow-gold">RIVAL</span>
+                <span className="text-[11.6px] font-black uppercase tracking-wide text-yellow-gold">RIVAL</span>
               </div>
             </div>
 
-            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-wide flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap px-2.5 overflow-hidden">
+            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[13.2px] sm:text-[14.3px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap px-3 overflow-hidden">
               <Swords size={14} strokeWidth={2.5} className="shrink-0" />
-              <span className="truncate">{language === "es" ? "Entrar 1 vs 1" : "Enter 1v1"}</span>
+              <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
             </div>
           </div>
         </motion.div>
@@ -549,11 +549,11 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="fixed left-0 top-[calc(50%-112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
         <button
           onClick={() => setIsStarsDrawerOpen(true)}
-          className="h-32 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none overflow-hidden"
+          className="h-36 w-8 md:w-9 flex flex-col items-center justify-between py-2.5 px-1 rounded-r-2xl bg-yellow-gold border-y border-r border-black/15 cursor-pointer text-black hover:brightness-105 transition-all duration-200 select-none overflow-hidden"
         >
           <Star size={12} strokeWidth={2.5} className="fill-black text-black shrink-0" />
           <span 
-            className="text-[9.5px] font-black tracking-[0.12em] uppercase text-black whitespace-nowrap" 
+            className="text-[10.5px] font-black tracking-[0.12em] uppercase text-black whitespace-nowrap" 
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
           >
             Estrellas 101010
@@ -584,7 +584,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     <Star size={14} className="text-yellow-gold fill-yellow-gold shrink-0" />
                     <span>Estrellas 101010</span>
                   </h3>
-                  <p className="text-[10.8px] text-white uppercase tracking-wider mt-0.5">
+                  <p className="text-[11.9px] text-white uppercase tracking-wider mt-0.5">
                     Reglamento Oficial WA 720
                   </p>
                 </div>
@@ -598,7 +598,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-                <p className="text-[12px] text-white leading-relaxed [text-wrap:pretty]">
+                <p className="text-[13.2px] text-white leading-relaxed [text-wrap:pretty]">
                   Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70 m o Compuesto 50 m) con un puntaje mínimo de 500 para ganar estrellas.
                 </p>
 
@@ -606,7 +606,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 <div className="grid grid-cols-2 gap-1 bg-[#090B0E] p-1 rounded-xl border border-white/[0.08] w-full">
                   <button
                     onClick={() => setActiveStarTab("Recurve")}
-                    className={`h-8 rounded-lg text-[12px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
+                    className={`h-8 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Recurve"
                         ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
                         : "text-white hover:text-white"
@@ -616,7 +616,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </button>
                   <button
                     onClick={() => setActiveStarTab("Compound")}
-                    className={`h-8 rounded-lg text-[12px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
+                    className={`h-8 rounded-lg text-[13.2px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Compound"
                         ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
                         : "text-white hover:text-white"
@@ -662,7 +662,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                               <span className="text-xs font-black text-white group-hover:text-yellow-gold transition-colors">
                                 {star.name}
                               </span>
-                              <span className="text-[10.8px] text-white font-bold mt-0.5 tabular-nums">
+                              <span className="text-[11.9px] text-white font-bold mt-0.5 tabular-nums">
                                 Mínimo: {star.minScore} pts
                               </span>
                             </div>
@@ -672,7 +672,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                           <div>
                             {isUnlocked ? (
                               <span 
-                                className="text-[9.6px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider"
+                                className="text-[10.6px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider"
                                 style={{ 
                                   borderColor: `${star.color}30`, 
                                   backgroundColor: `${star.color}10`, 
@@ -682,7 +682,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                                 LOGRADO
                               </span>
                             ) : (
-                              <div className="text-[12px] text-white bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
+                              <div className="text-[13.2px] text-white bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
                                 <Lock size={11} />
                               </div>
                             )}
@@ -722,7 +722,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   )}
                 </div>
 
-                <span className="text-[12px] text-yellow-gold font-black tracking-widest uppercase block mb-1">
+                <span className="text-[13.2px] text-yellow-gold font-black tracking-widest uppercase block mb-1">
                   REGLAMENTO OFICIAL WA
                 </span>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -731,23 +731,23 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 
                 <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[12px] text-white uppercase font-bold">Modalidad</span>
+                    <span className="text-[13.2px] text-white uppercase font-bold">Modalidad</span>
                     <span className="text-xs font-black text-white">
                       {selectedDetailStar.bowType === "Recurve" ? "Arco Recurvo" : "Arco Compuesto"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[12px] text-white uppercase font-bold">Distancia Oficial</span>
+                    <span className="text-[13.2px] text-white uppercase font-bold">Distancia Oficial</span>
                     <span className="text-xs font-black text-white">
                       {selectedDetailStar.bowType === "Recurve" ? "70 metros" : "50 metros"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[12px] text-white uppercase font-bold">Marca Mínima</span>
+                    <span className="text-[13.2px] text-white uppercase font-bold">Marca Mínima</span>
                     <span className="text-xs font-black text-white tabular-nums">{selectedDetailStar.star.minScore} / 720 pts</span>
                   </div>
                   <div className="flex flex-col pt-1">
-                    <div className="flex justify-between items-center text-[12px] text-white font-bold mb-1">
+                    <div className="flex justify-between items-center text-[13.2px] text-white font-bold mb-1">
                       <span>Progreso de Puntuación</span>
                       <span className="text-white font-extrabold tabular-nums">
                         {athleteStar && athleteStar.bowType === selectedDetailStar.bowType
@@ -775,7 +775,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                               }}
                             />
                           </div>
-                          <span className="text-[10.8px] font-bold text-white mt-0.5">
+                          <span className="text-[11.9px] font-bold text-white mt-0.5">
                             {selectedDetailStar.isUnlocked 
                               ? "Estrella obtenida y superada" 
                               : pointsNeeded > 0 
@@ -789,7 +789,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </div>
                 </div>
 
-                <p className="text-[12px] text-white leading-relaxed px-2 [text-wrap:pretty]">
+                <p className="text-[13.2px] text-white leading-relaxed px-2 [text-wrap:pretty]">
                   {selectedDetailStar.star.description || `Se obtiene con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
                 </p>
 

@@ -69,10 +69,10 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
   const heightVal = campaign.customHeight || 32;
   const pillStyle = campaign.pillStyle || "solid";
   const sizeClass = campaign.fontSize === "small" 
-    ? "text-[10.8px]" 
+    ? "text-[11.9px]" 
     : campaign.fontSize === "large" 
-      ? "text-[14.3px]" 
-      : "text-[13.2px]"; // default medium
+      ? "text-[15.7px]" 
+      : "text-[14.5px]"; // default medium
 
   // Default color is the branding color (cyan-neon) if solid and no custom color
   const defaultBg = "#00BFFF"; // Cyan oficial

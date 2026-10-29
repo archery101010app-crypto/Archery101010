@@ -220,7 +220,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               {/* 1-tap Social Registration */}
               <div className="flex items-center gap-4 pt-2 pb-1">
                 <div className="h-[1px] flex-1 bg-white/10" />
-                <span className="text-[12px] text-white font-bold uppercase tracking-widest">
+                <span className="text-[13.2px] text-white font-bold uppercase tracking-widest">
                   o regístrate en 1 toque
                 </span>
                 <div className="h-[1px] flex-1 bg-white/10" />

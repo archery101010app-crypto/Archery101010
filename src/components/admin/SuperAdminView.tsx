@@ -59,7 +59,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
             </button>
             <h1 className="text-xs font-black uppercase tracking-widest text-cyan-neon">Super Admin</h1>
           </div>
-          <span className="text-[12px] font-bold text-white">{user.email}</span>
+          <span className="text-[13.2px] font-bold text-white">{user.email}</span>
         </div>
 
         {/* Scrollable Horizontal Tab Bar */}
@@ -71,7 +71,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider flex-shrink-0 transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13.2px] font-black uppercase tracking-wider flex-shrink-0 transition-all cursor-pointer ${
                   isActive
                     ? "bg-cyan-brand/20 text-cyan-neon border border-cyan-neon/20"
                     : "text-white border border-transparent hover:text-white"
@@ -133,8 +133,8 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
         <div className="p-4 border-t border-white/5 flex flex-col gap-2">
           {!sidebarCollapsed && (
             <div className="flex flex-col mb-1.5">
-              <span className="text-[10.8px] font-black text-white uppercase tracking-widest leading-none">Usuario</span>
-              <span className="text-[12px] text-white truncate font-semibold mt-0.5">{user.email}</span>
+              <span className="text-[11.9px] font-black text-white uppercase tracking-widest leading-none">Usuario</span>
+              <span className="text-[13.2px] text-white truncate font-semibold mt-0.5">{user.email}</span>
             </div>
           )}
           

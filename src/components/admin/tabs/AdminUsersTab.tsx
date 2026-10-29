@@ -344,7 +344,7 @@ export default function AdminUsersTab() {
       {/* KPI Cards Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[12px] text-white uppercase font-bold flex items-center gap-1">
+          <span className="text-[13.2px] text-white uppercase font-bold flex items-center gap-1">
             <UserCheck size={12} className="text-cyan-neon" />
             Total Registrados
           </span>
@@ -352,14 +352,14 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[12px] text-white uppercase font-bold flex items-center gap-1">
+          <span className="text-[13.2px] text-white uppercase font-bold flex items-center gap-1">
             <Flame size={12} className="text-orange-400" />
             Nuevos (48h)
           </span>
           <span className="text-xl font-black text-orange-400 mt-1 flex items-center gap-1.5">
             {recentCount}
             {recentCount > 0 && (
-              <span className="text-[10.8px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-orange-300 font-bold uppercase">
+              <span className="text-[11.9px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-orange-300 font-bold uppercase">
                 Reciente
               </span>
             )}
@@ -367,7 +367,7 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[12px] text-white uppercase font-bold flex items-center gap-1">
+          <span className="text-[13.2px] text-white uppercase font-bold flex items-center gap-1">
             <Sparkles size={12} className="text-yellow-gold" />
             Suscripciones PRO
           </span>
@@ -375,7 +375,7 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[12px] text-white uppercase font-bold flex items-center gap-1">
+          <span className="text-[13.2px] text-white uppercase font-bold flex items-center gap-1">
             <Shield size={12} className="text-purple-400" />
             Coaches / Clubes
           </span>
@@ -404,7 +404,7 @@ export default function AdminUsersTab() {
               <button
                 key={filter}
                 onClick={() => setRoleFilter(filter)}
-                className={`px-3 py-1 rounded-lg text-[12px] font-bold uppercase transition cursor-pointer ${
+                className={`px-3 py-1 rounded-lg text-[13.2px] font-bold uppercase transition cursor-pointer ${
                   roleFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -421,7 +421,7 @@ export default function AdminUsersTab() {
               <button
                 key={filter}
                 onClick={() => setPlanFilter(filter)}
-                className={`px-3 py-1 rounded-lg text-[12px] font-bold uppercase transition cursor-pointer ${
+                className={`px-3 py-1 rounded-lg text-[13.2px] font-bold uppercase transition cursor-pointer ${
                   planFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -443,7 +443,7 @@ export default function AdminUsersTab() {
               <button
                 key={b.id}
                 onClick={() => setBowFilter(b.id)}
-                className={`px-2.5 py-1 rounded-lg text-[12px] font-bold uppercase transition cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-[13.2px] font-bold uppercase transition cursor-pointer ${
                   bowFilter === b.id
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20"
                     : "text-white hover:text-white"
@@ -489,21 +489,21 @@ export default function AdminUsersTab() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="text-xs font-bold text-white truncate">{u.fullName}</h4>
                         {u.nickname && (
-                          <span className="text-[12px] text-purple-400 font-mono font-semibold">
+                          <span className="text-[13.2px] text-purple-400 font-mono font-semibold">
                             @{u.nickname}
                           </span>
                         )}
                         {isRecent && (
-                          <span className="text-[9.6px] px-1.5 py-0.2 rounded-full bg-cyan-neon/20 text-cyan-neon font-black uppercase tracking-wider animate-pulse">
+                          <span className="text-[10.6px] px-1.5 py-0.2 rounded-full bg-cyan-neon/20 text-cyan-neon font-black uppercase tracking-wider animate-pulse">
                             Nuevo
                           </span>
                         )}
                       </div>
 
-                      <p className="text-[12px] text-white truncate">{u.email}</p>
+                      <p className="text-[13.2px] text-white truncate">{u.email}</p>
 
                       {/* Sub-row: Club & Primary Bow */}
-                      <div className="flex items-center gap-2 mt-1 text-[11.4px] text-white flex-wrap">
+                      <div className="flex items-center gap-2 mt-1 text-[12.5px] text-white flex-wrap">
                         <span className="text-white font-semibold">{u.clubName || "Independiente"}</span>
                         <span>·</span>
                         <span className="text-cyan-neon font-medium">
@@ -521,7 +521,7 @@ export default function AdminUsersTab() {
                   {/* Right: Badges and Action Controls */}
                   <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t border-white/5 md:border-t-0 shrink-0">
                     {/* Role badge */}
-                    <span className={`text-[10.8px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                    <span className={`text-[11.9px] px-2 py-0.5 rounded-full font-bold uppercase border ${
                       u.role === "superadmin" 
                         ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
                         : u.role === "coach" || u.role === "team_admin_coach"
@@ -532,7 +532,7 @@ export default function AdminUsersTab() {
                     </span>
 
                     {/* Plan badge */}
-                    <span className={`text-[10.8px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
+                    <span className={`text-[11.9px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
                       u.plan === "PRO"
                         ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20 shadow-[0_0_10px_rgba(255,229,0,0.05)]"
                         : "bg-white/5 text-white border-white/5"
@@ -589,7 +589,7 @@ export default function AdminUsersTab() {
                   <div className="w-14 h-14 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-lg">
                     {getInitials(selectedUser.fullName)}
                   </div>
-                  <span className="absolute -bottom-1 -right-1 text-[10.8px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
+                  <span className="absolute -bottom-1 -right-1 text-[11.9px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
                     {COUNTRIES[selectedUser.country]?.flag || selectedUser.country || "INT"}
                   </span>
                 </div>
@@ -597,7 +597,7 @@ export default function AdminUsersTab() {
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-bold text-white truncate">{selectedUser.fullName}</h3>
                     {selectedUser.nickname && (
-                      <span className="text-[13.2px] text-purple-400 font-mono font-semibold">
+                      <span className="text-[14.5px] text-purple-400 font-mono font-semibold">
                         @{selectedUser.nickname}
                       </span>
                     )}
@@ -606,7 +606,7 @@ export default function AdminUsersTab() {
                     <Mail size={12} />
                     <span>{selectedUser.email}</span>
                   </p>
-                  <p className="text-[12px] text-cyan-neon mt-1">
+                  <p className="text-[13.2px] text-cyan-neon mt-1">
                     Inscripción: {formatRegistrationDate(selectedUser.createdAt || selectedUser.lastActiveAt)}
                   </p>
                 </div>
@@ -616,56 +616,56 @@ export default function AdminUsersTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div className="grid grid-cols-2 gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
                   <div>
-                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest block">País</span>
+                    <span className="text-[11.9px] text-white uppercase font-black tracking-widest block">País</span>
                     <span className="text-white font-medium">
                       {COUNTRIES[selectedUser.country]?.flag} {COUNTRIES[selectedUser.country]?.name || selectedUser.country || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest block">Género</span>
+                    <span className="text-[11.9px] text-white uppercase font-black tracking-widest block">Género</span>
                     <span className="text-white font-medium">
                       {selectedUser.gender === "M" ? "Masculino" : selectedUser.gender === "F" ? "Femenino" : selectedUser.gender || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest block">Nacimiento</span>
+                    <span className="text-[11.9px] text-white uppercase font-black tracking-widest block">Nacimiento</span>
                     <span className="text-white font-medium">{selectedUser.birthDate || "N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-[10.8px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
-                    <span className="text-white font-mono text-[10.8px] truncate block">{selectedUser.uid}</span>
+                    <span className="text-[11.9px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
+                    <span className="text-white font-mono text-[11.9px] truncate block">{selectedUser.uid}</span>
                   </div>
                 </div>
 
                 <div className="bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
-                  <h4 className="font-bold text-white text-[12px] uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
+                  <h4 className="font-bold text-white text-[13.2px] uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
                     <Target size={12} />
                     Configuración de Arco Principal
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[10.8px] text-white uppercase font-bold block">Tipo</span>
+                      <span className="text-[11.9px] text-white uppercase font-bold block">Tipo</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.type || "Barebow"}</span>
                     </div>
                     <div>
-                      <span className="text-[10.8px] text-white uppercase font-bold block">Marca / Modelo</span>
+                      <span className="text-[11.9px] text-white uppercase font-bold block">Marca / Modelo</span>
                       <span className="text-white font-medium truncate">
                         {selectedUser.bowConfig?.brand || ""} {selectedUser.bowConfig?.model || ""}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10.8px] text-white uppercase font-bold block">Potencia</span>
+                      <span className="text-[11.9px] text-white uppercase font-bold block">Potencia</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.poundage || 0} lbs</span>
                     </div>
                     <div>
-                      <span className="text-[10.8px] text-white uppercase font-bold block">Distancia Default</span>
+                      <span className="text-[11.9px] text-white uppercase font-bold block">Distancia Default</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.defaultDistance || 18}m</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5">
-                  <h4 className="font-bold text-white text-[12px] uppercase tracking-wider text-cyan-neon">
+                  <h4 className="font-bold text-white text-[13.2px] uppercase tracking-wider text-cyan-neon">
                     Club y Contacto
                   </h4>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -675,7 +675,7 @@ export default function AdminUsersTab() {
                     </span>
 
                     <span className="text-white">ID Club:</span>
-                    <span className="text-white font-bold text-right truncate text-[12px]">
+                    <span className="text-white font-bold text-right truncate text-[13.2px]">
                       {selectedUser.clubId || "Ninguno"}
                     </span>
 
@@ -685,7 +685,7 @@ export default function AdminUsersTab() {
                     </span>
 
                     <span className="text-white">Rol en la App:</span>
-                    <span className="text-cyan-neon font-bold text-right uppercase text-[12px]">
+                    <span className="text-cyan-neon font-bold text-right uppercase text-[13.2px]">
                       {selectedUser.role}
                     </span>
                   </div>

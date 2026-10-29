@@ -103,7 +103,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                   }`}
                 />
                 {item.isPro && (
-                  <span className="absolute -top-1.5 -right-2.5 text-[8px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wide">
+                  <span className="absolute -top-1.5 -right-2.5 text-[8.8px] bg-yellow-gold text-black font-black px-1 py-[0.5px] rounded-[3px] uppercase scale-90 z-20 tracking-wide">
                     PRO
                   </span>
                 )}
@@ -111,7 +111,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[9.5px] font-bold tracking-tighter mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                className={`text-[10.5px] font-bold tracking-tighter mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

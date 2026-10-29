@@ -91,7 +91,7 @@ export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOve
                 <X size={18} />
               </button>
             ) : (
-              <div className="px-3 py-1.5 rounded-full bg-black/70 border border-white/5 text-white text-[12px] font-black uppercase tracking-wider select-none">
+              <div className="px-3 py-1.5 rounded-full bg-black/70 border border-white/5 text-white text-[13.2px] font-black uppercase tracking-wider select-none">
                 Cerrar en {closeSecondsLeft}s
               </div>
             )}
@@ -136,7 +136,7 @@ export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOve
 
           {/* Bottom Bar: Publicidad Badge + Dots Indicator */}
           <div className="h-12 px-6 flex items-center justify-between border-t border-white/5 bg-[#0F0F12]">
-            <span className="text-[10.8px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded bg-white/5">
+            <span className="text-[11.9px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded bg-white/5">
               Publicidad
             </span>
 

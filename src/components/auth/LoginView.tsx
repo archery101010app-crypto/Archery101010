@@ -290,9 +290,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-wrap items-baseline justify-center gap-x-2.5 sm:gap-x-4 text-[26px] sm:text-[38px] md:text-[48px] leading-tight text-center"
+          className="flex flex-wrap items-baseline justify-center gap-x-2 sm:gap-x-4 text-[29px] sm:text-[42.5px] md:text-[54px] leading-tight text-center"
         >
-          <span className="text-white tracking-widest font-extrabold">ARCHERY</span>
+          <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
             <span className="text-red-rival">10</span>
@@ -303,7 +303,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="text-[12px] sm:text-[14.4px] md:text-[15.4px] text-white font-bold tracking-[0.45em] uppercase text-center pl-1"
+          className="text-[15px] sm:text-[18px] md:text-[19.5px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1"
         >
           THE APP
         </motion.span>
@@ -328,7 +328,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   <span className="text-white text-xs font-black uppercase tracking-wider">
                     Instalar como App Local
                   </span>
-                  <span className="text-[9.6px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
+                  <span className="text-[10.6px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
                     Recomendado · Velocidad 10x
                   </span>
                 </div>
@@ -341,7 +341,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 <X size={14} />
               </button>
             </div>
-            <p className="text-[12px] text-white leading-snug">
+            <p className="text-[13.2px] text-white leading-snug">
               Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.
             </p>
             <button
@@ -360,7 +360,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <AlertCircle size={14} className="shrink-0" />
               {language === "es" ? "Modo Desconectado" : "Offline Mode"}
             </span>
-            <p className="text-[12px] text-white leading-snug">
+            <p className="text-[13.2px] text-white leading-snug">
               {language === "es" 
                 ? "No tienes conexión a internet. Puedes ingresar usando tus credenciales guardadas previamente en este dispositivo." 
                 : "No internet connection detected. You can sign in using credentials previously saved on this device."}
@@ -426,7 +426,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={handleOpenPasswordReset}
-              className="text-[13.2px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
+              className="text-[14.5px] text-cyan-neon/80 hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
               ¿Olvidaste tu contraseña?
             </button>
@@ -598,7 +598,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       </AnimatePresence>
 
       {/* Footer copyright */}
-      <footer className="text-center text-[12px] text-white tracking-wider mt-8">
+      <footer className="text-center text-[13.2px] text-white tracking-wider mt-8">
         {t("copyright")}
       </footer>
 
@@ -632,7 +632,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
               <div className="flex flex-col gap-3.5 text-xs text-white leading-relaxed">
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[12px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
                     1
                   </div>
                   <p>
@@ -640,30 +640,30 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[12px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
                     2
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Presiona el botón de compartir 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[12px] text-white inline-flex items-center gap-1">
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[13.2px] text-white inline-flex items-center gap-1">
                       Compartir <Share size={10} />
                     </span> 
                     abajo en la barra del sistema.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[12px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
                     3
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
                     Desliza hacia abajo y pulsa 
-                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[12px] text-white font-bold inline-flex items-center gap-1">
+                    <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[13.2px] text-white font-bold inline-flex items-center gap-1">
                       Añadir a pantalla de inicio <Plus size={10} />
                     </span>.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
-                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[12px] text-cyan-neon">
+                  <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[13.2px] text-cyan-neon">
                     4
                   </div>
                   <p>
@@ -674,7 +674,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
               <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center gap-2.5 mt-2">
                 <Zap size={14} className="text-cyan-neon shrink-0" />
-                <span className="text-[10.8px] text-cyan-neon font-medium leading-tight">
+                <span className="text-[11.9px] text-cyan-neon font-medium leading-tight">
                   Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
                 </span>
               </div>
