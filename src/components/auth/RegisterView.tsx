@@ -113,17 +113,17 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={onNavigateToLogin}
-          className="text-gray-dim hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+          className="text-white hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
         >
           <ArrowLeft size={16} />
           <span>{t("back")}</span>
         </button>
-        <span className="text-xs text-gray-dim font-bold tracking-widest uppercase">
+        <span className="text-xs text-white font-bold tracking-widest uppercase">
           {t("registerTitle")}
         </span>
         <button
           onClick={onNavigateToLogin}
-          className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-dim hover:text-white hover:bg-white/15 transition-all cursor-pointer"
+          className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer"
           title="Cerrar y volver al inicio de sesión"
           aria-label="Cerrar"
         >
@@ -141,7 +141,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                   : step > i
                   ? "bg-cyan-brand/10 border-cyan-brand text-cyan-brand"
-                  : "bg-transparent border-gray-border text-gray-dim"
+                  : "bg-transparent border-gray-border text-white"
               }`}
             >
               {step > i ? <Check size={12} /> : i}
@@ -195,7 +195,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 text-gray-dim hover:text-white transition cursor-pointer"
+                  className="absolute right-4 text-white hover:text-white transition cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -211,7 +211,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 text-gray-dim hover:text-white transition cursor-pointer"
+                  className="absolute right-4 text-white hover:text-white transition cursor-pointer"
                 >
                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -220,7 +220,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               {/* 1-tap Social Registration */}
               <div className="flex items-center gap-4 pt-2 pb-1">
                 <div className="h-[1px] flex-1 bg-white/10" />
-                <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
+                <span className="text-[10px] text-white font-bold uppercase tracking-widest">
                   o regístrate en 1 toque
                 </span>
                 <div className="h-[1px] flex-1 bg-white/10" />
@@ -268,7 +268,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               <h3 className="text-white text-lg font-bold tracking-wide mb-1">{t("step2")}</h3>
               
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-dim">{t("fullName")} *</label>
+                <label className="text-xs text-white">{t("fullName")} *</label>
                 <input
                   type="text"
                   value={fullName}
@@ -280,7 +280,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("birthDate")} *</label>
+                  <label className="text-xs text-white">{t("birthDate")} *</label>
                   <input
                     type="date"
                     value={birthDate}
@@ -290,7 +290,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-dim">{t("country")} *</label>
+                  <label className="text-xs text-white">{t("country")} *</label>
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
@@ -306,7 +306,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-dim">{t("gender")} *</label>
+                <label className="text-xs text-white">{t("gender")} *</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}

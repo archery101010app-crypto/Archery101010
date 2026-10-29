@@ -134,7 +134,7 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
                   </h4>
                 )}
                 {currentSlide.subtitle && (
-                  <p className="text-[10px] md:text-sm text-white/60 truncate font-medium">
+                  <p className="text-[10px] md:text-sm text-white truncate font-medium">
                     {currentSlide.subtitle}
                   </p>
                 )}
@@ -171,7 +171,7 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
                 e.stopPropagation();
                 if (onClose) onClose();
               }}
-              className="close-btn p-1.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-white/10"
+              className="close-btn p-1.5 rounded-full hover:bg-white/10 text-white hover:text-white transition duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-white/10"
             >
               <X size={14} />
             </button>

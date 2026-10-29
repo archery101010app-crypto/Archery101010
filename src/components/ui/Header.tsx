@@ -75,7 +75,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             v{APP_VERSION}
           </span>
         </div>
-        <span className="text-white/40 text-[9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
+        <span className="text-white text-[9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
           ARCHERY
         </span>
       </div>
@@ -90,7 +90,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               className={`h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
-                  : "text-gray-dim hover:text-white"
+                  : "text-white hover:text-white"
               }`}
             >
               Atleta
@@ -100,7 +100,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               className={`h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
-                  : "text-gray-dim hover:text-white"
+                  : "text-white hover:text-white"
               }`}
             >
               <span>Coach</span>
@@ -117,7 +117,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={handleToggleTheme}
-          className="flex items-center justify-center p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white/70 hover:text-white transition-all duration-200"
+          className="flex items-center justify-center p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200"
           title={theme === "dark" ? "Fondo Claro" : "Fondo Oscuro"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

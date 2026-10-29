@@ -484,7 +484,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             Planificación de Ciclos
           </h3>
 
-          <p className="text-[11px] text-gray-dim leading-relaxed">
+          <p className="text-[11px] text-white leading-relaxed">
             Planifica la temporada de tu club. Diseña ciclos con etapas personalizadas según tus objetivos, define metas de flechas y supervisa el progreso de todo el equipo en tiempo real.
           </p>
 
@@ -513,7 +513,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             className="flex flex-col gap-4"
           >
             <div className="flex justify-between items-center">
-              <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Ciclos Activos</span>
+              <span className="text-[10px] text-white font-black uppercase tracking-wider">Ciclos Activos</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleOpenImportModal}
@@ -535,7 +535,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
             <div className="flex flex-col gap-3">
               {macrocycles.length === 0 ? (
-                <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white/30 text-xs">
+                <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white text-xs">
                   Aún no has planificado ningún ciclo. Presiona "+ Ciclo" para iniciar.
                 </div>
               ) : (
@@ -551,7 +551,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-1 max-w-[70%]">
                           <h4 className="text-white text-sm font-bold group-hover:text-cyan-neon transition-colors truncate">{mac.name}</h4>
-                          <span className="text-[9px] text-gray-dim flex items-center gap-1">
+                          <span className="text-[9px] text-white flex items-center gap-1">
                             <Calendar size={10} />
                             {mac.startDate} al {mac.endDate}
                           </span>
@@ -573,7 +573,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       {/* Progress bar */}
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between text-[9px]">
-                          <span className="text-gray-dim">Meta de Volumen de Flechas:</span>
+                          <span className="text-white">Meta de Volumen de Flechas:</span>
                           <span className="text-white font-extrabold">{mac.currentVolume.toLocaleString()} / {mac.volumeGoal.toLocaleString()} ({progress}%)</span>
                         </div>
                         <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
@@ -589,7 +589,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       </div>
 
                       {/* Assignment Badge */}
-                      <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[9px] text-white/50">
+                      <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[9px] text-white">
                         <span className="flex items-center gap-1 font-bold">
                           {mac.assignmentType === "club" ? (
                             <>
@@ -645,7 +645,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             <div className="flex justify-between items-center border-b border-white/5 pb-3">
               <button
                 onClick={() => setSelectedMacro(null)}
-                className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition cursor-pointer"
+                className="flex items-center gap-1.5 text-xs text-white hover:text-white transition cursor-pointer"
               >
                 <ArrowLeft size={14} />
                 <span>Volver a Planes</span>
@@ -662,21 +662,21 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </button>
                 <button
                   onClick={() => exportCycleToCsv(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-emerald-400 transition cursor-pointer border border-white/5"
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-emerald-400 transition cursor-pointer border border-white/5"
                   title="Exportar a Excel / Google Sheets (CSV)"
                 >
                   <Download size={13} />
                 </button>
                 <button
                   onClick={() => handleOpenEdit(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition cursor-pointer border border-white/5"
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer border border-white/5"
                   title="Editar Plan"
                 >
                   <Edit2 size={13} />
                 </button>
                 <button
                   onClick={() => handleDuplicate(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition cursor-pointer border border-white/5"
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer border border-white/5"
                   title="Duplicar"
                 >
                   <Copy size={13} />
@@ -695,7 +695,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
             {/* Title / Dates details */}
             <div>
               <h2 className="text-lg font-black text-white leading-tight uppercase tracking-wide">{selectedMacro.name}</h2>
-              <p className="text-xs text-white/40 flex items-center gap-1 mt-1">
+              <p className="text-xs text-white flex items-center gap-1 mt-1">
                 <Calendar size={12} />
                 <span>Fechas: {selectedMacro.startDate} al {selectedMacro.endDate}</span>
               </p>
@@ -703,7 +703,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
             {/* Chronogram timeline visualization */}
             <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3.5">
-              <span className="text-[9px] text-white/40 uppercase font-black tracking-widest">Línea de Tiempo del Ciclo</span>
+              <span className="text-[9px] text-white uppercase font-black tracking-widest">Línea de Tiempo del Ciclo</span>
               
               {/* Visual relative duration bar */}
               <div className="h-6 w-full rounded-xl overflow-hidden flex border border-white/5">
@@ -762,17 +762,17 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                       <div className="grid grid-cols-2 gap-2 text-[10px] bg-neutral-900/30 p-2 rounded-xl border border-white/[0.02]">
                         <div>
-                          <span className="text-white/30 block uppercase font-bold text-[8px]">Sesiones/Semana</span>
+                          <span className="text-white block uppercase font-bold text-[8px]">Sesiones/Semana</span>
                           <span className="text-white font-medium">{phase.weeklySessionGoal} sesiones</span>
                         </div>
                         <div>
-                          <span className="text-white/30 block uppercase font-bold text-[8px]">Flechas/Semana</span>
+                          <span className="text-white block uppercase font-bold text-[8px]">Flechas/Semana</span>
                           <span className="text-white font-medium">{phase.weeklyArrowGoal} flechas</span>
                         </div>
                       </div>
 
                       {phase.notes && (
-                        <p className="text-[10px] text-white/50 leading-relaxed italic border-t border-white/[0.03] pt-1.5 mt-0.5">
+                        <p className="text-[10px] text-white leading-relaxed italic border-t border-white/[0.03] pt-1.5 mt-0.5">
                           "{phase.notes}"
                         </p>
                       )}
@@ -784,13 +784,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
             {/* Athlete progress table */}
             <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3">
-              <span className="text-[9px] text-white/40 uppercase font-black tracking-widest flex items-center gap-1">
+              <span className="text-[9px] text-white uppercase font-black tracking-widest flex items-center gap-1">
                 <Users size={12} className="text-cyan-neon" />
                 <span>Progreso de Atletas Asignados</span>
               </span>
 
               {roster.length === 0 ? (
-                <div className="text-center py-6 text-xs text-white/30">
+                <div className="text-center py-6 text-xs text-white">
                   No hay arqueros asignados en el roster.
                 </div>
               ) : (
@@ -806,12 +806,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     return (
                       <div key={athlete.uid} className="flex justify-between items-center bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white/60">
+                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white">
                             {athlete.fullName[0]}
                           </div>
                           <div>
                             <span className="text-xs font-bold text-white block">{athlete.fullName}</span>
-                            <span className="text-[9px] text-white/30 uppercase">{athlete.bowConfig?.type || ""}</span>
+                            <span className="text-[9px] text-white uppercase">{athlete.bowConfig?.type || ""}</span>
                           </div>
                         </div>
 
@@ -860,7 +860,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                 </div>
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="p-1 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition"
+                  className="p-1 rounded-full text-white hover:text-white hover:bg-white/5 transition"
                 >
                   <X size={16} />
                 </button>
@@ -870,7 +870,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               {step === 1 && (
                 <div className="flex flex-col gap-3.5 py-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Nombre del Plan</label>
+                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Nombre del Plan</label>
                     <input
                       type="text"
                       placeholder="Ej. Plan de Temporada"
@@ -882,7 +882,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Fecha Inicio</label>
+                      <label className="text-[9px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
                       <input
                         type="date"
                         value={startDate}
@@ -891,7 +891,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Fecha Fin</label>
+                      <label className="text-[9px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
                       <input
                         type="date"
                         value={endDate}
@@ -902,7 +902,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Meta de Volumen Total (Flechas)</label>
+                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Meta de Volumen Total (Flechas)</label>
                     <input
                       type="number"
                       value={volumeGoal}
@@ -917,7 +917,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               {step === 2 && (
                 <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">Etapas del Cronograma</span>
+                    <span className="text-[9px] text-white uppercase font-black tracking-widest">Etapas del Cronograma</span>
                     <button
                       type="button"
                       onClick={handleAddPhase}
@@ -943,13 +943,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       <div key={phase.id} className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3.5 flex flex-col gap-3 relative">
                         {/* Etapa Header with controls */}
                         <div className="flex justify-between items-center mb-0.5">
-                          <span className="text-[9px] font-black text-white/40 uppercase">Etapa #{idx + 1}</span>
+                          <span className="text-[9px] font-black text-white uppercase">Etapa #{idx + 1}</span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => handleMovePhase(idx, "up")}
                               disabled={idx === 0}
-                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              className="p-1 rounded bg-white/5 text-white hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                               title="Subir etapa"
                             >
                               <ArrowUp size={11} />
@@ -958,7 +958,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                               type="button"
                               onClick={() => handleMovePhase(idx, "down")}
                               disabled={idx === phases.length - 1}
-                              className="p-1 rounded bg-white/5 text-white/50 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              className="p-1 rounded bg-white/5 text-white hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                               title="Bajar etapa"
                             >
                               <ArrowDown size={11} />
@@ -978,7 +978,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                         {/* Stage Name & Color Selection */}
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[8px] text-white/40 uppercase font-bold">Nombre de la Etapa</label>
+                          <label className="text-[8px] text-white uppercase font-bold">Nombre de la Etapa</label>
                           <input
                             type="text"
                             placeholder="Ej. Acondicionamiento, Volumen, Torneo, Puesta a Punto..."
@@ -989,7 +989,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         </div>
 
                         <div className="flex flex-col gap-1">
-                          <label className="text-[8px] text-white/40 uppercase font-bold">Color Identificador</label>
+                          <label className="text-[8px] text-white uppercase font-bold">Color Identificador</label>
                           <div className="flex items-center gap-2 flex-wrap">
                             {ETAPA_COLORS.map((c) => (
                               <button
@@ -1011,7 +1011,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         {/* Dates and Targets */}
                         <div className="grid grid-cols-2 gap-2 mt-0.5">
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Fecha Inicio</label>
+                            <label className="text-[8px] text-white uppercase font-bold">Fecha Inicio</label>
                             <input
                               type="date"
                               value={phase.startDate}
@@ -1020,7 +1020,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                             />
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Fecha Fin</label>
+                            <label className="text-[8px] text-white uppercase font-bold">Fecha Fin</label>
                             <input
                               type="date"
                               value={phase.endDate}
@@ -1030,7 +1030,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                           </div>
 
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Sesiones / Semana</label>
+                            <label className="text-[8px] text-white uppercase font-bold">Sesiones / Semana</label>
                             <input
                               type="number"
                               min={1}
@@ -1041,7 +1041,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                             />
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[8px] text-white/40 uppercase font-bold">Flechas / Semana</label>
+                            <label className="text-[8px] text-white uppercase font-bold">Flechas / Semana</label>
                             <input
                               type="number"
                               value={phase.weeklyArrowGoal}
@@ -1052,7 +1052,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         </div>
 
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[8px] text-white/40 uppercase font-bold">Notas / Indicaciones para Arqueros</label>
+                          <label className="text-[8px] text-white uppercase font-bold">Notas / Indicaciones para Arqueros</label>
                           <textarea
                             value={phase.notes}
                             onChange={(e) => handleUpdatePhaseField(phase.id, "notes", e.target.value)}
@@ -1071,7 +1071,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               {step === 3 && (
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[9px] text-white/50 uppercase font-black tracking-widest">Tipo de Asignación</label>
+                    <label className="text-[9px] text-white uppercase font-black tracking-widest">Tipo de Asignación</label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
                         { id: "club", label: "Todo el Club", icon: Layout },
@@ -1087,10 +1087,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                             className={`border rounded-2xl p-4 cursor-pointer flex flex-col items-center justify-center text-center aspect-square transition ${
                               isSel
                                 ? "bg-cyan-brand/20 border-cyan-neon text-white"
-                                : "bg-neutral-900/40 border-white/10 hover:border-white/20 text-white/50"
+                                : "bg-neutral-900/40 border-white/10 hover:border-white/20 text-white"
                             }`}
                           >
-                            <CardIcon size={20} className={isSel ? "text-cyan-neon" : "text-white/40"} />
+                            <CardIcon size={20} className={isSel ? "text-cyan-neon" : "text-white"} />
                             <span className="text-[9px] font-black uppercase tracking-wider block mt-2.5 leading-tight">{card.label}</span>
                           </div>
                         );
@@ -1100,7 +1100,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   {assignmentType === "group" && (
                     <div className="flex flex-col gap-1 mt-1 animate-fadeIn">
-                      <label className="text-[9px] text-white/40 uppercase font-bold">Nombre del Grupo</label>
+                      <label className="text-[9px] text-white uppercase font-bold">Nombre del Grupo</label>
                       <input
                         type="text"
                         placeholder="Ej. Roster Cadete, Grupo A, etc."
@@ -1114,7 +1114,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                   {/* Checklist of simulated users/athletes */}
                   {assignmentType !== "club" && (
                     <div className="flex flex-col gap-2 animate-fadeIn mt-1 max-h-[30vh] overflow-y-auto pr-1">
-                      <label className="text-[9px] text-white/50 uppercase font-black tracking-widest">Seleccionar Atletas ({assignedAthleteIds.length})</label>
+                      <label className="text-[9px] text-white uppercase font-black tracking-widest">Seleccionar Atletas ({assignedAthleteIds.length})</label>
                       <div className="flex flex-col gap-1.5">
                         {roster.map((athlete) => {
                           const isSel = assignedAthleteIds.includes(athlete.uid);
@@ -1125,11 +1125,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                               className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition ${
                                 isSel
                                   ? "bg-cyan-brand/10 border-cyan-neon text-white"
-                                  : "bg-neutral-950/60 border-white/5 text-white/50"
+                                  : "bg-neutral-950/60 border-white/5 text-white"
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[10px] text-white/60">
+                                <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[10px] text-white">
                                   {athlete.fullName[0]}
                                 </div>
                                 <span className="text-xs font-bold">{athlete.fullName}</span>
@@ -1152,27 +1152,27 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
               {/* STEP 4: SUMMARY & CONFIRM */}
               {step === 4 && (
                 <div className="flex flex-col gap-3 py-2 text-xs">
-                  <span className="text-[9px] text-white/50 uppercase font-black tracking-widest">Resumen de Planificación</span>
+                  <span className="text-[9px] text-white uppercase font-black tracking-widest">Resumen de Planificación</span>
                   
                   <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
                     <div className="flex flex-col">
-                      <span className="text-[9px] text-white/30 uppercase font-bold">Nombre del Plan</span>
+                      <span className="text-[9px] text-white uppercase font-bold">Nombre del Plan</span>
                       <span className="text-white font-extrabold text-sm uppercase">{name}</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="text-[9px] text-white/30 uppercase font-bold">Fechas</span>
+                        <span className="text-[9px] text-white uppercase font-bold">Fechas</span>
                         <span className="text-white font-medium">{startDate} al {endDate}</span>
                       </div>
                       <div>
-                        <span className="text-[9px] text-white/30 uppercase font-bold">Meta de Flechas</span>
+                        <span className="text-[9px] text-white uppercase font-bold">Meta de Flechas</span>
                         <span className="text-cyan-neon font-black">{volumeGoal.toLocaleString()} flechas</span>
                       </div>
                     </div>
 
                     <div className="flex flex-col border-t border-white/5 pt-2.5">
-                      <span className="text-[9px] text-white/30 uppercase font-bold">Etapas Configuradas ({phases.length})</span>
+                      <span className="text-[9px] text-white uppercase font-bold">Etapas Configuradas ({phases.length})</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {phases.map((p) => (
                           <span 
@@ -1187,7 +1187,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     </div>
 
                     <div className="flex flex-col border-t border-white/5 pt-2.5">
-                      <span className="text-[9px] text-white/30 uppercase font-bold">Asignación</span>
+                      <span className="text-[9px] text-white uppercase font-bold">Asignación</span>
                       <span className="text-white font-medium mt-0.5">
                         {assignmentType === "club"
                           ? "Todo el Club"
@@ -1215,7 +1215,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-2.5 rounded-2xl bg-transparent border border-white/5 text-white/40 hover:text-white font-bold text-xs uppercase"
+                    className="flex-1 py-2.5 rounded-2xl bg-transparent border border-white/5 text-white hover:text-white font-bold text-xs uppercase"
                   >
                     Cancelar
                   </button>
@@ -1271,27 +1271,27 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                       <h3 className="text-sm font-black text-white uppercase tracking-wider">
                         Sincronizar Calendario
                       </h3>
-                      <span className="text-[9px] text-gray-dim block">
+                      <span className="text-[9px] text-white block">
                         Plan: <strong className="text-white">{macroToSync.name}</strong>
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowSyncModal(false)}
-                    className="p-1 rounded-full text-white/40 hover:text-white"
+                    className="p-1 rounded-full text-white hover:text-white"
                   >
                     <X size={16} />
                   </button>
                 </div>
 
                 <div className="flex flex-col gap-3 text-xs">
-                  <p className="text-[11px] text-white/70 leading-relaxed">
+                  <p className="text-[11px] text-white leading-relaxed">
                     Sincroniza automáticamente este ciclo con el calendario de la app. Los arqueros podrán entrar a cada día y ver las metas de flechas y el trabajo técnico asignado.
                   </p>
 
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white/40 uppercase font-bold">Mes a Sincronizar</label>
+                      <label className="text-[9px] text-white uppercase font-bold">Mes a Sincronizar</label>
                       <select
                         value={syncMonth}
                         onChange={(e) => setSyncMonth(Number(e.target.value))}
@@ -1304,7 +1304,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-white/40 uppercase font-bold">Año</label>
+                      <label className="text-[9px] text-white uppercase font-bold">Año</label>
                       <input
                         type="number"
                         value={syncYear}
@@ -1317,7 +1317,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                   {/* Selector de Destinatario: Todos los alumnos o 1 alumno */}
                   <div className="flex flex-col gap-2 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-white/50 uppercase font-black tracking-widest flex items-center gap-1.5">
+                      <span className="text-[9px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
                         <Users size={12} className="text-cyan-neon" />
                         <span>Sincronizar con:</span>
                       </span>
@@ -1333,7 +1333,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
                           syncTargetType === "all"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                            : "bg-neutral-950/60 border-white/10 text-white/40 hover:text-white"
+                            : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
                         <Users size={12} />
@@ -1351,7 +1351,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
                         className={`py-1.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
                           syncTargetType === "single"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
-                            : "bg-neutral-950/60 border-white/10 text-white/40 hover:text-white"
+                            : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
                         <User size={12} />
@@ -1361,7 +1361,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                     {syncTargetType === "single" && (
                       <div className="flex flex-col gap-1 pt-1 animate-fadeIn">
-                        <label className="text-[9px] text-white/40 uppercase font-bold">
+                        <label className="text-[9px] text-white uppercase font-bold">
                           Seleccionar Alumno
                         </label>
                         <select
@@ -1381,7 +1381,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade }: CoachMacrocycleT
 
                   {/* Phases Preview */}
                   <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
-                    <span className="text-[9px] text-white/40 uppercase font-bold">Etapas que se asignarán</span>
+                    <span className="text-[9px] text-white uppercase font-bold">Etapas que se asignarán</span>
                     <div className="flex flex-wrap gap-1.5">
                       {macroToSync.phases?.map((p) => (
                         <span

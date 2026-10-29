@@ -301,7 +301,7 @@ export default function AdminUsersTab() {
               {totalCount} Total
             </span>
           </h2>
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-white">
             Monitoreo en tiempo real de nuevos registros y base deportiva.
           </p>
         </div>
@@ -311,7 +311,7 @@ export default function AdminUsersTab() {
           <button
             onClick={refreshUsersFromFirestore}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-white/10 hover:border-white/20 text-white/80 hover:text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-white/10 hover:border-white/20 text-white hover:text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
             title="Refrescar lista desde Firestore"
           >
             <RefreshCw size={13} className={isRefreshing ? "animate-spin text-cyan-neon" : ""} />
@@ -344,7 +344,7 @@ export default function AdminUsersTab() {
       {/* KPI Cards Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[10px] text-gray-dim uppercase font-bold flex items-center gap-1">
+          <span className="text-[10px] text-white uppercase font-bold flex items-center gap-1">
             <UserCheck size={12} className="text-cyan-neon" />
             Total Registrados
           </span>
@@ -352,7 +352,7 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[10px] text-gray-dim uppercase font-bold flex items-center gap-1">
+          <span className="text-[10px] text-white uppercase font-bold flex items-center gap-1">
             <Flame size={12} className="text-orange-400" />
             Nuevos (48h)
           </span>
@@ -367,7 +367,7 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[10px] text-gray-dim uppercase font-bold flex items-center gap-1">
+          <span className="text-[10px] text-white uppercase font-bold flex items-center gap-1">
             <Sparkles size={12} className="text-yellow-gold" />
             Suscripciones PRO
           </span>
@@ -375,7 +375,7 @@ export default function AdminUsersTab() {
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
-          <span className="text-[10px] text-gray-dim uppercase font-bold flex items-center gap-1">
+          <span className="text-[10px] text-white uppercase font-bold flex items-center gap-1">
             <Shield size={12} className="text-purple-400" />
             Coaches / Clubes
           </span>
@@ -386,7 +386,7 @@ export default function AdminUsersTab() {
       {/* Search and Filters */}
       <div className="flex flex-col md:flex-row gap-3 items-center sticky top-0 z-10 bg-[#0A0A0C]/95 backdrop-blur-md py-2 border-b border-white/5">
         <div className="w-full md:flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" size={16} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white" size={16} />
           <input
             type="text"
             placeholder="Buscar por nombre, @apodo, correo, país o club..."
@@ -407,7 +407,7 @@ export default function AdminUsersTab() {
                 className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer ${
                   roleFilter === filter
                     ? "bg-white/10 text-white"
-                    : "text-white/40 hover:text-white/70"
+                    : "text-white hover:text-white"
                 }`}
               >
                 {filter === "ALL" ? "Todos" : filter === "ARCHER" ? "Arqueros" : filter === "COACH" ? "Coaches" : "Admins"}
@@ -424,7 +424,7 @@ export default function AdminUsersTab() {
                 className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer ${
                   planFilter === filter
                     ? "bg-white/10 text-white"
-                    : "text-white/40 hover:text-white/70"
+                    : "text-white hover:text-white"
                 }`}
               >
                 {filter === "ALL" ? "Planes" : filter}
@@ -446,7 +446,7 @@ export default function AdminUsersTab() {
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer ${
                   bowFilter === b.id
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20"
-                    : "text-white/40 hover:text-white/70"
+                    : "text-white hover:text-white"
                 }`}
               >
                 {b.label}
@@ -459,7 +459,7 @@ export default function AdminUsersTab() {
       {/* Users view list */}
       <div className="w-full flex flex-col gap-3">
         {filteredUsers.length === 0 ? (
-          <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white/30 text-xs">
+          <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white text-xs">
             No se encontraron arqueros que coincidan con los filtros de búsqueda.
           </div>
         ) : (
@@ -500,17 +500,17 @@ export default function AdminUsersTab() {
                         )}
                       </div>
 
-                      <p className="text-[10px] text-white/40 truncate">{u.email}</p>
+                      <p className="text-[10px] text-white truncate">{u.email}</p>
 
                       {/* Sub-row: Club & Primary Bow */}
-                      <div className="flex items-center gap-2 mt-1 text-[9.5px] text-gray-dim flex-wrap">
-                        <span className="text-white/70 font-semibold">{u.clubName || "Independiente"}</span>
+                      <div className="flex items-center gap-2 mt-1 text-[9.5px] text-white flex-wrap">
+                        <span className="text-white font-semibold">{u.clubName || "Independiente"}</span>
                         <span>·</span>
                         <span className="text-cyan-neon font-medium">
                           {u.bowConfig?.type || "Barebow"} {u.bowConfig?.poundage ? `(${u.bowConfig.poundage}#)` : ""}
                         </span>
                         <span>·</span>
-                        <span className="text-white/40 flex items-center gap-1">
+                        <span className="text-white flex items-center gap-1">
                           <Calendar size={10} />
                           {formatRegistrationDate(u.createdAt || u.lastActiveAt)}
                         </span>
@@ -526,7 +526,7 @@ export default function AdminUsersTab() {
                         ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
                         : u.role === "coach" || u.role === "team_admin_coach"
                         ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
-                        : "bg-neutral-500/10 text-neutral-400 border-neutral-500/20"
+                        : "bg-neutral-500/10 text-white border-neutral-500/20"
                     }`}>
                       {u.role === "archer" ? "Atleta" : u.role}
                     </span>
@@ -535,7 +535,7 @@ export default function AdminUsersTab() {
                     <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
                       u.plan === "PRO"
                         ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20 shadow-[0_0_10px_rgba(255,229,0,0.05)]"
-                        : "bg-white/5 text-white/50 border-white/5"
+                        : "bg-white/5 text-white border-white/5"
                     }`}>
                       {u.plan}
                     </span>
@@ -544,7 +544,7 @@ export default function AdminUsersTab() {
                     <div className="flex items-center gap-1 ml-1">
                       <button
                         onClick={() => setSelectedUser(u)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition cursor-pointer"
+                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer"
                         title="Ver Ficha Completa"
                       >
                         <Eye size={13} />
@@ -602,7 +602,7 @@ export default function AdminUsersTab() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-white/40 flex items-center gap-1 mt-0.5 truncate">
+                  <p className="text-xs text-white flex items-center gap-1 mt-0.5 truncate">
                     <Mail size={12} />
                     <span>{selectedUser.email}</span>
                   </p>
@@ -616,23 +616,23 @@ export default function AdminUsersTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div className="grid grid-cols-2 gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
                   <div>
-                    <span className="text-[9px] text-white/30 uppercase font-black tracking-widest block">País</span>
+                    <span className="text-[9px] text-white uppercase font-black tracking-widest block">País</span>
                     <span className="text-white font-medium">
                       {COUNTRIES[selectedUser.country]?.flag} {COUNTRIES[selectedUser.country]?.name || selectedUser.country || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-white/30 uppercase font-black tracking-widest block">Género</span>
+                    <span className="text-[9px] text-white uppercase font-black tracking-widest block">Género</span>
                     <span className="text-white font-medium">
                       {selectedUser.gender === "M" ? "Masculino" : selectedUser.gender === "F" ? "Femenino" : selectedUser.gender || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-white/30 uppercase font-black tracking-widest block">Nacimiento</span>
+                    <span className="text-[9px] text-white uppercase font-black tracking-widest block">Nacimiento</span>
                     <span className="text-white font-medium">{selectedUser.birthDate || "N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-white/30 uppercase font-black tracking-widest block">ID Usuario</span>
+                    <span className="text-[9px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
                     <span className="text-white font-mono text-[9px] truncate block">{selectedUser.uid}</span>
                   </div>
                 </div>
@@ -644,21 +644,21 @@ export default function AdminUsersTab() {
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[9px] text-white/30 uppercase font-bold block">Tipo</span>
+                      <span className="text-[9px] text-white uppercase font-bold block">Tipo</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.type || "Barebow"}</span>
                     </div>
                     <div>
-                      <span className="text-[9px] text-white/30 uppercase font-bold block">Marca / Modelo</span>
+                      <span className="text-[9px] text-white uppercase font-bold block">Marca / Modelo</span>
                       <span className="text-white font-medium truncate">
                         {selectedUser.bowConfig?.brand || ""} {selectedUser.bowConfig?.model || ""}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[9px] text-white/30 uppercase font-bold block">Potencia</span>
+                      <span className="text-[9px] text-white uppercase font-bold block">Potencia</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.poundage || 0} lbs</span>
                     </div>
                     <div>
-                      <span className="text-[9px] text-white/30 uppercase font-bold block">Distancia Default</span>
+                      <span className="text-[9px] text-white uppercase font-bold block">Distancia Default</span>
                       <span className="text-white font-medium">{selectedUser.bowConfig?.defaultDistance || 18}m</span>
                     </div>
                   </div>
@@ -669,22 +669,22 @@ export default function AdminUsersTab() {
                     Club y Contacto
                   </h4>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <span className="text-white/60">Club Deportivo:</span>
+                    <span className="text-white">Club Deportivo:</span>
                     <span className="text-white font-bold text-right truncate">
                       {selectedUser.clubName || "Arquero Independiente"}
                     </span>
 
-                    <span className="text-white/60">ID Club:</span>
+                    <span className="text-white">ID Club:</span>
                     <span className="text-white font-bold text-right truncate text-[10px]">
                       {selectedUser.clubId || "Ninguno"}
                     </span>
 
-                    <span className="text-white/60">Teléfono / WhatsApp:</span>
+                    <span className="text-white">Teléfono / WhatsApp:</span>
                     <span className="text-white font-bold text-right truncate">
                       {selectedUser.whatsappNumber || "No indicado"}
                     </span>
 
-                    <span className="text-white/60">Rol en la App:</span>
+                    <span className="text-white">Rol en la App:</span>
                     <span className="text-cyan-neon font-bold text-right uppercase text-[10px]">
                       {selectedUser.role}
                     </span>

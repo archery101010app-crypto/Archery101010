@@ -68,7 +68,7 @@ export default function ClubLogoIcon({ logo = "0", className = "w-10 h-10" }: Cl
       );
     default:
       return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`${className} text-gray-dim fallback-svg`}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`${className} text-white fallback-svg`}>
           <circle cx="12" cy="12" r="10" stroke="currentColor" />
           <path d="M8 12h8M12 8v8" stroke="currentColor" />
         </svg>

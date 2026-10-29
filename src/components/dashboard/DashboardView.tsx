@@ -271,7 +271,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             <span className="text-yellow-gold">10</span>
           </span>
         </h1>
-        <span className="text-[10px] sm:text-[12px] text-white/70 font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
+        <span className="text-[10px] sm:text-[12px] text-white font-bold tracking-[0.42em] uppercase text-center pl-1 whitespace-nowrap">
           THE APP
         </span>
       </div>
@@ -289,11 +289,11 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             )}
           </div>
-          <p className="text-xs text-white/50 mt-0.5 truncate flex items-center gap-1.5 font-medium">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/80 shrink-0">
+          <p className="text-xs text-white mt-0.5 truncate flex items-center gap-1.5 font-medium">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
               {clubCountryObj.flag}
             </span>
-            <span className="text-white/25">·</span>
+            <span className="text-white">·</span>
             {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
@@ -302,7 +302,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 {language === "es" ? "Completar perfil" : "Complete profile"}
               </span>
             ) : (
-              <span className="text-white/65 truncate">
+              <span className="text-white truncate">
                 {user?.bowConfig?.type === "Recurve"
                   ? "Recurvo"
                   : user?.bowConfig?.type === "Compound"
@@ -318,7 +318,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[10px] font-semibold text-white/80 flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
+            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-[10px] font-semibold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
             <span className="truncate">{todayMission.title}</span>
@@ -369,16 +369,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             return (
               <>
                 <div className="flex items-baseline justify-between gap-2 min-w-0">
-                  <span className="text-[11px] sm:text-xs text-white/55 font-semibold tracking-tight truncate">
+                  <span className="text-[11px] sm:text-xs text-white font-semibold tracking-tight truncate">
                     {t("weeklyProgress")}
                   </span>
                   {hasData ? (
                     <span className="text-xs font-bold text-white tabular-nums whitespace-nowrap shrink-0">
-                      {latest.score}<span className="text-white/40 font-medium">/{latest.maxScore}</span>{" "}
+                      {latest.score}<span className="text-white font-medium">/{latest.maxScore}</span>{" "}
                       <span className="text-cyan-neon">({latestPct}%)</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] text-white/35 font-medium whitespace-nowrap shrink-0">
+                    <span className="text-[10px] text-white font-medium whitespace-nowrap shrink-0">
                       {language === "es" ? "Sin rondas" : "No rounds"}
                     </span>
                   )}
@@ -414,16 +414,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </svg>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[10px] text-white/50 tabular-nums">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[10px] text-white tabular-nums">
                   <span className="truncate">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
-                    <strong className="text-white/85 font-bold">
+                    <strong className="text-white font-bold">
                       {stats.bestScore > 0 ? `${stats.bestScore} pts` : "—"}
                     </strong>
                   </span>
                   <span className="shrink-0">
                     {language === "es" ? "Volumen:" : "Volume:"}{" "}
-                    <strong className="text-white/85 font-bold">
+                    <strong className="text-white font-bold">
                       {stats.totalArrows} fl.
                     </strong>
                   </span>
@@ -439,7 +439,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 flex flex-col justify-between h-40 cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-[11px] sm:text-xs text-white/55 font-semibold tracking-tight leading-tight truncate">
+          <span className="text-[11px] sm:text-xs text-white font-semibold tracking-tight leading-tight truncate">
             {language === "es" ? "Mi Club" : "My Club"}
           </span>
 
@@ -451,10 +451,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             <span className="text-white text-xs font-bold truncate group-hover:text-cyan-neon transition-colors">
               {user.clubName || t("myClub")}
             </span>
-            <span className="text-[10px] text-white/50 truncate flex items-center gap-1 font-medium">
+            <span className="text-[10px] text-white truncate flex items-center gap-1 font-medium">
               <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-white/75 shrink-0">{clubCountryObj.olympic}</span>
-              <span className="text-white/25">·</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-white shrink-0">{clubCountryObj.olympic}</span>
+              <span className="text-white">·</span>
               <span className="truncate">
                 {user.role === "coach" 
                   ? "Coach" 
@@ -492,7 +492,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             </div>
 
-            <span className="text-[9px] font-bold uppercase tracking-wider text-white/45 whitespace-nowrap">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-white whitespace-nowrap">
               {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
@@ -505,7 +505,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             >
               {t("duelsTitle")}
             </h3>
-            <p className="text-xs text-white/65 leading-relaxed [text-wrap:pretty]">
+            <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
               {t("duelsDesc")}
             </p>
           </div>
@@ -521,7 +521,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 VS
               </span>
               <div className="flex items-baseline gap-1">
-                <span className="text-xs font-black text-white/80 tabular-nums">4</span>
+                <span className="text-xs font-black text-white tabular-nums">4</span>
                 <span className="text-[9px] font-black uppercase tracking-wider text-yellow-gold">RIVAL</span>
               </div>
             </div>
@@ -586,13 +586,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     <Star size={14} className="text-yellow-gold fill-yellow-gold shrink-0" />
                     <span>Estrellas 101010</span>
                   </h3>
-                  <p className="text-[9px] text-gray-dim uppercase tracking-wider mt-0.5">
+                  <p className="text-[9px] text-white uppercase tracking-wider mt-0.5">
                     Reglamento Oficial WA 720
                   </p>
                 </div>
                 <button
                   onClick={() => setIsStarsDrawerOpen(false)}
-                  className="w-8 h-8 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 text-gray-dim hover:text-white transition cursor-pointer flex items-center justify-center"
+                  className="w-8 h-8 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 text-white hover:text-white transition cursor-pointer flex items-center justify-center"
                 >
                   <X size={14} />
                 </button>
@@ -600,7 +600,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-                <p className="text-[10px] text-gray-dim leading-relaxed [text-wrap:pretty]">
+                <p className="text-[10px] text-white leading-relaxed [text-wrap:pretty]">
                   Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70 m o Compuesto 50 m) con un puntaje mínimo de 500 para ganar estrellas.
                 </p>
 
@@ -611,7 +611,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     className={`h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Recurve"
                         ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
-                        : "text-gray-dim hover:text-white"
+                        : "text-white hover:text-white"
                     }`}
                   >
                     Recurvo (70 m)
@@ -621,7 +621,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     className={`h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                       activeStarTab === "Compound"
                         ? "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30"
-                        : "text-gray-dim hover:text-white"
+                        : "text-white hover:text-white"
                     }`}
                   >
                     Compuesto (50 m)
@@ -664,7 +664,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                               <span className="text-xs font-black text-white group-hover:text-yellow-gold transition-colors">
                                 {star.name}
                               </span>
-                              <span className="text-[9px] text-gray-dim font-bold mt-0.5 tabular-nums">
+                              <span className="text-[9px] text-white font-bold mt-0.5 tabular-nums">
                                 Mínimo: {star.minScore} pts
                               </span>
                             </div>
@@ -684,7 +684,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                                 LOGRADO
                               </span>
                             ) : (
-                              <div className="text-[10px] text-gray-dim bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
+                              <div className="text-[10px] text-white bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
                                 <Lock size={11} />
                               </div>
                             )}
@@ -718,7 +718,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 >
                   <Star size={34} className="fill-current" />
                   {!selectedDetailStar.isUnlocked && (
-                    <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 p-1 rounded-lg text-gray-dim leading-none">
+                    <div className="absolute -bottom-1 -right-1 bg-black border border-white/10 p-1 rounded-lg text-white leading-none">
                       <Lock size={11} />
                     </div>
                   )}
@@ -733,23 +733,23 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 
                 <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[10px] text-gray-dim uppercase font-bold">Modalidad</span>
+                    <span className="text-[10px] text-white uppercase font-bold">Modalidad</span>
                     <span className="text-xs font-black text-white">
                       {selectedDetailStar.bowType === "Recurve" ? "Arco Recurvo" : "Arco Compuesto"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[10px] text-gray-dim uppercase font-bold">Distancia Oficial</span>
+                    <span className="text-[10px] text-white uppercase font-bold">Distancia Oficial</span>
                     <span className="text-xs font-black text-white">
                       {selectedDetailStar.bowType === "Recurve" ? "70 metros" : "50 metros"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[10px] text-gray-dim uppercase font-bold">Marca Mínima</span>
+                    <span className="text-[10px] text-white uppercase font-bold">Marca Mínima</span>
                     <span className="text-xs font-black text-white tabular-nums">{selectedDetailStar.star.minScore} / 720 pts</span>
                   </div>
                   <div className="flex flex-col pt-1">
-                    <div className="flex justify-between items-center text-[10px] text-gray-dim font-bold mb-1">
+                    <div className="flex justify-between items-center text-[10px] text-white font-bold mb-1">
                       <span>Progreso de Puntuación</span>
                       <span className="text-white font-extrabold tabular-nums">
                         {athleteStar && athleteStar.bowType === selectedDetailStar.bowType
@@ -777,7 +777,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                               }}
                             />
                           </div>
-                          <span className="text-[9px] font-bold text-gray-dim mt-0.5">
+                          <span className="text-[9px] font-bold text-white mt-0.5">
                             {selectedDetailStar.isUnlocked 
                               ? "Estrella obtenida y superada" 
                               : pointsNeeded > 0 
@@ -791,7 +791,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </div>
                 </div>
 
-                <p className="text-[10px] text-gray-dim leading-relaxed px-2 [text-wrap:pretty]">
+                <p className="text-[10px] text-white leading-relaxed px-2 [text-wrap:pretty]">
                   {selectedDetailStar.star.description || `Se obtiene con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
                 </p>
 
@@ -809,7 +809,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </button>
                   <button
                     onClick={() => setSelectedDetailStar(null)}
-                    className="w-full h-11 bg-[#111620] border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center justify-center whitespace-nowrap"
+                    className="w-full h-11 bg-[#111620] border border-white/10 text-white hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center justify-center whitespace-nowrap"
                   >
                     Volver al Listado
                   </button>

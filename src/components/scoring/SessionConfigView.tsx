@@ -126,7 +126,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       <div className="flex items-center gap-2.5">
         <button
           onClick={onBack}
-          className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-gray-dim hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
+          className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
           <ArrowLeft size={16} />
         </button>
@@ -134,7 +134,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">Configuración</p>
+          <p className="text-[10px] text-white uppercase tracking-wider truncate">Configuración</p>
         </div>
       </div>
 
@@ -156,7 +156,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 <h4 className="text-white text-xs font-bold mt-1 truncate">
                   {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
                 </h4>
-                <p className="text-[9px] text-gray-dim">
+                <p className="text-[9px] text-white">
                   Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
                     month: "short",
                     day: "numeric",
@@ -186,7 +186,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Practice Type Chips */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">
+          <label className="text-xs text-white font-bold uppercase tracking-wider">
             {t("practiceType")}
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -207,7 +207,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
-                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
+                    : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
                 {type === "Control" ? t("practiceControl") : type === "Práctica" ? t("practicePractice") : t("practiceVolume")}
@@ -218,7 +218,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Format Select */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">
+          <label className="text-xs text-white font-bold uppercase tracking-wider">
             {t("sessionFormat")}
           </label>
           <div className="relative">
@@ -237,7 +237,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 Vegas 300 {bowType === "Compound" ? "(10 Completo)" : ""}
               </option>
             </select>
-            <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-dim pointer-events-none" />
+            <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none" />
           </div>
           {format !== "Libre" && (
             <p className="text-[10px] text-cyan-neon font-mono font-bold px-1 tabular-nums">
@@ -248,7 +248,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Bow Type Chips */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">
+          <label className="text-xs text-white font-bold uppercase tracking-wider">
             {t("bowType")}
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -260,7 +260,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 className={`h-11 rounded-xl border text-xs font-bold flex items-center justify-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
-                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
+                    : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
                 {type === "Recurve" ? "Recurvo" : type === "Compound" ? "Compuesto" : "Barebow"}
@@ -271,7 +271,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Distance Chips presets */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-gray-dim font-bold uppercase tracking-wider">
+          <label className="text-xs text-white font-bold uppercase tracking-wider">
             {t("distance")}
           </label>
           <div className="grid grid-cols-5 gap-2 w-full">
@@ -294,7 +294,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 className={`h-11 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
-                    : "border-white/10 bg-[#0D0F12] text-gray-dim hover:text-white"
+                    : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
                 {d}m
@@ -311,7 +311,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             className="grid grid-cols-2 gap-3"
           >
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-gray-dim font-bold">{t("rounds")} (Ends)</label>
+              <label className="text-xs text-white font-bold">{t("rounds")} (Ends)</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
@@ -332,7 +332,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-gray-dim font-bold">Flechas / End</label>
+              <label className="text-xs text-white font-bold">Flechas / End</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
@@ -379,7 +379,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 </h3>
               </div>
 
-              <p className="text-xs text-gray-dim leading-relaxed">
+              <p className="text-xs text-white leading-relaxed">
                 {practiceInfoType === "Control" && (
                   "Simulación estricta de competencia. Con tiempos oficiales, planilla de puntuación reglamentaria, diana activa y sin interrupciones. Ideal para evaluar tu nivel en torneos."
                 )}
@@ -399,7 +399,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   onChange={(e) => setDontShowAgainPractice(e.target.checked)}
                   className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                 />
-                <label htmlFor="dontShowAgain" className="text-[10px] text-gray-dim font-bold cursor-pointer uppercase select-none">
+                <label htmlFor="dontShowAgain" className="text-[10px] text-white font-bold cursor-pointer uppercase select-none">
                   No volver a mostrar
                 </label>
               </div>

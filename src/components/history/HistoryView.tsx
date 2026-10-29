@@ -236,7 +236,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center cursor-pointer shrink-0 transition"
+            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center cursor-pointer shrink-0 transition"
           >
             <ArrowLeft size={16} />
           </button>
@@ -244,7 +244,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             <h2 className="text-white text-base sm:text-lg font-black uppercase tracking-wide truncate leading-tight">
               {t("historyTitle")}
             </h2>
-            <p className="text-[10px] text-gray-dim uppercase tracking-wider truncate">Historial</p>
+            <p className="text-[10px] text-white uppercase tracking-wider truncate">Historial</p>
           </div>
         </div>
 
@@ -253,7 +253,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <button
             onClick={() => setActiveTab("SESSIONS")}
             className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-              activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
+              activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
             }`}
           >
             Sesiones
@@ -261,7 +261,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <button
             onClick={() => setActiveTab("VOLUME")}
             className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-              activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-gray-dim hover:text-white"
+              activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
             }`}
           >
             Volumen
@@ -275,7 +275,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
             {/* Date Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Fecha:
               </span>
               <div className="flex gap-1.5">
@@ -290,7 +290,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       dateFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
+                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
                     }`}
                   >
                     {f.label}
@@ -301,7 +301,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Practice Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Tipo:
               </span>
               <div className="flex gap-1.5">
@@ -317,7 +317,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       practiceFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
+                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
                     }`}
                   >
                     {f.label}
@@ -328,7 +328,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
             {/* Bow Type Filters */}
             <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-[10px] text-gray-dim font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+              <span className="text-[10px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
                 Arco:
               </span>
               <div className="flex gap-1.5">
@@ -344,7 +344,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     className={`h-7 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                       bowFilter === f.id
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-gray-dim hover:text-white"
+                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
                     }`}
                   >
                     {f.label}
@@ -357,7 +357,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           {/* Session list items */}
           <div className="flex-1 flex flex-col gap-2.5">
             {filteredSessions.length === 0 ? (
-              <div className="text-center py-10 text-gray-dim text-xs">
+              <div className="text-center py-10 text-white text-xs">
                 No se encontraron sesiones registradas.
               </div>
             ) : (
@@ -373,21 +373,21 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   >
                     <div className="flex flex-col gap-1 w-[70%] min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-dim font-bold">{formatDate(session.timestamp)}</span>
+                        <span className="text-[10px] text-white font-bold">{formatDate(session.timestamp)}</span>
                         <span className="text-[8px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
                           {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
                         <span className="text-xl font-black text-white">{session.score}</span>
-                        <span className="text-[10px] text-gray-dim">/ {session.maxScore}</span>
+                        <span className="text-[10px] text-white">/ {session.maxScore}</span>
                         {session.maxScore > 0 && (
                           <span className="text-[11px] text-yellow-gold font-bold ml-1">
                             {Math.round((session.score / session.maxScore) * 100)}%
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-gray-dim truncate">
+                      <span className="text-[10px] text-white truncate">
                         {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
                     </div>
@@ -398,7 +398,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                           <Award size={10} /> PB
                         </span>
                       )}
-                      <ChevronRight size={16} className="text-gray-dim group-hover:text-white transition-colors" />
+                      <ChevronRight size={16} className="text-white group-hover:text-white transition-colors" />
                     </div>
                   </motion.div>
                 );
@@ -417,9 +417,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-white">{volStats.total}</span>
-              <span className="text-xs text-gray-dim font-bold">flechas registradas</span>
+              <span className="text-xs text-white font-bold">flechas registradas</span>
             </div>
-            <p className="text-[10px] text-gray-dim leading-relaxed">
+            <p className="text-[10px] text-white leading-relaxed">
               Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.
             </p>
           </div>
@@ -495,7 +495,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             
             <div className="flex flex-col gap-2">
               {sessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
-                <div className="text-center py-8 text-gray-dim text-xs">
+                <div className="text-center py-8 text-white text-xs">
                   No hay sesiones para calcular volumen.
                 </div>
               ) : (
@@ -507,12 +507,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       className="bg-neutral-900/40 border border-white/5 p-3.5 rounded-2xl flex justify-between items-center"
                     >
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] text-gray-500 font-bold">{formatDate(s.timestamp)}</span>
+                        <span className="text-[9px] text-white font-bold">{formatDate(s.timestamp)}</span>
                         <span className="text-xs font-bold text-white uppercase">{s.format} ({s.distance}m)</span>
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-cyan-neon">+{arrows}</span>
-                        <span className="text-[9px] text-gray-dim block font-bold uppercase">{s.practiceType}</span>
+                        <span className="text-[9px] text-white block font-bold uppercase">{s.practiceType}</span>
                       </div>
                     </div>
                   );
@@ -537,7 +537,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             <div className="flex justify-between items-center">
               <button
                 onClick={() => setSelectedSession(null)}
-                className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-gray-dim hover:text-white cursor-pointer"
+                className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-white hover:text-white cursor-pointer"
               >
                 <ArrowLeft size={16} />
               </button>
@@ -564,7 +564,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               <h3 className="text-white text-lg font-black uppercase tracking-wide">
                 Detalle de Entrenamiento
               </h3>
-              <p className="text-xs text-gray-dim mt-0.5">
+              <p className="text-xs text-white mt-0.5">
                 {formatDate(selectedSession.timestamp)} · {selectedSession.format}
               </p>
             </div>
@@ -572,13 +572,13 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Giant Score Summary */}
             <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
               <div className="flex flex-col">
-                <span className="text-[9px] text-gray-dim font-bold uppercase tracking-widest">Puntos Totales</span>
+                <span className="text-[9px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
                 <span className="text-3xl font-black text-white">
-                  {selectedSession.score} <span className="text-xs text-gray-dim">/ {selectedSession.maxScore}</span>
+                  {selectedSession.score} <span className="text-xs text-white">/ {selectedSession.maxScore}</span>
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[9px] text-gray-dim font-bold uppercase tracking-widest">Precisión</span>
+                <span className="text-[9px] text-white font-bold uppercase tracking-widest">Precisión</span>
                 <p className="text-2xl font-black text-yellow-gold leading-tight">
                   {selectedSession.maxScore > 0 ? Math.round((selectedSession.score / selectedSession.maxScore) * 100) : 0}%
                 </p>
@@ -588,23 +588,23 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-gray-dim uppercase block">Distancia</span>
+                <span className="text-[8px] text-white uppercase block">Distancia</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.distance}m</span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-gray-dim uppercase block">Arco</span>
+                <span className="text-[8px] text-white uppercase block">Arco</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.bowType === "Recurve" ? "Recurvo" : selectedSession.bowType === "Compound" ? "Compuesto" : selectedSession.bowType}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-gray-dim uppercase block">Tipo</span>
+                <span className="text-[8px] text-white uppercase block">Tipo</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.practiceType === "Control" ? t("practiceControl") : selectedSession.practiceType}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
-                <span className="text-[8px] text-gray-dim uppercase block">Rondas</span>
+                <span className="text-[8px] text-white uppercase block">Rondas</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.endsCount} Ends</span>
               </div>
             </div>
@@ -612,14 +612,14 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Bloques y Fatiga report (para WA600/720 en Historial) */}
             {selectedSession.blockStats && (
               <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
-                <span className="text-[9px] text-gray-dim uppercase font-bold">Rendimiento por Bloques</span>
-                <div className="flex justify-between text-white/80">
+                <span className="text-[9px] text-white uppercase font-bold">Rendimiento por Bloques</span>
+                <div className="flex justify-between text-white">
                   <span>Bloque 1 (Primera Mitad):</span>
                   <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b1Score} pts</span>
                 </div>
                 {selectedSession.blockStats.completedB2 ? (
                   <>
-                    <div className="flex justify-between text-white/80">
+                    <div className="flex justify-between text-white">
                       <span>Bloque 2 (Segunda Mitad):</span>
                       <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b2Score} pts</span>
                     </div>
@@ -648,7 +648,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 {selectedSession.ends?.map((e: any, idx: number) => (
                   <div key={idx} className="flex flex-col border-b border-gray-border/20 pb-2 last:border-b-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-dim font-bold">End {idx + 1}</span>
+                      <span className="text-xs text-white font-bold">End {idx + 1}</span>
                       <div className="flex items-center gap-1">
                         {e.arrows.map((a: string, arrowIdx: number) => (
                           <div
@@ -666,7 +666,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       </span>
                     </div>
                     {e.note && (
-                      <p className="text-[10px] text-gray-dim italic mt-1 pl-1">
+                      <p className="text-[10px] text-white italic mt-1 pl-1">
                         "{e.note}"
                       </p>
                     )}
@@ -752,11 +752,11 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       {disp && (
                         <div className="w-full grid grid-cols-2 gap-2 mt-2 text-center">
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[8px] text-gray-dim uppercase font-bold block">Agrupación Real</span>
+                            <span className="text-[8px] text-white uppercase font-bold block">Agrupación Real</span>
                             <span className="text-xs font-black text-cyan-neon">{disp.groupRadiusCm} cm</span>
                           </div>
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[8px] text-gray-dim uppercase font-bold block">Centro (+) vs X</span>
+                            <span className="text-[8px] text-white uppercase font-bold block">Centro (+) vs X</span>
                             <span className="text-xs font-black text-white">
                               {Math.hypot(disp.offsetCmX, disp.offsetCmY).toFixed(1)} cm
                             </span>
@@ -781,7 +781,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
             {/* Session final Notes sumary card */}
             {selectedSession.sessionNote && (
               <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-1.5">
-                <span className="text-xs text-gray-dim font-bold uppercase tracking-wider">
+                <span className="text-xs text-white font-bold uppercase tracking-wider">
                   Notas de la Sesión
                 </span>
                 <p className="text-xs text-white leading-relaxed italic">
@@ -802,7 +802,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-gray-border rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
               <h3 className="text-white text-base font-black uppercase">¿Eliminar Sesión?</h3>
-              <p className="text-xs text-gray-dim">
+              <p className="text-xs text-white">
                 Esta acción no se puede deshacer. Se eliminará también de la nube cuando te conectes.
               </p>
               <div className="flex gap-3 mt-2">
@@ -814,7 +814,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 </button>
                 <button
                   onClick={() => setConfirmDeleteId(null)}
-                  className="flex-1 py-3 rounded-full bg-transparent border border-gray-border text-gray-dim hover:text-white font-bold text-xs uppercase cursor-pointer"
+                  className="flex-1 py-3 rounded-full bg-transparent border border-gray-border text-white hover:text-white font-bold text-xs uppercase cursor-pointer"
                 >
                   Cancelar
                 </button>

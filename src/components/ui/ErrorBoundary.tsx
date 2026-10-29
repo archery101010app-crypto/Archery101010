@@ -54,7 +54,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               <h2 className="text-white text-base font-black tracking-tight">
                 Error de visualización
               </h2>
-              <p className="text-xs text-white/50 leading-relaxed px-2 mt-1">
+              <p className="text-xs text-white leading-relaxed px-2 mt-1">
                 Ocurrió un problema inesperado al cargar esta vista. Puedes recargar la página o regresar al inicio.
               </p>
             </div>
@@ -62,7 +62,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             {/* Debug Code Block */}
             <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[10px] font-mono text-left max-h-[110px] overflow-y-auto scrollbar-thin">
               <span className="text-red-rival font-bold">Detalle técnico:</span>
-              <span className="text-white/70 break-all">{this.state.error?.toString() || "Error desconocido"}</span>
+              <span className="text-white break-all">{this.state.error?.toString() || "Error desconocido"}</span>
             </div>
 
             {/* Control CTAs */}
@@ -77,7 +77,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               
               <button
                 onClick={this.handleReset}
-                className="w-full h-11 bg-[#0D1017] border border-white/[0.08] text-white/60 hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl cursor-pointer transition flex items-center justify-center gap-2"
+                className="w-full h-11 bg-[#0D1017] border border-white/[0.08] text-white hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl cursor-pointer transition flex items-center justify-center gap-2"
               >
                 <Home size={14} />
                 <span>Volver al Inicio</span>

@@ -1030,18 +1030,18 @@ export default function Home() {
                 </h3>
                 
                 <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full">
-                  <span className="text-[9px] text-white/50 uppercase font-bold block">
+                  <span className="text-[9px] text-white uppercase font-bold block">
                     Puntuación Registrada
                   </span>
                   <span className="text-2xl font-black text-white block mt-0.5 tabular-nums">
-                    {unlockedStar.score} <span className="text-xs text-white/50">/ 720</span>
+                    {unlockedStar.score} <span className="text-xs text-white">/ 720</span>
                   </span>
                   <span className="text-[9px] text-cyan-neon uppercase font-black tracking-wider block mt-1">
                     {unlockedStar.bowType === "Recurve" ? "Recurvo" : unlockedStar.bowType === "Compound" ? "Compuesto" : unlockedStar.bowType} · {unlockedStar.distance} m (72 flechas)
                   </span>
                 </div>
 
-                <p className="text-xs text-white/65 leading-relaxed px-2 [text-wrap:pretty]">
+                <p className="text-xs text-white leading-relaxed px-2 [text-wrap:pretty]">
                   Felicitaciones, {unlockedStar.userName}. Has superado la marca mínima de {unlockedStar.star.minScore} puntos y desbloqueado esta Estrella 101010.
                 </p>
 
@@ -1079,15 +1079,15 @@ export default function Home() {
                     
                     <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full text-left">
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white/50 uppercase font-bold">Formato WA</span>
+                        <span className="text-[10px] text-white uppercase font-bold">Formato WA</span>
                         <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance} m</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white/50 uppercase font-bold">Puntuación</span>
+                        <span className="text-[10px] text-white uppercase font-bold">Puntuación</span>
                         <span className="text-xs font-black text-cyan-neon tabular-nums">{activeDraft.score} pts</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[10px] text-white/50 uppercase font-bold">Progreso</span>
+                        <span className="text-[10px] text-white uppercase font-bold">Progreso</span>
                         <span className="text-xs font-black text-white tabular-nums">
                           {(() => {
                             const shotCount = activeDraft.ends.reduce((sum: number, e: any) => sum + e.arrows.filter((a: string) => a !== "").length, 0);
@@ -1097,8 +1097,8 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] text-white/50 uppercase font-bold">Guardado</span>
-                        <span className="text-[10px] text-white/60 font-medium">
+                        <span className="text-[10px] text-white uppercase font-bold">Guardado</span>
+                        <span className="text-[10px] text-white font-medium">
                           {activeDraft.timestamp ? (
                             (() => {
                               const date = new Date(activeDraft.timestamp);
@@ -1109,7 +1109,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-white/65 leading-relaxed px-2 [text-wrap:pretty]">
+                    <p className="text-xs text-white leading-relaxed px-2 [text-wrap:pretty]">
                       Tienes una sesión en curso guardada. ¿Deseas continuar registrando tus flechas donde lo dejaste?
                     </p>
 
@@ -1137,7 +1137,7 @@ export default function Home() {
                       ¿Descartar Borrador?
                     </h3>
                     
-                    <p className="text-xs text-white/65 leading-relaxed px-2 my-4 [text-wrap:pretty]">
+                    <p className="text-xs text-white leading-relaxed px-2 my-4 [text-wrap:pretty]">
                       Esta acción es irreversible y se perderán los tiros registrados en esta sesión en pausa. ¿Estás seguro de continuar?
                     </p>
 
@@ -1150,7 +1150,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(false)}
-                        className="w-full h-11 bg-[#111620] border border-white/[0.08] text-white/70 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
+                        className="w-full h-11 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                       >
                         No, Volver Atrás
                       </button>
@@ -1199,7 +1199,7 @@ export default function Home() {
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
                   Desafío en Vivo Recibido
                 </h3>
-                <p className="text-xs text-white/65 leading-relaxed [text-wrap:pretty]">
+                <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
                   <strong className="text-white">{pendingInvitation.senderName}</strong> te ha desafiado a una eliminatoria de <strong className="text-white">{pendingInvitation.bowType === "Recurve" ? "Recurvo" : pendingInvitation.bowType === "Compound" ? "Compuesto" : pendingInvitation.bowType}</strong> a <strong className="text-white">{pendingInvitation.distance} m</strong>.
                 </p>
               </div>
@@ -1268,7 +1268,7 @@ export default function Home() {
                       setPendingInvitation(null);
                     }
                   }}
-                  className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white/60 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
+                  className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                 >
                   Rechazar
                 </button>
@@ -1296,7 +1296,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 15, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 rounded-full bg-[#0D1017]/95 border border-white/15 text-white/90 text-xs font-semibold shadow-2xl backdrop-blur-md pointer-events-none flex items-center justify-center"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 rounded-full bg-[#0D1017]/95 border border-white/15 text-white text-xs font-semibold shadow-2xl backdrop-blur-md pointer-events-none flex items-center justify-center"
           >
             <span>{backToast}</span>
           </motion.div>

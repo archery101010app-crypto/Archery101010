@@ -59,7 +59,7 @@ export default function AdminSettingsTab() {
       {/* Header */}
       <div>
         <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">Configuración General</h2>
-        <p className="text-xs text-white/50">Ajusta credenciales del sistema, canales de soporte y habilita funcionalidades.</p>
+        <p className="text-xs text-white">Ajusta credenciales del sistema, canales de soporte y habilita funcionalidades.</p>
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-5 mt-2">
@@ -72,7 +72,7 @@ export default function AdminSettingsTab() {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">PayPal Client ID</label>
+              <label className="text-[9px] text-white uppercase font-black tracking-widest">PayPal Client ID</label>
               <input
                 type="password"
                 value={paypalClientId}
@@ -81,7 +81,7 @@ export default function AdminSettingsTab() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">PayPal Secret Key</label>
+              <label className="text-[9px] text-white uppercase font-black tracking-widest">PayPal Secret Key</label>
               <input
                 type="password"
                 value={paypalSecret}
@@ -101,7 +101,7 @@ export default function AdminSettingsTab() {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">WhatsApp de Soporte</label>
+              <label className="text-[9px] text-white uppercase font-black tracking-widest">WhatsApp de Soporte</label>
               <input
                 type="tel"
                 value={supportWhatsapp}
@@ -111,7 +111,7 @@ export default function AdminSettingsTab() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[9px] text-white/40 uppercase font-black tracking-widest">Email de Contacto</label>
+              <label className="text-[9px] text-white uppercase font-black tracking-widest">Email de Contacto</label>
               <input
                 type="email"
                 value={supportEmail}
@@ -135,17 +135,17 @@ export default function AdminSettingsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-white block">Módulo de Duelos</span>
-                <span className="text-[9px] text-white/40 block">Habilita duelos directos cara a cara entre arqueros.</span>
+                <span className="text-[9px] text-white block">Habilita duelos directos cara a cara entre arqueros.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setDuelsEnabled(!duelsEnabled)}
-                className="text-cyan-neon hover:text-white/80 transition cursor-pointer"
+                className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
                 {duelsEnabled ? (
                   <ToggleRight size={26} className="text-cyan-neon" />
                 ) : (
-                  <ToggleLeft size={26} className="text-white/20" />
+                  <ToggleLeft size={26} className="text-white" />
                 )}
               </button>
             </div>
@@ -154,17 +154,17 @@ export default function AdminSettingsTab() {
             <div className="flex items-center justify-between border-t border-white/5 pt-3">
               <div>
                 <span className="text-xs font-bold text-white block">Música de Competencia (Spotify)</span>
-                <span className="text-[9px] text-white/40 block">Mostrar widget de música ambiental en reloj de tiro.</span>
+                <span className="text-[9px] text-white block">Mostrar widget de música ambiental en reloj de tiro.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSpotifyEnabled(!spotifyEnabled)}
-                className="text-cyan-neon hover:text-white/80 transition cursor-pointer"
+                className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
                 {spotifyEnabled ? (
                   <ToggleRight size={26} className="text-cyan-neon" />
                 ) : (
-                  <ToggleLeft size={26} className="text-white/20" />
+                  <ToggleLeft size={26} className="text-white" />
                 )}
               </button>
             </div>
@@ -173,17 +173,17 @@ export default function AdminSettingsTab() {
             <div className="flex items-center justify-between border-t border-white/5 pt-3">
               <div>
                 <span className="text-xs font-bold text-white block">Módulo de Ciclos</span>
-                <span className="text-[9px] text-white/40 block">Habilita planificación avanzada de ciclos de entrenamiento.</span>
+                <span className="text-[9px] text-white block">Habilita planificación avanzada de ciclos de entrenamiento.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setMacrocyclesEnabled(!macrocyclesEnabled)}
-                className="text-cyan-neon hover:text-white/80 transition cursor-pointer"
+                className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
                 {macrocyclesEnabled ? (
                   <ToggleRight size={26} className="text-cyan-neon" />
                 ) : (
-                  <ToggleLeft size={26} className="text-white/20" />
+                  <ToggleLeft size={26} className="text-white" />
                 )}
               </button>
             </div>

@@ -47,5 +47,5 @@ export const PHASE_CONFIG: Record<string, { label: string; color: string }> = {
   puesta_punto: { label: "Etapa de Puesta a Punto", color: "#FFE500" },
   competitiva: { label: "Etapa Competitiva", color: "#FF0000" },
   transicion: { label: "Etapa de Transición", color: "#00C853" },
-  descanso: { label: "Etapa de Descanso", color: "#8E8E93" }
+  descanso: { label: "Etapa de Descanso", color: "#FFFFFF" }
 };

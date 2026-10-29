@@ -62,10 +62,10 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                 className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/40 border border-white/[0.02]"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] text-gray-dim font-bold w-4 shrink-0">#{idx + 1}</span>
+                  <span className="text-[10px] text-white font-bold w-4 shrink-0">#{idx + 1}</span>
                   <div className="flex flex-col min-w-0">
                     <span className="text-white text-xs font-bold leading-none truncate">{st.userName || "Arquero"}</span>
-                    <span className="text-[8px] text-gray-dim mt-1">
+                    <span className="text-[8px] text-white mt-1">
                       {st.wins}V - {st.losses}D - {st.ties}E · Total: {st.total}
                     </span>
                   </div>
@@ -73,7 +73,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
 
                 <div className="flex flex-col items-end shrink-0 pl-2">
                   <span className="text-xs font-black text-purple-400">{winRate}%</span>
-                  <span className="text-[8px] text-gray-dim uppercase">Efectividad</span>
+                  <span className="text-[8px] text-white uppercase">Efectividad</span>
                 </div>
               </div>
             );
@@ -83,10 +83,10 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
 
       {/* Historial general de duelos */}
       <div className="flex flex-col gap-2.5">
-        <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">Historial de la Arena</span>
+        <span className="text-[10px] text-white font-black uppercase tracking-wider">Historial de la Arena</span>
 
         {duels.length === 0 ? (
-          <p className="text-[11px] text-gray-dim text-center py-6">No se han registrado duelos en la arena aún.</p>
+          <p className="text-[11px] text-white text-center py-6">No se han registrado duelos en la arena aún.</p>
         ) : (
           duels.map((duel) => {
             const duelDate = new Date(duel.timestamp);
@@ -105,7 +105,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                   <span className="text-white text-xs font-bold leading-tight truncate">
                     {duel.userName || "Arquero"}
                   </span>
-                  <span className="text-[9px] text-gray-dim truncate">
+                  <span className="text-[9px] text-white truncate">
                     vs <span className="text-purple-400 font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
                   </span>
                 </div>

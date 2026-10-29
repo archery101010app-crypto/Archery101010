@@ -20,7 +20,7 @@
   --color-green-success: #00C853;
   --color-gray-glass: rgba(26, 29, 32, 0.75);
   --color-gray-border: #2C2F33;
-  --color-gray-dim: #8E8E93;
+  --color-gray-dim: #FFFFFF;
 
   --shadow-glow-cyan: none;
   --shadow-glow-yellow: none;
@@ -81,6 +81,54 @@ body {
   margin: 0;
   padding: 0;
   overscroll-behavior-y: contain;
+}
+
+/* --- Outdoor Sunlight High-Contrast Solid White Text (OLED Mode) --- */
+html:not(.light-contrast) .text-gray-dim,
+html:not(.light-contrast) [class*="text-gray-dim"],
+html:not(.light-contrast) [class*="text-white/"],
+html:not(.light-contrast) [class*="text-zinc-100"],
+html:not(.light-contrast) [class*="text-zinc-200"],
+html:not(.light-contrast) [class*="text-zinc-300"],
+html:not(.light-contrast) [class*="text-zinc-400"],
+html:not(.light-contrast) [class*="text-zinc-500"],
+html:not(.light-contrast) [class*="text-zinc-600"],
+html:not(.light-contrast) [class*="text-zinc-700"],
+html:not(.light-contrast) [class*="text-slate-100"],
+html:not(.light-contrast) [class*="text-slate-200"],
+html:not(.light-contrast) [class*="text-slate-300"],
+html:not(.light-contrast) [class*="text-slate-400"],
+html:not(.light-contrast) [class*="text-slate-500"],
+html:not(.light-contrast) [class*="text-slate-600"],
+html:not(.light-contrast) [class*="text-slate-700"],
+html:not(.light-contrast) [class*="text-neutral-100"],
+html:not(.light-contrast) [class*="text-neutral-200"],
+html:not(.light-contrast) [class*="text-neutral-300"],
+html:not(.light-contrast) [class*="text-neutral-400"],
+html:not(.light-contrast) [class*="text-neutral-500"],
+html:not(.light-contrast) [class*="text-neutral-600"],
+html:not(.light-contrast) [class*="text-neutral-700"],
+html:not(.light-contrast) [class*="text-gray-100"],
+html:not(.light-contrast) [class*="text-gray-200"],
+html:not(.light-contrast) [class*="text-gray-300"],
+html:not(.light-contrast) [class*="text-gray-400"],
+html:not(.light-contrast) [class*="text-gray-500"],
+html:not(.light-contrast) [class*="text-gray-600"],
+html:not(.light-contrast) [class*="text-gray-700"],
+html:not(.light-contrast) [class*="text-stone-100"],
+html:not(.light-contrast) [class*="text-stone-200"],
+html:not(.light-contrast) [class*="text-stone-300"],
+html:not(.light-contrast) [class*="text-stone-400"],
+html:not(.light-contrast) [class*="text-stone-500"],
+html:not(.light-contrast) [class*="text-stone-600"],
+html:not(.light-contrast) [class*="text-stone-700"] {
+  color: #ffffff !important;
+}
+
+html:not(.light-contrast) input::placeholder,
+html:not(.light-contrast) textarea::placeholder {
+  color: #ffffff !important;
+  opacity: 0.9 !important;
 }
 
 * {
@@ -275,10 +323,10 @@ body {
   border-color: rgba(255, 255, 255, 0.1) !important;
 }
 .light-contrast header .text-white\/40 {
-  color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
 }
 .light-contrast header .text-white\/50 {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: #ffffff !important;
 }
 .light-contrast header .bg-neutral-950 {
   background-color: #0a0a0a !important;

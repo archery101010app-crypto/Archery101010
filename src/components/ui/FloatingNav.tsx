@@ -99,7 +99,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                       ? "text-cyan-neon"
                       : isProBlocked
                       ? "text-yellow-gold/80 group-hover:text-yellow-gold"
-                      : "text-gray-dim group-hover:text-white"
+                      : "text-white group-hover:text-white"
                   }`}
                 />
                 {item.isPro && (
@@ -112,7 +112,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {/* Label indicator */}
               <span
                 className={`text-[8px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 ${
-                  isActive ? "text-white font-black" : "text-gray-dim/80 group-hover:text-white"
+                  isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >
                 {item.label}

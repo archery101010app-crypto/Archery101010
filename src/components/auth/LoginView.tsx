@@ -303,7 +303,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="text-[10px] sm:text-[12px] md:text-[14px] text-white/80 font-bold tracking-[0.45em] uppercase text-center pl-1"
+          className="text-[10px] sm:text-[12px] md:text-[14px] text-white font-bold tracking-[0.45em] uppercase text-center pl-1"
         >
           THE APP
         </motion.span>
@@ -336,12 +336,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <button
                 type="button"
                 onClick={() => setShowInstallBanner(false)}
-                className="text-gray-dim hover:text-white p-0.5 cursor-pointer"
+                className="text-white hover:text-white p-0.5 cursor-pointer"
               >
                 <X size={14} />
               </button>
             </div>
-            <p className="text-[10px] text-gray-dim leading-snug">
+            <p className="text-[10px] text-white leading-snug">
               Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.
             </p>
             <button
@@ -360,7 +360,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <AlertCircle size={14} className="shrink-0" />
               {language === "es" ? "Modo Desconectado" : "Offline Mode"}
             </span>
-            <p className="text-[10px] text-gray-dim leading-snug">
+            <p className="text-[10px] text-white leading-snug">
               {language === "es" 
                 ? "No tienes conexión a internet. Puedes ingresar usando tus credenciales guardadas previamente en este dispositivo." 
                 : "No internet connection detected. You can sign in using credentials previously saved on this device."}
@@ -368,7 +368,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           </div>
         )}
 
-        <h2 className="text-white/80 font-bold text-center text-sm tracking-wider uppercase">
+        <h2 className="text-white font-bold text-center text-sm tracking-wider uppercase">
           {t("loginTitle")}
         </h2>
 
@@ -389,7 +389,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Email field */}
           <div className="relative flex items-center">
-            <span className="absolute left-4 text-gray-dim">
+            <span className="absolute left-4 text-white">
               <Mail size={18} />
             </span>
             <input
@@ -397,13 +397,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("emailPlaceholder")}
-              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-gray-dim text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
           </div>
 
           {/* Password field */}
           <div className="relative flex items-center">
-            <span className="absolute left-4 text-gray-dim">
+            <span className="absolute left-4 text-white">
               <Lock size={18} />
             </span>
             <input
@@ -411,12 +411,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholder")}
-              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-gray-dim text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-gray-dim hover:text-white transition cursor-pointer"
+              className="absolute right-4 text-white hover:text-white transition cursor-pointer"
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -467,7 +467,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         {/* Divider */}
         <div className="flex items-center gap-4 py-2">
           <div className="h-[1px] flex-1 bg-gray-border" />
-          <span className="text-xs text-gray-dim uppercase tracking-widest">o</span>
+          <span className="text-xs text-white uppercase tracking-widest">o</span>
           <div className="h-[1px] flex-1 bg-gray-border" />
         </div>
 
@@ -528,13 +528,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 <button
                   type="button"
                   onClick={() => setShowResetModal(false)}
-                  className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white hover:text-white cursor-pointer"
                 >
                   <X size={14} />
                 </button>
               </div>
 
-              <p className="text-xs text-white/60 leading-relaxed">
+              <p className="text-xs text-white leading-relaxed">
                 Ingresa el correo electrónico de tu cuenta y te enviaremos un enlace automático para crear o restablecer tu contraseña.
               </p>
 
@@ -562,7 +562,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               ) : (
                 <form onSubmit={handleConfirmPasswordReset} className="flex flex-col gap-3.5">
                   <div className="relative flex items-center">
-                    <span className="absolute left-3.5 text-white/40">
+                    <span className="absolute left-3.5 text-white">
                       <Mail size={16} />
                     </span>
                     <input
@@ -571,14 +571,14 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                       onChange={(e) => setResetEmail(e.target.value)}
                       placeholder="correo@ejemplo.com"
                       autoFocus
-                      className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm pl-10 pr-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
+                      className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-10 pr-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
                     />
                   </div>
                   <div className="flex gap-2.5 pt-1">
                     <button
                       type="button"
                       onClick={() => setShowResetModal(false)}
-                      className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/70 hover:text-white text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
+                      className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white hover:text-white text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
                     >
                       Cancelar
                     </button>
@@ -598,7 +598,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       </AnimatePresence>
 
       {/* Footer copyright */}
-      <footer className="text-center text-[10px] text-gray-dim tracking-wider mt-8">
+      <footer className="text-center text-[10px] text-white tracking-wider mt-8">
         {t("copyright")}
       </footer>
 
@@ -624,13 +624,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 <button
                   type="button"
                   onClick={() => setShowIOSModal(false)}
-                  className="p-1 rounded-full bg-neutral-900 border border-neutral-800 text-gray-400 hover:text-white cursor-pointer"
+                  className="p-1 rounded-full bg-neutral-900 border border-neutral-800 text-white hover:text-white cursor-pointer"
                 >
                   <X size={14} />
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3.5 text-xs text-gray-dim leading-relaxed">
+              <div className="flex flex-col gap-3.5 text-xs text-white leading-relaxed">
                 <div className="flex gap-2.5 items-start">
                   <div className="w-5 h-5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-[10px] text-cyan-neon">
                     1

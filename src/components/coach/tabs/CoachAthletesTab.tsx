@@ -136,18 +136,18 @@ export default function CoachAthletesTab({
       <div className="flex flex-col gap-2.5 w-full max-w-full">
         {/* Row 1: Search Input (Full width, easy to tap on mobile) */}
         <div className="w-full bg-neutral-900/60 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
-          <Search size={15} className="text-gray-dim shrink-0" />
+          <Search size={15} className="text-white shrink-0" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por nombre o alias..."
-            className="bg-transparent border-none text-white text-xs outline-none flex-1 min-w-0 placeholder:text-gray-dim"
+            className="bg-transparent border-none text-white text-xs outline-none flex-1 min-w-0 placeholder:text-white"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm("")}
-              className="text-gray-dim hover:text-white text-xs p-0.5 cursor-pointer"
+              className="text-white hover:text-white text-xs p-0.5 cursor-pointer"
               title="Limpiar búsqueda"
             >
               <X size={13} />
@@ -173,7 +173,7 @@ export default function CoachAthletesTab({
               <option value="Barebow">Arco Barebow</option>
               <option value="Traditional">Arco Tradicional</option>
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-dim">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white">
               <ChevronDown size={14} />
             </div>
           </div>
@@ -192,7 +192,7 @@ export default function CoachAthletesTab({
       {/* Roster list */}
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center px-1">
-          <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+          <span className="text-[10px] text-white font-black uppercase tracking-wider">
             Alumnos Registrados ({filteredAthletes.length})
           </span>
           <span className="text-[9px] text-cyan-neon/80 font-bold">
@@ -202,8 +202,8 @@ export default function CoachAthletesTab({
 
         {filteredAthletes.length === 0 ? (
           <div className="text-center py-10 bg-neutral-900/20 border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2">
-            <User size={28} className="text-gray-dim/40" />
-            <p className="text-xs text-white/80 font-bold">No hay alumnos que coincidan con la búsqueda.</p>
+            <User size={28} className="text-white" />
+            <p className="text-xs text-white font-bold">No hay alumnos que coincidan con la búsqueda.</p>
             <button
               onClick={() => setIsModalOpen(true)}
               className="mt-2 text-[10px] text-cyan-neon uppercase tracking-wider font-extrabold border-b border-cyan-neon/50 hover:border-cyan-neon transition cursor-pointer"
@@ -238,12 +238,12 @@ export default function CoachAthletesTab({
                         {ath.fullName}
                       </span>
                       {ath.nickname && (
-                        <span className="text-[9px] text-gray-dim font-medium truncate">
+                        <span className="text-[9px] text-white font-medium truncate">
                           (@{ath.nickname})
                         </span>
                       )}
                     </div>
-                    <span className="text-[9px] text-gray-dim mt-0.5 truncate">
+                    <span className="text-[9px] text-white mt-0.5 truncate">
                       {ath.bowConfig?.type === "Recurve" ? "Recurvo" : ath.bowConfig?.type === "Compound" ? "Compuesto" : (ath.bowConfig?.type || "Barebow")} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
                     </span>
                   </div>
@@ -253,10 +253,10 @@ export default function CoachAthletesTab({
                   {stats.averageScore > 0 && (
                     <div className="flex flex-col text-right shrink-0">
                       <span className="text-xs font-black text-yellow-gold whitespace-nowrap">{stats.averageScore} pts</span>
-                      <span className="text-[8px] text-gray-dim leading-none">Promedio</span>
+                      <span className="text-[8px] text-white leading-none">Promedio</span>
                     </div>
                   )}
-                  <ChevronRight size={14} className="text-gray-dim group-hover:text-cyan-neon transition-colors shrink-0" />
+                  <ChevronRight size={14} className="text-white group-hover:text-cyan-neon transition-colors shrink-0" />
                 </div>
               </div>
             );
@@ -284,14 +284,14 @@ export default function CoachAthletesTab({
                     <h3 className="text-white text-sm font-black uppercase tracking-wider">
                       Crear Perfil de Alumno
                     </h3>
-                    <p className="text-[10px] text-gray-dim">
+                    <p className="text-[10px] text-white">
                       Registra a un nuevo atleta bajo tu dirección
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="p-1 rounded-lg text-gray-dim hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+                  className="p-1 rounded-lg text-white hover:text-white hover:bg-neutral-800 transition cursor-pointer"
                 >
                   <X size={16} />
                 </button>
@@ -301,7 +301,7 @@ export default function CoachAthletesTab({
               <form onSubmit={handleCreateSubmit} className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5 text-left">
                 {/* Nombre Completo */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                  <label className="text-[10px] text-white font-black uppercase tracking-wider">
                     Nombre Completo *
                   </label>
                   <input
@@ -317,7 +317,7 @@ export default function CoachAthletesTab({
                 {/* Nickname & Género */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Apodo / Alias
                     </label>
                     <input
@@ -330,7 +330,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Género
                     </label>
                     <select
@@ -347,7 +347,7 @@ export default function CoachAthletesTab({
                 {/* Tipo de Arco & Libras */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Tipo de Arco
                     </label>
                     <select
@@ -362,7 +362,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Potencia (Libras #)
                     </label>
                     <input
@@ -380,7 +380,7 @@ export default function CoachAthletesTab({
                 {/* Distancia Principal & Correo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Distancia Reglamentaria
                     </label>
                     <select
@@ -397,7 +397,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Teléfono / WhatsApp
                     </label>
                     <input
@@ -413,7 +413,7 @@ export default function CoachAthletesTab({
                 {/* Marca & Modelo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Marca de Arco (opcional)
                     </label>
                     <input
@@ -425,7 +425,7 @@ export default function CoachAthletesTab({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                    <label className="text-[10px] text-white font-black uppercase tracking-wider">
                       Modelo (opcional)
                     </label>
                     <input
@@ -440,7 +440,7 @@ export default function CoachAthletesTab({
 
                 {/* Correo Electrónico */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                  <label className="text-[10px] text-white font-black uppercase tracking-wider">
                     Correo del Alumno (opcional)
                   </label>
                   <input
@@ -454,7 +454,7 @@ export default function CoachAthletesTab({
 
                 {/* Notas Iniciales */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+                  <label className="text-[10px] text-white font-black uppercase tracking-wider">
                     Notas Técnicas Iniciales
                   </label>
                   <textarea
@@ -471,7 +471,7 @@ export default function CoachAthletesTab({
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-neutral-900 text-gray-dim font-bold text-xs uppercase tracking-wider hover:text-white transition cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-neutral-900 text-white font-bold text-xs uppercase tracking-wider hover:text-white transition cursor-pointer"
                   >
                     Cancelar
                   </button>

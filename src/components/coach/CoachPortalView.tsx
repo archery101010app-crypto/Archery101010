@@ -379,7 +379,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 <span>Coach Suscrito</span>
               </span>
             </div>
-            <p className="text-[10px] text-gray-dim mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <p className="text-[10px] text-white mt-0.5 flex items-center gap-1.5 flex-wrap">
               <Building2 size={11} className="text-cyan-neon shrink-0" />
               <span className="truncate">{user.clubName || "Club Archery 101010"}</span>
               <span>·</span>
@@ -391,14 +391,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         {/* Quick Club Code (Máximo 6 dígitos) */}
         <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-black px-3 py-2 rounded-xl border border-white/[0.06]">
           <div className="flex flex-col">
-            <span className="text-[8px] text-gray-dim uppercase font-bold tracking-wider">Código para Alumnos</span>
+            <span className="text-[8px] text-white uppercase font-bold tracking-wider">Código para Alumnos</span>
             <div className="flex items-baseline gap-1">
               <span className="text-sm font-mono font-black text-cyan-neon tracking-widest select-all">
                 {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
                   ? user.clubInviteCode 
                   : "101010"}
               </span>
-              <span className="text-[7px] text-gray-dim font-bold uppercase tracking-wider">
+              <span className="text-[7px] text-white font-bold uppercase tracking-wider">
                 (6 dígitos)
               </span>
             </div>
@@ -433,7 +433,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   }
                 }
               }}
-              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-gray-dim hover:text-yellow-gold transition cursor-pointer"
+              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-white hover:text-yellow-gold transition cursor-pointer"
               title="Borrar y generar nuevo código de 6 dígitos"
             >
               <RefreshCw size={13} />
@@ -459,10 +459,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 active 
                   ? "bg-white/[0.05] border border-white/[0.08] text-cyan-neon" 
-                  : "text-gray-dim hover:text-white border border-transparent"
+                  : "text-white hover:text-white border border-transparent"
               }`}
             >
-              <Icon size={14} className={active ? "text-cyan-neon" : "text-gray-dim"} />
+              <Icon size={14} className={active ? "text-cyan-neon" : "text-white"} />
               <span>{tab.label}</span>
             </button>
           );

@@ -604,7 +604,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             <button
               onClick={onBack}
               aria-label="Volver"
-              className="h-8 w-8 rounded-xl bg-[#141923] border border-white/[0.08] text-white/80 hover:text-white flex items-center justify-center cursor-pointer transition shrink-0"
+              className="h-8 w-8 rounded-xl bg-[#141923] border border-white/[0.08] text-white hover:text-white flex items-center justify-center cursor-pointer transition shrink-0"
             >
               <ArrowLeft size={15} />
             </button>
@@ -645,7 +645,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 <span className="text-[11px] font-mono font-bold text-cyan-neon truncate max-w-[110px]">
                   @{currentAlias}
                 </span>
-                <Edit3 size={10} className="text-white/45 group-hover:text-white transition shrink-0" />
+                <Edit3 size={10} className="text-white group-hover:text-white transition shrink-0" />
               </button>
             )}
           </div>
@@ -659,7 +659,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           >
             ELIMINATORIAS ONLINE
           </h2>
-          <p className="text-xs text-white/65 leading-relaxed [text-wrap:pretty]">
+          <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
             Compite flecha a flecha en tiempo real bajo reglamento oficial WA (Recurvo y Barebow a 6 pts de set · Compuesto a 15 flechas).
           </p>
         </div>
@@ -672,7 +672,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           className={`h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
             activeTab === "SEARCH"
               ? "bg-cyan-neon text-black"
-              : "text-white/60 hover:text-white"
+              : "text-white hover:text-white"
           }`}
         >
           Arena 1 vs 1
@@ -682,7 +682,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           className={`h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
             activeTab === "DRAFTS"
               ? "bg-cyan-neon text-black"
-              : "text-white/60 hover:text-white"
+              : "text-white hover:text-white"
           }`}
         >
           <span>En Curso</span>
@@ -697,7 +697,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           className={`h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
             activeTab === "HISTORY"
               ? "bg-cyan-neon text-black"
-              : "text-white/60 hover:text-white"
+              : "text-white hover:text-white"
           }`}
         >
           Historial
@@ -727,7 +727,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   className={`h-9 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
                     duelMode === "FRIEND"
                       ? "bg-cyan-neon text-black"
-                      : "text-white/60 hover:text-white"
+                      : "text-white hover:text-white"
                   }`}
                 >
                   Contra Amigo Online
@@ -738,7 +738,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   className={`h-9 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
                     duelMode === "BOT"
                       ? "bg-yellow-gold text-black"
-                      : "text-white/60 hover:text-white"
+                      : "text-white hover:text-white"
                   }`}
                 >
                   Contra Bot Olímpico
@@ -748,7 +748,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               {/* Tactile Bow & Distance Selectors */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-white/55 font-bold uppercase tracking-wider">
+                  <span className="text-[10px] text-white font-bold uppercase tracking-wider">
                     Modalidad de Arco
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -760,7 +760,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         className={`h-9 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
                           customBow === b
                             ? "bg-white/[0.12] border-cyan-neon text-white"
-                            : "bg-[#080A0F] border-white/[0.06] text-white/55 hover:text-white"
+                            : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
                         }`}
                       >
                         {b === "Recurve" ? "Recurvo" : b === "Compound" ? "Compuesto" : "Barebow"}
@@ -770,7 +770,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-white/55 font-bold uppercase tracking-wider">
+                  <span className="text-[10px] text-white font-bold uppercase tracking-wider">
                     Distancia Oficial
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -782,7 +782,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         className={`h-9 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer tabular-nums flex items-center justify-center whitespace-nowrap ${
                           customDistance === d
                             ? "bg-white/[0.12] border-cyan-neon text-white"
-                            : "bg-[#080A0F] border-white/[0.06] text-white/55 hover:text-white"
+                            : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
                         }`}
                       >
                         {d} m
@@ -795,7 +795,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               {/* Bot Level Pills or Online Explanation */}
               {duelMode === "BOT" ? (
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-white/55 font-bold uppercase tracking-wider">
+                  <span className="text-[10px] text-white font-bold uppercase tracking-wider">
                     Nivel del Oponente Simulado
                   </span>
                   <div className="grid grid-cols-4 gap-1.5">
@@ -814,7 +814,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         className={`py-2 px-1 rounded-xl border flex flex-col items-center justify-center transition cursor-pointer ${
                           botLevel === lvl.id
                             ? "bg-yellow-gold/15 border-yellow-gold text-yellow-gold"
-                            : "bg-[#080A0F] border-white/[0.06] text-white/60 hover:text-white"
+                            : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
                         }`}
                       >
                         <span className="text-[9px] font-black uppercase whitespace-nowrap">{lvl.label}</span>
@@ -825,7 +825,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </div>
               ) : (
                 <div className="bg-[#080A0F] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                  <p className="text-[11px] text-white/70 leading-snug [text-wrap:pretty]">
+                  <p className="text-[11px] text-white leading-snug [text-wrap:pretty]">
                     Genera una sala en vivo con código y enlace directo para compartir por WhatsApp con tu oponente.
                   </p>
                 </div>
@@ -852,7 +852,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               <span className="text-xs font-black uppercase tracking-wider text-white">
                 Unirse con Código de Invitación
               </span>
-              <span className="text-[11px] text-white/55">
+              <span className="text-[11px] text-white">
                 Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.
               </span>
             </div>
@@ -876,7 +876,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           {/* Search and Filters */}
           <div className="flex flex-col gap-2 pt-1">
             <div className="relative flex items-center">
-              <span className="absolute left-3 text-gray-dim">
+              <span className="absolute left-3 text-white">
                 <Search size={14} />
               </span>
               <input
@@ -898,7 +898,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   className={`h-8 rounded-xl text-[10px] font-black uppercase transition-all duration-150 border cursor-pointer flex items-center justify-center whitespace-nowrap ${
                     bowFilter === bow
                       ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
-                      : "bg-[#0D1017] border-white/[0.07] text-white/60 hover:text-white"
+                      : "bg-[#0D1017] border-white/[0.07] text-white hover:text-white"
                   }`}
                 >
                   {bow === "Recurve" ? "Recurvo" : bow === "Compound" ? "Compuesto" : "Barebow"}
@@ -928,11 +928,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       variants={cardVariants}
                       className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
                     >
-                      <Users size={16} className="text-white/40" />
-                      <p className="text-[11px] text-white/60 font-semibold">
+                      <Users size={16} className="text-white" />
+                      <p className="text-[11px] text-white font-semibold">
                         No hay otros arqueros en el lobby público en este instante.
                       </p>
-                      <p className="text-[10px] text-white/40">
+                      <p className="text-[10px] text-white">
                         Usa &ldquo;Crear Sala Online 1v1&rdquo; arriba para enviar un enlace directo por WhatsApp a tu amigo.
                       </p>
                     </motion.div>
@@ -964,7 +964,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                   {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white/50">
+                              <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white">
                                 <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
                                 <span className="truncate">{riv.clubName}</span>
                                 <span>·</span>
@@ -992,7 +992,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
             {/* Simulated Practice Bots */}
             <div className="flex flex-col gap-2.5 mt-1">
-              <h4 className="text-white/70 text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
                 Simuladores de Eliminatoria (Bots WA)
               </h4>
 
@@ -1012,20 +1012,20 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     >
                       <div className="flex items-center gap-3 w-[70%]">
                         <div className="relative shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white/75 font-bold text-xs">
+                          <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white font-bold text-xs">
                             {riv.fullName.substring(0, 2).toUpperCase()}
                           </div>
-                          <span className="absolute -bottom-1 -right-1 text-[8px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white/80 px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
+                          <span className="absolute -bottom-1 -right-1 text-[8px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                         </div>
                         
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
-                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white/60 font-bold uppercase shrink-0">
+                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white font-bold uppercase shrink-0">
                               {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white/50">
+                          <div className="flex items-center gap-1 mt-0.5 truncate text-[10px] text-white">
                             <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
                             <span className="truncate">{riv.clubName}</span>
                             <span>·</span>
@@ -1064,8 +1064,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <div className="flex flex-col gap-2.5">
             {drafts.length === 0 ? (
               <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-2">
-                <ShieldAlert size={20} className="text-white/40" />
-                <p className="text-xs text-white/60">No tienes eliminatorias en curso guardadas.</p>
+                <ShieldAlert size={20} className="text-white" />
+                <p className="text-xs text-white">No tienes eliminatorias en curso guardadas.</p>
               </div>
             ) : (
               drafts.map((dr) => (
@@ -1080,7 +1080,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         {dr.bowConfig?.type === "Recurve" ? "Recurvo" : dr.bowConfig?.type === "Compound" ? "Compuesto" : (dr.bowConfig?.type || "Barebow")}
                       </span>
                     </div>
-                    <span className="text-[10px] text-white/50 truncate">
+                    <span className="text-[10px] text-white truncate">
                       {dr.opponentClubName} · Set {dr.currentEnd + 1} · {dr.distance} m
                     </span>
                   </div>
@@ -1088,7 +1088,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => handleDeleteDraft(dr.uid)}
-                      className="h-8 w-8 rounded-xl border border-white/10 hover:border-red-rival/40 text-white/50 hover:text-red-rival flex items-center justify-center cursor-pointer transition active:scale-95"
+                      className="h-8 w-8 rounded-xl border border-white/10 hover:border-red-rival/40 text-white hover:text-red-rival flex items-center justify-center cursor-pointer transition active:scale-95"
                       title="Eliminar Duelo"
                     >
                       <Trash2 size={13} />
@@ -1133,8 +1133,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <div className="flex flex-col gap-2.5">
             {history.length === 0 ? (
               <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-2">
-                <ShieldAlert size={20} className="text-white/40" />
-                <p className="text-xs text-white/60">No has completado ninguna eliminatoria todavía.</p>
+                <ShieldAlert size={20} className="text-white" />
+                <p className="text-xs text-white">No has completado ninguna eliminatoria todavía.</p>
               </div>
             ) : (
               history.map((h) => {
@@ -1151,7 +1151,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           {h.bowConfig?.type === "Recurve" ? "Recurvo" : h.bowConfig?.type === "Compound" ? "Compuesto" : (h.bowConfig?.type || "Barebow")}
                         </span>
                       </div>
-                      <span className="text-[10px] text-white/50">
+                      <span className="text-[10px] text-white">
                         Puntos: {h.score} pts · {h.distance} m · {formatMatchDate(h.timestamp)}
                       </span>
                     </div>
@@ -1162,7 +1162,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                           : h.outcome === "loss"
                           ? "bg-red-500/10 border-red-500/30 text-red-400"
-                          : "bg-white/[0.05] border-white/10 text-white/60"
+                          : "bg-white/[0.05] border-white/10 text-white"
                       }`}>
                         {h.outcome === "win" ? "Victoria" : h.outcome === "loss" ? "Derrota" : "Empate"}
                       </span>
@@ -1201,13 +1201,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
                   Eliminatoria 1 vs 1 en Vivo
                 </h3>
-                <p className="text-xs text-white/60 mt-1 leading-snug">
+                <p className="text-xs text-white mt-1 leading-snug">
                   Comparte este código o enlace con tu rival para que se una a la sala.
                 </p>
 
                 {/* Display Invite Code Box */}
                 <div className="my-5 bg-[#080A0F] border border-white/[0.1] p-4 rounded-2xl w-full flex flex-col items-center gap-2">
-                  <span className="text-[9px] text-white/45 font-bold uppercase tracking-widest">
+                  <span className="text-[9px] text-white font-bold uppercase tracking-widest">
                     Código Oficial de Sala
                   </span>
                   <span className="text-white text-lg font-mono font-black tracking-widest uppercase">
@@ -1280,7 +1280,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                 <button
                   onClick={() => setGeneratedInvite(null)}
-                  className="text-[10px] text-white/50 hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
+                  className="text-[10px] text-white hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
                 >
                   Cerrar
                 </button>
@@ -1313,7 +1313,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </h3>
               </div>
 
-              <p className="text-[11px] text-gray-dim leading-relaxed px-2">
+              <p className="text-[11px] text-white leading-relaxed px-2">
                 {inviteStatusMessage}
               </p>
 
@@ -1334,7 +1334,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       setSentInvite(null);
                     }
                   }}
-                  className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-gray-dim hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                  className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
                 >
                   Cancelar Desafío
                 </button>

@@ -2166,7 +2166,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         <button
           onClick={handleBackWithConfirm}
           disabled={rivalThinking}
-          className={`w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-gray-dim hover:text-white flex items-center justify-center transition ${
+          className={`w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center transition ${
             rivalThinking ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
           }`}
         >
@@ -2204,7 +2204,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               Tú ({config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType})
             </span>
-            <span className="text-[9px] text-gray-dim flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
+            <span className="text-[9px] text-white flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
               <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3 h-3 shrink-0" />
               <span className="truncate">{user.clubName || "Independiente"}</span>
             </span>
@@ -2217,7 +2217,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <span className="text-xl font-black text-cyan-neon">
                   {getCumulativeTotal(userTiros) + (userShootOffShot || 0)}
                 </span>
-                <span className="text-[9px] text-gray-dim font-bold">-</span>
+                <span className="text-[9px] text-white font-bold">-</span>
                 <span className="text-xl font-black text-red-rival">
                   {getCumulativeTotal(rivalTiros) + (rivalShootOffShot || 0)}
                 </span>
@@ -2227,13 +2227,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <span className="text-2xl font-black text-cyan-neon">
                   {userSetPoints}
                 </span>
-                <span className="text-[10px] text-gray-dim font-bold">:</span>
+                <span className="text-[10px] text-white font-bold">:</span>
                 <span className="text-2xl font-black text-red-rival">
                   {rivalSetPoints}
                 </span>
               </div>
             )}
-            <span className="text-[8px] text-gray-dim font-bold uppercase tracking-wider mt-1.5 whitespace-nowrap">
+            <span className="text-[8px] text-white font-bold uppercase tracking-wider mt-1.5 whitespace-nowrap">
               {isCompound ? "Total Pts" : "Sets"}
             </span>
           </div>
@@ -2249,7 +2249,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             <span className="text-[11px] text-white font-extrabold truncate max-w-[95px] mt-1">
               {currentRivalName}
             </span>
-            <span className="text-[9px] text-gray-dim flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
+            <span className="text-[9px] text-white flex items-center gap-0.5 max-w-[95px] truncate mt-0.5">
               <ClubLogoIcon logo={config.rival.clubLogo || "0"} className="w-3 h-3 shrink-0" />
               <span className="truncate">{config.rival.clubName || "Club Rival"}</span>
             </span>
@@ -2260,7 +2260,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         {isShootOff && (
           <div className="border-t border-white/[0.03] pt-3 grid grid-cols-2 gap-4 text-center">
             <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[8px] text-gray-dim font-black uppercase">Tu Desempate</span>
+              <span className="text-[8px] text-white font-black uppercase">Tu Desempate</span>
               <span className="text-xl font-black text-cyan-neon">
                 {userShootOffShot !== null ? userShootOffShot : "—"}
               </span>
@@ -2271,7 +2271,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               )}
             </div>
             <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[8px] text-gray-dim font-black uppercase">Rival Desempate</span>
+              <span className="text-[8px] text-white font-black uppercase">Rival Desempate</span>
               <span className="text-xl font-black text-red-rival">
                 {rivalThinking ? (
                   <span className="inline-block animate-pulse text-[10px] text-red-rival">Apuntando...</span>
@@ -2295,7 +2295,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="border-t border-white/[0.05] pt-2.5 flex flex-col gap-1.5">
             <div className="flex justify-between items-center px-1 text-[9px] font-black uppercase tracking-wider">
               <span className="text-cyan-neon">Tus Flechas</span>
-              <span className="text-gray-dim">Flecha {Math.min(3, currentArrow + 1)} de 3</span>
+              <span className="text-white">Flecha {Math.min(3, currentArrow + 1)} de 3</span>
               <span className="text-red-rival">Flechas Rival</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -2312,7 +2312,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                           ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
                           : isCurrent
                           ? "border-cyan-neon/80 bg-cyan-neon/5 text-cyan-neon ring-1 ring-cyan-neon animate-pulse"
-                          : "bg-neutral-950/60 border-white/10 text-gray-600"
+                          : "bg-neutral-950/60 border-white/10 text-white"
                       }`}
                     >
                       {val !== undefined ? val : idx + 1}
@@ -2334,7 +2334,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                           ? "bg-red-rival/15 border-red-rival text-red-rival shadow-glow-red"
                           : isLoading
                           ? "border-red-rival text-red-rival animate-spin bg-red-rival/10"
-                          : "bg-neutral-950/60 border-white/10 text-gray-600"
+                          : "bg-neutral-950/60 border-white/10 text-white"
                       }`}
                     >
                       {val !== undefined ? val : isLoading ? "●" : idx + 1}
@@ -2361,7 +2361,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <h3 className="text-white text-base font-black uppercase tracking-wide">
                 Preparación de Flecha {currentArrow + 1}
               </h3>
-              <p className="text-[9px] text-gray-dim uppercase font-bold">
+              <p className="text-[9px] text-white uppercase font-bold">
                 Ambos arqueros deben reportarse listos
               </p>
             </div>
@@ -2374,7 +2374,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   ? "bg-cyan-neon/10 border-cyan-neon/35 text-cyan-neon font-black" 
                   : isUserPresent
                   ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-400 font-bold"
-                  : "bg-[#0D1017] border-white/[0.08] text-gray-dim"
+                  : "bg-[#0D1017] border-white/[0.08] text-white"
               }`}>
                 <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
                   {user.fullName.substring(0, 2).toUpperCase()}
@@ -2436,7 +2436,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     ? "bg-red-rival/10 border-red-rival/35 text-red-rival font-black" 
                     : isRivalPresent
                     ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-400 font-bold"
-                    : "bg-[#0D1017] border-white/[0.08] text-gray-dim"
+                    : "bg-[#0D1017] border-white/[0.08] text-white"
                 }`}>
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
@@ -2503,7 +2503,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center whitespace-nowrap transition-all duration-200 ${
                     isRivalPresent
                       ? "bg-cyan-neon hover:bg-[#19c8ff] text-black active:scale-98 cursor-pointer"
-                      : "bg-[#0D1017] border border-white/5 text-gray-dim cursor-not-allowed opacity-50"
+                      : "bg-[#0D1017] border border-white/5 text-white cursor-not-allowed opacity-50"
                   }`}
                 >
                   Iniciar Tirada
@@ -2515,7 +2515,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 )}
               </div>
             ) : (
-              <div className="w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest bg-[#0D1017] border border-white/5 text-gray-dim flex items-center justify-center whitespace-nowrap">
+              <div className="w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest bg-[#0D1017] border border-white/5 text-white flex items-center justify-center whitespace-nowrap">
                 Esperando al Rival...
               </div>
             )}
@@ -2531,7 +2531,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             className={`flex-1 py-1 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
               mode === "TARGET"
                 ? "bg-cyan-neon text-black shadow-glow-cyan"
-                : "text-gray-dim hover:text-white"
+                : "text-white hover:text-white"
             }`}
           >
             Diana
@@ -2541,7 +2541,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             className={`flex-1 py-1 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
               mode === "KEYBOARD"
                 ? "bg-cyan-neon text-black shadow-glow-cyan"
-                : "text-gray-dim hover:text-white"
+                : "text-white hover:text-white"
             }`}
           >
             Teclado
@@ -2605,7 +2605,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <span className="text-[10px] text-cyan-neon font-black tracking-widest uppercase block leading-none">
                   Diana Ampliada
                 </span>
-                <span className="text-[9px] text-gray-300 mt-1 block leading-none">
+                <span className="text-[9px] text-white mt-1 block leading-none">
                   Arrastra o toca para precisar · Suelta para registrar
                 </span>
               </div>
@@ -2614,7 +2614,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
           {/* Zoom coordinate info & value */}
           <div className="flex gap-3 items-center justify-center bg-[#0D1017] px-4 py-1.5 rounded-full border border-white/[0.08] text-[10px] font-bold z-10">
-            <span className="text-gray-dim">Puntuación Estimada:</span>
+            <span className="text-white">Puntuación Estimada:</span>
             <span className="text-yellow-gold font-extrabold text-xs tabular-nums">
               {getCoordsFromClient(cursorPos.x, cursorPos.y)?.value || "M"} Pts
             </span>
@@ -2732,13 +2732,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             </motion.svg>
           </div>
 
-          <span className="text-[8px] text-gray-dim font-bold uppercase text-center mt-1 z-10">
+          <span className="text-[8px] text-white font-bold uppercase text-center mt-1 z-10">
             Desliza sobre la diana para ampliarla · Suelta para registrar
           </span>
 
           {/* Historial de Ends/Sets Scrollable */}
           <div className="w-full max-w-[320px] mx-auto flex flex-col gap-1.5 px-4 z-10 mt-1">
-            <span className="text-[8px] font-black uppercase text-gray-dim tracking-widest text-center">
+            <span className="text-[8px] font-black uppercase text-white tracking-widest text-center">
               Historial de Sets / Ends
             </span>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none justify-center">
@@ -2762,13 +2762,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-[0_0_8px_rgba(0,229,255,0.1)]" 
                         : isCompleted 
                           ? "border-neutral-800 bg-neutral-900/60 text-white" 
-                          : "border-neutral-900/35 bg-neutral-950/45 text-gray-dim"
+                          : "border-neutral-900/35 bg-neutral-950/45 text-white"
                     }`}
                   >
                     <span className="text-[8.5px] uppercase font-black tracking-wider opacity-60">Set {idx + 1}</span>
                     <div className="text-[10px] font-black mt-0.5 flex gap-1 items-center">
                       <span className="text-cyan-neon">{userEnd.length > 0 ? userSum : "—"}</span>
-                      <span className="text-gray-dim text-[8px] font-normal">vs</span>
+                      <span className="text-white text-[8px] font-normal">vs</span>
                       <span className="text-red-rival">{rivalEnd.length > 0 ? rivalSum : "—"}</span>
                     </div>
                   </div>
@@ -2787,7 +2787,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="w-full max-w-[320px] mx-auto overflow-y-auto border border-white/10 rounded-2xl bg-neutral-950/40 max-h-[140px] z-10 relative">
             <table className="w-full text-left text-[11px] border-collapse">
               <thead>
-                <tr className="bg-neutral-900/80 text-gray-dim font-bold uppercase text-[8px] tracking-wider border-b border-white/10 text-center">
+                <tr className="bg-neutral-900/80 text-white font-bold uppercase text-[8px] tracking-wider border-b border-white/10 text-center">
                   <th className="py-2 px-1">Set</th>
                   <th className="py-2 px-1">Tus Tiros</th>
                   <th className="py-2 px-1">Tú</th>
@@ -2814,7 +2814,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         isCurrent ? "bg-cyan-neon/5 border-cyan-neon/20" : ""
                       }`}
                     >
-                      <td className="py-2 px-1 font-bold text-gray-dim">{idx + 1}</td>
+                      <td className="py-2 px-1 font-bold text-white">{idx + 1}</td>
                       
                       {/* User shots */}
                       <td className="py-2 px-1">
@@ -2830,7 +2830,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                                     ? "bg-cyan-neon/10 border-cyan-neon/40 text-cyan-neon shadow-glow-cyan"
                                     : isEditing
                                     ? "border-cyan-neon ring-1 ring-cyan-neon animate-pulse"
-                                    : "bg-neutral-900 border-white/5 text-gray-600"
+                                    : "bg-neutral-900 border-white/5 text-white"
                                 }`}
                               >
                                 {val !== undefined ? val : ""}
@@ -2864,7 +2864,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                                     ? "bg-red-rival/10 border-red-rival/40 text-red-rival shadow-glow-red"
                                     : isLoading
                                     ? "border-red-rival/50 text-red-rival animate-spin bg-red-rival/10"
-                                    : "bg-neutral-900 border-white/5 text-gray-600"
+                                    : "bg-neutral-900 border-white/5 text-white"
                                 }`}
                               >
                                 {val !== undefined ? val : isLoading ? "●" : ""}
@@ -2895,7 +2895,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {/* Backspace */}
             <button
               onClick={handleBackspace}
-              className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-[#0D1017] text-gray-dim font-black text-base flex items-center justify-center cursor-pointer hover:text-white active:scale-95 transition"
+              className="py-3.5 min-h-[48px] rounded-xl border border-white/10 bg-[#0D1017] text-white font-black text-base flex items-center justify-center cursor-pointer hover:text-white active:scale-95 transition"
             >
               ⌫
             </button>
@@ -2927,7 +2927,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <button
                 key={key}
                 onClick={() => handleScoreInput(key)}
-                className="py-3.5 min-h-[48px] rounded-xl border border-white/15 bg-[#0D1017] text-neutral-300 font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
+                className="py-3.5 min-h-[48px] rounded-xl border border-white/15 bg-[#0D1017] text-white font-black text-base flex items-center justify-center cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
               >
                 {key}
               </button>
@@ -2947,7 +2947,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {/* Miss */}
             <button
               onClick={() => handleScoreInput("M")}
-              className="col-span-4 py-3.5 min-h-[44px] rounded-xl border border-white/10 bg-[#0D1017] text-neutral-400 font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-neutral-200 active:scale-95 transition"
+              className="col-span-4 py-3.5 min-h-[44px] rounded-xl border border-white/10 bg-[#0D1017] text-white font-black text-xs flex items-center justify-center uppercase cursor-pointer hover:bg-neutral-800 hover:text-white active:scale-95 transition"
             >
               Miss (M)
             </button>
@@ -2965,7 +2965,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               (isShootOff && userShootOffShot === null) || 
               (!isShootOff && (userTiros[currentEnd]?.length ?? 0) === 0)
             }
-            className="w-full h-12 rounded-2xl bg-neutral-900 border border-white/5 text-gray-dim hover:text-red-rival flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed text-xs font-black uppercase tracking-wider"
+            className="w-full h-12 rounded-2xl bg-neutral-900 border border-white/5 text-white hover:text-red-rival flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed text-xs font-black uppercase tracking-wider"
             title="Deshacer Tiro"
           >
             <RotateCcw size={14} />
@@ -3025,7 +3025,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 initial={{ opacity: 0, scale: 0.85, y: 5 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.85, y: 5 }}
-                className="bg-[#0D1017]/95 border border-cyan-neon/25 p-2.5 rounded-xl max-w-[170px] shadow-2xl text-[9px] text-gray-300 leading-snug text-center mb-1 backdrop-blur"
+                className="bg-[#0D1017]/95 border border-cyan-neon/25 p-2.5 rounded-xl max-w-[170px] shadow-2xl text-[9px] text-white leading-snug text-center mb-1 backdrop-blur"
               >
                 <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">VoIP Activo</span>
                 Llamada de voz en vivo establecida ({formatCallDuration(callDuration)}).
@@ -3063,7 +3063,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon shadow-[0_0_20px_rgba(0,229,255,0.15)]"
                   : callState === "DIALING" || callState === "RINGING"
                   ? "bg-yellow-gold/10 border-yellow-gold text-yellow-gold animate-pulse animate-bounce shadow-[0_0_20px_rgba(255,242,0,0.15)]"
-                  : "bg-neutral-900 border-white/10 text-gray-dim hover:text-white"
+                  : "bg-neutral-900 border-white/10 text-white hover:text-white"
               }`}
             >
               {callState === "ACTIVE" ? (
@@ -3108,7 +3108,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <h3 className="text-white text-base font-black tracking-tight">
                   {config.rival.fullName}
                 </h3>
-                <p className="text-[10px] text-white/45 font-medium">
+                <p className="text-[10px] text-white font-medium">
                   {callState === "RINGING" ? "Voz en directo P2P" : "Esperando respuesta..."}
                 </p>
               </div>
@@ -3164,7 +3164,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
                     Validación de Diana - Set {currentEnd + 1}
                   </h3>
-                  <p className="text-[8px] text-gray-dim uppercase tracking-widest font-bold">
+                  <p className="text-[8px] text-white uppercase tracking-widest font-bold">
                     Revisión de Impactos del Turno
                   </p>
                 </div>
@@ -3175,7 +3175,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               {validationPhase === "UPLOAD" && (
                 <div className="flex flex-col gap-3.5">
-                  <p className="text-[10px] text-gray-dim leading-relaxed">
+                  <p className="text-[10px] text-white leading-relaxed">
                     Sube una foto de tu diana de este set para que tu rival verifique tus puntuaciones.
                   </p>
 
@@ -3214,21 +3214,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       <>
                         <span className="text-[10px] text-cyan-neon font-black uppercase tracking-widest">Cámara / Galería</span>
                         <span className="text-[10px] text-white font-bold uppercase tracking-wider">Tomar o subir foto</span>
-                        <span className="text-[8px] text-gray-dim">JPG, PNG hasta 5MB</span>
+                        <span className="text-[8px] text-white">JPG, PNG hasta 5MB</span>
                       </>
                     )}
                   </label>
 
                   {/* Status Indicator */}
                   <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[9px] font-bold">
-                    <span className="text-gray-dim">Tu Estado:</span>
+                    <span className="text-white">Tu Estado:</span>
                     <span className={userPhoto ? "text-cyan-neon" : "text-yellow-gold"}>
                       {userPhoto ? "Foto Subida" : "Pendiente de foto"}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[9px] font-bold">
-                    <span className="text-gray-dim">Estado del Rival:</span>
+                    <span className="text-white">Estado del Rival:</span>
                     <span className={rivalPhoto ? "text-cyan-neon" : "text-yellow-gold flex items-center gap-1"}>
                       {rivalPhoto ? "Foto Subida" : (
                         <>
@@ -3242,7 +3242,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   <button
                     onClick={() => setValidationPhase("REVIEW")}
                     disabled={!userPhoto || !rivalPhoto}
-                    className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black disabled:bg-neutral-900 disabled:text-gray-dim disabled:border border-white/5 font-extrabold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black disabled:bg-neutral-900 disabled:text-white disabled:border border-white/5 font-extrabold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     <span>Revisar Diana Rival</span>
                     <span>→</span>
@@ -3252,7 +3252,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               {validationPhase === "REVIEW" && (
                 <div className="flex flex-col gap-3.5">
-                  <p className="text-[10px] text-gray-dim leading-relaxed [text-wrap:pretty]">
+                  <p className="text-[10px] text-white leading-relaxed [text-wrap:pretty]">
                     Compara los impactos declarados por <span className="text-white font-bold">{config.rival.fullName}</span> en la diana virtual con su foto real.
                   </p>
 
@@ -3265,7 +3265,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         className={`flex-1 h-8 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                           reviewTab === "PHOTO"
                             ? "bg-cyan-neon text-black font-black"
-                            : "text-gray-dim hover:text-white"
+                            : "text-white hover:text-white"
                         }`}
                       >
                         Foto Real
@@ -3276,7 +3276,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         className={`flex-1 h-8 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition ${
                           reviewTab === "TARGET"
                             ? "bg-cyan-neon text-black font-black"
-                            : "text-gray-dim hover:text-white"
+                            : "text-white hover:text-white"
                         }`}
                       >
                         Diana Interactiva
@@ -3286,7 +3286,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
                   <div className="grid grid-cols-2 gap-3 items-center">
                     <div className="flex flex-col gap-1 text-center">
-                      <span className="text-[8px] text-gray-dim uppercase font-bold">
+                      <span className="text-[8px] text-white uppercase font-bold">
                         {rivalInputMode === "TARGET" && reviewTab === "TARGET" ? "Diana Interactiva" : "Foto del Rival"}
                       </span>
                       <div className="w-full aspect-square rounded-xl bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden relative">
@@ -3355,11 +3355,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <span className="text-[8px] text-gray-dim uppercase font-bold">Impactos Registrados</span>
+                      <span className="text-[8px] text-white uppercase font-bold">Impactos Registrados</span>
                       <div className="bg-neutral-900/60 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
                         {(rivalTiros[currentEnd] || []).map((val, idx) => (
                           <div key={idx} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-dim">Flecha {idx + 1}:</span>
+                            <span className="text-white">Flecha {idx + 1}:</span>
                             <span className="text-white font-black">{val} Pts</span>
                           </div>
                         ))}
@@ -3415,7 +3415,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <h3 className="text-white text-xs font-black uppercase tracking-wider">
                 Fin del Set {currentEnd + 1}
               </h3>
-              <p className="text-xs text-gray-dim leading-relaxed px-1 [text-wrap:pretty]">
+              <p className="text-xs text-white leading-relaxed px-1 [text-wrap:pretty]">
                 {endSummary}
               </p>
               <button
@@ -3457,7 +3457,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <h3 className="text-white text-xl font-black uppercase tracking-wide mt-1 [text-wrap:balance]">
                   {winner === "USER" ? "¡Victoria Magistral!" : winner === "RIVAL" ? "Derrota" : "Empate Final"}
                 </h3>
-                <p className="text-[11px] text-gray-dim leading-relaxed px-2 mt-1 [text-wrap:pretty]">
+                <p className="text-[11px] text-white leading-relaxed px-2 mt-1 [text-wrap:pretty]">
                   {winner === "USER" 
                     ? `Has vencido a ${config.rival.fullName} de ${config.rival.clubName}. ¡Gran desempeño!`
                     : winner === "RIVAL"
@@ -3469,19 +3469,19 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {/* Match summary points */}
               <div className="w-full bg-neutral-900/60 rounded-2xl border border-white/5 p-4 flex flex-col gap-2 mt-1">
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.04]">
-                  <span className="text-gray-dim">Tu Puntuación Total:</span>
+                  <span className="text-white">Tu Puntuación Total:</span>
                   <span className="text-cyan-neon font-black tabular-nums">
                     {userTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.04]">
-                  <span className="text-gray-dim">Puntuación Rival:</span>
+                  <span className="text-white">Puntuación Rival:</span>
                   <span className="text-red-rival font-black tabular-nums">
                     {rivalTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1">
-                  <span className="text-gray-dim">Volumen Sumado:</span>
+                  <span className="text-white">Volumen Sumado:</span>
                   <span className="text-yellow-gold font-black tabular-nums">
                     +{userTiros.flat().length + (userShootOffShot !== null ? 1 : 0)} flechas
                   </span>
@@ -3533,7 +3533,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 </h3>
               </div>
 
-              <div className="flex flex-col gap-3 text-left text-[11px] text-gray-dim mt-2">
+              <div className="flex flex-col gap-3 text-left text-[11px] text-white mt-2">
                 <div className="flex gap-2.5 items-start">
                   <span className="w-5 h-5 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
                   <p className="[text-wrap:pretty]">
@@ -3607,7 +3607,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <h3 className="text-white text-sm font-black uppercase tracking-wider">
                   {!navigator.onLine ? "Sin Conexión a Internet" : "Pausa por Reconexión"}
                 </h3>
-                <p className="text-[10px] text-gray-dim leading-relaxed">
+                <p className="text-[10px] text-white leading-relaxed">
                   {!navigator.onLine
                     ? "Tu dispositivo ha perdido la conexión a internet. Restableciendo enlace..."
                     : `Esperando a que ${config.rival.fullName} se reconecte temporalmente. No se perderá la partida.`}

@@ -75,7 +75,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
           <button
             type="button"
             onClick={handleExit}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-dim hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
             title="Cerrar y volver a inicio"
             aria-label="Cerrar"
           >
@@ -91,13 +91,13 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             <h3 className="text-white text-lg font-black uppercase tracking-wide">
               Completa tu Perfil
             </h3>
-            <p className="text-[9px] text-gray-dim uppercase tracking-wider font-bold">
+            <p className="text-[9px] text-white uppercase tracking-wider font-bold">
               Información obligatoria requerida
             </p>
           </div>
         </div>
 
-        <p className="text-xs text-gray-dim leading-relaxed">
+        <p className="text-xs text-white leading-relaxed">
           Para continuar usando <strong>Archery 101010</strong>, debes definir tu apodo público y otros datos indispensables.
         </p>
 
@@ -111,7 +111,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
         <form onSubmit={handleSave} className="flex flex-col gap-3.5 mt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("fullName")} *
               </label>
               <input
@@ -123,7 +123,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("nickname")} *
               </label>
               <input
@@ -138,7 +138,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("birthDate")} *
               </label>
               <input
@@ -149,7 +149,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("city")} *
               </label>
               <input
@@ -164,7 +164,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("country")} *
               </label>
               <select
@@ -181,7 +181,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-gray-dim uppercase font-bold tracking-wider">
+              <label className="text-[10px] text-white uppercase font-bold tracking-wider">
                 {t("gender")} *
               </label>
               <select
@@ -196,7 +196,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
           </div>
 
-          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[10px] text-gray-dim leading-snug">
+          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[10px] text-white leading-snug">
             <strong className="text-white uppercase tracking-wider">Nota sobre el Apodo:</strong> El apodo es de carácter público. Será visible para tu entrenador y otros arqueros durante duelos competitivos en vivo.
           </div>
 
@@ -212,7 +212,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             <button
               type="button"
               onClick={onReturnToLogin}
-              className="w-full py-2.5 text-xs text-gray-dim hover:text-yellow-gold font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer mt-1 border border-white/5 hover:border-yellow-gold/30 rounded-xl"
+              className="w-full py-2.5 text-xs text-white hover:text-yellow-gold font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer mt-1 border border-white/5 hover:border-yellow-gold/30 rounded-xl"
             >
               <ArrowLeft size={14} />
               <span>Volver a inicio de sesión (Usuario y contraseña)</span>

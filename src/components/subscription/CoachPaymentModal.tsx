@@ -100,7 +100,7 @@ export default function CoachPaymentModal({
                 className="flex items-center gap-1.5 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
               >
-                <span className="text-white/60 tracking-widest font-extrabold text-[11px]">ARCHERY</span>
+                <span className="text-white tracking-widest font-extrabold text-[11px]">ARCHERY</span>
                 <span className="inline-flex tracking-tight font-extrabold text-[11px]">
                   <span className="text-cyan-neon">10</span>
                   <span className="text-red-rival">10</span>
@@ -111,14 +111,14 @@ export default function CoachPaymentModal({
               <h2 className="text-xl font-black text-white tracking-tight mt-0.5">
                 Coach Pro
               </h2>
-              <p className="text-xs text-white/45 font-medium">
+              <p className="text-xs text-white font-medium">
                 Acceso bonificado de lanzamiento · Sin cargo hoy
               </p>
             </div>
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] text-white/50 hover:text-white flex items-center justify-center transition cursor-pointer shrink-0"
+              className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] text-white hover:text-white flex items-center justify-center transition cursor-pointer shrink-0"
               aria-label="Cerrar"
             >
               <X size={15} />
@@ -137,11 +137,11 @@ export default function CoachPaymentModal({
                   className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer flex flex-col justify-between ${
                     isSelected
                       ? "bg-[#121620] border-cyan-neon/60 text-white"
-                      : "bg-[#0D1017] border-white/[0.08] hover:border-white/20 text-white/70"
+                      : "bg-[#0D1017] border-white/[0.08] hover:border-white/20 text-white"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/45">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-white">
                       {prod.period === "monthly" ? "Plan Mensual" : "Plan Anual"}
                     </span>
                     {prod.savingsBadge && (
@@ -152,7 +152,7 @@ export default function CoachPaymentModal({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-col">
-                    <span className="text-[10px] text-white/30 line-through font-mono tabular-nums">
+                    <span className="text-[10px] text-white line-through font-mono tabular-nums">
                       {prod.regularPrice}
                     </span>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -171,24 +171,24 @@ export default function CoachPaymentModal({
 
           {/* Features List - Sobria y editorial */}
           <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white block">
               Incluido en Coach Pro
             </span>
 
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center gap-2.5 text-xs text-white/80">
+              <div className="flex items-center gap-2.5 text-xs text-white">
                 <Check size={14} className="text-cyan-neon shrink-0" />
                 <span>Director de tiro con dianas en tiempo real</span>
               </div>
-              <div className="flex items-center gap-2.5 text-xs text-white/80">
+              <div className="flex items-center gap-2.5 text-xs text-white">
                 <Check size={14} className="text-cyan-neon shrink-0" />
                 <span>Planificador de macrociclos individual y por club</span>
               </div>
-              <div className="flex items-center gap-2.5 text-xs text-white/80">
+              <div className="flex items-center gap-2.5 text-xs text-white">
                 <Check size={14} className="text-cyan-neon shrink-0" />
                 <span>Sincronización de sesiones con el calendario</span>
               </div>
-              <div className="flex items-center gap-2.5 text-xs text-white/80">
+              <div className="flex items-center gap-2.5 text-xs text-white">
                 <Check size={14} className="text-cyan-neon shrink-0" />
                 <span>Métricas de volumen, carga y dispersión técnica</span>
               </div>
@@ -219,13 +219,13 @@ export default function CoachPaymentModal({
             >
               {isProcessing ? "Activando..." : "Activar Coach Pro"}
             </button>
-            <span className="text-[10px] text-center text-white/35">
+            <span className="text-[10px] text-center text-white">
               Sin tarjeta requerida · Activación inmediata
             </span>
           </div>
 
           {/* App Store & Google Play Strip */}
-          <div className="border-t border-white/[0.06] pt-3 flex flex-col gap-2 text-white/40">
+          <div className="border-t border-white/[0.06] pt-3 flex flex-col gap-2 text-white">
             <div className="flex items-center justify-between text-[10px]">
               <button
                 type="button"
@@ -237,12 +237,12 @@ export default function CoachPaymentModal({
                 <span>Restaurar compras</span>
               </button>
 
-              <span className="font-mono text-[9px] text-white/25 uppercase">
+              <span className="font-mono text-[9px] text-white uppercase">
                 {selectedProduct.sku}
               </span>
             </div>
 
-            <p className="text-[9px] text-white/25 leading-relaxed">
+            <p className="text-[9px] text-white leading-relaxed">
               Gestionado mediante Google Play o Apple ID. Cancela en cualquier momento desde los ajustes de tu cuenta.
             </p>
           </div>

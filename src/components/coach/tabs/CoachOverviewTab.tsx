@@ -57,7 +57,7 @@ export default function CoachOverviewTab({
         <h3 className="text-white text-sm font-bold">
           ¡Hola, Coach {user.fullName}!
         </h3>
-        <p className="text-[11px] text-gray-dim mt-1">
+        <p className="text-[11px] text-white mt-1">
           Tu equipo tiene <span className="text-cyan-neon font-bold">{athletes.length} atletas activos</span> esta semana. Aquí tienes el resumen del día para tu club.
         </p>
       </div>
@@ -65,26 +65,26 @@ export default function CoachOverviewTab({
       {/* Bento Grid de Métricas */}
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Atletas</span>
+          <span className="text-[9px] text-white font-black uppercase tracking-wider truncate">Atletas</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-white truncate">{athletes.length}</span>
-            <span className="text-[8px] text-gray-dim truncate">Registrados</span>
+            <span className="text-[8px] text-white truncate">Registrados</span>
           </div>
         </div>
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Volumen total</span>
+          <span className="text-[9px] text-white font-black uppercase tracking-wider truncate">Volumen total</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-cyan-neon truncate">
               {recentActivities.reduce((acc, act) => acc + (act.totalArrowsVolume || act.arrowsTotal || (act.endsCount && act.arrowsPerEnd ? act.endsCount * act.arrowsPerEnd : 0) || 0), 0)}
             </span>
-            <span className="text-[8px] text-gray-dim truncate">Flechas tiradas</span>
+            <span className="text-[8px] text-white truncate">Flechas tiradas</span>
           </div>
         </div>
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider truncate">Asistencia</span>
+          <span className="text-[9px] text-white font-black uppercase tracking-wider truncate">Asistencia</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-yellow-gold truncate">{presentCount}</span>
-            <span className="text-[8px] text-gray-dim truncate">Presentes hoy</span>
+            <span className="text-[8px] text-white truncate">Presentes hoy</span>
           </div>
         </div>
       </div>
@@ -94,7 +94,7 @@ export default function CoachOverviewTab({
         <div className="flex justify-between items-center gap-2">
           <div className="min-w-0">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">Control de Asistencia del Día</h4>
-            <p className="text-[9px] text-gray-dim mt-0.5">Marca los arqueros que asisten al entrenamiento de hoy</p>
+            <p className="text-[9px] text-white mt-0.5">Marca los arqueros que asisten al entrenamiento de hoy</p>
           </div>
           <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black shrink-0 whitespace-nowrap">
             {presentCount} / {athletes.length}
@@ -120,16 +120,16 @@ export default function CoachOverviewTab({
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-bold leading-tight truncate">{ath.fullName}</span>
-                    <span className="text-[9px] text-gray-dim mt-0.5 truncate">{formatBowTypeEs(ath.bowConfig?.type)} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
+                    <span className="text-[9px] text-white mt-0.5 truncate">{formatBowTypeEs(ath.bowConfig?.type)} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
                   </div>
                 </div>
-                <div className="text-gray-dim shrink-0">
+                <div className="text-white shrink-0">
                   {isPresent ? (
                     <span className="text-[9px] bg-cyan-neon text-black font-extrabold px-2 py-1 rounded-full uppercase tracking-wider shadow-glow-cyan whitespace-nowrap">
                       Presente
                     </span>
                   ) : (
-                    <span className="text-[9px] bg-neutral-900 text-gray-dim font-bold px-2 py-1 rounded-full uppercase tracking-wider border border-white/5 whitespace-nowrap">
+                    <span className="text-[9px] bg-neutral-900 text-white font-bold px-2 py-1 rounded-full uppercase tracking-wider border border-white/5 whitespace-nowrap">
                       Ausente
                     </span>
                   )}
@@ -146,7 +146,7 @@ export default function CoachOverviewTab({
           <AlertTriangle className="text-red-rival shrink-0 mt-0.5" size={16} />
           <div className="flex flex-col">
             <span className="text-white text-xs font-bold">Atletas sin actividad esta semana</span>
-            <p className="text-[9px] text-gray-dim mt-0.5">
+            <p className="text-[9px] text-white mt-0.5">
               Los siguientes arqueros no han registrado tiros en los últimos 7 días:
             </p>
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -170,7 +170,7 @@ export default function CoachOverviewTab({
         
         <div className="flex flex-col gap-3 mt-1 relative before:absolute before:left-3.5 before:top-2.5 before:bottom-2.5 before:w-[1px] before:bg-white/10">
           {recentActivities.length === 0 ? (
-            <p className="text-[10px] text-gray-dim text-center py-2">No hay actividad reciente registrada.</p>
+            <p className="text-[10px] text-white text-center py-2">No hay actividad reciente registrada.</p>
           ) : (
             recentActivities.map((act) => {
               const dateStr = new Date(act.timestamp).toLocaleDateString(undefined, {
@@ -190,9 +190,9 @@ export default function CoachOverviewTab({
                       <span className="text-white text-xs font-bold leading-tight">
                         {act.userName}
                       </span>
-                      <span className="text-[8px] text-gray-dim font-bold uppercase">{dateStr}</span>
+                      <span className="text-[8px] text-white font-bold uppercase">{dateStr}</span>
                     </div>
-                    <p className="text-[10px] text-gray-dim mt-0.5">
+                    <p className="text-[10px] text-white mt-0.5">
                       {act.isDuel ? (
                         <span>
                           Completó un Duelo con <span className="text-purple-400 font-extrabold">{act.opponent}</span> · Resultado:{" "}

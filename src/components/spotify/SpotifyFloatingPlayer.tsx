@@ -586,7 +586,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
             {/* Expand Button */}
             <button
               onClick={() => setIsOpen(true)}
-              className="text-[9px] bg-[#141923] border border-white/[0.08] text-white/80 px-2.5 py-1 rounded-lg uppercase font-black cursor-pointer hover:text-white transition"
+              className="text-[9px] bg-[#141923] border border-white/[0.08] text-white px-2.5 py-1 rounded-lg uppercase font-black cursor-pointer hover:text-white transition"
               title="Abrir panel de Spotify"
             >
               Abrir
@@ -599,7 +599,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
               }}
-              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-white/50 hover:text-red-400 cursor-pointer transition"
+              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
               title="Cerrar reproductor"
             >
               <X size={12} />
@@ -646,7 +646,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     setIsMiniBarActive(true);
                     setIsOpen(false);
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-[#161C28] border border-white/[0.08] text-white/80 hover:text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                  className="px-2.5 py-1.5 rounded-xl bg-[#161C28] border border-white/[0.08] text-white hover:text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
                   title="Minimizar manteniendo la música"
                 >
                   <Minimize2 size={12} />
@@ -657,7 +657,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     setIsMiniBarActive(true);
                     setIsOpen(false);
                   }}
-                  className="p-2 rounded-xl bg-[#161C28] border border-white/[0.08] text-white/60 hover:text-white cursor-pointer transition"
+                  className="p-2 rounded-xl bg-[#161C28] border border-white/[0.08] text-white hover:text-white cursor-pointer transition"
                   title="Cerrar ventana"
                 >
                   <X size={16} />
@@ -688,7 +688,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                               SUSCRIPCIÓN ACTIVA
                             </span>
                           </div>
-                          <span className="text-[10px] text-white/50 truncate">
+                          <span className="text-[10px] text-white truncate">
                             Usuario: @{connectedAccount.username}
                           </span>
                         </div>
@@ -698,7 +698,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                         <button
                           type="button"
                           onClick={handleRefreshOAuthPlaylists}
-                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white/70 hover:text-[#1DB954] cursor-pointer transition"
+                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-[#1DB954] cursor-pointer transition"
                           title="Sincronizar reproductor con tu cuenta"
                         >
                           <RefreshCw size={12} />
@@ -706,14 +706,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                         <button
                           type="button"
                           onClick={() => setShowAccountForm(true)}
-                          className="px-2 py-1 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-[9px] font-bold text-white/70 hover:text-white cursor-pointer transition"
+                          className="px-2 py-1 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-[9px] font-bold text-white hover:text-white cursor-pointer transition"
                         >
                           Editar
                         </button>
                         <button
                           type="button"
                           onClick={handleDisconnectAccount}
-                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white/50 hover:text-red-400 cursor-pointer transition"
+                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
                           title="Desvincular cuenta"
                         >
                           <LogOut size={12} />
@@ -740,7 +740,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                               "noopener,noreferrer"
                             )
                           }
-                          className="py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-white/80 flex items-center gap-1 cursor-pointer transition shrink-0"
+                          className="py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-white flex items-center gap-1 cursor-pointer transition shrink-0"
                         >
                           <span>Mi Perfil</span>
                           <ExternalLink size={10} />
@@ -761,14 +761,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                         <button
                           type="button"
                           onClick={() => setShowAccountForm(false)}
-                          className="text-[10px] text-white/50 hover:text-white font-bold cursor-pointer"
+                          className="text-[10px] text-white hover:text-white font-bold cursor-pointer"
                         >
                           Cancelar
                         </button>
                       )}
                     </div>
 
-                    <p className="text-[10px] text-white/60 leading-snug">
+                    <p className="text-[10px] text-white leading-snug">
                       Ingresa tu usuario de Spotify e inicia sesión en tu cuenta suscrita para escuchar <strong className="text-white">canciones completas</strong> sin límite de 30 segundos.
                     </p>
 
@@ -814,7 +814,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                       <button
                         type="button"
                         onClick={() => setShowOAuthConfig((prev) => !prev)}
-                        className="text-[10px] text-white/50 hover:text-white/80 font-bold flex items-center gap-1 self-start cursor-pointer transition"
+                        className="text-[10px] text-white hover:text-white font-bold flex items-center gap-1 self-start cursor-pointer transition"
                       >
                         <KeyRound size={11} className="text-[#1DB954]" />
                         <span>
@@ -826,9 +826,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
 
                       {showOAuthConfig && (
                         <div className="bg-[#0B0E14] border border-white/[0.06] rounded-xl p-2.5 flex flex-col gap-2">
-                          <span className="text-[9px] text-white/50 leading-snug">
+                          <span className="text-[9px] text-white leading-snug">
                             Para importar automáticamente todas las playlists privadas de una cuenta vía API, ingresa el Spotify Client ID (Redirect URI:{" "}
-                            <code className="text-white/80">{typeof window !== "undefined" ? window.location.origin : ""}</code>):
+                            <code className="text-white">{typeof window !== "undefined" ? window.location.origin : ""}</code>):
                           </span>
                           <div className="flex gap-1.5">
                             <input
@@ -872,7 +872,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     <button
                       type="button"
                       onClick={() => setIframeReloadKey((prev) => prev + 1)}
-                      className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white/70 hover:text-white cursor-pointer transition"
+                      className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white hover:text-white cursor-pointer transition"
                       title="Recargar reproductor tras iniciar sesión"
                     >
                       <RefreshCw size={11} />
@@ -880,7 +880,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                     <button
                       type="button"
                       onClick={() => setIsCompactPlayer((prev) => !prev)}
-                      className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[9px] font-bold text-white/80 flex items-center gap-1 shrink-0 cursor-pointer transition"
+                      className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[9px] font-bold text-white flex items-center gap-1 shrink-0 cursor-pointer transition"
                     >
                       <ListMusic size={11} className="text-[#1DB954]" />
                       <span>{isCompactPlayer ? "Ver Canciones" : "Vista Compacta"}</span>
@@ -907,7 +907,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                 </div>
 
                 <div className="flex items-center justify-between pt-1 gap-2">
-                  <p className="text-[10px] text-white/60 leading-snug flex-1">
+                  <p className="text-[10px] text-white leading-snug flex-1">
                     Toca <strong className="text-white">Minimizar</strong> para seguir escuchando en la app o ábrelo en tu app de Spotify.
                   </p>
                   <button
@@ -1011,7 +1011,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                               MÍA
                             </span>
                           </span>
-                          <span className="text-[10px] text-white/50">
+                          <span className="text-[10px] text-white">
                             {list.description || `${typeLabel} guardada`}
                           </span>
                         </div>
@@ -1020,12 +1020,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomPlaylist(e, list.id)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/50 hover:text-red-400 transition"
+                            className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 transition"
                             title="Eliminar de mi lista"
                           >
                             <Trash2 size={11} />
                           </button>
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/70">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white">
                             {isActive ? (
                               <Check size={12} className="text-[#1DB954]" />
                             ) : (
@@ -1055,16 +1055,16 @@ export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFlo
                             <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors">
                               {list.name}
                             </span>
-                            <span className="text-[8px] bg-[#0B0E14] text-white/60 border border-white/[0.06] px-1.5 py-0.5 rounded font-extrabold uppercase">
+                            <span className="text-[8px] bg-[#0B0E14] text-white border border-white/[0.06] px-1.5 py-0.5 rounded font-extrabold uppercase">
                               {list.creator}
                             </span>
                           </div>
-                          <p className="text-[10px] text-white/60 leading-snug">
+                          <p className="text-[10px] text-white leading-snug">
                             {list.description}
                           </p>
                         </div>
 
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white/70 shrink-0">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white shrink-0">
                           {isActive ? (
                             <Check size={12} className="text-[#1DB954]" />
                           ) : (

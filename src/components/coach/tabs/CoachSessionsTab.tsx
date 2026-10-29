@@ -99,7 +99,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             </h4>
             <button
               onClick={handleShareWhatsApp}
-              className="p-2 rounded-xl bg-neutral-950 border border-white/5 text-gray-dim hover:text-white cursor-pointer transition flex items-center gap-1 text-[9px] font-black uppercase tracking-wider"
+              className="p-2 rounded-xl bg-neutral-950 border border-white/5 text-white hover:text-white cursor-pointer transition flex items-center gap-1 text-[9px] font-black uppercase tracking-wider"
             >
               <Share2 size={10} />
               <span>Compartir</span>
@@ -124,7 +124,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                   <div className="flex flex-col">
                     <span className="text-white text-xs font-bold">{rank.userName}</span>
-                    <span className="text-[8px] text-gray-dim uppercase">{rank.format}</span>
+                    <span className="text-[8px] text-white uppercase">{rank.format}</span>
                   </div>
                 </div>
 
@@ -163,7 +163,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
               className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                 filterType === type
                   ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
-                  : "bg-neutral-950 border border-white/5 text-gray-dim hover:text-white"
+                  : "bg-neutral-950 border border-white/5 text-white hover:text-white"
               }`}
             >
               {type === "ALL" ? "Todos" : type}
@@ -175,19 +175,19 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       {/* Feed Ordenado de Resultados Recibidos */}
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center px-1">
-          <span className="text-[10px] text-gray-dim font-black uppercase tracking-wider">
+          <span className="text-[10px] text-white font-black uppercase tracking-wider">
             Resultados de Puntos Recibidos ({filteredSessions.length})
           </span>
-          <span className="text-[9px] text-gray-dim">
+          <span className="text-[9px] text-white">
             Orden cronológico más reciente
           </span>
         </div>
 
         {filteredSessions.length === 0 ? (
           <div className="text-center py-10 bg-neutral-900/20 border border-white/5 rounded-2xl">
-            <Target size={24} className="text-gray-dim/40 mx-auto mb-2" />
-            <p className="text-xs text-white/80 font-bold">No hay resultados que coincidan con los filtros.</p>
-            <p className="text-[10px] text-gray-dim mt-1">Los alumnos registrados enviarán sus puntuaciones aquí al finalizar cada sesión.</p>
+            <Target size={24} className="text-white mx-auto mb-2" />
+            <p className="text-xs text-white font-bold">No hay resultados que coincidan con los filtros.</p>
+            <p className="text-[10px] text-white mt-1">Los alumnos registrados enviarán sus puntuaciones aquí al finalizar cada sesión.</p>
           </div>
         ) : (
           filteredSessions.map((sess) => {
@@ -246,7 +246,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           {sess.practiceType}
                         </span>
                       </div>
-                      <span className="text-[9px] text-gray-dim mt-0.5 truncate">
+                      <span className="text-[9px] text-white mt-0.5 truncate">
                         {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {dateStr} {timeStr}
                       </span>
                     </div>
@@ -258,7 +258,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         <span className="text-base font-black text-cyan-neon leading-tight">
                           {sess.score}
                         </span>
-                        <span className="text-[8px] text-gray-dim font-bold">
+                        <span className="text-[8px] text-white font-bold">
                           /{sess.maxScore || 720}
                         </span>
                       </div>
@@ -269,7 +269,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     {isExpanded ? (
                       <ChevronUp size={15} className="text-cyan-neon" />
                     ) : (
-                      <ChevronDown size={15} className="text-gray-dim" />
+                      <ChevronDown size={15} className="text-white" />
                     )}
                   </div>
                 </div>
@@ -286,19 +286,19 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {/* Metric capsules */}
                       <div className="grid grid-cols-4 gap-2 text-center bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
                         <div className="flex flex-col">
-                          <span className="text-[8px] text-gray-dim uppercase font-bold">Flechas</span>
+                          <span className="text-[8px] text-white uppercase font-bold">Flechas</span>
                           <span className="text-xs font-black text-white">{totalArrows}</span>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-[8px] text-gray-dim uppercase font-bold">Promedio</span>
+                          <span className="text-[8px] text-white uppercase font-bold">Promedio</span>
                           <span className="text-xs font-black text-cyan-neon">{avgPerArrow}</span>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-[8px] text-gray-dim uppercase font-bold">10s</span>
+                          <span className="text-[8px] text-white uppercase font-bold">10s</span>
                           <span className="text-xs font-black text-yellow-gold">{count10}</span>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-[8px] text-gray-dim uppercase font-bold">Xs</span>
+                          <span className="text-[8px] text-white uppercase font-bold">Xs</span>
                           <span className="text-xs font-black text-amber-500">{countX}</span>
                         </div>
                       </div>
@@ -306,7 +306,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {/* Desglose de Series (Ends) */}
                       {sess.ends && Array.isArray(sess.ends) && sess.ends.length > 0 && (
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[9px] text-gray-dim font-black uppercase tracking-wider">
+                          <span className="text-[9px] text-white font-black uppercase tracking-wider">
                             Desglose de Series ({sess.ends.length} tandas)
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -323,7 +323,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                   key={endIdx}
                                   className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-900/80 border border-white/5 text-[11px]"
                                 >
-                                  <span className="text-[9px] text-gray-dim font-bold shrink-0">
+                                  <span className="text-[9px] text-white font-bold shrink-0">
                                     Serie #{endIdx + 1}
                                   </span>
                                   <div className="flex items-center gap-1 flex-wrap justify-center">
@@ -337,7 +337,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                             ? "bg-red-500/20 text-red-400 border border-red-500/30"
                                             : arrowVal === "7" || arrowVal === "6"
                                             ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                                            : "bg-neutral-800 text-gray-300 border border-neutral-700"
+                                            : "bg-neutral-800 text-white border border-neutral-700"
                                         }`}
                                       >
                                         {arrowVal}
@@ -357,10 +357,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {/* Nota del Alumno */}
                       {sess.sessionNote && (
                         <div className="bg-neutral-900/50 p-2.5 rounded-xl border border-white/5">
-                          <span className="text-[8px] text-gray-dim font-black uppercase tracking-wider block mb-0.5">
+                          <span className="text-[8px] text-white font-black uppercase tracking-wider block mb-0.5">
                             Nota del Alumno:
                           </span>
-                          <p className="text-[11px] text-white/90 italic">
+                          <p className="text-[11px] text-white italic">
                             "{sess.sessionNote}"
                           </p>
                         </div>
@@ -382,7 +382,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         </h4>
 
         {starRanking.length === 0 ? (
-          <div className="text-center text-[10px] text-gray-dim py-4 border border-dashed border-white/5 rounded-xl">
+          <div className="text-center text-[10px] text-white py-4 border border-dashed border-white/5 rounded-xl">
             Aún ningún arquero del roster ha ganado una Estrella 101010 (720).
           </div>
         ) : (
@@ -393,7 +393,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                 className="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0E12]/80 border border-white/5"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-black text-white/50 w-4 text-center">
+                  <span className="text-xs font-black text-white w-4 text-center">
                     #{idx + 1}
                   </span>
                   
@@ -411,7 +411,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-extrabold truncate">{rank.userName}</span>
-                    <span className="text-[8px] text-gray-dim uppercase font-bold truncate">
+                    <span className="text-[8px] text-white uppercase font-bold truncate">
                       {rank.starName} · {rank.bowType === "Recurve" ? "Recurvo" : rank.bowType === "Compound" ? "Compuesto" : (rank.bowType || "Arco")}
                     </span>
                   </div>
@@ -419,7 +419,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
                 <div className="text-right">
                   <span className="text-xs font-black text-cyan-neon block">
-                    {rank.highestScore} <span className="text-[8px] text-gray-dim">/ 720</span>
+                    {rank.highestScore} <span className="text-[8px] text-white">/ 720</span>
                   </span>
                 </div>
               </div>
