@@ -5,17 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Archery 101010',
   webDir: 'out',
   server: {
-    androidScheme: 'https',
-    allowNavigation: [
-      '*.firebaseapp.com',
-      '*.web.app',
-      '*.google.com',
-      'accounts.google.com',
-      '*.googleusercontent.com',
-      '*.gstatic.com',
-      '*.facebook.com',
-      '*.fbcdn.net'
-    ]
+    androidScheme: 'https'
   },
   backgroundColor: '#050505',
   plugins: {

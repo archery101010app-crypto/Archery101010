@@ -277,13 +277,13 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
         }
       };
 
-      // Safety timeout: keep listening in ARMED state for up to 20 seconds for the archer to aim & shoot
+      // Safety timeout: keep listening in ARMED state for up to 8 seconds for the archer to aim & shoot
       timeoutRef.current = setTimeout(() => {
         stopRecording();
         setDetectionError(
-          "No se detectó ningún disparo en 20 segundos. Presiona Medir Velocidad cuando estés listo en la línea de tiro."
+          "No se detectó ningún disparo en 8 segundos. Presiona Medir Velocidad cuando estés listo en la línea de tiro."
         );
-      }, 20000);
+      }, 8000);
     } catch (err) {
       console.error("Microphone access error:", err);
       alert("No se pudo acceder al micrófono. Por favor permite los permisos de audio en tu teléfono.");
@@ -682,7 +682,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
           </button>
           <span className="text-[10px] text-gray-dim text-center">
             {isRecording 
-              ? "Tienes hasta 20 segundos para apuntar con calma y disparar. Se activará al detectar la suelta." 
+              ? "Tienes hasta 8 segundos para apuntar con calma y disparar. Se activará al detectar la suelta." 
               : "Distancia reglamentaria: 18 metros medidos con cinta métrica."}
           </span>
         </div>
@@ -825,7 +825,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                     <span>Disparo y Cálculo por Sonido</span>
                   </h4>
                   <p className="text-[11px] pl-6 text-white/70">
-                    Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong>; el cronógrafo quedará armado hasta por 20 segundos esperando a que apuntes con calma y dispares. Al detectar la suelta, capturará automáticamente el impacto a 18 metros.
+                    Presiona el botón <strong className="text-white">&ldquo;Medir Velocidad&rdquo;</strong>; el cronógrafo quedará armado hasta por 8 segundos esperando a que apuntes con calma y dispares. Al detectar la suelta, capturará automáticamente el impacto a 18 metros.
                   </p>
                 </div>
               </div>
@@ -906,7 +906,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
               <button
                 type="button"
                 onClick={() => setShowInstructionsModal(false)}
-                className="w-full py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer"
+                className="w-full py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer"
               >
                 Entendido, Cerrar Instrucciones
               </button>
@@ -1084,7 +1084,7 @@ export default function AcousticChronographView({ user, onBack }: AcousticChrono
                 <button
                   type="button"
                   onClick={handleAcceptMicDisclosure}
-                  className="flex-1 py-3 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase tracking-wider hover:brightness-110 shadow-glow-cyan transition cursor-pointer"
+                  className="flex-1 py-3 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase tracking-wider hover:brightness-110 transition cursor-pointer"
                 >
                   Entendido
                 </button>

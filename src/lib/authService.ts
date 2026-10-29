@@ -7,6 +7,7 @@ import {
   sendPasswordResetEmail,
   signInWithPopup,
   signInWithRedirect,
+  signInWithCredential,
   getRedirectResult,
   GoogleAuthProvider,
   FacebookAuthProvider,
@@ -830,6 +831,10 @@ export async function loginSocialUser(email: string, displayName: string, explic
   return user;
 }
 
+const GOOGLE_WEB_CLIENT_ID = "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
+const FIREBASE_AUTH_HANDLER_URI = "https://archery101010-c0bb4.firebaseapp.com/__/auth/handler";
+const FIREBASE_PUBLIC_API_KEY = "AIzaSyDFhnSTI6WbxHB8duYukpEBk9wKjxpduTE";
+
 export async function processSocialRedirectResult(): Promise<UserProfile | null> {
   if (typeof window === "undefined") return null;
   const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
@@ -839,6 +844,56 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
   if (isMockFirebase) return null;
 
   try {
+    // 1. Check direct OAuth token in URL hash/query (intercepted by Android MainActivity WebViewClient)
+    const rawHash = window.location.hash ? window.location.hash.substring(1) : "";
+    const rawSearch = window.location.search ? window.location.search.substring(1) : "";
+    const hashParams = new URLSearchParams(rawHash);
+    const searchParams = new URLSearchParams(rawSearch);
+
+    const idToken = hashParams.get("id_token") || searchParams.get("id_token");
+    const accessToken = hashParams.get("access_token") || searchParams.get("access_token");
+    const oauthError = hashParams.get("error") || searchParams.get("error");
+
+    if (idToken || accessToken || oauthError) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
+    if (oauthError) {
+      console.warn("OAuth retornó error:", oauthError);
+      return null;
+    }
+
+    if (idToken) {
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result = await signInWithCredential(auth, credential);
+      const u = result.user;
+      const email =
+        u.email ||
+        u.providerData?.find((p) => p.email)?.email ||
+        `${u.uid}@google.archery101010.com`;
+      const displayName =
+        u.displayName ||
+        u.providerData?.find((p) => p.displayName)?.displayName ||
+        "Arquero Google";
+      return await loginSocialUser(email, displayName, u.uid);
+    }
+
+    if (accessToken) {
+      const credential = FacebookAuthProvider.credential(accessToken);
+      const result = await signInWithCredential(auth, credential);
+      const u = result.user;
+      const email =
+        u.email ||
+        u.providerData?.find((p) => p.email)?.email ||
+        `${u.uid}@facebook.archery101010.com`;
+      const displayName =
+        u.displayName ||
+        u.providerData?.find((p) => p.displayName)?.displayName ||
+        "Arquero Facebook";
+      return await loginSocialUser(email, displayName, u.uid);
+    }
+
+    // 2. Standard Firebase Redirect Result fallback
     const result = await getRedirectResult(auth);
     if (result && result.user) {
       const u = result.user;
@@ -884,6 +939,59 @@ export async function authenticateWithSocialProvider(
 
   auth.languageCode = "es";
 
+  // Pre-verify Facebook configuration on Firebase before attempting navigation so it never loops
+  if (providerName === "facebook") {
+    let fbAuthUri = "";
+    try {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${FIREBASE_PUBLIC_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerId: "facebook.com",
+            continueUri: FIREBASE_AUTH_HANDLER_URI,
+          }),
+        }
+      );
+      if (!res.ok) {
+        throw new Error(
+          "El acceso con Facebook requiere vincular el App ID de Meta en la consola de Firebase (Authentication → Sign-in method → Facebook).\n\nPor ahora puedes ingresar directamente con tu cuenta de Google o con tu Correo y Contraseña."
+        );
+      }
+      const data = await res.json();
+      fbAuthUri = data?.authUri || "";
+    } catch (checkErr: any) {
+      if (checkErr?.message?.includes("Meta")) {
+        throw checkErr;
+      }
+      throw new Error(
+        "El acceso con Facebook aún no está activo en el servidor. Por favor ingresa con tu cuenta de Google o con tu Correo y Contraseña."
+      );
+    }
+
+    if (isCapacitorNative && fbAuthUri) {
+      const tokenUri = fbAuthUri.replace("response_type=code", "response_type=token");
+      window.location.assign(tokenUri);
+      return null;
+    }
+  }
+
+  // Inside native Android APK: use direct Google OAuth id_token flow (intercepted by MainActivity -> signInWithCredential)
+  if (isCapacitorNative && providerName === "google") {
+    const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const oauthUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth` +
+      `?client_id=${encodeURIComponent(GOOGLE_WEB_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(FIREBASE_AUTH_HANDLER_URI)}` +
+      `&response_type=id_token` +
+      `&scope=${encodeURIComponent("openid email profile")}` +
+      `&nonce=${encodeURIComponent(nonce)}` +
+      `&prompt=select_account`;
+    window.location.assign(oauthUrl);
+    return null;
+  }
+
   const provider =
     providerName === "google" ? new GoogleAuthProvider() : new FacebookAuthProvider();
 
@@ -894,19 +1002,7 @@ export async function authenticateWithSocialProvider(
   } else {
     (provider as FacebookAuthProvider).addScope("email");
     (provider as FacebookAuthProvider).addScope("public_profile");
-    if (!isCapacitorNative) {
-      (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
-    }
-  }
-
-  // Inside native Android APK WebView, use same-window redirect flow so OAuth completes seamlessly
-  if (isCapacitorNative) {
-    try {
-      await signInWithRedirect(auth, provider);
-      return null;
-    } catch (redirectErr: any) {
-      throw new Error(translateFirebaseAuthError(redirectErr));
-    }
+    (provider as FacebookAuthProvider).setCustomParameters({ display: "popup" });
   }
 
   try {
