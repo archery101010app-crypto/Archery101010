@@ -497,17 +497,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </span>
           </div>
 
-          {/* Row 2: Full-width Title & Balanced Description (Centered) */}
-          <div className="flex flex-col items-center gap-1 w-full text-center">
+          {/* Row 2: Full-width Centered Title */}
+          <div className="flex items-center justify-center w-full text-center py-1">
             <h3
-              className="text-white text-[16.5px] sm:text-lg font-black uppercase tracking-wider leading-snug group-hover:text-cyan-neon transition-colors [text-wrap:balance] text-center"
+              className="w-full text-white text-[17px] sm:text-xl font-black uppercase tracking-wider leading-tight group-hover:text-cyan-neon transition-colors text-center mx-auto"
               style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
             >
               {t("duelsTitle")}
             </h3>
-            <p className="text-xs text-white leading-relaxed [text-wrap:pretty] text-center max-w-md">
-              {t("duelsDesc")}
-            </p>
           </div>
 
           {/* Row 3: Symmetrical 2-Column Footer (1v1 Scoreboard + Primary CTA Button) */}

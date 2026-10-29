@@ -143,6 +143,14 @@ html:not(.light-contrast) [class*="text-stone-700"] {
   color: #ffffff !important;
 }
 
+/* Exception: Intro screen Skip ("Saltar") button stays dimmed white until hovered */
+html:not(.light-contrast) .intro-skip-btn {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+html:not(.light-contrast) .intro-skip-btn:hover {
+  color: #ffffff !important;
+}
+
 html:not(.light-contrast) input::placeholder,
 html:not(.light-contrast) textarea::placeholder {
   color: #ffffff !important;
