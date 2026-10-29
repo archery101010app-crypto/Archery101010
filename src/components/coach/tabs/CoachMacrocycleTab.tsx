@@ -239,16 +239,20 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
         setRoster(athletes);
       }
 
-      // Load macrocycles (filtrando y eliminando cualquier residuo de demo indoor 2026)
+      // Load macrocycles (filtrando y eliminando cualquier residuo de demo o plantilla ejemplo)
       const list = await getLocalMacrocycles();
       const cleanList: Macrocycle[] = [];
       for (const macro of list) {
+        const phasesDump = JSON.stringify(macro.phases || []).toLowerCase();
         const isIndoorDemo = macro.id === "MAC-DEMO-1" || 
           (macro.name || "").toLowerCase().includes("indoor 2026") ||
           (macro.name || "").toLowerCase().includes("preparación indoor") ||
           (macro.name || "").toLowerCase().includes("preparacion indoor") ||
           (macro.name || "").toLowerCase().includes("offline mode active") ||
-          (macro.name || "").toLowerCase().includes("connect to the internet");
+          (macro.name || "").toLowerCase().includes("connect to the internet") ||
+          phasesDump.includes("15 min calentamiento con liga") ||
+          phasesDump.includes("core y estabilidad") ||
+          phasesDump.includes("volumen técnico 70m");
         if (isIndoorDemo) {
           await deleteLocalMacrocycle(macro.id);
         } else {

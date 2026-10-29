@@ -443,31 +443,14 @@ function classifyHeader(hRaw: string): "date" | "startDate" | "endDate" | "title
 
 /**
  * Splits a cell value into clean individual list items (handling multi-line cells separated by "|||" or "\n")
+ * Preserves 100% literal text without prepending column header labels or inventing text.
  */
-function splitCellIntoListItems(cellValue: string, headerLabel?: string): string[] {
+function splitCellIntoListItems(cellValue: string): string[] {
   if (!cellValue || !cellValue.trim()) return [];
-  const rawParts = cellValue
+  return cellValue
     .split(/\s*\|\|\|\s*|\r?\n/)
     .map((p) => p.replace(/^[•\-\*▪▸]\s*/, "").trim())
     .filter(Boolean);
-
-  if (rawParts.length === 0) return [];
-
-  const isGenericHeader =
-    !headerLabel ||
-    /^(actividad|actividades|tarea|tareas|entrenamiento|trabajo|ejercicio|ejercicios|rutina|descripci[oó]n|detalle|plan|lista|columna\s*\d+|item\s*\d+)$/i.test(
-      headerLabel.trim()
-    );
-
-  if (isGenericHeader) {
-    return rawParts;
-  }
-
-  if (rawParts.length === 1) {
-    return [`${headerLabel.trim()}: ${rawParts[0]}`];
-  }
-
-  return rawParts.map((p) => `${headerLabel.trim()}: ${p}`);
 }
 
 /**
@@ -860,26 +843,16 @@ export function parseSpreadsheetData(
           customFields.push({ label: colHeader, value: cleanDisplayVal });
         }
 
-        // Convert cell into clean list item(s) for the day's checklist
-        if (c === arrowsCol) {
-          if (targetArrows > 0) {
-            rowItems.push(`Flechas: ${targetArrows} flechas`);
-          } else {
-            rowItems.push(...splitCellIntoListItems(rawCellVal, colHeader || "Flechas"));
-          }
-        } else {
-          const splitItems = splitCellIntoListItems(rawCellVal, colHeader);
+        // Convert cell into clean literal list item(s) for the day's list (never prepend invented labels)
+        if (c !== arrowsCol) {
+          const splitItems = splitCellIntoListItems(rawCellVal);
           splitItems.forEach((item) => {
             if (!rowItems.includes(item)) rowItems.push(item);
           });
         }
 
         if (c !== titleCol && c !== arrowsCol && c !== focusCol && c !== notesCol) {
-          if (colHeader) {
-            extraTextParts.push(`${colHeader}: ${cleanDisplayVal}`);
-          } else {
-            extraTextParts.push(cleanDisplayVal);
-          }
+          extraTextParts.push(cleanDisplayVal);
         }
       }
 
@@ -1137,40 +1110,20 @@ export function parseSpreadsheetData(
 }
 
 /**
- * Returns a ready-to-use CSV sample text for Coaches (Stages format)
+ * Returns a clean, blank CSV template for Stages format (no pre-written activities)
  */
 export function generateSampleCsvTemplate(): string {
-  const today = new Date();
-  const d1 = today.toISOString().split("T")[0];
-  const d2 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d3 = new Date(today.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d4 = new Date(today.getTime() + 65 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d5 = new Date(today.getTime() + 66 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d6 = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
   return [
-    "Nombre de la Etapa,Fecha Inicio,Fecha Fin,Sesiones por Semana,Flechas por Semana,Notas para los Arqueros",
-    `Base y Acondicionamiento,${d1},${d2},3,300,"Fuerza específica, banda elástica y técnica de anclaje"`,
-    `Aumento de Volumen,${d3},${d4},4,600,"Disparo continuo, ritmo regular por flecha y resistencia"`,
-    `Puesta a Punto y Duelos,${d5},${d6},3,400,"Simulacro de eliminatorias 1 contra 1 bajo tiempo oficial"`
+    "Nombre de la Etapa,Fecha Inicio,Fecha Fin,Sesiones por Semana,Flechas por Semana,Notas"
   ].join("\r\n");
 }
 
 /**
- * Returns a ready-to-use Day-by-Day CSV sample text for Coaches & Athletes
+ * Returns a clean, blank Day-by-Day CSV template (no pre-written activities)
  */
 export function generateDailySampleCsvTemplate(): string {
-  const today = new Date();
-  const dayStr = (offset: number) =>
-    new Date(today.getTime() + offset * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
   return [
-    "Fecha,Actividad,Flechas,Enfoque Técnico,Notas del Entrenador",
-    `${dayStr(0)},Volumen Técnico 70m,120,"Anclaje firme, Expansión dorsal","Tirar en series de 6 flechas controlando el ritmo"`,
-    `${dayStr(1)},Trabajo con Liga y 18m,90,"Alineación de hombros, Soltada limpia","15 min de banda elástica antes de tirar"`,
-    `${dayStr(2)},Descanso,0,"",""`,
-    `${dayStr(3)},Control Oficial WA 720,144,"Tiempo oficial 240s, Enfoque en el clic","Anotar las 2 rondas completas en la app"`,
-    `${dayStr(4)},Simulacro de Duelos,96,"Respiración bajo presión, Primera flecha fuerte","Disparar sets de 3 flechas en 20 segundos por flecha"`
+    "Fecha,Actividad 1,Actividad 2,Actividad 3,Flechas,Notas"
   ].join("\r\n");
 }
 
@@ -1207,9 +1160,8 @@ export function downloadDailySampleTemplate(): void {
 }
 
 /**
- * Generates and downloads a formatted .xlsx Excel workbook with two ready-to-use sheets:
- * 1. "Lista por Fecha" (Every day of the selected month with columns for multiple tasks/items per day)
- * 2. "Calendario Mensual" (7-column Lunes-Domingo grid where tasks are written under each day number)
+ * Generates and downloads a clean, 100% blank .xlsx Excel workbook with the dates of the selected month
+ * and zero pre-written or invented activities.
  */
 export function downloadFormattedExcelTemplate(year?: number, month?: number): void {
   const y = year || new Date().getFullYear();
@@ -1222,16 +1174,16 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
   ];
   const mName = monthNames[m - 1] || "Mes";
 
-  // Sheet 1: Clean Row-by-Row Date List (Recommended)
+  // Sheet 1: Clean Row-by-Row Date List (100% blank cells for the user to fill)
   const listAoA: string[][] = [
     [
       "Fecha",
       "Día",
-      "Actividad 1 (Tiro / Distancia)",
-      "Actividad 2 (Técnica / Liga)",
-      "Actividad 3 (Físico / Gimnasio)",
+      "Tarea 1",
+      "Tarea 2",
+      "Tarea 3",
       "Flechas",
-      "Notas / Indicaciones"
+      "Notas"
     ]
   ];
 
@@ -1240,32 +1192,7 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
     const dow = dateObj.getDay();
     const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const dayLabel = `${weekdayNames[dow]} ${d}`;
-
-    if (d === 1) {
-      listAoA.push([
-        dateStr,
-        dayLabel,
-        "Volumen Técnico 70m (series de 6 flechas)",
-        "15 min calentamiento con banda elástica",
-        "Core y estabilidad de hombros (20 min)",
-        "120",
-        "Mantener ritmo constante de disparo"
-      ]);
-    } else if (d === 2) {
-      listAoA.push([
-        dateStr,
-        dayLabel,
-        "Control WA 720 (2 rondas de 36 flechas)",
-        "Revisión de postura y suelta",
-        "Estiramiento completo al finalizar",
-        "72",
-        "Registrar puntuación en Archery 101010"
-      ]);
-    } else if (dow === 0) {
-      listAoA.push([dateStr, dayLabel, "Descanso", "", "", "0", "Recuperación activa"]);
-    } else {
-      listAoA.push([dateStr, dayLabel, "", "", "", "", ""]);
-    }
+    listAoA.push([dateStr, dayLabel, "", "", "", "", ""]);
   }
 
   const wb = XLSX.utils.book_new();
@@ -1273,17 +1200,17 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
   wsList["!cols"] = [
     { wch: 14 },
     { wch: 16 },
-    { wch: 38 },
     { wch: 34 },
-    { wch: 32 },
-    { wch: 10 },
+    { wch: 34 },
+    { wch: 34 },
+    { wch: 12 },
     { wch: 34 }
   ];
   XLSX.utils.book_append_sheet(wb, wsList, `Lista ${mName}`);
 
-  // Sheet 2: Visual 7-Column Monthly Calendar Grid (Lunes..Domingo)
+  // Sheet 2: Visual 7-Column Monthly Calendar Grid (100% blank cells under each day number)
   const gridAoA: string[][] = [
-    [`PLAN MENSUAL - ${mName.toUpperCase()} ${y}`, "", "", "", "", "", ""],
+    [`${mName.toUpperCase()} ${y}`, "", "", "", "", "", ""],
     ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
   ];
 
@@ -1296,17 +1223,9 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
 
     for (let col = 0; col < 7 && currentDay <= daysInMonth; col++) {
       const dateObj = new Date(y, m - 1, currentDay);
-      // Convert JS getDay (0=Sun..6=Sat) to Monday-first (0=Mon..6=Sun)
       const monFirstCol = (dateObj.getDay() + 6) % 7;
       if (monFirstCol === col) {
         numberRow[col] = String(currentDay);
-        if (currentDay === 1) {
-          taskRow1[col] = "Calentamiento con liga 15 min";
-          taskRow2[col] = "120 flechas a 70m";
-          taskRow3[col] = "Físico: Core y hombro";
-        } else if (monFirstCol === 6) {
-          taskRow1[col] = "Descanso";
-        }
         currentDay++;
       }
     }
@@ -1315,7 +1234,7 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
   }
 
   const wsGrid = XLSX.utils.aoa_to_sheet(gridAoA);
-  wsGrid["!cols"] = Array.from({ length: 7 }, () => ({ wch: 26 }));
+  wsGrid["!cols"] = Array.from({ length: 7 }, () => ({ wch: 24 }));
   XLSX.utils.book_append_sheet(wb, wsGrid, `Calendario ${mName}`);
 
   XLSX.writeFile(wb, `Formato_Plan_${mName}_${y}_Archery101010.xlsx`);

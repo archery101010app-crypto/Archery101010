@@ -187,24 +187,6 @@ export default function PlanImporterModal({
     }
   };
 
-  const handleLoadGuidedMonthTemplate = () => {
-    const daysInMonth = new Date(refYear, refMonth, 0).getDate();
-    const weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-    const lines = ["Fecha\tActividad 1 (Tiro / Distancia)\tActividad 2 (Técnica / Liga)\tActividad 3 (Físico / Notas)\tFlechas"];
-    for (let d = 1; d <= Math.min(7, daysInMonth); d++) {
-      const dow = new Date(refYear, refMonth - 1, d).getDay();
-      const dateStr = `${refYear}-${String(refMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dow === 0) {
-        lines.push(`${dateStr}\tDescanso\t\t\t0`);
-      } else {
-        lines.push(`${dateStr}\tVolumen 70m (${weekdayNames[dow]} ${d})\t15 min calentamiento con liga\tCore y estabilidad\t120`);
-      }
-    }
-    const sample = lines.join("\n");
-    setActiveTab("paste");
-    handleParseText(sample, `Plan ${MONTH_NAMES[refMonth - 1]} ${refYear}`);
-  };
-
   const handlePasteClipboard = async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.readText) {
@@ -729,7 +711,7 @@ export default function PlanImporterModal({
               <textarea
                 value={importText}
                 onChange={(e) => handleParseText(e.target.value)}
-                placeholder={`Ejemplo:\nFecha\tActividad\tFlechas\tNotas\n28/10/2026\tVolumen 70m\t120\tSeries de 6 flechas\n29/10/2026\tControl 720\t72\tAnotar en la app\n30/10/2026\tDescanso\t0\t`}
+                placeholder="Pega aquí las celdas de tu Excel o Google Sheets..."
                 rows={5}
                 className="bg-[#0D0F12] border border-white/10 rounded-2xl p-3.5 text-xs tabular-nums text-white outline-none focus:border-cyan-neon transition placeholder:text-white resize-none leading-relaxed"
               />
@@ -742,10 +724,10 @@ export default function PlanImporterModal({
               <div className="flex flex-col">
                 <span className="text-[11px] text-cyan-neon font-black uppercase tracking-wider flex items-center gap-1.5">
                   <FileSpreadsheet size={13} />
-                  <span>Formato Inteligente por Fecha / Número de Día</span>
+                  <span>Lectura de Fechas Exacta (Sin modificar tu texto)</span>
                 </span>
                 <p className="text-[11.5px] text-white mt-0.5 leading-snug">
-                  Escribe la <strong>Fecha</strong> (ej. <code className="text-cyan-neon">05/11/2026</code>) o solo el <strong>Número de Día</strong> (<code className="text-cyan-neon">1, 2, 3... 31</code>) y al lado las actividades de ese día. Al abrir ese día en el calendario aparecerá la lista completa.
+                  El sistema lee la <strong>Fecha</strong> o el <strong>Número de Día</strong> (<code className="text-cyan-neon">1..31</code>) de tu hoja y carga exactamente lo que hayas escrito en ese día sin agregar ni inventar ningún texto.
                 </p>
               </div>
             </div>
@@ -796,15 +778,7 @@ export default function PlanImporterModal({
                   className="flex-1 sm:flex-initial text-[11px] font-black uppercase tracking-wider text-black bg-cyan-neon hover:bg-[#19c8ff] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer"
                 >
                   <Download size={12} />
-                  <span>Descargar Formato Excel (.xlsx)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLoadGuidedMonthTemplate}
-                  className="text-[11px] font-bold uppercase tracking-wider text-cyan-neon bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0"
-                  title="Ver ejemplo listo para editar aquí mismo"
-                >
-                  <span>Ver Ejemplo</span>
+                  <span>Descargar Calendario Vacío (.xlsx)</span>
                 </button>
               </div>
             </div>

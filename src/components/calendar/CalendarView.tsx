@@ -195,16 +195,24 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       
       const eventList = await getLocalEvents();
       const cleanEvents: CalendarEvent[] = [];
+      const badMacroIds = new Set<string>(["MAC-DEMO-1"]);
       for (const ev of eventList) {
-        const fullDesc = `${ev.title || ""} ${ev.description || ""} ${ev.coachNotes || ""} ${ev.phaseName || ""}`.toLowerCase();
+        const itemsText = (ev.dailyItems || []).join(" ");
+        const fullDesc = `${ev.title || ""} ${ev.description || ""} ${ev.coachNotes || ""} ${ev.phaseName || ""} ${itemsText}`.toLowerCase();
         const isBadEvent = ev.macrocycleId === "MAC-DEMO-1" ||
           fullDesc.includes("indoor 2026") ||
           fullDesc.includes("preparación indoor") ||
           fullDesc.includes("preparacion indoor") ||
           fullDesc.includes("offline mode active") ||
-          fullDesc.includes("connect to the internet");
+          fullDesc.includes("connect to the internet") ||
+          fullDesc.includes("15 min calentamiento con liga") ||
+          fullDesc.includes("core y estabilidad") ||
+          fullDesc.includes("actividad 1 (tiro / distancia)") ||
+          fullDesc.includes("actividad 2 (técnica / liga)") ||
+          fullDesc.includes("volumen técnico 70m");
 
         if (isBadEvent) {
+          if (ev.macrocycleId) badMacroIds.add(ev.macrocycleId);
           await deleteLocalEvent(ev.id);
         } else {
           // Limpiar cualquier texto de enfoque o notas inventado previamente por IA/plantilla
@@ -271,7 +279,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       const macroList = await getLocalMacrocycles();
       const cleanMacroList: Macrocycle[] = [];
       for (const mac of macroList) {
-        const isIndoorDemo = mac.id === "MAC-DEMO-1" || 
+        const isIndoorDemo = badMacroIds.has(mac.id) ||
+          mac.id === "MAC-DEMO-1" || 
           (mac.name || "").toLowerCase().includes("indoor 2026") ||
           (mac.name || "").toLowerCase().includes("preparación indoor") ||
           (mac.name || "").toLowerCase().includes("preparacion indoor") ||
@@ -1432,9 +1441,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             )}
                           </div>
 
-                          <h4 className="text-white text-sm font-black mt-1">
-                            {coachAssignment.title}
-                          </h4>
+                          {(!coachAssignment.dailyItems || coachAssignment.dailyItems.length === 0) && (
+                            <h4 className="text-white text-sm font-black mt-1">
+                              {coachAssignment.title}
+                            </h4>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -1489,8 +1500,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         const rawList: string[] = [];
                         const addUniqueItem = (text?: string) => {
                           if (!text) return;
-                          const clean = text.trim();
-                          if (clean && !rawList.includes(clean)) {
+                          const clean = text
+                            .replace(/^actividad\s*\d*\s*(\([^)]*\))?\s*:\s*/i, "")
+                            .trim();
+                          if (!clean || /^flechas\s*:\s*\d+/i.test(clean)) return;
+                          if (!rawList.includes(clean)) {
                             rawList.push(clean);
                           }
                         };
@@ -1500,8 +1514,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         } else {
                           if (coachAssignment.customFields && coachAssignment.customFields.length > 0) {
                             coachAssignment.customFields.forEach((f) => {
-                              const isGeneric = /^(actividad|tarea|entrenamiento|trabajo|ejercicio|plan)$/i.test(f.label.trim());
-                              addUniqueItem(isGeneric ? f.value : `${f.label}: ${f.value}`);
+                              addUniqueItem(f.value);
                             });
                           }
                           if (coachAssignment.title) {
