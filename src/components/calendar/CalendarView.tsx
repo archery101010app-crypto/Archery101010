@@ -69,6 +69,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
   const [selectedMacrocycleId, setSelectedMacrocycleId] = useState<string>("ALL");
 
+  // Vista tipo Google Calendar: "month" (Cuadrícula) | "agenda" (Lista corrida día por día)
+  const [calendarViewMode, setCalendarViewMode] = useState<"month" | "agenda">("month");
+  const [agendaShowEmptyDays, setAgendaShowEmptyDays] = useState<boolean>(false);
+
   // Day Selection Modal (Athlete & Coach Daily Assignment Inspection)
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showDayModal, setShowDayModal] = useState(false);
@@ -78,14 +82,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const [syncMacroId, setSyncMacroId] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Edit / Add Daily Assignment Modal for Coach
+  // Edit / Add Daily Agenda Modal (Coach & Student)
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [assignmentEventId, setAssignmentEventId] = useState<string | null>(null);
   const [assignTitle, setAssignTitle] = useState("");
-  const [assignTargetArrows, setAssignTargetArrows] = useState(100);
+  const [assignLinesText, setAssignLinesText] = useState("");
+  const [assignTargetArrows, setAssignTargetArrows] = useState(0);
   const [assignFocusPoint, setAssignFocusPoint] = useState("");
   const [assignNotes, setAssignNotes] = useState("");
   const [assignDate, setAssignDate] = useState("");
+  const [assignRepeatMode, setAssignRepeatMode] = useState<
+    "none" | "same_weekday" | "mwf" | "tts" | "weekdays"
+  >("none");
+  const [assignRecipientMode, setAssignRecipientMode] = useState<
+    "all" | "selected" | "personal"
+  >("all");
+  const [assignSelectedAthletes, setAssignSelectedAthletes] = useState<string[]>([]);
 
   // Regular Event Modal State (Add / Edit)
   const [showModal, setShowModal] = useState(false);
@@ -600,114 +612,203 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     }
   };
 
-  // Coach Edit or Create Daily Assignment
+  // Coach & Student: Edit or Create Daily Agenda (Propuesta 1)
   const handleOpenEditAssignment = (event: CalendarEvent) => {
     setAssignmentEventId(event.id);
     setAssignDate(event.date);
-    setAssignTitle(event.title);
+    setAssignTitle(event.title || "");
     setAssignTargetArrows(event.targetArrows || 0);
-    setAssignFocusPoint(
+
+    const existingItems =
       event.dailyItems && event.dailyItems.length > 0
-        ? event.dailyItems.join(", ")
-        : event.focusPoints
-        ? event.focusPoints.join(", ")
-        : ""
-    );
-    setAssignNotes(event.coachNotes || event.description || "");
+        ? event.dailyItems
+        : [
+            event.title,
+            ...(event.focusPoints || []),
+            event.coachNotes || event.description || ""
+          ]
+            .map((s) => (s || "").trim())
+            .filter(Boolean);
+
+    setAssignLinesText(existingItems.join("\n"));
+    setAssignFocusPoint("");
+    setAssignNotes("");
+    setAssignRepeatMode("none");
+
+    if (!isCoach) {
+      setAssignRecipientMode("personal");
+      setAssignSelectedAthletes([user.uid]);
+    } else if (event.assignedAthleteIds && event.assignedAthleteIds.length > 0) {
+      if (event.assignedAthleteIds.length === 1 && event.assignedAthleteIds[0] === user.uid) {
+        setAssignRecipientMode("personal");
+      } else {
+        setAssignRecipientMode("selected");
+        setAssignSelectedAthletes(event.assignedAthleteIds);
+      }
+    } else {
+      setAssignRecipientMode("all");
+      setAssignSelectedAthletes([]);
+    }
+
     setShowAssignmentModal(true);
   };
 
-  const handleOpenCreateAssignment = (dateStr: string, phaseInfo: any) => {
+  const handleOpenCreateAssignment = (dateStr: string, _phaseInfo?: any) => {
     setAssignmentEventId(null);
     setAssignDate(dateStr);
-    const pName = phaseInfo?.phase?.name || "Entrenamiento";
-    setAssignTitle(pName);
-    const defaultArrows = phaseInfo?.phase 
-      ? Math.round(phaseInfo.phase.weeklyArrowGoal / Math.max(1, phaseInfo.phase.weeklySessionGoal)) 
-      : 0;
-    setAssignTargetArrows(defaultArrows);
+    setAssignTitle("");
+    setAssignLinesText("");
+    setAssignTargetArrows(0);
     setAssignFocusPoint("");
-    setAssignNotes(phaseInfo?.phase?.notes || "");
+    setAssignNotes("");
+    setAssignRepeatMode("none");
+
+    if (!isCoach) {
+      setAssignRecipientMode("personal");
+      setAssignSelectedAthletes([user.uid]);
+    } else if (selectedAthleteFilter !== "ALL") {
+      setAssignRecipientMode("selected");
+      setAssignSelectedAthletes([selectedAthleteFilter]);
+    } else {
+      setAssignRecipientMode("all");
+      setAssignSelectedAthletes([]);
+    }
+
     setShowAssignmentModal(true);
+  };
+
+  const toggleAssignAthlete = (uid: string) => {
+    setAssignSelectedAthletes((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
+    );
+  };
+
+  const handleDeleteDailyAssignment = async (evId?: string | null) => {
+    const targetId = evId || assignmentEventId;
+    if (!targetId) return;
+    await deleteLocalEvent(targetId);
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "calendar_events",
+      operation: "DELETE",
+      payloadId: targetId,
+      payload: {},
+      timestamp: Date.now()
+    });
+    const refreshedEvents = await getLocalEvents();
+    setEvents(refreshedEvents);
+    setShowAssignmentModal(false);
   };
 
   const handleSaveDailyAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignDate || !assignTitle.trim()) return;
+    if (!assignDate) return;
 
-    const existingEv = assignmentEventId ? events.find((ev) => ev.id === assignmentEventId) : undefined;
-    const eventId = assignmentEventId || `EVT-MAC-ASSIGN-${Date.now()}`;
-    const focusArr = assignFocusPoint
-      .split(/[,;\n]/)
+    const cleanItems = assignLinesText
+      .split(/\r?\n|\s*\/\s*/)
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const notesArr = assignNotes
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const combinedDailyItems: string[] = [];
-    if (focusArr.length > 0) {
-      focusArr.forEach((f) => {
-        if (!combinedDailyItems.includes(f)) combinedDailyItems.push(f);
-      });
-    } else if (assignTitle.trim()) {
-      combinedDailyItems.push(assignTitle.trim());
+    if (cleanItems.length === 0 && assignTargetArrows <= 0) {
+      alert("Escribe al menos una actividad para este día.");
+      return;
     }
-    notesArr.forEach((n) => {
-      if (!combinedDailyItems.includes(n)) combinedDailyItems.push(n);
-    });
 
-    const activePhaseInfo = getPhaseOnDate(assignDate);
+    if (isCoach && assignRecipientMode === "selected" && assignSelectedAthletes.length === 0) {
+      alert("Marca al menos un alumno o selecciona 'Todos los Alumnos'.");
+      return;
+    }
 
-    const updatedAssignment: CalendarEvent = {
-      id: eventId,
-      title: assignTitle,
-      date: assignDate,
-      description: assignNotes,
-      createdByRole: "coach",
-      createdByName: user.fullName || "Coach Director",
-      createdByUid: user.uid,
-      clubId: user.clubId || undefined,
-      type: "training",
-      timestamp: Date.now(),
-      macrocycleId: existingEv?.macrocycleId || activePhaseInfo?.macrocycle?.id,
-      phaseId: existingEv?.phaseId || activePhaseInfo?.phase?.id,
-      phaseName: existingEv?.phaseName || activePhaseInfo?.phase?.name || "Entrenamiento",
-      phaseType: existingEv?.phaseType || activePhaseInfo?.phase?.type,
-      phaseColor: existingEv?.phaseColor || activePhaseInfo?.phase?.color || "#00BFFF",
-      targetArrows: assignTargetArrows,
-      assignedAthleteIds: existingEv?.assignedAthleteIds || (selectedAthleteFilter !== "ALL" ? [selectedAthleteFilter] : []),
-      focusPoints: focusArr,
-      coachNotes: assignNotes,
-      dailyItems: combinedDailyItems,
-      completedItems: existingEv?.completedItems || [],
-      isRestDay: assignTargetArrows === 0 && assignTitle.toLowerCase().includes("descanso"),
-      isCompleted: false
-    };
+    const baseDateObj = new Date(assignDate + "T12:00:00");
+    const targetYear = baseDateObj.getFullYear();
+    const targetMonth = baseDateObj.getMonth(); // 0..11
+    const baseDow = baseDateObj.getDay();
+    const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
 
-    await saveLocalEvent(eventId, updatedAssignment);
+    const targetDates: string[] = [];
+    if (assignRepeatMode === "none") {
+      targetDates.push(assignDate);
+    } else {
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dt = new Date(targetYear, targetMonth, d, 12, 0, 0);
+        const dow = dt.getDay();
+        const iso = `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        if (assignRepeatMode === "same_weekday" && dow === baseDow) {
+          targetDates.push(iso);
+        } else if (assignRepeatMode === "mwf" && (dow === 1 || dow === 3 || dow === 5)) {
+          targetDates.push(iso);
+        } else if (assignRepeatMode === "tts" && (dow === 2 || dow === 4 || dow === 6)) {
+          targetDates.push(iso);
+        } else if (assignRepeatMode === "weekdays" && dow >= 1 && dow <= 5) {
+          targetDates.push(iso);
+        }
+      }
+    }
 
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "calendar_events",
-      operation: "UPDATE",
-      payloadId: eventId,
-      payload: updatedAssignment,
-      timestamp: Date.now()
-    });
+    const recipientIds: string[] = !isCoach || assignRecipientMode === "personal"
+      ? [user.uid]
+      : assignRecipientMode === "selected"
+      ? assignSelectedAthletes
+      : [];
+
+    const mainTitle = cleanItems[0] || (assignTargetArrows > 0 ? `${assignTargetArrows} flechas` : "Entrenamiento");
+    const isRest =
+      cleanItems.length === 1 &&
+      /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(cleanItems[0]) &&
+      assignTargetArrows === 0;
+
+    for (const dateIso of targetDates) {
+      const existingEv =
+        dateIso === assignDate && assignmentEventId
+          ? events.find((ev) => ev.id === assignmentEventId)
+          : undefined;
+      const eventId =
+        existingEv?.id || `EVT-AGENDA-${dateIso}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      const updatedAssignment: CalendarEvent = {
+        id: eventId,
+        title: mainTitle,
+        date: dateIso,
+        description: cleanItems.length > 1 ? cleanItems.slice(1).join(" · ") : "",
+        createdByRole: isCoach ? "coach" : "archer",
+        createdByName: user.fullName || (isCoach ? "Coach" : "Arquero"),
+        createdByUid: user.uid,
+        clubId: user.clubId || undefined,
+        type: "training",
+        timestamp: Date.now(),
+        macrocycleId: existingEv?.macrocycleId,
+        phaseId: existingEv?.phaseId,
+        phaseName: existingEv?.phaseName,
+        phaseType: existingEv?.phaseType,
+        phaseColor: existingEv?.phaseColor || "#00E5FF",
+        targetArrows: assignTargetArrows,
+        assignedAthleteIds: recipientIds,
+        focusPoints: [],
+        coachNotes: "",
+        dailyItems: cleanItems,
+        completedItems: existingEv?.completedItems || [],
+        isRestDay: isRest,
+        isCompleted: false
+      };
+
+      await saveLocalEvent(eventId, updatedAssignment);
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "calendar_events",
+        operation: "UPDATE",
+        payloadId: eventId,
+        payload: updatedAssignment,
+        timestamp: Date.now()
+      });
+    }
 
     const refreshedEvents = await getLocalEvents();
     setEvents(refreshedEvents);
     setShowAssignmentModal(false);
 
-    // If day modal is open, keep it updated
     if (selectedDay === assignDate) {
       setSelectedDay(assignDate);
     }
-
-    alert("Asignación del día guardada y notificada a los arqueros.");
   };
 
   // Form handlers for regular events
@@ -836,58 +937,98 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           </div>
         </div>
 
-        {/* Action buttons: Import Excel/Sheets + Sync Cycle (Coach) + Add Event */}
+        {/* Action buttons: Planificar Mes (Tabla 1-31 / Excel) + Agregar Agenda Hoy */}
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleOpenImportModal}
             className="h-9 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
-            title="Importar Plan desde Excel o Google Sheets"
+            title="Planificar todo el mes (Tabla Día 1 al 31 o pegar de Excel / Sheets)"
           >
             <FileSpreadsheet size={13} />
-            <span className="hidden sm:inline">Importar Excel / Sheets</span>
-            <span className="sm:hidden">Excel</span>
+            <span className="hidden sm:inline">Planificar Mes / Excel</span>
+            <span className="sm:hidden">Plan Mes</span>
           </button>
 
-          {isCoach && (
-            <button
-              onClick={() => setShowSyncModal(true)}
-              className="h-9 px-2.5 rounded-xl bg-yellow-gold/15 hover:bg-yellow-gold/25 border border-yellow-gold/35 text-yellow-gold font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
-              title="Sincronizar ciclo con el mes"
-            >
-              <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-              <span className="hidden sm:inline">Sincronizar Ciclo</span>
-              <span className="sm:hidden">Ciclo</span>
-            </button>
-          )}
-
           <button
-            onClick={handleOpenAdd}
-            className="w-9 h-9 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon flex items-center justify-center cursor-pointer active:scale-95 transition shrink-0"
-            title="Planificar Evento"
+            onClick={() =>
+              handleOpenCreateAssignment(
+                selectedDay || new Date().toISOString().split("T")[0],
+                null
+              )
+            }
+            className="h-9 px-2.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition shrink-0"
+            title="Escribir agenda para un día"
           >
-            <Plus size={16} />
+            <Plus size={15} />
+            <span>Agenda</span>
           </button>
         </div>
       </div>
 
-      {/* Month selection selector */}
-      <div className="flex justify-between items-center bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5">
-        <button
-          onClick={prevMonth}
-          className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <div className="text-center">
-          <span className="text-white font-extrabold text-base sm:text-lg capitalize block leading-tight">{monthName}</span>
-          <span className="text-[12.8px] text-white mt-0.5 block">Toca cualquier día para ver las tareas</span>
+      {/* Month selection selector + Interruptor Mes | Agenda (Estilo Google Calendar) */}
+      <div className="flex flex-col gap-2.5 bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5">
+        <div className="flex justify-between items-center">
+          <button
+            onClick={prevMonth}
+            className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div className="text-center">
+            <span className="text-white font-extrabold text-base sm:text-lg capitalize block leading-tight">
+              {monthName}
+            </span>
+            <span className="text-[11.5px] text-white mt-0.5 block">
+              Toca cualquier día para ver o escribir su agenda
+            </span>
+          </div>
+          <button
+            onClick={nextMonth}
+            className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+          >
+            <ChevronRight size={20} />
+          </button>
         </div>
-        <button
-          onClick={nextMonth}
-          className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
-        >
-          <ChevronRight size={20} />
-        </button>
+
+        {/* Interruptor Google Calendar: Vista Mes vs Vista Agenda */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] flex-wrap">
+          <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setCalendarViewMode("month")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                calendarViewMode === "month"
+                  ? "bg-cyan-neon text-black shadow-sm"
+                  : "text-white hover:bg-white/5"
+              }`}
+            >
+              <CalendarIcon size={12} />
+              <span>Vista Mes</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarViewMode("agenda")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                calendarViewMode === "agenda"
+                  ? "bg-cyan-neon text-black shadow-sm"
+                  : "text-white hover:bg-white/5"
+              }`}
+            >
+              <CheckCircle2 size={12} />
+              <span>Agenda del Día</span>
+            </button>
+          </div>
+
+          {calendarViewMode === "agenda" && (
+            <button
+              type="button"
+              onClick={() => setAgendaShowEmptyDays((v) => !v)}
+              className="text-[10.5px] font-bold text-cyan-neon bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 px-2.5 py-1.5 rounded-xl transition cursor-pointer"
+            >
+              {agendaShowEmptyDays ? "Ver solo días con tareas" : "Ver todos los días (1 al 31)"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Macrocycle Filter & Unlink Plan Action */}
@@ -959,146 +1100,346 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         </div>
       )}
 
-      {/* Grid calendar */}
-      <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
-        {/* Days of week header */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center border-b border-white/5 pb-2">
-          {daysOfWeek.map((day, dIdx) => (
-            <div key={day} className="flex items-center justify-center py-0.5">
-              <span
-                className={`text-xs sm:text-sm font-black uppercase tracking-wider leading-none ${
-                  dIdx === 0 ? "text-cyan-neon" : "text-white"
-                }`}
-              >
-                {day}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Days Grid cells */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-          {cells.map((cell, idx) => {
-            const isToday =
-              cell.isCurrentMonth &&
-              cell.day === new Date().getDate() &&
-              month === new Date().getMonth() &&
-              year === new Date().getFullYear();
-
-            const cellDateStr = cell.isCurrentMonth
-              ? `${year}-${String(month + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`
-              : "";
-            
-            const activePhaseInfo = cell.isCurrentMonth ? getPhaseOnDate(cellDateStr) : null;
-
-            // Check if there is an assignment from coach on this day
-            const coachAssignment = cell.dayEvents.find(
-              (e) => e.createdByRole === "coach" || e.targetArrows !== undefined || e.macrocycleId
-            );
-
-            const customStyle = coachAssignment?.phaseColor
-              ? {
-                  borderColor: `${coachAssignment.phaseColor}40`,
-                  backgroundColor: `${coachAssignment.phaseColor}10`
-                }
-              : activePhaseInfo
-              ? {
-                  backgroundColor: `${activePhaseInfo.phase.color}15`,
-                  borderColor: `${activePhaseInfo.phase.color}35`,
-                  color: activePhaseInfo.phase.color
-                }
-              : {};
-
-            return (
-              <div
-                key={idx}
-                onClick={() => {
-                  if (cell.isCurrentMonth) {
-                    handleDayClick(cellDateStr);
-                  }
-                }}
-                style={customStyle}
-                className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-0.5 p-1 relative font-bold transition-all border overflow-hidden ${
-                  !cell.isCurrentMonth
-                    ? "text-white border-transparent pointer-events-none"
-                    : cell.hasSession && !activePhaseInfo && !coachAssignment
-                    ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
-                    : "text-white hover:bg-neutral-900/80 border-white/[0.06] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
-                } ${isToday ? "border-cyan-neon bg-cyan-neon/15" : ""} ${
-                  coachAssignment ? "shadow-[0_0_10px_rgba(255,255,255,0.03)]" : ""
-                }`}
-                title={cell.isCurrentMonth ? "Toca para ver la asignación de este día" : ""}
-              >
-                {/* Coach badge dot pinned top-right so day number stays 100% centered */}
-                {coachAssignment && !coachAssignment.isRestDay && (
-                  <span 
-                    style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }} 
-                    className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full animate-pulse shadow-sm"
-                    title="Asignación del Coach"
-                  />
-                )}
-
-                {/* Day Number (+20% larger and squarely centered) */}
-                <span className={`text-[13.8px] sm:text-[14.5px] leading-none text-center ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
-                  {cell.day}
+      {/* VISTA 1: CUADRÍCULA DE MES (calendarViewMode === "month") */}
+      {calendarViewMode === "month" ? (
+        <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
+          {/* Days of week header */}
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center border-b border-white/5 pb-2">
+            {daysOfWeek.map((day, dIdx) => (
+              <div key={day} className="flex items-center justify-center py-0.5">
+                <span
+                  className={`text-xs sm:text-sm font-black uppercase tracking-wider leading-none ${
+                    dIdx === 0 ? "text-cyan-neon" : "text-white"
+                  }`}
+                >
+                  {day}
                 </span>
+              </div>
+            ))}
+          </div>
 
-                {/* Literal Title / List Preview / Target Arrows from Excel/Sheet */}
-                {coachAssignment ? (
-                  <div className="flex flex-col items-center justify-center w-full px-0.5 gap-0.5 overflow-hidden">
-                    {coachAssignment.title &&
-                      coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` && (
+          {/* Days Grid cells */}
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+            {cells.map((cell, idx) => {
+              const isToday =
+                cell.isCurrentMonth &&
+                cell.day === new Date().getDate() &&
+                month === new Date().getMonth() &&
+                year === new Date().getFullYear();
+
+              const cellDateStr = cell.isCurrentMonth
+                ? `${year}-${String(month + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`
+                : "";
+              
+              const activePhaseInfo = cell.isCurrentMonth ? getPhaseOnDate(cellDateStr) : null;
+
+              const coachAssignment = cell.dayEvents.find(
+                (e) =>
+                  e.createdByRole === "coach" ||
+                  e.targetArrows !== undefined ||
+                  e.macrocycleId ||
+                  (e.dailyItems && e.dailyItems.length > 0)
+              );
+
+              const customStyle = coachAssignment?.phaseColor
+                ? {
+                    borderColor: `${coachAssignment.phaseColor}40`,
+                    backgroundColor: `${coachAssignment.phaseColor}10`
+                  }
+                : activePhaseInfo
+                ? {
+                    backgroundColor: `${activePhaseInfo.phase.color}15`,
+                    borderColor: `${activePhaseInfo.phase.color}35`,
+                    color: activePhaseInfo.phase.color
+                  }
+                : {};
+
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    if (cell.isCurrentMonth) {
+                      handleDayClick(cellDateStr);
+                    }
+                  }}
+                  style={customStyle}
+                  className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-0.5 p-1 relative font-bold transition-all border overflow-hidden ${
+                    !cell.isCurrentMonth
+                      ? "text-white border-transparent pointer-events-none"
+                      : cell.hasSession && !activePhaseInfo && !coachAssignment
+                      ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
+                      : "text-white hover:bg-neutral-900/80 border-white/[0.06] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
+                  } ${isToday ? "border-cyan-neon bg-cyan-neon/15" : ""} ${
+                    coachAssignment ? "shadow-[0_0_10px_rgba(255,255,255,0.03)]" : ""
+                  }`}
+                  title={cell.isCurrentMonth ? "Toca para ver la agenda de este día" : ""}
+                >
+                  {coachAssignment && !coachAssignment.isRestDay && (
+                    <span 
+                      style={{ backgroundColor: coachAssignment.phaseColor || "#00E5FF" }} 
+                      className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full animate-pulse shadow-sm"
+                      title="Agenda programada"
+                    />
+                  )}
+
+                  <span className={`text-[13.8px] sm:text-[14.5px] leading-none text-center ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
+                    {cell.day}
+                  </span>
+
+                  {coachAssignment ? (
+                    <div className="flex flex-col items-center justify-center w-full px-0.5 gap-0.5 overflow-hidden">
+                      {coachAssignment.title &&
+                        coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` && (
+                          <span
+                            style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
+                            className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-none truncate max-w-full text-center"
+                          >
+                            {coachAssignment.dailyItems && coachAssignment.dailyItems.length > 0
+                              ? coachAssignment.dailyItems[0]
+                              : coachAssignment.title}
+                          </span>
+                        )}
+                      {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                         <span
-                          style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
-                          className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-none truncate max-w-full text-center"
+                          style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
+                          className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
                         >
-                          {coachAssignment.dailyItems && coachAssignment.dailyItems.length > 0
-                            ? coachAssignment.dailyItems[0]
-                            : coachAssignment.title}
+                          {coachAssignment.targetArrows} fl.
                         </span>
-                      )}
-                    {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
-                      <span
-                        style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                        className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
-                      >
-                        {coachAssignment.targetArrows} fl.
-                      </span>
-                    ) : coachAssignment.dailyItems && coachAssignment.dailyItems.length > 1 ? (
-                      <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-none truncate max-w-full text-center tabular-nums">
-                        +{coachAssignment.dailyItems.length - 1} más
-                      </span>
-                    ) : null}
-                  </div>
-                ) : activePhaseInfo ? (
-                  <span className="text-[9.3px] sm:text-[10.5px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
-                    {activePhaseInfo.phase.name}
-                  </span>
-                ) : cell.dayEvents.length > 0 && cell.dayEvents[0].title ? (
-                  <span className="text-[9.3px] sm:text-[10.5px] font-bold text-white tracking-tight leading-none truncate max-w-[94%] text-center">
-                    {cell.dayEvents[0].title}
-                  </span>
-                ) : null}
+                      ) : coachAssignment.dailyItems && coachAssignment.dailyItems.length > 1 ? (
+                        <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-none truncate max-w-full text-center tabular-nums">
+                          +{coachAssignment.dailyItems.length - 1} más
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : activePhaseInfo ? (
+                    <span className="text-[9.3px] sm:text-[10.5px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
+                      {activePhaseInfo.phase.name}
+                    </span>
+                  ) : cell.dayEvents.length > 0 && cell.dayEvents[0].title ? (
+                    <span className="text-[9.3px] sm:text-[10.5px] font-bold text-white tracking-tight leading-none truncate max-w-[94%] text-center">
+                      {cell.dayEvents[0].title}
+                    </span>
+                  ) : null}
 
-                {/* Visual dots for events */}
-                {(cell.dayEvents.length > 0 || cell.hasSession) && (
-                  <div className="flex gap-0.5 justify-center items-center w-full mt-0.5">
-                    {cell.dayEvents.slice(0, 3).map((ev) => (
-                      <span 
-                        key={ev.id} 
-                        className={`w-1.5 h-1.5 rounded-full ${getEventDotColor(ev.type)}`} 
-                      />
-                    ))}
-                    {cell.hasSession && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-gold" title="Práctica Realizada" />
+                  {(cell.dayEvents.length > 0 || cell.hasSession) && (
+                    <div className="flex gap-0.5 justify-center items-center w-full mt-0.5">
+                      {cell.dayEvents.slice(0, 3).map((ev) => (
+                        <span 
+                          key={ev.id} 
+                          className={`w-1.5 h-1.5 rounded-full ${getEventDotColor(ev.type)}`} 
+                        />
+                      ))}
+                      {cell.hasSession && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-gold" title="Práctica Realizada" />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* VISTA 2: AGENDA CORRIDA ESTILO GOOGLE CALENDAR (calendarViewMode === "agenda") */
+        <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-2.5">
+          {(() => {
+            const currentMonthCells = cells.filter((c) => c.isCurrentMonth);
+            const weekdayLabelsShort = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+
+            const rowsToRender = currentMonthCells.filter((c) => {
+              if (agendaShowEmptyDays) return true;
+              const dateIso = `${year}-${String(month + 1).padStart(2, "0")}-${String(c.day).padStart(2, "0")}`;
+              const isTodayCell =
+                c.day === new Date().getDate() &&
+                month === new Date().getMonth() &&
+                year === new Date().getFullYear();
+              return c.dayEvents.length > 0 || c.hasSession || isTodayCell || Boolean(getPhaseOnDate(dateIso));
+            });
+
+            if (rowsToRender.length === 0) {
+              return (
+                <div className="py-8 px-4 text-center flex flex-col items-center gap-3">
+                  <p className="text-xs text-white font-bold">
+                    No hay actividades programadas todavía en este mes.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={handleOpenImportModal}
+                      className="px-4 py-2 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Planificar Mes (Día 1 al 31 / Excel)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgendaShowEmptyDays(true)}
+                      className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs cursor-pointer"
+                    >
+                      Ver los días del mes para escribir
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return rowsToRender.map((c) => {
+              const dateIso = `${year}-${String(month + 1).padStart(2, "0")}-${String(c.day).padStart(2, "0")}`;
+              const dtObj = new Date(year, month, c.day);
+              const dowShort = weekdayLabelsShort[dtObj.getDay()];
+              const isTodayCell =
+                c.day === new Date().getDate() &&
+                month === new Date().getMonth() &&
+                year === new Date().getFullYear();
+
+              const dayAssign = c.dayEvents.find(
+                (e) =>
+                  e.createdByRole === "coach" ||
+                  e.targetArrows !== undefined ||
+                  e.macrocycleId ||
+                  (e.dailyItems && e.dailyItems.length > 0)
+              );
+
+              const itemsList: string[] = [];
+              const pushItem = (txt?: string) => {
+                if (!txt) return;
+                const cl = txt.replace(/^actividad\s*\d*\s*(\([^)]*\))?\s*:\s*/i, "").trim();
+                if (!cl || /^flechas\s*:\s*\d+/i.test(cl)) return;
+                if (!itemsList.includes(cl)) itemsList.push(cl);
+              };
+
+              if (dayAssign) {
+                if (dayAssign.dailyItems && dayAssign.dailyItems.length > 0) {
+                  dayAssign.dailyItems.forEach((it) => pushItem(it));
+                } else {
+                  if (dayAssign.title) {
+                    dayAssign.title.split(/\s*\/\s*|\s*·\s*/).forEach((p) => pushItem(p));
+                  }
+                  if (dayAssign.focusPoints) {
+                    dayAssign.focusPoints.forEach((fp) => pushItem(fp));
+                  }
+                  if (dayAssign.coachNotes) {
+                    dayAssign.coachNotes.split(/\s*\|\s*|\s*·\s*/).forEach((n) => pushItem(n));
+                  }
+                }
+              }
+
+              const completedSet = new Set<number>(dayAssign?.completedItems || []);
+
+              const handleToggleAgendaItem = async (itemIdx: number) => {
+                if (!dayAssign) return;
+                const nextCompleted = completedSet.has(itemIdx)
+                  ? (dayAssign.completedItems || []).filter((i) => i !== itemIdx)
+                  : [...(dayAssign.completedItems || []), itemIdx];
+
+                const updatedEv: CalendarEvent = {
+                  ...dayAssign,
+                  completedItems: nextCompleted,
+                  isCompleted: nextCompleted.length === itemsList.length
+                };
+                await saveLocalEvent(updatedEv.id, updatedEv);
+                setEvents((prev) => prev.map((ev) => (ev.id === updatedEv.id ? updatedEv : ev)));
+              };
+
+              return (
+                <div
+                  key={dateIso}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border transition ${
+                    isTodayCell
+                      ? "bg-cyan-neon/[0.07] border-cyan-neon/40"
+                      : itemsList.length > 0
+                      ? "bg-[#0D1017] border-white/10"
+                      : "bg-neutral-950/50 border-white/[0.05]"
+                  }`}
+                >
+                  {/* Columna Fecha estilo Google Calendar */}
+                  <button
+                    type="button"
+                    onClick={() => handleDayClick(dateIso)}
+                    className={`w-14 shrink-0 rounded-xl py-2 px-1.5 text-center border cursor-pointer transition ${
+                      isTodayCell
+                        ? "bg-cyan-neon text-black border-cyan-neon font-black"
+                        : "bg-neutral-950 border-white/10 text-white hover:border-cyan-neon/40"
+                    }`}
+                  >
+                    <span className="text-[10px] font-black uppercase block leading-none opacity-80">
+                      {dowShort}
+                    </span>
+                    <span className="text-base font-black tabular-nums block leading-tight mt-0.5">
+                      {c.day}
+                    </span>
+                  </button>
+
+                  {/* Contenido de la Agenda de ese Día */}
+                  <div className="flex-1 min-w-0 flex flex-col gap-2">
+                    {itemsList.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {itemsList.map((txt, idx) => {
+                          const done = completedSet.has(idx);
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleToggleAgendaItem(idx)}
+                              className={`w-full text-left px-3 py-2 rounded-xl border flex items-start gap-2 transition cursor-pointer ${
+                                done
+                                  ? "bg-emerald-500/10 border-emerald-500/35 text-white"
+                                  : "bg-neutral-950 border-white/10 hover:border-cyan-neon/40 text-white"
+                              }`}
+                            >
+                              <span
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 ${
+                                  done
+                                    ? "bg-emerald-400 border-emerald-400 text-black"
+                                    : "bg-cyan-neon/15 border-cyan-neon/40 text-cyan-neon"
+                                }`}
+                              >
+                                {done ? "✓" : idx + 1}
+                              </span>
+                              <span
+                                className={`text-xs font-bold leading-snug break-words flex-1 ${
+                                  done ? "line-through opacity-75" : "text-white"
+                                }`}
+                              >
+                                {txt}
+                              </span>
+                            </button>
+                          );
+                        })}
+
+                        {dayAssign && dayAssign.targetArrows && dayAssign.targetArrows > 0 ? (
+                          <div className="flex items-center gap-2 text-[11px] text-cyan-neon font-black pl-1">
+                            <Target size={12} />
+                            <span>Meta: {dayAssign.targetArrows} flechas</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="py-1.5 flex items-center text-xs text-white/50">
+                        <span>Sin actividades programadas</span>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* Botón rápido para escribir o editar ese día */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      dayAssign
+                        ? handleOpenEditAssignment(dayAssign)
+                        : handleOpenCreateAssignment(dateIso, null)
+                    }
+                    className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-neon/15 border border-white/10 hover:border-cyan-neon/40 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0 cursor-pointer transition"
+                  >
+                    {dayAssign ? <Edit2 size={11} /> : <Plus size={12} />}
+                    <span>{dayAssign ? "Editar" : "Escribir"}</span>
+                  </button>
+                </div>
+              );
+            });
+          })()}
         </div>
-      </div>
+      )}
 
       {/* Fase Actual details block */}
       {(() => {
@@ -1345,7 +1686,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           const arrowsShot = getArrowsShotOnDate(selectedDay);
 
           const coachAssignment = dayEvents.find(
-            (e) => e.createdByRole === "coach" || e.targetArrows !== undefined || e.macrocycleId
+            (e) =>
+              e.createdByRole === "coach" ||
+              e.targetArrows !== undefined ||
+              e.macrocycleId ||
+              (e.dailyItems && e.dailyItems.length > 0)
           );
 
           const countdown = getDaysRemaining(selectedDay);
@@ -1368,7 +1713,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <div className="flex justify-between items-start border-b border-white/5 pb-3">
                   <div>
                     <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block">
-                      Detalle del Día
+                      Agenda del Día
                     </span>
                     <h3 className="text-sm font-black text-white capitalize mt-0.5">
                       {formattedDayTitle}
@@ -1387,12 +1732,26 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   </div>
                 </div>
 
-                {/* 1. SECCIÓN PRINCIPAL: ASIGNACIÓN DEL ENTRENADOR */}
+                {/* 1. SECCIÓN PRINCIPAL: AGENDA DEL DÍA */}
                 <div className="flex flex-col gap-2">
-                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
-                    <Shield size={12} className="text-yellow-gold" />
-                    <span>Plan del Entrenador para este Día</span>
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
+                      <CalendarIcon size={12} className="text-cyan-neon" />
+                      <span>Actividades de este Día</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        coachAssignment
+                          ? handleOpenEditAssignment(coachAssignment)
+                          : handleOpenCreateAssignment(selectedDay, activePhaseInfo)
+                      }
+                      className="px-2.5 py-1 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition"
+                    >
+                      {coachAssignment ? <Edit2 size={11} /> : <Plus size={12} />}
+                      <span>{coachAssignment ? "Editar Agenda" : "Escribir Agenda"}</span>
+                    </button>
+                  </div>
 
                   {coachAssignment ? (
                     <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-xl">
@@ -1408,7 +1767,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[9.3px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30 flex items-center gap-1">
                               <Shield size={9} />
-                              <span>Asignado por: {coachAssignment.createdByName}</span>
+                              <span>Por: {coachAssignment.createdByName || "Coach"}</span>
                             </span>
 
                             {coachAssignment.assignedAthleteIds && coachAssignment.assignedAthleteIds.length > 0 ? (
@@ -1416,8 +1775,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 <User size={9} />
                                 <span>
                                   {isCoach 
-                                    ? `Para: ${coachAssignment.assignedAthleteIds.map(id => roster.find(r => r.uid === id)?.fullName || id).join(", ")}`
-                                    : "Asignación Personalizada"}
+                                    ? `Para: ${coachAssignment.assignedAthleteIds.map(id => roster.find(r => r.uid === id)?.fullName || (id === user.uid ? "Mí" : id)).join(", ")}`
+                                    : "Agenda Personal"}
                                 </span>
                               </span>
                             ) : (
@@ -1449,48 +1808,30 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Edit button if coach */}
-                          {isCoach && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditAssignment(coachAssignment)}
-                              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Edit2 size={11} />
-                              <span>Editar</span>
-                            </button>
-                          )}
-                          {/* Botón para Desvincular Plan */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditAssignment(coachAssignment)}
+                            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit2 size={11} />
+                            <span>Editar</span>
+                          </button>
+                          {/* Botón para Borrar / Desvincular */}
                           <button
                             type="button"
                             onClick={() => {
                               const m = macrocycles.find((mc) => mc.id === coachAssignment.macrocycleId);
                               if (m) {
                                 handleRequestUnlink(m);
-                              } else if (coachAssignment.macrocycleId) {
-                                handleRequestUnlink({
-                                  id: coachAssignment.macrocycleId,
-                                  name: coachAssignment.title,
-                                  startDate: coachAssignment.date,
-                                  endDate: coachAssignment.date,
-                                  phases: [],
-                                  assignmentType: "club",
-                                  assignedAthleteIds: [],
-                                  volumeGoal: 0,
-                                  currentVolume: 0,
-                                  status: "active",
-                                  coachId: "",
-                                  clubId: "",
-                                  createdAt: "",
-                                  updatedAt: ""
-                                });
+                              } else {
+                                handleDeleteDailyAssignment(coachAssignment.id);
                               }
                             }}
                             className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/25 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
-                            title="Desvincular Plan"
+                            title="Borrar o Desvincular"
                           >
-                            <Unlink size={11} />
-                            <span>Desvincular</span>
+                            <Trash2 size={11} />
+                            <span>Borrar</span>
                           </button>
                         </div>
                       </div>
@@ -1678,28 +2019,24 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         <p className="text-[11.6px] text-white italic">&ldquo;{activePhaseInfo.phase.notes}&rdquo;</p>
                       )}
 
-                      {isCoach && (
-                        <button
-                          onClick={() => handleOpenCreateAssignment(selectedDay, activePhaseInfo)}
-                          className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          <span>Asignar Tarea Específica para este Día</span>
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleOpenCreateAssignment(selectedDay, activePhaseInfo)}
+                        className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
+                      >
+                        <Plus size={12} />
+                        <span>Escribir Agenda para este Día</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="bg-neutral-900/20 border border-white/5 rounded-2xl p-4 text-center flex flex-col items-center gap-2">
-                      <p className="text-xs text-white">No hay asignación programada para esta fecha.</p>
-                      {isCoach && (
-                        <button
-                          onClick={() => handleOpenCreateAssignment(selectedDay, null)}
-                          className="py-1.5 px-3 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1 shadow-glow-cyan cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          <span>Asignar Tarea del Día</span>
-                        </button>
-                      )}
+                      <p className="text-xs text-white">No hay actividades programadas en esta fecha.</p>
+                      <button
+                        onClick={() => handleOpenCreateAssignment(selectedDay, null)}
+                        className="py-2 px-4 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 shadow-glow-cyan cursor-pointer"
+                      >
+                        <Plus size={13} />
+                        <span>Escribir Agenda para este Día</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1870,95 +2207,170 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       </AnimatePresence>
 
       {/* ================================================================= */}
-      {/* MODAL 3: COACH EDIT / CREATE DAILY ASSIGNMENT                     */}
+      {/* MODAL 3: AGENDA DIRECTA DEL DÍA (PROPUESTA 1 — COACH & ALUMNO)    */}
       {/* ================================================================= */}
       <AnimatePresence>
         {showAssignmentModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <div className="absolute inset-0" onClick={() => setShowAssignmentModal(false)} />
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left max-h-[90vh] overflow-y-auto"
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left max-h-[92vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                    {assignmentEventId ? "Editar Asignación del Día" : "Crear Asignación del Día"}
+                    {assignmentEventId ? "Editar Agenda del Día" : "Agenda del Día"}
                   </h3>
-                  <span className="text-[10.5px] text-cyan-neon font-black block mt-0.5">
+                  <span className="text-[11px] text-cyan-neon font-black block mt-0.5">
                     Fecha: {assignDate}
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowAssignmentModal(false)}
-                  className="p-1 rounded-full text-white hover:text-white"
+                  className="p-1.5 rounded-full bg-white/5 text-white hover:bg-white/10 cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
               <form onSubmit={handleSaveDailyAssignment} className="flex flex-col gap-3.5">
-                <div className="flex flex-col gap-1">
+                {/* Selector de destinatario (Solo para Coach) */}
+                {isCoach && (
+                  <div className="flex flex-col gap-2 bg-[#0D1017] border border-cyan-neon/25 rounded-2xl p-3">
+                    <span className="text-[10.5px] text-cyan-neon uppercase font-black tracking-wider">
+                      ¿En el calendario de quién se guardará?
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setAssignRecipientMode("selected")}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                          assignRecipientMode === "selected"
+                            ? "bg-cyan-neon text-black"
+                            : "text-white hover:bg-white/5"
+                        }`}
+                      >
+                        1 o Varios
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssignRecipientMode("all")}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                          assignRecipientMode === "all"
+                            ? "bg-cyan-neon text-black"
+                            : "text-white hover:bg-white/5"
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssignRecipientMode("personal")}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black uppercase transition cursor-pointer ${
+                          assignRecipientMode === "personal"
+                            ? "bg-cyan-neon text-black"
+                            : "text-white hover:bg-white/5"
+                        }`}
+                      >
+                        Solo Mí
+                      </button>
+                    </div>
+
+                    {assignRecipientMode === "selected" && roster.length > 0 && (
+                      <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pt-1">
+                        {roster.map((ath) => {
+                          const checked = assignSelectedAthletes.includes(ath.uid);
+                          return (
+                            <button
+                              key={ath.uid}
+                              type="button"
+                              onClick={() => toggleAssignAthlete(ath.uid)}
+                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-left text-xs font-bold transition cursor-pointer ${
+                                checked
+                                  ? "bg-cyan-neon/15 border-cyan-neon text-white"
+                                  : "bg-neutral-950 border-white/10 text-white"
+                              }`}
+                            >
+                              <span className="truncate">{ath.fullName}</span>
+                              <span className="text-[10px] text-cyan-neon font-black">
+                                {checked ? "✓ Marcado" : "Marcar"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cuadro único: 1 tarea por renglón */}
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Título de la Tarea / Sesión
+                    Lo que corresponde este día (escribe 1 actividad por renglón)
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={assignTitle}
-                    onChange={(e) => setAssignTitle(e.target.value)}
-                    placeholder="Ej. Control 720m + 120 flechas"
-                    className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                  <textarea
+                    rows={5}
+                    value={assignLinesText}
+                    onChange={(e) => setAssignLinesText(e.target.value)}
+                    placeholder="Escribe aquí las actividades del día (cada renglón será un punto de la lista)..."
+                    className="bg-neutral-950 border border-white/15 rounded-2xl p-3 text-xs text-white outline-none focus:border-cyan-neon resize-y leading-relaxed placeholder:text-white/35"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Meta de Flechas para este Día (0 = Descanso)
+                {/* Meta de flechas opcional */}
+                <div className="flex items-center justify-between gap-3 bg-neutral-950/80 border border-white/10 rounded-2xl px-3.5 py-2.5">
+                  <label className="text-[11px] text-white font-bold">
+                    Meta de Flechas del Día (opcional):
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={assignTargetArrows}
-                    onChange={(e) => setAssignTargetArrows(Number(e.target.value))}
-                    className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                    value={assignTargetArrows || ""}
+                    onChange={(e) => setAssignTargetArrows(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-24 bg-neutral-900 border border-white/15 rounded-xl px-2.5 py-1.5 text-cyan-neon font-black text-xs text-center outline-none focus:border-cyan-neon tabular-nums"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1">
+                {/* ¿Repetir en otros días del mes? */}
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Puntos de Enfoque Técnico (separados por coma)
+                    ¿Repetir esta misma agenda en otros días de este mes?
                   </label>
-                  <input
-                    type="text"
-                    value={assignFocusPoint}
-                    onChange={(e) => setAssignFocusPoint(e.target.value)}
-                    placeholder="Ej. Calentamiento con gomas, Ritmo de tiro, Anclaje firme"
-                    className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
-                  />
+                  <select
+                    value={assignRepeatMode}
+                    onChange={(e) => setAssignRepeatMode(e.target.value as any)}
+                    className="bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none focus:border-cyan-neon cursor-pointer"
+                  >
+                    <option value="none">Solo este día ({assignDate})</option>
+                    <option value="same_weekday">Todos los mismos días de la semana este mes</option>
+                    <option value="mwf">Todos los Lunes, Miércoles y Viernes de este mes</option>
+                    <option value="tts">Todos los Martes, Jueves y Sábados de este mes</option>
+                    <option value="weekdays">Todos los Lunes a Viernes de este mes</option>
+                  </select>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Indicaciones / Notas para tus Alumnos
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={assignNotes}
-                    onChange={(e) => setAssignNotes(e.target.value)}
-                    placeholder="Escribe recomendaciones técnicas o de actitud para la sesión..."
-                    className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon resize-none"
-                  />
+                <div className="flex items-center gap-2 mt-1">
+                  {assignmentEventId && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDailyAssignment(assignmentEventId)}
+                      className="px-3.5 py-3 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-red-rival font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                    >
+                      Borrar
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer active:scale-98 transition"
+                  >
+                    Guardar Agenda
+                  </button>
                 </div>
-
-                <button
-                  type="submit"
-                  className="w-full mt-2 py-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer active:scale-98 transition"
-                >
-                  Guardar y Asignar a los Alumnos
-                </button>
               </form>
             </motion.div>
           </div>

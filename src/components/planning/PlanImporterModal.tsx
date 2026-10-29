@@ -3,44 +3,39 @@
 import React, { useState, useRef, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Macrocycle } from "@/lib/db/macrocycleTypes";
-import { 
-  saveLocalMacrocycle, 
-  generateResilientId, 
+import {
+  saveLocalMacrocycle,
+  generateResilientId,
   addToSyncQueue,
-  getLocalSetting 
+  getLocalSetting,
+  getLocalEvents
 } from "@/lib/db/indexedDB";
-import { 
-  saveDailyEntriesToCalendar, 
-  syncEntireMacrocycleToCalendar, 
-  SyncCycleSummary 
+import {
+  saveDailyEntriesToCalendar,
+  SyncCycleSummary
 } from "@/lib/cycleCalendarSync";
-import { 
-  parseSpreadsheetData, 
+import {
+  parseSpreadsheetData,
   parseExcelWorkbookBuffer,
-  ParsedCycleResult, 
-  downloadSampleTemplate, 
-  downloadDailySampleTemplate,
+  ParsedDailyEntry,
   downloadFormattedExcelTemplate,
   fetchGoogleSheetCsv
 } from "@/lib/cycleImporter";
-import { 
-  FileSpreadsheet, 
-  UploadCloud, 
-  ClipboardPaste, 
-  Download, 
-  CheckCircle2, 
-  AlertCircle, 
-  X, 
-  Table as TableIcon, 
-  LayoutList, 
-  Link2, 
-  RefreshCw, 
-  Info, 
-  ArrowRight,
-  FileCheck2,
+import {
+  Calendar as CalendarIcon,
+  UploadCloud,
+  ClipboardPaste,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Link2,
+  RefreshCw,
   Users,
   User,
-  Check
+  Check,
+  Copy,
+  Trash2
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -58,8 +53,21 @@ interface PlanImporterModalProps {
   preselectedAthleteIds?: string[];
 }
 
-type UploadTab = "file" | "sheets" | "paste";
-type PreviewViewMode = "table" | "cards";
+interface DayRowState {
+  day: number;
+  dateIso: string;
+  weekdayShort: string;
+  weekdayIndex: number; // 0 = Dom .. 6 = Sab
+  text: string; // Actividades del día (separadas por renglón o "/")
+  arrows: string; // Opcional
+}
+
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+const WEEKDAY_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 export default function PlanImporterModal({
   isOpen,
@@ -71,39 +79,36 @@ export default function PlanImporterModal({
   athletes: propAthletes,
   preselectedAthleteIds
 }: PlanImporterModalProps) {
-  const isCoachUser = Boolean(coachViewMode || user.role === "coach" || user.role === "team_admin_coach");
-  const [activeTab, setActiveTab] = useState<UploadTab>("file");
-  const [importText, setImportText] = useState("");
-  const [importPlanName, setImportPlanName] = useState("");
-  const [importPreview, setImportPreview] = useState<ParsedCycleResult | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
+  const isCoachUser = Boolean(
+    coachViewMode || user.role === "coach" || user.role === "team_admin_coach"
+  );
+
+  const [refMonth, setRefMonth] = useState<number>(new Date().getMonth() + 1);
+  const [refYear, setRefYear] = useState<number>(new Date().getFullYear());
+  const [importPlanName, setImportPlanName] = useState<string>("");
+
+  // Tabla de los días del mes (1..31)
+  const [dayRows, setDayRows] = useState<DayRowState[]>([]);
+
+  // Herramientas opcionales de pegado / archivo / Google Sheets
+  const [showPasteBox, setShowPasteBox] = useState(false);
+  const [pasteBoxText, setPasteBoxText] = useState("");
+  const [showSheetsUrlBox, setShowSheetsUrlBox] = useState(false);
   const [sheetUrlInput, setSheetUrlInput] = useState("");
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [viewMode, setViewMode] = useState<PreviewViewMode>("table");
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-
-  // Multi-sheet Excel workbook states
   const [excelSheets, setExcelSheets] = useState<string[]>([]);
   const [selectedExcelSheet, setSelectedExcelSheet] = useState<string>("");
   const workbookExtractorRef = useRef<((sheetName: string) => string) | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Recipient assignment state (Coach role: "all" vs "selected" for 1 or multiple athletes)
-  const [assignTarget, setAssignTarget] = useState<"all" | "selected">("all");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Destinatario (Coach: "selected" | "all" | "personal")
+  const [assignTarget, setAssignTarget] = useState<"all" | "selected" | "personal">("all");
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>([]);
   const [clubAthletes, setClubAthletes] = useState<UserProfile[]>([]);
-
-  // Reference Month & Year for sheets that use day numbers (1..31) or short dates
-  const [refMonth, setRefMonth] = useState<number>(new Date().getMonth() + 1);
-  const [refYear, setRefYear] = useState<number>(new Date().getFullYear());
-
-  const MONTH_NAMES = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleAthleteSelection = (uid: string) => {
     setSelectedAthleteIds((prev) =>
@@ -111,643 +116,569 @@ export default function PlanImporterModal({
     );
   };
 
+  // Construir filas 1..N del mes seleccionado y cargar eventos existentes si los hubiera
+  const buildMonthRows = async (year: number, month: number) => {
+    const daysCount = new Date(year, month, 0).getDate();
+    const rows: DayRowState[] = [];
+
+    for (let d = 1; d <= daysCount; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      const dow = dateObj.getDay();
+      const dateIso = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      rows.push({
+        day: d,
+        dateIso,
+        weekdayShort: WEEKDAY_SHORT[dow],
+        weekdayIndex: dow,
+        text: "",
+        arrows: ""
+      });
+    }
+
+    setDayRows(rows);
+  };
+
   useEffect(() => {
     if (!isOpen) return;
-    if (preselectedAthleteIds && preselectedAthleteIds.length > 0) {
-      setAssignTarget("selected");
-      setSelectedAthleteIds(preselectedAthleteIds);
-    } else {
-      setAssignTarget("all");
-    }
-  }, [isOpen, preselectedAthleteIds]);
 
-  useEffect(() => {
-    async function loadClubAthletes() {
-      if (!isCoachUser) return;
-      try {
-        const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const y = now.getFullYear();
+    setRefMonth(m);
+    setRefYear(y);
+    setImportPlanName(`Agenda ${MONTH_NAMES[m - 1]} ${y}`);
+    setImportError(null);
+    setStatusMessage(null);
+    setShowPasteBox(false);
+    setShowSheetsUrlBox(false);
+    setPasteBoxText("");
+    setExcelSheets([]);
+    buildMonthRows(y, m);
+
+    async function loadRoster() {
+      if (propAthletes && propAthletes.length > 0) {
+        setClubAthletes(propAthletes);
+      } else if (isCoachUser) {
+        const activeClubId =
+          user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const localAthletes = (allUsers || []).filter(
-          (u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer" && u.uid !== user.uid
+        const filtered = (allUsers || []).filter(
+          (u) =>
+            (u.clubId === activeClubId ||
+              (user.clubId && u.clubId === user.clubId) ||
+              !u.clubId) &&
+            u.role === "archer"
         );
+        setClubAthletes(filtered);
+      }
 
-        const mergedMap = new Map<string, UserProfile>();
-        (propAthletes || []).forEach((a) => {
-          if (a && a.uid) mergedMap.set(a.uid, a);
-        });
-        localAthletes.forEach((a) => {
-          if (a && a.uid && !mergedMap.has(a.uid)) mergedMap.set(a.uid, a);
-        });
-
-        const finalAthletes = Array.from(mergedMap.values());
-        setClubAthletes(finalAthletes);
-
-        if ((!preselectedAthleteIds || preselectedAthleteIds.length === 0) && selectedAthleteIds.length === 0 && finalAthletes.length > 0) {
-          setSelectedAthleteIds([finalAthletes[0].uid]);
-        }
-      } catch (err) {
-        console.error("Error loading club athletes in PlanImporterModal:", err);
+      if (preselectedAthleteIds && preselectedAthleteIds.length > 0) {
+        setAssignTarget("selected");
+        setSelectedAthleteIds(preselectedAthleteIds);
+      } else {
+        setAssignTarget(isCoachUser ? "all" : "personal");
+        setSelectedAthleteIds([]);
       }
     }
-    loadClubAthletes();
-  }, [user.clubId, user.uid, isCoachUser, isOpen, propAthletes, preselectedAthleteIds]);
+    loadRoster();
+  }, [isOpen, propAthletes, preselectedAthleteIds, isCoachUser, user.clubId, user.uid]);
 
   if (!isOpen) return null;
 
-  const handleParseText = (text: string, nameOverride?: string, customYear?: number, customMonth?: number) => {
-    setImportText(text);
-    setImportError(null);
-
-    const clean = text.trim();
-    if (!clean) {
-      setImportPreview(null);
-      return;
-    }
-
-    if (clean.toLowerCase().includes("offline mode active") || clean.toLowerCase().includes("connect to the internet")) {
-      setImportPreview(null);
-      setImportError("No hay conexión a internet para cargar el documento.");
-      return;
-    }
-
-    const fallbackName = nameOverride !== undefined ? nameOverride : (importPlanName || `Plan ${MONTH_NAMES[(customMonth || refMonth) - 1]} ${customYear || refYear}`);
-    const result = parseSpreadsheetData(clean, fallbackName, {
-      referenceYear: customYear || refYear,
-      referenceMonth: customMonth || refMonth
-    });
-
-    if (result.success && (result.stages.length > 0 || result.dailyEntries.length > 0)) {
-      setImportPreview(result);
-      if (!importPlanName && !nameOverride) {
-        setImportPlanName(result.planName);
-      }
-    } else {
-      setImportPreview(null);
-      setImportError(result.error || "No se detectaron fechas o filas válidas en el archivo. Revisa que tu hoja tenga una columna de Fecha o Número de Día.");
-    }
+  const handleMonthYearChange = (newYear: number, newMonth: number) => {
+    setRefYear(newYear);
+    setRefMonth(newMonth);
+    setImportPlanName(`Agenda ${MONTH_NAMES[newMonth - 1]} ${newYear}`);
+    buildMonthRows(newYear, newMonth);
   };
 
-  const handlePasteClipboard = async () => {
+  const updateDayRow = (dayNumber: number, field: "text" | "arrows", value: string) => {
+    setDayRows((prev) =>
+      prev.map((r) => (r.day === dayNumber ? { ...r, [field]: value } : r))
+    );
+  };
+
+  // Repetir el texto de un día en todos los mismos días de la semana del mes (ej. todos los Lunes)
+  const handleRepeatWeekdayInMonth = (sourceRow: DayRowState) => {
+    if (!sourceRow.text.trim() && !sourceRow.arrows.trim()) return;
+    setDayRows((prev) =>
+      prev.map((r) =>
+        r.weekdayIndex === sourceRow.weekdayIndex
+          ? { ...r, text: sourceRow.text, arrows: sourceRow.arrows }
+          : r
+      )
+    );
+    setStatusMessage(
+      `Se copió el contenido del Día ${sourceRow.day} a todos los ${sourceRow.weekdayShort} del mes.`
+    );
+  };
+
+  const handleClearAllDays = () => {
+    setDayRows((prev) => prev.map((r) => ({ ...r, text: "", arrows: "" })));
+    setStatusMessage("Se limpiaron todos los días de la tabla.");
+  };
+
+  // Procesar texto pegado de Excel / Google Sheets y volcarlo en la tabla Día 1..31
+  const applyRawSpreadsheetTextToMonthTable = (rawText: string) => {
+    setImportError(null);
+    setStatusMessage(null);
+
+    if (!rawText || !rawText.trim()) {
+      setImportError("El texto pegado está vacío.");
+      return;
+    }
+
+    // 1. Intentar con el lector de fechas / números de día (1..31) o cuadrícula de 7 columnas
+    const parsed = parseSpreadsheetData(rawText, importPlanName || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`, {
+      referenceYear: refYear,
+      referenceMonth: refMonth
+    });
+
+    if (parsed.success && parsed.dailyEntries.length > 0) {
+      const targetYearMonth = `${refYear}-${String(refMonth).padStart(2, "0")}-`;
+      let matchedCount = 0;
+
+      setDayRows((prev) => {
+        const next = prev.map((r) => ({ ...r }));
+        for (const entry of parsed.dailyEntries) {
+          // Si coincide con el mes o extraemos el día (1..31)
+          const dayNum = parseInt(entry.date.split("-")[2], 10);
+          if (dayNum >= 1 && dayNum <= next.length) {
+            const targetIdx = dayNum - 1;
+            const cleanItems =
+              entry.dailyItems && entry.dailyItems.length > 0
+                ? entry.dailyItems
+                : [entry.title].filter(Boolean);
+            const joined = cleanItems.join("\n");
+            next[targetIdx].text = next[targetIdx].text
+              ? `${next[targetIdx].text}\n${joined}`
+              : joined;
+            if (entry.targetArrows > 0) {
+              next[targetIdx].arrows = String(entry.targetArrows);
+            }
+            matchedCount++;
+          }
+        }
+        return next;
+      });
+
+      if (matchedCount > 0) {
+        setStatusMessage(
+          `¡Listo! Se cargaron ${matchedCount} días en la tabla inferior. Revisa o edita cualquier día antes de guardar.`
+        );
+        setShowPasteBox(false);
+        return;
+      }
+    }
+
+    // 2. Fallback directo y ultra simple: Cada renglón pegado corresponde a Día 1, Día 2, Día 3...
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) {
+      setImportError("No se encontraron renglones con texto.");
+      return;
+    }
+
+    let filled = 0;
+    setDayRows((prev) =>
+      prev.map((row, idx) => {
+        if (idx >= lines.length) return row;
+        const cells = lines[idx]
+          .split(/\t/)
+          .map((c) => c.trim())
+          .filter(Boolean);
+        // Si la primera celda es solo el número de día (ej. "1", "2"), la quitamos del texto
+        if (cells.length > 1 && /^\d{1,2}$/.test(cells[0])) {
+          cells.shift();
+        }
+        const textVal = cells.join(" / ");
+        if (textVal) filled++;
+        return {
+          ...row,
+          text: textVal
+        };
+      })
+    );
+
+    setStatusMessage(
+      `Se volcaron ${filled} renglones directamente en los días del mes. Puedes revisar o ajustar cada día abajo.`
+    );
+    setShowPasteBox(false);
+  };
+
+  const handlePasteFromClipboard = async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          setUploadedFileName(null);
-          setExcelSheets([]);
-          handleParseText(text);
+        const clip = await navigator.clipboard.readText();
+        if (clip && clip.trim()) {
+          applyRawSpreadsheetTextToMonthTable(clip);
           return;
         }
       }
-      alert("Copia las celdas de tu hoja (Ctrl+C o Copiar) y pégalas directamente en el recuadro.");
+      setShowPasteBox(true);
     } catch {
-      alert("Pega las celdas manteniendo presionado dentro del recuadro de texto.");
+      setShowPasteBox(true);
     }
   };
 
   const handleFileChange = (file?: File | null) => {
     if (!file) return;
-    setUploadedFileName(file.name);
     setImportError(null);
+    setStatusMessage(null);
 
-    const defaultName = file.name.replace(/\.[^/.]+$/, "");
-    setImportPlanName(defaultName);
-
-    const lowerName = file.name.toLowerCase();
-    const isBinaryExcel = lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls") || lowerName.endsWith(".ods");
-
-    if (isBinaryExcel) {
+    const isExcelBinary = /\.(xlsx|xls|ods)$/i.test(file.name);
+    if (isExcelBinary) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const buffer = e.target?.result as ArrayBuffer;
-          if (!buffer) return;
+      reader.onload = (ev) => {
+        const buffer = ev.target?.result as ArrayBuffer;
+        if (buffer) {
           const { sheetNames, getSheetTsv } = parseExcelWorkbookBuffer(buffer);
           workbookExtractorRef.current = getSheetTsv;
           setExcelSheets(sheetNames);
-
-          // Automatically pick the first non-empty sheet
-          let chosenSheet = sheetNames[0] || "";
-          let extractedTsv = "";
-          for (const sName of sheetNames) {
-            const candidate = getSheetTsv(sName);
-            if (candidate && candidate.trim().length > 0) {
-              chosenSheet = sName;
-              extractedTsv = candidate;
-              break;
-            }
+          if (sheetNames.length > 0) {
+            const firstSheet = sheetNames[0];
+            setSelectedExcelSheet(firstSheet);
+            const tsv = getSheetTsv(firstSheet);
+            applyRawSpreadsheetTextToMonthTable(tsv);
+          } else {
+            setImportError("El archivo Excel parece no tener hojas legibles.");
           }
-          setSelectedExcelSheet(chosenSheet);
-          handleParseText(extractedTsv, defaultName);
-        } catch (err) {
-          console.error("Error parsing Excel file:", err);
-          setImportError("No se pudo leer el archivo Excel (.xlsx). Verifica que no esté protegido con contraseña.");
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      setExcelSheets([]);
-      workbookExtractorRef.current = null;
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
+      reader.onload = (ev) => {
+        const content = ev.target?.result as string;
         if (content) {
-          handleParseText(content, defaultName);
+          applyRawSpreadsheetTextToMonthTable(content);
         }
       };
       reader.readAsText(file);
     }
   };
 
-  const handleSelectExcelSheet = (sheetName: string) => {
-    setSelectedExcelSheet(sheetName);
-    if (workbookExtractorRef.current) {
-      const tsv = workbookExtractorRef.current(sheetName);
-      handleParseText(tsv, importPlanName || sheetName);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingFile(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDraggingFile(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingFile(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      handleFileChange(file);
-    }
-  };
-
-  const handleFetchGoogleSheets = async () => {
+  const handleFetchGoogleSheet = async () => {
     if (!sheetUrlInput.trim()) return;
     setIsFetchingSheet(true);
     setImportError(null);
-    setExcelSheets([]);
     try {
       const res = await fetchGoogleSheetCsv(sheetUrlInput);
-      setIsFetchingSheet(false);
       if (res.ok && res.csv) {
-        setUploadedFileName("Google Sheets Vinculado");
-        handleParseText(res.csv, importPlanName || "Plan Google Sheets");
+        applyRawSpreadsheetTextToMonthTable(res.csv);
+        setShowSheetsUrlBox(false);
       } else {
-        setImportError(res.error || "No se pudo leer la hoja de Google Sheets. Asegúrate de que esté configurada como 'Cualquier persona con el enlace puede ver'.");
+        setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
       }
     } catch {
+      setImportError("Error de red al conectar con Google Sheets.");
+    } finally {
       setIsFetchingSheet(false);
-      setImportError("Error al conectar con Google Sheets.");
     }
   };
 
-  const handleConfirmImport = async () => {
-    if (!importPreview) return;
-    if (isCoachUser && assignTarget === "selected" && selectedAthleteIds.length === 0) {
-      setImportError("Por favor selecciona al menos un alumno para cargarle el plan en su calendario.");
+  const filledDays = dayRows.filter((r) => r.text.trim().length > 0 || Number(r.arrows) > 0);
+
+  const handleConfirmSave = async () => {
+    if (filledDays.length === 0) {
+      setImportError("Escribe o pega actividades en al menos un día del mes antes de guardar.");
       return;
     }
+
+    if (isCoachUser && assignTarget === "selected" && selectedAthleteIds.length === 0) {
+      setImportError("Marca al menos un alumno en la lista o selecciona 'Todos mis Alumnos'.");
+      return;
+    }
+
     setIsSubmitting(true);
+    setImportError(null);
 
     try {
-      const nowStr = new Date().toISOString();
-      const planId = generateResilientId("MAC");
-      const finalName = (importPlanName.trim() || importPreview.planName || "Plan Importado").trim();
+      const macroId = generateResilientId("MAC");
+      const nowIso = new Date().toISOString();
+      const activeClubId =
+        user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
 
-      const isSelectedMode = isCoachUser && assignTarget === "selected" && selectedAthleteIds.length > 0;
-      const targetAthletes = isSelectedMode
+      const dailyEntries: ParsedDailyEntry[] = filledDays.map((r) => {
+        const items = r.text
+          .split(/\r?\n|\s*\/\s*|\s*;\s*/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const arrowGoal = Math.max(0, parseInt(r.arrows, 10) || 0);
+        const isRest =
+          items.length === 1 &&
+          /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(items[0]) &&
+          arrowGoal === 0;
+
+        return {
+          date: r.dateIso,
+          title: items[0] || (arrowGoal > 0 ? `${arrowGoal} flechas` : "Entrenamiento"),
+          targetArrows: arrowGoal,
+          type: "training",
+          isRestDay: isRest,
+          notes: items.length > 1 ? items.slice(1).join(" · ") : "",
+          focusPoints: [],
+          dailyItems: items,
+          customFields: items.map((it, idx) => ({
+            label: `Tarea ${idx + 1}`,
+            value: it
+          }))
+        };
+      });
+
+      const totalArrows = dailyEntries.reduce((acc, d) => acc + (d.targetArrows || 0), 0);
+      const startDate = dailyEntries[0].date;
+      const endDate = dailyEntries[dailyEntries.length - 1].date;
+
+      const isForSpecificAthletes =
+        isCoachUser && assignTarget === "selected" && selectedAthleteIds.length > 0;
+      const isPersonalOnly = !isCoachUser || assignTarget === "personal";
+
+      const targetIdsForSave = isPersonalOnly
+        ? [user.uid]
+        : isForSpecificAthletes
         ? selectedAthleteIds
-        : (!isCoachUser ? [user.uid] : []);
+        : undefined;
 
-      const assignmentType: "club" | "group" | "individual" = isSelectedMode
-        ? (selectedAthleteIds.length === 1 ? "individual" : "group")
-        : (!isCoachUser ? "individual" : "club");
-
-      const selectedNames = selectedAthleteIds
-        .map((uid) => clubAthletes.find((a) => a.uid === uid)?.fullName?.split(" ")[0] || "Alumno")
-        .join(", ");
-
-      const newCycle: Macrocycle = {
-        id: planId,
-        name: finalName,
-        coachId: isCoachUser ? user.uid : "USR-COACH-DEFAULT",
-        clubId: user.clubId || "CLB-DEMO",
-        startDate: importPreview.startDate,
-        endDate: importPreview.endDate,
-        phases: importPreview.stages,
-        assignmentType,
-        assignedAthleteIds: targetAthletes,
-        groupName: assignmentType === "group" ? `${selectedAthleteIds.length} Alumnos (${selectedNames})` : undefined,
-        volumeGoal: importPreview.totalVolumeGoal,
+      const newMacro: Macrocycle = {
+        id: macroId,
+        clubId: activeClubId,
+        coachId: user.uid,
+        name: importPlanName.trim() || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`,
+        startDate,
+        endDate,
+        phases: [
+          {
+            id: `etapa-${Date.now()}-0`,
+            name: `${MONTH_NAMES[refMonth - 1]} ${refYear}`,
+            startDate,
+            endDate,
+            weeklySessionGoal: 5,
+            weeklyArrowGoal: Math.round(totalArrows / 4) || 0,
+            notes: "",
+            color: "#00E5FF"
+          }
+        ],
+        assignmentType: isPersonalOnly
+          ? "individual"
+          : isForSpecificAthletes
+          ? selectedAthleteIds.length === 1
+            ? "individual"
+            : "group"
+          : "club",
+        assignedAthleteIds: targetIdsForSave || [],
+        groupName:
+          isForSpecificAthletes && selectedAthleteIds.length > 1
+            ? `${selectedAthleteIds.length} alumnos seleccionados`
+            : undefined,
+        volumeGoal: totalArrows,
         currentVolume: 0,
         status: "active",
-        createdAt: nowStr,
-        updatedAt: nowStr
+        createdAt: nowIso,
+        updatedAt: nowIso
       };
 
-      await saveLocalMacrocycle(planId, newCycle);
-
+      await saveLocalMacrocycle(newMacro.id, newMacro);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "macrocycles",
         operation: "INSERT",
-        payloadId: planId,
-        payload: newCycle,
+        payloadId: newMacro.id,
+        payload: newMacro,
         timestamp: Date.now()
       });
 
-      let summary: SyncCycleSummary;
-      if (importPreview.mode === "daily" && importPreview.dailyEntries.length > 0) {
-        summary = await saveDailyEntriesToCalendar(importPreview.dailyEntries, newCycle, user);
-      } else {
-        summary = await syncEntireMacrocycleToCalendar(newCycle, user);
-      }
+      const syncSummary = await saveDailyEntriesToCalendar(
+        dailyEntries,
+        newMacro,
+        user
+      );
 
       onSuccess({
-        macrocycle: newCycle,
-        summary
+        macrocycle: newMacro,
+        summary: syncSummary
       });
       onClose();
     } catch (err) {
-      console.error("Error confirming plan import:", err);
-      setImportError("Ocurrió un error al guardar el plan. Por favor intenta de nuevo.");
+      console.error("Error guardando la agenda mensual:", err);
+      setImportError("Ocurrió un problema al guardar la agenda en el calendario.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Compute detailed statistics from preview
-  const totalEntries = importPreview?.dailyEntries.length || 0;
-  const trainingCount = importPreview?.dailyEntries.filter((d) => !d.isRestDay).length || importPreview?.stages.length || 0;
-  const restCount = importPreview?.dailyEntries.filter((d) => d.isRestDay).length || 0;
-  const totalArrows = importPreview?.totalVolumeGoal || 0;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
-      <div className="absolute inset-0" onClick={() => !isSubmitting && onClose()} />
-
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 12 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-[#0A0B0E] border border-white/10 rounded-3xl w-full max-w-2xl flex flex-col max-h-[92vh] shadow-2xl z-10 overflow-hidden text-left"
+        className="w-full max-w-2xl bg-[#111318] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh]"
       >
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] flex justify-between items-start bg-[#0D0F12]">
+        {/* Encabezado Estilo Google Calendar */}
+        <div className="p-4 sm:p-5 border-b border-white/[0.06] flex items-center justify-between bg-[#0A0C10]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon shrink-0">
-              <FileSpreadsheet size={20} />
+            <div className="w-10 h-10 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon shrink-0">
+              <CalendarIcon size={20} />
             </div>
             <div>
-              <span className="text-[10.5px] text-cyan-neon uppercase font-black tracking-widest block">
-                {titleOverride || "Calendario y Planificación"}
-              </span>
-              <h2 className="text-[17.6px] sm:text-[19.8px] font-black text-white uppercase tracking-wide">
-                Importar Excel o Google Sheets
-              </h2>
-              <p className="text-[12.8px] text-white leading-tight mt-0.5">
-                Lectura 100% literal de tus fechas, actividades, flechas y columnas sin modificar tu texto.
+              <h3 className="text-white font-black text-base tracking-tight">
+                {titleOverride || "Planificador Mensual (Día 1 al 31)"}
+              </h3>
+              <p className="text-[11.5px] text-white mt-0.5">
+                Escribe directo en cada día o pega tus renglones desde Excel / Google Sheets
               </p>
             </div>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
-            className="p-2 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition cursor-pointer shrink-0"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Modal Body (Scrollable) */}
-        <div className="p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto flex-1">
-          {/* COACH RECIPIENT SELECTOR (Always visible at top for Coach: 1 Alumno, Varios Alumnos, o Todos) */}
-          {isCoachUser && clubAthletes.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-[#0D1017] border border-cyan-neon/25 flex flex-col gap-3">
+        {/* Cuerpo Principal */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Paso 1 (Solo para Coach): ¿A quién se le carga en su Calendario? */}
+          {isCoachUser && (
+            <div className="bg-[#0D1017] border border-cyan-neon/25 rounded-2xl p-3.5 flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[11.6px] text-cyan-neon uppercase font-black tracking-widest flex items-center gap-1.5">
-                  <Users size={14} className="text-cyan-neon" />
-                  <span>¿A quién cargar este Plan en su Calendario?</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
+                  <Users size={14} />
+                  <span>¿En el calendario de quién se guardará?</span>
                 </span>
-                <span className="text-[10.5px] text-white font-black uppercase tracking-wider bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon px-2.5 py-0.5 rounded-full">
-                  {assignTarget === "all"
-                    ? `Todos los Alumnos (${clubAthletes.length})`
-                    : selectedAthleteIds.length === 1
-                    ? `1 Alumno: ${clubAthletes.find((a) => a.uid === selectedAthleteIds[0])?.fullName || "Seleccionado"}`
-                    : `${selectedAthleteIds.length} Alumnos Seleccionados`}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAssignTarget("selected")}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer border ${
-                    assignTarget === "selected"
-                      ? "bg-cyan-neon text-black border-cyan-neon"
-                      : "bg-neutral-950 border-white/10 text-white hover:border-white/25"
-                  }`}
-                >
-                  <User size={13} />
-                  <span>Escoger 1 o Varios</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAssignTarget("all")}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer border ${
-                    assignTarget === "all"
-                      ? "bg-cyan-neon text-black border-cyan-neon"
-                      : "bg-neutral-950 border-white/10 text-white hover:border-white/25"
-                  }`}
-                >
-                  <Users size={13} />
-                  <span>Todos los Alumnos</span>
-                </button>
+                <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setAssignTarget("selected")}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                      assignTarget === "selected"
+                        ? "bg-cyan-neon text-black shadow-sm"
+                        : "text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <User size={11} />
+                    <span>Escoger 1 o Varios</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignTarget("all")}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                      assignTarget === "all"
+                        ? "bg-cyan-neon text-black shadow-sm"
+                        : "text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <Users size={11} />
+                    <span>Todos los Alumnos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignTarget("personal")}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                      assignTarget === "personal"
+                        ? "bg-cyan-neon text-black shadow-sm"
+                        : "text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <span>Solo Mi Calendario</span>
+                  </button>
+                </div>
               </div>
 
               {assignTarget === "selected" && (
-                <div className="flex flex-col gap-2 pt-1 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                      Toca para marcar 1 o varios alumnos ({selectedAthleteIds.length}/{clubAthletes.length}):
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAthleteIds(clubAthletes.map((a) => a.uid))}
-                        className="text-[10.5px] text-cyan-neon font-black uppercase hover:underline cursor-pointer"
-                      >
-                        Marcar Todos
-                      </button>
-                      <span className="text-white/30">·</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAthleteIds([])}
-                        className="text-[10.5px] text-white font-bold uppercase hover:underline cursor-pointer"
-                      >
-                        Limpiar
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
-                    {clubAthletes.map((ath) => {
-                      const isChecked = selectedAthleteIds.includes(ath.uid);
-                      const bowLabel =
-                        ath.bowConfig?.type === "Recurve"
-                          ? "Recurvo"
-                          : ath.bowConfig?.type === "Compound"
-                          ? "Compuesto"
-                          : ath.bowConfig?.type || "Barebow";
-                      return (
-                        <button
-                          key={ath.uid}
-                          type="button"
-                          onClick={() => toggleAthleteSelection(ath.uid)}
-                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition cursor-pointer ${
-                            isChecked
-                              ? "bg-cyan-neon/15 border-cyan-neon text-white"
-                              : "bg-neutral-950/80 border-white/[0.08] text-white hover:border-white/20"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div
-                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
+                <div className="flex flex-col gap-2 pt-1">
+                  {clubAthletes.length > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between text-[11px] text-white">
+                        <span>
+                          Toca para marcar a <strong>1 o varios alumnos</strong> (
+                          {selectedAthleteIds.length} seleccionados):
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedAthleteIds(clubAthletes.map((a) => a.uid))
+                            }
+                            className="text-[10.5px] text-cyan-neon font-bold hover:underline cursor-pointer"
+                          >
+                            Marcar todos
+                          </button>
+                          <span className="text-white/30">·</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAthleteIds([])}
+                            className="text-[10.5px] text-white font-bold hover:underline cursor-pointer"
+                          >
+                            Limpiar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                        {clubAthletes.map((ath) => {
+                          const isChecked = selectedAthleteIds.includes(ath.uid);
+                          return (
+                            <button
+                              key={ath.uid}
+                              type="button"
+                              onClick={() => toggleAthleteSelection(ath.uid)}
+                              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition cursor-pointer ${
                                 isChecked
-                                  ? "bg-cyan-neon border-cyan-neon text-black"
-                                  : "bg-neutral-900 border-white/20 text-transparent"
+                                  ? "bg-cyan-neon/15 border-cyan-neon text-white"
+                                  : "bg-neutral-950/80 border-white/10 text-white hover:border-white/25"
                               }`}
                             >
-                              <Check size={12} strokeWidth={3} />
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-xs font-black text-white block truncate">
-                                {ath.fullName || ath.email}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div
+                                  className={`w-4 h-4 rounded-md flex items-center justify-center border shrink-0 ${
+                                    isChecked
+                                      ? "bg-cyan-neon border-cyan-neon text-black"
+                                      : "border-white/30 bg-transparent"
+                                  }`}
+                                >
+                                  {isChecked && <Check size={11} strokeWidth={3} />}
+                                </div>
+                                <span className="text-xs font-bold truncate">
+                                  {ath.fullName}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-cyan-neon shrink-0">
+                                {ath.bowConfig?.type || "Arquero"}
                               </span>
-                              <span className="text-[10.5px] text-cyan-neon font-bold uppercase block truncate">
-                                {bowLabel} {ath.bowConfig?.defaultDistance ? `· ${ath.bowConfig.defaultDistance}m` : ""}
-                              </span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-amber-400">
+                      Aún no tienes alumnos registrados en tu club. Se guardará para todo el club.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Method Selection Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0D0F12] rounded-2xl border border-white/[0.08]">
-            <button
-              type="button"
-              onClick={() => setActiveTab("file")}
-              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === "file"
-                  ? "bg-cyan-neon text-black"
-                  : "text-white hover:text-white"
-              }`}
-            >
-              <UploadCloud size={14} />
-              <span>Subir Excel</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("sheets")}
-              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === "sheets"
-                  ? "bg-cyan-neon text-black"
-                  : "text-white hover:text-white"
-              }`}
-            >
-              <Link2 size={14} />
-              <span>Google Sheets</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("paste")}
-              className={`py-2 px-2.5 rounded-xl text-[12.8px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === "paste"
-                  ? "bg-cyan-neon text-black"
-                  : "text-white hover:text-white"
-              }`}
-            >
-              <ClipboardPaste size={14} />
-              <span>Pegar Celdas</span>
-            </button>
-          </div>
-
-          {/* TAB 1: UPLOAD EXCEL (.XLSX / .XLS / .CSV) */}
-          {activeTab === "file" && (
-            <div className="flex flex-col gap-3 animate-fadeIn">
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`p-5 sm:p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2.5 text-center transition cursor-pointer ${
-                  isDraggingFile
-                    ? "border-cyan-neon bg-cyan-neon/10"
-                    : "border-white/15 bg-[#0D0F12] hover:border-cyan-neon/40"
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.ods,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-                  onChange={(e) => handleFileChange(e.target.files?.[0])}
-                  className="hidden"
-                />
-
-                <div className="w-11 h-11 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center text-cyan-neon">
-                  <UploadCloud size={22} />
-                </div>
-
-                <div>
-                  <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wide">
-                    {uploadedFileName ? uploadedFileName : "Toca aquí para elegir tu archivo Excel o CSV"}
-                  </h4>
-                  <p className="text-[12.8px] text-white mt-1">
-                    Compatible con <strong className="text-cyan-neon">Excel (.xlsx, .xls)</strong> y <strong className="text-cyan-neon">.CSV</strong> directamente desde tu celular o PC
-                  </p>
-                </div>
-
-                <span className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-[11.6px] uppercase tracking-wider">
-                  {uploadedFileName ? "Cambiar Archivo" : "Seleccionar Archivo"}
-                </span>
-              </div>
-
-              {/* Multi-sheet selector if the Excel file has multiple tabs */}
-              {excelSheets.length > 1 && (
-                <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2">
-                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Pestañas detectadas en tu Excel ({excelSheets.length}) — Elige cuál aplicar:
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {excelSheets.map((sName) => (
-                      <button
-                        key={sName}
-                        type="button"
-                        onClick={() => handleSelectExcelSheet(sName)}
-                        className={`px-3 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider border transition cursor-pointer ${
-                          selectedExcelSheet === sName
-                            ? "bg-cyan-neon text-black border-cyan-neon"
-                            : "bg-neutral-900 border-white/10 text-white hover:text-white"
-                        }`}
-                      >
-                        {sName}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: GOOGLE SHEETS */}
-          {activeTab === "sheets" && (
-            <div className="flex flex-col gap-3 animate-fadeIn">
-              <div className="bg-[#0D0F12] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-wider flex items-center gap-1.5">
-                  <Link2 size={13} className="text-cyan-neon" />
-                  <span>Enlace de Google Sheets</span>
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="url"
-                    value={sheetUrlInput}
-                    onChange={(e) => setSheetUrlInput(e.target.value)}
-                    placeholder="Pega aquí el enlace de tu Google Sheets..."
-                    className="flex-1 bg-neutral-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white min-w-0"
-                  />
-                  <button
-                    type="button"
-                    disabled={!sheetUrlInput.trim() || isFetchingSheet}
-                    onClick={handleFetchGoogleSheets}
-                    className="px-4 py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider shrink-0 transition disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <RefreshCw size={13} className={isFetchingSheet ? "animate-spin" : ""} />
-                    <span>{isFetchingSheet ? "Leyendo..." : "Leer Google Sheet"}</span>
-                  </button>
-                </div>
-
-                <div className="flex items-start gap-2 bg-neutral-950/60 p-2.5 rounded-xl border border-white/5 text-[11.6px] text-white">
-                  <Info size={14} className="text-cyan-neon shrink-0 mt-0.5" />
-                  <p className="leading-relaxed">
-                    En la app de Google Sheets toca <strong>Compartir</strong> y asegúrate de que diga <strong>&ldquo;Cualquier persona con el enlace (Lector)&rdquo;</strong>, o usa la pestaña <strong>Pegar Celdas</strong>.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: PASTE CELLS */}
-          {activeTab === "paste" && (
-            <div className="flex flex-col gap-2.5 animate-fadeIn">
-              <div className="flex justify-between items-center gap-2 flex-wrap">
-                <span className="text-[11.6px] font-black uppercase tracking-widest text-white">
-                  Copia las celdas en Excel o Sheets y pégalas aquí:
-                </span>
-                <button
-                  type="button"
-                  onClick={handlePasteClipboard}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-                >
-                  <ClipboardPaste size={13} />
-                  <span>Pegar del Portapapeles</span>
-                </button>
-              </div>
-
-              <textarea
-                value={importText}
-                onChange={(e) => handleParseText(e.target.value)}
-                placeholder="Pega aquí las celdas de tu Excel o Google Sheets..."
-                rows={5}
-                className="bg-[#0D0F12] border border-white/10 rounded-2xl p-3.5 text-xs tabular-nums text-white outline-none focus:border-cyan-neon transition placeholder:text-white resize-none leading-relaxed"
-              />
-            </div>
-          )}
-
-          {/* Quick Format Guide & Month/Year Selector */}
+          {/* Paso 2: Selector de Mes/Año + Botones Rápidos para Pegar de Excel/Sheets */}
           <div className="bg-[#0D1017] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex flex-col">
-                <span className="text-[11px] text-cyan-neon font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <FileSpreadsheet size={13} />
-                  <span>Lectura de Fechas Exacta (Sin modificar tu texto)</span>
-                </span>
-                <p className="text-[11.5px] text-white mt-0.5 leading-snug">
-                  El sistema lee la <strong>Fecha</strong> o el <strong>Número de Día</strong> (<code className="text-cyan-neon">1..31</code>) de tu hoja y carga exactamente lo que hayas escrito en ese día sin agregar ni inventar ningún texto.
-                </p>
-              </div>
-            </div>
-
-            {/* Month & Year Selector + Excel Template Download */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-white/[0.06]">
               <div className="flex items-center gap-2">
-                <span className="text-[10.5px] text-white font-black uppercase tracking-wider shrink-0">
-                  Mes del Plan:
+                <span className="text-[11px] text-white font-black uppercase tracking-wider">
+                  Mes:
                 </span>
                 <select
                   value={refMonth}
-                  onChange={(e) => {
-                    const m = Number(e.target.value);
-                    setRefMonth(m);
-                    if (importText.trim()) {
-                      handleParseText(importText, importPlanName, refYear, m);
-                    }
-                  }}
-                  className="bg-neutral-950 border border-white/15 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon cursor-pointer flex-1"
+                  onChange={(e) =>
+                    handleMonthYearChange(refYear, Number(e.target.value))
+                  }
+                  className="bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs font-black outline-none focus:border-cyan-neon cursor-pointer"
                 >
                   {MONTH_NAMES.map((mName, idx) => (
                     <option key={mName} value={idx + 1}>
@@ -760,291 +691,287 @@ export default function PlanImporterModal({
                   min={2025}
                   max={2035}
                   value={refYear}
-                  onChange={(e) => {
-                    const y = Number(e.target.value) || new Date().getFullYear();
-                    setRefYear(y);
-                    if (importText.trim()) {
-                      handleParseText(importText, importPlanName, y, refMonth);
-                    }
-                  }}
-                  className="w-20 bg-neutral-950 border border-white/15 rounded-xl px-2 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon text-center tabular-nums"
+                  onChange={(e) =>
+                    handleMonthYearChange(
+                      Number(e.target.value) || new Date().getFullYear(),
+                      refMonth
+                    )
+                  }
+                  className="w-20 bg-neutral-950 border border-white/15 rounded-xl px-2 py-1.5 text-white text-xs font-black outline-none focus:border-cyan-neon text-center tabular-nums"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 justify-end">
+              {/* Botones rápidos opcionales para traer de Excel / Sheets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handlePasteFromClipboard}
+                  className="px-2.5 py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <ClipboardPaste size={13} />
+                  <span>Pegar de Excel / Sheets</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <UploadCloud size={13} className="text-cyan-neon" />
+                  <span>Subir .xlsx</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.ods,.csv,.tsv,.txt"
+                  onChange={(e) => handleFileChange(e.target.files?.[0])}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowSheetsUrlBox((v) => !v)}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Link2 size={13} className="text-emerald-400" />
+                  <span>Link Sheets</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
-                  className="flex-1 sm:flex-initial text-[11px] font-black uppercase tracking-wider text-black bg-cyan-neon hover:bg-[#19c8ff] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                  title="Descargar hoja vacía con los días del mes"
                 >
                   <Download size={12} />
-                  <span>Descargar Calendario Vacío (.xlsx)</span>
+                  <span>Plantilla Vacía</span>
                 </button>
               </div>
             </div>
+
+            {/* Si el archivo Excel subido tiene varias pestañas */}
+            {excelSheets.length > 1 && (
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
+                <span className="text-[10.5px] font-black uppercase text-cyan-neon">
+                  Pestaña del Excel:
+                </span>
+                {excelSheets.map((sName) => (
+                  <button
+                    key={sName}
+                    type="button"
+                    onClick={() => {
+                      setSelectedExcelSheet(sName);
+                      if (workbookExtractorRef.current) {
+                        applyRawSpreadsheetTextToMonthTable(
+                          workbookExtractorRef.current(sName)
+                        );
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      selectedExcelSheet === sName
+                        ? "bg-cyan-neon text-black font-black"
+                        : "bg-white/5 text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {sName}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Cuadro manual para pegar texto si el navegador pide pegar manualmente */}
+            {showPasteBox && (
+              <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+                <span className="text-[11px] text-white font-bold">
+                  Pega aquí las celdas copiadas de tu Excel o Google Sheets (pueden tener fecha o ser simplemente los renglones del mes):
+                </span>
+                <textarea
+                  value={pasteBoxText}
+                  onChange={(e) => setPasteBoxText(e.target.value)}
+                  rows={4}
+                  placeholder="Mantén presionado aquí y selecciona 'Pegar'..."
+                  className="bg-neutral-950 border border-cyan-neon/40 rounded-xl p-3 text-xs text-white outline-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasteBox(false)}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 text-white text-xs font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyRawSpreadsheetTextToMonthTable(pasteBoxText)}
+                    className="px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase cursor-pointer"
+                  >
+                    Pasar a la Tabla del Mes
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cuadro opcional para pegar link de Google Sheets */}
+            {showSheetsUrlBox && (
+              <div className="flex gap-2 pt-2 border-t border-white/10">
+                <input
+                  type="url"
+                  value={sheetUrlInput}
+                  onChange={(e) => setSheetUrlInput(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="flex-1 bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-neon"
+                />
+                <button
+                  type="button"
+                  onClick={handleFetchGoogleSheet}
+                  disabled={isFetchingSheet || !sheetUrlInput.trim()}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500 text-black font-black text-xs uppercase cursor-pointer disabled:opacity-40 flex items-center gap-1"
+                >
+                  {isFetchingSheet ? <RefreshCw size={13} className="animate-spin" /> : null}
+                  <span>Cargar</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Optional Plan Name Edit */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-              Nombre del Plan
-            </label>
-            <input
-              type="text"
-              value={importPlanName}
-              onChange={(e) => {
-                setImportPlanName(e.target.value);
-                if (importText.trim()) {
-                  handleParseText(importText, e.target.value);
-                }
-              }}
-              placeholder="Ej. Plan Mensual Octubre - Noviembre"
-              className="bg-[#0D0F12] border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-xs outline-none focus:border-cyan-neon transition placeholder:text-white font-bold"
-            />
-          </div>
-
-          {/* Error Message */}
-          {importError && (
-            <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-red-rival text-xs flex items-center gap-2.5 animate-fadeIn">
-              <AlertCircle size={16} className="shrink-0" />
-              <span className="leading-snug">{importError}</span>
+          {statusMessage && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 text-xs text-emerald-300 font-bold flex items-center justify-between gap-2">
+              <span>{statusMessage}</span>
+              <button
+                type="button"
+                onClick={() => setStatusMessage(null)}
+                className="text-white/60 hover:text-white cursor-pointer"
+              >
+                <X size={14} />
+              </button>
             </div>
           )}
 
-          {/* PARSED PREVIEW - LITERAL DISPLAY */}
-          {importPreview && (importPreview.dailyEntries.length > 0 || importPreview.stages.length > 0) && (
-            <div className="flex flex-col gap-3.5 bg-[#0D0F12] border border-white/10 rounded-2xl p-4 animate-fadeIn">
-              {/* Header with Mode Badge & View Switcher */}
-              <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-white/[0.08]">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400">
-                    <FileCheck2 size={16} />
-                  </span>
-                  <div>
-                    <span className="text-[11.6px] font-black uppercase text-emerald-400 tracking-wider block">
-                      {importPreview.mode === "daily" ? "Lectura Literal Día por Día Lista" : "Lectura Literal por Etapas Lista"}
-                    </span>
-                    <span className="text-[12.8px] text-white tabular-nums tabular-nums">
-                      Del {importPreview.startDate} al {importPreview.endDate}
-                    </span>
-                  </div>
-                </div>
+          {importError && (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 flex items-center gap-2 text-rose-300 text-xs font-bold">
+              <AlertCircle size={15} className="shrink-0" />
+              <span>{importError}</span>
+            </div>
+          )}
 
-                {/* View Switcher: Table vs Cards */}
-                {importPreview.mode === "daily" && (
-                  <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/[0.08]">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("table")}
-                      className={`px-2.5 py-1 rounded-lg text-[11.6px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
-                        viewMode === "table"
-                          ? "bg-cyan-neon text-black font-black"
-                          : "text-white hover:text-white"
-                      }`}
-                    >
-                      <TableIcon size={12} />
-                      <span>Tabla</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("cards")}
-                      className={`px-2.5 py-1 rounded-lg text-[11.6px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer ${
-                        viewMode === "cards"
-                          ? "bg-cyan-neon text-black font-black"
-                          : "text-white hover:text-white"
-                      }`}
-                    >
-                      <LayoutList size={12} />
-                      <span>Tarjetas</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 4 Key Metrics Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Días Leídos</span>
-                  <span className="text-xs font-black text-white mt-0.5 block tabular-nums">{totalEntries || importPreview.stages.length} días</span>
-                </div>
-                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Actividades</span>
-                  <span className="text-xs font-black text-cyan-neon mt-0.5 block tabular-nums">{trainingCount} días</span>
-                </div>
-                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Descansos</span>
-                  <span className="text-xs font-black text-emerald-400 mt-0.5 block tabular-nums">{restCount} días</span>
-                </div>
-                <div className="bg-neutral-950 p-2.5 rounded-xl border border-white/[0.06]">
-                  <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Flechas Indicadas</span>
-                  <span className="text-xs font-black text-yellow-gold mt-0.5 block tabular-nums">{totalArrows > 0 ? totalArrows.toLocaleString() : "—"}</span>
-                </div>
-              </div>
-
-              {/* PREVIEW CONTAINER */}
-              {importPreview.mode === "daily" ? (
-                viewMode === "table" ? (
-                  <div className="rounded-xl border border-white/10 overflow-hidden bg-neutral-950 max-h-64 overflow-y-auto">
-                    <table className="w-full text-left border-collapse text-[12.8px]">
-                      <thead className="bg-neutral-900 sticky top-0 z-10 border-b border-white/10">
-                        <tr>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-cyan-neon w-16 text-center">Día #</th>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Fecha</th>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white">Lista de lo que corresponde ese día</th>
-                          <th className="py-2 px-2.5 text-[10.5px] font-black uppercase tracking-wider text-white text-right">Flechas</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 tabular-nums">
-                        {importPreview.dailyEntries.map((row, idx) => {
-                          const dayNumber = parseInt(row.date.split("-")[2], 10) || (idx + 1);
-                          const itemsList = row.dailyItems && row.dailyItems.length > 0 ? row.dailyItems : [row.title];
-                          return (
-                            <tr 
-                              key={`${row.date}-${idx}`}
-                              className={`hover:bg-white/[0.03] transition align-top ${row.isRestDay ? "bg-emerald-500/[0.03]" : ""}`}
-                            >
-                              <td className="py-2.5 px-2.5 text-center">
-                                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-cyan-neon/15 border border-cyan-neon/35 text-cyan-neon font-black text-xs tabular-nums">
-                                  Día {dayNumber}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-2.5 text-white whitespace-nowrap font-bold tabular-nums text-xs">
-                                {row.date}
-                              </td>
-                              <td className="py-2.5 px-2.5 text-white font-sans">
-                                <ul className="flex flex-col gap-1">
-                                  {itemsList.map((item, itemIdx) => (
-                                    <li key={itemIdx} className="flex items-start gap-1.5 text-xs text-white leading-snug">
-                                      <span className="text-cyan-neon font-black shrink-0">{itemIdx + 1}.</span>
-                                      <span className="font-semibold">{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </td>
-                              <td className="py-2.5 px-2.5 text-right whitespace-nowrap tabular-nums">
-                                {row.targetArrows > 0 ? (
-                                  <span className="text-cyan-neon font-black">{row.targetArrows}</span>
-                                ) : (
-                                  <span className="text-white">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
-                    {importPreview.dailyEntries.map((dayItem, i) => {
-                      const dayNumber = parseInt(dayItem.date.split("-")[2], 10) || (i + 1);
-                      const itemsList = dayItem.dailyItems && dayItem.dailyItems.length > 0 ? dayItem.dailyItems : [dayItem.title];
-                      return (
-                        <div
-                          key={`${dayItem.date}-${i}`}
-                          className="p-3 rounded-xl bg-neutral-950 border border-white/[0.08] flex flex-col gap-2 text-xs"
-                        >
-                          <div className="flex items-center justify-between gap-2 border-b border-white/[0.05] pb-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-lg bg-cyan-neon/15 border border-cyan-neon/35 text-cyan-neon font-black text-xs tabular-nums">
-                                Día {dayNumber}
-                              </span>
-                              <span className="text-white font-bold tabular-nums">{dayItem.date}</span>
-                            </div>
-                            {dayItem.targetArrows > 0 && (
-                              <span className="text-cyan-neon font-black tabular-nums">
-                                {dayItem.targetArrows} flechas
-                              </span>
-                            )}
-                          </div>
-                          <ul className="flex flex-col gap-1 pl-1">
-                            {itemsList.map((it, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-white">
-                                <span className="text-cyan-neon font-black">{idx + 1}.</span>
-                                <span className="font-semibold">{it}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
-              ) : (
-                <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
-                  {importPreview.stages.map((stg, i) => (
-                    <div
-                      key={stg.id || i}
-                      className="p-2.5 rounded-xl bg-neutral-950 border border-white/[0.06] flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span
-                          className="w-3 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: stg.color || "#00E5FF" }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-white truncate">{stg.name}</div>
-                          <div className="text-[11.6px] text-white tabular-nums tabular-nums">
-                            {stg.startDate} al {stg.endDate}
-                            {stg.weeklySessionGoal > 0 ? ` · ${stg.weeklySessionGoal} sesiones/sem` : ""}
-                          </div>
-                          {stg.notes && (
-                            <div className="text-[11.6px] text-white italic truncate mt-0.5">
-                              {stg.notes}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {stg.weeklyArrowGoal > 0 && (
-                        <div className="text-right shrink-0">
-                          <div className="text-cyan-neon font-black tabular-nums tabular-nums">
-                            {stg.weeklyArrowGoal} fl/sem
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+          {/* TABLA DE 2 COLUMNAS: DÍA 1 AL DÍA 31 DEL MES */}
+          <div className="bg-[#0A0C10] border border-white/10 rounded-2xl overflow-hidden">
+            <div className="px-3.5 py-2.5 bg-white/[0.03] border-b border-white/10 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon">
+                Agenda Día por Día — {MONTH_NAMES[refMonth - 1]} {refYear} ({filledDays.length} días con plan)
+              </span>
+              {filledDays.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllDays}
+                  className="text-[10.5px] text-rose-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 size={11} />
+                  <span>Limpiar todo</span>
+                </button>
               )}
             </div>
-          )}
+
+            <div className="divide-y divide-white/[0.06] max-h-[42vh] overflow-y-auto">
+              {dayRows.map((row) => {
+                const isSunday = row.weekdayIndex === 0;
+                const hasContent = row.text.trim().length > 0 || Number(row.arrows) > 0;
+                return (
+                  <div
+                    key={row.day}
+                    className={`flex items-start gap-2.5 p-2.5 transition ${
+                      hasContent
+                        ? "bg-cyan-neon/[0.04]"
+                        : isSunday
+                        ? "bg-white/[0.015]"
+                        : "bg-transparent"
+                    }`}
+                  >
+                    {/* Columna 1: Fecha / Número de Día */}
+                    <div
+                      className={`w-16 shrink-0 rounded-xl px-2 py-2 text-center border ${
+                        hasContent
+                          ? "bg-cyan-neon/15 border-cyan-neon/40 text-white"
+                          : isSunday
+                          ? "bg-white/[0.03] border-white/10 text-amber-300"
+                          : "bg-neutral-950 border-white/10 text-white"
+                      }`}
+                    >
+                      <div className="text-[10px] font-black uppercase tracking-wider opacity-80">
+                        {row.weekdayShort}
+                      </div>
+                      <div className="text-sm font-black tabular-nums leading-tight">
+                        Día {row.day}
+                      </div>
+                    </div>
+
+                    {/* Columna 2: Lo que corresponde ese día */}
+                    <div className="flex-1 min-w-0">
+                      <textarea
+                        value={row.text}
+                        onChange={(e) => updateDayRow(row.day, "text", e.target.value)}
+                        rows={row.text.includes("\n") ? Math.min(4, row.text.split("\n").length) : 1}
+                        placeholder="Escribe qué toca este día (usa '/' o Enter para enlistar varias tareas)..."
+                        className="w-full bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-3 py-2 text-xs text-white outline-none resize-y leading-relaxed placeholder:text-white/35"
+                      />
+                    </div>
+
+                    {/* Flechas opcionales + Botón repetir en todos los mismos días de la semana */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.arrows}
+                        onChange={(e) => updateDayRow(row.day, "arrows", e.target.value)}
+                        placeholder="Flechas"
+                        title="Meta de flechas (opcional)"
+                        className="w-16 bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-2 py-2 text-xs text-cyan-neon font-bold text-center tabular-nums outline-none placeholder:text-white/30"
+                      />
+                      {hasContent && (
+                        <button
+                          type="button"
+                          onClick={() => handleRepeatWeekdayInMonth(row)}
+                          title={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
+                          className="p-2 rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer"
+                        >
+                          <Copy size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Modal Footer Controls */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#0D0F12] flex items-center justify-between gap-3">
+        {/* Footer de confirmación */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-[#0A0C10] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
-            className="py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white hover:text-white font-bold text-xs uppercase cursor-pointer transition border border-white/10"
+            className="px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer"
           >
             Cancelar
           </button>
 
           <button
             type="button"
-            disabled={!importPreview || (importPreview.stages.length === 0 && importPreview.dailyEntries.length === 0) || isSubmitting}
-            onClick={handleConfirmImport}
-            className="flex-1 py-3 px-5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer active:scale-98"
+            disabled={filledDays.length === 0 || isSubmitting}
+            onClick={handleConfirmSave}
+            className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] cursor-pointer"
           >
             {isSubmitting ? (
               <>
                 <RefreshCw size={15} className="animate-spin" />
-                <span>Aplicando al Calendario...</span>
+                <span>Guardando en Calendario...</span>
               </>
             ) : (
               <>
-                <Check size={15} />
+                <CheckCircle2 size={15} />
                 <span>
-                  {isCoachUser && assignTarget === "selected"
-                    ? selectedAthleteIds.length === 1
-                      ? `Cargar al Calendario de ${clubAthletes.find((a) => a.uid === selectedAthleteIds[0])?.fullName || "Alumno"}`
-                      : `Cargar al Calendario de ${selectedAthleteIds.length} Alumnos`
-                    : isCoachUser
-                    ? "Cargar al Calendario de Todos los Alumnos"
-                    : "Aplicar Literalmente al Calendario"}
+                  Guardar {filledDays.length} {filledDays.length === 1 ? "Día" : "Días"} en el Calendario
                 </span>
-                <ArrowRight size={15} />
               </>
             )}
           </button>
