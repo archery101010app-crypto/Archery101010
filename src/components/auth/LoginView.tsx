@@ -119,7 +119,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       if (
         firebaseUser &&
         !resolved &&
-        firebaseUser.providerData.some((p) => p.providerId === "google.com")
+        firebaseUser.providerData.some((p) => p.providerId === "google.com" || p.providerId === "apple.com")
       ) {
         resolved = true;
         setLoading(true);
@@ -259,12 +259,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     }
   };
 
-  const handleSocialLogin = async () => {
+  const handleSocialLogin = async (provider: "google" | "apple" = "google") => {
     setLoading(true);
     setError("");
     setResetSuccessMsg("");
     try {
-      const user = await authenticateWithSocialProvider("google");
+      const user = await authenticateWithSocialProvider(provider);
       if (user) {
         onLoginSuccess(user);
       }
@@ -474,12 +474,12 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           <div className="h-[1px] flex-1 bg-gray-border" />
         </div>
 
-        {/* Social login button (Google) */}
-        <div className="flex flex-col gap-3">
+        {/* Social login buttons (Google & Apple) */}
+        <div className="flex flex-col gap-2.5">
           <button
             type="button"
             disabled={loading}
-            onClick={handleSocialLogin}
+            onClick={() => handleSocialLogin("google")}
             className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -489,6 +489,18 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
             <span>{t("googleLogin")}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => handleSocialLogin("apple")}
+            className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
+          >
+            <svg className="w-4 h-4 shrink-0 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+            </svg>
+            <span>{t("appleLogin")}</span>
           </button>
         </div>
       </div>

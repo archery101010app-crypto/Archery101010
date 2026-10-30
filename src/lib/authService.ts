@@ -10,6 +10,7 @@ import {
   signInWithCredential,
   getRedirectResult,
   GoogleAuthProvider,
+  OAuthProvider,
   signOut,
   deleteUser,
   updateProfile as updateFirebaseAuthProfile
@@ -847,7 +848,7 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
 
     if (
       auth.currentUser &&
-      auth.currentUser.providerData.some((p) => p.providerId === "google.com")
+      auth.currentUser.providerData.some((p) => p.providerId === "google.com" || p.providerId === "apple.com")
     ) {
       const u = auth.currentUser;
       const email =
@@ -867,12 +868,40 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
 }
 
 export async function authenticateWithSocialProvider(
-  providerName: "google" = "google"
+  providerName: "google" | "apple" = "google"
 ): Promise<UserProfile | null> {
   const isCapacitorNative =
     typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
 
   auth.languageCode = "es";
+
+  // Apple Sign-In (Apple App Store Guideline 4.8 compliance)
+  if (providerName === "apple") {
+    const appleProvider = new OAuthProvider("apple.com");
+    appleProvider.addScope("email");
+    appleProvider.addScope("name");
+    appleProvider.setCustomParameters({ locale: auth.languageCode || "es" });
+
+    try {
+      const result = await signInWithPopup(auth, appleProvider);
+      const u = result.user;
+      const email =
+        u.email ||
+        u.providerData?.find((p) => p.email)?.email ||
+        `${u.uid}@apple.archery101010.com`;
+      const displayName =
+        u.displayName ||
+        u.providerData?.find((p) => p.displayName)?.displayName ||
+        "Arquero Apple";
+      return await loginSocialUser(email, displayName, u.uid);
+    } catch (appleErr: any) {
+      if (appleErr?.code === "auth/popup-blocked" || isCapacitorNative) {
+        await signInWithRedirect(auth, appleProvider);
+        return null;
+      }
+      throw new Error(translateFirebaseAuthError(appleErr));
+    }
+  }
 
   // Inside native Android APK: use Native Android Google Account Picker (1-tap system bottom sheet, zero typing)
   if (isCapacitorNative && providerName === "google") {
