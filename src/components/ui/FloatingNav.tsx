@@ -4,6 +4,7 @@ import React from "react";
 import { Home, Target, History, Calendar, User, Users, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 function SpotifyNavIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
   return (
@@ -29,25 +30,26 @@ interface FloatingNavProps {
 }
 
 export default function FloatingNav({ activeScreen, onScreenChange, user, coachViewMode = false }: FloatingNavProps) {
+  const { t } = useLanguage();
   const isCoach = coachViewMode;
   const isSuper = user?.role === "superadmin";
 
   // For coach: Director & stats receiver (no arrow counter, no duels, no scoring sheets)
   const navItems = isCoach
     ? [
-        { id: "HOME" as Screen, icon: Users, label: "Director" },
-        { id: "HISTORY" as Screen, icon: History, label: "Resultados" },
-        { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "HOME" as Screen, icon: Users, label: t("navDirector") },
+        { id: "HISTORY" as Screen, icon: History, label: t("navResults") },
+        { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
         { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
-        { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
+        { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ]
     : [
-        { id: "HOME" as Screen, icon: Home, label: "Inicio" },
-        { id: "TARGET" as Screen, icon: Target, label: "Sesión" },
-        { id: "HISTORY" as Screen, icon: History, label: "Historial" },
-        { id: "CALENDAR" as Screen, icon: Calendar, label: "Calendario" },
+        { id: "HOME" as Screen, icon: Home, label: t("navHome") },
+        { id: "TARGET" as Screen, icon: Target, label: t("navSession") },
+        { id: "HISTORY" as Screen, icon: History, label: t("navHistory") },
+        { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
         { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
-        { id: "PROFILE" as Screen, icon: User, label: "Perfil" }
+        { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ];
 
   if (isSuper) {

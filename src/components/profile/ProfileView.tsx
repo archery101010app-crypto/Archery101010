@@ -7,6 +7,7 @@ import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
 import { ArrowLeft, LogOut, Check, Shield, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
+import LanguageSelector from "../ui/LanguageSelector";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { triggerHaptic } from "@/lib/haptics";
 
@@ -485,6 +486,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </div>
         </div>
       </div>
+
+      {/* SECTION 0: App Language Selector */}
+      <LanguageSelector variant="card" />
 
       {/* SECTION 1: Personal Data */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">

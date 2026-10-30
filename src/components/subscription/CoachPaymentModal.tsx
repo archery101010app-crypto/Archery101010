@@ -14,6 +14,7 @@ import {
   activateCoachLaunchPromo,
   restoreCoachStorePurchases
 } from "@/lib/billingService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 interface CoachPaymentModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function CoachPaymentModal({
   user,
   onSuccess
 }: CoachPaymentModalProps) {
+  const { t } = useLanguage();
   const products = getCoachStoreProducts();
   const [selectedProductId, setSelectedProductId] = useState<string>("coach_pro_annual");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -102,7 +104,8 @@ export default function CoachPaymentModal({
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-1">
               <div
-                className="flex items-center gap-1.5 select-none"
+                translate="no"
+                className="notranslate flex items-center gap-1.5 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
               >
                 <span className="text-white tracking-widest font-extrabold text-[13.5px]">ARCHERY</span>
@@ -114,15 +117,15 @@ export default function CoachPaymentModal({
               </div>
 
               <div className="flex items-center gap-2 mt-0.5">
-                <h2 className="text-[22px] font-black text-white tracking-tight leading-none">
+                <h2 translate="no" className="notranslate text-[22px] font-black text-white tracking-tight leading-none">
                   Coach Pro
                 </h2>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/30">
-                  Gratis hoy
+                  {t("freeToday")}
                 </span>
               </div>
               <p className="text-xs text-white/70 font-medium mt-0.5">
-                Acceso gratuito de lanzamiento · Sin cargo hoy
+                {t("launchAccessSubtitle")}
               </p>
             </div>
 
@@ -153,10 +156,10 @@ export default function CoachPaymentModal({
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-white">
-                      {isAnnual ? "Anual" : "Mensual"}
+                      {isAnnual ? t("annualPlan") : t("monthlyPlan")}
                     </span>
                     {isAnnual && (
-                      <span className="text-[10px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded uppercase">
+                      <span translate="no" className="notranslate text-[10px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded uppercase">
                         -25%
                       </span>
                     )}
@@ -164,14 +167,14 @@ export default function CoachPaymentModal({
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-col">
                     <span className="text-xs text-white/50 line-through tabular-nums font-semibold">
-                      {isAnnual ? "$89.91 / año" : "$9.99 / mes"}
+                      {isAnnual ? `$89.91 ${t("perYear")}` : `$9.99 ${t("perMonth")}`}
                     </span>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
-                      <span className="text-xl font-black text-white tabular-nums tracking-tight">
+                      <span translate="no" className="notranslate text-xl font-black text-white tabular-nums tracking-tight">
                         $0.00
                       </span>
                       <span className="text-[10px] font-extrabold text-cyan-neon uppercase tracking-wider">
-                        Gratis
+                        {t("freeLabel")}
                       </span>
                     </div>
                   </div>
@@ -184,19 +187,19 @@ export default function CoachPaymentModal({
           <div className="bg-[#0E1117] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-2.5">
             <div className="flex items-center gap-2.5 text-xs text-white">
               <Check size={14} className="text-cyan-neon shrink-0" />
-              <span>Portal Coach y conexión en vivo con alumnos</span>
+              <span>{t("proBenefit1")}</span>
             </div>
             <div className="flex items-center gap-2.5 text-xs text-white">
               <Check size={14} className="text-cyan-neon shrink-0" />
-              <span>Agenda diaria y planes en calendario</span>
+              <span>{t("proBenefit2")}</span>
             </div>
             <div className="flex items-center gap-2.5 text-xs text-white">
               <Check size={14} className="text-cyan-neon shrink-0" />
-              <span>Asignación individual o a todo el club</span>
+              <span>{t("proBenefit3")}</span>
             </div>
             <div className="flex items-center gap-2.5 text-xs text-white">
               <Check size={14} className="text-cyan-neon shrink-0" />
-              <span>Métricas de volumen y rendimiento</span>
+              <span>{t("proBenefit4")}</span>
             </div>
           </div>
 
@@ -222,10 +225,10 @@ export default function CoachPaymentModal({
               disabled={isProcessing}
               className="h-12 w-full rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] active:scale-[0.99] text-black font-black text-xs uppercase tracking-widest transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
             >
-              {isProcessing ? "Activando..." : "Continuar Gratis — $0.00"}
+              {isProcessing ? t("activating") : t("continueFreeBtn")}
             </button>
             <span className="text-[11px] text-center text-white/60">
-              Sin tarjeta requerida · Activación inmediata
+              {t("noCardRequired")}
             </span>
           </div>
 
@@ -238,10 +241,10 @@ export default function CoachPaymentModal({
               className="hover:text-white flex items-center gap-1.5 font-semibold transition cursor-pointer"
             >
               <RotateCw size={11} className={isRestoring ? "animate-spin text-cyan-neon" : ""} />
-              <span>Restaurar compras</span>
+              <span>{t("restorePurchases")}</span>
             </button>
 
-            <span className="tabular-nums text-[10.5px]">
+            <span translate="no" className="notranslate tabular-nums text-[10.5px]">
               Google Play · App Store
             </span>
           </div>

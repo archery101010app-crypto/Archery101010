@@ -4,7 +4,26 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { translations, TranslationKey } from "../translations/dict";
 import { getLocalSetting, saveLocalSetting } from "../db/indexedDB";
 
-type Language = string;
+export type Language = string;
+
+export interface LanguageOption {
+  code: string;
+  shortLabel: string;
+  name: string;
+  nativeName: string;
+  flag: string;
+}
+
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { code: "es", shortLabel: "ES", name: "Español", nativeName: "Español", flag: "🇪🇸" },
+  { code: "en", shortLabel: "EN", name: "Inglés", nativeName: "English", flag: "🇺🇸" },
+  { code: "ko", shortLabel: "KO", name: "Coreano", nativeName: "한국어", flag: "🇰🇷" },
+  { code: "fr", shortLabel: "FR", name: "Francés", nativeName: "Français", flag: "🇫🇷" },
+  { code: "de", shortLabel: "DE", name: "Alemán", nativeName: "Deutsch", flag: "🇩🇪" },
+  { code: "pt", shortLabel: "PT", name: "Portugués", nativeName: "Português", flag: "🇧🇷" },
+  { code: "it", shortLabel: "IT", name: "Italiano", nativeName: "Italiano", flag: "🇮🇹" },
+  { code: "zh-CN", shortLabel: "ZH", name: "Chino", nativeName: "中文", flag: "🇨🇳" },
+];
 
 interface LanguageContextProps {
   language: Language;
@@ -14,32 +33,37 @@ interface LanguageContextProps {
 
 const LanguageContext = createContext<LanguageContextProps | undefined>(undefined);
 
+function normalizeLangCode(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  if (lower.startsWith("zh")) return "zh-CN";
+  const base = lower.split("-")[0];
+  return base;
+}
+
 // Helper function to detect standard system OS language or timezone location fallback
 function detectSystemLanguage(): string {
   if (typeof window === "undefined") return "es";
 
-  const supportedLanguages = Object.keys(translations);
+  const supportedCodes = SUPPORTED_LANGUAGES.map((l) => l.code);
 
-  // 1. Check navigator.languages for a matching supported language or any preferred language
+  // 1. Check navigator.languages
   if (navigator.languages && navigator.languages.length > 0) {
     for (const lang of navigator.languages) {
-      const cleanLang = lang.split("-")[0].toLowerCase();
-      // If it is directly supported (es or en), return it
-      if (supportedLanguages.includes(cleanLang)) {
-        return cleanLang;
+      const normalized = normalizeLangCode(lang);
+      if (supportedCodes.includes(normalized)) {
+        return normalized;
       }
-      // If not es or en, return the code directly so Google Translate can translate it!
-      if (cleanLang.length === 2 || cleanLang.length === 3) {
-        return cleanLang;
+      if (normalized.length === 2 || normalized.length === 3) {
+        return normalized;
       }
     }
   }
 
   // 2. Check navigator.language
   if (navigator.language) {
-    const cleanLang = navigator.language.split("-")[0].toLowerCase();
-    if (supportedLanguages.includes(cleanLang) || cleanLang.length === 2 || cleanLang.length === 3) {
-      return cleanLang;
+    const normalized = normalizeLangCode(navigator.language);
+    if (supportedCodes.includes(normalized) || normalized.length === 2 || normalized.length === 3) {
+      return normalized;
     }
   }
 
@@ -47,21 +71,20 @@ function detectSystemLanguage(): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const spanishTzs = [
-      "madrid", "canary", "mexico", "monterrey", "merida", "tijuana", "chihuahua", 
-      "hermosillo", "cancun", "bogota", "caracas", "santiago", "buenos_aires", 
-      "lima", "quito", "guayaquil", "la_paz", "asuncion", "montevideo", "guatemala", 
-      "el_salvador", "tegucigalpa", "managua", "costa_rica", "panama", "havana", 
+      "madrid", "canary", "mexico", "monterrey", "merida", "tijuana", "chihuahua",
+      "hermosillo", "cancun", "bogota", "caracas", "santiago", "buenos_aires",
+      "lima", "quito", "guayaquil", "la_paz", "asuncion", "montevideo", "guatemala",
+      "el_salvador", "tegucigalpa", "managua", "costa_rica", "panama", "havana",
       "santo_domingo", "puerto_rico"
     ];
     const lowerTz = tz.toLowerCase();
-    if (spanishTzs.some(city => lowerTz.includes(city))) {
+    if (spanishTzs.some((city) => lowerTz.includes(city))) {
       return "es";
     }
-  } catch (e) {
+  } catch {
     // Ignore timezone parsing errors
   }
 
-  // 4. Default fallback
   return "es";
 }
 
@@ -73,12 +96,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function loadPreference() {
       try {
-        // Read preference from IndexedDB (fallback to null to detect)
         const savedLang = await getLocalSetting<string | null>("preferred_language", null);
         if (savedLang) {
           setLanguageState(savedLang);
         } else {
-          // Try localStorage
           let localLang: string | null = null;
           if (typeof window !== "undefined") {
             localLang = localStorage.getItem("preferred_language");
@@ -90,8 +111,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             setLanguageState(detected);
           }
         }
-      } catch (e) {
-        console.warn("Could not load language from IndexedDB, trying localStorage", e);
+      } catch {
         let localLang: string | null = null;
         if (typeof window !== "undefined") {
           localLang = localStorage.getItem("preferred_language");
@@ -112,16 +132,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = async (lang: Language) => {
     setLanguageState(lang);
     try {
-      // Persist in IndexedDB (resilient storage)
       await saveLocalSetting("preferred_language", lang);
-    } catch (e) {
-      console.warn("Could not save language to IndexedDB, trying localStorage", e);
+    } catch {
+      // Ignore IndexedDB error
     }
     if (typeof window !== "undefined") {
       localStorage.setItem("preferred_language", lang);
-      
-      // If switching to es/en, clear Google Translate cookies and reload if Translate was active
-      if (lang === "es" || lang === "en") {
+
+      if (lang === "es") {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
         if (document.getElementById("google-translate-script")) {
@@ -129,7 +147,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       } else {
-        // If switching to another language via Google Translate, set cookie and reload
         document.cookie = `googtrans=/es/${lang}; path=/;`;
         document.cookie = `googtrans=/es/${lang}; path=/; domain=${window.location.hostname};`;
         window.location.reload();
@@ -138,25 +155,22 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Sync lang attribute of html tag dynamically for SEO/accessibility
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = language;
     }
   }, [language]);
 
-  // Google Translate script and cookie management
+  // Activate neural DOM translation for non-Spanish languages so 100% of screens translate seamlessly
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const needTranslate = language !== "es" && language !== "en";
+    const needTranslate = language !== "es";
 
     if (needTranslate) {
-      // Set the Google Translate cookie
       document.cookie = `googtrans=/es/${language}; path=/;`;
       document.cookie = `googtrans=/es/${language}; path=/; domain=${window.location.hostname};`;
 
-      // Inject Google Translate script if it does not exist
       if (!document.getElementById("google-translate-script")) {
         const script = document.createElement("script");
         script.id = "google-translate-script";
@@ -164,33 +178,38 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         script.async = true;
         document.body.appendChild(script);
 
-        // Define global callback
         (window as any).googleTranslateElementInit = () => {
-          new (window as any).google.translate.TranslateElement({
-            pageLanguage: 'es',
-            layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE,
-            autoDisplay: false
-          }, 'google_translate_element');
+          new (window as any).google.translate.TranslateElement(
+            {
+              pageLanguage: "es",
+              layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE,
+              autoDisplay: false,
+            },
+            "google_translate_element"
+          );
         };
       }
     } else {
-      // Clear Translate cookies if we are back to es or en
       document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
     }
   }, [language]);
 
   const t = (key: TranslationKey): string => {
-    // If the language is not es or en, render in Spanish so Google Translate has clean base text to translate from
     const dict = (translations as any)[language] || translations["es"];
     return dict[key] || translations["es"][key] || String(key);
   };
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
-      {/* Hidden container required by Google Translate */}
       <div id="google_translate_element" style={{ display: "none", visibility: "hidden" }} />
-      {isLoaded ? children : <div className="min-h-screen flex items-center justify-center bg-black-oled text-cyan-neon font-bold">{t("loading")}</div>}
+      {isLoaded ? (
+        children
+      ) : (
+        <div className="min-h-screen flex items-center justify-center bg-black-oled text-cyan-neon font-bold">
+          {t("loading")}
+        </div>
+      )}
     </LanguageContext.Provider>
   );
 }

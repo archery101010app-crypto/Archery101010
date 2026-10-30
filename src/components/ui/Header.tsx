@@ -6,6 +6,7 @@ import { UserProfile } from "@/lib/authService";
 import { Wifi, WifiOff, RefreshCw, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { APP_VERSION } from "@/lib/version";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 interface HeaderProps {
   user: UserProfile;
@@ -15,6 +16,7 @@ interface HeaderProps {
 
 export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
   const { pendingCount, syncStatus, isSyncing, triggerSync } = useSync();
+  const { t } = useLanguage();
   const [showStatusTooltip, setShowStatusTooltip] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -61,7 +63,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   return (
     <header className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-black-oled/90 backdrop-blur-md border-b border-gray-border/40 px-4 sm:px-6 flex items-center justify-between z-40 max-w-full">
       {/* Brand logo compact */}
-      <div className="flex items-center gap-2 select-none min-w-0">
+      <div translate="no" className="notranslate flex items-center gap-2 select-none min-w-0">
         <div className="flex items-baseline gap-1">
           <div 
             className="flex text-[19.8px] tracking-tighter font-extrabold brand-logo-101010" 
@@ -93,7 +95,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
                   : "text-white hover:text-white"
               }`}
             >
-              Atleta
+              {t("roleAthlete")}
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
@@ -103,8 +105,8 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
                   : "text-white hover:text-white"
               }`}
             >
-              <span>Coach</span>
-              <span className="text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
+              <span>{t("roleCoach")}</span>
+              <span translate="no" className="notranslate text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
                 PRO
               </span>
             </button>

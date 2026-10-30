@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getLocalSetting } from "@/lib/db/indexedDB";
+import LanguageSelector from "@/components/ui/LanguageSelector";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -276,12 +277,16 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-between px-6 pt-12 pb-6 min-h-full">
-
+    <div className="flex-1 flex flex-col justify-between px-6 pt-6 pb-6 min-h-full">
+      {/* Top right minimalist language selector pill */}
+      <div className="w-full max-w-sm mx-auto flex justify-end">
+        <LanguageSelector variant="pill" />
+      </div>
 
       {/* Brand logo section: ARCHERY 101010 / THE APP (Branding Oficial Permanente) */}
       <div 
-        className="w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
+        translate="no"
+        className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
         <motion.h1 
@@ -426,7 +431,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               onClick={handleOpenPasswordReset}
               className="text-[12.8px] text-cyan-neon hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
-              ¿Olvidaste tu contraseña?
+              {t("forgotPassword")}
             </button>
           </div>
 
@@ -465,7 +470,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         {/* Divider */}
         <div className="flex items-center gap-4 py-2">
           <div className="h-[1px] flex-1 bg-gray-border" />
-          <span className="text-xs text-white uppercase tracking-widest">o</span>
+          <span className="text-xs text-white uppercase tracking-widest">{t("orDivider")}</span>
           <div className="h-[1px] flex-1 bg-gray-border" />
         </div>
 

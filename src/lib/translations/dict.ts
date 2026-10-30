@@ -194,7 +194,37 @@ export const translations = {
     recordLabel: "Récord:",
     nextLabel: "Siguiente:",
     maxStarAchieved: "Has alcanzado la Estrella máxima (Diamante)",
-    pointsToNextStar: "puntos para subir de nivel de estrella."
+    pointsToNextStar: "puntos para subir de nivel de estrella.",
+
+    // Multi-language & Navigation & Coach Pro Modal
+    appLanguage: "Idioma de la Aplicación",
+    selectLanguage: "Selecciona tu idioma",
+    forgotPassword: "¿Olvidaste tu contraseña?",
+    orDivider: "o",
+    roleAthlete: "Atleta",
+    roleCoach: "Coach",
+    navHome: "Inicio",
+    navSession: "Sesión",
+    navHistory: "Historial",
+    navCalendar: "Calendario",
+    navProfile: "Perfil",
+    navDirector: "Director",
+    navResults: "Resultados",
+    freeToday: "Gratis hoy",
+    launchAccessSubtitle: "Acceso gratuito de lanzamiento · Sin cargo hoy",
+    annualPlan: "Anual",
+    monthlyPlan: "Mensual",
+    perYear: "/ año",
+    perMonth: "/ mes",
+    freeLabel: "Gratis",
+    proBenefit1: "Portal Coach y conexión en vivo con alumnos",
+    proBenefit2: "Agenda diaria y planes en calendario",
+    proBenefit3: "Asignación individual o a todo el club",
+    proBenefit4: "Métricas de volumen y rendimiento",
+    activating: "Activando...",
+    continueFreeBtn: "Continuar Gratis — $0.00",
+    noCardRequired: "Sin tarjeta requerida · Activación inmediata",
+    restorePurchases: "Restaurar compras"
   },
   en: {
     // General
@@ -391,7 +421,37 @@ export const translations = {
     recordLabel: "Record:",
     nextLabel: "Next:",
     maxStarAchieved: "You have reached the maximum Star (Diamond)",
-    pointsToNextStar: "points needed to upgrade your star level."
+    pointsToNextStar: "points needed to upgrade your star level.",
+
+    // Multi-language & Navigation & Coach Pro Modal
+    appLanguage: "App Language",
+    selectLanguage: "Select your language",
+    forgotPassword: "Forgot your password?",
+    orDivider: "or",
+    roleAthlete: "Athlete",
+    roleCoach: "Coach",
+    navHome: "Home",
+    navSession: "Session",
+    navHistory: "History",
+    navCalendar: "Calendar",
+    navProfile: "Profile",
+    navDirector: "Director",
+    navResults: "Results",
+    freeToday: "Free today",
+    launchAccessSubtitle: "Free launch access · No charge today",
+    annualPlan: "Annual",
+    monthlyPlan: "Monthly",
+    perYear: "/ year",
+    perMonth: "/ mo",
+    freeLabel: "Free",
+    proBenefit1: "Coach Portal & live connection with athletes",
+    proBenefit2: "Daily schedule & training plans on calendar",
+    proBenefit3: "Individual or full-club plan assignment",
+    proBenefit4: "Volume & performance analytics",
+    activating: "Activating...",
+    continueFreeBtn: "Continue Free — $0.00",
+    noCardRequired: "No card required · Instant activation",
+    restorePurchases: "Restore purchases"
   }
 };
 
