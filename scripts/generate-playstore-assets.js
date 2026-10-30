@@ -113,8 +113,8 @@ async function generateFeatureGraphic(logo3Path) {
     }
   }
 
-  // +15% larger "THE APP" (19 -> 22px height)
-  const subTargetH = 22;
+  // Enlarged "THE APP" (25px height)
+  const subTargetH = 25;
   const subTargetW = Math.round(seqW * (subTargetH / 131));
   subtitleHiRes.resize({ w: subTargetW, h: subTargetH });
 
@@ -122,9 +122,9 @@ async function generateFeatureGraphic(logo3Path) {
   const subY = Math.round(logoY + targetH + 28);
   canvas.composite(subtitleHiRes, subX, subY);
 
-  // 3. Crisp 3-segment 101010 Tricolor Accent Line below "THE APP" (+20% longer: 132 -> 159px, thicker: 3 -> 4px)
-  const barWidth = 159;
-  const barHeight = 4;
+  // 3. Crisp 3-segment 101010 Tricolor Accent Line below "THE APP" (189px wide = 63px per color, 5px thick)
+  const barWidth = 189;
+  const barHeight = 5;
   const barX = Math.round(cx - barWidth / 2);
   const barY = Math.round(subY + subTargetH + 20);
   const segW = barWidth / 3;
@@ -202,6 +202,7 @@ async function main() {
   const featureGraphic = await generateFeatureGraphic(logo3Path);
   await featureGraphic.write(path.join(googlePlayDir, 'feature_graphic_1024x500.png'));
   await featureGraphic.write(path.join(storeAssetsDir, 'playstore-feature-graphic-1024x500.png'));
+  await featureGraphic.write(path.join(storeAssetsDir, 'playstore-cover-1024x500.png'));
 
   const storeIcon = await generateStoreIcon(logo5Path);
   await storeIcon.write(path.join(googlePlayDir, 'store_icon_512.png'));
