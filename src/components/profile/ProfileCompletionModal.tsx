@@ -31,8 +31,8 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
     e.preventDefault();
     setError("");
 
-    if (!fullName.trim() || !birthDate || !country || !gender) {
-      setError("Por favor completa todos los campos obligatorios.");
+    if (!fullName.trim() || !birthDate || !city.trim() || !country || !gender) {
+      setError("Por favor completa todos los campos obligatorios (Nombre, Fecha de nacimiento, Ciudad, País y Género).");
       return;
     }
 

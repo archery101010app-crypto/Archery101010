@@ -143,6 +143,33 @@ export default function AdminUsersTab() {
     };
   }, [refreshUsersFromFirestore, loadLocalUsers]);
 
+  // Helper to calculate exact age from YYYY-MM-DD birthDate
+  const calculateAge = (birthDate?: string): number | null => {
+    if (!birthDate) return null;
+    const parts = birthDate.split("-");
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const m = today.getMonth() - month;
+    if (m < 0 || (m === 0 && today.getDate() < day)) {
+      age--;
+    }
+    return age >= 0 && age <= 115 ? age : null;
+  };
+
+  const getWACategory = (age: number | null): string => {
+    if (age === null) return "N/A";
+    if (age < 15) return "Sub-15";
+    if (age < 18) return "Sub-18 (Cadete)";
+    if (age < 21) return "Sub-21 (Junior)";
+    if (age < 50) return "Mayor (Senior)";
+    return "Master (50+)";
+  };
+
   // Export users to CSV / Excel
   const handleExportCSV = () => {
     if (users.length === 0) {
@@ -155,6 +182,12 @@ export default function AdminUsersTab() {
       "Nombre Completo",
       "Alias / Gamertag",
       "Correo",
+      "WhatsApp",
+      "Edad",
+      "Categoría WA",
+      "Fecha de Nacimiento",
+      "Género",
+      "Ciudad",
       "País",
       "Club",
       "Rol",
@@ -164,6 +197,10 @@ export default function AdminUsersTab() {
       "Modelo Arco",
       "Potencia (lbs)",
       "Distancia Default (m)",
+      "Estatura (cm)",
+      "Peso (kg)",
+      "Ojo Dominante",
+      "Mano Dominante",
       "Fecha de Registro"
     ];
 
@@ -175,11 +212,19 @@ export default function AdminUsersTab() {
 
     const rows = users.map((u) => {
       const countryName = COUNTRIES[u.country]?.name || u.country || "N/A";
+      const age = calculateAge(u.birthDate);
+      const waCategory = getWACategory(age);
+      const genderLabel =
+        u.gender === "M" ? "Masculino" : u.gender === "F" ? "Femenino" : u.gender === "O" ? "Otro" : "N/A";
       const bowType = u.bowConfig?.type || "Barebow";
       const bowBrand = u.bowConfig?.brand || "";
       const bowModel = u.bowConfig?.model || "";
       const poundage = u.bowConfig?.poundage || "";
       const distance = u.bowConfig?.defaultDistance || "";
+      const height = u.physicalData?.height || "";
+      const weight = u.physicalData?.weight || "";
+      const domEye = u.physicalData?.dominantEye || "";
+      const domHand = u.physicalData?.dominantHand || "";
       const regDate = formatRegistrationDate(u.createdAt || u.lastActiveAt);
 
       return [
@@ -187,6 +232,12 @@ export default function AdminUsersTab() {
         escapeCSV(u.fullName),
         escapeCSV(u.nickname ? `@${u.nickname}` : ""),
         escapeCSV(u.email),
+        escapeCSV(u.whatsappNumber || ""),
+        escapeCSV(age !== null ? age : "N/A"),
+        escapeCSV(waCategory),
+        escapeCSV(u.birthDate || ""),
+        escapeCSV(genderLabel),
+        escapeCSV(u.city || ""),
         escapeCSV(countryName),
         escapeCSV(u.clubName || "Independiente"),
         escapeCSV(u.role),
@@ -196,6 +247,10 @@ export default function AdminUsersTab() {
         escapeCSV(bowModel),
         escapeCSV(poundage),
         escapeCSV(distance),
+        escapeCSV(height),
+        escapeCSV(weight),
+        escapeCSV(domEye),
+        escapeCSV(domHand),
         escapeCSV(regDate)
       ].join(",");
     });
@@ -207,7 +262,7 @@ export default function AdminUsersTab() {
     const link = document.createElement("a");
     const today = new Date().toISOString().split("T")[0];
     link.setAttribute("href", url);
-    link.setAttribute("download", `arqueros_inscritos_archery101010_${today}.csv`);
+    link.setAttribute("download", `suscriptores_demografia_archery101010_${today}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -253,6 +308,7 @@ export default function AdminUsersTab() {
       (u.email || "").toLowerCase().includes(term) ||
       (u.nickname || "").toLowerCase().includes(term) ||
       (u.clubName || "").toLowerCase().includes(term) ||
+      (u.city || "").toLowerCase().includes(term) ||
       (u.country || "").toLowerCase().includes(term);
 
     const matchesRole = 
@@ -502,8 +558,20 @@ export default function AdminUsersTab() {
 
                       <p className="text-[11.6px] text-white truncate">{u.email}</p>
 
-                      {/* Sub-row: Club & Primary Bow */}
+                      {/* Sub-row: Demographics, Club & Primary Bow */}
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-white flex-wrap">
+                        <span className="text-yellow-gold font-bold">
+                          {calculateAge(u.birthDate) !== null ? `${calculateAge(u.birthDate)} años` : "Edad N/D"}
+                        </span>
+                        <span>·</span>
+                        <span className="text-white font-medium">
+                          {u.gender === "M" ? "M" : u.gender === "F" ? "F" : "O"}
+                        </span>
+                        <span>·</span>
+                        <span className="text-white font-medium">
+                          {u.city ? `${u.city}, ` : ""}{countryInfo.name}
+                        </span>
+                        <span>·</span>
                         <span className="text-white font-semibold">{u.clubName || "Independiente"}</span>
                         <span>·</span>
                         <span className="text-cyan-neon font-medium">
@@ -614,11 +682,11 @@ export default function AdminUsersTab() {
 
               {/* Profile Data Info */}
               <div className="flex flex-col gap-3 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
+                <div className="grid grid-cols-2 gap-2.5 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">País</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">País / Ciudad</span>
                     <span className="text-white font-medium">
-                      {COUNTRIES[selectedUser.country]?.flag} {COUNTRIES[selectedUser.country]?.name || selectedUser.country || "N/A"}
+                      {COUNTRIES[selectedUser.country]?.flag} {selectedUser.city ? `${selectedUser.city}, ` : ""}{COUNTRIES[selectedUser.country]?.name || selectedUser.country || "N/A"}
                     </span>
                   </div>
                   <div>
@@ -628,8 +696,13 @@ export default function AdminUsersTab() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">Nacimiento</span>
-                    <span className="text-white font-medium">{selectedUser.birthDate || "N/A"}</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">Edad / Nacimiento</span>
+                    <span className="text-yellow-gold font-bold">
+                      {calculateAge(selectedUser.birthDate) !== null
+                        ? `${calculateAge(selectedUser.birthDate)} años (${getWACategory(calculateAge(selectedUser.birthDate))})`
+                        : "N/A"}
+                    </span>
+                    <span className="text-white/70 text-[10.5px] block">{selectedUser.birthDate || ""}</span>
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">ID Usuario</span>

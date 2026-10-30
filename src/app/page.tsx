@@ -121,7 +121,12 @@ export default function Home() {
   }, [unlockedStar]);
 
   useEffect(() => {
-    if (user && !dismissedProfileModal && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender)) {
+    if (
+      user &&
+      user.role !== "superadmin" &&
+      !dismissedProfileModal &&
+      (!user.fullName?.trim() || !user.birthDate || !user.city?.trim() || !user.country || !user.gender)
+    ) {
       return registerModalDismiss(() => {
         handleReturnToLoginFromProfile();
       });
@@ -1155,7 +1160,10 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Profile Completion Modal with X close and return to login support */}
-      {user && !dismissedProfileModal && (!user.fullName?.trim() || !user.birthDate || !user.country || !user.gender) && (
+      {user &&
+        user.role !== "superadmin" &&
+        !dismissedProfileModal &&
+        (!user.fullName?.trim() || !user.birthDate || !user.city?.trim() || !user.country || !user.gender) && (
         <ProfileCompletionModal
           user={user}
           onComplete={(updatedUser) => {

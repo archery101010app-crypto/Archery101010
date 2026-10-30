@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Users, UserCheck, CreditCard, Activity, Target, RefreshCw, Database } from "lucide-react";
+import { Users, UserCheck, CreditCard, Activity, Target, RefreshCw, Database, Globe2, PieChart, Award, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, getLocalSessions, getSyncQueue, adCampaignsStore } from "@/lib/db/indexedDB";
+import { COUNTRIES_MAP as COUNTRIES } from "@/lib/countries";
 
 interface RealActivityItem {
   id: string;
@@ -169,15 +170,117 @@ export default function AdminDashboardTab() {
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    const handleDbChange = (e: any) => {
+      if (!e.detail || e.detail.store === "simulated_users" || e.detail.store === "sessions_local") {
+        loadRealData();
+      }
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("local-db-change", handleDbChange);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("local-db-change", handleDbChange);
     };
   }, [loadRealData]);
+
+  // Helper to compute exact age from birthDate
+  const calculateAge = (birthDate?: string): number | null => {
+    if (!birthDate) return null;
+    const parts = birthDate.split("-");
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const m = today.getMonth() - month;
+    if (m < 0 || (m === 0 && today.getDate() < day)) {
+      age--;
+    }
+    return age >= 0 && age <= 115 ? age : null;
+  };
+
+  // Compute demographic & commercial intelligence metrics
+  const totalUsersCount = Math.max(users.length, 1);
+
+  // 1. Gender breakdown
+  const maleCount = users.filter((u) => u.gender === "M").length;
+  const femaleCount = users.filter((u) => u.gender === "F").length;
+  const otherGenderCount = users.filter((u) => u.gender && u.gender !== "M" && u.gender !== "F").length;
+
+  // 2. Age & WA Category breakdown
+  const validAges: number[] = [];
+  let catU18 = 0;
+  let catU21 = 0;
+  let catSenior = 0;
+  let catMaster = 0;
+
+  users.forEach((u) => {
+    const age = calculateAge(u.birthDate);
+    if (age !== null) {
+      validAges.push(age);
+      if (age < 18) catU18++;
+      else if (age < 21) catU21++;
+      else if (age < 50) catSenior++;
+      else catMaster++;
+    }
+  });
+
+  const avgAge =
+    validAges.length > 0
+      ? Math.round(validAges.reduce((acc, a) => acc + a, 0) / validAges.length)
+      : 0;
+  const totalAgesCount = Math.max(validAges.length, 1);
+
+  // 3. Top Countries & Cities
+  const countryMap = new Map<string, number>();
+  const cityMap = new Map<string, { city: string; countryCode: string; count: number }>();
+
+  users.forEach((u) => {
+    const cCode = (u.country || "CR").toUpperCase();
+    countryMap.set(cCode, (countryMap.get(cCode) || 0) + 1);
+
+    const cleanCity = (u.city || "").trim();
+    if (cleanCity) {
+      const cityKey = `${cleanCity.toLowerCase()}_${cCode}`;
+      const existing = cityMap.get(cityKey);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        cityMap.set(cityKey, { city: cleanCity, countryCode: cCode, count: 1 });
+      }
+    }
+  });
+
+  const topCountries = Array.from(countryMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const topCities = Array.from(cityMap.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // 4. Bow Type & Brand Market Share
+  const recurveCount = users.filter((u) => u.bowConfig?.type === "Recurve").length;
+  const compoundCount = users.filter((u) => u.bowConfig?.type === "Compound").length;
+  const barebowCount = users.filter((u) => !u.bowConfig?.type || u.bowConfig?.type === "Barebow").length;
+
+  const brandMap = new Map<string, number>();
+  users.forEach((u) => {
+    const brand = (u.bowConfig?.brand || "").trim();
+    if (brand) {
+      const key = brand.charAt(0).toUpperCase() + brand.slice(1);
+      brandMap.set(key, (brandMap.get(key) || 0) + 1);
+    }
+  });
+  const topBrands = Array.from(brandMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
 
   // Compute metrics from real state
   const now = Date.now();
@@ -287,6 +390,185 @@ export default function AdminDashboardTab() {
             </motion.div>
           );
         })}
+      </div>
+
+      {/* Demographic & Commercial Intelligence Section */}
+      <div className="flex flex-col gap-3 mt-1">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black text-cyan-neon uppercase tracking-wider flex items-center gap-2">
+            <PieChart size={16} />
+            <span>Estadística Demográfica e Inteligencia Comercial</span>
+          </h3>
+          <span className="text-[11px] font-bold text-white/70">
+            Datos en vivo ({users.length} suscriptores)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          {/* Card 1: Age & WA Categories */}
+          <motion.div
+            variants={item}
+            className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <span className="text-xs font-black text-white uppercase tracking-wider">Edad y Categoría WA</span>
+              <span className="text-xs font-black text-yellow-gold bg-yellow-gold/10 border border-yellow-gold/20 px-2 py-0.5 rounded-full">
+                Prom: {avgAge > 0 ? `${avgAge} años` : "N/D"}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2 text-xs">
+              {[
+                { label: "Sub-18 (<18)", count: catU18, color: "bg-cyan-neon" },
+                { label: "Sub-21 (18-20)", count: catU21, color: "bg-emerald-400" },
+                { label: "Mayor (21-49)", count: catSenior, color: "bg-yellow-gold" },
+                { label: "Master (50+)", count: catMaster, color: "bg-red-rival" }
+              ].map((cat) => {
+                const pct = validAges.length > 0 ? Math.round((cat.count / totalAgesCount) * 100) : 0;
+                return (
+                  <div key={cat.label} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-white font-semibold">{cat.label}</span>
+                      <span className="text-white font-bold tabular-nums">
+                        {cat.count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-full ${cat.color} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* Card 2: Gender Breakdown */}
+          <motion.div
+            variants={item}
+            className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <span className="text-xs font-black text-white uppercase tracking-wider">Distribución por Género</span>
+              <Users size={14} className="text-cyan-neon" />
+            </div>
+
+            <div className="flex flex-col gap-2.5 text-xs my-auto">
+              {[
+                { label: "Masculino (M)", count: maleCount, color: "bg-cyan-neon" },
+                { label: "Femenino (F)", count: femaleCount, color: "bg-pink-500" },
+                { label: "Otro (O)", count: otherGenderCount, color: "bg-purple-400" }
+              ].map((g) => {
+                const pct = users.length > 0 ? Math.round((g.count / totalUsersCount) * 100) : 0;
+                return (
+                  <div key={g.label} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-white font-semibold">{g.label}</span>
+                      <span className="text-white font-bold tabular-nums">
+                        {g.count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-full ${g.color} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* Card 3: Top Countries & Cities */}
+          <motion.div
+            variants={item}
+            className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <span className="text-xs font-black text-white uppercase tracking-wider">Top Países y Ciudades</span>
+              <Globe2 size={14} className="text-cyan-neon" />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-[11px]">
+              <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon">Países Principales</span>
+              {topCountries.length === 0 ? (
+                <span className="text-white/60">Sin datos</span>
+              ) : (
+                topCountries.slice(0, 3).map(([code, count]) => {
+                  const cInfo = COUNTRIES[code] || { flag: "🌐", name: code };
+                  const pct = Math.round((count / totalUsersCount) * 100);
+                  return (
+                    <div key={code} className="flex items-center justify-between">
+                      <span className="text-white font-medium truncate">
+                        {cInfo.flag} {cInfo.name}
+                      </span>
+                      <span className="text-white font-bold tabular-nums">
+                        {count} ({pct}%)
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+
+              <span className="text-[10px] font-black uppercase tracking-wider text-yellow-gold mt-1.5 flex items-center gap-1">
+                <MapPin size={10} />
+                <span>Ciudades Principales</span>
+              </span>
+              {topCities.length === 0 ? (
+                <span className="text-white/60">Sin ciudades registradas</span>
+              ) : (
+                topCities.slice(0, 3).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between">
+                    <span className="text-white font-medium truncate">
+                      {item.city} ({item.countryCode})
+                    </span>
+                    <span className="text-yellow-gold font-bold tabular-nums">{item.count}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+
+          {/* Card 4: Bow Market Share & Top Brands */}
+          <motion.div
+            variants={item}
+            className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <span className="text-xs font-black text-white uppercase tracking-wider">Arcos y Marcas</span>
+              <Award size={14} className="text-yellow-gold" />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-[11px]">
+              {[
+                { label: "Recurvo", count: recurveCount, color: "text-cyan-neon" },
+                { label: "Compuesto", count: compoundCount, color: "text-yellow-gold" },
+                { label: "Barebow / Raso", count: barebowCount, color: "text-emerald-400" }
+              ].map((b) => {
+                const pct = users.length > 0 ? Math.round((b.count / totalUsersCount) * 100) : 0;
+                return (
+                  <div key={b.label} className="flex items-center justify-between">
+                    <span className="text-white font-medium">{b.label}</span>
+                    <span className={`font-bold tabular-nums ${b.color}`}>
+                      {b.count} ({pct}%)
+                    </span>
+                  </div>
+                );
+              })}
+
+              <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon mt-1.5">
+                Top Marcas Registradas
+              </span>
+              {topBrands.length === 0 ? (
+                <span className="text-white/60">Sin marcas registradas</span>
+              ) : (
+                topBrands.slice(0, 3).map(([brand, count]) => (
+                  <div key={brand} className="flex items-center justify-between">
+                    <span className="text-white font-medium truncate">{brand}</span>
+                    <span className="text-white font-bold tabular-nums">{count} arq.</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        </div>
       </div>
 
       {/* Main Section */}
