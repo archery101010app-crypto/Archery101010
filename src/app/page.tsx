@@ -346,25 +346,21 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [user?.uid]);
 
-  // Listen to visibilitychange to force instant cloud reconnection on wake/refocus
+  // Listen to visibilitychange to keep Firestore WebSocket warm without tearing down active streams
   useEffect(() => {
     if (!user?.uid) return;
     
     const handleVisibilityChange = async () => {
       if (document.visibilityState === "visible") {
-        console.log("[Presence] App visible/focused. Forcing Firestore network reconnection...");
         try {
-          const { disableNetwork, enableNetwork } = await import("@/lib/firebase");
-          const { db } = await import("@/lib/firebase");
-          await disableNetwork(db);
+          const { enableNetwork, db } = await import("@/lib/firebase");
           await enableNetwork(db);
-          console.log("[Presence] Firestore network re-enabled successfully.");
           
           // Trigger immediate sync queue process
           const { runSync } = await import("@/lib/db/syncManager");
           runSync().catch((err) => console.error("Auto sync on visibility change failed:", err));
         } catch (err) {
-          console.error("Error toggling network on visibility change:", err);
+          console.error("Error enabling network on visibility change:", err);
         }
       }
     };
@@ -605,12 +601,9 @@ export default function Home() {
       const uid = user.uid;
 
       if (document.visibilityState === "visible") {
-        console.log("[Firebase Reconnect] Tab focused. Reconnecting Firestore...");
         try {
-          const { db, disableNetwork, enableNetwork } = await import("@/lib/firebase");
-          await disableNetwork(db);
+          const { db, enableNetwork } = await import("@/lib/firebase");
           await enableNetwork(db);
-          console.log("[Firebase Reconnect] Firestore reconnected successfully.");
           const { runSync } = await import("@/lib/db/syncManager");
           runSync();
 
@@ -781,8 +774,16 @@ export default function Home() {
   const handleDiscardDraft = async () => {
     if (activeDraft) {
       try {
-        const { deleteLocalSession } = await import("@/lib/db/indexedDB");
+        const { deleteLocalSession, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
         await deleteLocalSession(activeDraft.id);
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "DELETE",
+          payloadId: activeDraft.id,
+          payload: null,
+          timestamp: Date.now()
+        });
         console.log("[Persistence] Draft discarded:", activeDraft.id);
         setActiveDraft(null);
         setShowDiscardConfirm(false);

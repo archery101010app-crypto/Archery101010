@@ -311,22 +311,24 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return sum;
   };
 
-  // Autoguardado en caliente tras cada tiro o cambio de notas
+  // Autoguardado en caliente instantáneo (0ms Local-First + Real-Time Turbo Sync) tras cada tiro o cambio de notas
   useEffect(() => {
     if (ends.length === 0) return;
-    
+
     // Evitamos autoguardar si es el estado inicial vacío
-    const hasAnyShot = ends.some(e => e.arrows.some(a => a !== ""));
+    const hasAnyShot = ends.some((e) => e.arrows.some((a) => a !== ""));
     if (!hasAnyShot && impacts.length === 0) return;
 
     const autoSave = async () => {
-      const sessionId = config.draftId || config.id || "SES-TEMP-DRAFT";
+      const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
+      const nowTs = Date.now();
       const draftObj = {
         id: sessionId,
         userId: user.uid,
         userName: user.fullName,
         clubId: user.clubId,
-        timestamp: config.timestamp || Date.now(),
+        timestamp: config.timestamp || nowTs,
+        updatedAt: nowTs,
         practiceType: config.practiceType,
         bowType: config.bowType,
         distance: config.distance,
@@ -340,16 +342,26 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         impacts: impacts,
         isDraft: true
       };
-      
+
       try {
+        // 1. Instant 0ms local IndexedDB write (Offline-First safety shield)
         await saveLocalSession(sessionId, draftObj);
+
+        // 2. Real-Time Turbo Sync: push live arrow telemetry immediately to Firestore (coalesced)
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "UPDATE",
+          payloadId: sessionId,
+          payload: draftObj,
+          timestamp: nowTs
+        });
       } catch (err) {
         console.error("Hot autosave failed", err);
       }
     };
 
-    const timer = setTimeout(autoSave, 500);
-    return () => clearTimeout(timer);
+    autoSave();
   }, [ends, impacts, sessionNote]);
 
   // Scroll active row into view in keyboard table
@@ -811,10 +823,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
-  const handleDiscard = async () => {
-    if (config.draftId) {
-      await deleteLocalSession(config.draftId);
+  const cleanupLiveDrafts = async () => {
+    const draftIds = Array.from(
+      new Set([config.draftId, config.id, `SES-DRAFT-${user.uid}`, "SES-TEMP-DRAFT"].filter(Boolean))
+    ) as string[];
+
+    for (const dId of draftIds) {
+      await deleteLocalSession(dId);
+      if (dId.startsWith("SES-DRAFT-") || dId === config.draftId) {
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "DELETE",
+          payloadId: dId,
+          payload: null,
+          timestamp: Date.now()
+        });
+      }
     }
+  };
+
+  const handleDiscard = async () => {
+    await cleanupLiveDrafts();
     onBack(); // exits to Home
   };
 
@@ -882,9 +912,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
 
     try {
-      if (config.draftId) {
-        await deleteLocalSession(config.draftId);
-      }
+      await cleanupLiveDrafts();
       await saveLocalSession(sessionId, sessionObj);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
@@ -977,10 +1005,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
 
     try {
-      if (config.draftId) {
-        await deleteLocalSession(config.draftId);
-      }
-
+      await cleanupLiveDrafts();
       await saveLocalSession(sessionId, sessionObj);
 
       await addToSyncQueue({

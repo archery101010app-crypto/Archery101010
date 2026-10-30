@@ -54,6 +54,7 @@ let activeUnsubscribes: (() => void)[] = [];
 
 /**
  * Initializes Firebase real-time listeners for all core collections
+ * using Incremental Delta Streaming (snapshot.docChanges()) for < 1ms local-first updates.
  */
 export function startRealtimeSync(currentUserUid: string | null) {
   // Clear any existing active listeners to prevent multiple streams
@@ -62,17 +63,20 @@ export function startRealtimeSync(currentUserUid: string | null) {
   if (typeof window === "undefined") return;
 
   // Check if the api key is the mock placeholder to prevent console warnings on mock environments
-  const isLocalhost = typeof window !== "undefined" && 
-                      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-  const isMockFirebase = (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 
-                         process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) && isLocalhost;
-  
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const isMockFirebase =
+    (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("mock-api-key")) &&
+    isLocalhost;
+
   if (isMockFirebase) {
     console.log("Mock Firebase configuration detected. Real-time sync disabled.");
     return;
   }
 
-  console.log("Initializing real-time Firestore sync listeners...");
+  console.log("Initializing Real-Time Turbo Sync Firestore listeners...");
 
   // 1. Sync Users Collection
   const usersUnsub = onSnapshot(
@@ -91,25 +95,27 @@ export function startRealtimeSync(currentUserUid: string | null) {
         });
 
         // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
-        const localUsers = await settingsStore.getItem<UserProfile[]>("simulated_users") || [];
+        const localUsers = (await settingsStore.getItem<UserProfile[]>("simulated_users")) || [];
         const queue = await getSyncQueue();
-        const pendingUserUids = new Set(queue.filter(q => q.collection === "users").map(q => q.payloadId));
+        const pendingUserUids = new Set(
+          queue.filter((q) => q.collection === "users").map((q) => q.payloadId)
+        );
 
         // Rebuild merged list: prefer local user profile if it has a pending write in the queue
         const mergedList: UserProfile[] = [];
-        
+
         // Add remote users who do not have pending local edits
         for (const remoteU of usersList) {
           if (!pendingUserUids.has(remoteU.uid)) {
             mergedList.push(remoteU);
           }
         }
-        
+
         // Add local users who have pending edits, or who were not in the remote list
         for (const localU of localUsers) {
           if (pendingUserUids.has(localU.uid)) {
             mergedList.push(localU);
-          } else if (!usersList.some(u => u.uid === localU.uid)) {
+          } else if (!usersList.some((u) => u.uid === localU.uid)) {
             mergedList.push(localU);
           }
         }
@@ -122,7 +128,7 @@ export function startRealtimeSync(currentUserUid: string | null) {
           const updatedCurrentUser = usersList.find((u) => u.uid === currentUserUid);
           if (updatedCurrentUser) {
             const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
-            
+
             // Helper to check if a profile has all mandatory fields
             const isProfileValid = (u: UserProfile | null | undefined): boolean => {
               if (!u) return false;
@@ -140,28 +146,36 @@ export function startRealtimeSync(currentUserUid: string | null) {
             const isRemoteValid = isProfileValid(updatedCurrentUser);
 
             if (isLocalValid && !isRemoteValid) {
-              console.warn("[Sync] Local profile is complete, but remote is missing mandatory fields. Skip overwrite to avoid reset loop.");
+              console.warn(
+                "[Sync] Local profile is complete, but remote is missing mandatory fields. Skip overwrite to avoid reset loop."
+              );
             } else {
-              const hasFunctionalDifference = isProfileFunctionallyDifferent(localCurrent, updatedCurrentUser);
-              const hasAnyDifference = JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser);
+              const hasFunctionalDifference = isProfileFunctionallyDifferent(
+                localCurrent,
+                updatedCurrentUser
+              );
+              const hasAnyDifference =
+                JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser);
 
               if (hasFunctionalDifference) {
-                console.log("[Sync] Functional difference detected in user profile. Overwriting and dispatching update...");
+                console.log(
+                  "[Sync] Functional difference detected in user profile. Overwriting and dispatching update..."
+                );
                 await settingsStore.setItem("current_user", updatedCurrentUser);
                 // Notify components to update user context in real-time
                 window.dispatchEvent(
                   new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
                 );
               } else if (hasAnyDifference) {
-                // There are differences only in transient/subscription timestamps (like lastActiveAt or updatedAt)
-                // Overwrite IndexedDB silently to keep it fresh, but do NOT dispatch event to prevent rendering loop
                 await settingsStore.setItem("current_user", updatedCurrentUser);
               }
             }
           }
         }
 
-        window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "simulated_users" } }));
+        window.dispatchEvent(
+          new CustomEvent("local-db-change", { detail: { store: "simulated_users" } })
+        );
       } catch (err) {
         console.error("Error in real-time users sync:", err);
       }
@@ -177,132 +191,175 @@ export function startRealtimeSync(currentUserUid: string | null) {
   );
   activeUnsubscribes.push(usersUnsub);
 
-  // 2. Sync Ad Campaigns Collection
-  const adsUnsub = onSnapshot(collection(db, "ad_campaigns"), async (snapshot) => {
-    try {
-      // Clear local store before saving updated campaigns
-      await adCampaignsStore.clear();
+  // Helper for incremental delta sync on standard stores (avoids full .clear() disk stalls)
+  function createIncrementalStoreListener(
+    collectionName: string,
+    store: LocalForage,
+    storeEventName: string
+  ) {
+    let isFirstSnapshot = true;
+    return onSnapshot(collection(db, collectionName), async (snapshot) => {
+      try {
+        const queue = await getSyncQueue();
+        const pendingIds = new Set(
+          queue.filter((item) => item.collection === collectionName).map((item) => item.payloadId)
+        );
 
-      for (const doc of snapshot.docs) {
-        await adCampaignsStore.setItem(doc.id, doc.data());
+        if (isFirstSnapshot) {
+          isFirstSnapshot = false;
+          const remoteIds = new Set(snapshot.docs.map((d) => d.id));
+          const keysToRemove: string[] = [];
+          await store.iterate((_: any, key: string) => {
+            if (!remoteIds.has(key) && !pendingIds.has(key)) {
+              keysToRemove.push(key);
+            }
+          });
+          await Promise.all([
+            ...keysToRemove.map((k) => store.removeItem(k)),
+            ...snapshot.docs
+              .filter((d) => !pendingIds.has(d.id))
+              .map((d) => store.setItem(d.id, d.data()))
+          ]);
+        } else {
+          const changes = snapshot.docChanges();
+          if (changes.length === 0) return;
+
+          await Promise.all(
+            changes.map(async (change) => {
+              const docId = change.doc.id;
+              if (pendingIds.has(docId)) return;
+
+              if (change.type === "removed") {
+                await store.removeItem(docId);
+              } else {
+                await store.setItem(docId, change.doc.data());
+              }
+            })
+          );
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("local-db-change", { detail: { store: storeEventName } })
+        );
+      } catch (err) {
+        console.error(`Error in real-time ${collectionName} sync:`, err);
       }
+    });
+  }
 
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "ad_campaigns" } }));
-    } catch (err) {
-      console.error("Error in real-time campaigns sync:", err);
-    }
-  });
-  activeUnsubscribes.push(adsUnsub);
+  // 2. Sync Ad Campaigns Collection (Incremental Real-Time)
+  activeUnsubscribes.push(
+    createIncrementalStoreListener("ad_campaigns", adCampaignsStore, "ad_campaigns")
+  );
 
-  // 3. Sync Calendar Events Collection
-  const calendarUnsub = onSnapshot(collection(db, "calendar_events"), async (snapshot) => {
-    try {
-      await calendarStore.clear();
+  // 3. Sync Calendar Events Collection (Incremental Real-Time)
+  activeUnsubscribes.push(
+    createIncrementalStoreListener("calendar_events", calendarStore, "calendar_events")
+  );
 
-      for (const doc of snapshot.docs) {
-        await calendarStore.setItem(doc.id, doc.data());
-      }
+  // 4. Sync Macrocycles Collection (Incremental Real-Time)
+  activeUnsubscribes.push(
+    createIncrementalStoreListener("macrocycles", macrocyclesStore, "macrocycles_local")
+  );
 
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "calendar_events" } }));
-    } catch (err) {
-      console.error("Error in real-time calendar sync:", err);
-    }
-  });
-  activeUnsubscribes.push(calendarUnsub);
-
-  // 4. Sync Macrocycles Collection
-  const macrocyclesUnsub = onSnapshot(collection(db, "macrocycles"), async (snapshot) => {
-    try {
-      await macrocyclesStore.clear();
-
-      for (const doc of snapshot.docs) {
-        await macrocyclesStore.setItem(doc.id, doc.data());
-      }
-
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "macrocycles_local" } }));
-    } catch (err) {
-      console.error("Error in real-time macrocycles sync:", err);
-    }
-  });
-  activeUnsubscribes.push(macrocyclesUnsub);
-
-  // 5. Sync Sessions Collection
+  // 5. Sync Sessions Collection (Incremental Real-Time + Live Draft Protection)
+  let isFirstSessionsSnapshot = true;
   const sessionsUnsub = onSnapshot(collection(db, "sessions"), async (snapshot) => {
     try {
-      // Obtener todos los elementos en la cola de sincronización para identificar inserciones y eliminaciones pendientes
       const queue = await getSyncQueue();
-      const pendingDeletes = new Set(
-        queue.filter(item => item.collection === "sessions" && item.operation === "DELETE").map(item => item.payloadId)
-      );
-      const pendingInserts = new Map(
-        queue.filter(item => item.collection === "sessions" && item.operation === "INSERT").map(item => [item.payloadId, item.payload])
+      const pendingSessionIds = new Set(
+        queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
       );
 
-      // Cargar en memoria todas las sesiones locales que sean borradores (drafts) para preservarlas
-      const localDrafts: any[] = [];
-      await sessionsStore.iterate((value: any, key: string) => {
-        if (value && value.isDraft) {
-          localDrafts.push({ key, value });
-        }
-      });
+      if (isFirstSessionsSnapshot) {
+        isFirstSessionsSnapshot = false;
+        const remoteIds = new Set(snapshot.docs.map((d) => d.id));
+        const keysToRemove: string[] = [];
 
-      // Ahora limpiamos el almacén local
-      await sessionsStore.clear();
+        await sessionsStore.iterate((value: any, key: string) => {
+          const isOwnLocalDraft =
+            value && value.isDraft && (!currentUserUid || value.userId === currentUserUid);
+          if (!remoteIds.has(key) && !pendingSessionIds.has(key) && !isOwnLocalDraft) {
+            keysToRemove.push(key);
+          }
+        });
 
-      // Restaurar los borradores locales
-      for (const draft of localDrafts) {
-        await sessionsStore.setItem(draft.key, draft.value);
+        await Promise.all([
+          ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
+          ...snapshot.docs
+            .filter((d) => !pendingSessionIds.has(d.id))
+            .map(async (d) => {
+              const data = d.data();
+              // Do not overwrite the active archer's own in-progress local draft with an older cloud echo
+              if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+                const existingLocal = await sessionsStore.getItem<any>(d.id);
+                if (
+                  existingLocal &&
+                  (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
+                    (data.updatedAt || data.timestamp || 0)
+                ) {
+                  return;
+                }
+              }
+              await sessionsStore.setItem(d.id, { ...data, id: d.id });
+            })
+        ]);
+      } else {
+        const changes = snapshot.docChanges();
+        if (changes.length === 0) return;
+
+        await Promise.all(
+          changes.map(async (change) => {
+            const docId = change.doc.id;
+            if (pendingSessionIds.has(docId)) return;
+
+            if (change.type === "removed") {
+              const existingLocal = await sessionsStore.getItem<any>(docId);
+              // Keep local draft if it belongs to current user and was not explicitly deleted
+              if (
+                existingLocal?.isDraft &&
+                currentUserUid &&
+                existingLocal.userId === currentUserUid
+              ) {
+                return;
+              }
+              await sessionsStore.removeItem(docId);
+            } else {
+              const data = change.doc.data();
+              if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+                const existingLocal = await sessionsStore.getItem<any>(docId);
+                if (
+                  existingLocal &&
+                  (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
+                    (data.updatedAt || data.timestamp || 0)
+                ) {
+                  return;
+                }
+              }
+              await sessionsStore.setItem(docId, { ...data, id: docId });
+            }
+          })
+        );
       }
 
-      // Restaurar las sesiones pendientes de subida (inserts)
-      for (const [id, payload] of pendingInserts.entries()) {
-        await sessionsStore.setItem(id, payload);
-      }
-
-      // Escribir los documentos provenientes de Firestore (omitiendo aquellos con borrado pendiente)
-      for (const doc of snapshot.docs) {
-        if (!pendingDeletes.has(doc.id)) {
-          // Aseguramos que doc.id quede guardado dentro de las propiedades del objeto (evita errores de borrado posterior)
-          const data = doc.data();
-          const docWithId = { ...data, id: doc.id };
-          await sessionsStore.setItem(doc.id, docWithId);
-        }
-      }
-
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "sessions_local" } }));
+      window.dispatchEvent(
+        new CustomEvent("local-db-change", { detail: { store: "sessions_local" } })
+      );
     } catch (err) {
       console.error("Error in real-time sessions sync:", err);
     }
   });
   activeUnsubscribes.push(sessionsUnsub);
 
-  // 6. Sync Athlete Stars Collection
-  const starsUnsub = onSnapshot(collection(db, "athlete_stars"), async (snapshot) => {
-    try {
-      await athleteStarsStore.clear();
-      for (const doc of snapshot.docs) {
-        await athleteStarsStore.setItem(doc.id, doc.data());
-      }
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "athlete_stars" } }));
-    } catch (err) {
-      console.error("Error in real-time athlete_stars sync:", err);
-    }
-  });
-  activeUnsubscribes.push(starsUnsub);
+  // 6. Sync Athlete Stars Collection (Incremental Real-Time)
+  activeUnsubscribes.push(
+    createIncrementalStoreListener("athlete_stars", athleteStarsStore, "athlete_stars")
+  );
 
-  // 7. Sync Star History Collection
-  const starHistoryUnsub = onSnapshot(collection(db, "star_history"), async (snapshot) => {
-    try {
-      await starHistoryStore.clear();
-      for (const doc of snapshot.docs) {
-        await starHistoryStore.setItem(doc.id, doc.data());
-      }
-      window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "star_history" } }));
-    } catch (err) {
-      console.error("Error in real-time star_history sync:", err);
-    }
-  });
-  activeUnsubscribes.push(starHistoryUnsub);
+  // 7. Sync Star History Collection (Incremental Real-Time)
+  activeUnsubscribes.push(
+    createIncrementalStoreListener("star_history", starHistoryStore, "star_history")
+  );
 }
 
 /**

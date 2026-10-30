@@ -263,9 +263,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     }
     ensureClean6DigitCode();
 
-    // Listen for realtime database changes (new athlete sessions synced from cloud)
+    // Listen for realtime database changes (new athlete sessions or roster updates synced from cloud)
     const handleDbChange = async (e: any) => {
-      if (!e.detail || e.detail.store === "sessions_local" || e.detail.store === "settings_local") {
+      if (
+        !e.detail ||
+        e.detail.store === "sessions_local" ||
+        e.detail.store === "settings_local" ||
+        e.detail.store === "simulated_users"
+      ) {
         const freshSessions = await getLocalSessions();
         setSessions(freshSessions);
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);

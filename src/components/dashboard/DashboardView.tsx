@@ -112,6 +112,18 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       }
     }
     loadAthleteStar();
+
+    const handleStarChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.store === "athlete_stars") {
+        loadAthleteStar();
+      }
+    };
+
+    window.addEventListener("local-db-change", handleStarChange);
+    return () => {
+      window.removeEventListener("local-db-change", handleStarChange);
+    };
   }, [user]);
 
   // Load today's mission and upcoming calendar events
@@ -149,7 +161,9 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
   useEffect(() => {
     async function loadStats() {
       const localSess = await getLocalSessions();
-      const activeSess = localSess.filter(s => s.deletedByArcher !== true);
+      const activeSess = localSess.filter(
+        (s) => s.deletedByArcher !== true && !s.isDraft && (!s.userId || s.userId === user.uid)
+      );
       setSessions(activeSess);
       
       if (activeSess.length > 0) {
