@@ -369,7 +369,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   <span className="text-yellow-gold">10</span>
                 </div>
                 <span className="text-white text-[14.5px] sm:text-[15.8px] font-black tracking-widest uppercase pl-0.5">
-                  WA TIMER
+                  TIMER
                 </span>
               </div>
               <button
@@ -540,10 +540,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
               // Config Panel (Idle Configuration State)
               <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-4 relative z-10 my-2">
                 <div className="text-center">
-                  <h2 className="text-white text-[22px] font-black tracking-wide uppercase">
-                    Reloj Oficial World Archery
-                  </h2>
-                  <p className="text-white text-[12.8px] mt-0.5">
+                  <p className="text-white text-[12.8px]">
                     Reglamento WA: 2 pitidos (Rojo) · 1 pitido (Verde) · 30s (Amarillo) · 3 pitidos (Fin)
                   </p>
                 </div>
