@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { getLoggedUser, UserProfile } from "@/lib/authService";
 import LoginView from "@/components/auth/LoginView";
 import RegisterView from "@/components/auth/RegisterView";
@@ -8,26 +9,27 @@ import DashboardView from "@/components/dashboard/DashboardView";
 import FloatingNav from "@/components/ui/FloatingNav";
 import Header from "@/components/ui/Header";
 import IntroScreen from "@/components/ui/IntroScreen";
-
-import SessionConfigView from "@/components/scoring/SessionConfigView";
-import ScoringView from "@/components/scoring/ScoringView";
-import HistoryView from "@/components/history/HistoryView";
-import CalendarView from "@/components/calendar/CalendarView";
-import ProfileView from "@/components/profile/ProfileView";
 import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
-import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
-import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
-import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
-import CoachPaymentModal from "@/components/subscription/CoachPaymentModal";
+
+// Lazy-loaded secondary screens for ultra-fast initial mobile boot
+const SessionConfigView = dynamic(() => import("@/components/scoring/SessionConfigView"));
+const ScoringView = dynamic(() => import("@/components/scoring/ScoringView"));
+const HistoryView = dynamic(() => import("@/components/history/HistoryView"));
+const CalendarView = dynamic(() => import("@/components/calendar/CalendarView"));
+const ProfileView = dynamic(() => import("@/components/profile/ProfileView"));
+const SpotifyFloatingPlayer = dynamic(() => import("@/components/spotify/SpotifyFloatingPlayer"));
+const MatchplayLobbyView = dynamic(() => import("@/components/matchplay/MatchplayLobbyView"));
+const MatchplayGameView = dynamic(() => import("@/components/matchplay/MatchplayGameView"));
+const CoachPaymentModal = dynamic(() => import("@/components/subscription/CoachPaymentModal"));
+const SuperAdminView = dynamic(() => import("@/components/admin/SuperAdminView"));
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Star } from "lucide-react";
 
-// Ads & Admin Imports
+// Ads Imports
 import BannerWidget from "@/components/ads/BannerWidget";
 import NotificationBar from "@/components/ads/NotificationBar";
 import AdPopupOverlay from "@/components/ads/AdPopupOverlay";
-import SuperAdminView from "@/components/admin/SuperAdminView";
 import { AdCampaign } from "@/lib/db/adTypes";
 import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
 import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation/backNavigation";
@@ -76,6 +78,20 @@ export default function Home() {
       }
     }
   }, [currentScreen]);
+
+  // Background warm-preload of secondary screen chunks after first paint for 0ms offline navigation
+  useEffect(() => {
+    if (!user) return;
+    const timer = setTimeout(() => {
+      import("@/components/scoring/SessionConfigView").catch(() => {});
+      import("@/components/scoring/ScoringView").catch(() => {});
+      import("@/components/history/HistoryView").catch(() => {});
+      import("@/components/calendar/CalendarView").catch(() => {});
+      import("@/components/profile/ProfileView").catch(() => {});
+      import("@/components/matchplay/MatchplayLobbyView").catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [user]);
 
   // Mobile Back Navigation (Android hardware button & Apple iOS / Android edge-swipe)
   useEffect(() => {

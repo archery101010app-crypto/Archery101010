@@ -290,21 +290,50 @@ export default function AdminDashboardTab() {
     return now - ts <= 48 * 3600 * 1000;
   });
 
+  const weeklyActiveUsers = users.filter((u) => {
+    const ts = u.lastActiveAt || u.createdAt;
+    if (!ts) return false;
+    return now - ts <= 7 * 24 * 3600 * 1000;
+  });
+  const weeklyRetentionPct =
+    users.length > 0 ? Math.round((weeklyActiveUsers.length / users.length) * 100) : 0;
+
+  const coachesCount = users.filter(
+    (u) => u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach"
+  ).length;
+
+  const uniqueClubsCount = new Set(
+    users.map((u) => (u.clubName || "").trim().toLowerCase()).filter(Boolean)
+  ).size;
+
+  const totalGlobalArrows = sessions.reduce((sum, s) => {
+    if (s.totalArrowsVolume && typeof s.totalArrowsVolume === "number") {
+      return sum + s.totalArrowsVolume;
+    }
+    const endsCount = s.endsCount || (Array.isArray(s.ends) ? s.ends.length : 0);
+    const arrowsPerEnd =
+      s.arrowsPerEnd || (Array.isArray(s.ends) && s.ends[0]?.arrows ? s.ends[0].arrows.length : 0);
+    return sum + endsCount * arrowsPerEnd + (s.warmupArrows || 0);
+  }, 0);
+
+  const avgArrowsPerArcher =
+    users.length > 0 ? Math.round(totalGlobalArrows / users.length) : 0;
+
   const proUsers = users.filter((u) => u.plan === "PRO");
 
   const kpis = [
     {
       title: "Arqueros Registrados",
       value: users.length.toString(),
-      subtitle: users.length === 1 ? "1 cuenta en la base de datos" : `${users.length} cuentas en la base de datos`,
+      subtitle: `${coachesCount} Coaches • ${uniqueClubsCount} Clubes activos`,
       icon: Users,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-[0_0_15px_rgba(0,191,255,0.1)]",
       textColor: "text-cyan-neon"
     },
     {
-      title: "Activos Recientes",
-      value: recentActiveUsers.length.toString(),
-      subtitle: recentActiveUsers.length === 0 ? "Sin actividad en 48h" : "Actividad en últimas 48 horas",
+      title: "Activos y Retención",
+      value: `${recentActiveUsers.length} (${weeklyRetentionPct}%)`,
+      subtitle: `Activos 48h • Retención 7d: ${weeklyRetentionPct}%`,
       icon: UserCheck,
       colorClass: "text-green-500 bg-green-500/10 border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]",
       textColor: "text-green-400"
@@ -318,9 +347,9 @@ export default function AdminDashboardTab() {
       textColor: "text-yellow-400"
     },
     {
-      title: "Sesiones de Tiro",
-      value: sessions.length.toString(),
-      subtitle: sessions.length === 1 ? "1 entrenamiento guardado" : `${sessions.length} entrenamientos guardados`,
+      title: "Flechas Globales",
+      value: totalGlobalArrows.toLocaleString(),
+      subtitle: `${sessions.length} sesiones • ~${avgArrowsPerArcher.toLocaleString()} fl./arquero`,
       icon: Target,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]",
       textColor: "text-cyan-neon"

@@ -1,9 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Settings, Save, ShieldAlert, Key, MessageSquare, ToggleLeft, ToggleRight, Sparkles, CheckCircle2 } from "lucide-react";
+import { Settings, Save, ShieldAlert, Key, MessageSquare, ToggleLeft, ToggleRight, Sparkles, CheckCircle2, Database, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { settingsStore } from "@/lib/db/indexedDB";
+import {
+  settingsStore,
+  getLocalSessions,
+  getLocalEvents,
+  getLocalMacrocycles,
+  adCampaignsStore,
+  athleteStarsStore,
+  starHistoryStore
+} from "@/lib/db/indexedDB";
 
 export default function AdminSettingsTab() {
   const [paypalClientId, setPaypalClientId] = useState("");
@@ -17,6 +25,101 @@ export default function AdminSettingsTab() {
   const [macrocyclesEnabled, setMacrocyclesEnabled] = useState(true);
 
   const [isSaved, setIsSaved] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+
+  const handleDownloadMasterBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const backupPayload: Record<string, any> = {
+        app: "Archery 101010: The App",
+        exportedAt: new Date().toISOString(),
+        timestamp: Date.now(),
+        collections: {}
+      };
+
+      // 1. Collect local IndexedDB stores as baseline
+      const users = (await settingsStore.getItem<any[]>("simulated_users")) || [];
+      const sessions = await getLocalSessions();
+      const calendarEvents = await getLocalEvents();
+      const macrocycles = await getLocalMacrocycles();
+
+      const adCampaigns: any[] = [];
+      await adCampaignsStore.iterate((val) => {
+        adCampaigns.push(val);
+      });
+
+      const athleteStars: any[] = [];
+      await athleteStarsStore.iterate((val, key) => {
+        athleteStars.push({ id: key, ...(typeof val === "object" && val ? val : {}) });
+      });
+
+      const starHistory: any[] = [];
+      await starHistoryStore.iterate((val, key) => {
+        starHistory.push({ id: key, ...(typeof val === "object" && val ? val : {}) });
+      });
+
+      backupPayload.collections = {
+        users,
+        sessions,
+        calendar_events: calendarEvents,
+        macrocycles,
+        ad_campaigns: adCampaigns,
+        athlete_stars: athleteStars,
+        star_history: starHistory
+      };
+
+      // 2. If online, enrich with live Firestore collections
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const { collection, getDocs } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const colNames = [
+            "users",
+            "sessions",
+            "calendar_events",
+            "macrocycles",
+            "ad_campaigns",
+            "athlete_stars",
+            "star_history"
+          ];
+          await Promise.all(
+            colNames.map(async (colName) => {
+              try {
+                const snap = await getDocs(collection(db, colName));
+                if (!snap.empty) {
+                  backupPayload.collections[colName] = snap.docs.map((d) => ({
+                    id: d.id,
+                    ...d.data()
+                  }));
+                }
+              } catch {
+                // Keep local fallback if a collection fails
+              }
+            })
+          );
+        } catch {
+          // Offline or Firestore unavailable; local snapshot used
+        }
+      }
+
+      const jsonStr = JSON.stringify(backupPayload, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const today = new Date().toISOString().split("T")[0];
+      link.setAttribute("href", url);
+      link.setAttribute("download", `archery101010_respaldo_maestro_${today}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to generate master backup:", err);
+      alert("Error al generar el respaldo maestro.");
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
 
   useEffect(() => {
     async function loadSettings() {
@@ -188,6 +291,26 @@ export default function AdminSettingsTab() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Section: Master Cloud & Local Backup */}
+        <div className="bg-neutral-900/40 border border-cyan-neon/25 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-3">
+          <h3 className="text-xs font-black text-cyan-neon uppercase tracking-widest border-b border-white/5 pb-2 flex items-center gap-1.5">
+            <Database size={14} className="text-cyan-neon" />
+            <span>Respaldo Maestro de Base de Datos (Snapshot .JSON)</span>
+          </h3>
+          <p className="text-xs text-white leading-relaxed">
+            Descarga una copia de seguridad completa e instantánea con todos los usuarios, perfiles demográficos, sesiones de tiro, calendarios, macrociclos, estrellas y campañas publicitarias de Firestore + IndexedDB.
+          </p>
+          <button
+            type="button"
+            onClick={handleDownloadMasterBackup}
+            disabled={isBackingUp}
+            className="self-start mt-1 py-2.5 px-4 bg-white/10 hover:bg-cyan-neon hover:text-black border border-cyan-neon/30 text-cyan-neon font-black text-xs uppercase tracking-wider rounded-xl flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+          >
+            <Download size={14} />
+            <span>{isBackingUp ? "Generando Respaldo..." : "Descargar Respaldo Maestro (.JSON)"}</span>
+          </button>
         </div>
 
         {/* Form Footer Action */}

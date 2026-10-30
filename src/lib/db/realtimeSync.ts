@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where, or } from "firebase/firestore";
 import {
   adCampaignsStore,
   calendarStore,
@@ -262,94 +262,124 @@ export function startRealtimeSync(currentUserUid: string | null) {
     createIncrementalStoreListener("macrocycles", macrocyclesStore, "macrocycles_local")
   );
 
-  // 5. Sync Sessions Collection (Incremental Real-Time + Live Draft Protection)
-  let isFirstSessionsSnapshot = true;
-  const sessionsUnsub = onSnapshot(collection(db, "sessions"), async (snapshot) => {
-    try {
-      const queue = await getSyncQueue();
-      const pendingSessionIds = new Set(
-        queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
-      );
+  // 5. Sync Sessions Collection (Incremental Real-Time + Scoped Cloud Filter + Live Draft Protection)
+  settingsStore
+    .getItem<UserProfile>("current_user")
+    .then((localUser) => {
+      let isFirstSessionsSnapshot = true;
+      const role = localUser?.role || "archer";
+      const clubId = localUser?.clubId || null;
 
-      if (isFirstSessionsSnapshot) {
-        isFirstSessionsSnapshot = false;
-        const remoteIds = new Set(snapshot.docs.map((d) => d.id));
-        const keysToRemove: string[] = [];
-
-        await sessionsStore.iterate((value: any, key: string) => {
-          const isOwnLocalDraft =
-            value && value.isDraft && (!currentUserUid || value.userId === currentUserUid);
-          if (!remoteIds.has(key) && !pendingSessionIds.has(key) && !isOwnLocalDraft) {
-            keysToRemove.push(key);
-          }
-        });
-
-        await Promise.all([
-          ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
-          ...snapshot.docs
-            .filter((d) => !pendingSessionIds.has(d.id))
-            .map(async (d) => {
-              const data = d.data();
-              // Do not overwrite the active archer's own in-progress local draft with an older cloud echo
-              if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
-                const existingLocal = await sessionsStore.getItem<any>(d.id);
-                if (
-                  existingLocal &&
-                  (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
-                    (data.updatedAt || data.timestamp || 0)
-                ) {
-                  return;
-                }
-              }
-              await sessionsStore.setItem(d.id, { ...data, id: d.id });
-            })
-        ]);
-      } else {
-        const changes = snapshot.docChanges();
-        if (changes.length === 0) return;
-
-        await Promise.all(
-          changes.map(async (change) => {
-            const docId = change.doc.id;
-            if (pendingSessionIds.has(docId)) return;
-
-            if (change.type === "removed") {
-              const existingLocal = await sessionsStore.getItem<any>(docId);
-              // Keep local draft if it belongs to current user and was not explicitly deleted
-              if (
-                existingLocal?.isDraft &&
-                currentUserUid &&
-                existingLocal.userId === currentUserUid
-              ) {
-                return;
-              }
-              await sessionsStore.removeItem(docId);
-            } else {
-              const data = change.doc.data();
-              if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
-                const existingLocal = await sessionsStore.getItem<any>(docId);
-                if (
-                  existingLocal &&
-                  (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
-                    (data.updatedAt || data.timestamp || 0)
-                ) {
-                  return;
-                }
-              }
-              await sessionsStore.setItem(docId, { ...data, id: docId });
-            }
-          })
-        );
+      // Smart Query Scoping:
+      // - SuperAdmins and Coaches receive global or club-wide telemetry
+      // - Individual archers only download their own sessions (+ their club's sessions if in a club), saving up to 95% Firestore reads
+      let sessionsTarget: any = collection(db, "sessions");
+      if (currentUserUid && role === "archer") {
+        if (clubId) {
+          sessionsTarget = query(
+            collection(db, "sessions"),
+            or(where("userId", "==", currentUserUid), where("clubId", "==", clubId))
+          );
+        } else {
+          sessionsTarget = query(
+            collection(db, "sessions"),
+            where("userId", "==", currentUserUid)
+          );
+        }
       }
 
-      window.dispatchEvent(
-        new CustomEvent("local-db-change", { detail: { store: "sessions_local" } })
-      );
-    } catch (err) {
-      console.error("Error in real-time sessions sync:", err);
-    }
-  });
-  activeUnsubscribes.push(sessionsUnsub);
+      const sessionsUnsub = onSnapshot(sessionsTarget, async (snapshot: any) => {
+        try {
+          const queue = await getSyncQueue();
+          const pendingSessionIds = new Set(
+            queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
+          );
+
+          if (isFirstSessionsSnapshot) {
+            isFirstSessionsSnapshot = false;
+            const remoteIds = new Set(snapshot.docs.map((d: any) => d.id));
+            const keysToRemove: string[] = [];
+
+            await sessionsStore.iterate((value: any, key: string) => {
+              const isOwnLocalDraft =
+                value && value.isDraft && (!currentUserUid || value.userId === currentUserUid);
+              const isDemoSession = typeof key === "string" && key.startsWith("SES-D-");
+              if (
+                !remoteIds.has(key) &&
+                !pendingSessionIds.has(key) &&
+                !isOwnLocalDraft &&
+                !isDemoSession
+              ) {
+                keysToRemove.push(key);
+              }
+            });
+
+            await Promise.all([
+              ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
+              ...snapshot.docs
+                .filter((d: any) => !pendingSessionIds.has(d.id))
+                .map(async (d: any) => {
+                  const data = d.data();
+                  if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+                    const existingLocal = await sessionsStore.getItem<any>(d.id);
+                    if (
+                      existingLocal &&
+                      (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
+                        (data.updatedAt || data.timestamp || 0)
+                    ) {
+                      return;
+                    }
+                  }
+                  await sessionsStore.setItem(d.id, { ...data, id: d.id });
+                })
+            ]);
+          } else {
+            const changes = snapshot.docChanges();
+            if (changes.length === 0) return;
+
+            await Promise.all(
+              changes.map(async (change: any) => {
+                const docId = change.doc.id;
+                if (pendingSessionIds.has(docId)) return;
+
+                if (change.type === "removed") {
+                  const existingLocal = await sessionsStore.getItem<any>(docId);
+                  if (
+                    existingLocal?.isDraft &&
+                    currentUserUid &&
+                    existingLocal.userId === currentUserUid
+                  ) {
+                    return;
+                  }
+                  await sessionsStore.removeItem(docId);
+                } else {
+                  const data = change.doc.data();
+                  if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+                    const existingLocal = await sessionsStore.getItem<any>(docId);
+                    if (
+                      existingLocal &&
+                      (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
+                        (data.updatedAt || data.timestamp || 0)
+                    ) {
+                      return;
+                    }
+                  }
+                  await sessionsStore.setItem(docId, { ...data, id: docId });
+                }
+              })
+            );
+          }
+
+          window.dispatchEvent(
+            new CustomEvent("local-db-change", { detail: { store: "sessions_local" } })
+          );
+        } catch (err) {
+          console.error("Error in real-time sessions sync:", err);
+        }
+      });
+      activeUnsubscribes.push(sessionsUnsub);
+    })
+    .catch((err) => console.error("Failed to initialize scoped sessions listener:", err));
 
   // 6. Sync Athlete Stars Collection (Incremental Real-Time)
   activeUnsubscribes.push(
