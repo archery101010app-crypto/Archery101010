@@ -113,7 +113,8 @@ async function generateFeatureGraphic(logo3Path) {
     }
   }
 
-  const subTargetH = 19;
+  // +15% larger "THE APP" (19 -> 22px height)
+  const subTargetH = 22;
   const subTargetW = Math.round(seqW * (subTargetH / 131));
   subtitleHiRes.resize({ w: subTargetW, h: subTargetH });
 
@@ -121,9 +122,9 @@ async function generateFeatureGraphic(logo3Path) {
   const subY = Math.round(logoY + targetH + 28);
   canvas.composite(subtitleHiRes, subX, subY);
 
-  // 3. Crisp 3-segment 101010 Tricolor Accent Line below "THE APP"
-  const barWidth = 132;
-  const barHeight = 3;
+  // 3. Crisp 3-segment 101010 Tricolor Accent Line below "THE APP" (+20% longer: 132 -> 159px, thicker: 3 -> 4px)
+  const barWidth = 159;
+  const barHeight = 4;
   const barX = Math.round(cx - barWidth / 2);
   const barY = Math.round(subY + subTargetH + 20);
   const segW = barWidth / 3;
