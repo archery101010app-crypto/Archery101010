@@ -192,6 +192,32 @@
             "value": "attachment; filename=\"Estrategia_Redes_Sociales_WHOOP_Archery101010_Movil.pdf\""
           }
         ]
+      },
+      {
+        "source": "/101010-the-app-watermark-transparente.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"101010-the-app-watermark-transparente.png\""
+          }
+        ]
+      },
+      {
+        "source": "/101010-the-app-preview-negro.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"101010-the-app-preview-negro.png\""
+          }
+        ]
       }
     ],
     "redirects": [
