@@ -57,12 +57,25 @@ if (fs.existsSync(swPath)) {
 
 // 5. Update android/app/build.gradle versionCode and versionName
 const gradlePath = path.join(__dirname, '../android/app/build.gradle');
+const vCode = 40000 + parts[1] * 100 + parts[2];
 if (fs.existsSync(gradlePath)) {
   let gradleContent = fs.readFileSync(gradlePath, 'utf8');
   // Base 40000 ensures monotonic Android versionCode increase after resetting visible version to 2.0
-  const vCode = 40000 + parts[1] * 100 + parts[2];
   gradleContent = gradleContent.replace(/versionCode\s+\d+/, `versionCode ${vCode}`);
   gradleContent = gradleContent.replace(/versionName\s+["'].*?["']/, `versionName "${displayVersion}"`);
   fs.writeFileSync(gradlePath, gradleContent, 'utf8');
   console.log(`Updated android/app/build.gradle with: versionCode ${vCode}, versionName "${displayVersion}"`);
 }
+
+// 6. Write public/version.json for automatic in-app update detection
+const versionJsonPath = path.join(__dirname, '../public/version.json');
+const versionPayload = {
+  version: displayVersion,
+  fullVersion: newVersion,
+  versionCode: vCode,
+  apkUrl: `https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v${displayVersion}.apk`,
+  playStoreUrl: 'https://play.google.com/store/apps/details?id=com.archery101010.app',
+  updatedAt: new Date().toISOString()
+};
+fs.writeFileSync(versionJsonPath, JSON.stringify(versionPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/version.json for v${displayVersion} (versionCode ${vCode})`);

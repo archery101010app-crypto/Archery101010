@@ -21,6 +21,36 @@
         ]
       },
       {
+        "source": "/version.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json; charset=utf-8"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Guia_Actualizaciones_Archery101010_Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Guia_Actualizaciones_Archery101010_Movil.pdf\""
+          }
+        ]
+      },
+      {
         "source": "/arqueros.csv",
         "headers": [
           {
@@ -154,17 +184,27 @@
     "redirects": [
       {
         "source": "/archery-app.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.6.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.7.apk",
         "type": 302
       },
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.6.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.7.apk",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.6.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.7.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.7.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.7.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.7.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.7.apk",
         "type": 302
       },
       {

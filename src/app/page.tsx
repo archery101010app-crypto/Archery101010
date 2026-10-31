@@ -9,6 +9,7 @@ import DashboardView from "@/components/dashboard/DashboardView";
 import FloatingNav from "@/components/ui/FloatingNav";
 import Header from "@/components/ui/Header";
 import IntroScreen from "@/components/ui/IntroScreen";
+import AppUpdateBanner from "@/components/ui/AppUpdateBanner";
 import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
 
 // Lazy-loaded secondary screens for ultra-fast initial mobile boot
@@ -900,6 +901,7 @@ export default function Home() {
         className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-28 px-3.5 sm:px-5 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
+        <AppUpdateBanner />
         {currentScreen === "HOME" && (
           <DashboardView
             user={user}
