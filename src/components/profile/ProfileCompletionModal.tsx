@@ -98,7 +98,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
         </div>
 
         <p className="text-xs text-white leading-relaxed">
-          Para continuar usando <strong>Archery 101010</strong>, debes definir tu apodo público y otros datos indispensables.
+          Para continuar usando <strong>Archery 101010</strong>, completa tus datos básicos de arquero. El <strong>Nickname</strong> es opcional.
         </p>
 
         {error && (
@@ -124,14 +124,14 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
-                {t("nickname")} *
+                Nickname <span className="text-white/50 font-medium normal-case">(Opcional)</span>
               </label>
               <input
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder=""
-                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                placeholder="Opcional"
+                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
           </div>
 
           <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[11.6px] text-white leading-snug">
-            <strong className="text-white uppercase tracking-wider">Nota sobre el Apodo:</strong> El apodo es de carácter público. Será visible para tu entrenador y otros arqueros durante duelos competitivos en vivo.
+            <strong className="text-white uppercase tracking-wider">Nickname (Opcional):</strong> Si lo deseas, puedes indicar un Nickname para tus duelos en línea y tarjetas compartidas.
           </div>
 
           <button

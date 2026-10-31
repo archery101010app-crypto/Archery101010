@@ -1,8 +1,8 @@
 {
-  "version": "2.8",
-  "fullVersion": "2.8.0",
-  "versionCode": 40800,
-  "apkUrl": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.8.apk",
+  "version": "2.9",
+  "fullVersion": "2.9.0",
+  "versionCode": 40900,
+  "apkUrl": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.9.apk",
   "playStoreUrl": "https://play.google.com/store/apps/details?id=com.archery101010.app",
-  "updatedAt": "2026-10-31T16:54:13.035Z"
+  "updatedAt": "2026-10-31T17:17:42.181Z"
 }

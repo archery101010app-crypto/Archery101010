@@ -27,6 +27,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [fullName, setFullName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [country, setCountry] = useState("CR");
   const [gender, setGender] = useState("M");
@@ -103,7 +104,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
     try {
       const cleanFullName = fullName.trim();
-      const autoNickname = cleanFullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
+      const autoNickname = nickname.trim() || cleanFullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
       const user = await registerUser({
         email,
         password,
@@ -285,6 +286,19 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder=""
                   className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
+                  Nickname <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Opcional"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
               </div>
 
