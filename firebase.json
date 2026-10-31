@@ -71,6 +71,19 @@
             "value": "attachment; filename=\"archery101010-tshirt-negra.png\""
           }
         ]
+      },
+      {
+        "source": "/archery101010-tshirt-frontal.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"archery101010-tshirt-frontal.png\""
+          }
+        ]
       }
     ],
     "redirects": [
