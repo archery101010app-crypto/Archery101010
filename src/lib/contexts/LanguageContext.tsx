@@ -23,6 +23,10 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "pt", shortLabel: "PT", name: "Portugués", nativeName: "Português", flag: "🇧🇷" },
   { code: "it", shortLabel: "IT", name: "Italiano", nativeName: "Italiano", flag: "🇮🇹" },
   { code: "zh-CN", shortLabel: "ZH", name: "Chino", nativeName: "中文", flag: "🇨🇳" },
+  { code: "iw", shortLabel: "HE", name: "Hebreo", nativeName: "עברית", flag: "🇮🇱" },
+  { code: "ru", shortLabel: "RU", name: "Ruso", nativeName: "Русский", flag: "🇷🇺" },
+  { code: "cs", shortLabel: "CS", name: "Checo", nativeName: "Čeština", flag: "🇨🇿" },
+  { code: "ar", shortLabel: "AR", name: "Árabe", nativeName: "العربية", flag: "🇸🇦" },
 ];
 
 interface LanguageContextProps {
@@ -36,6 +40,7 @@ const LanguageContext = createContext<LanguageContextProps | undefined>(undefine
 function normalizeLangCode(raw: string): string {
   const lower = raw.trim().toLowerCase();
   if (lower.startsWith("zh")) return "zh-CN";
+  if (lower === "he" || lower.startsWith("he-") || lower === "iw") return "iw";
   const base = lower.split("-")[0];
   return base;
 }

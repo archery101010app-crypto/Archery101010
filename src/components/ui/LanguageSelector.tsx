@@ -116,7 +116,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 </button>
               </div>
 
-              <div translate="no" className="notranslate grid grid-cols-2 gap-2">
+              <div translate="no" className="notranslate grid grid-cols-2 gap-2 max-h-[70vh] overflow-y-auto pr-0.5">
                 {SUPPORTED_LANGUAGES.map((lang) => {
                   const isSelected = lang.code.toLowerCase() === language.toLowerCase();
                   return (
