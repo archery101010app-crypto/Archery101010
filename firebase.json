@@ -123,6 +123,19 @@
             "value": "attachment; filename=\"archery101010-serigrafia-negro.png\""
           }
         ]
+      },
+      {
+        "source": "/Plan_Maestro_WHOOP_Archery101010_Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Plan_Maestro_WHOOP_Archery101010_Movil.pdf\""
+          }
+        ]
       }
     ],
     "redirects": [
