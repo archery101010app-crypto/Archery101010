@@ -82,9 +82,13 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       ? ranking.map((r, idx) => `${idx + 1}. ${r.userName} · ${r.score} pts (${r.format})`).join("\n")
       : "No hay registros esta semana.";
 
-    const fullMessage = `*REPORTE DE PUNTUACIONES · ARCHERY 101010*\n\n*Top Podio de la Semana:*\n${rankingText}\n\nExcelente trabajo y disciplina a todos los arqueros.`;
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(fullMessage)}`;
-    window.open(url, "_blank");
+    const fullMessage = `*REPORTE DE PUNTUACIONES · 101010 THE APP*\n\n*Top Podio de la Semana:*\n${rankingText}\n\nExcelente trabajo y disciplina a todos los arqueros.\n🎯 *101010 THE APP*`;
+    if (typeof window !== "undefined" && (window as any).ArcheryNativeShare?.shareWhatsAppText) {
+      (window as any).ArcheryNativeShare.shareWhatsAppText(fullMessage);
+      return;
+    }
+    const url = `whatsapp://send?text=${encodeURIComponent(fullMessage)}`;
+    window.location.href = url;
   };
 
   return (

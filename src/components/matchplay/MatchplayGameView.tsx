@@ -1790,7 +1790,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     const outcomeText = winner === "USER" ? "¡VICTORIA!" : winner === "RIVAL" ? "Derrota" : "Empate";
 
     const message = 
-      `*ELIMINATORIAS ONLINE · ARCHERY 101010*\n` +
+      `*ELIMINATORIAS ONLINE · 101010 THE APP*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Resultado:* ${outcomeText}\n` +
       `• *Formato:* ${config.bowType} · ${config.distance}m\n` +
@@ -1798,13 +1798,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       `• *${user.fullName || "Tú"}:* ${userTotal} pts ${!isCompound ? `(${userSetPoints} SP)` : ""}\n` +
       `• *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `*¿Quieres retarme o jugar la revancha?*\n` +
-      `Entra aquí: https://archery101010.com`;
+      `🎯 *101010 THE APP*`;
+
+    if (typeof window !== "undefined" && (window as any).ArcheryNativeShare?.shareWhatsAppText) {
+      (window as any).ArcheryNativeShare.shareWhatsAppText(message);
+      return;
+    }
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: `Duelo 1v1 - Archery 101010`,
+          title: `Duelo 1v1 - 101010 THE APP`,
           text: message,
         });
         return;
@@ -1816,7 +1820,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
 
     const encoded = encodeURIComponent(message);
-    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
+    window.location.href = `whatsapp://send?text=${encoded}`;
   };
 
   const handleBackspace = () => {

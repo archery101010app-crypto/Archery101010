@@ -9,7 +9,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight, Camera } from "lucide-react";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
-import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
+import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
+import StravaShareModal from "../scoring/StravaShareModal";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -36,52 +37,82 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   // Delete confirm state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
 
   const handleShareSessionShotChart = async (session: any) => {
     if (!session) return;
-    if (session.impacts && session.impacts.length > 0) {
-      setIsGeneratingImage(true);
-      try {
-        const archerName = user.nickname || user.fullName || "Arquero";
-        const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
-        const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
-        const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
-        const dispersion = calculateDispersionAnalysis(
-          session.impacts,
-          Number(session.distance) || 18,
-          session.bowType || "Recurve",
-          presetType,
-          session.format,
-          session.targetType
-        );
-        const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+    setIsGeneratingImage(true);
+    try {
+      const archerName = user.nickname || user.fullName || "Arquero";
+      const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
+      const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
+      const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
+      const dispersion = session.impacts && session.impacts.length > 0
+        ? calculateDispersionAnalysis(
+            session.impacts,
+            Number(session.distance) || 18,
+            session.bowType || "Recurve",
+            presetType,
+            session.format,
+            session.targetType
+          )
+        : null;
+      const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 
-        await shareTargetShotChart({
-          impacts: session.impacts,
-          presetType,
-          score: session.score || 0,
-          maxScore: session.maxScore || 300,
-          tensCount: tens,
-          xsCount: xs,
-          distanceM: Number(session.distance) || 18,
-          bowType: session.bowType || "Recurve",
-          archerName,
-          dateStr,
-          dispersion
-        });
-      } catch (err) {
-        console.error("Error sharing target shot chart from History:", err);
-      } finally {
-        setIsGeneratingImage(false);
-      }
-    } else {
-      const bowLabel = session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : (session.bowType || "Barebow");
-      const text = `*ARCHERY 101010 · Planilla de Tiro*\n• *Arquero:* ${user.fullName || "Arquero"}\n• *Formato:* ${session.format} · ${bowLabel} · ${session.distance}m\n• *Puntaje:* ${session.score} / ${session.maxScore} pts (${session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0}%)`;
-      if (typeof navigator !== "undefined" && navigator.share) {
-        navigator.share({ title: "Planilla - Archery 101010", text }).catch(() => {});
-      } else {
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
-      }
+      const result = await shareTargetShotChart({
+        impacts: session.impacts || [],
+        ends: session.ends || [],
+        presetType,
+        score: session.score || 0,
+        maxScore: session.maxScore || 300,
+        tensCount: tens,
+        xsCount: xs,
+        distanceM: Number(session.distance) || 18,
+        bowType: session.bowType || "Recurve",
+        format: session.format || "World Archery",
+        archerName,
+        dateStr,
+        sessionNote: session.sessionNote,
+        dispersion
+      });
+      setStravaSharePreview(result);
+    } catch (err) {
+      console.error("Error sharing target shot chart from History:", err);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleShareSessionWhatsApp = async (session: any) => {
+    if (!session) return;
+    setIsGeneratingImage(true);
+    try {
+      const archerName = user.nickname || user.fullName || "Arquero";
+      const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
+      const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
+      const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
+      const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+
+      const result = await shareScorecardWhatsAppNative({
+        impacts: session.impacts || [],
+        ends: session.ends || [],
+        presetType,
+        score: session.score || 0,
+        maxScore: session.maxScore || 300,
+        tensCount: tens,
+        xsCount: xs,
+        distanceM: Number(session.distance) || 18,
+        bowType: session.bowType || "Recurve",
+        format: session.format || "World Archery",
+        archerName,
+        dateStr,
+        sessionNote: session.sessionNote
+      });
+      setStravaSharePreview(result);
+    } catch (err) {
+      console.error("Error sharing WhatsApp scorecard from History:", err);
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -774,9 +805,41 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                         <Camera size={15} />
                         <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Foto Diana (HD)"}</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShareSessionWhatsApp(selectedSession)}
+                        disabled={isGeneratingImage}
+                        className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        <Share2 size={15} />
+                        <span>Compartir Planilla por WhatsApp</span>
+                      </button>
                     </>
                   );
                 })()}
+              </div>
+            )}
+
+            {(!selectedSession.impacts || selectedSession.impacts.length === 0) && (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleShareSessionShotChart(selectedSession)}
+                  disabled={isGeneratingImage}
+                  className="w-full py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <Camera size={15} />
+                  <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Diana Gráfica (HD)"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShareSessionWhatsApp(selectedSession)}
+                  disabled={isGeneratingImage}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <Share2 size={15} />
+                  <span>Compartir Planilla por WhatsApp</span>
+                </button>
               </div>
             )}
 
@@ -825,6 +888,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           </div>
         )}
       </AnimatePresence>
+
+      {/* Strava-Style Share Preview Modal */}
+      <StravaShareModal
+        shareResult={stravaSharePreview}
+        onClose={() => setStravaSharePreview(null)}
+      />
     </div>
   );
 }

@@ -10,7 +10,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { calculateDispersionAnalysis, DispersionAnalysis, getConvexHull } from "@/lib/scoring/dispersionAnalytics";
-import { shareTargetShotChart } from "@/lib/scoring/targetImageGenerator";
+import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
+import StravaShareModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { playRealisticMechanicalClockClick } from "@/lib/soundUtils";
@@ -234,6 +235,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [showDispersionDrawer, setShowDispersionDrawer] = useState(false); // Modal de Clics de Mira & Agrupación
   const [dispersionScope, setDispersionScope] = useState<"END" | "GLOBAL">("GLOBAL");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
 
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
@@ -516,75 +518,37 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   };
 
-  // WhatsApp Scorecard Sharing (Android Web Share API + Direct URL fallback)
+  // WhatsApp Scorecard Sharing (Strava-style Diana+Planilla Image + Clean Scorecard Text without homepage URL)
   const handleShareScorecardWhatsApp = async () => {
-    const totalScore = calculateTotalScore();
-    const maxScore = config.maxScore || (config.endsCount * config.arrowsPerEnd * 10);
-    const pct = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-    
-    let countX = 0;
-    let count10 = 0;
-    let totalArrows = 0;
-    
-    ends.forEach((end) => {
-      end.arrows.forEach((a) => {
-        if (a === "X") { countX++; count10++; totalArrows++; }
-        else if (a === "10") { count10++; totalArrows++; }
-        else if (a !== "") { totalArrows++; }
+    setIsGeneratingImage(true);
+    try {
+      const totalScore = calculateTotalScore();
+      const maxScore = config.maxScore || (config.endsCount * config.arrowsPerEnd * 10);
+      const tens = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "10" || a === "X").length, 0);
+      const xs = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "X").length, 0);
+      const archerName = user.nickname || user.fullName || "Arquero";
+
+      const result = await shareScorecardWhatsAppNative({
+        impacts,
+        ends,
+        presetType,
+        score: totalScore,
+        maxScore,
+        tensCount: tens,
+        xsCount: xs,
+        distanceM: config.distance || 70,
+        bowType: config.bowType || user.bowConfig?.type || "Recurve",
+        format: config.format || "World Archery",
+        archerName,
+        sessionNote,
+        dispersion: globalDispersion
       });
-    });
-
-    const avgPerArrow = totalArrows > 0 ? (totalScore / totalArrows).toFixed(2) : "0.0";
-
-    const endsDetail = ends
-      .map((e, idx) => {
-        const valid = e.arrows.filter((a) => a !== "");
-        if (valid.length === 0) return null;
-        const endSum = valid.reduce((s, a) => s + getScoreValue(a), 0);
-        return `• End ${idx + 1}: ${valid.join(", ")}  →  *${endSum}* pts`;
-      })
-      .filter(Boolean)
-      .join("\n");
-
-    const bowLabel =
-      (config.bowType || user.bowConfig?.type) === "Recurve"
-        ? "Recurvo"
-        : (config.bowType || user.bowConfig?.type) === "Compound"
-        ? "Compuesto"
-        : config.bowType || user.bowConfig?.type || "Barebow";
-
-    const message = 
-      `*PLANILLA OFICIAL ARCHERY 101010*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `• *Arquero:* ${user.fullName || "Arquero"}\n` +
-      `• *Arco:* ${bowLabel}\n` +
-      `• *Modalidad:* ${config.format} · ${config.distance}m\n` +
-      `• *Flechas Tiradas:* ${totalArrows}\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `*PUNTUACIÓN TOTAL:* *${totalScore}* / ${maxScore} pts (*${pct}%*)\n` +
-      `• *10s:* ${count10} | *Xs:* ${countX}\n` +
-      `• *Promedio/Flecha:* ${avgPerArrow} pts\n` +
-      (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
-      (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `*App Oficial:* https://archery101010.com`;
-
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({
-          title: `Planilla de Tiro - ${user.fullName}`,
-          text: message,
-        });
-        return;
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
-          console.error("Share error:", err);
-        }
-      }
+      setStravaSharePreview(result);
+    } catch (err) {
+      console.error("Error sharing WhatsApp scorecard:", err);
+    } finally {
+      setIsGeneratingImage(false);
     }
-
-    const encoded = encodeURIComponent(message);
-    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
   };
 
   // Helper to convert client coordinates to relative SVG percent coordinates
@@ -1121,7 +1085,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
 
-  // Shot Chart Share Handler (HD Target Image)
+  // Shot Chart Share Handler (HD Target Image with 101010 THE APP Strava watermark)
   const handleShareShotChart = async () => {
     setIsGeneratingImage(true);
     try {
@@ -1130,8 +1094,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const tens = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "10" || a === "X").length, 0);
       const xs = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "X").length, 0);
 
-      await shareTargetShotChart({
+      const result = await shareTargetShotChart({
         impacts,
+        ends,
         presetType: presetType,
         score: totalScore,
         maxScore: config.maxScore,
@@ -1139,9 +1104,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         xsCount: xs,
         distanceM: config.distance || 70,
         bowType: config.bowType || "Recurve",
+        format: config.format || "World Archery",
         archerName,
+        sessionNote,
         dispersion: globalDispersion
       });
+      setStravaSharePreview(result);
     } catch (err) {
       console.error("Error sharing target shot chart:", err);
     } finally {
@@ -1550,9 +1518,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 type="button"
                 onClick={handleShareShotChart}
-                disabled={isGeneratingImage || impacts.length === 0}
+                disabled={isGeneratingImage}
                 className="py-1.5 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                title="Generar y compartir imagen de la diana con impactos"
+                title="Generar y compartir imagen de la diana con sello 101010 THE APP"
               >
                 <Camera size={13} />
                 <span>{isGeneratingImage ? "Generando..." : "Foto Diana"}</span>
@@ -2077,7 +2045,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <div className="flex flex-col gap-2.5 mt-2">
                 <button
                   onClick={handleShareShotChart}
-                  disabled={isGeneratingImage || impacts.length === 0}
+                  disabled={isGeneratingImage}
                   className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Camera size={16} />
@@ -2085,7 +2053,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </button>
                 <button
                   onClick={handleShareScorecardWhatsApp}
-                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
+                  disabled={isGeneratingImage}
+                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Share2 size={16} />
                   <span>Compartir Planilla por WhatsApp</span>
@@ -2473,6 +2442,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         </div>
       )}
+
+      {/* Strava-Style Share Preview Modal */}
+      <StravaShareModal
+        shareResult={stravaSharePreview}
+        onClose={() => setStravaSharePreview(null)}
+      />
     </div>
   );
 }
