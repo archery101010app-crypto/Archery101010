@@ -97,6 +97,32 @@
             "value": "attachment; filename=\"archery101010-tshirt-limpia.png\""
           }
         ]
+      },
+      {
+        "source": "/archery101010-serigrafia-transparente.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"archery101010-serigrafia-transparente.png\""
+          }
+        ]
+      },
+      {
+        "source": "/archery101010-serigrafia-negro.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"archery101010-serigrafia-negro.png\""
+          }
+        ]
       }
     ],
     "redirects": [
