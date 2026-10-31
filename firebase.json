@@ -51,6 +51,19 @@
         ]
       },
       {
+        "source": "/Guia_App_Store_iPhone_Archery101010_Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Guia_App_Store_iPhone_Archery101010_Movil.pdf\""
+          }
+        ]
+      },
+      {
         "source": "/arqueros.csv",
         "headers": [
           {
