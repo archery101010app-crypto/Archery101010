@@ -16,7 +16,9 @@ import {
   Plus,
   Send,
   Target,
-  FileSpreadsheet
+  FileSpreadsheet,
+  UserMinus,
+  AlertTriangle
 } from "lucide-react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -30,13 +32,15 @@ interface AthleteDetailSheetProps {
   sessions: any[];
   onRestoreSession?: (sessionId: string) => void;
   onOpenPlanImporter?: (athleteId: string) => void;
+  onUnlinkAthlete?: (athlete: UserProfile) => void;
 }
 
 type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
-export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession, onOpenPlanImporter }: AthleteDetailSheetProps) {
+export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession, onOpenPlanImporter, onUnlinkAthlete }: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
   
   // Coach notes state
   const [notes, setNotes] = useState<Array<{ id: string; date: number; content: string }>>([]);
@@ -64,6 +68,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
     loadAthleteStar();
     setActiveTab("PERFIL"); // reset to profile tab on open
     setExpandedSessionId(null);
+    setShowUnlinkConfirm(false);
   }, [athlete]);
 
   if (!athlete) return null;
@@ -136,30 +141,52 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
         </button>
 
         {/* Athlete Overview Card */}
-        <div className="px-5 pb-3 pt-1 flex flex-col gap-2.5 shrink-0 border-b border-white/[0.05]">
-          <div className="flex items-center gap-3.5">
+        <div className="px-5 pb-3.5 pt-1 flex flex-col gap-3 shrink-0 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3.5 pr-9">
             <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon shadow-glow-cyan uppercase shrink-0">
               {athlete.fullName.substring(0, 2)}
             </div>
             <div className="flex flex-col flex-1 min-w-0">
-              <h3 className="text-white text-base font-black truncate uppercase tracking-wide">
-                {athlete.fullName}
-              </h3>
-              <p className="text-[11.6px] text-white leading-none mt-0.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="text-white text-base font-black truncate uppercase tracking-wide">
+                  {athlete.fullName}
+                </h3>
+                {athlete.nickname && (
+                  <span className="text-[10.5px] text-cyan-neon font-bold truncate">
+                    @{athlete.nickname}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11.6px] text-white/85 leading-snug mt-0.5 truncate">
                 {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
               </p>
             </div>
           </div>
 
-          {onOpenPlanImporter && (
-            <button
-              type="button"
-              onClick={() => onOpenPlanImporter(athlete.uid)}
-              className="w-full py-2 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
-            >
-              <FileSpreadsheet size={14} className="shrink-0" />
-              <span>Cargar Plan Excel / Sheets en su Calendario</span>
-            </button>
+          {(onOpenPlanImporter || onUnlinkAthlete) && (
+            <div className="flex items-center gap-2 w-full">
+              {onOpenPlanImporter && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPlanImporter(athlete.uid)}
+                  className="flex-1 min-w-0 py-2.5 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-98"
+                >
+                  <FileSpreadsheet size={13} className="shrink-0" />
+                  <span className="truncate">Cargar Plan Excel / Sheets</span>
+                </button>
+              )}
+              {onUnlinkAthlete && (
+                <button
+                  type="button"
+                  onClick={() => setShowUnlinkConfirm(true)}
+                  className="shrink-0 py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/35 text-red-400 hover:text-red-300 text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                  title="Desvincular alumno de tu club"
+                >
+                  <UserMinus size={13} className="shrink-0" />
+                  <span>Desvincular</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -331,6 +358,28 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                   </div>
                 )}
               </div>
+
+              {onUnlinkAthlete && (
+                <div className="bg-red-950/15 p-4 rounded-2xl border border-red-500/20 flex flex-col gap-2.5 mt-1">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11.6px] text-red-400 font-black tracking-wider uppercase flex items-center gap-1.5">
+                      <UserMinus size={13} />
+                      <span>Vinculación con el Club</span>
+                    </span>
+                    <p className="text-[10.8px] text-white/75 leading-relaxed">
+                      Retira a este atleta de tu lista de alumnos activos. Sus puntuaciones personales no se borrarán de su cuenta.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowUnlinkConfirm(true)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
+                  >
+                    <UserMinus size={14} className="shrink-0" />
+                    <span>Desvincular Alumno del Club</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -866,6 +915,66 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
             </div>
           )}
         </div>
+
+        {/* Confirmation Modal for Unlinking Athlete */}
+        <AnimatePresence>
+          {showUnlinkConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-30 bg-black/85 backdrop-blur-sm flex items-center justify-center p-5"
+            >
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0, y: 10 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.94, opacity: 0, y: 10 }}
+                className="w-full max-w-sm bg-[#0D1017] border border-red-500/35 rounded-3xl p-5 flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <h4 className="text-white text-sm font-black uppercase tracking-wider">
+                      ¿Desvincular Alumno?
+                    </h4>
+                    <span className="text-xs text-cyan-neon font-bold truncate">
+                      {athlete.fullName}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-white/85 leading-relaxed">
+                  El alumno saldrá de tu lista de atletas del club y dejará de recibir planes de entrenamiento asignados. Si lo deseas, podrá volver a vincularse usando tu código de 6 dígitos.
+                </p>
+
+                <div className="flex items-center gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowUnlinkConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-white/10 text-white font-extrabold text-xs uppercase tracking-wider transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUnlinkConfirm(false);
+                      if (onUnlinkAthlete) {
+                        onUnlinkAthlete(athlete);
+                      }
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-lg"
+                  >
+                    <UserMinus size={14} />
+                    <span>Sí, Desvincular</span>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   );

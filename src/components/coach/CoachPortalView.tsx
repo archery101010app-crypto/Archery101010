@@ -74,10 +74,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     async function loadCoachData() {
       // 1. Get roster of athletes in this club
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-      let clubArchers = allUsers.filter(u => (u.clubId === activeClubId || !u.clubId) && u.role === "archer");
+      const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
+      const demoSeeded = await getLocalSetting<boolean>(`demo_athletes_seeded_${activeClubId}`, false);
+
+      let clubArchers = allUsers.filter(
+        u => u.clubId === activeClubId && u.role === "archer" && !unlinkedIds.includes(u.uid)
+      );
       
-      // Fallback/Seed demo athletes if empty so the coach has initial data to examine
-      if (clubArchers.length === 0) {
+      // Fallback/Seed demo athletes once if never seeded so the coach has initial data to examine
+      if (clubArchers.length === 0 && !demoSeeded) {
         const demoArchers: UserProfile[] = [
           {
             uid: "USR-D-ATHLETE-1",
@@ -138,9 +143,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           }
         ];
 
-        const updatedList = [...allUsers, ...demoArchers];
+        const existingUids = new Set(allUsers.map(u => u.uid));
+        const toAdd = demoArchers.filter(d => !existingUids.has(d.uid));
+        const updatedList = [...allUsers, ...toAdd];
         await saveLocalSetting("simulated_users", updatedList);
-        clubArchers = demoArchers;
+        await saveLocalSetting(`demo_athletes_seeded_${activeClubId}`, true);
+        clubArchers = demoArchers.filter(d => !unlinkedIds.includes(d.uid));
       }
       setAthletes(clubArchers);
 
@@ -274,16 +282,78 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         const freshSessions = await getLocalSessions();
         setSessions(freshSessions);
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const clubArchers = allUsers.filter(u => (u.clubId === activeClubId) && u.role === "archer");
-        if (clubArchers.length > 0) {
-          setAthletes(clubArchers);
-        }
+        const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
+        const clubArchers = allUsers.filter(
+          u => u.clubId === activeClubId && u.role === "archer" && !unlinkedIds.includes(u.uid)
+        );
+        setAthletes(clubArchers);
       }
     };
 
     window.addEventListener("local-db-change", handleDbChange);
     return () => window.removeEventListener("local-db-change", handleDbChange);
   }, [user, activeClubId]);
+
+  // Unlink athlete from club callback
+  const handleUnlinkAthlete = async (athleteToUnlink: UserProfile) => {
+    try {
+      const targetUid = athleteToUnlink.uid;
+
+      // 1. Track unlinked UID locally for this club so realtime sync doesn't re-add stale cache
+      const unlinkedKey = `unlinked_athletes_${activeClubId}`;
+      const prevUnlinked = await getLocalSetting<string[]>(unlinkedKey, []);
+      if (!prevUnlinked.includes(targetUid)) {
+        await saveLocalSetting(unlinkedKey, [...prevUnlinked, targetUid]);
+      }
+
+      // 2. Update athlete in simulated_users (clear clubId & clubName)
+      const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+      let updatedAthleteRecord: UserProfile | null = null;
+      const updatedUsers = allUsers.map((u) => {
+        if (u.uid === targetUid) {
+          updatedAthleteRecord = {
+            ...u,
+            clubId: null,
+            clubName: null,
+            clubLogo: undefined
+          };
+          return updatedAthleteRecord;
+        }
+        return u;
+      });
+      await saveLocalSetting("simulated_users", updatedUsers);
+
+      // 3. Remove from active UI state and close detail sheet
+      setAthletes((prev) => prev.filter((a) => a.uid !== targetUid));
+      setSelectedAthlete(null);
+
+      // 4. Queue cloud sync UPDATE for Firestore users collection
+      const payloadToSync: UserProfile = updatedAthleteRecord || {
+        ...athleteToUnlink,
+        clubId: null,
+        clubName: null,
+        clubLogo: undefined
+      };
+      try {
+        const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+        const { runSync } = await import("@/lib/db/syncManager");
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "users",
+          operation: "UPDATE",
+          payloadId: targetUid,
+          payload: payloadToSync,
+          timestamp: Date.now()
+        });
+        runSync();
+      } catch (syncErr) {
+        console.warn("Cloud sync skipped on unlink:", syncErr);
+      }
+    } catch (err) {
+      console.error("Error unlinking athlete:", err);
+      alert("No se pudo desvincular al alumno. Inténtalo de nuevo.");
+    }
+  };
 
   // Create new athlete profile callback
   const handleCreateAthlete = async (newAthlete: UserProfile) => {
@@ -551,6 +621,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             onClose={() => setSelectedAthlete(null)}
             sessions={sessions}
             onRestoreSession={handleRestoreSession}
+            onUnlinkAthlete={handleUnlinkAthlete}
             onOpenPlanImporter={(athleteId) => {
               setSelectedAthlete(null);
               handleOpenPlanImporter(athleteId);

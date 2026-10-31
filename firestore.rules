@@ -479,19 +479,19 @@ service cloud.firestore {
       // Authenticated users can read profiles for rival searches, club directories, and real-time sync
       allow read: if isAuthenticated();
 
-      // Users can create their own document; superadmins can create any profile.
+      // Users can create their own document; coaches can create athlete ('archer') profiles; superadmins can create any profile.
       // Privilege escalation to 'superadmin' is strictly prohibited for standard users.
       allow create: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin()) &&
+        (isOwner(userId) || isSuperAdmin() || (isCoach() && request.resource.data.role == 'archer')) &&
         request.resource.data.uid == userId &&
         isValidUser(request.resource.data) &&
         (isSuperAdmin() || request.resource.data.role != 'superadmin');
 
-      // Users can update their own profile; superadmins can update any profile.
+      // Users can update their own profile; coaches can update athlete ('archer') profiles; superadmins can update any profile.
       // Role elevation to 'superadmin' is strictly forbidden.
       // UID is immutable.
       allow update: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin()) &&
+        (isOwner(userId) || isSuperAdmin() || (isCoach() && resource.data.role == 'archer' && request.resource.data.role == 'archer')) &&
         request.resource.data.uid == userId &&
         request.resource.data.uid == resource.data.uid &&
         isValidUser(request.resource.data) &&
