@@ -84,6 +84,19 @@
             "value": "attachment; filename=\"archery101010-tshirt-frontal.png\""
           }
         ]
+      },
+      {
+        "source": "/archery101010-tshirt-limpia.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"archery101010-tshirt-limpia.png\""
+          }
+        ]
       }
     ],
     "redirects": [
