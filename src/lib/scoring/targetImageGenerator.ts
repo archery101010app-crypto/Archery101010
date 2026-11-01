@@ -251,19 +251,19 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.lineTo(940, 25);
   ctx.stroke();
 
-  // 2. Top Athlete Header & Score Hero Card (Pure White App Header Typography)
+  // 2. Top Athlete Header & Score Hero Card (Pure White App Header Typography +20%)
   ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
   ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
   ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, 54, 52, 236, 36, 18);
+  drawRoundedRect(ctx, 54, 50, 266, 40, 20);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 13px ${appFont}`;
+  ctx.font = `800 15.6px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("TELEMETRÍA OFICIAL", 172, 75);
+  ctx.fillText("TELEMETRÍA OFICIAL", 187, 76);
 
   // Archer Name
   ctx.font = `900 42px ${appFont}`;
@@ -286,7 +286,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 13px ${appFont}`;
+  ctx.font = `800 15.6px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.fillText("PUNTUACIÓN TOTAL", 896, 82);
@@ -466,8 +466,8 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 318);
   ctx.stroke();
 
-  // Telemetry summary below the logo inside the right panel (White header, no extra line below)
-  ctx.font = `800 13px ${appFont}`;
+  // Telemetry summary below the logo inside the right panel (White header +20%, no extra line below)
+  ctx.font = `800 15.6px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 362);
@@ -523,10 +523,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = `800 12px ${appFont}`;
+    ctx.font = `800 14.4px ${appFont}`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "left";
-    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 26);
+    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 28);
 
     const displayEnds = validEnds.slice(0, 12);
     const colW = Math.min(82, Math.floor(932 / displayEnds.length));
@@ -581,10 +581,10 @@ function drawStatBox(
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 12px ${appFont}`;
+  ctx.font = `800 14.4px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(title, x + 18, y + 28, w - 36);
+  ctx.fillText(title, x + 18, y + 30, w - 36);
 
   ctx.font = `900 22px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
