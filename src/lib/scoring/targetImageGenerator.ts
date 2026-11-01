@@ -139,7 +139,7 @@ function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 50px sans-serif";
+  ctx.font = "900 50px 'Good Times', 'Outfit', sans-serif";
   // Draw 10 (Cyan), 10 (Red), 10 (Yellow)
   const offset = 98;
   ctx.fillStyle = "#00A8F3";
@@ -149,7 +149,7 @@ function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number
   ctx.fillStyle = "#FFF200";
   ctx.fillText("10", centerX + offset, centerY - 18);
 
-  ctx.font = "900 22px sans-serif";
+  ctx.font = "900 22px 'Good Times', 'Outfit', sans-serif";
   ctx.fillStyle = "#FFFFFF";
   ctx.letterSpacing = "7px";
   ctx.fillText("THE APP", centerX, centerY + 30);
@@ -213,7 +213,14 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
+  if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+    try {
+      await (document as any).fonts.ready;
+    } catch {}
+  }
+
   const appFont = "Inter, system-ui, -apple-system, sans-serif";
+  const logoFont = "'Good Times', 'Outfit', sans-serif";
 
   // 1. Deep OLED Carbon Background
   const bgGrad = ctx.createRadialGradient(540, 450, 90, 540, 500, 820);
@@ -427,54 +434,57 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   // Reset textBaseline
   ctx.textBaseline = "alphabetic";
 
-  // 5B. RIGHT SIDE OF TARGET: Squared Brand & Telemetry Panel ("101010 THE APP")
+  // 5B. RIGHT SIDE OF TARGET: Open Editorial Brand Lockup ("ARCHERY / 101010 / THE APP") + Average
   const totalArrowsCount =
     ends.length > 0
       ? ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
       : impacts.length;
   const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
+  const goldPct = totalArrowsCount > 0 ? Math.round((tensCount / totalArrowsCount) * 100) : 0;
 
   const rightBoxX = 556;
   const rightBoxY = 224;
   const rightBoxW = 470;
-  const rightBoxH = 456; // Exact height of the 456px target diameter on the left
   const rightCenterX = rightBoxX + rightBoxW / 2; // 791
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.025)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-  ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, rightBoxX, rightBoxY, rightBoxW, rightBoxH, 28);
-  ctx.fill();
-  ctx.stroke();
+  // Draw "ARCHERY" in Good Times font directly above "101010 THE APP" (No outer box border)
+  ctx.save();
+  ctx.font = `900 44px ${logoFont}`;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  (ctx as any).letterSpacing = "6px";
+  ctx.fillText("ARCHERY", rightCenterX + 3, rightBoxY + 76);
+  ctx.restore();
 
-  // Draw "101010 THE APP" Watermark on the Right Side of the Target (No tricolor bar above it)
+  // Draw "101010 THE APP" Watermark below "ARCHERY"
   const wmImg = await loadWatermarkImage();
-  const stampCenterY = rightBoxY + 185;
+  const stampCenterY = rightBoxY + 192;
   if (wmImg) {
-    const wmW = 404;
-    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~177px
+    const wmW = 396;
+    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~173px
     ctx.drawImage(wmImg, Math.round(rightCenterX - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
   } else {
     drawFallback101010TheApp(ctx, rightCenterX, stampCenterY);
   }
 
-  // Divider inside right panel
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  // Subtle horizontal divider separating Brand Lockup and Average Score
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(rightBoxX + 44, rightBoxY + 318);
   ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 318);
   ctx.stroke();
 
-  // Telemetry summary below the logo inside the right panel (White header +10% more, no extra line below)
+  // Telemetry summary below the logo
   ctx.font = `800 17.2px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 364);
+  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 368);
 
-  ctx.font = `900 38px ${appFont}`;
+  ctx.font = `900 42px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 412);
+  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 420);
 
   // 6. Telemetry KPI Boxes (3 Columns)
   const cardY = 710;
@@ -488,29 +498,22 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     cardHeight,
     "PRECISIÓN",
     `${tensCount} (10+X) • ${xsCount} Xs`,
-    `Promedio: ${avgArrow} pts / flecha (${totalArrowsCount} fl.)`
+    `${totalArrowsCount} flechas • ${goldPct}% en el 10`
   );
 
   const spreadText = dispersion ? `Ø ${dispersion.spreadCm.toFixed(1)} cm` : "Activa";
   const groupQuality = dispersion ? dispersion.groupQuality : `${totalArrowsCount} flechas registradas`;
   drawStatBox(ctx, 387, cardY, 306, cardHeight, "AGRUPACIÓN", spreadText, groupQuality);
 
-  const centerText = dispersion ? dispersion.clockDirection : "Centro X";
-  let directionAdvice = "Mira centrada";
-  if (dispersion) {
-    const hasV = dispersion.verticalDirection !== "CENTRADO";
-    const hasH = dispersion.horizontalDirection !== "CENTRADO";
-    if (hasV && hasH) {
-      directionAdvice = `Mover ${dispersion.verticalDirection === "ARRIBA" ? "arriba" : "abajo"} y ${
-        dispersion.horizontalDirection === "DERECHA" ? "derecha" : "izquierda"
-      }`;
-    } else if (hasV) {
-      directionAdvice = dispersion.verticalDirection === "ARRIBA" ? "Mover hacia arriba" : "Mover hacia abajo";
-    } else if (hasH) {
-      directionAdvice = dispersion.horizontalDirection === "DERECHA" ? "Mover a la derecha" : "Mover a la izquierda";
-    }
-  }
-  drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionAdvice);
+  const centerText = dispersion ? dispersion.clockDirection : "Centro";
+  const isCenteredGroup =
+    !dispersion ||
+    centerText.toLowerCase().includes("centro") ||
+    (dispersion.verticalDirection === "CENTRADO" && dispersion.horizontalDirection === "CENTRADO");
+  const directionTelemetry = isCenteredGroup
+    ? "Agrupación centrada en el 10"
+    : `Tendencia a las ${centerText}`;
+  drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionTelemetry);
 
   // 7. Compact End-by-End Scorecard Strip (Sin título, E1..En y puntajes +100% de tamaño)
   if (validEnds.length > 0) {
