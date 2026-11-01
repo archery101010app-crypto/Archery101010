@@ -157,9 +157,10 @@ function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number
 }
 
 /**
- * Renders a high-definition, squared-off Screenshot Canvas (1080x992)
+ * Renders an Ultra-HD (2x Retina: 2160x1984) Squared Screenshot Canvas
  * featuring the Virtual Target on the LEFT, the "101010 THE APP" brand panel
- * aligned on the RIGHT of the target, Telemetry KPI Boxes, and End-by-End Strip.
+ * aligned on the RIGHT of the target, pure white headers matching the app's
+ * typography, Telemetry KPI Boxes, and End-by-End Strip.
  */
 export async function renderTargetShotChartCanvas(params: TargetShotChartParams): Promise<HTMLCanvasElement> {
   const {
@@ -197,14 +198,22 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     })
     .filter(Boolean) as Array<{ idx: number; sum: number; arrows: string[] }>;
 
-  const canvasWidth = 1080;
-  const canvasHeight = validEnds.length > 0 ? 992 : 880;
+  // Logical layout dimensions (scaled 2x for Ultra-HD 2160px output)
+  const logicalWidth = 1080;
+  const logicalHeight = validEnds.length > 0 ? 992 : 880;
+  const hdScale = 2; // 2160 x 1984 Ultra-HD resolution
 
   const canvas = document.createElement("canvas");
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
+  canvas.width = logicalWidth * hdScale;
+  canvas.height = logicalHeight * hdScale;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not get 2D canvas context");
+
+  ctx.scale(hdScale, hdScale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const appFont = "Inter, system-ui, -apple-system, sans-serif";
 
   // 1. Deep OLED Carbon Background
   const bgGrad = ctx.createRadialGradient(540, 450, 90, 540, 500, 820);
@@ -212,20 +221,20 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   bgGrad.addColorStop(0.5, "#070B12");
   bgGrad.addColorStop(1, "#020305");
   ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
   // Subtle ambient halo behind the left target
   const haloGrad = ctx.createRadialGradient(294, 452, 80, 294, 452, 310);
-  haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.12)");
+  haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.10)");
   haloGrad.addColorStop(0.65, "rgba(255, 242, 0, 0.03)");
   haloGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = haloGrad;
-  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
   // Outer Frame Border (Squared & tightly fitted)
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
   ctx.lineWidth = 2.5;
-  drawRoundedRect(ctx, 24, 24, canvasWidth - 48, canvasHeight - 48, 36);
+  drawRoundedRect(ctx, 24, 24, logicalWidth - 48, logicalHeight - 48, 36);
   ctx.stroke();
 
   // Top Accent Line (Cyan -> Red -> Yellow 101010 DNA)
@@ -242,22 +251,22 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.lineTo(940, 25);
   ctx.stroke();
 
-  // 2. Top Athlete Header & Score Hero Card
-  ctx.fillStyle = "rgba(0, 229, 255, 0.12)";
-  ctx.strokeStyle = "rgba(0, 229, 255, 0.35)";
+  // 2. Top Athlete Header & Score Hero Card (Pure White App Header Typography)
+  ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
   ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, 54, 52, 245, 36, 18);
+  drawRoundedRect(ctx, 54, 52, 236, 36, 18);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = "900 15px monospace";
-  ctx.fillStyle = "#00E5FF";
+  ctx.font = `800 13px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("TELEMETRÍA OFICIAL", 176, 75);
+  ctx.fillText("TELEMETRÍA OFICIAL", 172, 75);
 
   // Archer Name
-  ctx.font = "900 42px sans-serif";
+  ctx.font = `900 42px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
   ctx.fillText(archerName || "Arquero", 54, 138, 680);
@@ -265,30 +274,30 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   // Category, Distance, Format & Date
   const displayBowType =
     bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
-  ctx.font = "700 21px sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+  ctx.font = `700 21px ${appFont}`;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
   ctx.fillText(`${displayBowType} • ${distanceM}m • ${format} • ${dateStr}`, 54, 172, 680);
 
   // Total Score Hero Badge (Top Right)
-  ctx.fillStyle = "rgba(253, 216, 53, 0.10)";
-  ctx.strokeStyle = "rgba(253, 216, 53, 0.45)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+  ctx.strokeStyle = "rgba(253, 216, 53, 0.42)";
   ctx.lineWidth = 2;
   drawRoundedRect(ctx, 766, 52, 260, 130, 26);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = "900 14px sans-serif";
-  ctx.fillStyle = "#FDD835";
+  ctx.font = `800 13px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.fillText("PUNTUACIÓN TOTAL", 896, 82);
 
-  ctx.font = "900 54px monospace";
+  ctx.font = `900 54px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${score}`, 896, 138);
 
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-  ctx.font = "800 16px sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.font = `700 16px ${appFont}`;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
   ctx.fillText(`/ ${maxScore} pts (${pct}%)`, 896, 166);
 
   // 3. Split Hero Row: Virtual Target on the LEFT + "101010 THE APP" on the RIGHT
@@ -408,7 +417,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.lineWidth = 1.8;
     ctx.stroke();
 
-    ctx.font = "900 10px sans-serif";
+    ctx.font = `900 10px ${appFont}`;
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -438,23 +447,12 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fill();
   ctx.stroke();
 
-  // Subtle top tricolor bar inside the right brand card
-  const barW = 132;
-  const barX = rightCenterX - barW / 2;
-  const barY = rightBoxY + 62;
-  ctx.fillStyle = "#00A8F3";
-  ctx.fillRect(barX, barY, 44, 4);
-  ctx.fillStyle = "#FF0000";
-  ctx.fillRect(barX + 44, barY, 44, 4);
-  ctx.fillStyle = "#FFF200";
-  ctx.fillRect(barX + 88, barY, 44, 4);
-
-  // Draw "101010 THE APP" Watermark on the Right Side of the Target
+  // Draw "101010 THE APP" Watermark on the Right Side of the Target (No tricolor bar above it)
   const wmImg = await loadWatermarkImage();
-  const stampCenterY = rightBoxY + 210;
+  const stampCenterY = rightBoxY + 185;
   if (wmImg) {
-    const wmW = 396;
-    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~173px
+    const wmW = 404;
+    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~177px
     ctx.drawImage(wmImg, Math.round(rightCenterX - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
   } else {
     drawFallback101010TheApp(ctx, rightCenterX, stampCenterY);
@@ -464,23 +462,19 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(rightBoxX + 44, rightBoxY + 328);
-  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 328);
+  ctx.moveTo(rightBoxX + 44, rightBoxY + 318);
+  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 318);
   ctx.stroke();
 
-  // Telemetry summary below the logo inside the right panel
-  ctx.font = "900 13px sans-serif";
-  ctx.fillStyle = "#00E5FF";
-  ctx.textAlign = "center";
-  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 364);
-
-  ctx.font = "900 34px monospace";
+  // Telemetry summary below the logo inside the right panel (White header, no extra line below)
+  ctx.font = `800 13px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 406);
+  ctx.textAlign = "center";
+  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 362);
 
-  ctx.font = "700 14px sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
-  ctx.fillText(`${totalArrowsCount} flechas • ${pct}% efectividad`, rightCenterX, rightBoxY + 434);
+  ctx.font = `900 38px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 412);
 
   // 6. Telemetry KPI Boxes (3 Columns)
   const cardY = 710;
@@ -492,7 +486,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     cardY,
     306,
     cardHeight,
-    "PRECISIÓN & OROS",
+    "PRECISIÓN",
     `${tensCount} (10+X) • ${xsCount} Xs`,
     `Promedio: ${avgArrow} pts / flecha (${totalArrowsCount} fl.)`
   );
@@ -529,23 +523,23 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = "900 11px sans-serif";
-    ctx.fillStyle = "rgba(0, 229, 255, 0.85)";
+    ctx.font = `800 12px ${appFont}`;
+    ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "left";
-    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 24);
+    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 26);
 
     const displayEnds = validEnds.slice(0, 12);
     const colW = Math.min(82, Math.floor(932 / displayEnds.length));
     displayEnds.forEach((item, i) => {
       const cellX = 74 + i * colW;
-      ctx.font = "700 12px sans-serif";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.50)";
+      ctx.font = `700 12px ${appFont}`;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.60)";
       ctx.textAlign = "center";
-      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 50);
+      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 52);
 
-      ctx.font = "900 20px monospace";
+      ctx.font = `900 20px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 76);
+      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 78);
     });
   }
 
@@ -553,7 +547,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 }
 
 /**
- * Renders high-definition (1080x1350) Shot Chart on Canvas and returns PNG Blob
+ * Renders Ultra-HD Shot Chart on Canvas and returns lossless PNG Blob
  */
 export async function generateTargetShotChartBlob(params: TargetShotChartParams): Promise<Blob> {
   const canvas = await renderTargetShotChartCanvas(params);
@@ -564,7 +558,7 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
         else reject(new Error("Canvas toBlob failed"));
       },
       "image/png",
-      0.95
+      1.0
     );
   });
 }
@@ -579,6 +573,7 @@ function drawStatBox(
   main: string,
   sub: string
 ) {
+  const appFont = "Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
   ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
   ctx.lineWidth = 1.5;
@@ -586,17 +581,17 @@ function drawStatBox(
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = "900 12px sans-serif";
-  ctx.fillStyle = "rgba(0, 229, 255, 0.9)";
+  ctx.font = `800 12px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
   ctx.fillText(title, x + 18, y + 28, w - 36);
 
-  ctx.font = "900 22px monospace";
+  ctx.font = `900 22px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(main, x + 18, y + 62, w - 36);
 
-  ctx.font = "600 13px sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.font = `600 13px ${appFont}`;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
   ctx.fillText(sub, x + 18, y + 90, w - 36);
 }
 
