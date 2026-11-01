@@ -1343,42 +1343,135 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           <div className="flex-1 flex flex-col items-center justify-center gap-6 py-6">
             {/* Tally Counter Casing Container */}
             <div className="relative flex flex-col items-center select-none">
-              {/* Reset Button at top-right */}
-              <div className="w-full flex justify-end mb-2">
+              {/* Metal hanger loop at the top */}
+              <div
+                className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-zinc-400 bg-transparent relative z-0 flex items-center justify-center animate-pulse"
+                style={{
+                  borderColor: "#a1a1aa",
+                  boxShadow: "0 -2px 8px rgba(255,255,255,0.25), inset 0 2px 4px rgba(0,0,0,0.6)"
+                }}
+              >
+                <div
+                  className="w-10 h-6 rounded-t-full bg-zinc-900 border-2 border-zinc-600 shadow-inner"
+                  style={{ backgroundColor: "#18181b", borderColor: "#52525b" }}
+                />
+              </div>
+
+              {/* Reset Knob on the side (top right position) */}
+              <div className="absolute right-[-32px] top-[48px] z-10 flex items-center">
+                <div
+                  className="w-3 h-5 bg-zinc-500 border-y border-l border-zinc-400 rounded-l shadow"
+                  style={{
+                    background: "linear-gradient(180deg, #d4d4d8 0%, #71717a 50%, #3f3f46 100%)",
+                    borderColor: "#a1a1aa"
+                  }}
+                />
                 <button
                   type="button"
                   onClick={handleTallyReset}
-                  className="px-3 py-1.5 rounded-full bg-[#0D1017] border border-white/[0.08] text-[11.6px] font-bold uppercase tracking-wider text-white hover:text-white transition cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-gradient-to-r from-zinc-300 via-white to-zinc-500 border-2 border-zinc-400 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
+                  style={{
+                    background: "radial-gradient(circle at 35% 35%, #ffffff 0%, #d4d4d8 45%, #71717a 100%)",
+                    borderColor: "#a1a1aa",
+                    boxShadow: "0 4px 10px rgba(0,0,0,0.6), inset 0 2px 3px rgba(255,255,255,0.9)"
+                  }}
                   title="Reiniciar contador"
                 >
-                  Reiniciar (0)
+                  <div
+                    className="w-3.5 h-3.5 rounded-full bg-zinc-700 border border-zinc-500 flex items-center justify-center font-bold text-[8px] text-white"
+                    style={{ backgroundColor: "#27272a", borderColor: "#71717a" }}
+                  >
+                    R
+                  </div>
                 </button>
               </div>
 
-              {/* Minimalist Tactical Counter (WHOOP / Apple Fitness+ style) */}
+              {/* Main counter circular 3D chrome case */}
               <button
                 type="button"
                 onClick={handleTallyIncrement}
-                className="w-60 h-60 rounded-full bg-[#0D1017] border-2 border-white/[0.08] hover:border-cyan-neon/40 flex flex-col items-center justify-center gap-3 relative z-10 cursor-pointer shadow-2xl active:scale-[0.98] transition group"
+                className="w-60 h-60 rounded-full border-[8px] border-zinc-300 flex flex-col items-center justify-center gap-2 relative z-10 cursor-pointer hover:brightness-105 active:scale-[0.97] active:translate-y-0.5 transition group"
+                style={{
+                  background: "radial-gradient(circle at 35% 28%, #fafafa 0%, #e4e4e7 28%, #a1a1aa 68%, #52525b 100%)",
+                  borderColor: "#d4d4d8",
+                  boxShadow: "0 25px 50px rgba(0,0,0,0.85), 0 8px 20px rgba(0,0,0,0.6), inset 0 6px 14px rgba(255,255,255,0.95), inset 0 -8px 16px rgba(24,24,27,0.55)"
+                }}
               >
-                <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
-                  Flechas Lanzadas
-                </span>
+                {/* Shiny highlight reflection */}
+                <div
+                  className="absolute inset-2 rounded-full pointer-events-none"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.08) 45%, transparent 100%)"
+                  }}
+                />
 
-                <span className="text-5xl font-black text-white tabular-nums tabular-nums tracking-tight">
-                  {String(tallyCount).padStart(3, "0")}
-                </span>
+                {/* Lever/Button at the top center of the case */}
+                <div
+                  className="absolute top-[12px] w-24 h-5 rounded border border-zinc-400 group-active:translate-y-1 transition"
+                  style={{
+                    background: "linear-gradient(180deg, #ffffff 0%, #d4d4d8 50%, #71717a 100%)",
+                    borderColor: "#a1a1aa",
+                    boxShadow: "0 4px 6px rgba(0,0,0,0.45), inset 0 1px 2px rgba(255,255,255,0.95)"
+                  }}
+                />
 
-                <span className="text-[11.6px] text-cyan-neon font-bold tracking-widest uppercase mt-1">
-                  Tocar para sumar +1
-                </span>
+                {/* Display Window */}
+                <div
+                  className="w-40 bg-zinc-950 border-4 border-zinc-700 p-3.5 rounded-2xl mt-4 flex flex-col items-center gap-1.5 relative overflow-hidden"
+                  style={{
+                    backgroundColor: "#09090b",
+                    borderColor: "#3f3f46",
+                    boxShadow: "inset 0 5px 12px rgba(0,0,0,0.98), 0 2px 4px rgba(255,255,255,0.6)"
+                  }}
+                >
+                  {/* Subtle inner reflection */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+                  
+                  {/* Label */}
+                  <span className="text-[8px] text-cyan-neon font-black tracking-widest uppercase">
+                    FLECHAS LANZADAS
+                  </span>
+
+                  {/* Digits Roller Board */}
+                  <div className="flex gap-1.5 mt-0.5">
+                    {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
+                      <div
+                        key={idx}
+                        className="w-7 h-10 border border-zinc-800 rounded flex items-center justify-center font-black text-2xl text-white font-mono relative"
+                        style={{
+                          background: "linear-gradient(180deg, #18181b 0%, #09090b 50%, #18181b 100%)",
+                          borderColor: "#27272a",
+                          boxShadow: "inset 0 3px 6px rgba(0,0,0,0.95)"
+                        }}
+                      >
+                        {/* Horizontal divider for roller visual look */}
+                        <div className="absolute inset-x-0 h-[1px] bg-zinc-800/60 top-1/2" />
+                        <span className="relative z-10">{digit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Engraved bottom callout */}
+                <div
+                  className="text-[10px] font-black tracking-wider uppercase mt-2 transition"
+                  style={{
+                    color: "#18181b",
+                    textShadow: "0 1px 0 rgba(255,255,255,0.65)"
+                  }}
+                >
+                  PULSAR PARA CONTAR
+                </div>
               </button>
             </div>
 
             {/* Helper status text */}
             <div className="flex flex-col items-center text-center gap-1">
-              <span className="text-xs text-white font-medium">
-                Distancia: <span className="text-white font-bold">{config.distance} m</span>
+              <span className="text-xs text-white font-semibold">
+                Distancia de Tiro: <span className="text-cyan-neon font-bold">{config.distance}m</span>
+              </span>
+              <span className="text-[10px] text-white italic">
+                (Registra cada tiro presionando el contador metálico)
               </span>
             </div>
 

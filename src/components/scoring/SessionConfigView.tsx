@@ -311,7 +311,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             className="grid grid-cols-2 gap-3"
           >
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white font-bold">{t("rounds")} (Ends)</label>
+              <label className="text-xs text-white font-bold">{t("rounds")}</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
@@ -332,7 +332,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white font-bold">Flechas / End</label>
+              <label className="text-xs text-white font-bold">Flechas</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
