@@ -512,10 +512,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   }
   drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionAdvice);
 
-  // 7. Compact End-by-End Scorecard Strip (Planilla Resumida)
+  // 7. Compact End-by-End Scorecard Strip (Sin título, E1..En y puntajes +100% de tamaño)
   if (validEnds.length > 0) {
-    const stripY = 842;
-    const stripH = 96;
+    const stripY = 840;
+    const stripH = 100;
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ctx.lineWidth = 1.5;
@@ -523,23 +523,18 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = `800 15.9px ${appFont}`;
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "left";
-    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 30);
-
     const displayEnds = validEnds.slice(0, 12);
-    const colW = Math.min(82, Math.floor(932 / displayEnds.length));
+    const colW = Math.min(125, Math.floor(932 / displayEnds.length));
     displayEnds.forEach((item, i) => {
-      const cellX = 74 + i * colW;
-      ctx.font = `700 12.5px ${appFont}`;
+      const cellCenterX = 74 + i * colW + colW * 0.45;
+      ctx.font = `800 25px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
       ctx.textAlign = "center";
-      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 54);
+      ctx.fillText(`E${item.idx}`, cellCenterX, stripY + 38);
 
-      ctx.font = `900 20px ${appFont}`;
+      ctx.font = `900 40px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 80);
+      ctx.fillText(`${item.sum}`, cellCenterX, stripY + 84);
     });
   }
 
