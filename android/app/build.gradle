@@ -56,6 +56,12 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+tasks.configureEach {
+    if (name.contains("Assets")) {
+        doNotTrackState("OneDrive compatibility")
+    }
+}
+
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
