@@ -139,9 +139,9 @@ function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 54px sans-serif";
+  ctx.font = "900 50px sans-serif";
   // Draw 10 (Cyan), 10 (Red), 10 (Yellow)
-  const offset = 105;
+  const offset = 98;
   ctx.fillStyle = "#00A8F3";
   ctx.fillText("10", centerX - offset, centerY - 18);
   ctx.fillStyle = "#FF0000";
@@ -149,17 +149,17 @@ function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number
   ctx.fillStyle = "#FFF200";
   ctx.fillText("10", centerX + offset, centerY - 18);
 
-  ctx.font = "900 24px sans-serif";
+  ctx.font = "900 22px sans-serif";
   ctx.fillStyle = "#FFFFFF";
-  ctx.letterSpacing = "8px";
-  ctx.fillText("THE APP", centerX, centerY + 32);
+  ctx.letterSpacing = "7px";
+  ctx.fillText("THE APP", centerX, centerY + 30);
   ctx.restore();
 }
 
 /**
- * Renders a high-definition Strava/WHOOP-style (1080x1350) Screenshot Canvas
- * featuring the Target Face, Telemetry Stats, End-by-End Scorecard Strip,
- * and the official "101010 THE APP" transparent brand stamp.
+ * Renders a high-definition, squared-off Screenshot Canvas (1080x992)
+ * featuring the Virtual Target on the LEFT, the "101010 THE APP" brand panel
+ * aligned on the RIGHT of the target, Telemetry KPI Boxes, and End-by-End Strip.
  */
 export async function renderTargetShotChartCanvas(params: TargetShotChartParams): Promise<HTMLCanvasElement> {
   const {
@@ -185,32 +185,47 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format)
       : null);
 
+  const validEnds = ends
+    .map((e, idx) => {
+      const validArrows = (e.arrows || []).filter((a) => a !== "");
+      if (validArrows.length === 0) return null;
+      const endSum = validArrows.reduce(
+        (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
+        0
+      );
+      return { idx: idx + 1, sum: endSum, arrows: validArrows };
+    })
+    .filter(Boolean) as Array<{ idx: number; sum: number; arrows: string[] }>;
+
+  const canvasWidth = 1080;
+  const canvasHeight = validEnds.length > 0 ? 992 : 880;
+
   const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 1350;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not get 2D canvas context");
 
-  // 1. Deep OLED Carbon Background (Strava / WHOOP Dark Aesthetic)
-  const bgGrad = ctx.createRadialGradient(540, 520, 90, 540, 675, 920);
+  // 1. Deep OLED Carbon Background
+  const bgGrad = ctx.createRadialGradient(540, 450, 90, 540, 500, 820);
   bgGrad.addColorStop(0, "#101827");
   bgGrad.addColorStop(0.5, "#070B12");
   bgGrad.addColorStop(1, "#020305");
   ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, 1080, 1350);
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-  // Subtle ambient halo behind the target
-  const haloGrad = ctx.createRadialGradient(540, 525, 110, 540, 525, 410);
-  haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.11)");
+  // Subtle ambient halo behind the left target
+  const haloGrad = ctx.createRadialGradient(294, 452, 80, 294, 452, 310);
+  haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.12)");
   haloGrad.addColorStop(0.65, "rgba(255, 242, 0, 0.03)");
   haloGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = haloGrad;
-  ctx.fillRect(0, 0, 1080, 1350);
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-  // Outer Frame Border
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+  // Outer Frame Border (Squared & tightly fitted)
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
   ctx.lineWidth = 2.5;
-  drawRoundedRect(ctx, 24, 24, 1032, 1302, 36);
+  drawRoundedRect(ctx, 24, 24, canvasWidth - 48, canvasHeight - 48, 36);
   ctx.stroke();
 
   // Top Accent Line (Cyan -> Red -> Yellow 101010 DNA)
@@ -276,15 +291,15 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
   ctx.fillText(`/ ${maxScore} pts (${pct}%)`, 896, 166);
 
-  // 3. Target Face Center & Geometry
-  const targetCenterX = 540;
-  const targetCenterY = 520;
-  const targetRadius = 300; // 600px diameter on canvas
+  // 3. Split Hero Row: Virtual Target on the LEFT + "101010 THE APP" on the RIGHT
+  const targetCenterX = 294;
+  const targetCenterY = 452;
+  const targetRadius = 228; // 456px diameter (x: 66..522, y: 224..680)
 
   // Target shadow
   ctx.save();
   ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-  ctx.shadowBlur = 40;
+  ctx.shadowBlur = 36;
   ctx.beginPath();
   ctx.arc(targetCenterX, targetCenterY, targetRadius, 0, Math.PI * 2);
   ctx.fillStyle = "#000000";
@@ -308,24 +323,24 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.strokeStyle = "rgba(0, 0, 0, 0.65)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(targetCenterX - 12, targetCenterY);
-  ctx.lineTo(targetCenterX + 12, targetCenterY);
-  ctx.moveTo(targetCenterX, targetCenterY - 12);
-  ctx.lineTo(targetCenterX, targetCenterY + 12);
+  ctx.moveTo(targetCenterX - 10, targetCenterY);
+  ctx.lineTo(targetCenterX + 10, targetCenterY);
+  ctx.moveTo(targetCenterX, targetCenterY - 10);
+  ctx.lineTo(targetCenterX, targetCenterY + 10);
   ctx.stroke();
 
-  // 4. Centroid & Grouping Polygon
+  // 4. Centroid & Grouping Polygon on Left Target
   if (dispersion && impacts.length >= 2) {
     const cx = targetCenterX + ((dispersion.centroidX - 50) / 48) * targetRadius;
     const cy = targetCenterY + ((dispersion.centroidY - 50) / 48) * targetRadius;
     const activeDiameterCm = getExactTargetDimensions(distanceM, bowType, presetType).visibleDiameterCm;
     const rx = (dispersion.spreadCm / activeDiameterCm) * (targetRadius * 2) * 0.5;
-    const clampedRx = Math.max(14, Math.min(targetRadius * 0.95, rx));
+    const clampedRx = Math.max(12, Math.min(targetRadius * 0.95, rx));
 
     ctx.save();
     ctx.strokeStyle = "rgba(0, 229, 255, 0.85)";
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([8, 6]);
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([7, 5]);
     ctx.beginPath();
     ctx.arc(cx, cy, clampedRx, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 229, 255, 0.08)";
@@ -338,8 +353,8 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       if (hull.length >= 3) {
         ctx.save();
         ctx.strokeStyle = "rgba(0, 229, 255, 0.9)";
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([8, 6]);
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([7, 5]);
         ctx.fillStyle = "rgba(0, 229, 255, 0.10)";
         ctx.beginPath();
         hull.forEach((p, idx) => {
@@ -357,43 +372,43 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 
     // Group Center Crosshair (+)
     ctx.strokeStyle = "#00E5FF";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.6;
     ctx.beginPath();
-    ctx.moveTo(cx - 15, cy);
-    ctx.lineTo(cx + 15, cy);
-    ctx.moveTo(cx, cy - 15);
-    ctx.lineTo(cx, cy + 15);
+    ctx.moveTo(cx - 13, cy);
+    ctx.lineTo(cx + 13, cy);
+    ctx.moveTo(cx, cy - 13);
+    ctx.lineTo(cx, cy + 13);
     ctx.stroke();
 
     ctx.fillStyle = "#00E5FF";
     ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // 5. Plotted Arrow Impacts
+  // 5. Plotted Arrow Impacts on Left Target
   impacts.forEach((imp, idx) => {
     const ix = targetCenterX + ((imp.x - 50) / 48) * targetRadius;
     const iy = targetCenterY + ((imp.y - 50) / 48) * targetRadius;
 
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 7;
     ctx.beginPath();
-    ctx.arc(ix, iy, 13.5, 0, Math.PI * 2);
+    ctx.arc(ix, iy, 11.5, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
     ctx.fill();
     ctx.restore();
 
     ctx.beginPath();
-    ctx.arc(ix, iy, 11, 0, Math.PI * 2);
+    ctx.arc(ix, iy, 9.5, 0, Math.PI * 2);
     ctx.fillStyle = "#FFD700";
     ctx.fill();
     ctx.strokeStyle = "#000000";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
-    ctx.font = "900 11px sans-serif";
+    ctx.font = "900 10px sans-serif";
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -403,14 +418,73 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   // Reset textBaseline
   ctx.textBaseline = "alphabetic";
 
-  // 6. Strava-Style Telemetry KPI Boxes (3 Columns)
-  const cardY = 852;
-  const cardHeight = 112;
+  // 5B. RIGHT SIDE OF TARGET: Squared Brand & Telemetry Panel ("101010 THE APP")
   const totalArrowsCount =
     ends.length > 0
       ? ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
       : impacts.length;
   const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
+
+  const rightBoxX = 556;
+  const rightBoxY = 224;
+  const rightBoxW = 470;
+  const rightBoxH = 456; // Exact height of the 456px target diameter on the left
+  const rightCenterX = rightBoxX + rightBoxW / 2; // 791
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.025)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, rightBoxX, rightBoxY, rightBoxW, rightBoxH, 28);
+  ctx.fill();
+  ctx.stroke();
+
+  // Subtle top tricolor bar inside the right brand card
+  const barW = 132;
+  const barX = rightCenterX - barW / 2;
+  const barY = rightBoxY + 62;
+  ctx.fillStyle = "#00A8F3";
+  ctx.fillRect(barX, barY, 44, 4);
+  ctx.fillStyle = "#FF0000";
+  ctx.fillRect(barX + 44, barY, 44, 4);
+  ctx.fillStyle = "#FFF200";
+  ctx.fillRect(barX + 88, barY, 44, 4);
+
+  // Draw "101010 THE APP" Watermark on the Right Side of the Target
+  const wmImg = await loadWatermarkImage();
+  const stampCenterY = rightBoxY + 210;
+  if (wmImg) {
+    const wmW = 396;
+    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~173px
+    ctx.drawImage(wmImg, Math.round(rightCenterX - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
+  } else {
+    drawFallback101010TheApp(ctx, rightCenterX, stampCenterY);
+  }
+
+  // Divider inside right panel
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(rightBoxX + 44, rightBoxY + 328);
+  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 328);
+  ctx.stroke();
+
+  // Telemetry summary below the logo inside the right panel
+  ctx.font = "900 13px sans-serif";
+  ctx.fillStyle = "#00E5FF";
+  ctx.textAlign = "center";
+  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 364);
+
+  ctx.font = "900 34px monospace";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 406);
+
+  ctx.font = "700 14px sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.fillText(`${totalArrowsCount} flechas • ${pct}% efectividad`, rightCenterX, rightBoxY + 434);
+
+  // 6. Telemetry KPI Boxes (3 Columns)
+  const cardY = 710;
+  const cardHeight = 112;
 
   drawStatBox(
     ctx,
@@ -445,21 +519,9 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionAdvice);
 
   // 7. Compact End-by-End Scorecard Strip (Planilla Resumida)
-  const validEnds = ends
-    .map((e, idx) => {
-      const validArrows = (e.arrows || []).filter((a) => a !== "");
-      if (validArrows.length === 0) return null;
-      const endSum = validArrows.reduce(
-        (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
-        0
-      );
-      return { idx: idx + 1, sum: endSum, arrows: validArrows };
-    })
-    .filter(Boolean) as Array<{ idx: number; sum: number; arrows: string[] }>;
-
   if (validEnds.length > 0) {
-    const stripY = 984;
-    const stripH = 92;
+    const stripY = 842;
+    const stripH = 96;
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ctx.lineWidth = 1.5;
@@ -479,34 +541,12 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       ctx.font = "700 12px sans-serif";
       ctx.fillStyle = "rgba(255, 255, 255, 0.50)";
       ctx.textAlign = "center";
-      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 48);
+      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 50);
 
       ctx.font = "900 20px monospace";
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 74);
+      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 76);
     });
-  }
-
-  // 8. Signature Strava-Style "101010 THE APP" Watermark Stamp at Bottom
-  const wmImg = await loadWatermarkImage();
-  const stampCenterY = validEnds.length > 0 ? 1200 : 1145;
-
-  // Decorative side lines flanking the 101010 THE APP watermark
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(80, stampCenterY);
-  ctx.lineTo(290, stampCenterY);
-  ctx.moveTo(790, stampCenterY);
-  ctx.lineTo(1000, stampCenterY);
-  ctx.stroke();
-
-  if (wmImg) {
-    const wmW = 420;
-    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~184px
-    ctx.drawImage(wmImg, Math.round(540 - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
-  } else {
-    drawFallback101010TheApp(ctx, 540, stampCenterY);
   }
 
   return canvas;

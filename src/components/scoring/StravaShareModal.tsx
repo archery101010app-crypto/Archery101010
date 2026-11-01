@@ -81,20 +81,29 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[200000] bg-black/92 backdrop-blur-md flex flex-col items-center justify-between p-4 overflow-y-auto"
       >
-        {/* Top Bar */}
+        {/* Top Bar: ARCHERY 101010 en tipografía Good Times sin marcas de terceros */}
         <div className="w-full max-w-sm flex items-center justify-between py-1">
-          <div className="flex flex-col">
-            <span className="text-[10.5px] font-black uppercase tracking-widest text-cyan-neon">
-              Tarjeta Oficial Estilo Strava
+          <div className="flex flex-col gap-0.5">
+            <div
+              translate="no"
+              className="notranslate flex items-baseline gap-1.5 text-[18.5px] sm:text-[21px] font-extrabold tracking-tight leading-none select-none"
+              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+            >
+              <span className="text-white">ARCHERY</span>
+              <span className="inline-flex">
+                <span className="text-cyan-neon">10</span>
+                <span className="text-red-rival">10</span>
+                <span className="text-yellow-gold">10</span>
+              </span>
+            </div>
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/75">
+              Lista para Compartir
             </span>
-            <h3 className="text-white text-sm font-black uppercase">
-              101010 THE APP · Lista para Compartir
-            </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition"
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition shrink-0"
           >
             <X size={18} />
           </button>
@@ -104,11 +113,11 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         <motion.div
           initial={{ scale: 0.94, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-full max-w-[330px] my-2 rounded-3xl overflow-hidden border border-white/15 shadow-[0_0_40px_rgba(0,229,255,0.18)] bg-[#05070B]"
+          className="w-full max-w-[355px] my-2 rounded-3xl overflow-hidden border border-white/15 shadow-[0_0_40px_rgba(0,229,255,0.18)] bg-[#05070B]"
         >
           <img
             src={shareResult.dataUrl}
-            alt="101010 THE APP Diana"
+            alt="ARCHERY 101010 Diana"
             className="w-full h-auto block select-none"
           />
         </motion.div>
@@ -121,7 +130,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
             className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition shadow-lg"
           >
             <Share2 size={16} />
-            <span>Compartir Imagen (Instagram / Redes)</span>
+            <span>Compartir Imagen (Redes Sociales)</span>
           </button>
 
           <button
@@ -130,7 +139,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
             className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition shadow-lg"
           >
             <MessageCircle size={16} />
-            <span>Enviar por WhatsApp (Foto + Planilla)</span>
+            <span>Enviar Foto + Planilla</span>
           </button>
 
           <button

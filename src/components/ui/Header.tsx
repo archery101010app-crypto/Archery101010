@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSync } from "@/hooks/useSync";
 import { UserProfile } from "@/lib/authService";
-import { Wifi, WifiOff, RefreshCw, Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { APP_VERSION } from "@/lib/version";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
@@ -15,9 +15,9 @@ interface HeaderProps {
 }
 
 export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
-  const { pendingCount, syncStatus, isSyncing, triggerSync } = useSync();
+  // Keep background sync hook active silently without showing any technical Wi-Fi/badge icon
+  useSync();
   const { t } = useLanguage();
-  const [showStatusTooltip, setShowStatusTooltip] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -45,19 +45,6 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
     } else {
       document.documentElement.classList.remove("light-contrast");
     }
-  };
-
-  const getSyncColorClass = () => {
-    if (isSyncing) return "text-yellow-gold";
-    if (pendingCount > 0) return "text-yellow-gold";
-    if (syncStatus === "Sin conexión") return "text-red-rival animate-pulse";
-    return "text-cyan-neon";
-  };
-
-  const handleSyncClick = async () => {
-    setShowStatusTooltip(true);
-    await triggerSync();
-    setTimeout(() => setShowStatusTooltip(false), 2000);
   };
 
   return (
@@ -124,36 +111,6 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </motion.button>
-
-        {/* Sync wifi button with badge count */}
-        <div className="relative">
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={handleSyncClick}
-            className={`flex items-center justify-center p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer transition-all duration-200 ${getSyncColorClass()}`}
-          >
-            {isSyncing ? (
-              <RefreshCw size={15} className="animate-spin" />
-            ) : syncStatus === "Sin conexión" ? (
-              <WifiOff size={15} />
-            ) : (
-              <Wifi size={15} />
-            )}
-
-            {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-yellow-gold text-black font-extrabold text-[11.9px] w-4 h-4 rounded-full flex items-center justify-center border border-black animate-bounce">
-                {pendingCount}
-              </span>
-            )}
-          </motion.button>
-
-          {/* Sync status tooltip */}
-          {showStatusTooltip && (
-            <div className="absolute right-0 top-10 bg-neutral-900 border border-gray-border rounded-lg px-2.5 py-1 text-[13.2px] text-white whitespace-nowrap shadow-xl">
-              {isSyncing ? "Conectando..." : syncStatus}
-            </div>
-          )}
-        </div>
       </div>
     </header>
   );
