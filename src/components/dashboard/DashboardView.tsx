@@ -453,28 +453,71 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           })()}
         </motion.div>
 
-        {/* 2. Mi Club */}
+        {/* 2. Mi Club — Diseño Editorial Estilo WHOOP (Sin iconos cartoon) */}
         <motion.div
           variants={cardVariants}
-          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col items-center justify-between text-center min-h-[178px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-1 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 flex flex-col justify-between min-h-[178px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden relative"
           onClick={() => onNavigate("PROFILE")}
         >
-          <span className="text-[11px] text-white font-extrabold uppercase tracking-[0.08em] leading-none w-full text-center">
-            {language === "es" ? "Mi Club" : "My Club"}
-          </span>
-
-          <div className="w-11 h-11 rounded-2xl bg-[#080A0F] flex items-center justify-center border border-white/[0.08] group-hover:border-white/20 transition-colors shrink-0 my-1">
-            <ClubLogoIcon logo={user.clubLogo || "0"} className="w-5 h-5 p-0.5" />
+          {/* Header Row: Label + Live Status Dot */}
+          <div className="flex items-center justify-between gap-1.5 w-full">
+            <span className="text-[11px] text-white font-extrabold uppercase tracking-[0.08em] leading-none truncate">
+              {language === "es" ? "Mi Club" : "My Club"}
+            </span>
+            <span
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                user.clubId ? "bg-green-success" : "bg-cyan-neon"
+              }`}
+            />
           </div>
 
-          <div className="flex flex-col items-center gap-1 pt-2 border-t border-white/[0.07] overflow-hidden min-w-0 w-full">
-            <span className="text-white text-[11.5px] font-bold truncate w-full text-center group-hover:text-cyan-neon transition-colors leading-tight">
-              {user.clubName || t("myClub")}
+          {/* Center Hero: Pure WHOOP Typography & Country/Team Telemetry */}
+          <div className="flex flex-col items-start justify-center my-auto py-1 min-w-0 w-full">
+            {user.clubLogo && (user.clubLogo.startsWith("http://") || user.clubLogo.startsWith("https://") || user.clubLogo.startsWith("data:")) ? (
+              <div className="flex items-center gap-2.5 w-full min-w-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={user.clubLogo}
+                  alt={user.clubName || "Club"}
+                  className="w-9 h-9 rounded-lg object-cover border border-white/10 shrink-0"
+                />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[18px] font-black tracking-wider text-white uppercase leading-none tabular-nums">
+                    {clubCountryObj.olympic}
+                  </span>
+                  <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-cyan-neon mt-1 truncate">
+                    {user.clubId
+                      ? language === "es" ? "Vinculado" : "Linked"
+                      : language === "es" ? "Activo" : "Active"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-1.5 w-full min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[23px] sm:text-[26px] font-black tracking-[0.04em] text-white uppercase leading-none tabular-nums">
+                    {clubCountryObj.olympic}
+                  </span>
+                  <span className="text-xs leading-none shrink-0">{clubCountryObj.flag}</span>
+                </div>
+                <div className="w-7 h-[2px] rounded-full bg-gradient-to-r from-cyan-neon via-red-rival to-yellow-gold opacity-90" />
+                <span className="text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-white/75 truncate w-full leading-none">
+                  {user.clubId
+                    ? language === "es" ? "Club Oficial" : "Official Club"
+                    : user.role === "coach" || user.role === "team_admin_coach"
+                      ? "Coach"
+                      : language === "es" ? "Afiliación" : "Affiliation"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Row: Club Name + Subtle Action Arrow (Aligned with Progreso Semanal footer) */}
+          <div className="flex items-center justify-between gap-1 pt-2 border-t border-white/[0.07] min-w-0 w-full">
+            <span className="text-white text-[11px] font-bold truncate group-hover:text-cyan-neon transition-colors leading-none">
+              {user.clubName || (language === "es" ? "Configurar" : "Configure")}
             </span>
-            <span className="text-[10px] text-white truncate flex items-center justify-center gap-1 font-semibold w-full leading-none">
-              <span className="shrink-0">{clubCountryObj.flag}</span>
-              <span className="font-bold uppercase tracking-wide text-white shrink-0">{clubCountryObj.olympic}</span>
-            </span>
+            <ArrowUpRight className="w-3 h-3 text-white/60 group-hover:text-cyan-neon transition-colors shrink-0" />
           </div>
         </motion.div>
 

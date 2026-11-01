@@ -24,14 +24,13 @@ export default function ClubLogoIcon({ logo = "0", className = "w-10 h-10" }: Cl
     );
   }
 
-  // Library of 5 vector icons
+  // Library of 5 architectural vector insignias (WHOOP minimalist style)
   switch (logo) {
-    case "0": // Diana Dorada
+    case "0": // Escudo Minimalista Editorial (sin diana cartoon)
       return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`${className} text-yellow-gold`}>
-          <circle cx="12" cy="12" r="10" stroke="#FFE300" strokeWidth="2" fill="rgba(255,227,0,0.1)" />
-          <circle cx="12" cy="12" r="6" stroke="#FFE300" strokeWidth="1.5" />
-          <circle cx="12" cy="12" r="2" fill="#FFE300" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={`${className} text-cyan-neon`}>
+          <path d="M12 3L4 6.5v5.5c0 5.25 3.4 9.65 8 11 4.6-1.35 8-5.75 8-11V6.5L12 3z" stroke="#00BFFF" strokeWidth="1.8" fill="rgba(0,191,255,0.08)" />
+          <path d="M9 12l2 2 4-4" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "1": // Arco Neón
