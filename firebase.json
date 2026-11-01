@@ -3,10 +3,26 @@
     "public": "out",
     "ignore": [
       "firebase.json",
-      "**/node_modules/**",
-      "**/*.apk"
+      "**/node_modules/**"
     ],
     "headers": [
+      {
+        "source": "**/*.apk",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/vnd.android.package-archive"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
       {
         "source": "/.well-known/assetlinks.json",
         "headers": [
@@ -223,17 +239,22 @@
     "redirects": [
       {
         "source": "/archery-app.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.18.apk",
+        "destination": "/Archery101010-v2.19.apk",
         "type": 302
       },
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.18.apk",
+        "destination": "/Archery101010-v2.19.apk",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.18.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.19.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.19.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.19.aab",
         "type": 302
       },
       {

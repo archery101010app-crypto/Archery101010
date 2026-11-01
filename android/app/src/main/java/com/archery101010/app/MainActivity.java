@@ -133,6 +133,15 @@ public class MainActivity extends BridgeActivity {
                     if (uri != null) {
                         String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "";
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
+                        String path = uri.getPath() != null ? uri.getPath().toLowerCase() : "";
+                        if (path.endsWith(".apk") || path.endsWith(".aab") || path.equals("/download-apk")) {
+                            try {
+                                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                                return true;
+                            } catch (Exception ignored) {}
+                        }
                         if (scheme.equals("whatsapp") || host.equals("api.whatsapp.com") || host.equals("wa.me")) {
                             try {
                                 Intent intent = new Intent(Intent.ACTION_VIEW, uri);

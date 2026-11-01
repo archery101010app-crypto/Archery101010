@@ -74,18 +74,7 @@ export default function AppUpdateBanner() {
   const handleUpdateNow = async () => {
     setIsUpdating(true);
     try {
-      const isNative = Capacitor.isNativePlatform();
-      if (isNative) {
-        // On Android native app, download the latest signed APK or open Play Store
-        const targetUrl =
-          remoteInfo.apkUrl ||
-          `https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v${remoteInfo.version}.apk`;
-        window.open(targetUrl, "_system");
-        setIsUpdating(false);
-        return;
-      }
-
-      // On Web / PWA: unregister stale service workers & clear caches, then reload
+      // Unregister stale service workers & clear caches
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map((r) => r.unregister()));
@@ -94,9 +83,22 @@ export default function AppUpdateBanner() {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
+
+      const isNative =
+        Capacitor.isNativePlatform() ||
+        (typeof window !== "undefined" && !!(window as any).ArcheryNativeAuth);
+
+      if (isNative) {
+        // Instant In-App OTA Update inside the native WebView (no GitHub redirect)
+        window.location.replace(
+          `https://archery101010-c0bb4.web.app/?v=${remoteInfo.version}&t=${Date.now()}`
+        );
+        return;
+      }
+
       window.location.reload();
     } catch {
-      window.location.reload();
+      window.location.href = `https://archery101010-c0bb4.web.app/?v=${remoteInfo.version}&t=${Date.now()}`;
     }
   };
 

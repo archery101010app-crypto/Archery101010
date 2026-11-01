@@ -871,7 +871,9 @@ export async function authenticateWithSocialProvider(
   providerName: "google" | "apple" = "google"
 ): Promise<UserProfile | null> {
   const isCapacitorNative =
-    typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+    typeof window !== "undefined" &&
+    (!!(window as any).Capacitor?.isNativePlatform?.() ||
+      !!(window as any).ArcheryNativeAuth);
 
   auth.languageCode = "es";
 
