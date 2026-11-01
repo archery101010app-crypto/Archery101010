@@ -303,48 +303,12 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     }
   };
 
-  if (isDisabled) {
-    return (
-      <button
-        onClick={handleDisableToggle}
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 w-12 h-12 rounded-full bg-neutral-900 border border-white/20 text-white flex items-center justify-center cursor-pointer shadow-2xl hover:text-cyan-neon transition"
-        title="Activar Reloj"
-      >
-        <Clock size={20} />
-      </button>
-    );
-  }
-
   // Percentage for progress bar fill
   const progressPercent = totalPhaseTime > 0 ? (timeLeft / totalPhaseTime) * 100 : 0;
 
-  // FAB color reflects official WA light when active
-  const fabColorClass = isActive
-    ? lightState === "RED"
-      ? "bg-red-600 text-white"
-      : lightState === "YELLOW"
-      ? "bg-yellow-gold text-black"
-      : "bg-green-success text-white"
-    : "bg-[#121620] border border-cyan-neon/40 text-cyan-neon";
-
   return (
     <>
-      {/* Floating Action Button (FAB) positioned cleanly above the bottom navigation bar */}
-      <motion.button
-        onClick={() => setIsOverlayOpen(true)}
-        animate={isActive ? { scale: [1, 1.05, 1] } : {}}
-        transition={isActive ? { repeat: Infinity, duration: 1.5 } : {}}
-        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 w-[58px] h-[58px] rounded-full flex flex-col items-center justify-center shadow-[0_8px_28px_rgba(0,0,0,0.85)] cursor-pointer ${fabColorClass}`}
-      >
-        <Clock size={24} />
-        {isActive && (
-          <span className="text-[11.6px] font-black mt-0.5 leading-none">
-            {formatTime(timeLeft)}
-          </span>
-        )}
-      </motion.button>
-
-      {/* Full-Screen World Archery Official Timing & Traffic Light System */}
+      {/* Full-Screen World Archery Official Timing & Traffic Light System (No floating bubble FAB; controlled from top HUD) */}
       <AnimatePresence>
         {isOverlayOpen && (
           <motion.div

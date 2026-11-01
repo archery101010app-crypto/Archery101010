@@ -1189,10 +1189,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   return (
-    <div className="flex flex-col gap-2.5 py-2 min-h-full w-full max-w-full overflow-x-hidden">
-      {/* Top Config info Header */}
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <div className="flex flex-col gap-2 py-1.5 min-h-full w-full max-w-full overflow-x-hidden">
+      {/* Top Config info Header + Integrated Clock & Mode Switcher */}
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => setIsExitModalOpen(true)}
             className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
@@ -1205,25 +1205,47 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {presetType === "WA_300_COMPOUND" && " · 10 Oficial"}
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
-            <p className="text-[11.6px] text-white uppercase tracking-wider truncate">
+            <p className="text-[11px] text-white uppercase tracking-wider truncate">
               {config.practiceType === "Control" ? t("practiceControl") : config.practiceType} · {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType}
             </p>
           </div>
         </div>
 
-        {/* Tab Selection Mode + Direct Clock Access buttons */}
+        {/* Single Integrated WA Clock Control + Mode Switcher */}
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("open-archery-clock"))}
-            title="Abrir Cronómetro WA"
-            className="h-10 px-2.5 rounded-xl bg-[#0D1017] border border-cyan-neon/35 hover:border-cyan-neon text-cyan-neon flex items-center gap-1.5 cursor-pointer transition active:scale-95"
+            title="Abrir Cronómetro Oficial WA"
+            className={`h-9 px-2.5 rounded-xl border flex items-center gap-1.5 cursor-pointer transition active:scale-95 ${
+              clockTimeStr
+                ? clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+                  ? "bg-red-600/20 border-red-500/60 text-white"
+                  : clockIsWarn
+                  ? "bg-yellow-gold/20 border-yellow-gold/60 text-yellow-gold"
+                  : "bg-green-success/20 border-green-success/60 text-green-success"
+                : "bg-[#0D1017] border-white/[0.12] hover:border-cyan-neon/50 text-white"
+            }`}
           >
-            <Clock size={15} />
-            <span className="text-[10.5px] font-black uppercase tracking-wider">Reloj</span>
+            {clockTimeStr ? (
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                  clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+                    ? "bg-red-500"
+                    : clockIsWarn
+                    ? "bg-yellow-gold"
+                    : "bg-green-success"
+                }`}
+              />
+            ) : (
+              <Clock size={14} className="text-cyan-neon shrink-0" />
+            )}
+            <span className="text-[11px] font-black uppercase tracking-wider tabular-nums">
+              {clockTimeStr || "Reloj"}
+            </span>
           </button>
 
-          <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08]">
+          <div className="flex bg-[#0D1017] p-0.5 rounded-xl border border-white/[0.08]">
             <button
               onClick={() => setMode("TARGET")}
               className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
@@ -1244,7 +1266,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         </div>
       </div>
 
-      {/* Floating clock controller integration */}
+      {/* Floating clock controller integration (Full-screen overlay only) */}
       <FloatingClock
         arrowsPerEnd={config.arrowsPerEnd}
         onClockDisabledChange={setClockDisabled}
@@ -1256,108 +1278,91 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         }}
       />
 
-      {/* Mini Clock display widget (visible when floating clock is running and overlay minimized) */}
-      {clockTimeStr && (
-        <div
-          className={`w-full bg-[#0D1017] border rounded-xl px-4 py-2 flex items-center justify-between shadow-lg transition-colors ${
-            clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-              ? "border-red-500/40"
-              : clockIsWarn
-              ? "border-yellow-gold/40"
-              : "border-green-success/40"
-          }`}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={`w-2.5 h-2.5 rounded-full shrink-0 animate-pulse ${
-                clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-                  ? "bg-red-600"
-                  : clockIsWarn
-                  ? "bg-yellow-gold"
-                  : "bg-green-success"
-              }`}
-            />
-            <span className="text-xs text-white font-bold uppercase tracking-wider truncate">
-              {clockPhase === "prep"
-                ? "Preparación (Ir a la línea)"
-                : clockPhase === "stop" || clockIsOver
-                ? "Fin de Tiempo (Alto)"
-                : clockIsWarn
-                ? "Últimos 30s de Tiro"
-                : "Tiempo de Tiro"}
-            </span>
-          </div>
-          <span
-            className={`text-lg font-black tabular-nums leading-none tabular-nums shrink-0 ${
-              clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-                ? "text-red-500"
-                : clockIsWarn
-                ? "text-yellow-gold"
-                : "text-green-success"
-            }`}
-          >
-            {clockTimeStr}
-          </span>
-        </div>
-      )}
-
-      {/* Total score box */}
+      {/* Unified WHOOP-Style Telemetry HUD (Score + End + Active Arrows in 1 compact block) */}
       {config.practiceType === "Volumen" ? (
-        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center gap-2">
-          <div className="flex flex-col">
-            <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex justify-between items-center gap-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10.5px] text-white font-bold tracking-widest uppercase">
               Distancia
             </span>
-            <span className="text-2xl font-black text-white leading-tight tabular-nums">
-              {config.distance} <span className="text-xs text-white">metros</span>
+            <span className="text-xl font-black text-white leading-none tabular-nums">
+              {config.distance} <span className="text-xs text-white">m</span>
             </span>
           </div>
-          <div className="text-right flex flex-col items-end">
-            <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-3 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
-              Práctica de Volumen
-            </span>
-          </div>
+          <span className="text-[10.5px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
+            Práctica de Volumen
+          </span>
         </div>
       ) : (
-        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex justify-between items-center flex-wrap gap-2">
-          <div className="flex flex-col">
-            <span className="text-[11.6px] text-white font-bold tracking-widest uppercase">
-              Puntuación
-            </span>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-black text-white leading-tight tabular-nums">
-                {calculateTotalScore()} <span className="text-xs text-white">/ {config.maxScore}</span>
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex flex-col gap-2">
+          <div className="flex justify-between items-center gap-2">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="text-[10.5px] text-white font-bold tracking-widest uppercase shrink-0">
+                Puntos
+              </span>
+              <span className="text-2xl font-black text-white leading-none tabular-nums">
+                {calculateTotalScore()} <span className="text-xs text-white font-bold">/ {config.maxScore}</span>
               </span>
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
                 <button
                   onClick={handleFinishFirstBlockOnly}
-                  className="text-[10.5px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2.5 py-1 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
+                  className="text-[10px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2 py-0.5 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
                 >
-                  Finalizar en 1er Bloque
+                  1er Bloque
                 </button>
               )}
             </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10.5px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
+                End {currentEndIdx + 1}/{config.endsCount}
+              </span>
+              <span className="text-[11px] text-white font-bold tabular-nums whitespace-nowrap">
+                Fl. {currentArrowIdx + 1}/{config.arrowsPerEnd}
+              </span>
+            </div>
           </div>
-          <div className="text-right flex flex-col items-end">
-            <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
-              End {currentEndIdx + 1} / {config.endsCount}
-            </span>
-            <span className="text-xs text-white font-bold mt-1 tabular-nums">
-              Flecha {currentArrowIdx + 1} / {config.arrowsPerEnd}
-            </span>
-          </div>
+
+          {mode === "TARGET" && (
+            <div className="flex justify-between items-center gap-1.5 pt-2 border-t border-white/[0.07]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="flex gap-1">
+                  {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
+                    const isCellEditing = currentArrowIdx === arrowIdx;
+                    return (
+                      <div
+                        key={arrowIdx}
+                        onClick={() => setCurrentArrowIdx(arrowIdx)}
+                        className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer shrink-0 ${getArrowColorClass(
+                          a
+                        )} ${
+                          isCellEditing
+                            ? "border-cyan-neon ring-1 ring-cyan-neon/40 bg-cyan-neon/10"
+                            : "border-white/5 hover:border-white/20"
+                        }`}
+                      >
+                        {a || "—"}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="px-2.5 py-1 rounded-xl bg-[#080A0F] border border-white/10 font-black text-[11.6px] text-cyan-neon shrink-0 whitespace-nowrap tabular-nums">
+                End: {calculateEndTotal(currentEndIdx)} pts
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* SCORING COMPONENT MODES */}
-      <div className="flex-1 flex flex-col justify-center min-h-[320px] py-4">
+      <div className="flex-1 flex flex-col justify-center min-h-[300px] py-1">
         {config.practiceType === "Volumen" ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 py-6">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 py-4">
             {/* Tally Counter Casing Container */}
             <div className="relative flex flex-col items-center select-none">
               {/* Metal hanger loop at the top */}
               <div
-                className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-zinc-400 bg-transparent relative z-0 flex items-center justify-center animate-pulse"
+                className="w-14 h-10 -mb-2 rounded-t-full border-[5px] border-zinc-400 bg-transparent relative z-0 flex items-center justify-center"
                 style={{
                   borderColor: "#a1a1aa",
                   boxShadow: "0 -2px 8px rgba(255,255,255,0.25), inset 0 2px 4px rgba(0,0,0,0.6)"
@@ -1572,46 +1577,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               )}
             </AnimatePresence>
 
-            {/* Parciales del End Activo (Optimizado) */}
-            <div className="w-full flex justify-between items-center gap-1.5 py-2 px-3 bg-neutral-900/60 rounded-2xl border border-white/10 shadow-inner">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider shrink-0">
-                  ACTUAL:
-                </span>
-                <div className="flex gap-1">
-                  {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
-                    const isCellEditing = currentArrowIdx === arrowIdx;
-                    return (
-                      <div
-                        key={arrowIdx}
-                        onClick={() => setCurrentArrowIdx(arrowIdx)}
-                        className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer shrink-0 ${getArrowColorClass(
-                          a
-                        )} ${
-                          isCellEditing
-                            ? "border-cyan-neon ring-2 ring-cyan-neon/30 shadow-glow-cyan bg-cyan-neon/10 scale-105"
-                            : "border-white/5 hover:border-white/20"
-                        }`}
-                      >
-                        {a || "—"}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="px-2 py-1 rounded-xl bg-neutral-950 border border-white/10 font-extrabold text-[11.6px] text-cyan-neon shadow-sm shrink-0 whitespace-nowrap">
-                Suma: {calculateEndTotal(currentEndIdx)} pts
-              </div>
-            </div>
-
             {/* Quick Actions Bar: Clics de Mira & Compartir Diana */}
             <div className="w-full flex items-center justify-between gap-2 px-0.5">
               <button
                 type="button"
                 onClick={() => setShowDispersionDrawer(true)}
-                className="flex-1 py-1.5 px-3 rounded-xl bg-neutral-900/90 border border-cyan-neon/30 hover:border-cyan-neon text-white font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
+                className="flex-1 py-1.5 px-3 rounded-xl bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/50 text-white font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
               >
-                <Crosshair size={13} className="text-cyan-neon animate-pulse" />
+                <Crosshair size={13} className="text-cyan-neon shrink-0" />
                 <span>Ajuste de Mira</span>
                 {activeAnalysis && activeAnalysis.count > 0 && (
                   <span className="text-[10.5px] px-1.5 py-0.5 rounded-md bg-cyan-neon/15 text-cyan-neon tabular-nums">
@@ -1624,7 +1597,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 type="button"
                 onClick={handleShareShotChart}
                 disabled={isGeneratingImage}
-                className="py-1.5 px-3.5 rounded-xl bg-neutral-900/90 border border-yellow-gold/40 hover:border-yellow-gold text-yellow-gold font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                className="py-1.5 px-3.5 rounded-xl bg-[#0D1017] border border-yellow-gold/35 hover:border-yellow-gold text-yellow-gold font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 title="Generar y compartir imagen de la diana con sello 101010 THE APP"
               >
                 <Camera size={13} />
