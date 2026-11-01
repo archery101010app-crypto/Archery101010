@@ -251,31 +251,31 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.lineTo(940, 25);
   ctx.stroke();
 
-  // 2. Top Athlete Header & Score Hero Card (Pure White App Header Typography +20%)
+  // 2. Top Athlete Header & Score Hero Card (Pure Solid White Typography)
   ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
   ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, 54, 50, 266, 40, 20);
+  drawRoundedRect(ctx, 54, 48, 306, 44, 22);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 15.6px ${appFont}`;
+  ctx.font = `800 19px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("TELEMETRÍA OFICIAL", 187, 76);
+  ctx.fillText("TELEMETRÍA OFICIAL", 207, 77);
 
-  // Archer Name
-  ctx.font = `900 42px ${appFont}`;
+  // Archer Name (-15% size: 35.7px)
+  ctx.font = `900 35.7px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(archerName || "Arquero", 54, 138, 680);
+  ctx.fillText(archerName || "Arquero", 54, 136, 680);
 
-  // Category, Distance, Format & Date
+  // Category, Distance, Format & Date (Solid White)
   const displayBowType =
     bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
   ctx.font = `700 21px ${appFont}`;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${displayBowType} • ${distanceM}m • ${format} • ${dateStr}`, 54, 172, 680);
 
   // Total Score Hero Badge (Top Right)
@@ -286,10 +286,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 15.6px ${appFont}`;
+  ctx.font = `800 17.2px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PUNTUACIÓN TOTAL", 896, 82);
+  ctx.fillText("PUNTUACIÓN TOTAL", 896, 83);
 
   ctx.font = `900 54px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
@@ -297,7 +297,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
   ctx.font = `700 16px ${appFont}`;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`/ ${maxScore} pts (${pct}%)`, 896, 166);
 
   // 3. Split Hero Row: Virtual Target on the LEFT + "101010 THE APP" on the RIGHT
@@ -466,11 +466,11 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 318);
   ctx.stroke();
 
-  // Telemetry summary below the logo inside the right panel (White header +20%, no extra line below)
-  ctx.font = `800 15.6px ${appFont}`;
+  // Telemetry summary below the logo inside the right panel (White header +10% more, no extra line below)
+  ctx.font = `800 17.2px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 362);
+  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 364);
 
   ctx.font = `900 38px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
@@ -523,23 +523,23 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = `800 14.4px ${appFont}`;
+    ctx.font = `800 15.9px ${appFont}`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "left";
-    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 28);
+    ctx.fillText("RESUMEN DE RONDAS (ENDS)", 74, stripY + 30);
 
     const displayEnds = validEnds.slice(0, 12);
     const colW = Math.min(82, Math.floor(932 / displayEnds.length));
     displayEnds.forEach((item, i) => {
       const cellX = 74 + i * colW;
-      ctx.font = `700 12px ${appFont}`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.60)";
+      ctx.font = `700 12.5px ${appFont}`;
+      ctx.fillStyle = "#FFFFFF";
       ctx.textAlign = "center";
-      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 52);
+      ctx.fillText(`E${item.idx}`, cellX + colW * 0.42, stripY + 54);
 
       ctx.font = `900 20px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 78);
+      ctx.fillText(`${item.sum}`, cellX + colW * 0.42, stripY + 80);
     });
   }
 
@@ -581,18 +581,18 @@ function drawStatBox(
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 14.4px ${appFont}`;
+  ctx.font = `800 15.9px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(title, x + 18, y + 30, w - 36);
+  ctx.fillText(title, x + 18, y + 31, w - 36);
 
   ctx.font = `900 22px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(main, x + 18, y + 62, w - 36);
+  ctx.fillText(main, x + 18, y + 63, w - 36);
 
   ctx.font = `600 13px ${appFont}`;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
-  ctx.fillText(sub, x + 18, y + 90, w - 36);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(sub, x + 18, y + 91, w - 36);
 }
 
 export interface ShareTargetResult {
