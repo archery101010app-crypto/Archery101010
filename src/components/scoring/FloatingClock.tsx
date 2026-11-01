@@ -90,6 +90,19 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     }
   }, [arrowsPerEnd]);
 
+  // Allow opening the clock overlay from top scoring header button
+  useEffect(() => {
+    const handleOpenClock = () => {
+      if (isDisabled) {
+        setIsDisabled(false);
+        if (onClockDisabledChange) onClockDisabledChange(false);
+      }
+      setIsOverlayOpen(true);
+    };
+    window.addEventListener("open-archery-clock", handleOpenClock);
+    return () => window.removeEventListener("open-archery-clock", handleOpenClock);
+  }, [isDisabled, onClockDisabledChange]);
+
   // Official World Archery Light Color ("RED" | "YELLOW" | "GREEN")
   const getOfficialLightState = (): "RED" | "YELLOW" | "GREEN" => {
     if (phase === "prep" || phase === "stop" || timeLeft <= 0) {
@@ -294,7 +307,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     return (
       <button
         onClick={handleDisableToggle}
-        className="fixed bottom-[72px] right-4 z-40 w-12 h-12 rounded-full bg-neutral-900 border border-gray-border text-white flex items-center justify-center cursor-pointer shadow-lg hover:text-white"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 w-12 h-12 rounded-full bg-neutral-900 border border-white/20 text-white flex items-center justify-center cursor-pointer shadow-2xl hover:text-cyan-neon transition"
         title="Activar Reloj"
       >
         <Clock size={20} />
@@ -312,16 +325,16 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
       : lightState === "YELLOW"
       ? "bg-yellow-gold text-black"
       : "bg-green-success text-white"
-    : "bg-[#121620] border border-white/15 text-cyan-neon";
+    : "bg-[#121620] border border-cyan-neon/40 text-cyan-neon";
 
   return (
     <>
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Action Button (FAB) positioned cleanly above the bottom navigation bar */}
       <motion.button
         onClick={() => setIsOverlayOpen(true)}
         animate={isActive ? { scale: [1, 1.05, 1] } : {}}
         transition={isActive ? { repeat: Infinity, duration: 1.5 } : {}}
-        className={`fixed bottom-[72px] right-4 z-40 w-[62px] h-[62px] rounded-full flex flex-col items-center justify-center shadow-2xl cursor-pointer ${fabColorClass}`}
+        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 w-[58px] h-[58px] rounded-full flex flex-col items-center justify-center shadow-[0_8px_28px_rgba(0,0,0,0.85)] cursor-pointer ${fabColorClass}`}
       >
         <Clock size={24} />
         {isActive && (

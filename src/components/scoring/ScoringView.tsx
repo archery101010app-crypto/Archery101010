@@ -7,7 +7,7 @@ import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting,
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X } from "lucide-react";
+import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X, Clock } from "lucide-react";
 import confetti from "canvas-confetti";
 import { calculateDispersionAnalysis, DispersionAnalysis, getConvexHull } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
@@ -1211,24 +1211,36 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         </div>
 
-        {/* Tab Selection Mode buttons */}
-        <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
+        {/* Tab Selection Mode + Direct Clock Access buttons */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setMode("TARGET")}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
-              mode === "TARGET" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-            }`}
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-archery-clock"))}
+            title="Abrir Cronómetro WA"
+            className="h-10 px-2.5 rounded-xl bg-[#0D1017] border border-cyan-neon/35 hover:border-cyan-neon text-cyan-neon flex items-center gap-1.5 cursor-pointer transition active:scale-95"
           >
-            <Target size={15} />
+            <Clock size={15} />
+            <span className="text-[10.5px] font-black uppercase tracking-wider">Reloj</span>
           </button>
-          <button
-            onClick={() => setMode("KEYBOARD")}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
-              mode === "KEYBOARD" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-            }`}
-          >
-            <Keyboard size={15} />
-          </button>
+
+          <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08]">
+            <button
+              onClick={() => setMode("TARGET")}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
+                mode === "TARGET" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
+              }`}
+            >
+              <Target size={15} />
+            </button>
+            <button
+              onClick={() => setMode("KEYBOARD")}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
+                mode === "KEYBOARD" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
+              }`}
+            >
+              <Keyboard size={15} />
+            </button>
+          </div>
         </div>
       </div>
 
