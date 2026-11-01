@@ -124,7 +124,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
-                Nickname <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                Alias <span className="text-white/50 font-medium normal-case">(Opcional)</span>
               </label>
               <input
                 type="text"
@@ -197,7 +197,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
           </div>
 
           <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[11.6px] text-white leading-snug">
-            <strong className="text-white uppercase tracking-wider">Nickname (Opcional):</strong> Si lo deseas, puedes indicar un Nickname para tus duelos en línea y tarjetas compartidas.
+            <strong className="text-white uppercase tracking-wider">Alias (Opcional):</strong> Si lo deseas, puedes indicar un Alias para tus duelos en línea y tarjetas compartidas.
           </div>
 
           <button
