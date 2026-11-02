@@ -108,12 +108,12 @@ export default function CoachPaymentModal({
                 className="notranslate flex items-center gap-1.5 select-none"
                 style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
               >
-                <span className="text-white tracking-widest font-extrabold text-[13.5px]">ARCHERY</span>
-                <span className="inline-flex tracking-tight font-extrabold text-[13.5px]">
+                <span className="inline-flex tracking-tight font-extrabold text-[14px]">
                   <span className="text-cyan-neon">10</span>
                   <span className="text-red-rival">10</span>
                   <span className="text-yellow-gold">10</span>
                 </span>
+                <span className="text-white/90 tracking-[0.22em] font-extrabold text-[10px]">THE APP</span>
               </div>
 
               <div className="flex items-center gap-2 mt-0.5">

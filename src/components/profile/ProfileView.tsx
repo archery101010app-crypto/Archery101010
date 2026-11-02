@@ -528,13 +528,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none uppercase"
+                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none uppercase [color-scheme:dark]"
               />
               <input
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none"
                 placeholder={t("city")}
               />
             </div>
@@ -542,20 +542,20 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none [color-scheme:dark]"
               >
                 {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                  <option key={c.code} value={c.code} className="bg-black text-white">{c.flag} {c.name}</option>
                 ))}
               </select>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none [color-scheme:dark]"
               >
-                <option value="M">{t("genderM")}</option>
-                <option value="F">{t("genderF")}</option>
-                <option value="O">{t("genderO")}</option>
+                <option value="M" className="bg-black text-white">{t("genderM")}</option>
+                <option value="F" className="bg-black text-white">{t("genderF")}</option>
+                <option value="O" className="bg-black text-white">{t("genderO")}</option>
               </select>
             </div>
           </div>

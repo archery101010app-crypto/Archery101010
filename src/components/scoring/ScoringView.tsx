@@ -2124,7 +2124,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   onClick={handleShareShotChart}
                   disabled={isGeneratingImage}
-                  className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  className="w-full h-11 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Camera size={16} />
                   <span>{isGeneratingImage ? "Generando Imagen..." : "Compartir Diana Gráfica (HD)"}</span>
@@ -2132,7 +2132,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   onClick={handleShareScorecardWhatsApp}
                   disabled={isGeneratingImage}
-                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  className="w-full h-11 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Share2 size={16} />
                   <span>Compartir Planilla por WhatsApp</span>
@@ -2378,16 +2378,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     </div>
                   </div>
 
-                  {/* Target Face Official Dimension Card */}
-                  <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
-                    <span className="text-white font-medium">Diana Reglamentaria:</span>
-                    <span className="tabular-nums font-bold text-white">{activeAnalysis.targetName}</span>
-                  </div>
-
-                  {/* Dispersion spread card */}
-                  <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex justify-between items-center text-xs">
-                    <span className="text-white font-medium">Diámetro Máximo de Grupo:</span>
-                    <span className="tabular-nums font-black text-cyan-neon tabular-nums">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
+                  {/* Target Face & Dispersion spread compact 2-column row */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
+                      <span className="text-[10.5px] font-black uppercase text-white/70 tracking-wider">Diana Oficial</span>
+                      <span className="tabular-nums font-bold text-xs text-white truncate">{activeAnalysis.targetName}</span>
+                    </div>
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
+                      <span className="text-[10.5px] font-black uppercase text-white/70 tracking-wider">Diámetro Grupo</span>
+                      <span className="tabular-nums font-black text-xs text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
+                    </div>
                   </div>
 
                   {/* Summary Tip */}

@@ -551,7 +551,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[80px] left-4 right-4 z-[990] h-12 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.08] rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/40 transition-all max-w-md mx-auto"
+          className="fixed bottom-[62px] left-4 right-4 z-[990] h-12 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.08] rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/40 transition-all max-w-md mx-auto"
         >
           <div
             onClick={() => setIsOpen(true)}
@@ -806,47 +806,6 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         >
                           Solo Guardar Usuario
                         </button>
-                      )}
-                    </div>
-
-                    {/* OAuth 2.0 PKCE Auto-Import Option */}
-                    <div className="border-t border-white/[0.06] pt-2 flex flex-col gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowOAuthConfig((prev) => !prev)}
-                        className="text-[11.6px] text-white hover:text-white font-bold flex items-center gap-1 self-start cursor-pointer transition"
-                      >
-                        <KeyRound size={11} className="text-[#1DB954]" />
-                        <span>
-                          {showOAuthConfig
-                            ? "Ocultar sincronización automática de biblioteca (OAuth)"
-                            : "Sincronización automática de todas tus playlists (OAuth API)"}
-                        </span>
-                      </button>
-
-                      {showOAuthConfig && (
-                        <div className="bg-[#0B0E14] border border-white/[0.06] rounded-xl p-2.5 flex flex-col gap-2">
-                          <span className="text-[10.5px] text-white leading-snug">
-                            Para importar automáticamente todas las playlists privadas de una cuenta vía API, ingresa el Spotify Client ID (Redirect URI:{" "}
-                            <code className="text-white">{typeof window !== "undefined" ? window.location.origin : ""}</code>):
-                          </span>
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              value={oauthClientIdInput}
-                              onChange={(e) => setOauthClientIdInput(e.target.value)}
-                              placeholder="Spotify Client ID"
-                              className="flex-1 bg-[#121722] border border-white/[0.08] text-white text-[12.8px] px-2.5 py-1.5 rounded-lg outline-none focus:border-[#1DB954]"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleStartOAuthSync}
-                              className="px-3 py-1.5 rounded-lg bg-[#1DB954] text-black font-black text-[11.6px] uppercase tracking-wider cursor-pointer shrink-0"
-                            >
-                              Autorizar API
-                            </button>
-                          </div>
-                        </div>
                       )}
                     </div>
                   </div>

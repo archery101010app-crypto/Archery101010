@@ -194,16 +194,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <button
                 key={type}
                 type="button"
-                onClick={async () => {
-                  const hide = await getLocalSetting(`hide_info_practice_${type}`, false);
-                  if (hide) {
-                    setPracticeType(type);
-                  } else {
-                    setPracticeInfoType(type);
-                    setDontShowAgainPractice(false);
-                    setShowPracticeInfoModal(true);
-                  }
-                }}
+                onClick={() => setPracticeType(type)}
                 className={`h-11 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
@@ -214,34 +205,45 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               </button>
             ))}
           </div>
+          <p className="text-[11.2px] text-white/70 leading-snug px-1">
+            {practiceType === "Control" && "Simulación oficial de torneo con tiempos, diana activa y planilla reglamentaria."}
+            {practiceType === "Práctica" && "Entrenamiento libre con análisis de agrupación y notas por ronda."}
+            {practiceType === "Volumen" && "Contador rápido de carga física de flechas sin puntuación en diana."}
+          </p>
         </div>
 
-        {/* Format Select */}
+        {/* Format Chips */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-white font-bold uppercase tracking-wider">
             {t("sessionFormat")}
           </label>
-          <div className="relative">
-            <select
-              value={format}
-              onChange={(e) => handleFormatChange(e.target.value)}
-              className="w-full h-11 bg-[#0D0F12] border border-white/10 text-white text-xs sm:text-sm px-4 rounded-xl outline-none focus:border-cyan-neon transition duration-200 appearance-none font-bold"
-            >
-              <option value="Libre" className="bg-black text-white">Ajuste libre</option>
-              <option value="WA 360" className="bg-black text-white">WA 360</option>
-              <option value="WA 720" className="bg-black text-white">WA 720</option>
-              <option value="WA 300" className="bg-black text-white">
-                WA 300 {bowType === "Compound" ? "(10 Reducido Oficial)" : ""}
-              </option>
-              <option value="Vegas 300" className="bg-black text-white">
-                Vegas 300 {bowType === "Compound" ? "(10 Completo)" : ""}
-              </option>
-            </select>
-            <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none" />
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {[
+              { id: "Libre", label: "Libre" },
+              { id: "WA 720", label: "WA 720" },
+              { id: "WA 360", label: "WA 360" },
+              { id: "WA 300", label: "WA 300" },
+              { id: "Vegas 300", label: "Vegas 300" }
+            ].map((fmt) => (
+              <button
+                key={fmt.id}
+                type="button"
+                onClick={() => handleFormatChange(fmt.id)}
+                className={`h-10 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                  format === fmt.id
+                    ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
+                    : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
+                }`}
+              >
+                {fmt.label}
+              </button>
+            ))}
           </div>
           {format !== "Libre" && (
-            <p className="text-[11.6px] text-cyan-neon tabular-nums font-bold px-1 tabular-nums">
+            <p className="text-[11.6px] text-cyan-neon tabular-nums font-bold px-1">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
+              {bowType === "Compound" && format === "WA 300" ? " · 10 Reducido Oficial" : ""}
+              {bowType === "Compound" && format === "Vegas 300" ? " · 10 Completo" : ""}
             </p>
           )}
         </div>

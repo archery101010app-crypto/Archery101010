@@ -1053,7 +1053,7 @@ export default function Home() {
 
                 <button
                   onClick={() => setUnlockedStar(null)}
-                  className="mt-6 w-full h-11 bg-yellow-gold hover:brightness-105 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
+                  className="mt-6 w-full h-11 bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                 >
                   Continuar
                 </button>

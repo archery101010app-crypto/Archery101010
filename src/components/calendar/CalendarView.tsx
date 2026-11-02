@@ -965,69 +965,51 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         </div>
       </div>
 
-      {/* Month selection selector + Interruptor Mes | Agenda (Estilo Google Calendar) */}
-      <div className="flex flex-col gap-2.5 bg-neutral-900/60 p-3.5 rounded-2xl border border-white/5">
-        <div className="flex justify-between items-center">
+      {/* Compact Month Selector + View Switcher Bar */}
+      <div className="flex items-center justify-between gap-2 bg-[#0D1017] px-3 py-2.5 rounded-2xl border border-white/[0.08]">
+        <div className="flex items-center gap-1 min-w-0">
           <button
             onClick={prevMonth}
-            className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+            className="w-8 h-8 rounded-xl text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={18} />
           </button>
-          <div className="text-center">
-            <span className="text-white font-extrabold text-base sm:text-lg capitalize block leading-tight">
-              {monthName}
-            </span>
-            <span className="text-[11.5px] text-white mt-0.5 block">
-              Toca cualquier día para ver o escribir su agenda
-            </span>
-          </div>
+          <span className="text-white font-extrabold text-sm sm:text-base capitalize truncate px-1">
+            {monthName}
+          </span>
           <button
             onClick={nextMonth}
-            className="p-2 rounded-xl text-cyan-neon hover:bg-neutral-800 transition cursor-pointer"
+            className="w-8 h-8 rounded-xl text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronRight size={20} />
+            <ChevronRight size={18} />
           </button>
         </div>
 
-        {/* Interruptor Google Calendar: Vista Mes vs Vista Agenda */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06] flex-wrap">
-          <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10">
-            <button
-              type="button"
-              onClick={() => setCalendarViewMode("month")}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
-                calendarViewMode === "month"
-                  ? "bg-cyan-neon text-black shadow-sm"
-                  : "text-white hover:bg-white/5"
-              }`}
-            >
-              <CalendarIcon size={12} />
-              <span>Vista Mes</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCalendarViewMode("agenda")}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
-                calendarViewMode === "agenda"
-                  ? "bg-cyan-neon text-black shadow-sm"
-                  : "text-white hover:bg-white/5"
-              }`}
-            >
-              <CheckCircle2 size={12} />
-              <span>Agenda del Día</span>
-            </button>
-          </div>
-
-          {calendarViewMode === "agenda" && (
-            <button
-              type="button"
-              onClick={() => setAgendaShowEmptyDays((v) => !v)}
-              className="text-[10.5px] font-bold text-cyan-neon bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 px-2.5 py-1.5 rounded-xl transition cursor-pointer"
-            >
-              {agendaShowEmptyDays ? "Ver solo días con tareas" : "Ver todos los días (1 al 31)"}
-            </button>
-          )}
+        <div className="flex items-center gap-1 bg-[#090B0E] p-1 rounded-xl border border-white/[0.08] shrink-0">
+          <button
+            type="button"
+            onClick={() => setCalendarViewMode("month")}
+            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+              calendarViewMode === "month"
+                ? "bg-cyan-neon text-black shadow-sm"
+                : "text-white hover:bg-white/5"
+            }`}
+          >
+            <CalendarIcon size={11} />
+            <span>Mes</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCalendarViewMode("agenda")}
+            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+              calendarViewMode === "agenda"
+                ? "bg-cyan-neon text-black shadow-sm"
+                : "text-white hover:bg-white/5"
+            }`}
+          >
+            <CheckCircle2 size={11} />
+            <span>Agenda</span>
+          </button>
         </div>
       </div>
 

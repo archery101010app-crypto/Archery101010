@@ -33,6 +33,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   const [dateFilter, setDateFilter] = useState<"7DAYS" | "MONTH" | "ALL">("ALL");
   const [practiceFilter, setPracticeFilter] = useState<string>("ALL");
   const [bowFilter, setBowFilter] = useState<string>("ALL");
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   
   // Delete confirm state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -279,111 +280,142 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           </div>
         </div>
 
-        {/* Tab Selector Buttons */}
-        <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
-          <button
-            onClick={() => setActiveTab("SESSIONS")}
-            className={`h-8 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-              activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-            }`}
-          >
-            Sesiones
-          </button>
-          <button
-            onClick={() => setActiveTab("VOLUME")}
-            className={`h-8 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-              activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-            }`}
-          >
-            Volumen
-          </button>
+        {/* Tab Selector & Filter Toggle */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {activeTab === "SESSIONS" && (
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              className={`h-9 px-2.5 rounded-xl border text-[11.6px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition ${
+                showFilters || dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL"
+                  ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
+                  : "bg-[#0D1017] border-white/[0.08] text-white hover:text-white"
+              }`}
+              title="Filtrar sesiones"
+            >
+              <Filter size={13} />
+              <span className="hidden xs:inline">Filtrar</span>
+              {(dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL") && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon" />
+              )}
+            </button>
+          )}
+          <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
+            <button
+              onClick={() => setActiveTab("SESSIONS")}
+              className={`h-7 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+                activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
+              }`}
+            >
+              Sesiones
+            </button>
+            <button
+              onClick={() => setActiveTab("VOLUME")}
+              className={`h-7 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+                activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
+              }`}
+            >
+              Volumen
+            </button>
+          </div>
         </div>
       </div>
 
       {activeTab === "SESSIONS" ? (
         <>
-          {/* Filter Panel */}
-          <div className="bg-[#0D1017] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
-            {/* Date Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[11.6px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                Fecha:
-              </span>
-              <div className="flex gap-1.5">
-                {[
-                  { id: "ALL", label: t("allTime") },
-                  { id: "7DAYS", label: t("last7Days") },
-                  { id: "MONTH", label: t("thisMonth") }
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setDateFilter(f.id as any)}
-                    className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
-                      dateFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Collapsible Filter Panel */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-[#0D1017] p-3.5 rounded-2xl border border-white/[0.08] flex flex-col gap-2.5">
+                  {/* Date Pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                    <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+                      Fecha:
+                    </span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: "ALL", label: t("allTime") },
+                        { id: "7DAYS", label: t("last7Days") },
+                        { id: "MONTH", label: t("thisMonth") }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setDateFilter(f.id as any)}
+                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                            dateFilter === f.id
+                              ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                              : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            {/* Practice Type Filters */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[11.6px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                Tipo:
-              </span>
-              <div className="flex gap-1.5">
-                {[
-                  { id: "ALL", label: t("filterAll") },
-                  { id: "Control", label: t("practiceControl") },
-                  { id: "Práctica", label: t("practicePractice") },
-                  { id: "Volumen", label: t("practiceVolume") }
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setPracticeFilter(f.id)}
-                    className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
-                      practiceFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                  {/* Practice Type Filters */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                    <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+                      Tipo:
+                    </span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: "ALL", label: t("filterAll") },
+                        { id: "Control", label: t("practiceControl") },
+                        { id: "Práctica", label: t("practicePractice") },
+                        { id: "Volumen", label: t("practiceVolume") }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setPracticeFilter(f.id)}
+                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                            practiceFilter === f.id
+                              ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                              : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            {/* Bow Type Filters */}
-            <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-[11.6px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                Arco:
-              </span>
-              <div className="flex gap-1.5">
-                {[
-                  { id: "ALL", label: t("filterAll") },
-                  { id: "Recurve", label: "Recurvo" },
-                  { id: "Compound", label: "Compuesto" },
-                  { id: "Barebow", label: "Barebow" }
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setBowFilter(f.id)}
-                    className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
-                      bowFilter === f.id
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
-                        : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                  {/* Bow Type Filters */}
+                  <div className="flex items-center gap-2 overflow-x-auto">
+                    <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
+                      Arco:
+                    </span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: "ALL", label: t("filterAll") },
+                        { id: "Recurve", label: "Recurvo" },
+                        { id: "Compound", label: "Compuesto" },
+                        { id: "Barebow", label: "Barebow" }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setBowFilter(f.id)}
+                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                            bowFilter === f.id
+                              ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
+                              : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Session list items */}
           <div className="flex-1 flex flex-col gap-2.5">
@@ -800,7 +832,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                         type="button"
                         onClick={() => handleShareSessionShotChart(selectedSession)}
                         disabled={isGeneratingImage}
-                        className="w-full py-3 mt-1 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                        className="w-full py-3 mt-1 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         <Camera size={15} />
                         <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Foto Diana (HD)"}</span>
@@ -809,7 +841,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                         type="button"
                         onClick={() => handleShareSessionWhatsApp(selectedSession)}
                         disabled={isGeneratingImage}
-                        className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                        className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         <Share2 size={15} />
                         <span>Compartir Planilla por WhatsApp</span>
@@ -826,7 +858,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   type="button"
                   onClick={() => handleShareSessionShotChart(selectedSession)}
                   disabled={isGeneratingImage}
-                  className="w-full py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <Camera size={15} />
                   <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Diana Gráfica (HD)"}</span>
@@ -835,7 +867,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   type="button"
                   onClick={() => handleShareSessionWhatsApp(selectedSession)}
                   disabled={isGeneratingImage}
-                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <Share2 size={15} />
                   <span>Compartir Planilla por WhatsApp</span>
