@@ -27,10 +27,36 @@ export default class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
     this.setState({ errorInfo });
+    const msg = error?.toString() || "";
+    if (typeof window !== "undefined" && (msg.includes("ChunkLoadError") || msg.includes("Failed to load chunk"))) {
+      try {
+        const reloadedKey = "chunk_reload_attempted";
+        if (!sessionStorage.getItem(reloadedKey)) {
+          sessionStorage.setItem(reloadedKey, "1");
+          this.handleReload();
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
 
-  private handleReload = () => {
-    window.location.reload();
+  private handleReload = async () => {
+    if (typeof window !== "undefined") {
+      try {
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.update()));
+        }
+      } catch {
+        // ignore
+      }
+      window.location.href = `${window.location.origin}/?v=${Date.now()}`;
+    }
   };
 
   private handleReset = () => {
