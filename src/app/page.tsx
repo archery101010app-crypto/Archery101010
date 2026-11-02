@@ -1007,13 +1007,7 @@ export default function Home() {
 
       {/* Spotify Floating Player */}
       <SpotifyFloatingPlayer
-        showSideTab={
-          !coachViewMode &&
-          (currentScreen === "HOME" ||
-            currentScreen === "TARGET" ||
-            currentScreen === "CALENDAR" ||
-            currentScreen === "HISTORY")
-        }
+        showSideTab={false}
       />
 
       {/* Star Unlock Celebrate Overlay Modal */}

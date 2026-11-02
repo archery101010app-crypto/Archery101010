@@ -88,7 +88,7 @@ interface SpotifyFloatingPlayerProps {
   showSideTab?: boolean;
 }
 
-export default function SpotifyFloatingPlayer({ showSideTab = true }: SpotifyFloatingPlayerProps) {
+export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFloatingPlayerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasLoadedIframe, setHasLoadedIframe] = useState(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
