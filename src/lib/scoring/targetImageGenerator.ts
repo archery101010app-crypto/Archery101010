@@ -220,7 +220,12 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   }
 
   const appFont = "Inter, system-ui, -apple-system, sans-serif";
-  const logoFont = "'Good Times', 'Outfit', sans-serif";
+
+  const totalArrowsCount =
+    ends.length > 0
+      ? ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
+      : impacts.length;
+  const effectiveMaxScore = totalArrowsCount > 0 ? totalArrowsCount * 10 : maxScore;
 
   // 1. Deep OLED Carbon Background
   const bgGrad = ctx.createRadialGradient(540, 450, 90, 540, 500, 820);
@@ -302,10 +307,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${score}`, 896, 138);
 
-  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
   ctx.font = `700 16px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`/ ${maxScore} pts (${pct}%)`, 896, 166);
+  ctx.fillText(`/ ${effectiveMaxScore} pts (${pct}%)`, 896, 166);
 
   // 3. Split Hero Row: Virtual Target on the LEFT + "101010 THE APP" on the RIGHT
   const targetCenterX = 294;
@@ -434,11 +439,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   // Reset textBaseline
   ctx.textBaseline = "alphabetic";
 
-  // 5B. RIGHT SIDE OF TARGET: Open Editorial Brand Lockup ("ARCHERY / 101010 / THE APP") + Average
-  const totalArrowsCount =
-    ends.length > 0
-      ? ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
-      : impacts.length;
+  // 5B. RIGHT SIDE OF TARGET: Clean Open Brand Lockup ("101010 THE APP") + Average
   const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
   const goldPct = totalArrowsCount > 0 ? Math.round((tensCount / totalArrowsCount) * 100) : 0;
 
@@ -447,22 +448,12 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   const rightBoxW = 470;
   const rightCenterX = rightBoxX + rightBoxW / 2; // 791
 
-  // Draw "ARCHERY" in Good Times font directly above "101010 THE APP" (No outer box border)
-  ctx.save();
-  ctx.font = `900 44px ${logoFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  (ctx as any).letterSpacing = "6px";
-  ctx.fillText("ARCHERY", rightCenterX + 3, rightBoxY + 76);
-  ctx.restore();
-
-  // Draw "101010 THE APP" Watermark below "ARCHERY"
+  // Draw "101010 THE APP" Watermark (No "ARCHERY" prefix, no outer box border)
   const wmImg = await loadWatermarkImage();
-  const stampCenterY = rightBoxY + 192;
+  const stampCenterY = rightBoxY + 148;
   if (wmImg) {
-    const wmW = 396;
-    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~173px
+    const wmW = 410;
+    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~179px
     ctx.drawImage(wmImg, Math.round(rightCenterX - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
   } else {
     drawFallback101010TheApp(ctx, rightCenterX, stampCenterY);
@@ -472,19 +463,19 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(rightBoxX + 44, rightBoxY + 318);
-  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 318);
+  ctx.moveTo(rightBoxX + 44, rightBoxY + 292);
+  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 292);
   ctx.stroke();
 
   // Telemetry summary below the logo
   ctx.font = `800 17.2px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 368);
+  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 350);
 
   ctx.font = `900 42px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 420);
+  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 404);
 
   // 6. Telemetry KPI Boxes (3 Columns)
   const cardY = 710;
@@ -515,21 +506,26 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     : `Tendencia a las ${centerText}`;
   drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionTelemetry);
 
-  // 7. Compact End-by-End Scorecard Strip (Sin título, E1..En y puntajes +100% de tamaño)
+  // 7. Compact End-by-End Scorecard Strip (Sin título, centrado simétrico y E1..En +100% de tamaño)
   if (validEnds.length > 0) {
+    const stripX = 54;
     const stripY = 840;
+    const stripW = 972;
     const stripH = 100;
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ctx.lineWidth = 1.5;
-    drawRoundedRect(ctx, 54, stripY, 972, stripH, 20);
+    drawRoundedRect(ctx, stripX, stripY, stripW, stripH, 20);
     ctx.fill();
     ctx.stroke();
 
     const displayEnds = validEnds.slice(0, 12);
-    const colW = Math.min(125, Math.floor(932 / displayEnds.length));
+    const colW = Math.min(115, Math.floor((stripW - 40) / displayEnds.length));
+    const totalColsW = displayEnds.length * colW;
+    const startX = stripX + (stripW - totalColsW) / 2;
+
     displayEnds.forEach((item, i) => {
-      const cellCenterX = 74 + i * colW + colW * 0.45;
+      const cellCenterX = startX + i * colW + colW * 0.5;
       ctx.font = `800 25px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
       ctx.textAlign = "center";
@@ -610,10 +606,15 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
   const dataUrl = canvas.toDataURL("image/png");
   const fileName = `101010-TheApp-Diana-${Date.now()}.png`;
   const title = `Diana ${params.archerName || "Arquero"} • 101010 THE APP`;
+  const totalArrows =
+    params.ends && params.ends.length > 0
+      ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
+      : params.impacts?.length || 0;
+  const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
   const captionText =
     `🎯 *101010 THE APP*\n` +
     `• *Arquero:* ${params.archerName || "Arquero"}\n` +
-    `• *Puntaje:* ${params.score} / ${params.maxScore} pts\n` +
+    `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
     `• *Precisión:* ${params.tensCount} (10+X) | ${params.xsCount} Xs · ${params.distanceM}m`;
 
   // 1. Native Android APK Bridge (100% reliable in Capacitor Android WebView)
@@ -668,7 +669,6 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     sessionNote
   } = params;
 
-  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
   let totalArrows = 0;
   ends.forEach((e) => {
     (e.arrows || []).forEach((a) => {
@@ -679,6 +679,8 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     totalArrows = params.impacts.length;
   }
 
+  const effectiveMaxScore = totalArrows > 0 ? totalArrows * 10 : maxScore;
+  const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
   const avgPerArrow = totalArrows > 0 ? (score / totalArrows).toFixed(2) : "0.00";
   const bowLabel =
     bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
@@ -705,7 +707,7 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     `• *Modalidad:* ${format} · ${distanceM}m\n` +
     `• *Flechas Tiradas:* ${totalArrows}\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `*PUNTUACIÓN TOTAL:* *${score}* / ${maxScore} pts (*${pct}%*)\n` +
+    `*PUNTUACIÓN TOTAL:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
     `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
     `• *Promedio/Flecha:* ${avgPerArrow} pts\n` +
     (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
