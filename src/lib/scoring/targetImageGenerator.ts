@@ -529,7 +529,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       ctx.font = `800 25px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
       ctx.textAlign = "center";
-      ctx.fillText(`E${item.idx}`, cellCenterX, stripY + 38);
+      ctx.fillText(String(item.idx).padStart(2, "0"), cellCenterX, stripY + 38);
 
       ctx.font = `900 40px ${appFont}`;
       ctx.fillStyle = "#FFFFFF";
