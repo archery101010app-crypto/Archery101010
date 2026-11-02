@@ -45,6 +45,16 @@ export default function AppUpdateBanner() {
         const data: RemoteVersionInfo = await res.json();
         if (mounted && data?.version && isNewerVersion(data.version, APP_VERSION)) {
           setRemoteInfo(data);
+          // If running from local bundled APK assets (localhost), auto-OTA switch to live web build seamlessly
+          const isNativeLocal =
+            typeof window !== "undefined" &&
+            window.location.hostname === "localhost" &&
+            (Capacitor.isNativePlatform() || !!(window as any).ArcheryNativeAuth);
+          if (isNativeLocal) {
+            window.location.replace(
+              `https://archery101010-c0bb4.web.app/?v=${data.version}&t=${Date.now()}`
+            );
+          }
         }
       } catch {
         // Silent fallback when offline or unreachable

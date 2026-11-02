@@ -852,11 +852,9 @@ export default function Home() {
     );
   }
 
-  // Calculate dynamic main padding top based on active ads and safe areas.
+  // Calculate dynamic main padding top based on active ads (flush 52px top header, no double safe-area inset)
   const hasBanner = activeBanner !== null;
-  const paddingTopStyle = hasBanner
-    ? "calc(8.5rem + env(safe-area-inset-top))"
-    : "calc(4.75rem + env(safe-area-inset-top))";
+  const paddingTopStyle = hasBanner ? "7.25rem" : "3.65rem";
 
   const handleToggleCoachViewMode = (val: boolean) => {
     if (val) {
@@ -898,7 +896,7 @@ export default function Home() {
       {/* Screen Router Container */}
       <main 
         ref={mainRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-28 px-3.5 sm:px-5 transition-[padding-top] duration-300 ease-in-out relative" 
+        className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full pb-20 px-3.5 sm:px-5 transition-[padding-top] duration-300 ease-in-out relative" 
         style={{ paddingTop: paddingTopStyle }}
       >
         <AppUpdateBanner />

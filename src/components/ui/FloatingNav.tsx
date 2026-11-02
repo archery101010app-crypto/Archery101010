@@ -61,8 +61,8 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
   );
 
   return (
-    <div className="fixed bottom-[calc(0.35rem+env(safe-area-inset-bottom))] sm:bottom-3 left-1/2 -translate-x-1/2 z-40 w-[96%] max-w-[390px]">
-      <div className="bg-[#0A0B0E]/95 backdrop-blur-md rounded-2xl border border-white/[0.08] px-1.5 sm:px-3 py-2 flex items-center justify-around shadow-[0_12px_32px_rgba(0,0,0,0.85)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#07090E]/98 backdrop-blur-xl border-t border-white/[0.09] shadow-[0_-10px_28px_rgba(0,0,0,0.9)]">
+      <div className="w-full max-w-[430px] mx-auto px-1.5 sm:px-3 py-1.5 flex items-center justify-around">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
@@ -85,7 +85,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {isActive && (
                 <motion.div
                   layoutId="activeGlow"
-                  className="absolute inset-0 bg-white/[0.05] border border-white/[0.08] rounded-xl"
+                  className="absolute inset-0 bg-white/[0.06] border border-white/[0.09] rounded-xl"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -114,6 +114,6 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

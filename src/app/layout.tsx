@@ -39,7 +39,6 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  viewportFit: "cover",
 };
 
 import ServiceWorkerRegister from "@/components/sw/ServiceWorkerRegister";
