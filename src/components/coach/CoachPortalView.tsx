@@ -227,7 +227,6 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         const updates: Partial<UserProfile> = {
           clubInviteCode: finalCode,
           clubId: finalClubId,
-          clubName: user.isClubCreator && user.clubName ? user.clubName : "Club Archery 101010",
           isClubCreator: true
         };
         if (user.role === "archer") {
@@ -295,16 +294,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         await saveLocalSetting(unlinkedKey, [...prevUnlinked, targetUid]);
       }
 
-      // 2. Update athlete in simulated_users (clear clubId & clubName)
+      // 2. Update athlete in simulated_users (clear clubId without touching archer's optional clubName)
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       let updatedAthleteRecord: UserProfile | null = null;
       const updatedUsers = allUsers.map((u) => {
         if (u.uid === targetUid) {
           updatedAthleteRecord = {
             ...u,
-            clubId: null,
-            clubName: null,
-            clubLogo: undefined
+            clubId: null
           };
           return updatedAthleteRecord;
         }
@@ -319,9 +316,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       // 4. Queue cloud sync UPDATE for Firestore users collection
       const payloadToSync: UserProfile = updatedAthleteRecord || {
         ...athleteToUnlink,
-        clubId: null,
-        clubName: null,
-        clubLogo: undefined
+        clubId: null
       };
       try {
         const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
@@ -349,9 +344,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     try {
       const athleteWithClub: UserProfile = {
         ...newAthlete,
-        clubId: activeClubId,
-        clubName: user.clubName || "Club Archery 101010",
-        clubCountry: user.clubCountry || user.country || "CR"
+        clubId: activeClubId
       };
 
       // 1. Save to local simulated_users
@@ -475,15 +468,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               </button>
             </div>
             <p className="text-[11.6px] text-white mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <Building2 size={11} className="text-cyan-neon shrink-0" />
-              <span className="truncate">{user.clubName || "Club Archery 101010"}</span>
+              <span>Portal de Entrenador</span>
               <span>·</span>
               <span>Receptor y Director de Estadísticas</span>
             </p>
           </div>
         </div>
 
-        {/* Quick Club Code (Máximo 6 dígitos) */}
+        {/* Quick Coach Code (Máximo 6 dígitos) */}
         <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-black px-3 py-2 rounded-xl border border-white/[0.06]">
           <div className="flex flex-col">
             <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">Código para Alumnos</span>
@@ -510,7 +502,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 }
                 if (navigator.clipboard) {
                   navigator.clipboard.writeText(codeToCopy);
-                  alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen a tu club.`);
+                  alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`);
                 }
               }}
               className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
@@ -526,8 +518,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                     const freshCode = generateClubInviteCode();
                     const updated = await updateProfile(user.uid, {
                       clubInviteCode: freshCode,
-                      clubId: user.clubId || activeClubId,
-                      clubName: user.clubName || "Club Archery 101010",
+                      clubId: activeClubId,
                       isClubCreator: true
                     });
                     if (onUserUpdate) onUserUpdate(updated);

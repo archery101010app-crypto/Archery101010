@@ -110,7 +110,6 @@ export async function activateCoachLaunchPromo(
       proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS,
       role: user.role === "archer" ? "coach" : user.role,
       clubId: resolvedClubId,
-      clubName: user.isClubCreator && user.clubName ? user.clubName : "Club Archery 101010",
       clubInviteCode: validCode,
       isClubCreator: true
     });

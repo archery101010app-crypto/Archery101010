@@ -59,7 +59,7 @@ export default function CoachOverviewTab({
           ¡Hola, Coach {user.fullName}!
         </h3>
         <p className="text-[12.8px] text-white mt-1">
-          Tu equipo tiene <span className="text-cyan-neon font-bold">{athletes.length} atletas activos</span> esta semana. Aquí tienes el resumen del día para tu club.
+          Tu equipo tiene <span className="text-cyan-neon font-bold">{athletes.length} atletas activos</span> esta semana. Aquí tienes el resumen del día para tus alumnos.
         </p>
       </div>
 

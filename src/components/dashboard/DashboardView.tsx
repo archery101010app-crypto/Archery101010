@@ -284,7 +284,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     animate: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  const clubCountryObj = COUNTRIES.find(c => c.code === user.clubCountry) || COUNTRIES.find(c => c.code === user.country) || COUNTRIES[0];
+  const clubCountryObj = COUNTRIES.find(c => c.code === user.country) || COUNTRIES[0];
+  const customClubName =
+    user.clubName &&
+    !["club archery 101010", "club olímpico", "club olimpico", "club deportivo", "arqueros"].includes(
+      user.clubName.trim().toLowerCase()
+    )
+      ? user.clubName.trim()
+      : "";
 
   if (coachViewMode) {
     return (
@@ -324,10 +331,15 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       {/* Cabecera Editorial Limpia (Estilo Apple Fitness / WHOOP) */}
       <div className="flex items-center justify-between px-1 gap-3">
         <div className="flex flex-col min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-white text-[19.8px] sm:text-[22px] font-bold tracking-tight truncate">
               {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
             </h2>
+            {customClubName && (
+              <span className="text-cyan-neon text-[11px] font-bold bg-[#0D1017] px-2.5 py-0.5 rounded-full border border-white/15 tracking-wide truncate max-w-[180px] shrink-0">
+                {customClubName}
+              </span>
+            )}
             {user.plan === "PRO" && (
               <span className="text-yellow-gold text-[10.5px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
                 {t("proBadge")}

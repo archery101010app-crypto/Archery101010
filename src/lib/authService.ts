@@ -561,21 +561,6 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   if (index !== -1) {
     const updatedUser = sanitizeUserProfile({ ...usersList[index], ...updates, profileSetupCompleted: true });
 
-    // Propagation: If Coach/Admin updates club name, country or logo, cascade to all club members
-    if (
-      (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") &&
-      updatedUser.clubId &&
-      (updates.clubName !== undefined || updates.clubLogo !== undefined || updates.clubCountry !== undefined)
-    ) {
-      for (let i = 0; i < usersList.length; i++) {
-        if (usersList[i].clubId === updatedUser.clubId && usersList[i].uid !== updatedUser.uid) {
-          if (updates.clubName !== undefined) usersList[i].clubName = updates.clubName;
-          if (updates.clubLogo !== undefined) usersList[i].clubLogo = updates.clubLogo;
-          if (updates.clubCountry !== undefined) usersList[i].clubCountry = updates.clubCountry;
-        }
-      }
-    }
-
     usersList[index] = updatedUser;
     await saveLocalSetting("simulated_users", usersList);
 
@@ -595,11 +580,6 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 
     if (currentLogged && currentLogged.uid === uid) {
       currentLogged = sanitizeUserProfile({ ...currentLogged, ...updates, profileSetupCompleted: true });
-      if (updatedUser.role === "coach" || updatedUser.role === "team_admin" || updatedUser.role === "team_admin_coach") {
-        currentLogged.clubLogo = updatedUser.clubLogo;
-        currentLogged.clubCountry = updatedUser.clubCountry;
-        currentLogged.clubName = updatedUser.clubName;
-      }
       await saveLocalSetting("current_user", currentLogged);
     }
     return usersList[index];
@@ -1216,16 +1196,13 @@ export async function joinClubByInviteCode(
     return { success: false, error: "Este es tu propio código de Coach. Compártelo con tus alumnos." };
   }
 
-  // 2. The coach's clubId is the single link key. If the coach doc still lacks it, derive the canonical one.
+  // 2. The coach's clubId is the single internal link key.
   const resolvedClubId = clubCoach.clubId || "CLB-" + clubCoach.uid.replace("USR-", "");
-  const resolvedClubName = clubCoach.clubName || "Club Archery 101010";
-  const resolvedClubLogo = clubCoach.clubLogo || "0";
-  const resolvedClubCountry = clubCoach.clubCountry || clubCoach.country || "CR";
 
   // Cache coach locally so ProfileView immediately shows coach info
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
   const coachIdx = usersList.findIndex((u) => u.uid === clubCoach.uid);
-  const coachRecord = sanitizeUserProfile({ ...clubCoach, clubId: resolvedClubId, clubName: resolvedClubName });
+  const coachRecord = sanitizeUserProfile({ ...clubCoach, clubId: resolvedClubId });
   if (coachIdx === -1) {
     usersList.push(coachRecord);
   } else {
@@ -1243,13 +1220,9 @@ export async function joinClubByInviteCode(
     );
   }
 
-  // 3. Link the athlete: only club fields. The athlete does NOT receive the coach's invite code
-  //    (that made other athletes look like club owners in later lookups).
+  // 3. Link the athlete to the Coach without touching the athlete's optional clubName
   const updates: Partial<UserProfile> = {
     clubId: resolvedClubId,
-    clubName: resolvedClubName,
-    clubLogo: resolvedClubLogo,
-    clubCountry: resolvedClubCountry,
     clubInviteCode: ""
   };
 
@@ -1286,18 +1259,15 @@ export async function joinClubByInviteCode(
     console.warn("Could not re-tag athlete sessions with clubId:", err);
   }
 
-  return { success: true, clubName: resolvedClubName, user: updated };
+  return { success: true, clubName: clubCoach.fullName, user: updated };
 }
 
 /**
- * Leaves the current club, returning to independent archer status.
+ * Unlinks from the current Coach without modifying the archer's optional clubName.
  */
 export async function leaveCurrentClub(userUid: string): Promise<{ success: boolean; user?: UserProfile }> {
   const updated = await updateProfile(userUid, {
-    clubId: null,
-    clubName: null,
-    clubLogo: undefined,
-    clubCountry: undefined
+    clubId: null
   });
   return { success: true, user: updated };
 }

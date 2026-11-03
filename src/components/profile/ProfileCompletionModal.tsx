@@ -19,6 +19,14 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
   const { t } = useLanguage();
   const [fullName, setFullName] = useState(user.fullName || "");
   const [nickname, setNickname] = useState(user.nickname || "");
+  const [clubName, setClubName] = useState(
+    user.clubName &&
+      !["club archery 101010", "club olímpico", "club olimpico", "club deportivo"].includes(
+        user.clubName.trim().toLowerCase()
+      )
+      ? user.clubName
+      : ""
+  );
   const [birthDate, setBirthDate] = useState(user.birthDate || "");
   const [city, setCity] = useState(user.city || "");
   const [country, setCountry] = useState(user.country || "CR");
@@ -42,6 +50,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
       const updated = await updateProfile(user.uid, {
         fullName: fullName.trim(),
         nickname: cleanNick,
+        clubName: clubName.trim() || null,
         birthDate,
         city: city.trim(),
         country,
@@ -196,8 +205,17 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
           </div>
 
-          <div className="bg-[#0D0F12] border border-white/[0.06] p-3 rounded-xl text-[11.6px] text-white leading-snug">
-            <strong className="text-white uppercase tracking-wider">Alias (Opcional):</strong> Si lo deseas, puedes indicar un Alias para tus duelos en línea y tarjetas compartidas.
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              Club <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={clubName}
+              onChange={(e) => setClubName(e.target.value)}
+              placeholder="Opcional"
+              className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+            />
           </div>
 
           <button

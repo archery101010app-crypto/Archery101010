@@ -28,6 +28,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
   const [fullName, setFullName] = useState("");
   const [nickname, setNickname] = useState("");
+  const [clubName, setClubName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [country, setCountry] = useState("CR");
   const [gender, setGender] = useState("M");
@@ -115,7 +116,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         country,
         gender,
         clubId: null,
-        clubName: null,
+        clubName: clubName.trim() || null,
       });
       onRegisterSuccess(user);
     } catch (err: any) {
@@ -289,17 +290,31 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
-                  Alias <span className="text-white/50 font-medium normal-case">(Opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Opcional"
-                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
+                    Alias <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="Opcional"
+                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
+                    Club <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={clubName}
+                    onChange={(e) => setClubName(e.target.value)}
+                    placeholder="Opcional"
+                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

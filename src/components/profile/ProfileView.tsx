@@ -41,6 +41,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // Form Fields
   const [fullName, setFullName] = useState(user.fullName);
   const [nickname, setNickname] = useState(user.nickname || "");
+  const [clubName, setClubName] = useState(
+    user.clubName &&
+      !["club archery 101010", "club olímpico", "club olimpico", "club deportivo", "arqueros"].includes(
+        user.clubName.trim().toLowerCase()
+      )
+      ? user.clubName
+      : ""
+  );
   const [birthDate, setBirthDate] = useState(user.birthDate);
   const [country, setCountry] = useState(user.country);
   const [city, setCity] = useState(user.city || "");
@@ -133,33 +141,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   // Coach WhatsApp notice field
   const [clubWhatsApp, setClubWhatsApp] = useState(user.whatsappNumber || "");
 
-  // Club customization form fields (Coach only)
-  const [clubName, setClubName] = useState(user.clubName || "");
-  const [clubCountry, setClubCountry] = useState(user.clubCountry || user.country);
-  const [clubLogo, setClubLogo] = useState(user.clubLogo || "0");
-  const [customLogoUrl, setCustomLogoUrl] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? user.clubLogo : "");
-  const [isCustomLogo, setIsCustomLogo] = useState(user.clubLogo && (user.clubLogo.startsWith("http") || user.clubLogo.startsWith("/")) ? true : false);
-
-  // Club roster states
-  const [clubMembers, setClubMembers] = useState<UserProfile[]>([]);
-
-  // Athlete Club & Coach Linking states
+  // Athlete Coach Linking states
   const [athleteInviteCode, setAthleteInviteCode] = useState("");
   const [isJoiningClub, setIsJoiningClub] = useState(false);
   const [clubJoinFeedback, setClubJoinFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [coachProfile, setCoachProfile] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    async function loadClubMembers() {
-      if (user.clubId) {
-        const { getLocalSetting } = await import("@/lib/db/indexedDB");
-        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const members = list.filter((u) => u.clubId === user.clubId);
-        setClubMembers(members);
-      }
-    }
-    loadClubMembers();
-  }, [user.clubId, user.role]);
 
   useEffect(() => {
     async function loadCoachInfo() {
@@ -195,112 +181,34 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       const res = await joinClubByInviteCode(user.uid, athleteInviteCode.trim());
       if (res.success && res.user) {
         triggerHaptic("confirm");
-        setClubJoinFeedback({ type: "success", message: `¡Te has vinculado exitosamente al club "${res.user.clubName || "Arqueros"}"!` });
+        setClubJoinFeedback({ type: "success", message: "¡Te has vinculado exitosamente con tu entrenador!" });
         onProfileUpdated(res.user);
         window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
         setAthleteInviteCode("");
       } else {
         triggerHaptic("miss");
-        setClubJoinFeedback({ type: "error", message: res.error || "No se encontró el club o código de invitación inválido." });
+        setClubJoinFeedback({ type: "error", message: res.error || "No se encontró el entrenador o el código de 6 dígitos es inválido." });
       }
     } catch (err: any) {
-      setClubJoinFeedback({ type: "error", message: err?.message || "Error al intentar vincularte al club." });
+      setClubJoinFeedback({ type: "error", message: err?.message || "Error al intentar vincularte con tu entrenador." });
     } finally {
       setIsJoiningClub(false);
     }
   };
 
   const handleLeaveClub = async () => {
-    if (!confirm("¿Estás seguro de que deseas desvincularte de este club y entrenador?")) return;
+    if (!confirm("¿Estás seguro de que deseas desvincularte de tu entrenador?")) return;
     try {
       const res = await leaveCurrentClub(user.uid);
       if (res.success && res.user) {
         triggerHaptic("confirm");
-        setClubJoinFeedback({ type: "success", message: "Te has desvinculado del club exitosamente." });
+        setClubJoinFeedback({ type: "success", message: "Te has desvinculado de tu entrenador exitosamente." });
         setCoachProfile(null);
         onProfileUpdated(res.user);
         window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
       }
     } catch (err) {
-      console.error("Error leaving club:", err);
-    }
-  };
-
-  const handlePromoteToCoach = async (memberUid: string) => {
-    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
-    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const idx = list.findIndex((u) => u.uid === memberUid);
-    if (idx !== -1) {
-      const currentMember = list[idx];
-      let nextRole: UserProfile["role"] = "coach";
-      if (currentMember.role === "team_admin") {
-        nextRole = "team_admin_coach";
-      }
-      const updatedUser = {
-        ...currentMember,
-        role: nextRole
-      };
-      list[idx] = updatedUser;
-      await saveLocalSetting("simulated_users", list);
-
-      // Push to Firestore Sync Queue
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "users",
-        operation: "UPDATE",
-        payloadId: memberUid,
-        payload: updatedUser,
-        timestamp: Date.now()
-      });
-
-      // Update local state
-      setClubMembers(list.filter((u) => u.clubId === user.clubId));
-      
-      // If it is the current user, notify
-      if (memberUid === user.uid) {
-        await saveLocalSetting("current_user", updatedUser);
-        onProfileUpdated(updatedUser);
-        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
-      }
-    }
-  };
-
-  const handleDemoteToArcher = async (memberUid: string) => {
-    const { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } = await import("@/lib/db/indexedDB");
-    const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const idx = list.findIndex((u) => u.uid === memberUid);
-    if (idx !== -1) {
-      const currentMember = list[idx];
-      let nextRole: UserProfile["role"] = "archer";
-      if (currentMember.role === "team_admin_coach") {
-        nextRole = "team_admin";
-      }
-      const updatedUser = {
-        ...currentMember,
-        role: nextRole
-      };
-      list[idx] = updatedUser;
-      await saveLocalSetting("simulated_users", list);
-
-      // Push to Firestore Sync Queue
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "users",
-        operation: "UPDATE",
-        payloadId: memberUid,
-        payload: updatedUser,
-        timestamp: Date.now()
-      });
-
-      // Update local state
-      setClubMembers(list.filter((u) => u.clubId === user.clubId));
-
-      // If it is the current user, notify
-      if (memberUid === user.uid) {
-        await saveLocalSetting("current_user", updatedUser);
-        onProfileUpdated(updatedUser);
-        window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
-      }
+      console.error("Error leaving coach:", err);
     }
   };
 
@@ -318,6 +226,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       const updated = await updateProfile(user.uid, {
         fullName,
         nickname,
+        clubName: clubName.trim() || null,
         birthDate,
         city,
         country,
@@ -369,23 +278,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         whatsappNumber: clubWhatsApp
       });
       onProfileUpdated(updated);
-      alert("WhatsApp del club guardado correctamente");
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleSaveClubDetails = async () => {
-    try {
-      const finalLogo = isCustomLogo ? customLogoUrl : clubLogo;
-      const updated = await updateProfile(user.uid, {
-        clubName,
-        clubLogo: finalLogo,
-        clubCountry
-      });
-      onProfileUpdated(updated);
-      setEditClubDetails(false);
-      alert("Ficha de Club premium guardada y propagada a todos los miembros.");
+      alert("WhatsApp de Coach guardado correctamente");
     } catch (e) {
       console.error(e);
     }
@@ -564,6 +457,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <option value="O" className="bg-black text-white">{t("genderO")}</option>
               </select>
             </div>
+            <input
+              type="text"
+              value={clubName}
+              onChange={(e) => setClubName(e.target.value)}
+              className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none"
+              placeholder="Club (Opcional)"
+            />
           </div>
         ) : (
           <div className="flex flex-col gap-2 mt-1">
@@ -574,6 +474,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-white">Alias para Retos:</span>
               <span className="text-cyan-neon tabular-nums font-bold">@{user.nickname || "arquero"}</span>
+            </div>
+            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
+              <span className="text-white">Club (Opcional):</span>
+              <span className="text-white font-bold">{clubName.trim() || "—"}</span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
               <span className="text-white">Nacimiento:</span>
@@ -896,13 +800,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </button>
       </div>
 
-      {/* SECTION 4.5: Mi Club y Entrenador (Para atletas / arqueros) */}
+      {/* SECTION 4.5: Mi Entrenador (Para atletas / arqueros) */}
       {(user.role === "archer" || user.role === "superadmin" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-cyan-neon" />
-              Mi Club y Entrenador
+              <Users className="w-4 h-4 text-cyan-neon" />
+              Mi Entrenador (Coach)
             </h4>
             {user.clubId && (
               <span className="text-[10.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
@@ -928,24 +832,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
           {user.clubId ? (
             <div className="flex flex-col gap-3">
-              {/* Tarjeta del Club Vinculado */}
-              <div className="flex items-center gap-3.5 bg-neutral-950/50 p-3.5 rounded-2xl border border-white/5">
-                <ClubLogoIcon logo={user.clubLogo || "0"} className="w-12 h-12 shrink-0 bg-neutral-900 border border-white/10 rounded-xl p-1.5" />
-                <div className="flex flex-col min-w-0">
-                  <span className="text-white text-xs font-black truncate">{user.clubName || "Club Deportivo"}</span>
-                  <span className="text-[11.6px] text-white flex items-center gap-1 mt-0.5">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
-                    <span>·</span>
-                    <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || user.country}</span>
-                  </span>
-                  {user.clubInviteCode && (
-                    <span className="text-[10.5px] tabular-nums text-cyan-neon mt-0.5">
-                      Código: {user.clubInviteCode}
-                    </span>
-                  )}
-                </div>
-              </div>
-
               {/* Información del Entrenador */}
               <div className="bg-neutral-950/30 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -980,14 +866,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   onClick={handleLeaveClub}
                   className="text-xs bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
                 >
-                  Desvincularme del club
+                  Desvincularme del Coach
                 </button>
               </div>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[12.8px] text-white leading-snug">
-                Pídele a tu entrenador o club su código de invitación de 6 dígitos (ej. <strong className="text-white">101010</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
+                Pídele a tu entrenador su código de 6 dígitos (ej. <strong className="text-white">101010</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
               </p>
 
               <div className="flex gap-2">
@@ -1013,118 +899,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       )}
 
-      {/* SECTION 5: Coach/Admin management */}
-      {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && user.clubId && (
+      {/* SECTION 5: Coach settings (código de 6 dígitos y WhatsApp de contacto, sin club) */}
+      {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("clubManage")}</h4>
-            <button
-              onClick={() => {
-                if (editClubDetails) handleSaveClubDetails();
-                else setEditClubDetails(true);
-              }}
-              className="text-xs text-cyan-neon font-bold hover:underline cursor-pointer"
-            >
-              {editClubDetails ? "Guardar Ficha" : "Editar Ficha"}
-            </button>
+            <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración de Coach</h4>
           </div>
 
           <div className="flex flex-col gap-3 mt-1">
-            {editClubDetails ? (
-              <div className="flex flex-col gap-3 p-1">
-                {/* Edit Club Name */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">Nombre del Club</span>
-                  <input
-                    type="text"
-                    value={clubName}
-                    onChange={(e) => setClubName(e.target.value)}
-                    className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                    placeholder="Nombre del club"
-                  />
-                </div>
-
-                {/* Edit Club Country */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">País del Club</span>
-                  <select
-                    value={clubCountry}
-                    onChange={(e) => setClubCountry(e.target.value)}
-                    className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                  >
-                    {COUNTRIES.map((c) => (
-                      <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Edit Club Logo */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">Logotipo del Club</span>
-                  <div className="grid grid-cols-5 gap-2 bg-neutral-950/60 p-2 rounded-xl border border-white/5">
-                    {["0", "1", "2", "3", "4"].map((idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setClubLogo(idx);
-                          setIsCustomLogo(false);
-                        }}
-                        className={`aspect-square p-1 rounded-lg border flex items-center justify-center transition-all ${
-                          !isCustomLogo && clubLogo === idx
-                            ? "border-cyan-neon bg-cyan-neon/10"
-                            : "border-transparent bg-neutral-900/50 hover:bg-neutral-800"
-                        }`}
-                      >
-                        <ClubLogoIcon logo={idx} className="w-6 h-6" />
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="checkbox"
-                      id="useCustomLogoProfile"
-                      checked={isCustomLogo}
-                      onChange={(e) => setIsCustomLogo(e.target.checked)}
-                      className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 w-3.5 h-3.5 cursor-pointer"
-                    />
-                    <label htmlFor="useCustomLogoProfile" className="text-[10.5px] text-white font-bold uppercase cursor-pointer select-none">
-                      Imagen personalizada (URL)
-                    </label>
-                  </div>
-
-                  {isCustomLogo && (
-                    <input
-                      type="text"
-                      value={customLogoUrl}
-                      onChange={(e) => setCustomLogoUrl(e.target.value)}
-                      placeholder="https://ejemplo.com/logo.png"
-                      className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                    />
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 mt-1">
-                {/* Preview Card */}
-                <div className="flex items-center gap-3 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
-                  <ClubLogoIcon logo={user.clubLogo || "0"} className="w-12 h-12 shrink-0 bg-neutral-900 border border-white/10 rounded-xl p-1.5" />
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="text-white text-xs font-black truncate">{user.clubName || "Club Olímpico"}</span>
-                    <span className="text-[11.6px] text-white mt-0.5 flex items-center gap-1">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-neon shrink-0">{COUNTRIES.find((c) => c.code === user.clubCountry)?.flag || "🇨🇷 CRC"}</span>
-                      <span>·</span>
-                      <span className="truncate">{COUNTRIES.find((c) => c.code === user.clubCountry)?.name || "Costa Rica"}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Invite code (6 dígitos) */}
-            <div className="flex flex-col gap-1 border-t border-white/[0.03] pt-2">
-              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">{t("inviteCode")} (6 dígitos)</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">Código para Alumnos (6 dígitos)</span>
               <div className="flex items-center gap-2">
                 <span className="flex-1 text-sm tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
                   {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
@@ -1152,7 +937,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
             {/* Coach personal WhatsApp */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">{t("clubWhatsApp")}</span>
+              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">WhatsApp del Coach</span>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1169,62 +954,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 </button>
               </div>
             </div>
-
-            {/* Club Members Roster Section */}
-            {user.clubId && (user.role === "team_admin" || user.role === "team_admin_coach" || user.isClubCreator) && (
-              <div className="flex flex-col gap-2.5 border-t border-white/[0.03] pt-4 mt-2">
-                <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">Miembros del Roster ({clubMembers.length})</span>
-                
-                <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
-                  {clubMembers.map((member) => {
-                    const isSelf = member.uid === user.uid;
-                    const isMemberCoach = member.role === "coach" || member.role === "team_admin_coach";
-                    
-                    return (
-                      <div key={member.uid} className="flex items-center justify-between p-2 rounded-xl bg-neutral-950/60 border border-white/5">
-                        <div className="flex flex-col min-w-0 pr-2 pl-2">
-                          <span className="text-[11.6px] font-black text-white truncate">
-                            {member.fullName} {isSelf && <span className="text-cyan-neon font-normal text-[9.3px]">(Tú)</span>}
-                          </span>
-                          <span className="text-[9.3px] text-white uppercase mt-0.5 font-bold">
-                            {member.role === "team_admin_coach" 
-                              ? "Admin / Coach" 
-                              : member.role === "team_admin" 
-                                ? "Administrador" 
-                                : member.role === "coach" 
-                                  ? "Coach" 
-                                  : "Atleta"}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-1.5 shrink-0 pr-2">
-                          {!isMemberCoach ? (
-                            <button
-                              type="button"
-                              onClick={() => handlePromoteToCoach(member.uid)}
-                              className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:bg-cyan-neon/20 text-cyan-neon font-black text-[10.5px] uppercase tracking-wider rounded-lg transition active:scale-95"
-                            >
-                              Hacer Coach
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={isSelf && member.role === "team_admin_coach"}
-                              onClick={() => handleDemoteToArcher(member.uid)}
-                              className={`px-2 py-1 bg-yellow-gold/10 border border-yellow-gold/20 hover:bg-yellow-gold/20 text-yellow-gold font-black text-[10.5px] uppercase tracking-wider rounded-lg transition active:scale-95 ${
-                                isSelf && member.role === "team_admin_coach" ? "opacity-50 cursor-not-allowed" : ""
-                              }`}
-                            >
-                              Quitar Coach
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

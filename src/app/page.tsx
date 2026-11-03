@@ -230,7 +230,6 @@ export default function Home() {
               const { updateProfile } = await import("@/lib/authService");
               const fixed = await updateProfile(loggedUser.uid, {
                 clubId: null,
-                clubName: null,
                 clubInviteCode: ""
               });
               setUser(fixed);
@@ -390,10 +389,8 @@ export default function Home() {
         if (user.isClubCreator && user.clubInviteCode) {
           presencePayload.clubInviteCode = user.clubInviteCode;
           presencePayload.clubId = user.clubId || ("CLB-" + user.uid.replace("USR-", ""));
-          presencePayload.clubName = user.clubName || "Club Archery 101010";
         } else if (user.clubId) {
           presencePayload.clubId = user.clubId;
-          if (user.clubName) presencePayload.clubName = user.clubName;
           if (user.clubInviteCode) presencePayload.clubInviteCode = user.clubInviteCode;
         }
         await setDoc(docRef, presencePayload, { merge: true });
