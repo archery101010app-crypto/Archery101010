@@ -167,7 +167,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         try {
           const { getLocalSetting } = await import("@/lib/db/indexedDB");
           const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const coach = list.find((u) => u.clubId === user.clubId && (u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach" || u.isClubCreator));
+          const coach =
+            list.find(
+              (u) =>
+                u.clubId === user.clubId &&
+                (u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach" || u.role === "superadmin" || u.isClubCreator)
+            ) ||
+            list.find((u) => u.clubId === user.clubId);
           if (coach) {
             setCoachProfile(coach);
           }
@@ -891,7 +897,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 4.5: Mi Club y Entrenador (Para atletas / arqueros) */}
-      {(user.role === "archer" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
+      {(user.role === "archer" || user.role === "superadmin" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">

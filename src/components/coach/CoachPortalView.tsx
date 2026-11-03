@@ -78,8 +78,59 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       const demoSeeded = await getLocalSetting<boolean>(`demo_athletes_seeded_${activeClubId}`, false);
 
       let clubArchers = allUsers.filter(
-        u => u.clubId === activeClubId && u.role === "archer" && !unlinkedIds.includes(u.uid)
+        u =>
+          u.uid !== user.uid &&
+          (u.clubId === activeClubId || (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)) &&
+          !unlinkedIds.includes(u.uid)
       );
+
+      // Pull any newly linked athletes directly from Firestore so Coach sees students immediately
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const qClub = query(collection(db, "users"), where("clubId", "==", activeClubId));
+          const snapClub = await getDocs(qClub);
+          const remoteAthletes: UserProfile[] = [];
+          snapClub.forEach((docSnap) => {
+            const data = docSnap.data() as UserProfile;
+            if (data && data.uid && data.uid !== user.uid && !unlinkedIds.includes(data.uid)) {
+              remoteAthletes.push(data);
+            }
+          });
+          if (user.clubInviteCode) {
+            const qCode = query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode));
+            const snapCode = await getDocs(qCode);
+            snapCode.forEach((docSnap) => {
+              const data = docSnap.data() as UserProfile;
+              if (
+                data &&
+                data.uid &&
+                data.uid !== user.uid &&
+                !unlinkedIds.includes(data.uid) &&
+                !remoteAthletes.some((r) => r.uid === data.uid)
+              ) {
+                remoteAthletes.push(data);
+              }
+            });
+          }
+          if (remoteAthletes.length > 0) {
+            const mergedMap = new Map<string, UserProfile>();
+            for (const u of allUsers) mergedMap.set(u.uid, u);
+            for (const r of remoteAthletes) mergedMap.set(r.uid, r);
+            const mergedUsers = Array.from(mergedMap.values());
+            await saveLocalSetting("simulated_users", mergedUsers);
+            clubArchers = mergedUsers.filter(
+              u =>
+                u.uid !== user.uid &&
+                (u.clubId === activeClubId || (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)) &&
+                !unlinkedIds.includes(u.uid)
+            );
+          }
+        } catch (err) {
+          console.warn("Could not fetch club athletes from Firestore:", err);
+        }
+      }
       
       // Fallback/Seed demo athletes once if never seeded so the coach has initial data to examine
       if (clubArchers.length === 0 && !demoSeeded) {
@@ -254,19 +305,29 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     }
     loadCoachData();
 
-    // Migración automática: Borrar códigos antiguos o que excedan 6 dígitos y generar un código numérico limpio de 6 dígitos
+    // Migración automática: Asegurar que el Coach tenga código numérico limpio de 6 dígitos y clubId sincronizado en Firestore
     async function ensureClean6DigitCode() {
       const code = user.clubInviteCode ? user.clubInviteCode.trim() : "";
       const isValid6DigitCode = code.length > 0 && code.length <= 6 && /^\d+$/.test(code);
-      if (!isValid6DigitCode) {
-        try {
-          const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
-          const freshCode = generateClubInviteCode();
-          const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
-          if (onUserUpdate) onUserUpdate(updated);
-        } catch (err) {
-          console.error("Error asegurando código de 6 dígitos:", err);
+      const needsClubSync = !isValid6DigitCode || !user.clubId || !user.isClubCreator;
+      try {
+        const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+        const finalCode = isValid6DigitCode ? code : generateClubInviteCode();
+        const updates: Partial<UserProfile> = {
+          clubInviteCode: finalCode,
+          clubId: user.clubId || activeClubId,
+          clubName: user.clubName || "Club Archery 101010",
+          isClubCreator: true
+        };
+        if (user.role === "archer") {
+          updates.role = "coach";
         }
+        const updated = await updateProfile(user.uid, updates);
+        if (needsClubSync && onUserUpdate) {
+          onUserUpdate(updated);
+        }
+      } catch (err) {
+        console.error("Error asegurando código de 6 dígitos:", err);
       }
     }
     ensureClean6DigitCode();
@@ -529,7 +590,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   try {
                     const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
                     const freshCode = generateClubInviteCode();
-                    const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
+                    const updated = await updateProfile(user.uid, {
+                      clubInviteCode: freshCode,
+                      clubId: user.clubId || activeClubId,
+                      clubName: user.clubName || "Club Archery 101010",
+                      isClubCreator: true
+                    });
                     if (onUserUpdate) onUserUpdate(updated);
                     alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
                   } catch (err) {

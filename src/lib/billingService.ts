@@ -1,7 +1,7 @@
 "use client";
 
-import { getLocalSetting, saveLocalSetting, addToSyncQueue, generateResilientId } from "@/lib/db/indexedDB";
-import { UserProfile, updateProfile } from "@/lib/authService";
+import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
+import { UserProfile, updateProfile, generateClubInviteCode } from "@/lib/authService";
 
 export interface StoreProduct {
   id: string;
@@ -69,25 +69,24 @@ export async function activateCoachLaunchPromo(
   productSku: string = "archery101010_coach_pro_monthly"
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
-    const updatedUser: UserProfile = {
-      ...user,
-      plan: "PRO"
-    };
+    const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
+    const validCode =
+      existingCode.length > 0 && existingCode.length <= 6 && /^\d+$/.test(existingCode)
+        ? existingCode
+        : generateClubInviteCode();
+    const resolvedClubId =
+      user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
 
-    // 1. Update in local current_user
-    await saveLocalSetting("current_user", updatedUser);
+    const updatedUser = await updateProfile(user.uid, {
+      plan: "PRO",
+      role: user.role === "archer" ? "coach" : user.role,
+      clubId: resolvedClubId,
+      clubName: user.clubName || "Club Archery 101010",
+      clubInviteCode: validCode,
+      isClubCreator: true
+    });
 
-    // 2. Update in simulated_users cache
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const idx = usersList.findIndex((u) => u.uid === user.uid);
-    if (idx !== -1) {
-      usersList[idx] = updatedUser;
-    } else {
-      usersList.push(updatedUser);
-    }
-    await saveLocalSetting("simulated_users", usersList);
-
-    // 3. Register real subscription audit log in IndexedDB
+    // Register real subscription audit log in IndexedDB
     const auditLogs = await getLocalSetting<any[]>("sub_audit_logs", []);
     const newLog = {
       id: generateResilientId("SUB"),
@@ -99,21 +98,6 @@ export async function activateCoachLaunchPromo(
       reason: "Activación Bonificada de Lanzamiento (Google Play / App Store Ready)"
     };
     await saveLocalSetting("sub_audit_logs", [newLog, ...auditLogs]);
-
-    // 4. Queue to Firestore sync
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "UPDATE",
-      payloadId: user.uid,
-      payload: {
-        plan: "PRO",
-        subscriptionSource: "LAUNCH_PROMO",
-        subscriptionSku: productSku,
-        subscribedAt: Date.now()
-      },
-      timestamp: Date.now()
-    });
 
     // Notify components
     if (typeof window !== "undefined") {

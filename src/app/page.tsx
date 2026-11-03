@@ -343,10 +343,25 @@ export default function Home() {
       try {
         const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
+        const { runSync } = await import("@/lib/db/syncManager");
         const docRef = doc(db, "users", uid);
-        await setDoc(docRef, {
+        const presencePayload: Record<string, any> = {
+          uid: user.uid,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
           lastActiveAt: Date.now()
-        }, { merge: true });
+        };
+        if (user.clubInviteCode) {
+          presencePayload.clubInviteCode = user.clubInviteCode;
+          presencePayload.clubId = user.clubId || ("CLB-" + user.uid.replace("USR-", ""));
+          presencePayload.clubName = user.clubName || "Club Archery 101010";
+        } else if (user.clubId) {
+          presencePayload.clubId = user.clubId;
+          if (user.clubName) presencePayload.clubName = user.clubName;
+        }
+        await setDoc(docRef, presencePayload, { merge: true });
+        runSync().catch(() => {});
       } catch (err) {
         // Silently catch offline/network errors
       }
