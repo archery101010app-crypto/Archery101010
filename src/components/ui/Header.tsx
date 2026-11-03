@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSync } from "@/hooks/useSync";
-import { UserProfile } from "@/lib/authService";
+import { UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
 import { Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { APP_VERSION } from "@/lib/version";
@@ -19,6 +19,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   useSync();
   const { t } = useLanguage();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const linkedToCoach = isLinkedToExternalCoach(user);
 
   useEffect(() => {
     async function loadTheme() {
@@ -71,8 +72,8 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
 
       {/* View Switcher, Theme Selector & Sync Wifi Button */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-        {/* Coach View Switcher Toggle */}
-        {user && onToggleCoachViewMode && (
+        {/* Coach View Switcher Toggle (hidden when user is linked as an athlete to a Coach) */}
+        {user && onToggleCoachViewMode && !linkedToCoach && (
           <div className="flex bg-[#090B0E] p-1 rounded-full border border-white/[0.08] items-center">
             <button
               onClick={() => onToggleCoachViewMode(false)}

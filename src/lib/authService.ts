@@ -47,6 +47,12 @@ export interface UserProfile {
   };
   clubId: string | null;
   clubName: string | null;
+  /** UID of the Coach this athlete is linked to (never equal to the athlete's own uid). */
+  coachId?: string | null;
+  /** Full name of the linked Coach (persisted on the athlete profile so it never resolves to self). */
+  coachName?: string | null;
+  /** Email of the linked Coach. */
+  coachEmail?: string | null;
   clubLogo?: string; // index "0"-"4" or URL
   clubCountry?: string; // country code for club flag
   role: "archer" | "coach" | "team_admin" | "team_admin_coach" | "superadmin";
@@ -94,6 +100,38 @@ function sanitizeUserProfile(u: any): UserProfile {
 }
 
 /**
+ * Returns the canonical internal clubId owned by a Coach.
+ */
+export function getCanonicalCoachClubId(coach: Partial<UserProfile> | null | undefined): string {
+  if (!coach?.uid) return "CLB-DIRECTOR";
+  const canonical = "CLB-" + coach.uid.replace("USR-", "");
+  if (coach.isClubCreator && coach.clubId && coach.clubId.startsWith("CLB-")) {
+    return coach.clubId;
+  }
+  return canonical;
+}
+
+/**
+ * True only when the user is linked as an athlete to ANOTHER user (their Coach),
+ * never when clubId points to the user's own Coach ID.
+ */
+export function isLinkedToExternalCoach(user: Partial<UserProfile> | null | undefined): boolean {
+  if (!user?.uid) return false;
+  if (user.coachId && user.coachId !== user.uid) return true;
+  if (user.coachId && user.coachId === user.uid) return false;
+  const ownCanonical = "CLB-" + user.uid.replace("USR-", "");
+  if (
+    user.clubId &&
+    user.clubId !== ownCanonical &&
+    user.clubId !== `CLB-${user.uid}` &&
+    !user.isClubCreator
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Fire-and-forget profile write to Firestore that can NEVER break the calling flow
  * (catches both async rejections and synchronous SDK throws).
  */
@@ -116,6 +154,7 @@ function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
     u.role === "coach" ||
     u.role === "team_admin" ||
     u.role === "team_admin_coach" ||
+    u.role === "superadmin" ||
     !!u.isClubCreator
   );
 }
@@ -123,9 +162,9 @@ function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
 /**
  * Finds the Coach / club owner that owns a 6-digit invite code.
  * Cloud (Firestore) is the source of truth; local cache is only an offline fallback.
- * Never returns an archer and never invents a coach.
+ * Never returns the requesting athlete himself.
  */
-export async function findClubOwnerByInviteCode(rawCode: string): Promise<UserProfile | null> {
+export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: string): Promise<UserProfile | null> {
   const cleanCode = (rawCode || "").trim().toUpperCase();
   if (!cleanCode) return null;
 
@@ -135,11 +174,15 @@ export async function findClubOwnerByInviteCode(rawCode: string): Promise<UserPr
         getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode))),
         8000
       );
-      const owners = snap.docs
+      const allMatches = snap.docs
         .map((d) => sanitizeUserProfile({ ...d.data(), uid: (d.data() as any).uid || d.id }))
-        .filter((u) => isClubOwnerRole(u));
+        .filter((u) => !excludeUid || u.uid !== excludeUid);
+      const owners = allMatches.filter((u) => isClubOwnerRole(u));
       if (owners.length > 0) {
         return owners.find((u) => u.isClubCreator) || owners[0];
+      }
+      if (allMatches.length > 0) {
+        return allMatches[0];
       }
     } catch (err) {
       console.warn("Cloud lookup of invite code failed, trying local cache:", err);
@@ -147,10 +190,11 @@ export async function findClubOwnerByInviteCode(rawCode: string): Promise<UserPr
   }
 
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-  const localOwners = usersList.filter(
-    (u) => isClubOwnerRole(u) && (u.clubInviteCode || "").trim().toUpperCase() === cleanCode
+  const localMatches = usersList.filter(
+    (u) => (!excludeUid || u.uid !== excludeUid) && (u.clubInviteCode || "").trim().toUpperCase() === cleanCode
   );
-  return localOwners.find((u) => u.isClubCreator) || localOwners[0] || null;
+  const localOwners = localMatches.filter((u) => isClubOwnerRole(u));
+  return localOwners.find((u) => u.isClubCreator) || localOwners[0] || localMatches[0] || null;
 }
 
 export function translateFirebaseAuthError(err: any): string {
@@ -1182,8 +1226,13 @@ export async function joinClubByInviteCode(
     };
   }
 
-  // 1. Resolve the real Coach that owns this code (cloud first, never an archer, never a fake coach)
-  const clubCoach = await findClubOwnerByInviteCode(cleanCode);
+  const currentLogged = await getLoggedUser();
+  if (currentLogged && (currentLogged.clubInviteCode || "").trim().toUpperCase() === cleanCode) {
+    return { success: false, error: "Este es tu propio código de Coach. Ingresa el código de 6 dígitos de tu entrenador." };
+  }
+
+  // 1. Resolve the real Coach that owns this code (cloud first, never the athlete himself)
+  const clubCoach = await findClubOwnerByInviteCode(cleanCode, userUid);
 
   if (!clubCoach) {
     return {
@@ -1196,13 +1245,17 @@ export async function joinClubByInviteCode(
     return { success: false, error: "Este es tu propio código de Coach. Compártelo con tus alumnos." };
   }
 
-  // 2. The coach's clubId is the single internal link key.
-  const resolvedClubId = clubCoach.clubId || "CLB-" + clubCoach.uid.replace("USR-", "");
+  // 2. Canonical coach clubId + explicit coachId/coachName/coachEmail so the link is unambiguous.
+  const resolvedClubId = getCanonicalCoachClubId(clubCoach);
 
   // Cache coach locally so ProfileView immediately shows coach info
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
   const coachIdx = usersList.findIndex((u) => u.uid === clubCoach.uid);
-  const coachRecord = sanitizeUserProfile({ ...clubCoach, clubId: resolvedClubId });
+  const coachRecord = sanitizeUserProfile({
+    ...clubCoach,
+    clubId: resolvedClubId,
+    isClubCreator: true
+  });
   if (coachIdx === -1) {
     usersList.push(coachRecord);
   } else {
@@ -1211,18 +1264,31 @@ export async function joinClubByInviteCode(
   await saveLocalSetting("simulated_users", usersList);
 
   // Clear athlete from unlinked_athletes list if previously unlinked
-  const unlinkedKey = `unlinked_athletes_${resolvedClubId}`;
-  const prevUnlinked = await getLocalSetting<string[]>(unlinkedKey, []);
-  if (prevUnlinked.includes(userUid)) {
-    await saveLocalSetting(
-      unlinkedKey,
-      prevUnlinked.filter((id) => id !== userUid)
-    );
+  for (const cid of new Set([resolvedClubId, clubCoach.clubId || "", "CLB-" + clubCoach.uid.replace("USR-", "")])) {
+    if (!cid) continue;
+    const unlinkedKey = `unlinked_athletes_${cid}`;
+    const prevUnlinked = await getLocalSetting<string[]>(unlinkedKey, []);
+    if (prevUnlinked.includes(userUid)) {
+      await saveLocalSetting(
+        unlinkedKey,
+        prevUnlinked.filter((id) => id !== userUid)
+      );
+    }
   }
 
-  // 3. Link the athlete to the Coach without touching the athlete's optional clubName
+  // 3. Link the athlete to the Coach and reset any accidental self-coach flags
+  const preservedRole: UserProfile["role"] =
+    currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
+      ? "superadmin"
+      : "archer";
+
   const updates: Partial<UserProfile> = {
+    role: preservedRole,
+    isClubCreator: false,
     clubId: resolvedClubId,
+    coachId: clubCoach.uid,
+    coachName: clubCoach.fullName || "Entrenador",
+    coachEmail: clubCoach.email || "",
     clubInviteCode: ""
   };
 
@@ -1266,8 +1332,20 @@ export async function joinClubByInviteCode(
  * Unlinks from the current Coach without modifying the archer's optional clubName.
  */
 export async function leaveCurrentClub(userUid: string): Promise<{ success: boolean; user?: UserProfile }> {
+  const currentLogged = await getLoggedUser();
+  const preservedRole: UserProfile["role"] =
+    currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
+      ? "superadmin"
+      : "archer";
+
   const updated = await updateProfile(userUid, {
-    clubId: null
+    role: preservedRole,
+    isClubCreator: false,
+    clubId: null,
+    coachId: null,
+    coachName: null,
+    coachEmail: null,
+    clubInviteCode: ""
   });
   return { success: true, user: updated };
 }

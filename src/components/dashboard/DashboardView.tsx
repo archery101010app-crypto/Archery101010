@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile } from "@/lib/authService";
+import { UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
 import { 
   getLocalSessions, 
   getLocalSetting, 
@@ -250,9 +250,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
   useEffect(() => {
     async function loadAthletes() {
-      if ((user.role === "coach" || user.role === "team_admin_coach") && user.clubId) {
+      if ((user.role === "coach" || user.role === "team_admin_coach") && user.clubId && !isLinkedToExternalCoach(user)) {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const clubArchers = list.filter(u => !isFictitiousUser(u) && u.clubId === user.clubId && u.role === "archer");
+        const clubArchers = list.filter(
+          (u) =>
+            !isFictitiousUser(u) &&
+            u.uid !== user.uid &&
+            (u.coachId === user.uid || u.clubId === user.clubId)
+        );
         setAthletes(clubArchers);
 
         const dateKey = new Date().toISOString().split("T")[0];
@@ -293,7 +298,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       ? user.clubName.trim()
       : "";
 
-  if (coachViewMode) {
+  if (coachViewMode && !isLinkedToExternalCoach(user)) {
     return (
       <CoachPortalView
         user={user}

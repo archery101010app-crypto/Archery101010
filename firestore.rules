@@ -302,7 +302,11 @@ service cloud.firestore {
         validOptionalString(data, 'city', 0, 100) &&
         validOptionalString(data, 'gender', 0, 20) &&
         (!('plan' in data) || data.plan in ['FREE', 'PRO']) &&
+        validOptionalDateOrTimestamp(data, 'proExpiresAt') &&
         validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'coachId', 0, 128) &&
+        validOptionalString(data, 'coachName', 0, 100) &&
+        validOptionalString(data, 'coachEmail', 0, 128) &&
         validOptionalString(data, 'clubName', 0, 100) &&
         validOptionalString(data, 'clubLogo', 0, 2048) &&
         validOptionalString(data, 'clubCountry', 0, 10) &&
@@ -507,15 +511,16 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
         (isOwner(userId) || isSuperAdmin() ||
           (isCoach() && resource.data.role == 'archer' && request.resource.data.role == 'archer' &&
-            isCoachOfClub(resource.data.get('clubId', null)))) &&
+            (isCoachOfClub(resource.data.get('clubId', null)) || resource.data.get('coachId', null) == request.auth.uid))) &&
         request.resource.data.uid == userId &&
-        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.uid == resource.data.get('uid', userId) &&
         isValidUser(request.resource.data) &&
         (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin')) &&
-        // Anti self-escalation: a user cannot change their OWN role while belonging to a club
-        // (prevents an athlete from turning into "coach" of the club they joined and editing teammates).
+        // Anti self-escalation: a user cannot change their OWN role to a privileged role while belonging to another coach's club,
+        // but CAN always de-escalate their own role back to 'archer'.
         (isSuperAdmin() || !isOwner(userId) ||
           request.resource.data.role == resource.data.role ||
+          request.resource.data.role == 'archer' ||
           request.resource.data.get('clubId', null) == null ||
           resource.data.get('isClubCreator', false) == true ||
           (request.resource.data.get('isClubCreator', false) == true && (

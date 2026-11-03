@@ -2,7 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, BowConfig, updateProfile, logoutUser, deleteUserAccount, joinClubByInviteCode, leaveCurrentClub } from "@/lib/authService";
+import {
+  UserProfile,
+  BowConfig,
+  updateProfile,
+  logoutUser,
+  deleteUserAccount,
+  joinClubByInviteCode,
+  leaveCurrentClub,
+  isLinkedToExternalCoach,
+  getCanonicalCoachClubId
+} from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
 import { ArrowLeft, LogOut, Check, Shield, Plus, Trash2, Target, Building2, Users, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -146,32 +156,113 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [isJoiningClub, setIsJoiningClub] = useState(false);
   const [clubJoinFeedback, setClubJoinFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [coachProfile, setCoachProfile] = useState<UserProfile | null>(null);
+  const linkedToCoach = isLinkedToExternalCoach(user);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadCoachInfo() {
-      if (user.clubId) {
-        try {
-          const { getLocalSetting } = await import("@/lib/db/indexedDB");
-          const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const coach =
-            list.find(
-              (u) =>
-                u.clubId === user.clubId &&
-                (u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach" || u.role === "superadmin" || u.isClubCreator)
-            ) ||
-            list.find((u) => u.clubId === user.clubId);
-          if (coach) {
-            setCoachProfile(coach);
-          }
-        } catch (e) {
-          console.error("Error loading coach profile:", e);
-        }
-      } else {
+      if (!isLinkedToExternalCoach(user)) {
         setCoachProfile(null);
+        return;
+      }
+      try {
+        const { getLocalSetting } = await import("@/lib/db/indexedDB");
+        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const findCoachInList = (candidates: UserProfile[]): UserProfile | undefined => {
+          const others = candidates.filter((u) => u && u.uid && u.uid !== user.uid);
+          if (user.coachId && user.coachId !== user.uid) {
+            const byId = others.find((u) => u.uid === user.coachId);
+            if (byId) return byId;
+          }
+          if (user.clubId) {
+            const byRoleAndClub = others.find(
+              (u) =>
+                (u.clubId === user.clubId ||
+                  getCanonicalCoachClubId(u) === user.clubId ||
+                  "CLB-" + u.uid.replace("USR-", "") === user.clubId) &&
+                (u.role === "coach" ||
+                  u.role === "team_admin" ||
+                  u.role === "team_admin_coach" ||
+                  u.role === "superadmin" ||
+                  u.isClubCreator)
+            );
+            if (byRoleAndClub) return byRoleAndClub;
+            const byDerivedId = others.find(
+              (u) => "CLB-" + u.uid.replace("USR-", "") === user.clubId
+            );
+            if (byDerivedId) return byDerivedId;
+          }
+          return undefined;
+        };
+
+        let resolved = findCoachInList(list);
+
+        if (!resolved && typeof navigator !== "undefined" && navigator.onLine) {
+          try {
+            const { doc, getDoc, collection, query, where, getDocs } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+
+            const candidateCoachUid =
+              user.coachId && user.coachId !== user.uid
+                ? user.coachId
+                : user.clubId?.startsWith("CLB-")
+                ? user.clubId.replace(/^CLB-/, "")
+                : "";
+
+            if (candidateCoachUid && candidateCoachUid !== user.uid) {
+              const directSnap = await getDoc(doc(db, "users", candidateCoachUid));
+              if (directSnap.exists()) {
+                const data = directSnap.data() as UserProfile;
+                if (data && (data.uid || directSnap.id) !== user.uid) {
+                  resolved = { ...data, uid: data.uid || directSnap.id };
+                }
+              }
+            }
+
+            if (!resolved && user.clubId) {
+              const qClub = query(collection(db, "users"), where("clubId", "==", user.clubId));
+              const snapClub = await getDocs(qClub);
+              const remoteList: UserProfile[] = [];
+              snapClub.forEach((d) => {
+                const data = d.data() as UserProfile;
+                const uid = data?.uid || d.id;
+                if (data && uid && uid !== user.uid) {
+                  remoteList.push({ ...data, uid });
+                }
+              });
+              resolved = findCoachInList(remoteList);
+            }
+          } catch (cloudErr) {
+            console.warn("Could not fetch coach profile from cloud:", cloudErr);
+          }
+        }
+
+        if (cancelled) return;
+
+        if (resolved && resolved.uid !== user.uid) {
+          setCoachProfile(resolved);
+          // Self-heal missing explicit coachId/coachName/coachEmail on the athlete profile
+          if (user.coachId !== resolved.uid || !user.coachName) {
+            updateProfile(user.uid, {
+              coachId: resolved.uid,
+              coachName: resolved.fullName || "Entrenador",
+              coachEmail: resolved.email || ""
+            })
+              .then((updated) => onProfileUpdated(updated))
+              .catch(() => {});
+          }
+        } else {
+          setCoachProfile(null);
+        }
+      } catch (e) {
+        console.error("Error loading coach profile:", e);
       }
     }
     loadCoachInfo();
-  }, [user.clubId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user.uid, user.clubId, user.coachId, user.isClubCreator]);
 
   const handleJoinClub = async () => {
     if (!athleteInviteCode.trim()) return;
@@ -181,7 +272,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       const res = await joinClubByInviteCode(user.uid, athleteInviteCode.trim());
       if (res.success && res.user) {
         triggerHaptic("confirm");
-        setClubJoinFeedback({ type: "success", message: "¡Te has vinculado exitosamente con tu entrenador!" });
+        setClubJoinFeedback({
+          type: "success",
+          message: `¡Te has vinculado exitosamente con tu entrenador${res.clubName ? ` (${res.clubName})` : ""}!`
+        });
         onProfileUpdated(res.user);
         window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
         setAthleteInviteCode("");
@@ -800,110 +894,128 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </button>
       </div>
 
-      {/* SECTION 4.5: Mi Entrenador (Para atletas / arqueros) */}
-      {(user.role === "archer" || user.role === "superadmin" || (!user.isClubCreator && user.role !== "coach" && user.role !== "team_admin" && user.role !== "team_admin_coach")) && (
-        <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-cyan-neon" />
-              Mi Entrenador (Coach)
-            </h4>
-            {user.clubId && (
-              <span className="text-[10.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Vinculado
-              </span>
-            )}
-          </div>
-
-          {clubJoinFeedback && (
-            <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border ${
-              clubJoinFeedback.type === "success" 
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" 
-                : "bg-white border-white text-black"
-            }`}>
-              {clubJoinFeedback.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-black" />
-              )}
-              <span className="leading-snug">{clubJoinFeedback.message}</span>
-            </div>
-          )}
-
-          {user.clubId ? (
-            <div className="flex flex-col gap-3">
-              {/* Información del Entrenador */}
-              <div className="bg-neutral-950/30 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10.5px] text-white uppercase font-black tracking-wider flex items-center gap-1">
-                    <Users className="w-3 h-3 text-cyan-neon" /> Tu Entrenador
-                  </span>
-                  {coachProfile?.whatsappNumber && (
-                    <a
-                      href={`https://wa.me/${coachProfile.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola Coach ${coachProfile.fullName}, soy ${user.fullName}. Te escribo desde Archery 101010.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[11.6px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
-                    >
-                      <MessageCircle className="w-3 h-3" /> WhatsApp
-                    </a>
-                  )}
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-white font-bold">{coachProfile?.fullName || "Entrenador Asignado"}</span>
-                  <span className="text-[11.6px] text-white">{coachProfile?.email || "En línea"}</span>
-                </div>
-                <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[11.6px] text-cyan-300 leading-snug flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
-                  <span>Tus planillas y series se sincronizan en tiempo real con el panel de tu coach.</span>
-                </div>
-              </div>
-
-              {/* Desvincularse */}
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={handleLeaveClub}
-                  className="text-xs bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
-                >
-                  Desvincularme del Coach
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-[12.8px] text-white leading-snug">
-                Pídele a tu entrenador su código de 6 dígitos (ej. <strong className="text-white">101010</strong>) para vincularte. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
-              </p>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={athleteInviteCode}
-                  onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9a-zA-Z]/g, "").slice(0, 6))}
-                  placeholder="Código de 6 dígitos"
-                  className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={handleJoinClub}
-                  disabled={!athleteInviteCode.trim() || isJoiningClub}
-                  className="px-4 py-2.5 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-                >
-                  {isJoiningClub ? "Vinculando..." : "Vincular"}
-                </button>
-              </div>
-            </div>
+      {/* SECTION 4.5: Mi Entrenador (Disponible para todos los usuarios para poder vincularse/desvincularse siempre) */}
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-cyan-neon" />
+            Mi Entrenador (Coach)
+          </h4>
+          {linkedToCoach && (
+            <span className="text-[10.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Vinculado
+            </span>
           )}
         </div>
-      )}
 
-      {/* SECTION 5: Coach settings (código de 6 dígitos y WhatsApp de contacto, sin club) */}
-      {(user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && (
+        {clubJoinFeedback && (
+          <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border ${
+            clubJoinFeedback.type === "success" 
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" 
+              : "bg-white border-white text-black"
+          }`}>
+            {clubJoinFeedback.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-black" />
+            )}
+            <span className="leading-snug">{clubJoinFeedback.message}</span>
+          </div>
+        )}
+
+        {linkedToCoach ? (
+          <div className="flex flex-col gap-3">
+            {/* Información del Entrenador */}
+            <div className="bg-neutral-950/30 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] text-white uppercase font-black tracking-wider flex items-center gap-1">
+                  <Users className="w-3 h-3 text-cyan-neon" /> Tu Entrenador
+                </span>
+                {coachProfile?.whatsappNumber && (
+                  <a
+                    href={`https://wa.me/${coachProfile.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola Coach ${coachProfile.fullName}, soy ${user.fullName}. Te escribo desde Archery 101010.`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[11.6px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                  >
+                    <MessageCircle className="w-3 h-3" /> WhatsApp
+                  </a>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white font-bold">
+                  {coachProfile?.fullName || user.coachName || "Entrenador Asignado"}
+                </span>
+                <span className="text-[11.6px] text-white">
+                  {coachProfile?.email || user.coachEmail || "En línea"}
+                </span>
+              </div>
+              <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[11.6px] text-cyan-300 leading-snug flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
+                <span>Tus planillas y series se sincronizan en tiempo real con el panel de tu coach.</span>
+              </div>
+            </div>
+
+            {/* Desvincularse */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleLeaveClub}
+                className="text-xs bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
+              >
+                Desvincularme del Coach
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-[12.8px] text-white leading-snug">
+              Pídele a tu entrenador su código de 6 dígitos para vincularte como su alumno. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                maxLength={6}
+                value={athleteInviteCode}
+                onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                placeholder="Código de 6 dígitos"
+                className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
+              />
+              <button
+                type="button"
+                onClick={handleJoinClub}
+                disabled={!athleteInviteCode.trim() || isJoiningClub}
+                className="px-4 py-2.5 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+              >
+                {isJoiningClub ? "Vinculando..." : "Vincular"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 5: Coach settings (código de 6 dígitos y WhatsApp de contacto, solo cuando NO está vinculado como alumno a otro coach) */}
+      {!linkedToCoach && (user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración de Coach</h4>
+            <button
+              type="button"
+              onClick={async () => {
+                if (confirm("¿Deseas desactivar el modo Coach en tu cuenta y volver a perfil exclusivo de Atleta?")) {
+                  const res = await leaveCurrentClub(user.uid);
+                  if (res.success && res.user) {
+                    setCoachProfile(null);
+                    onProfileUpdated(res.user);
+                    window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
+                  }
+                }
+              }}
+              className="text-[10.5px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
+            >
+              Volver a modo Atleta
+            </button>
           </div>
 
           <div className="flex flex-col gap-3 mt-1">
@@ -912,23 +1024,29 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">Código para Alumnos (6 dígitos)</span>
               <div className="flex items-center gap-2">
                 <span className="flex-1 text-sm tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
-                  {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
-                    ? user.clubInviteCode 
-                    : "101010"}
+                  {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
+                    ? user.clubInviteCode
+                    : "······"}
                 </span>
                 <button
                   type="button"
                   onClick={async () => {
-                    if (confirm("¿Deseas generar un nuevo código de 6 dígitos para tus alumnos?")) {
+                    if (confirm("¿Deseas generar un código de 6 dígitos para tus alumnos?")) {
                       const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
                       const freshCode = generateClubInviteCode();
-                      const updated = await updateProfile(user.uid, { clubInviteCode: freshCode });
+                      const canonicalClubId = getCanonicalCoachClubId(user);
+                      const updated = await updateProfile(user.uid, {
+                        clubInviteCode: freshCode,
+                        clubId: canonicalClubId,
+                        isClubCreator: true
+                      });
                       onProfileUpdated(updated);
+                      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updated } }));
                       alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
                     }
                   }}
                   className="px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-xs font-bold transition cursor-pointer active:scale-95"
-                  title="Borrar y generar nuevo código de 6 dígitos"
+                  title="Generar nuevo código de 6 dígitos"
                 >
                   Nuevo
                 </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getLoggedUser, UserProfile } from "@/lib/authService";
+import { getLoggedUser, UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
 import LoginView from "@/components/auth/LoginView";
 import RegisterView from "@/components/auth/RegisterView";
 import DashboardView from "@/components/dashboard/DashboardView";
@@ -368,6 +368,13 @@ export default function Home() {
     initApp();
   }, []);
  
+  // If the user is linked as an athlete to an external Coach, ensure coachViewMode is off
+  useEffect(() => {
+    if (coachViewMode && isLinkedToExternalCoach(user)) {
+      setCoachViewMode(false);
+    }
+  }, [coachViewMode, user?.uid, user?.clubId, user?.coachId, user?.isClubCreator]);
+
   // Periodic user presence heartbeat to mark user as online in Firestore (self-healing)
   useEffect(() => {
     if (!user?.uid || !user?.fullName?.trim()) return;
@@ -386,7 +393,12 @@ export default function Home() {
           role: user.role,
           lastActiveAt: Date.now()
         };
-        if (user.isClubCreator && user.clubInviteCode) {
+        if (isLinkedToExternalCoach(user)) {
+          if (user.clubId) presencePayload.clubId = user.clubId;
+          if (user.coachId) presencePayload.coachId = user.coachId;
+          if (user.coachName) presencePayload.coachName = user.coachName;
+          if (user.coachEmail) presencePayload.coachEmail = user.coachEmail;
+        } else if (user.isClubCreator && user.clubInviteCode) {
           presencePayload.clubInviteCode = user.clubInviteCode;
           presencePayload.clubId = user.clubId || ("CLB-" + user.uid.replace("USR-", ""));
         } else if (user.clubId) {
@@ -404,7 +416,7 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
-  }, [user?.uid, user?.fullName, user?.role, user?.clubId, user?.clubInviteCode, user?.isClubCreator]);
+  }, [user?.uid, user?.fullName, user?.role, user?.clubId, user?.coachId, user?.clubInviteCode, user?.isClubCreator]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
   useEffect(() => {
@@ -929,6 +941,12 @@ export default function Home() {
 
   const handleToggleCoachViewMode = async (val: boolean) => {
     if (val) {
+      if (isLinkedToExternalCoach(user)) {
+        alert(
+          "Estás vinculado como alumno a tu entrenador. Para activar un Portal de Coach propio debes desvincularte primero desde tu Perfil."
+        );
+        return;
+      }
       // Active monthly PRO → enter Coach mode directly; otherwise show the free (re)activation screen
       const { isProActive } = await import("@/lib/billingService");
       if (isProActive(user)) {
@@ -944,8 +962,10 @@ export default function Home() {
 
   const handleCoachPaymentSuccess = (updatedUser: UserProfile) => {
     setUser(updatedUser);
-    setCoachViewMode(true);
-    setCurrentScreen("HOME");
+    if (!isLinkedToExternalCoach(updatedUser)) {
+      setCoachViewMode(true);
+      setCurrentScreen("HOME");
+    }
     setShowCoachPaymentModal(false);
   };
 

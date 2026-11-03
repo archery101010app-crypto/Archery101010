@@ -208,10 +208,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           (u) =>
             !isFictitiousUser(u) &&
             u.uid !== user.uid &&
-            !unlinkedIds.includes(u.uid) &&
-            (u.clubId === activeClubId ||
-              (user.clubId && u.clubId === user.clubId) ||
-              (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode))
+            (u.coachId === user.uid ||
+              (!unlinkedIds.includes(u.uid) &&
+                (!u.coachId || u.coachId === user.uid) &&
+                (u.clubId === activeClubId ||
+                  (user.clubId && u.clubId === user.clubId) ||
+                  (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode))))
         );
         setRoster(athletes);
         linkedAthleteUids = new Set(athletes.map((a) => a.uid));

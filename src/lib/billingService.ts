@@ -1,7 +1,7 @@
 "use client";
 
 import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
-import { UserProfile, updateProfile, generateClubInviteCode } from "@/lib/authService";
+import { UserProfile, updateProfile, generateClubInviteCode, isLinkedToExternalCoach } from "@/lib/authService";
 
 export interface StoreProduct {
   id: string;
@@ -99,20 +99,28 @@ export async function activateCoachLaunchPromo(
   productSku: string = "archery101010_coach_pro_monthly"
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
+    const linkedToExternal = isLinkedToExternalCoach(user);
     const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
     const validCode = /^\d{6}$/.test(existingCode) ? existingCode : generateClubInviteCode();
     const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
     const resolvedClubId =
       user.isClubCreator && user.clubId ? user.clubId : canonicalCoachClubId;
 
-    const updatedUser = await updateProfile(user.uid, {
-      plan: "PRO",
-      proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS,
-      role: user.role === "archer" ? "coach" : user.role,
-      clubId: resolvedClubId,
-      clubInviteCode: validCode,
-      isClubCreator: true
-    });
+    const profileUpdates: Partial<UserProfile> = linkedToExternal
+      ? {
+          plan: "PRO",
+          proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS
+        }
+      : {
+          plan: "PRO",
+          proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS,
+          role: user.role === "archer" ? "coach" : user.role,
+          clubId: resolvedClubId,
+          clubInviteCode: validCode,
+          isClubCreator: true
+        };
+
+    const updatedUser = await updateProfile(user.uid, profileUpdates);
 
     // Confirm the coach code reaches the cloud so athletes can find it immediately
     try {
