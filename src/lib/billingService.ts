@@ -54,6 +54,36 @@ export const COACH_STORE_PRODUCTS: StoreProduct[] = [
 // Launch phase status
 export const IS_LAUNCH_PROMO_FREE = true;
 
+/** Free Coach PRO access lasts 30 days; the coach re-activates it (still $0) once a month. */
+export const COACH_PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** True while the user has a non-expired PRO access (superadmins are always PRO). */
+export function isProActive(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === "superadmin") return true;
+  return user.plan === "PRO" && typeof user.proExpiresAt === "number" && user.proExpiresAt > Date.now();
+}
+
+/** Days left of the current monthly PRO access (0 when inactive). */
+export function proDaysLeft(user: UserProfile | null | undefined): number {
+  if (!user || !isProActive(user) || typeof user.proExpiresAt !== "number") return 0;
+  return Math.max(0, Math.ceil((user.proExpiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+/**
+ * Downgrades expired or legacy (no expiry date) PRO accounts to FREE.
+ * Keeps role, club and invite code intact so athletes stay linked; only the PRO flag lapses.
+ */
+export async function enforceProExpiry(user: UserProfile): Promise<UserProfile> {
+  if (user.role === "superadmin" || user.plan !== "PRO" || isProActive(user)) return user;
+  try {
+    return await updateProfile(user.uid, { plan: "FREE" });
+  } catch (err) {
+    console.warn("Could not downgrade expired PRO plan:", err);
+    return { ...user, plan: "FREE" };
+  }
+}
+
 /**
  * Retorna los productos configurados para las tiendas Google Play Store y Apple App Store
  */
@@ -76,6 +106,7 @@ export async function activateCoachLaunchPromo(
 
     const updatedUser = await updateProfile(user.uid, {
       plan: "PRO",
+      proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS,
       role: user.role === "archer" ? "coach" : user.role,
       clubId: resolvedClubId,
       clubName: user.clubName || "Club Archery 101010",

@@ -399,9 +399,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
   const handleUpgradeToPro = async () => {
     try {
-      const updated = await updateProfile(user.uid, { plan: "PRO" });
+      const { COACH_PRO_PERIOD_MS } = await import("@/lib/billingService");
+      const updated = await updateProfile(user.uid, { plan: "PRO", proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS });
       if (onUserUpdate) onUserUpdate(updated);
-      alert("¡Cuenta de Coach PRO activada!");
+      alert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
     } catch (e) {
       console.error(e);
     }

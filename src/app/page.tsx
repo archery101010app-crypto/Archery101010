@@ -195,6 +195,11 @@ export default function Home() {
         } else {
           setUser(loggedUser);
           if (loggedUser) {
+            // Monthly Coach PRO: expired or legacy PRO accounts return to FREE (role/club kept)
+            import("@/lib/billingService").then(async ({ enforceProExpiry }) => {
+              const checked = await enforceProExpiry(loggedUser);
+              if (checked !== loggedUser) setUser(checked);
+            }).catch((err) => console.warn("PRO expiry check failed", err));
             import("@/lib/pushNotifications").then(({ registerPushSilent }) => {
               registerPushSilent(loggedUser.uid);
             }).catch((err) => console.warn("Failed to load push notifications helper", err));
@@ -940,8 +945,15 @@ export default function Home() {
   const hasBanner = activeBanner !== null;
   const paddingTopStyle = hasBanner ? "7.25rem" : "3.65rem";
 
-  const handleToggleCoachViewMode = (val: boolean) => {
+  const handleToggleCoachViewMode = async (val: boolean) => {
     if (val) {
+      // Active monthly PRO → enter Coach mode directly; otherwise show the free (re)activation screen
+      const { isProActive } = await import("@/lib/billingService");
+      if (isProActive(user)) {
+        setCoachViewMode(true);
+        setCurrentScreen("HOME");
+        return;
+      }
       setShowCoachPaymentModal(true);
       return;
     }
@@ -968,7 +980,7 @@ export default function Home() {
             campaign={activeBanner} 
             onSlideClick={() => {}} 
             onClose={() => setActiveBanner(null)} 
-            showCloseButton={user?.plan === "PRO"}
+            showCloseButton={user?.plan === "PRO" && (user.role === "superadmin" || (user.proExpiresAt ?? 0) > Date.now())}
           />
         )}
       </AnimatePresence>

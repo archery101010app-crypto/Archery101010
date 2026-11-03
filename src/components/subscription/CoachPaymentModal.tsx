@@ -235,6 +235,9 @@ export default function CoachPaymentModal({
             <span className="text-[11px] text-center text-white/60">
               {t("noCardRequired")}
             </span>
+            <span className="text-[11px] text-center text-white font-bold">
+              Acceso Coach PRO por 30 días · Renuévalo gratis cada mes, sin límite
+            </span>
           </div>
 
           {/* Footer minimalista */}

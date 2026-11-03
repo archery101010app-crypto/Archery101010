@@ -51,6 +51,8 @@ export interface UserProfile {
   clubCountry?: string; // country code for club flag
   role: "archer" | "coach" | "team_admin" | "team_admin_coach" | "superadmin";
   plan: "FREE" | "PRO";
+  /** Epoch ms when the free monthly Coach PRO access expires (re-activated by the coach once a month, still free). */
+  proExpiresAt?: number;
   isClubCreator: boolean;
   whatsappNumber?: string;
   clubInviteCode?: string;
@@ -369,7 +371,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       clubId: null,
       clubName: null,
       role: isAdminEmail ? "superadmin" : "archer",
-      plan: "PRO",
+      plan: isAdminEmail ? "PRO" : "FREE",
       isClubCreator: false,
       profileSetupCompleted: true,
       createdAt: Date.now()
@@ -497,7 +499,7 @@ export async function registerUser(
     email: normalizedEmail,
     uid,
     role: finalRole,
-    plan: "PRO", // Promoción de Lanzamiento: Acceso PRO 100% gratuito para nuevos usuarios pioneros
+    plan: finalRole === "superadmin" ? "PRO" : "FREE", // Todas las cuentas inician FREE; Coach PRO se activa gratis cada mes
     isClubCreator: isCreator,
     clubInviteCode: inviteCode,
     clubLogo,
@@ -851,7 +853,7 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
       clubId: null,
       clubName: null,
       role: isAdminEmail ? "superadmin" : "archer",
-      plan: "PRO",
+      plan: isAdminEmail ? "PRO" : "FREE",
       isClubCreator: false,
       profileSetupCompleted: isAdminEmail,
       createdAt: Date.now()
