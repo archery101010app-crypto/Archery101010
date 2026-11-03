@@ -88,47 +88,120 @@ function isProfileValid(u: UserProfile | null | undefined): boolean {
   );
 }
 
-function sanitizeUserProfile(u: any): UserProfile {
-  const copy = { ...u };
-  delete copy.password;
-  delete copy.actAsCoach;
-  // Strip undefined fields so Firestore never rejects the profile write
-  for (const k of Object.keys(copy)) {
-    if (copy[k] === undefined) delete copy[k];
-  }
-  return copy as UserProfile;
-}
+const NON_COACH_CLUB_IDS = new Set(["CLB-DIRECTOR", "CLB-101010", "CLB-DEMO"]);
 
 /**
  * Returns the canonical internal clubId owned by a Coach.
+ * Always derived deterministically from the Coach's own UID so a Coach can never
+ * inherit another user's clubId.
  */
 export function getCanonicalCoachClubId(coach: Partial<UserProfile> | null | undefined): string {
   if (!coach?.uid) return "CLB-DIRECTOR";
-  const canonical = "CLB-" + coach.uid.replace("USR-", "");
-  if (coach.isClubCreator && coach.clubId && coach.clubId.startsWith("CLB-")) {
-    return coach.clubId;
+  return "CLB-" + coach.uid.replace("USR-", "");
+}
+
+/**
+ * Extracts the external Coach's UID if the user is linked to another user as their Coach.
+ * Returns null if the user is not linked to an external Coach.
+ */
+export function getExternalCoachUid(user: Partial<UserProfile> | null | undefined): string | null {
+  if (!user?.uid) return null;
+  if (user.coachId && user.coachId !== user.uid) {
+    return user.coachId;
   }
-  return canonical;
+  const ownCanonical = "CLB-" + user.uid.replace("USR-", "");
+  if (
+    user.clubId &&
+    user.clubId.startsWith("CLB-") &&
+    user.clubId !== ownCanonical &&
+    user.clubId !== `CLB-${user.uid}` &&
+    !NON_COACH_CLUB_IDS.has(user.clubId)
+  ) {
+    const candidateUid = user.clubId.slice(4);
+    if (candidateUid && candidateUid !== user.uid) {
+      return candidateUid;
+    }
+  }
+  return null;
 }
 
 /**
  * True only when the user is linked as an athlete to ANOTHER user (their Coach),
  * never when clubId points to the user's own Coach ID.
+ * Does NOT rely on `!user.isClubCreator`, because an athlete who previously
+ * toggled Coach mode before linking may still have `isClubCreator: true` in stale storage.
  */
 export function isLinkedToExternalCoach(user: Partial<UserProfile> | null | undefined): boolean {
   if (!user?.uid) return false;
-  if (user.coachId && user.coachId !== user.uid) return true;
+  if (getExternalCoachUid(user) !== null) return true;
   if (user.coachId && user.coachId === user.uid) return false;
   const ownCanonical = "CLB-" + user.uid.replace("USR-", "");
   if (
     user.clubId &&
     user.clubId !== ownCanonical &&
     user.clubId !== `CLB-${user.uid}` &&
+    !NON_COACH_CLUB_IDS.has(user.clubId) &&
     !user.isClubCreator
   ) {
     return true;
   }
   return false;
+}
+
+function sanitizeUserProfile(u: any): UserProfile {
+  const copy = { ...u };
+  delete copy.password;
+  delete copy.actAsCoach;
+
+  if (copy.uid) {
+    // Self-heal self-referential coachId
+    if (copy.coachId && copy.coachId === copy.uid) {
+      copy.coachId = null;
+      copy.coachName = null;
+      copy.coachEmail = null;
+    }
+
+    if (isLinkedToExternalCoach(copy)) {
+      // Athlete is linked to another user's Coach account: never allow self-coach flags or own invite code
+      copy.isClubCreator = false;
+      copy.clubInviteCode = "";
+      if (copy.role !== "superadmin" && !isSuperAdminEmail(copy.email)) {
+        copy.role = "archer";
+      }
+      const externalCoachUid = getExternalCoachUid(copy);
+      if (!copy.coachId && externalCoachUid) {
+        copy.coachId = externalCoachUid;
+      }
+      if (copy.clubName === "Club Archery 101010") {
+        copy.clubName = null;
+      }
+    } else if (copy.role === "archer" && !copy.isClubCreator) {
+      // Unlinked pure archer: strip any leftover invite code or self-clubId
+      copy.clubId = null;
+      copy.coachId = null;
+      copy.coachName = null;
+      copy.coachEmail = null;
+      copy.clubInviteCode = "";
+    } else if (
+      copy.role === "coach" ||
+      copy.role === "team_admin" ||
+      copy.role === "team_admin_coach" ||
+      (copy.isClubCreator && copy.role !== "archer")
+    ) {
+      // Genuine Coach / club owner: ensure canonical own clubId and no external coachId
+      copy.clubId = getCanonicalCoachClubId(copy);
+      copy.isClubCreator = true;
+      copy.coachId = null;
+      copy.coachName = null;
+      copy.coachEmail = null;
+    }
+  }
+
+  // Strip undefined fields so Firestore never rejects the profile write
+  for (const k of Object.keys(copy)) {
+    if (copy[k] === undefined) delete copy[k];
+  }
+  return copy as UserProfile;
 }
 
 /**
@@ -149,7 +222,7 @@ function cloudWriteUser(profile: UserProfile): void {
 
 /** Roles that own a club and hand out invite codes */
 function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
-  if (!u) return false;
+  if (!u || isLinkedToExternalCoach(u)) return false;
   return (
     u.role === "coach" ||
     u.role === "team_admin" ||
@@ -162,7 +235,7 @@ function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
 /**
  * Finds the Coach / club owner that owns a 6-digit invite code.
  * Cloud (Firestore) is the source of truth; local cache is only an offline fallback.
- * Never returns the requesting athlete himself.
+ * Never returns the requesting athlete himself or an athlete linked to another coach.
  */
 export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: string): Promise<UserProfile | null> {
   const cleanCode = (rawCode || "").trim().toUpperCase();
@@ -176,7 +249,7 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
       );
       const allMatches = snap.docs
         .map((d) => sanitizeUserProfile({ ...d.data(), uid: (d.data() as any).uid || d.id }))
-        .filter((u) => !excludeUid || u.uid !== excludeUid);
+        .filter((u) => (!excludeUid || u.uid !== excludeUid) && !isLinkedToExternalCoach(u));
       const owners = allMatches.filter((u) => isClubOwnerRole(u));
       if (owners.length > 0) {
         return owners.find((u) => u.isClubCreator) || owners[0];
@@ -189,9 +262,12 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
     }
   }
 
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
   const localMatches = usersList.filter(
-    (u) => (!excludeUid || u.uid !== excludeUid) && (u.clubInviteCode || "").trim().toUpperCase() === cleanCode
+    (u) =>
+      (!excludeUid || u.uid !== excludeUid) &&
+      !isLinkedToExternalCoach(u) &&
+      (u.clubInviteCode || "").trim().toUpperCase() === cleanCode
   );
   const localOwners = localMatches.filter((u) => isClubOwnerRole(u));
   return localOwners.find((u) => u.isClubCreator) || localOwners[0] || localMatches[0] || null;
@@ -509,33 +585,31 @@ export async function registerUser(
     if (profileData.clubId === "CREATE_NEW" && isAdult) {
       finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
       isCreator = true;
-      userFields.clubId = generateResilientId("CLB");
+      userFields.clubId = getCanonicalCoachClubId({ uid });
       inviteCode = generateClubInviteCode();
     } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
       userFields.clubId = null;
-      userFields.clubName = null;
       finalRole = "archer";
     } else if (profileData.clubId && profileData.clubId !== "NONE") {
       finalRole = "archer";
-      const clubCoach = await findClubOwnerByInviteCode(profileData.clubId);
-      if (clubCoach && clubCoach.clubId) {
-        userFields.clubId = clubCoach.clubId;
-        userFields.clubName = clubCoach.clubName || "Club Archery 101010";
+      const clubCoach = await findClubOwnerByInviteCode(profileData.clubId, uid);
+      if (clubCoach && clubCoach.uid !== uid) {
+        userFields.clubId = getCanonicalCoachClubId(clubCoach);
+        userFields.coachId = clubCoach.uid;
+        userFields.coachName = clubCoach.fullName || "Entrenador";
+        userFields.coachEmail = clubCoach.email || "";
         clubLogo = clubCoach.clubLogo || "0";
         clubCountry = clubCoach.clubCountry || clubCoach.country;
       } else {
         // Code not found: register as independent archer (they can link later from Profile)
         userFields.clubId = null;
-        userFields.clubName = null;
       }
     } else {
       userFields.clubId = null;
-      userFields.clubName = null;
       finalRole = "archer";
     }
   } else {
     userFields.clubId = null;
-    userFields.clubName = null;
   }
 
   const newProfile: UserProfile = sanitizeUserProfile({
@@ -1284,6 +1358,8 @@ export async function joinClubByInviteCode(
 
   const updates: Partial<UserProfile> = {
     role: preservedRole,
+    plan: preservedRole === "superadmin" ? "PRO" : "FREE",
+    proExpiresAt: preservedRole === "superadmin" ? currentLogged?.proExpiresAt : 0,
     isClubCreator: false,
     clubId: resolvedClubId,
     coachId: clubCoach.uid,
@@ -1340,6 +1416,8 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
 
   const updated = await updateProfile(userUid, {
     role: preservedRole,
+    plan: preservedRole === "superadmin" ? "PRO" : "FREE",
+    proExpiresAt: preservedRole === "superadmin" ? currentLogged?.proExpiresAt : 0,
     isClubCreator: false,
     clubId: null,
     coachId: null,

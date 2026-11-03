@@ -133,8 +133,17 @@ export function startRealtimeSync(
         const rawLocalUsers = (await settingsStore.getItem<UserProfile[]>("simulated_users")) || [];
         const localUsers = rawLocalUsers.filter((u) => !isFictitiousUser(u));
         const queue = await getSyncQueue();
+        const nowQueueMs = Date.now();
         const pendingUserUids = new Set(
-          queue.filter((q) => q.collection === "users").map((q) => q.payloadId)
+          queue
+            .filter(
+              (q) =>
+                q.collection === "users" &&
+                q.status === "pending" &&
+                (q.attempts || 0) === 0 &&
+                nowQueueMs - (q.timestamp || 0) < 30000
+            )
+            .map((q) => q.payloadId)
         );
 
         // Rebuild merged list: prefer local user profile if it has a pending write in the queue
@@ -185,14 +194,12 @@ export function startRealtimeSync(
           if (updatedCurrentUser) {
             const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
 
-            // Helper to check if a profile has all mandatory fields
+            // Helper to check if a profile has all mandatory fields (matches authService.ts)
             const isProfileValid = (u: UserProfile | null | undefined): boolean => {
               if (!u) return false;
               return !!(
-                u.nickname?.trim() &&
                 u.fullName?.trim() &&
                 u.birthDate &&
-                u.city?.trim() &&
                 u.country &&
                 u.gender
               );

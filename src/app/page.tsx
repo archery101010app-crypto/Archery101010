@@ -246,14 +246,74 @@ export default function Home() {
           }
           const queue = await getSyncQueue();
           for (const item of queue) {
-            if (
+            const isFailedOrStaleUserWrite =
               item.collection === "users" &&
-              !String(item.payloadId || "").startsWith("USR-ATH-") &&
-              (String(item.payloadId || "").startsWith("USR-") || item.payload?.password)
+              (item.status === "failed" ||
+                (item.attempts || 0) > 0 ||
+                Date.now() - (item.timestamp || 0) > 30000);
+            if (
+              isFailedOrStaleUserWrite ||
+              (item.collection === "users" &&
+                !String(item.payloadId || "").startsWith("USR-ATH-") &&
+                (String(item.payloadId || "").startsWith("USR-") || item.payload?.password))
             ) {
               await removeFromSyncQueue(item.id);
             }
           }
+
+          // Reconcile logged-in user against Firestore on startup so any remote Coach link/unlink
+          // or self-healed role is applied immediately and never overwritten by stale local IndexedDB state
+          if (
+            loggedUser &&
+            !isLegacyOrDemoUser(loggedUser) &&
+            !isIncompleteUser(loggedUser) &&
+            typeof navigator !== "undefined" &&
+            navigator.onLine
+          ) {
+            try {
+              const { doc, getDoc, setDoc } = await import("firebase/firestore");
+              const { db } = await import("@/lib/firebase");
+              const { getExternalCoachUid } = await import("@/lib/authService");
+              const snap = await getDoc(doc(db, "users", loggedUser.uid));
+              if (snap.exists()) {
+                const rawCloud = { ...(snap.data() as UserProfile), uid: loggedUser.uid };
+                const externalCoachUid = getExternalCoachUid(rawCloud);
+                const cloudLinked = isLinkedToExternalCoach(rawCloud);
+                const normalizedCloud: UserProfile = {
+                  ...loggedUser,
+                  ...rawCloud,
+                  uid: loggedUser.uid,
+                  role: cloudLinked && rawCloud.role !== "superadmin" ? "archer" : rawCloud.role || loggedUser.role,
+                  isClubCreator: cloudLinked ? false : !!rawCloud.isClubCreator,
+                  clubInviteCode: cloudLinked || (!rawCloud.isClubCreator && rawCloud.role === "archer") ? "" : (rawCloud.clubInviteCode || ""),
+                  coachId: cloudLinked ? (rawCloud.coachId || externalCoachUid || null) : null
+                };
+                await saveLocalSetting("current_user", normalizedCloud);
+                setUser(normalizedCloud);
+
+                if (
+                  rawCloud.isClubCreator !== normalizedCloud.isClubCreator ||
+                  rawCloud.role !== normalizedCloud.role ||
+                  (rawCloud.coachId || null) !== (normalizedCloud.coachId || null) ||
+                  (rawCloud.clubInviteCode || "") !== (normalizedCloud.clubInviteCode || "")
+                ) {
+                  await setDoc(
+                    doc(db, "users", loggedUser.uid),
+                    {
+                      role: normalizedCloud.role,
+                      isClubCreator: normalizedCloud.isClubCreator,
+                      coachId: normalizedCloud.coachId || null,
+                      clubInviteCode: normalizedCloud.clubInviteCode || ""
+                    },
+                    { merge: true }
+                  ).catch(() => {});
+                }
+              }
+            } catch (cloudSyncErr) {
+              console.warn("Could not reconcile user profile on startup:", cloudSyncErr);
+            }
+          }
+
           const { runSync } = await import("@/lib/db/syncManager");
           runSync().catch(() => {});
 
@@ -386,26 +446,17 @@ export default function Home() {
         const { db } = await import("@/lib/firebase");
         const { runSync } = await import("@/lib/db/syncManager");
         const docRef = doc(db, "users", uid);
-        const presencePayload: Record<string, any> = {
-          uid: user.uid,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          lastActiveAt: Date.now()
-        };
-        if (isLinkedToExternalCoach(user)) {
-          if (user.clubId) presencePayload.clubId = user.clubId;
-          if (user.coachId) presencePayload.coachId = user.coachId;
-          if (user.coachName) presencePayload.coachName = user.coachName;
-          if (user.coachEmail) presencePayload.coachEmail = user.coachEmail;
-        } else if (user.isClubCreator && user.clubInviteCode) {
-          presencePayload.clubInviteCode = user.clubInviteCode;
-          presencePayload.clubId = user.clubId || ("CLB-" + user.uid.replace("USR-", ""));
-        } else if (user.clubId) {
-          presencePayload.clubId = user.clubId;
-          if (user.clubInviteCode) presencePayload.clubInviteCode = user.clubInviteCode;
-        }
-        await setDoc(docRef, presencePayload, { merge: true });
+        // Only write heartbeat identity fields — never overwrite role, clubId, coachId, isClubCreator, or clubInviteCode!
+        await setDoc(
+          docRef,
+          {
+            uid: user.uid,
+            email: user.email,
+            fullName: user.fullName,
+            lastActiveAt: Date.now()
+          },
+          { merge: true }
+        );
         runSync().catch(() => {});
       } catch (err) {
         // Silently catch offline/network errors
@@ -416,7 +467,7 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
-  }, [user?.uid, user?.fullName, user?.role, user?.clubId, user?.coachId, user?.clubInviteCode, user?.isClubCreator]);
+  }, [user?.uid, user?.fullName, user?.email]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
   useEffect(() => {

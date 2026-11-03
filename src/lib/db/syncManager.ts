@@ -112,20 +112,34 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
           } catch (err: any) {
             console.error(`Failed to sync item ${item.id}:`, err);
 
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("firestore-sync-error", { detail: { error: err.message || String(err) } })
-              );
-            }
+            const errCode = String(err?.code || "");
+            const errMsg = String(err?.message || err || "");
+            const nextAttempts = (item.attempts || 0) + 1;
+            const isPermanentReject =
+              errCode.includes("permission-denied") ||
+              errCode.includes("invalid-argument") ||
+              errMsg.includes("Missing or insufficient permissions") ||
+              errMsg.includes("Unsupported field value") ||
+              nextAttempts >= 3;
 
-            await updateSyncItem(item.id, {
-              status: "failed",
-              attempts: item.attempts + 1
-            });
+            if (isPermanentReject) {
+              console.warn(`[SyncManager] Dropping rejected/stale sync item ${item.id} (${targetKey}) after ${nextAttempts} attempt(s).`);
+              await removeFromSyncQueue(item.id);
+            } else {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("firestore-sync-error", { detail: { error: errMsg } })
+                );
+              }
+              await updateSyncItem(item.id, {
+                status: "failed",
+                attempts: nextAttempts
+              });
+            }
 
             skippedKeys.add(targetKey);
 
-            if (err.message === "NETWORK_TIMEOUT" || (typeof navigator !== "undefined" && !navigator.onLine)) {
+            if (errMsg === "NETWORK_TIMEOUT" || (typeof navigator !== "undefined" && !navigator.onLine)) {
               networkAborted = true;
             }
           }

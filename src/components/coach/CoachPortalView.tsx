@@ -77,8 +77,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     if (!u || !u.uid || isFictitiousUser(u) || u.uid === user.uid) return false;
     // Explicit coachId link always wins (even if athlete was previously unlinked and re-joined)
     if (u.coachId === user.uid) return true;
-    if (u.coachId && u.coachId !== user.uid) return false;
+    if (u.coachId && u.coachId !== user.uid && user.role !== "superadmin") return false;
     if (unlinkedIds.includes(u.uid)) return false;
+    if (user.role === "superadmin" && isLinkedToExternalCoach(u)) return true;
     return (
       u.clubId === activeClubId ||
       u.clubId === canonicalCoachClubId ||
@@ -152,6 +153,16 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               snapCode.forEach(addRemoteDoc);
             } catch (e) {
               console.warn("Query users by clubInviteCode failed:", e);
+            }
+          }
+
+          // Query 5: superadmin sees all linked athletes across the platform
+          if (user.role === "superadmin") {
+            try {
+              const snapAll = await getDocs(collection(db, "users"));
+              snapAll.forEach(addRemoteDoc);
+            } catch (e) {
+              console.warn("Query all users for superadmin failed:", e);
             }
           }
 
@@ -354,10 +365,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         if (u.uid === targetUid) {
           updatedAthleteRecord = {
             ...u,
+            role: u.role === "superadmin" ? "superadmin" : "archer",
+            isClubCreator: false,
             clubId: null,
             coachId: null,
             coachName: null,
-            coachEmail: null
+            coachEmail: null,
+            clubInviteCode: ""
           };
           return updatedAthleteRecord;
         }
@@ -372,10 +386,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       // 4. Write directly to Firestore and queue cloud sync UPDATE
       const payloadToSync: UserProfile = updatedAthleteRecord || {
         ...athleteToUnlink,
+        role: athleteToUnlink.role === "superadmin" ? "superadmin" : "archer",
+        isClubCreator: false,
         clubId: null,
         coachId: null,
         coachName: null,
-        coachEmail: null
+        coachEmail: null,
+        clubInviteCode: ""
       };
       try {
         if (typeof navigator === "undefined" || navigator.onLine) {
@@ -383,7 +400,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           const { db } = await import("@/lib/firebase");
           await setDoc(
             doc(db, "users", targetUid),
-            { clubId: null, coachId: null, coachName: null, coachEmail: null },
+            {
+              role: athleteToUnlink.role === "superadmin" ? "superadmin" : "archer",
+              isClubCreator: false,
+              clubId: null,
+              coachId: null,
+              coachName: null,
+              coachEmail: null,
+              clubInviteCode: ""
+            },
             { merge: true }
           );
         }

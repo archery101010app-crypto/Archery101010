@@ -156,7 +156,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [isJoiningClub, setIsJoiningClub] = useState(false);
   const [clubJoinFeedback, setClubJoinFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [coachProfile, setCoachProfile] = useState<UserProfile | null>(null);
+  const [coachStudents, setCoachStudents] = useState<UserProfile[]>([]);
   const linkedToCoach = isLinkedToExternalCoach(user);
+  const isCoachProfile =
+    !linkedToCoach &&
+    (user.role === "coach" ||
+      user.role === "team_admin" ||
+      user.role === "team_admin_coach" ||
+      user.role === "superadmin");
 
   useEffect(() => {
     let cancelled = false;
@@ -241,12 +248,25 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         if (resolved && resolved.uid !== user.uid) {
           setCoachProfile(resolved);
-          // Self-heal missing explicit coachId/coachName/coachEmail on the athlete profile
-          if (user.coachId !== resolved.uid || !user.coachName) {
+          const expectedRole: UserProfile["role"] = user.role === "superadmin" ? "superadmin" : "archer";
+          const expectedClubId = getCanonicalCoachClubId(resolved);
+          // Self-heal missing explicit coachId/coachName/coachEmail or leftover self-coach flags on the athlete profile
+          if (
+            user.coachId !== resolved.uid ||
+            !user.coachName ||
+            user.isClubCreator ||
+            user.role !== expectedRole ||
+            user.clubId !== expectedClubId ||
+            !!user.clubInviteCode
+          ) {
             updateProfile(user.uid, {
+              role: expectedRole,
+              isClubCreator: false,
+              clubId: expectedClubId,
               coachId: resolved.uid,
               coachName: resolved.fullName || "Entrenador",
-              coachEmail: resolved.email || ""
+              coachEmail: resolved.email || "",
+              clubInviteCode: ""
             })
               .then((updated) => onProfileUpdated(updated))
               .catch(() => {});
@@ -262,7 +282,114 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     return () => {
       cancelled = true;
     };
-  }, [user.uid, user.clubId, user.coachId, user.isClubCreator]);
+  }, [user.uid, user.clubId, user.coachId, user.isClubCreator, user.role]);
+
+  // Load linked students for the Coach profile section & ensure Coach's 6-digit invite code is persisted in cloud
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCoachStudents() {
+      if (!isCoachProfile) {
+        setCoachStudents([]);
+        return;
+      }
+      try {
+        const { getLocalSetting, saveLocalSetting, isFictitiousUser } = await import("@/lib/db/indexedDB");
+        const { generateClubInviteCode } = await import("@/lib/authService");
+        const canonicalClubId = getCanonicalCoachClubId(user);
+
+        // Ensure Coach has a valid 6-digit invite code and canonical clubId saved
+        if (
+          !user.clubInviteCode ||
+          !/^\d{6}$/.test(user.clubInviteCode) ||
+          user.clubId !== canonicalClubId ||
+          !user.isClubCreator
+        ) {
+          const codeToUse =
+            user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
+              ? user.clubInviteCode
+              : generateClubInviteCode();
+          updateProfile(user.uid, {
+            clubInviteCode: codeToUse,
+            clubId: canonicalClubId,
+            isClubCreator: true
+          })
+            .then((updated) => onProfileUpdated(updated))
+            .catch(() => {});
+        }
+
+        const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${canonicalClubId}`, []);
+        const matchStudent = (u: UserProfile): boolean => {
+          if (!u || !u.uid || u.uid === user.uid || isFictitiousUser(u)) return false;
+          if (u.coachId === user.uid) return true;
+          if (u.coachId && u.coachId !== user.uid && user.role !== "superadmin") return false;
+          if (unlinkedIds.includes(u.uid)) return false;
+          if (u.clubId === canonicalClubId || (!!user.clubId && u.clubId === user.clubId)) return true;
+          if (user.role === "superadmin" && isLinkedToExternalCoach(u)) return true;
+          return false;
+        };
+
+        const localList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const mergedMap = new Map<string, UserProfile>();
+        for (const u of localList) {
+          if (matchStudent(u)) mergedMap.set(u.uid, u);
+        }
+
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          try {
+            const { collection, query, where, getDocs } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+
+            const addDocSnap = (d: any) => {
+              const raw = d.data() as UserProfile;
+              const uid = raw?.uid || d.id;
+              if (!raw || !uid || uid === user.uid) return;
+              const u = { ...raw, uid };
+              if (matchStudent(u)) {
+                mergedMap.set(uid, u);
+              }
+            };
+
+            const [snapByCoach, snapByClub] = await Promise.all([
+              getDocs(query(collection(db, "users"), where("coachId", "==", user.uid))).catch(() => null),
+              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId))).catch(() => null)
+            ]);
+            snapByCoach?.forEach(addDocSnap);
+            snapByClub?.forEach(addDocSnap);
+
+            if (user.role === "superadmin") {
+              const snapAll = await getDocs(collection(db, "users")).catch(() => null);
+              snapAll?.forEach(addDocSnap);
+            }
+
+            if (mergedMap.size > 0) {
+              const updatedLocal = [...localList];
+              for (const student of mergedMap.values()) {
+                const idx = updatedLocal.findIndex((x) => x.uid === student.uid);
+                if (idx === -1) updatedLocal.push(student);
+                else updatedLocal[idx] = { ...updatedLocal[idx], ...student };
+              }
+              await saveLocalSetting("simulated_users", updatedLocal);
+            }
+          } catch (err) {
+            console.warn("Could not fetch linked students in ProfileView:", err);
+          }
+        }
+
+        if (!cancelled) {
+          setCoachStudents(Array.from(mergedMap.values()));
+        }
+      } catch (err) {
+        console.warn("Error loading coach students:", err);
+      }
+    }
+    loadCoachStudents();
+    const handleRosterChange = () => loadCoachStudents();
+    window.addEventListener("users-roster-updated", handleRosterChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("users-roster-updated", handleRosterChange);
+    };
+  }, [isCoachProfile, user.uid, user.clubId, user.clubInviteCode, user.isClubCreator, user.role]);
 
   const handleJoinClub = async () => {
     if (!athleteInviteCode.trim()) return;
@@ -995,27 +1122,29 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         )}
       </div>
 
-      {/* SECTION 5: Coach settings (código de 6 dígitos y WhatsApp de contacto, solo cuando NO está vinculado como alumno a otro coach) */}
-      {!linkedToCoach && (user.role === "coach" || user.role === "team_admin" || user.role === "team_admin_coach") && (
+      {/* SECTION 5: Coach settings (código de 6 dígitos, WhatsApp y alumnos vinculados, solo cuando NO está vinculado como alumno a otro coach) */}
+      {isCoachProfile && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración de Coach</h4>
-            <button
-              type="button"
-              onClick={async () => {
-                if (confirm("¿Deseas desactivar el modo Coach en tu cuenta y volver a perfil exclusivo de Atleta?")) {
-                  const res = await leaveCurrentClub(user.uid);
-                  if (res.success && res.user) {
-                    setCoachProfile(null);
-                    onProfileUpdated(res.user);
-                    window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
+            {user.role !== "superadmin" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm("¿Deseas desactivar el modo Coach en tu cuenta y volver a perfil exclusivo de Atleta?")) {
+                    const res = await leaveCurrentClub(user.uid);
+                    if (res.success && res.user) {
+                      setCoachProfile(null);
+                      onProfileUpdated(res.user);
+                      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
+                    }
                   }
-                }
-              }}
-              className="text-[10.5px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
-            >
-              Volver a modo Atleta
-            </button>
+                }}
+                className="text-[10.5px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
+              >
+                Volver a modo Atleta
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 mt-1">
@@ -1071,6 +1200,57 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   Ok
                 </button>
               </div>
+            </div>
+
+            {/* Linked students roster directly in Coach Profile */}
+            <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">
+                  Mis Alumnos Vinculados ({coachStudents.length})
+                </span>
+                {onNavigate && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("COACH")}
+                    className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer"
+                  >
+                    Abrir Portal Coach →
+                  </button>
+                )}
+              </div>
+
+              {coachStudents.length === 0 ? (
+                <p className="text-[11px] text-neutral-400 bg-neutral-950/60 border border-white/5 rounded-xl p-3">
+                  Aún no tienes arqueros vinculados. Comparte tu código de 6 dígitos para que tus alumnos lo ingresen en su Perfil.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {coachStudents.map((student) => (
+                    <div
+                      key={student.uid}
+                      className="flex items-center justify-between gap-2 bg-neutral-950 border border-white/[0.06] rounded-xl px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-xs shrink-0">
+                          {(student.fullName || "A").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-white truncate">
+                            {student.fullName || "Arquero"}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 truncate">
+                            {student.email}
+                            {student.clubName ? ` • ${student.clubName}` : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/20 px-2 py-0.5 rounded-lg shrink-0">
+                        {student.bowConfig?.type || "Recurve"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

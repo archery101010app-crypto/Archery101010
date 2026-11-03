@@ -510,21 +510,19 @@ service cloud.firestore {
       // UID is immutable.
       allow update: if isAuthenticated() &&
         (isOwner(userId) || isSuperAdmin() ||
-          (isCoach() && resource.data.role == 'archer' && request.resource.data.role == 'archer' &&
+          (isCoach() && request.resource.data.role == 'archer' &&
             (isCoachOfClub(resource.data.get('clubId', null)) || resource.data.get('coachId', null) == request.auth.uid))) &&
         request.resource.data.uid == userId &&
         request.resource.data.uid == resource.data.get('uid', userId) &&
         isValidUser(request.resource.data) &&
         (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin')) &&
-        // Anti self-escalation: a user cannot change their OWN role to a privileged role while belonging to another coach's club,
-        // but CAN always de-escalate their own role back to 'archer'.
+        // Anti self-escalation: a user can always set their own role to 'archer',
+        // and can only hold a coach/admin role when not linked to an external coach (coachId == null)
+        // and when clubId is either null or their own canonical CLB-<uid>.
         (isSuperAdmin() || !isOwner(userId) ||
-          request.resource.data.role == resource.data.role ||
           request.resource.data.role == 'archer' ||
-          request.resource.data.get('clubId', null) == null ||
-          resource.data.get('isClubCreator', false) == true ||
-          (request.resource.data.get('isClubCreator', false) == true && (
-            resource.data.get('clubId', null) == null ||
+          (request.resource.data.get('coachId', null) == null && (
+            request.resource.data.get('clubId', null) == null ||
             request.resource.data.get('clubId', '') == 'CLB-' + userId ||
             request.resource.data.get('clubId', '') == 'CLB-' + userId.replace('USR-', '')
           )));
