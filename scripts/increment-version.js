@@ -67,8 +67,7 @@ if (fs.existsSync(gradlePath)) {
   console.log(`Updated android/app/build.gradle with: versionCode ${vCode}, versionName "${displayVersion}"`);
 }
 
-// 6. Write public/app-version.json for automatic in-app update detection
-// and keep public/version.json neutral so older v2.24-v2.28 APKs never abort OAuth #id_token redirects on localhost
+// 6. Write public/version.json and public/app-version.json for automatic in-app update detection
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
 const versionPayload = {
@@ -81,9 +80,5 @@ const versionPayload = {
   updatedAt: new Date().toISOString()
 };
 fs.writeFileSync(appVersionJsonPath, JSON.stringify(versionPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(
-  versionJsonPath,
-  JSON.stringify({ ...versionPayload, version: "2.0" }, null, 2) + '\n',
-  'utf8'
-);
-console.log(`Updated public/app-version.json for v${displayVersion} (versionCode ${vCode})`);
+fs.writeFileSync(versionJsonPath, JSON.stringify(versionPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/version.json for v${displayVersion} (versionCode ${vCode})`);
