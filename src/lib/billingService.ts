@@ -101,15 +101,16 @@ export async function activateCoachLaunchPromo(
   try {
     const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
     const validCode = /^\d{6}$/.test(existingCode) ? existingCode : generateClubInviteCode();
+    const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
     const resolvedClubId =
-      user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+      user.isClubCreator && user.clubId ? user.clubId : canonicalCoachClubId;
 
     const updatedUser = await updateProfile(user.uid, {
       plan: "PRO",
       proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS,
       role: user.role === "archer" ? "coach" : user.role,
       clubId: resolvedClubId,
-      clubName: user.clubName || "Club Archery 101010",
+      clubName: user.isClubCreator && user.clubName ? user.clubName : "Club Archery 101010",
       clubInviteCode: validCode,
       isClubCreator: true
     });

@@ -15,6 +15,7 @@ import StravaShareModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { playRealisticMechanicalClockClick } from "@/lib/soundUtils";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface ScoringViewProps {
   user: UserProfile;
@@ -214,6 +215,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [ends, setEnds] = useState<EndData[]>([]);
   const [currentEndIdx, setCurrentEndIdx] = useState(0);
   const [currentArrowIdx, setCurrentArrowIdx] = useState(0);
+  const [editingArrowSlot, setEditingArrowSlot] = useState<number | null>(null);
   const [impacts, setImpacts] = useState<ShotImpact[]>([]);
 
   // Exit states
@@ -240,6 +242,35 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Intercept Android hardware back button so the archer does not accidentally exit an active scoring session
+  useEffect(() => {
+    return registerModalDismiss(() => setIsExitModalOpen(true));
+  }, []);
+
+  useEffect(() => {
+    if (isExitModalOpen) {
+      return registerModalDismiss(() => setIsExitModalOpen(false));
+    }
+  }, [isExitModalOpen]);
+
+  useEffect(() => {
+    if (isFinishing) {
+      return registerModalDismiss(() => setIsFinishing(false));
+    }
+  }, [isFinishing]);
+
+  useEffect(() => {
+    if (showDispersionDrawer) {
+      return registerModalDismiss(() => setShowDispersionDrawer(false));
+    }
+  }, [showDispersionDrawer]);
+
+  // Keep endNote synchronized with the currently selected End
+  useEffect(() => {
+    setEndNote(ends[currentEndIdx]?.note || "");
+    setEditingArrowSlot(null);
+  }, [currentEndIdx]);
 
   // Load settings and restore draft if applicable on mount
   useEffect(() => {
@@ -403,16 +434,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [ends, currentEndIdx, config.arrowsPerEnd]);
 
   // Keyboard tactile touch event handler
-  const handleScoreInput = (value: string) => {
+  const handleScoreInput = (value: string, fromTargetShot: boolean = false) => {
     if (currentEndIdx >= config.endsCount) return;
 
-    // Si el end ya tiene todas las flechas registradas, no permitir más tiros hasta confirmar o deshacer
+    // Si el end ya tiene todas las flechas registradas y el usuario NO seleccionó una casilla específica para editar, bloquear
     const currentEnd = ends[currentEndIdx];
-    if (
+    const isEndFull =
       currentEnd &&
       currentEnd.arrows.length === config.arrowsPerEnd &&
-      currentEnd.arrows.every((a) => a !== "" && a !== undefined)
-    ) {
+      currentEnd.arrows.every((a) => a !== "" && a !== undefined);
+    if (isEndFull && editingArrowSlot === null) {
       return;
     }
 
@@ -423,6 +454,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     } else {
       triggerHaptic("arrow");
     }
+
+    if (!fromTargetShot && value === "M") {
+      setImpacts((prev) =>
+        prev.filter((imp) => !(imp.endIdx === currentEndIdx && imp.arrowIdx === currentArrowIdx))
+      );
+    }
+
+    const existingArrows = ends[currentEndIdx]?.arrows || [];
+    const updatedArrowsPreview = [...existingArrows];
+    updatedArrowsPreview[currentArrowIdx] = value;
 
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
@@ -436,11 +477,27 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       return newEnds;
     });
 
-    // Advance cell pointer index (sin avanzar de end automáticamente)
-    advanceCell();
+    setEditingArrowSlot(null);
+
+    // Advance cell pointer index to next empty slot (sin avanzar de end automáticamente)
+    advanceCell(updatedArrowsPreview);
   };
 
-  const advanceCell = () => {
+  const advanceCell = (arrowsAfterShot?: string[]) => {
+    const arr = arrowsAfterShot || ends[currentEndIdx]?.arrows || [];
+    // Seek next empty slot starting after currentArrowIdx, then wrap from 0
+    for (let i = currentArrowIdx + 1; i < config.arrowsPerEnd; i++) {
+      if (!arr[i] || arr[i] === "") {
+        setCurrentArrowIdx(i);
+        return;
+      }
+    }
+    for (let i = 0; i < currentArrowIdx; i++) {
+      if (!arr[i] || arr[i] === "") {
+        setCurrentArrowIdx(i);
+        return;
+      }
+    }
     if (currentArrowIdx < config.arrowsPerEnd - 1) {
       setCurrentArrowIdx(currentArrowIdx + 1);
     }
@@ -582,13 +639,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const registerShot = (x: number, y: number, value: string) => {
     if (currentEndIdx >= config.endsCount) return;
 
-    // Si el end actual ya está completo, no añadir más flechas hasta confirmar o deshacer
+    // Si el end actual ya está completo y el usuario NO seleccionó una casilla específica para corregir, bloquear
     const currentEnd = ends[currentEndIdx];
-    if (
+    const isEndFull =
       currentEnd &&
       currentEnd.arrows.length === config.arrowsPerEnd &&
-      currentEnd.arrows.every((a) => a !== "" && a !== undefined)
-    ) {
+      currentEnd.arrows.every((a) => a !== "" && a !== undefined);
+    if (isEndFull && editingArrowSlot === null) {
       return;
     }
 
@@ -600,8 +657,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       value
     };
 
-    setImpacts((prev) => [...prev, newImpact]);
-    handleScoreInput(value);
+    // Replace any existing impact for the same (endIdx, arrowIdx) so correcting an arrow never duplicates dots
+    setImpacts((prev) => [
+      ...prev.filter((imp) => !(imp.endIdx === currentEndIdx && imp.arrowIdx === currentArrowIdx)),
+      newImpact
+    ]);
+    handleScoreInput(value, true);
 
     // Trigger pop animation
     setAnimatingValue({ value, id: Date.now() });
@@ -624,7 +685,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const onStart = (clientX: number, clientY: number, isTouch: boolean) => {
       const currentArrows = ends[currentEndIdx]?.arrows || [];
       const actualShots = currentArrows.filter(a => a !== "").length;
-      if (currentEndIdx >= config.endsCount || actualShots >= config.arrowsPerEnd) {
+      if (currentEndIdx >= config.endsCount || (actualShots >= config.arrowsPerEnd && editingArrowSlot === null)) {
         return;
       }
 
@@ -757,7 +818,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       diana.removeEventListener("touchend", handleTouchEnd);
       diana.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [currentEndIdx, currentArrowIdx, ends, config, presetRings]);
+  }, [currentEndIdx, currentArrowIdx, editingArrowSlot, ends, config, presetRings]);
 
   // Keep confirmedVolume synced whenever the Finish modal opens
   useEffect(() => {
@@ -798,6 +859,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     try {
       await saveLocalSession(sessionId, draftObj);
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "sessions",
+        operation: "UPDATE",
+        payloadId: sessionId,
+        payload: draftObj,
+        timestamp: Date.now()
+      });
+      runSync().catch(() => {});
       onBack(); // returns to Home
     } catch (err) {
       console.error("Failed to save session draft", err);
@@ -1403,7 +1473,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     return (
                       <div
                         key={arrowIdx}
-                        onClick={() => setCurrentArrowIdx(arrowIdx)}
+                        onClick={() => {
+                          setCurrentArrowIdx(arrowIdx);
+                          setEditingArrowSlot(arrowIdx);
+                        }}
                         className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer shrink-0 ${getArrowColorClass(
                           a
                         )} ${
@@ -1905,7 +1978,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                             return (
                               <div
                                 key={arrowIdx}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all ${textFontClass} ${getArrowColorClass(
+                                onClick={() => {
+                                  if (idx <= currentEndIdx) {
+                                    setCurrentEndIdx(idx);
+                                    setCurrentArrowIdx(arrowIdx);
+                                    setEditingArrowSlot(arrowIdx);
+                                  }
+                                }}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer ${textFontClass} ${getArrowColorClass(
                                   a
                                 )} ${
                                   isCellEditing
@@ -2055,7 +2135,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
           <textarea
             value={endNote}
-            onChange={(e) => setEndNote(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setEndNote(val);
+              setEnds((prevEnds) => {
+                if (!prevEnds[currentEndIdx]) return prevEnds;
+                const newEnds = [...prevEnds];
+                newEnds[currentEndIdx] = { ...newEnds[currentEndIdx], note: val };
+                return newEnds;
+              });
+            }}
             placeholder={t("endNotePlaceholder")}
             className="w-full bg-neutral-950/60 border border-gray-border focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none transition-all duration-200 resize-none h-14"
           />
@@ -2142,9 +2231,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     const b2 = ends.slice(Math.floor(config.endsCount / 2)).reduce((sum, e) => sum + e.arrows.reduce((s, a) => s + getScoreValue(a), 0), 0);
                     const diff = b2 - b1;
                     return (
-                      <div className="flex justify-between border-t border-white/5 pt-1.5 mt-0.5">
+                      <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-0.5">
                         <span>Consistencia:</span>
-                        <span className={`font-black uppercase text-[11.6px] ${diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
+                        <span className={`font-black uppercase text-[11.6px] ${diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
                           {diff > 0 ? `+${diff}` : diff} pts {diff < 0 ? "(Fatiga)" : "(Excelente)"}
                         </span>
                       </div>

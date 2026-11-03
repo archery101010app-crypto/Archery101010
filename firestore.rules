@@ -518,7 +518,11 @@ service cloud.firestore {
           request.resource.data.role == resource.data.role ||
           request.resource.data.get('clubId', null) == null ||
           resource.data.get('isClubCreator', false) == true ||
-          (request.resource.data.get('isClubCreator', false) == true && resource.data.get('clubId', null) == null));
+          (request.resource.data.get('isClubCreator', false) == true && (
+            resource.data.get('clubId', null) == null ||
+            request.resource.data.get('clubId', '') == 'CLB-' + userId ||
+            request.resource.data.get('clubId', '') == 'CLB-' + userId.replace('USR-', '')
+          )));
 
       // Users can delete their own profile; superadmins can delete any profile
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());

@@ -75,6 +75,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
   const [todayMission, setTodayMission] = useState<CalendarEvent | null>(null);
   const [upcomingCount, setUpcomingCount] = useState<number>(0);
+  const [duelStats, setDuelStats] = useState<{ wins: number; total: number }>({ wins: 0, total: 0 });
 
   const needsSetup = user.profileSetupCompleted === false || 
                      (!user.profileSetupCompleted && user.birthDate === "1995-05-15");
@@ -134,13 +135,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     async function loadCalendarInfo() {
       try {
         const events = await getLocalEvents();
+        const userVisibleEvents = events.filter((e) => {
+          if (e.createdByUid === user.uid) return true;
+          if (!user.clubId || e.clubId !== user.clubId) return false;
+          if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
+            return e.assignedAthleteIds.includes(user.uid);
+          }
+          return true;
+        });
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
         
-        const todayEv = events.find(e => e.date === todayStr);
+        const todayEv = userVisibleEvents.find(e => e.date === todayStr);
         setTodayMission(todayEv || null);
 
-        const futureEvs = events.filter(e => e.date >= todayStr);
+        const futureEvs = userVisibleEvents.filter(e => e.date >= todayStr);
         setUpcomingCount(futureEvs.length);
       } catch (e) {
         console.error("Error loading calendar info:", e);
@@ -159,11 +168,23 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     return () => {
       window.removeEventListener("local-db-change", handleCalendarChange);
     };
-  }, []);
+  }, [user.uid, user.clubId]);
 
   useEffect(() => {
     async function loadStats() {
       const localSess = await getLocalSessions();
+      const ownDuels = localSess.filter(
+        (s) =>
+          !isFictitiousSession(s, s.id) &&
+          s.isDuel === true &&
+          s.deletedByArcher !== true &&
+          (s.userId === user.uid || s.userUid === user.uid)
+      );
+      setDuelStats({
+        wins: ownDuels.filter((s) => s.outcome === "win").length,
+        total: ownDuels.length
+      });
+
       const activeSess = localSess.filter(
         (s) =>
           !isFictitiousSession(s, s.id) &&
@@ -500,33 +521,27 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           </div>
 
           {/* Row 3: Symmetrical 2-Column Footer (Real Duel Record + Clean CTA Button) */}
-          {(() => {
-            const userDuels = sessions.filter((s) => s.isDuel);
-            const duelWins = userDuels.filter((s) => s.outcome === "win").length;
-            return (
-              <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
-                <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[10.2px] font-black uppercase tracking-wide text-cyan-neon">
-                      {language === "es" ? "VICTORIAS" : "WINS"}
-                    </span>
-                    <span className="text-xs font-black text-white tabular-nums">{duelWins}</span>
-                  </div>
-                  <span className="text-white font-bold">·</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[10.2px] font-black uppercase tracking-wide text-yellow-gold">
-                      {language === "es" ? "DUELOS" : "DUELS"}
-                    </span>
-                    <span className="text-xs font-black text-white tabular-nums">{userDuels.length}</span>
-                  </div>
-                </div>
-
-                <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
-                  <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
-                </div>
+          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
+            <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10.2px] font-black uppercase tracking-wide text-cyan-neon">
+                  {language === "es" ? "VICTORIAS" : "WINS"}
+                </span>
+                <span className="text-xs font-black text-white tabular-nums">{duelStats.wins}</span>
               </div>
-            );
-          })()}
+              <span className="text-white font-bold">·</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10.2px] font-black uppercase tracking-wide text-yellow-gold">
+                  {language === "es" ? "DUELOS" : "DUELS"}
+                </span>
+                <span className="text-xs font-black text-white tabular-nums">{duelStats.total}</span>
+              </div>
+            </div>
+
+            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
+              <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
+            </div>
+          </div>
         </motion.div>
 
         {/* 4. Botón Principal de Entrenamiento (Limpio y Directo) */}

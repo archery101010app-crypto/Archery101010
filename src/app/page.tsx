@@ -371,7 +371,7 @@ export default function Home() {
  
   // Periodic user presence heartbeat to mark user as online in Firestore (self-healing)
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !user?.fullName?.trim()) return;
     const uid = user.uid;
 
     const updatePresence = async () => {
@@ -387,13 +387,14 @@ export default function Home() {
           role: user.role,
           lastActiveAt: Date.now()
         };
-        if (user.clubInviteCode) {
+        if (user.isClubCreator && user.clubInviteCode) {
           presencePayload.clubInviteCode = user.clubInviteCode;
           presencePayload.clubId = user.clubId || ("CLB-" + user.uid.replace("USR-", ""));
           presencePayload.clubName = user.clubName || "Club Archery 101010";
         } else if (user.clubId) {
           presencePayload.clubId = user.clubId;
           if (user.clubName) presencePayload.clubName = user.clubName;
+          if (user.clubInviteCode) presencePayload.clubInviteCode = user.clubInviteCode;
         }
         await setDoc(docRef, presencePayload, { merge: true });
         runSync().catch(() => {});
@@ -406,34 +407,7 @@ export default function Home() {
     const interval = setInterval(updatePresence, 25000);
 
     return () => clearInterval(interval);
-  }, [user?.uid]);
-
-  // Listen to visibilitychange to keep Firestore WebSocket warm without tearing down active streams
-  useEffect(() => {
-    if (!user?.uid) return;
-    
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible") {
-        try {
-          const { enableNetwork, db } = await import("@/lib/firebase");
-          await enableNetwork(db);
-          
-          // Trigger immediate sync queue process
-          const { runSync } = await import("@/lib/db/syncManager");
-          runSync().catch((err) => console.error("Auto sync on visibility change failed:", err));
-        } catch (err) {
-          console.error("Error enabling network on visibility change:", err);
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleVisibilityChange);
-    };
-  }, [user?.uid]);
+  }, [user?.uid, user?.fullName, user?.role, user?.clubId, user?.clubInviteCode, user?.isClubCreator]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
   useEffect(() => {
@@ -621,11 +595,14 @@ export default function Home() {
     };
   }, [user?.uid]);
 
-  // Check for active session draft in IndexedDB when user is loaded
+  // Check for active session draft in IndexedDB when user is loaded or returns to HOME
   useEffect(() => {
     async function checkForDrafts() {
       if (!user?.uid) {
         setActiveDraft(null);
+        return;
+      }
+      if (currentScreen === "TARGET" && sessionConfig) {
         return;
       }
       try {
@@ -635,15 +612,24 @@ export default function Home() {
           .filter((s) => s.userId === user.uid && s.isDraft === true && !s.isDuel)
           .sort((a, b) => (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0))[0];
         if (draft) {
-          console.log("[Persistence] Active draft found:", draft);
           setActiveDraft(draft);
+        } else {
+          setActiveDraft(null);
         }
       } catch (err) {
         console.error("Error checking for drafts:", err);
       }
     }
     checkForDrafts();
-  }, [user?.uid]);
+
+    const handleDraftDbChange = (e: any) => {
+      if (!e.detail || e.detail.store === "sessions_local" || e.detail.store === "scoring_sessions") {
+        checkForDrafts();
+      }
+    };
+    window.addEventListener("local-db-change", handleDraftDbChange);
+    return () => window.removeEventListener("local-db-change", handleDraftDbChange);
+  }, [user?.uid, currentScreen, sessionConfig]);
 
   // Check for restored sessions by coach to show notification
   useEffect(() => {
@@ -700,7 +686,8 @@ export default function Home() {
     };
   }, [user?.uid]);
 
-  // Listen to visibilitychange to force Firestore network reconnection and update presence
+  // Listen to visibilitychange to trigger sync queue and update presence without calling enableNetwork(db)
+  // (repeated enableNetwork calls while onSnapshot is active trigger Firestore INTERNAL ASSERTION FAILED ca9/b815)
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (!user?.uid) return;
@@ -708,24 +695,23 @@ export default function Home() {
 
       if (document.visibilityState === "visible") {
         try {
-          const { db, enableNetwork } = await import("@/lib/firebase");
-          await enableNetwork(db);
           const { runSync } = await import("@/lib/db/syncManager");
-          runSync();
+          runSync().catch(() => {});
 
-          // Set presence online immediately
-          const { doc, setDoc } = await import("firebase/firestore");
-          await setDoc(doc(db, "users", uid), {
-            lastActiveAt: Date.now()
-          }, { merge: true });
+          if (user.fullName?.trim()) {
+            const { db } = await import("@/lib/firebase");
+            const { doc, setDoc } = await import("firebase/firestore");
+            await setDoc(doc(db, "users", uid), {
+              lastActiveAt: Date.now()
+            }, { merge: true });
+          }
         } catch (err) {
-          console.error("[Firebase Reconnect] Error during reconnect:", err);
+          console.error("[Firebase Reconnect] Error during visibility sync:", err);
         }
       } else if (document.visibilityState === "hidden") {
         // Tab closed or minimized: set presence offline immediately
         // BUT skip if the user is in the middle of a Matchplay duel
-        if (currentScreen === "MATCHPLAY_ARENA") {
-          console.log("[Presence] Tab hidden during active duel. Preserving online presence.");
+        if (currentScreen === "MATCHPLAY_ARENA" || !user.fullName?.trim()) {
           return;
         }
         try {
@@ -734,7 +720,6 @@ export default function Home() {
           await setDoc(doc(db, "users", uid), {
             lastActiveAt: 0
           }, { merge: true });
-          console.log("[Presence] Tab hidden. Presence set to offline.");
         } catch (err) {
           // Silently catch errors
         }
@@ -745,7 +730,7 @@ export default function Home() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [user?.uid, currentScreen]);
+  }, [user?.uid, user?.fullName, currentScreen]);
 
   // Listen to database changes and user updates in real-time
   useEffect(() => {

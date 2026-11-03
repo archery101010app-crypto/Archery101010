@@ -14,8 +14,11 @@ import {
   getLocalMacrocycles,
   saveLocalMacrocycle,
   deleteLocalMacrocycle,
-  getLocalSetting
+  getLocalSetting,
+  isFictitiousUser,
+  isFictitiousSession
 } from "@/lib/db/indexedDB";
+import { getSessionArrows } from "@/lib/scoring/sessionMetrics";
 import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
@@ -195,15 +198,37 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   // Load Sessions, Events and Macrocycles on Mount & on db change
   useEffect(() => {
     async function loadData() {
-      const sessionList = await getLocalSessions();
-      setSessions(sessionList);
+      const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+      let linkedAthleteUids = new Set<string>();
 
       if (isCoach) {
-        const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const athletes = (allUsers || []).filter((u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer");
+        const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
+        const athletes = (allUsers || []).filter(
+          (u) =>
+            !isFictitiousUser(u) &&
+            u.uid !== user.uid &&
+            !unlinkedIds.includes(u.uid) &&
+            (u.clubId === activeClubId ||
+              (user.clubId && u.clubId === user.clubId) ||
+              (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode))
+        );
         setRoster(athletes);
+        linkedAthleteUids = new Set(athletes.map((a) => a.uid));
       }
+
+      const sessionList = await getLocalSessions();
+      const filteredSessions = sessionList.filter((s) => {
+        if (isFictitiousSession(s, s.id) || s.isDraft || s.isDuel || s.deletedByArcher === true) {
+          return false;
+        }
+        const sUid = s.userId || s.userUid;
+        if (!isCoach) {
+          return sUid === user.uid;
+        }
+        return sUid === user.uid || linkedAthleteUids.has(sUid) || (activeClubId && s.clubId === activeClubId);
+      });
+      setSessions(filteredSessions);
       
       const eventList = await getLocalEvents();
       const cleanEvents: CalendarEvent[] = [];
@@ -301,7 +326,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         if (isIndoorDemo) {
           await deleteLocalMacrocycle(mac.id);
         } else {
-          cleanMacroList.push(mac);
+          const belongsToScope =
+            mac.coachId === user.uid ||
+            (activeClubId && mac.clubId === activeClubId) ||
+            (user.clubId && mac.clubId === user.clubId) ||
+            (mac.assignedAthleteIds && mac.assignedAthleteIds.includes(user.uid));
+          if (belongsToScope) {
+            cleanMacroList.push(mac);
+          }
         }
       }
       setMacrocycles(cleanMacroList);
@@ -415,16 +447,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       if (user.clubId && e.clubId === user.clubId) return true;
       if (e.createdByUid === user.uid) return true;
-      return !e.clubId;
+      return false;
     }
 
     // Archer (Student):
     if (e.createdByUid === user.uid) return true;
+    if (!user.clubId || e.clubId !== user.clubId) return false;
     if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
       return e.assignedAthleteIds.includes(user.uid);
     }
-    if (user.clubId && e.clubId === user.clubId) return true;
-    return !e.clubId; // global
+    return true;
   });
 
   // Filter visible events to show in list (current month)
@@ -436,15 +468,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   // Helper to check if a specific day has an training session registered
   const hasSessionOnDay = (day: number): boolean => {
     return sessions.some((s) => {
+      if (isCoach && selectedAthleteFilter !== "ALL" && selectedAthleteFilter !== "CLUB_ONLY") {
+        if ((s.userId || s.userUid) !== selectedAthleteFilter) return false;
+      }
       const d = new Date(s.timestamp);
       return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
     });
   };
 
-  // Get sessions on a date string YYYY-MM-DD
+  // Get sessions on a date string YYYY-MM-DD (using local timezone so evening sessions stay on the correct day)
   const getSessionsOnDate = (dateStr: string) => {
     return sessions.filter((s) => {
-      const dStr = new Date(s.timestamp).toISOString().split("T")[0];
+      if (isCoach && selectedAthleteFilter !== "ALL" && selectedAthleteFilter !== "CLUB_ONLY") {
+        if ((s.userId || s.userUid) !== selectedAthleteFilter) return false;
+      }
+      const d = new Date(s.timestamp);
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       return dStr === dateStr;
     });
   };
@@ -452,17 +491,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   // Calculate arrows shot on a date
   const getArrowsShotOnDate = (dateStr: string) => {
     const daySessions = getSessionsOnDate(dateStr);
-    return daySessions.reduce((total, s) => {
-      let count = 0;
-      if (Array.isArray(s.ends)) {
-        count = s.ends.reduce((sub: number, e: any) => sub + (e.arrows ? e.arrows.length : 0), 0);
-      } else if (s.endsCount && s.arrowsPerEnd) {
-        count = s.endsCount * s.arrowsPerEnd;
-      } else if (s.arrowsCount) {
-        count = s.arrowsCount;
-      }
-      return total + count;
-    }, 0);
+    return daySessions.reduce((total, s) => total + getSessionArrows(s), 0);
   };
 
   // Get events on a specific day

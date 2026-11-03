@@ -31,8 +31,10 @@ function isProfileFunctionallyDifferent(p1: UserProfile | null, p2: UserProfile 
     "gender",
     "role",
     "plan",
+    "proExpiresAt",
     "clubId",
     "clubName",
+    "clubInviteCode",
     "clubLogo",
     "clubCountry",
     "isClubCreator",
@@ -151,6 +153,26 @@ export function startRealtimeSync(
           }
         }
 
+        // Check whether any user profile changed functionally or crossed the online/offline threshold
+        const nowMs = Date.now();
+        const isOnline = (u?: UserProfile | null) =>
+          !!u?.lastActiveAt && nowMs - u.lastActiveAt < 120000;
+        const localByUid = new Map(localUsers.map((u) => [u.uid, u]));
+        let rosterMeaningfullyChanged = mergedList.length !== localUsers.length;
+        if (!rosterMeaningfullyChanged) {
+          for (const u of mergedList) {
+            const prev = localByUid.get(u.uid) || null;
+            if (
+              !prev ||
+              isProfileFunctionallyDifferent(prev, u) ||
+              isOnline(prev) !== isOnline(u)
+            ) {
+              rosterMeaningfullyChanged = true;
+              break;
+            }
+          }
+        }
+
         await settingsStore.setItem("simulated_users", mergedList);
 
         // Check if currently logged-in user profile has changed remotely
@@ -204,9 +226,11 @@ export function startRealtimeSync(
           }
         }
 
-        window.dispatchEvent(
-          new CustomEvent("local-db-change", { detail: { store: "simulated_users" } })
-        );
+        if (rosterMeaningfullyChanged) {
+          window.dispatchEvent(
+            new CustomEvent("local-db-change", { detail: { store: "simulated_users" } })
+          );
+        }
       } catch (err) {
         console.error("Error in real-time users sync:", err);
       }

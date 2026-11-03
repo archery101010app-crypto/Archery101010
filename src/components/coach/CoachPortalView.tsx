@@ -70,7 +70,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     );
   };
 
-  const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+  const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+  const activeClubId = user.isClubCreator && user.clubId ? user.clubId : canonicalCoachClubId;
 
   // Load real linked roster and transfer real sessions from linked students (no demo/fictitious data)
   useEffect(() => {
@@ -211,7 +212,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         }
 
         const finalCode = isValid6DigitCode ? code : generateClubInviteCode();
-        const finalClubId = user.clubId || activeClubId;
+        const finalClubId = activeClubId;
         const cloudInSync =
           !!cloudData &&
           cloudData.clubInviteCode === finalCode &&
@@ -226,7 +227,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         const updates: Partial<UserProfile> = {
           clubInviteCode: finalCode,
           clubId: finalClubId,
-          clubName: user.clubName || "Club Archery 101010",
+          clubName: user.isClubCreator && user.clubName ? user.clubName : "Club Archery 101010",
           isClubCreator: true
         };
         if (user.role === "archer") {

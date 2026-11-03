@@ -82,7 +82,10 @@ export const auth = getAuth(app);
 // (root cause of sessions/profiles silently failing to sync to the cloud).
 function createFirestore(): Firestore {
   try {
-    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+    return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      experimentalAutoDetectLongPolling: true,
+    });
   } catch {
     // Already initialized (hot reload) – reuse existing instance
     return getFirestore(app);

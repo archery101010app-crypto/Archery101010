@@ -12,6 +12,7 @@ import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/sco
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
 import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -40,6 +41,19 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
+
+  // Intercept Android hardware back button when viewing session detail or delete confirmation modal
+  useEffect(() => {
+    if (selectedSession) {
+      return registerModalDismiss(() => setSelectedSession(null));
+    }
+  }, [selectedSession]);
+
+  useEffect(() => {
+    if (confirmDeleteId) {
+      return registerModalDismiss(() => setConfirmDeleteId(null));
+    }
+  }, [confirmDeleteId]);
 
   const handleShareSessionShotChart = async (session: any) => {
     if (!session) return;
@@ -177,6 +191,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
       ownList.push(s);
     }
 
+    ownList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     setSessions(ownList);
     setFilteredSessions(ownList);
   };
@@ -197,7 +212,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           const data = d.data();
           if (data && !isFictitiousSession(data, d.id)) {
             const existing = await getLocalSession(d.id);
-            if (!existing) {
+            const shouldUpdate =
+              !existing ||
+              data.restoredByCoach === true ||
+              (data.coachFeedback && data.coachFeedback !== existing.coachFeedback) ||
+              (data.updatedAt && data.updatedAt > (existing.updatedAt || existing.timestamp || 0));
+            if (shouldUpdate) {
               await saveLocalSession(d.id, { ...data, id: d.id });
               changed = true;
             }
@@ -809,9 +829,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       <span>Bloque 2 (Segunda Mitad):</span>
                       <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b2Score} pts</span>
                     </div>
-                    <div className="flex justify-between border-t border-white/5 pt-1.5 mt-0.5">
+                    <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-0.5">
                       <span>Consistencia:</span>
-                      <span className={`font-black uppercase text-[11.6px] ${selectedSession.blockStats.diff < 0 ? "text-red-500" : "text-cyan-neon"}`}>
+                      <span className={`font-black uppercase text-[11.6px] ${selectedSession.blockStats.diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
                         {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? "(Fatiga)" : "(Excelente)"}
                       </span>
                     </div>
