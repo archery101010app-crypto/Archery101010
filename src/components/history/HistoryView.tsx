@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession, isFictitiousSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight, Camera } from "lucide-react";
@@ -11,6 +11,7 @@ import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
 import StravaShareModal from "../scoring/StravaShareModal";
+import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -119,13 +120,107 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
   const loadSessions = async () => {
     const list = await getLocalSessions();
-    setSessions(list);
-    setFilteredSessions(list);
+    const ownList: any[] = [];
+
+    for (const s of list) {
+      if (isFictitiousSession(s, s.id)) continue;
+      if (s.isDuel) continue; // duels live in the Matchplay history
+      const isMine = s.userId === user.uid || s.userUid === user.uid;
+      if (!isMine) continue;
+      if (s.deletedByArcher === true) continue;
+
+      // Auto-rescue any draft session that already has scored arrows so the user never loses a session
+      if (s.isDraft) {
+        const hasArrows =
+          (s.score || 0) > 0 ||
+          (Array.isArray(s.ends) && s.ends.some((e: any) => Array.isArray(e.arrows) && e.arrows.some((a: string) => a !== "" && a !== undefined)));
+        if (!hasArrows) continue;
+
+        const allEndsComplete =
+          Array.isArray(s.ends) &&
+          s.ends.length > 0 &&
+          s.ends.every((e: any) => Array.isArray(e.arrows) && e.arrows.length > 0 && e.arrows.every((a: string) => a !== "" && a !== undefined));
+
+        if (allEndsComplete) {
+          const finalId = String(s.id || "").startsWith("SES-DRAFT-") ? generateResilientId("SES") : s.id;
+          const volumeDraft = isVolumeSession(s);
+          const rescued = sanitizeForFirestore({
+            ...s,
+            id: finalId,
+            userId: user.uid,
+            userName: user.fullName || user.nickname || "Arquero",
+            clubId: user.clubId || s.clubId || null,
+            isDraft: false,
+            isVolumeOnly: volumeDraft,
+            score: volumeDraft ? 0 : s.score,
+            maxScore: volumeDraft ? 0 : s.maxScore,
+            totalArrowsVolume: s.totalArrowsVolume || getSessionArrows({ ...s, totalArrowsVolume: 0 }),
+            updatedAt: Date.now()
+          });
+          await saveLocalSession(finalId, rescued);
+          if (finalId !== s.id) {
+            await deleteLocalSession(s.id);
+          }
+          await addToSyncQueue({
+            id: generateResilientId("TXN"),
+            collection: "sessions",
+            operation: "INSERT",
+            payloadId: finalId,
+            payload: rescued,
+            timestamp: Date.now()
+          });
+          ownList.push(rescued);
+          continue;
+        }
+      }
+
+      ownList.push(s);
+    }
+
+    setSessions(ownList);
+    setFilteredSessions(ownList);
   };
 
   useEffect(() => {
     loadSessions();
-  }, []);
+
+    // Also pull user's own sessions directly from Firestore to ensure 100% cloud-to-history consistency
+    async function syncOwnSessionsFromCloud() {
+      if (typeof navigator === "undefined" || !navigator.onLine || !user?.uid) return;
+      try {
+        const { collection, query, where, getDocs } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const q = query(collection(db, "sessions"), where("userId", "==", user.uid));
+        const snap = await getDocs(q);
+        let changed = false;
+        for (const d of snap.docs) {
+          const data = d.data();
+          if (data && !isFictitiousSession(data, d.id)) {
+            const existing = await getLocalSession(d.id);
+            if (!existing) {
+              await saveLocalSession(d.id, { ...data, id: d.id });
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          loadSessions();
+        }
+      } catch (err) {
+        console.warn("Could not fetch user sessions from cloud:", err);
+      }
+    }
+    syncOwnSessionsFromCloud();
+
+    const handleDbChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (!customEvent.detail || customEvent.detail.store === "sessions_local") {
+        loadSessions();
+      }
+    };
+    window.addEventListener("local-db-change", handleDbChange);
+    return () => window.removeEventListener("local-db-change", handleDbChange);
+  }, [user?.uid]);
 
   // Filter application trigger
   useEffect(() => {
@@ -161,10 +256,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   const pbByCategory = React.useMemo(() => {
     const map: Record<string, number> = {};
     sessions
-      .filter((s) => !s.deletedByArcher)
+      .filter((s) => !s.deletedByArcher && hasRealScore(s))
       .forEach((s) => {
         const key = getCategoryKey(s);
-        const sc = s.score || 0;
+        const sc = getSessionScore(s);
         if (sc > 0 && (!map[key] || sc > map[key])) {
           map[key] = sc;
         }
@@ -173,9 +268,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   }, [sessions]);
 
   const isSessionPB = (s: any): boolean => {
+    if (!hasRealScore(s)) return false;
     const key = getCategoryKey(s);
     const best = pbByCategory[key] || 0;
-    return best > 0 && s.score === best;
+    return best > 0 && getSessionScore(s) === best;
   };
 
   const handleDelete = async (id: string) => {
@@ -244,7 +340,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
     sessions.forEach((s) => {
       if (s.deletedByArcher) return;
-      const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+      const arrows = getSessionArrows(s);
       total += arrows;
       
       if (s.bowType === "Recurve") recurve += arrows;
@@ -442,12 +538,21 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
-                        <span className="text-xl font-black text-white">{session.score}</span>
-                        <span className="text-[11.6px] text-white">/ {session.maxScore}</span>
-                        {session.maxScore > 0 && (
-                          <span className="text-[12.8px] text-yellow-gold font-bold ml-1">
-                            {Math.round((session.score / session.maxScore) * 100)}%
-                          </span>
+                        {isVolumeSession(session) ? (
+                          <>
+                            <span className="text-xl font-black text-cyan-neon">{getSessionArrows(session)}</span>
+                            <span className="text-[11.6px] text-white font-bold">flechas</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xl font-black text-white">{getSessionScore(session)}</span>
+                            <span className="text-[11.6px] text-white">/ {getSessionMaxScore(session)} pts</span>
+                            {getSessionMaxScore(session) > 0 && (
+                              <span className="text-[12.8px] text-yellow-gold font-bold ml-1">
+                                {Math.round((getSessionScore(session) / getSessionMaxScore(session)) * 100)}%
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       <span className="text-[11.6px] text-white truncate">
@@ -563,7 +668,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 </div>
               ) : (
                 sessions.filter(s => s.deletedByArcher !== true).map((s) => {
-                  const arrows = (s.endsCount || 0) * (s.arrowsPerEnd || 0);
+                  const arrows = getSessionArrows(s);
                   return (
                     <div
                       key={s.id}
@@ -634,21 +739,37 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </p>
             </div>
 
-            {/* Giant Score Summary */}
-            <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
-              <div className="flex flex-col">
-                <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
-                <span className="text-3xl font-black text-white">
-                  {selectedSession.score} <span className="text-xs text-white">/ {selectedSession.maxScore}</span>
-                </span>
+            {/* Giant Score / Volume Summary */}
+            {isVolumeSession(selectedSession) ? (
+              <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Volumen de Flechas</span>
+                  <span className="text-3xl font-black text-cyan-neon">
+                    {getSessionArrows(selectedSession)} <span className="text-xs text-white">flechas</span>
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Tipo</span>
+                  <p className="text-base font-black text-yellow-gold leading-tight">Sin puntaje</p>
+                </div>
               </div>
-              <div className="text-right">
-                <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Precisión</span>
-                <p className="text-2xl font-black text-yellow-gold leading-tight">
-                  {selectedSession.maxScore > 0 ? Math.round((selectedSession.score / selectedSession.maxScore) * 100) : 0}%
-                </p>
+            ) : (
+              <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
+                  <span className="text-3xl font-black text-white">
+                    {getSessionScore(selectedSession)} <span className="text-xs text-white">/ {getSessionMaxScore(selectedSession)}</span>
+                  </span>
+                  <span className="text-[10.5px] text-white/80 font-bold mt-0.5">{getSessionArrows(selectedSession)} flechas</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Precisión</span>
+                  <p className="text-2xl font-black text-yellow-gold leading-tight">
+                    {getSessionMaxScore(selectedSession) > 0 ? Math.round((getSessionScore(selectedSession) / getSessionMaxScore(selectedSession)) * 100) : 0}%
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
@@ -703,7 +824,8 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               </div>
             )}
 
-            {/* Ends breakdown lists */}
+            {/* Ends breakdown lists (scored sessions only — volume sessions have no real points per arrow) */}
+            {!isVolumeSession(selectedSession) && (
             <div className="bg-neutral-900/40 border border-white/5 rounded-2xl overflow-hidden p-4 flex flex-col gap-3">
               <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                 <FileText size={14} className="text-cyan-neon" />
@@ -739,6 +861,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 ))}
               </div>
             </div>
+            )}
 
             {/* Target SVG Impact Map (Overlay plots of shots) */}
             {selectedSession.impacts && selectedSession.impacts.length > 0 && (

@@ -9,7 +9,9 @@ import {
   saveLocalSetting, 
   athleteStarsStore,
   getLocalEvents,
-  CalendarEvent 
+  CalendarEvent,
+  isFictitiousSession,
+  isFictitiousUser
 } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -38,6 +40,7 @@ import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 
 import CoachPortalView from "../coach/CoachPortalView";
+import { getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 
 type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
@@ -88,7 +91,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
     sessions.forEach((s) => {
       if (period === "TOTAL" || s.timestamp >= limit) {
-        total += ((s.endsCount || 0) * (s.arrowsPerEnd || 0)) + (s.warmupArrows || 0);
+        total += getSessionArrows(s);
       }
     });
     return total;
@@ -162,7 +165,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     async function loadStats() {
       const localSess = await getLocalSessions();
       const activeSess = localSess.filter(
-        (s) => s.deletedByArcher !== true && !s.isDraft && (!s.userId || s.userId === user.uid)
+        (s) =>
+          !isFictitiousSession(s, s.id) &&
+          !s.isDuel &&
+          s.deletedByArcher !== true &&
+          !s.isDraft &&
+          (s.userId === user.uid || s.userUid === user.uid)
       );
       setSessions(activeSess);
       
@@ -173,23 +181,25 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         let bestDate = 0;
         
         activeSess.forEach((s) => {
-          totalArrows += ((s.endsCount || 0) * (s.arrowsPerEnd || 0)) + (s.warmupArrows || 0);
-          if ((s.score || 0) >= best) {
-            best = s.score;
-            bestMax = s.maxScore || 300;
+          totalArrows += getSessionArrows(s);
+          if (hasRealScore(s) && getSessionScore(s) >= best) {
+            best = getSessionScore(s);
+            bestMax = getSessionMaxScore(s) || 300;
             bestDate = s.timestamp;
           }
         });
 
-        const sortedSess = [...activeSess].sort((a, b) => b.timestamp - a.timestamp);
-        const last = sortedSess[0];
+        const scoredSess = activeSess
+          .filter((s) => hasRealScore(s))
+          .sort((a, b) => b.timestamp - a.timestamp);
+        const last = scoredSess[0];
         setStats({
-          lastScore: last.score || 0,
-          lastMax: last.maxScore || 300,
+          lastScore: last ? getSessionScore(last) : 0,
+          lastMax: last ? getSessionMaxScore(last) : 0,
           totalArrows: totalArrows,
-          bestScore: best || last.score || 0,
-          bestMax: bestMax,
-          bestDate: bestDate || last.timestamp || 0
+          bestScore: best,
+          bestMax: best > 0 ? bestMax : 0,
+          bestDate: bestDate
         });
       } else {
         setStats({
@@ -206,7 +216,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
     const handleDbChange = (e: Event) => {
       const customEvent = e as CustomEvent;
-      if (customEvent.detail?.store === "sessions_local") {
+      if (!customEvent.detail || customEvent.detail?.store === "sessions_local") {
         loadStats();
       }
     };
@@ -215,13 +225,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, []);
+  }, [user.uid]);
 
   useEffect(() => {
     async function loadAthletes() {
       if ((user.role === "coach" || user.role === "team_admin_coach") && user.clubId) {
         const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const clubArchers = list.filter(u => u.clubId === user.clubId && u.role === "archer");
+        const clubArchers = list.filter(u => !isFictitiousUser(u) && u.clubId === user.clubId && u.role === "archer");
         setAthletes(clubArchers);
 
         const dateKey = new Date().toISOString().split("T")[0];
@@ -350,7 +360,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         >
           {(() => {
             const scored = sessions
-              .filter((s) => !s.isVolumeOnly && !s.isDraft && s.maxScore > 0 && s.score > 0)
+              .filter((s) => hasRealScore(s))
               .sort((a, b) => a.timestamp - b.timestamp)
               .slice(-6);
 

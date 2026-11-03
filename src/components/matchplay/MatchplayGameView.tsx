@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle, RefreshCw, Share2 } from "lucide-react";
-import { saveLocalSession, generateResilientId } from "@/lib/db/indexedDB";
+import { saveLocalSession, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -2112,22 +2112,28 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     const duelId = config.id || generateResilientId("DUE");
 
     const newSession = {
+      id: duelId,
       uid: duelId,
+      userId: user.uid,
       userUid: user.uid,
-      userName: user.fullName,
+      userName: user.fullName || user.nickname || "Arquero",
+      clubId: user.clubId || null,
       timestamp: Date.now(),
       practiceType: "Control",
+      bowType: config.bowType,
+      format: "Duelo 1v1",
       bowConfig: { 
         type: config.bowType, 
         brand: user?.bowConfig?.brand || "Generic", 
         model: user?.bowConfig?.model || "Model", 
         poundage: user?.bowConfig?.poundage || 35 
       },
-      endsCount: userTiros.filter(e => e.length > 0).length,
+      endsCount: Math.min(100, userTiros.filter(e => e.length > 0).length),
       arrowsPerEnd: 3,
       distance: config.distance,
-      score: userTotalScore,
-      maxScore: userTiros.filter(e => e.length > 0).length * 30 + (userShootOffShot !== null ? 10 : 0),
+      score: Math.min(2000, userTotalScore),
+      maxScore: Math.min(2000, userTiros.filter(e => e.length > 0).length * 30 + (userShootOffShot !== null ? 10 : 0)),
+      totalArrowsVolume: totalUserArrows,
       warmupArrows: 0,
       isDuel: true,
       isDraft: false, // Mark completed to distinguish from drafts!
@@ -2140,6 +2146,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     try {
       await saveLocalSession(duelId, newSession);
+      // Persist duel result to the cloud so it survives reinstall and reaches the Coach
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "sessions",
+        operation: "INSERT",
+        payloadId: duelId,
+        payload: newSession,
+        timestamp: Date.now()
+      });
       onDuelSaved();
     } catch (e) {
       console.error("Error saving duel session", e);

@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.31.0",
+  "version": "2.32.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -23,7 +23,7 @@
     "@capacitor/status-bar": "^8.0.4",
     "@paypal/react-paypal-js": "^9.2.0",
     "canvas-confetti": "^1.9.4",
-    "firebase": "^12.13.0",
+    "firebase": "^12.19.0",
     "framer-motion": "^12.40.0",
     "jimp": "^1.6.1",
     "localforage": "^1.10.0",

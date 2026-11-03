@@ -25,6 +25,7 @@ import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
+import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -73,8 +74,10 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
 
   if (!athlete) return null;
 
-  // Filter athlete sessions (only shooting scores)
-  const athleteSessions = sessions.filter(s => s.userId === athlete.uid && !s.isDuel);
+  // Filter athlete sessions (only shooting sessions, no duels/drafts)
+  const athleteSessions = sessions.filter(s => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && !s.isDraft);
+  // Sessions with real points (volume sessions never count as score)
+  const scoredSessions = athleteSessions.filter((s) => hasRealScore(s));
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +100,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
   // Rebuild PBs
   const getPBs = () => {
     const pbs: Record<string, { score: number; maxScore: number; date: number }> = {};
-    athleteSessions.forEach(s => {
+    scoredSessions.forEach(s => {
       const format = s.format || "Libre";
       if (!pbs[format] || s.score > pbs[format].score) {
         pbs[format] = {
@@ -417,8 +420,17 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col text-right">
-                              <span className="text-sm font-black text-cyan-neon">{sess.score}</span>
-                              <span className="text-[9.3px] text-white">/ {sess.maxScore || 300} pts</span>
+                              {isVolumeSession(sess) ? (
+                                <>
+                                  <span className="text-sm font-black text-cyan-neon">{getSessionArrows(sess)}</span>
+                                  <span className="text-[9.3px] text-white">flechas</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-sm font-black text-cyan-neon">{getSessionScore(sess)}</span>
+                                  <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
+                                </>
+                              )}
                             </div>
                             {isExpanded ? <ChevronUp size={14} className="text-white" /> : <ChevronDown size={14} className="text-white" />}
                           </div>
@@ -603,8 +615,17 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col text-right">
-                              <span className="text-sm font-black text-white">{sess.score}</span>
-                              <span className="text-[9.3px] text-white">/ {sess.maxScore || 300} pts</span>
+                              {isVolumeSession(sess) ? (
+                                <>
+                                  <span className="text-sm font-black text-white">{getSessionArrows(sess)}</span>
+                                  <span className="text-[9.3px] text-white">flechas</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-sm font-black text-white">{getSessionScore(sess)}</span>
+                                  <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
+                                </>
+                              )}
                             </div>
                             {onRestoreSession && (
                               <button
@@ -794,7 +815,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase">Progresión de Rendimiento</span>
                 
-                {athleteSessions.length < 2 ? (
+                {scoredSessions.length < 2 ? (
                   <p className="text-[12.8px] text-white text-center py-6">
                     Se necesitan al menos 2 sesiones de control para calcular la tendencia de rendimiento.
                   </p>
@@ -804,10 +825,10 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                       {/* Simple SVG Chart */}
                       <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
                         <path
-                          d={`M 5,35 ${athleteSessions.slice(0, 6).reverse().map((s, idx, arr) => {
+                          d={`M 5,35 ${scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
                             const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
                             const x = 5 + idx * step;
-                            const pct = s.maxScore > 0 ? s.score / s.maxScore : 0;
+                            const pct = getSessionMaxScore(s) > 0 ? getSessionScore(s) / getSessionMaxScore(s) : 0;
                             const y = 38 - pct * 30; // mapping 0.5-1.0 to 38-8
                             return `L ${x},${y}`;
                           }).join(" ")}`}
@@ -816,16 +837,16 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           strokeWidth="1.5"
                           strokeLinecap="round"
                         />
-                        {athleteSessions.slice(0, 6).reverse().map((s, idx, arr) => {
+                        {scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
                           const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
                           const x = 5 + idx * step;
-                          const pct = s.maxScore > 0 ? s.score / s.maxScore : 0;
+                          const pct = getSessionMaxScore(s) > 0 ? getSessionScore(s) / getSessionMaxScore(s) : 0;
                           const y = 38 - pct * 30;
                           return (
                             <g key={idx}>
                               <circle cx={x} cy={y} r="1.5" className="fill-cyan-neon stroke-black stroke-[0.4px]" />
                               <text x={x} y={y - 2.5} fontSize="3" fontWeight="bold" fill="white" textAnchor="middle">
-                                {s.score}
+                                {getSessionScore(s)}
                               </text>
                             </g>
                           );
@@ -844,16 +865,16 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
                   <span className="text-[9.3px] text-white uppercase block">Puntaje Promedio</span>
                   <span className="text-base font-black text-white">
-                    {athleteSessions.length > 0
-                      ? Math.round(athleteSessions.reduce((acc, s) => acc + s.score, 0) / athleteSessions.length)
+                    {scoredSessions.length > 0
+                      ? Math.round(scoredSessions.reduce((acc, s) => acc + getSessionScore(s), 0) / scoredSessions.length)
                       : "—"}
                   </span>
                 </div>
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
                   <span className="text-[9.3px] text-white uppercase block">Puntaje Máximo</span>
                   <span className="text-base font-black text-yellow-gold">
-                    {athleteSessions.length > 0
-                      ? Math.max(...athleteSessions.map(s => s.score))
+                    {scoredSessions.length > 0
+                      ? Math.max(...scoredSessions.map(s => getSessionScore(s)))
                       : "—"}
                   </span>
                 </div>

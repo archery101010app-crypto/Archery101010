@@ -5,6 +5,7 @@ import { UserProfile } from "@/lib/authService";
 import { Award, Share2, Filter, ChevronDown, ChevronUp, User, Target, Calendar, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DIANA_PRESETS } from "../../scoring/ScoringView";
+import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore, countScoredArrows } from "@/lib/scoring/sessionMetrics";
 
 interface CoachSessionsTabProps {
   athletes: UserProfile[];
@@ -56,15 +57,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
   // Calculate weekly ranking (Top 3 scores)
   const getWeeklyRanking = () => {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const weeklySess = athleteSessions.filter(s => s.timestamp >= oneWeekAgo);
+    const weeklySess = athleteSessions.filter(s => s.timestamp >= oneWeekAgo && hasRealScore(s));
     
     const maxScores: Record<string, { userName: string; score: number; format: string }> = {};
     weeklySess.forEach(s => {
       const uid = s.userId || s.userUid;
-      if (!maxScores[uid] || s.score > maxScores[uid].score) {
+      const sc = getSessionScore(s);
+      if (!maxScores[uid] || sc > maxScores[uid].score) {
         maxScores[uid] = {
           userName: s.userName || "Atleta",
-          score: s.score,
+          score: sc,
           format: s.format || "WA 720"
         };
       }
@@ -207,9 +209,11 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             });
 
             // Calculate arrows and average
-            const scoredArrows = sess.arrowsTotal || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : (sess.ends ? sess.ends.reduce((acc: number, end: any) => acc + (end.arrows ? end.arrows.length : 0), 0) : 0));
-            const totalArrows = sess.totalArrowsVolume || scoredArrows;
-            const avgPerArrow = scoredArrows > 0 && sess.score > 0 ? (sess.score / scoredArrows).toFixed(1) : "—";
+            const isVol = isVolumeSession(sess);
+            const scoredArrows = isVol ? 0 : countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
+            const totalArrows = getSessionArrows(sess);
+            const realScore = getSessionScore(sess);
+            const avgPerArrow = !isVol && scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
             const bowTypeEs = sess.bowType === "Recurve" ? "Recurvo" : sess.bowType === "Compound" ? "Compuesto" : (sess.bowType || "Arco");
 
             // Count 10s and Xs
@@ -258,17 +262,29 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
                   <div className="flex items-center gap-2.5 shrink-0">
                     <div className="flex flex-col text-right">
-                      <div className="flex items-baseline gap-1 justify-end">
-                        <span className="text-base font-black text-cyan-neon leading-tight">
-                          {sess.score}
-                        </span>
-                        <span className="text-[9.3px] text-white font-bold">
-                          /{sess.maxScore || 720}
-                        </span>
-                      </div>
-                      <span className="text-[9.3px] text-yellow-gold font-bold">
-                        {avgPerArrow} pts/fl
-                      </span>
+                      {isVol ? (
+                        <>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="text-base font-black text-cyan-neon leading-tight">{totalArrows}</span>
+                            <span className="text-[9.3px] text-white font-bold">flechas</span>
+                          </div>
+                          <span className="text-[9.3px] text-yellow-gold font-bold">Volumen</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="text-base font-black text-cyan-neon leading-tight">
+                              {realScore}
+                            </span>
+                            <span className="text-[9.3px] text-white font-bold">
+                              /{getSessionMaxScore(sess)}
+                            </span>
+                          </div>
+                          <span className="text-[9.3px] text-yellow-gold font-bold">
+                            {avgPerArrow} pts/fl
+                          </span>
+                        </>
+                      )}
                     </div>
                     {isExpanded ? (
                       <ChevronUp size={15} className="text-cyan-neon" />

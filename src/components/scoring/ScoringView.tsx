@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession } from "@/lib/db/indexedDB";
+import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
@@ -324,26 +324,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const autoSave = async () => {
       const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
       const nowTs = Date.now();
-      const draftObj = {
+      const draftObj = sanitizeForFirestore({
         id: sessionId,
         userId: user.uid,
-        userName: user.fullName,
-        clubId: user.clubId,
+        userName: user.fullName || user.nickname || "Arquero",
+        clubId: user.clubId || null,
         timestamp: config.timestamp || nowTs,
         updatedAt: nowTs,
-        practiceType: config.practiceType,
-        bowType: config.bowType,
-        distance: config.distance,
-        format: config.format,
-        endsCount: config.endsCount,
-        arrowsPerEnd: config.arrowsPerEnd,
-        maxScore: config.maxScore,
-        score: calculateTotalScore(),
-        ends: ends,
-        sessionNote: sessionNote,
-        impacts: impacts,
+        practiceType: config.practiceType || "Práctica",
+        bowType: config.bowType || "Recurve",
+        distance: Number(config.distance) || 18,
+        format: config.format || "Libre",
+        endsCount: Math.min(100, Number(config.endsCount) || 10),
+        arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
+        maxScore: Math.min(2000, Number(config.maxScore) || 300),
+        score: config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore()),
+        isVolumeOnly: config.practiceType === "Volumen",
+        totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : undefined,
+        ends: ends.slice(0, 100),
+        sessionNote: sessionNote || "",
+        impacts: impacts.slice(0, 500),
         isDraft: true
-      };
+      });
 
       try {
         // 1. Instant 0ms local IndexedDB write (Offline-First safety shield)
@@ -757,39 +759,58 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
   }, [currentEndIdx, currentArrowIdx, ends, config, presetRings]);
 
+  // Keep confirmedVolume synced whenever the Finish modal opens
+  useEffect(() => {
+    if (isFinishing) {
+      const scoredArrowsCount = ends.reduce((sum, e) => sum + e.arrows.filter((a) => a !== "").length, 0);
+      const initVol =
+        config.practiceType === "Volumen"
+          ? tallyCount + (config.warmupArrows || 0)
+          : scoredArrowsCount + (config.warmupArrows || 0);
+      setConfirmedVolume(initVol);
+      setSaveType("full");
+    }
+  }, [isFinishing, ends, tallyCount, config.practiceType, config.warmupArrows]);
+
   const handleSaveDraft = async () => {
-    const sessionId = config.draftId || generateResilientId("SES");
-    const draftObj = {
+    const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
+    const draftObj = sanitizeForFirestore({
       id: sessionId,
       userId: user.uid,
-      userName: user.fullName,
-      clubId: user.clubId,
+      userName: user.fullName || user.nickname || "Arquero",
+      clubId: user.clubId || null,
       timestamp: Date.now(),
-      practiceType: config.practiceType,
-      bowType: config.bowType,
-      distance: config.distance,
-      format: config.format,
-      endsCount: config.endsCount,
-      arrowsPerEnd: config.arrowsPerEnd,
-      maxScore: config.maxScore,
-      score: calculateTotalScore(),
-      ends: ends,
-      sessionNote: sessionNote,
-      impacts: impacts,
+      practiceType: config.practiceType || "Práctica",
+      bowType: config.bowType || "Recurve",
+      distance: Number(config.distance) || 18,
+      format: config.format || "Libre",
+      endsCount: Math.min(100, Number(config.endsCount) || 10),
+      arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
+      maxScore: Math.min(2000, Number(config.maxScore) || 300),
+      score: config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore()),
+        isVolumeOnly: config.practiceType === "Volumen",
+        totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : undefined,
+      ends: ends.slice(0, 100),
+      sessionNote: sessionNote || "",
+      impacts: impacts.slice(0, 500),
       isDraft: true
-    };
+    });
 
     try {
       await saveLocalSession(sessionId, draftObj);
-      onSessionSaved(); // returns to Dashboard
+      onBack(); // returns to Home
     } catch (err) {
       console.error("Failed to save session draft", err);
     }
   };
 
-  const cleanupLiveDrafts = async () => {
+  const cleanupLiveDrafts = async (preserveId?: string) => {
     const draftIds = Array.from(
-      new Set([config.draftId, config.id, `SES-DRAFT-${user.uid}`, "SES-TEMP-DRAFT"].filter(Boolean))
+      new Set(
+        [config.draftId, config.id, `SES-DRAFT-${user.uid}`, "SES-TEMP-DRAFT"].filter(
+          (id) => Boolean(id) && id !== preserveId
+        )
+      )
     ) as string[];
 
     for (const dId of draftIds) {
@@ -817,14 +838,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const halfEnds = Math.floor(config.endsCount / 2);
     const actualArrows = type === "partial" 
       ? ends.slice(0, halfEnds).reduce((sum, e) => sum + e.arrows.filter(a => a !== "").length, 0)
-      : scoredArrowsCount;
+      : config.practiceType === "Volumen"
+        ? tallyCount
+        : scoredArrowsCount;
       
     const totalVolumeInit = actualArrows + (config.warmupArrows || 0);
     
     setSaveType(type);
     setConfirmedVolume(totalVolumeInit);
     setIsConfirmingVolume(true);
-    setIsFinishing(false); // Cerramos el modal de notas si estaba abierto
+    setIsFinishing(false);
   };
 
   const handleFinishFirstBlockOnly = async () => {
@@ -847,45 +870,55 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       });
     });
 
+    const nowTs = Date.now();
     const sessionId = generateResilientId("SES");
-    const sessionObj = {
+    const sessionObj = sanitizeForFirestore({
       id: sessionId,
       userId: user.uid,
-      userName: user.fullName,
-      clubId: user.clubId,
-      timestamp: Date.now(),
-      practiceType: config.practiceType,
-      bowType: config.bowType,
-      distance: config.distance,
-      format: `${config.format} (Bloque 1)`,
-      endsCount: halfEnds,
-      arrowsPerEnd: config.arrowsPerEnd,
-      maxScore: maxB1,
-      score: scoreB1,
-      ends: truncatedEnds,
+      userName: user.fullName || user.nickname || "Arquero",
+      clubId: user.clubId || null,
+      timestamp: nowTs,
+      updatedAt: nowTs,
+      practiceType: config.practiceType || "Práctica",
+      bowType: config.bowType || "Recurve",
+      distance: Number(config.distance) || 18,
+      format: `${config.format || "WA 720"} (Bloque 1)`,
+      endsCount: Math.min(100, halfEnds),
+      arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 6),
+      maxScore: Math.min(2000, maxB1),
+      score: Math.min(2000, scoreB1),
+      ends: truncatedEnds.slice(0, 100),
       sessionNote: sessionNote ? `${sessionNote} [Finalizado en primer bloque]` : "[Finalizado en primer bloque]",
-      impacts: truncatedImpacts,
+      impacts: truncatedImpacts.slice(0, 500),
+      isDraft: false,
       singleBlockSaved: true,
-      totalArrowsVolume: finalVolume,
+      totalArrowsVolume: Math.min(10000, finalVolume || 0),
       blockStats: {
         b1Score: scoreB1,
         b2Score: 0,
         diff: 0,
         completedB2: false
       }
-    };
+    });
 
     try {
-      await cleanupLiveDrafts();
       await saveLocalSession(sessionId, sessionObj);
+      await cleanupLiveDrafts(sessionId);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "sessions",
         operation: "INSERT",
         payloadId: sessionId,
         payload: sessionObj,
-        timestamp: Date.now()
+        timestamp: nowTs
       });
+
+      // Also write directly to Firestore immediately if online
+      try {
+        const { doc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        setDoc(doc(db, "sessions", sessionId), sessionObj, { merge: true }).catch(() => {});
+      } catch (_) {}
 
       confetti({
         particleCount: 120,
@@ -918,16 +951,17 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleFinishAndSave = async () => {
-    triggerSaveFlow("full");
+    await executeFinalSave(confirmedVolume);
   };
 
   const executeSaveFull = async (finalVolume: number) => {
-    const finalScore = calculateTotalScore();
+    const isVolMode = config.practiceType === "Volumen";
+    const finalScore = isVolMode ? 0 : calculateTotalScore();
     const sessionId = generateResilientId("SES");
     const halfEnds = Math.floor(config.endsCount / 2);
 
-    let blockStats = undefined;
-    if (isBlockFormat) {
+    let blockStats: Record<string, any> | undefined = undefined;
+    if (isBlockFormat && !isVolMode) {
       let b1Score = 0;
       let b2Score = 0;
       ends.forEach((e, idx) => {
@@ -947,30 +981,49 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       };
     }
 
-    const sessionObj = {
+    const scoredEndsList = isVolMode
+      ? ends.slice(0, 100)
+      : ends.filter((e) => e.arrows.some((a) => a !== "" && a !== undefined));
+    const effectiveEnds = scoredEndsList.length > 0 ? scoredEndsList : ends.slice(0, 100);
+    const effectiveEndsCount = isVolMode
+      ? Math.min(100, Math.ceil((finalVolume || tallyCount) / (config.arrowsPerEnd || 3)))
+      : effectiveEnds.length;
+    const effectiveMaxScore = isVolMode
+      ? 0
+      : Math.min(2000, effectiveEndsCount * (Number(config.arrowsPerEnd) || 3) * 10);
+
+    const nowTs = Date.now();
+    const rawSessionObj: Record<string, any> = {
       id: sessionId,
       userId: user.uid,
-      userName: user.fullName,
-      clubId: user.clubId,
-      timestamp: Date.now(),
-      practiceType: config.practiceType,
-      bowType: config.bowType,
-      distance: config.distance,
-      format: config.format,
-      endsCount: config.practiceType === "Volumen" ? ends.length : config.endsCount,
-      arrowsPerEnd: config.arrowsPerEnd,
-      maxScore: config.practiceType === "Volumen" ? ends.length * config.arrowsPerEnd * 10 : config.maxScore,
-      score: finalScore,
-      ends: ends,
-      sessionNote: sessionNote,
-      impacts: impacts,
-      totalArrowsVolume: finalVolume,
-      blockStats
+      userName: user.fullName || user.nickname || "Arquero",
+      clubId: user.clubId || null,
+      timestamp: nowTs,
+      updatedAt: nowTs,
+      practiceType: config.practiceType || "Práctica",
+      bowType: config.bowType || "Recurve",
+      distance: Number(config.distance) || 18,
+      format: config.format || "Libre",
+      endsCount: Math.min(100, effectiveEndsCount),
+      arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
+      maxScore: effectiveMaxScore,
+      score: Math.min(2000, finalScore),
+      ends: effectiveEnds.slice(0, 100),
+      sessionNote: sessionNote || "",
+      impacts: impacts.slice(0, 500),
+      isDraft: false,
+      isVolumeOnly: isVolMode,
+      totalArrowsVolume: Math.min(10000, finalVolume || (isVolMode ? tallyCount : effectiveEndsCount * (Number(config.arrowsPerEnd) || 3)))
     };
+    if (blockStats) {
+      rawSessionObj.blockStats = blockStats;
+    }
+
+    const sessionObj = sanitizeForFirestore(rawSessionObj);
 
     try {
-      await cleanupLiveDrafts();
       await saveLocalSession(sessionId, sessionObj);
+      await cleanupLiveDrafts(sessionId);
 
       await addToSyncQueue({
         id: generateResilientId("TXN"),
@@ -978,8 +1031,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         operation: "INSERT",
         payloadId: sessionId,
         payload: sessionObj,
-        timestamp: Date.now()
+        timestamp: nowTs
       });
+
+      // Also write directly to Firestore immediately if online
+      try {
+        const { doc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        setDoc(doc(db, "sessions", sessionId), sessionObj, { merge: true }).catch(() => {});
+      } catch (_) {}
 
       confetti({
         particleCount: 120,
@@ -988,20 +1048,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         colors: ["#00E5FF", "#FFF200", "#FF3B30", "#00C853"]
       });
 
-      try {
-        const { checkAndAwardStar } = await import("@/lib/starsManager");
-        await checkAndAwardStar(
-          user.uid,
-          user.fullName,
-          config.bowType,
-          config.distance,
-          config.endsCount,
-          config.arrowsPerEnd,
-          finalScore,
-          sessionId
-        );
-      } catch (starErr) {
-        console.error("Error checking star achievements on full block:", starErr);
+      if (!isVolMode) {
+        try {
+          const { checkAndAwardStar } = await import("@/lib/starsManager");
+          await checkAndAwardStar(
+            user.uid,
+            user.fullName,
+            config.bowType,
+            config.distance,
+            effectiveEndsCount,
+            config.arrowsPerEnd,
+            finalScore,
+            sessionId
+          );
+        } catch (starErr) {
+          console.error("Error checking star achievements on full block:", starErr);
+        }
       }
 
       runSync();
@@ -1013,6 +1075,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeFinalSave = async (finalVolume: number) => {
     setIsConfirmingVolume(false);
+    setIsFinishing(false);
     if (saveType === "partial") {
       await executeSavePartialBlock(finalVolume);
     } else {
@@ -1313,6 +1376,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              {ends.some((e) => e.arrows.some((a) => a !== "")) && (
+                <button
+                  type="button"
+                  onClick={() => setIsFinishing(true)}
+                  className="text-[10px] font-black uppercase text-black bg-cyan-neon hover:bg-[#19c8ff] px-2.5 py-1 rounded-full transition cursor-pointer whitespace-nowrap shadow-sm"
+                >
+                  Finalizar
+                </button>
+              )}
               <span className="text-[10.5px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
                 End {currentEndIdx + 1}/{config.endsCount}
               </span>
@@ -2091,11 +2163,45 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     value={sessionNote}
                     onChange={(e) => setSessionNote(e.target.value)}
                     placeholder={t("sessionNotePlaceholder")}
-                    className="w-full bg-neutral-950/60 border border-cyan-brand focus:border-cyan-neon text-white text-xs p-3.5 rounded-2xl outline-none transition duration-200 min-h-[100px] resize-none caret-yellow-gold"
+                    className="w-full bg-neutral-950/60 border border-cyan-brand focus:border-cyan-neon text-white text-xs p-3.5 rounded-2xl outline-none transition duration-200 min-h-[80px] resize-none caret-yellow-gold"
                   />
                   <p className="text-[10.5px] text-white">Estas notas se guardan en tu historial y son visibles para el Coach.</p>
                 </div>
               )}
+
+              {/* Direct Volume Confirmation inside Finish Modal (1-click Save) */}
+              <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/10 flex items-center justify-between gap-2">
+                <div className="flex flex-col">
+                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
+                    Volumen Total de Flechas
+                  </span>
+                  <span className="text-[10px] text-white/80">
+                    Para tu historial de volumen
+                  </span>
+                </div>
+                <div className="flex items-center bg-black border border-white/10 rounded-xl px-1.5 py-1">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmedVolume(Math.max(0, confirmedVolume - 3))}
+                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95"
+                  >
+                    -3
+                  </button>
+                  <input
+                    type="number"
+                    value={confirmedVolume}
+                    onChange={(e) => setConfirmedVolume(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-14 text-center font-black text-white text-base bg-transparent outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setConfirmedVolume(confirmedVolume + 3)}
+                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95"
+                  >
+                    +3
+                  </button>
+                </div>
+              </div>
 
               {/* Group Dispersion Summary in Finish Modal */}
               {globalDispersion && impacts.length > 0 && (
@@ -2161,15 +2267,26 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         {isExitModalOpen && (
           <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0D1017] border border-white/10 rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
-              <h3 className="text-white text-base font-black uppercase [text-wrap:balance]">¿Pausar Sesión?</h3>
+              <h3 className="text-white text-base font-black uppercase [text-wrap:balance]">¿Finalizar o Pausar Sesión?</h3>
               <p className="text-xs text-white [text-wrap:pretty]">
-                Puedes guardar el progreso actual como borrador para reanudarlo más tarde, o descartar la sesión por completo.
+                Puedes finalizar y guardar la sesión en tu historial con los tiros actuales, pausarla como borrador, o descartarla.
               </p>
               
               <div className="flex flex-col gap-2.5 mt-2">
+                {(ends.some((e) => e.arrows.some((a) => a !== "")) || tallyCount > 0) && (
+                  <button
+                    onClick={() => {
+                      setIsExitModalOpen(false);
+                      setIsFinishing(true);
+                    }}
+                    className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition shadow-sm"
+                  >
+                    Guardar y Finalizar en Historial
+                  </button>
+                )}
                 <button
                   onClick={handleSaveDraft}
-                  className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition"
+                  className="w-full h-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition"
                 >
                   Pausar y Guardar Borrador
                 </button>

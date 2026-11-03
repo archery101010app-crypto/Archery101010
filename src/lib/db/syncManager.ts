@@ -3,7 +3,10 @@ import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   getSyncQueue,
   removeFromSyncQueue,
-  updateSyncItem
+  updateSyncItem,
+  sanitizeForFirestore,
+  isFictitiousSession,
+  isFictitiousUser
 } from "./indexedDB";
 
 // State flags to control sequential runs and prevent race conditions
@@ -86,11 +89,19 @@ export async function runSync(onProgressUpdate?: (pendingCount: number, statusTe
           const docRef = doc(db, item.collection, item.payloadId);
 
           try {
+            if (
+              (item.collection === "sessions" && isFictitiousSession(item.payload || { id: item.payloadId }, item.payloadId)) ||
+              (item.collection === "users" && isFictitiousUser(item.payload || { uid: item.payloadId }))
+            ) {
+              await removeFromSyncQueue(item.id);
+              return;
+            }
+            const cleanPayload = sanitizeForFirestore({ ...(item.payload || {}), updatedAt: Date.now() });
             if (item.operation === "INSERT") {
-              await withTimeout(setDoc(docRef, { ...item.payload, updatedAt: Date.now() }), NETWORK_TIMEOUT_MS);
+              await withTimeout(setDoc(docRef, cleanPayload), NETWORK_TIMEOUT_MS);
             } else if (item.operation === "UPDATE") {
               await withTimeout(
-                setDoc(docRef, { ...item.payload, updatedAt: Date.now() }, { merge: true }),
+                setDoc(docRef, cleanPayload, { merge: true }),
                 NETWORK_TIMEOUT_MS
               );
             } else if (item.operation === "DELETE") {

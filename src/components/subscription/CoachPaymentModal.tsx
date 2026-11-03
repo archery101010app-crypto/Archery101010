@@ -50,8 +50,13 @@ export default function CoachPaymentModal({
         onSuccess(res.updatedUser);
       }, 400);
     } catch (err: any) {
+      const raw = String(err?.message || "");
+      const friendly =
+        raw.includes("INTERNAL ASSERTION") || raw.includes("FIRESTORE") || raw.length > 160
+          ? "Hubo un problema de conexión con la nube. Cierra y vuelve a abrir la app e inténtalo de nuevo."
+          : raw || "Error al activar.";
       setStatusMessage({
-        text: err.message || "Error al activar.",
+        text: friendly,
         isError: true
       });
     } finally {

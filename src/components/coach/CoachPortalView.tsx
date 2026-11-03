@@ -6,7 +6,10 @@ import {
   getLocalSessions, 
   getLocalSetting, 
   saveLocalSetting, 
-  saveLocalSession 
+  saveLocalSession,
+  purgeAllFictitiousData,
+  isFictitiousUser,
+  isFictitiousSession
 } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -69,16 +72,18 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
   const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
 
-  // Load roster and seed demo sessions
+  // Load real linked roster and transfer real sessions from linked students (no demo/fictitious data)
   useEffect(() => {
     async function loadCoachData() {
-      // 1. Get roster of athletes in this club
+      await purgeAllFictitiousData();
+
+      // 1. Get roster of real athletes linked to this coach/club
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
-      const demoSeeded = await getLocalSetting<boolean>(`demo_athletes_seeded_${activeClubId}`, false);
 
       let clubArchers = allUsers.filter(
         u =>
+          !isFictitiousUser(u) &&
           u.uid !== user.uid &&
           (u.clubId === activeClubId || (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)) &&
           !unlinkedIds.includes(u.uid)
@@ -94,7 +99,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           const remoteAthletes: UserProfile[] = [];
           snapClub.forEach((docSnap) => {
             const data = docSnap.data() as UserProfile;
-            if (data && data.uid && data.uid !== user.uid && !unlinkedIds.includes(data.uid)) {
+            if (data && data.uid && !isFictitiousUser(data) && data.uid !== user.uid && !unlinkedIds.includes(data.uid)) {
               remoteAthletes.push(data);
             }
           });
@@ -106,6 +111,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               if (
                 data &&
                 data.uid &&
+                !isFictitiousUser(data) &&
                 data.uid !== user.uid &&
                 !unlinkedIds.includes(data.uid) &&
                 !remoteAthletes.some((r) => r.uid === data.uid)
@@ -116,12 +122,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           }
           if (remoteAthletes.length > 0) {
             const mergedMap = new Map<string, UserProfile>();
-            for (const u of allUsers) mergedMap.set(u.uid, u);
+            for (const u of allUsers) {
+              if (!isFictitiousUser(u)) mergedMap.set(u.uid, u);
+            }
             for (const r of remoteAthletes) mergedMap.set(r.uid, r);
             const mergedUsers = Array.from(mergedMap.values());
             await saveLocalSetting("simulated_users", mergedUsers);
             clubArchers = mergedUsers.filter(
               u =>
+                !isFictitiousUser(u) &&
                 u.uid !== user.uid &&
                 (u.clubId === activeClubId || (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)) &&
                 !unlinkedIds.includes(u.uid)
@@ -131,76 +140,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           console.warn("Could not fetch club athletes from Firestore:", err);
         }
       }
-      
-      // Fallback/Seed demo athletes once if never seeded so the coach has initial data to examine
-      if (clubArchers.length === 0 && !demoSeeded) {
-        const demoArchers: UserProfile[] = [
-          {
-            uid: "USR-D-ATHLETE-1",
-            email: "daniela.solano@club.com",
-            fullName: "Daniela Solano",
-            nickname: "daniela",
-            birthDate: "2002-08-12",
-            country: user.country || "CR",
-            city: "San José",
-            gender: "F",
-            bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 42, defaultDistance: 70 },
-            physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
-            clubId: activeClubId,
-            clubName: user.clubName || "Club Archery 101010",
-            clubLogo: user.clubLogo,
-            clubCountry: user.clubCountry || "CR",
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          },
-          {
-            uid: "USR-D-ATHLETE-2",
-            email: "carlos.ruiz@club.com",
-            fullName: "Carlos Ruiz",
-            nickname: "carlos",
-            birthDate: "1998-04-25",
-            country: user.country || "CR",
-            city: "Cartago",
-            gender: "M",
-            bowConfig: { type: "Compound", brand: "Mathews", model: "TRX", poundage: 58, defaultDistance: 50 },
-            physicalData: { height: 178, weight: 76, dominantEye: "R", dominantHand: "R" },
-            clubId: activeClubId,
-            clubName: user.clubName || "Club Archery 101010",
-            clubLogo: user.clubLogo,
-            clubCountry: user.clubCountry || "CR",
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          },
-          {
-            uid: "USR-D-ATHLETE-3",
-            email: "sebastian.castro@club.com",
-            fullName: "Sebastián Castro",
-            nickname: "sebas",
-            birthDate: "2005-11-03",
-            country: user.country || "CR",
-            city: "Alajuela",
-            gender: "M",
-            bowConfig: { type: "Barebow", brand: "Gillo", model: "G1", poundage: 36, defaultDistance: 18 },
-            physicalData: { height: 172, weight: 64, dominantEye: "L", dominantHand: "R" },
-            clubId: activeClubId,
-            clubName: user.clubName || "Club Archery 101010",
-            clubLogo: user.clubLogo,
-            clubCountry: user.clubCountry || "CR",
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          }
-        ];
 
-        const existingUids = new Set(allUsers.map(u => u.uid));
-        const toAdd = demoArchers.filter(d => !existingUids.has(d.uid));
-        const updatedList = [...allUsers, ...toAdd];
-        await saveLocalSetting("simulated_users", updatedList);
-        await saveLocalSetting(`demo_athletes_seeded_${activeClubId}`, true);
-        clubArchers = demoArchers.filter(d => !unlinkedIds.includes(d.uid));
-      }
       setAthletes(clubArchers);
 
       // 2. Load attendance for today
@@ -208,114 +148,84 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       const savedAttendance = await getLocalSetting<Record<string, boolean>>(`attendance_${activeClubId}_${dateKey}`, {});
       setAttendance(savedAttendance);
 
-      // 3. Load sessions
-      let allSessions = await getLocalSessions();
+      // 3. Transfer all real sessions from linked athletes in Firestore + local DB
+      if (typeof navigator !== "undefined" && navigator.onLine && clubArchers.length > 0) {
+        try {
+          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
 
-      // Seed sessions for demo roster if none exists
-      const hasDemoSessions = allSessions.some(s => s.userId && s.userId.startsWith("USR-D-"));
-      if (!hasDemoSessions) {
-        const demoSessions = [
-          // Daniela Solano - Recurve Control
-          {
-            id: "SES-D-1",
-            userId: "USR-D-ATHLETE-1",
-            userName: "Daniela Solano",
-            clubId: activeClubId,
-            timestamp: Date.now() - 2 * 60 * 60 * 1000,
-            practiceType: "Control",
-            bowType: "Recurve",
-            distance: 70,
-            format: "WA 720",
-            endsCount: 12,
-            arrowsPerEnd: 6,
-            maxScore: 720,
-            score: 638,
-            isDraft: false,
-            ends: Array.from({ length: 12 }, () => ({
-              arrows: ["X", "10", "9", "9", "9", "8"],
-              note: ""
-            })),
-            impacts: [
-              { endIdx: 0, arrowIdx: 0, x: 50, y: 50, value: "X" },
-              { endIdx: 0, arrowIdx: 1, x: 51.5, y: 49, value: "10" },
-              { endIdx: 0, arrowIdx: 2, x: 54, y: 46, value: "9" },
-              { endIdx: 0, arrowIdx: 3, x: 47, y: 53, value: "9" }
-            ],
-            sessionNote: "Excelente progresión técnica y soltura."
-          },
-          // Carlos Ruiz - Compound Practice
-          {
-            id: "SES-D-2",
-            userId: "USR-D-ATHLETE-2",
-            userName: "Carlos Ruiz",
-            clubId: activeClubId,
-            timestamp: Date.now() - 24 * 60 * 60 * 1000,
-            practiceType: "Práctica",
-            bowType: "Compound",
-            distance: 50,
-            format: "WA 720",
-            endsCount: 12,
-            arrowsPerEnd: 6,
-            maxScore: 720,
-            score: 684,
-            isDraft: false,
-            ends: Array.from({ length: 12 }, () => ({
-              arrows: ["X", "X", "10", "10", "9", "9"],
-              note: ""
-            })),
-            impacts: [
-              { endIdx: 0, arrowIdx: 0, x: 50, y: 50, value: "X" },
-              { endIdx: 0, arrowIdx: 1, x: 50.8, y: 49.2, value: "X" }
-            ]
-          },
-          // Sebastián Castro - Barebow Volume
-          {
-            id: "SES-D-3",
-            userId: "USR-D-ATHLETE-3",
-            userName: "Sebastián Castro",
-            clubId: activeClubId,
-            timestamp: Date.now() - 3 * 24 * 60 * 60 * 1000,
-            practiceType: "Volumen",
-            bowType: "Barebow",
-            distance: 18,
-            format: "WA 300",
-            endsCount: 10,
-            arrowsPerEnd: 3,
-            maxScore: 300,
-            score: 272,
-            isDraft: false,
-            ends: Array.from({ length: 10 }, () => ({
-              arrows: ["10", "9", "9"],
-              note: ""
-            })),
-            impacts: []
+          const qClubSess = query(collection(db, "sessions"), where("clubId", "==", activeClubId));
+          const snapClubSess = await getDocs(qClubSess);
+          for (const d of snapClubSess.docs) {
+            const data = d.data();
+            if (data && !isFictitiousSession(data, d.id)) {
+              await saveLocalSession(d.id, { ...data, id: d.id });
+            }
           }
-        ];
 
-        for (const ds of demoSessions) {
-          const id = ds.id;
-          if (id) {
-            await saveLocalSession(id, ds);
+          for (const ath of clubArchers) {
+            const qAthSess = query(collection(db, "sessions"), where("userId", "==", ath.uid));
+            const snapAthSess = await getDocs(qAthSess);
+            for (const d of snapAthSess.docs) {
+              const data = d.data();
+              if (data && !isFictitiousSession(data, d.id)) {
+                await saveLocalSession(d.id, { ...data, id: d.id });
+              }
+            }
           }
+        } catch (err) {
+          console.warn("Could not fetch linked athlete sessions from Firestore:", err);
         }
-        allSessions = [...allSessions, ...demoSessions];
       }
 
-      setSessions(allSessions);
+      const allSessions = await getLocalSessions();
+      const linkedUids = new Set(clubArchers.map((a) => a.uid));
+      const realLinkedSessions = allSessions.filter(
+        (s) =>
+          !isFictitiousSession(s, s.id) &&
+          !s.isDraft &&
+          linkedUids.has(s.userId || s.userUid)
+      );
+      setSessions(realLinkedSessions);
     }
     loadCoachData();
 
-    // Migración automática: Asegurar que el Coach tenga código numérico limpio de 6 dígitos y clubId sincronizado en Firestore
+    // Garantiza que el código de 6 dígitos y el clubId del Coach EXISTAN en Firestore
+    // (si no están en la nube, el alumno recibe "Código no encontrado").
     async function ensureClean6DigitCode() {
       const code = user.clubInviteCode ? user.clubInviteCode.trim() : "";
-      const isValid6DigitCode = code.length > 0 && code.length <= 6 && /^\d+$/.test(code);
-      const needsClubSync = !isValid6DigitCode || !user.clubId || !user.isClubCreator;
+      const isValid6DigitCode = /^\d{6}$/.test(code);
       try {
         const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+        const { doc, getDoc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+
+        let cloudData: any = null;
+        if (typeof navigator === "undefined" || navigator.onLine) {
+          try {
+            const snap = await getDoc(doc(db, "users", user.uid));
+            cloudData = snap.exists() ? snap.data() : null;
+          } catch {
+            cloudData = null;
+          }
+        }
+
         const finalCode = isValid6DigitCode ? code : generateClubInviteCode();
+        const finalClubId = user.clubId || activeClubId;
+        const cloudInSync =
+          !!cloudData &&
+          cloudData.clubInviteCode === finalCode &&
+          cloudData.clubId === finalClubId &&
+          cloudData.isClubCreator === true &&
+          cloudData.role !== "archer";
+        const localInSync =
+          isValid6DigitCode && user.clubId === finalClubId && user.isClubCreator === true && user.role !== "archer";
+
+        if (cloudInSync && localInSync) return;
+
         const updates: Partial<UserProfile> = {
           clubInviteCode: finalCode,
-          clubId: user.clubId || activeClubId,
+          clubId: finalClubId,
           clubName: user.clubName || "Club Archery 101010",
           isClubCreator: true
         };
@@ -323,7 +233,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           updates.role = "coach";
         }
         const updated = await updateProfile(user.uid, updates);
-        if (needsClubSync && onUserUpdate) {
+        try {
+          await setDoc(doc(db, "users", user.uid), updated, { merge: true });
+        } catch (cloudErr) {
+          console.warn("Código del Coach pendiente de subir a la nube:", cloudErr);
+        }
+        if (!localInSync && onUserUpdate) {
           onUserUpdate(updated);
         }
       } catch (err) {
@@ -340,14 +255,26 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         e.detail.store === "settings_local" ||
         e.detail.store === "simulated_users"
       ) {
-        const freshSessions = await getLocalSessions();
-        setSessions(freshSessions);
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
         const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
         const clubArchers = allUsers.filter(
-          u => u.clubId === activeClubId && u.role === "archer" && !unlinkedIds.includes(u.uid)
+          u =>
+            !isFictitiousUser(u) &&
+            u.uid !== user.uid &&
+            (u.clubId === activeClubId || (user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)) &&
+            !unlinkedIds.includes(u.uid)
         );
         setAthletes(clubArchers);
+
+        const linkedUids = new Set(clubArchers.map((a) => a.uid));
+        const freshSessions = await getLocalSessions();
+        const realLinkedSessions = freshSessions.filter(
+          (s) =>
+            !isFictitiousSession(s, s.id) &&
+            !s.isDraft &&
+            linkedUids.has(s.userId || s.userUid)
+        );
+        setSessions(realLinkedSessions);
       }
     };
 
@@ -505,7 +432,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         });
         
         const list = await getLocalSessions();
-        setSessions(list);
+        const linkedUids = new Set(athletes.map((a) => a.uid));
+        setSessions(list.filter((s) => !isFictitiousSession(s, s.id) && !s.isDraft && linkedUids.has(s.userId || s.userUid)));
         runSync();
         
         alert("Sesión restituida correctamente. Se ha notificado al arquero.");
@@ -559,9 +487,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">Código para Alumnos</span>
             <div className="flex items-baseline gap-1">
               <span className="text-sm tabular-nums font-black text-cyan-neon tracking-widest select-all">
-                {user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode) 
+                {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode) 
                   ? user.clubInviteCode 
-                  : "101010"}
+                  : "······"}
               </span>
               <span className="text-[8.1px] text-white font-bold uppercase tracking-wider">
                 (6 dígitos)
@@ -571,9 +499,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
-                const codeToCopy = (user.clubInviteCode && user.clubInviteCode.length <= 6 && /^\d+$/.test(user.clubInviteCode))
+                const codeToCopy = (user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode))
                   ? user.clubInviteCode
-                  : "101010";
+                  : "";
+                if (!codeToCopy) {
+                  alert("Tu código se está generando. Espera unos segundos e inténtalo de nuevo.");
+                  return;
+                }
                 if (navigator.clipboard) {
                   navigator.clipboard.writeText(codeToCopy);
                   alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen a tu club.`);

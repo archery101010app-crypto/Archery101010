@@ -13,6 +13,7 @@ import {
   Plus,
   Target
 } from "lucide-react";
+import { isVolumeSession, getSessionArrows, getSessionScore } from "@/lib/scoring/sessionMetrics";
 
 interface CoachOverviewTabProps {
   user: UserProfile;
@@ -75,7 +76,7 @@ export default function CoachOverviewTab({
           <span className="text-[10.5px] text-white font-black uppercase tracking-wider truncate">Volumen total</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-cyan-neon truncate">
-              {recentActivities.reduce((acc, act) => acc + (act.totalArrowsVolume || act.arrowsTotal || (act.endsCount && act.arrowsPerEnd ? act.endsCount * act.arrowsPerEnd : 0) || 0), 0)}
+              {recentActivities.reduce((acc, act) => acc + getSessionArrows(act), 0)}
             </span>
             <span className="text-[9.3px] text-white truncate">Flechas tiradas</span>
           </div>
@@ -199,10 +200,15 @@ export default function CoachOverviewTab({
                             {act.outcome === "win" ? "Ganó" : act.outcome === "loss" ? "Perdió" : "Empató"}
                           </span>
                         </span>
+                      ) : isVolumeSession(act) ? (
+                        <span>
+                          Registró sesión de <span className="text-white font-bold">Volumen</span> ·{" "}
+                          <span className="text-cyan-neon font-extrabold">{getSessionArrows(act)} flechas</span>
+                        </span>
                       ) : (
                         <span>
                           Registró sesión de <span className="text-white font-bold">{act.practiceType}</span> ({act.format}) ·{" "}
-                          <span className="text-cyan-neon font-extrabold">{act.score} pts</span>
+                          <span className="text-cyan-neon font-extrabold">{getSessionScore(act)} pts</span>
                         </span>
                       )}
                     </p>

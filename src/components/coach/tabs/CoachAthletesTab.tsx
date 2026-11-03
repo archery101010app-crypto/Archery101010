@@ -5,6 +5,7 @@ import { UserProfile } from "@/lib/authService";
 import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { getSessionScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 
 interface CoachAthletesTabProps {
   athletes: UserProfile[];
@@ -47,11 +48,12 @@ export default function CoachAthletesTab({
 
   // Calculate active states
   const getAthleteStats = (uid: string) => {
-    const athSess = sessions.filter(s => s.userId === uid || s.userUid === uid);
+    const athSess = sessions.filter(s => (s.userId === uid || s.userUid === uid) && !s.isDuel && !s.isDraft && s.deletedByArcher !== true);
     const count = athSess.length;
-    const lastTime = count > 0 ? Math.max(...athSess.map(s => s.timestamp)) : 0;
-    const averageScore = athSess.filter(s => !s.isDuel).length > 0
-      ? Math.round(athSess.filter(s => !s.isDuel).reduce((sum, s) => sum + s.score, 0) / athSess.filter(s => !s.isDuel).length)
+    const lastTime = count > 0 ? Math.max(...athSess.map(s => s.timestamp || 0)) : 0;
+    const scored = athSess.filter((s) => hasRealScore(s));
+    const averageScore = scored.length > 0
+      ? Math.round(scored.reduce((sum, s) => sum + getSessionScore(s), 0) / scored.length)
       : 0;
 
     return { count, lastTime, averageScore };

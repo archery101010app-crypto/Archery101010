@@ -70,10 +70,7 @@ export async function activateCoachLaunchPromo(
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
     const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
-    const validCode =
-      existingCode.length > 0 && existingCode.length <= 6 && /^\d+$/.test(existingCode)
-        ? existingCode
-        : generateClubInviteCode();
+    const validCode = /^\d{6}$/.test(existingCode) ? existingCode : generateClubInviteCode();
     const resolvedClubId =
       user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
 
@@ -85,6 +82,15 @@ export async function activateCoachLaunchPromo(
       clubInviteCode: validCode,
       isClubCreator: true
     });
+
+    // Confirm the coach code reaches the cloud so athletes can find it immediately
+    try {
+      const { doc, setDoc } = await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase");
+      await setDoc(doc(db, "users", user.uid), updatedUser, { merge: true });
+    } catch (cloudErr) {
+      console.warn("Coach activation saved locally; cloud sync pending:", cloudErr);
+    }
 
     // Register real subscription audit log in IndexedDB
     const auditLogs = await getLocalSetting<any[]>("sub_audit_logs", []);

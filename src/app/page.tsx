@@ -186,11 +186,11 @@ export default function Home() {
           );
         };
 
-        // Helper to check for incomplete registration that was abandoned or never finished
+        // Helper to check for incomplete registration that was abandoned (no email at all).
+        // Users with a missing birthDate/name are NOT logged out anymore: the ProfileCompletionModal asks them once.
         const isIncompleteUser = (u: any) => {
           if (!u) return false;
-          // Must have an email and a valid fullName & birthDate to be considered an established user session
-          return !u.email || !u.fullName?.trim() || !u.birthDate;
+          return !u.email;
         };
 
         if (loggedUser && (isLegacyOrDemoUser(loggedUser) || isIncompleteUser(loggedUser))) {
@@ -207,21 +207,51 @@ export default function Home() {
           }
         }
 
-        // Clean up all mock/demo/legacy users from simulated_users and stale sync queue items
+        // Clean up all mock/demo/legacy users and fictitious sessions from local DB and sync queue
         try {
-          const { getLocalSetting, saveLocalSetting, getSyncQueue, removeFromSyncQueue } = await import("@/lib/db/indexedDB");
+          const { getLocalSetting, saveLocalSetting, getSyncQueue, removeFromSyncQueue, purgeAllFictitiousData, FAKE_CLUB_IDS } = await import("@/lib/db/indexedDB");
+          await purgeAllFictitiousData();
+
+          // Athletes that were "linked" to a non-existent fallback club must relink with their real Coach code
+          if (
+            loggedUser &&
+            !isLegacyOrDemoUser(loggedUser) &&
+            !isIncompleteUser(loggedUser) &&
+            loggedUser.clubId &&
+            FAKE_CLUB_IDS.has(loggedUser.clubId) &&
+            !loggedUser.isClubCreator
+          ) {
+            try {
+              const { updateProfile } = await import("@/lib/authService");
+              const fixed = await updateProfile(loggedUser.uid, {
+                clubId: null,
+                clubName: null,
+                clubInviteCode: ""
+              });
+              setUser(fixed);
+            } catch (fixErr) {
+              console.warn("Could not reset fake club link:", fixErr);
+            }
+          }
           const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-          const cleanedUsers = localUsers.filter(u => !isLegacyOrDemoUser(u));
+          // Coach-managed athlete profiles (USR-ATH-*) are legitimate roster entries, keep them
+          const cleanedUsers = localUsers.filter(u => String(u.uid || "").startsWith("USR-ATH-") || !isLegacyOrDemoUser(u));
           if (localUsers.length !== cleanedUsers.length) {
             await saveLocalSetting("simulated_users", cleanedUsers);
             console.log("[Auth Startup] Cleaned legacy/fictitious users from local database:", localUsers.length - cleanedUsers.length, "removed.");
           }
           const queue = await getSyncQueue();
           for (const item of queue) {
-            if (item.collection === "users" && (String(item.payloadId || "").startsWith("USR-") || item.payload?.password)) {
+            if (
+              item.collection === "users" &&
+              !String(item.payloadId || "").startsWith("USR-ATH-") &&
+              (String(item.payloadId || "").startsWith("USR-") || item.payload?.password)
+            ) {
               await removeFromSyncQueue(item.id);
             }
           }
+          const { runSync } = await import("@/lib/db/syncManager");
+          runSync().catch(() => {});
 
           // Clean up any legacy demo macrocycles/events referencing "Indoor 2026" or "offline mode active"
           const { getLocalMacrocycles, deleteLocalMacrocycle, getLocalEvents, deleteLocalEvent, saveLocalEvent } = await import("@/lib/db/indexedDB");
@@ -494,7 +524,7 @@ export default function Home() {
               ...data
             });
           });
-        });
+        }, (err) => console.warn("Duel invitation listener error:", err?.message || err));
       } catch (err) {
         console.error("Error setting up real-time duel invitation listener:", err);
       }
@@ -532,15 +562,57 @@ export default function Home() {
     checkAds();
   }, [currentScreen, user?.uid, user?.role, user?.plan, dbVersion]);
 
-  // Start real-time Firestore synchronization when user is authenticated
+  // Start real-time Firestore synchronization when user is authenticated.
+  // startRealtimeSync is idempotent per (uid, role, clubId) — avoids listener churn that
+  // crashes the Firestore SDK with "INTERNAL ASSERTION FAILED (ca9 / b815)".
   useEffect(() => {
     if (user?.uid) {
-      startRealtimeSync(user.uid);
+      startRealtimeSync(user.uid, { role: user.role, clubId: user.clubId || null });
     } else {
       stopRealtimeSync();
     }
+  }, [user?.uid, user?.role, user?.clubId]);
+
+  useEffect(() => {
     return () => {
       stopRealtimeSync();
+    };
+  }, []);
+
+  // Session integrity guard: the local profile must match a live Firebase Auth session.
+  // Otherwise Firestore rejects every write silently (sessions/links never reach the cloud).
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    let unsub: () => void = () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const { auth } = await import("@/lib/firebase");
+        unsub = onAuthStateChanged(auth, async (fbUser) => {
+          if (cancelled) return;
+          const online = typeof navigator === "undefined" || navigator.onLine;
+          if (!online) return;
+          if (!fbUser || fbUser.uid !== user.uid) {
+            console.warn("[Auth Guard] Firebase session missing or mismatched. Forcing re-login.");
+            alert("Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.");
+            try {
+              const { logoutUser } = await import("@/lib/authService");
+              await logoutUser();
+            } catch {
+              // ignore
+            }
+            setUser(null);
+            setAuthScreen("LOGIN");
+          }
+        });
+      } catch (err) {
+        console.warn("Auth guard unavailable:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsub();
     };
   }, [user?.uid]);
 
@@ -554,7 +626,9 @@ export default function Home() {
       try {
         const { getLocalSessions } = await import("@/lib/db/indexedDB");
         const localSessions = await getLocalSessions();
-        const draft = localSessions.find((s) => s.userId === user.uid && s.isDraft === true);
+        const draft = localSessions
+          .filter((s) => s.userId === user.uid && s.isDraft === true && !s.isDuel)
+          .sort((a, b) => (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0))[0];
         if (draft) {
           console.log("[Persistence] Active draft found:", draft);
           setActiveDraft(draft);
@@ -933,10 +1007,15 @@ export default function Home() {
             <ScoringView
               user={user}
               config={sessionConfig}
-              onBack={() => setSessionConfig(null)}
-              onSessionSaved={() => {
+              onBack={() => {
                 setSessionConfig(null);
                 setCurrentScreen("HOME");
+              }}
+              onSessionSaved={() => {
+                setActiveDraft(null);
+                setSessionConfig(null);
+                setInitialHistoryTab("SESSIONS");
+                setCurrentScreen("HISTORY");
               }}
             />
           )

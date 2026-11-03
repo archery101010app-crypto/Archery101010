@@ -18,7 +18,8 @@ import {
   addToSyncQueue, 
   getLocalSetting,
   saveLocalSetting,
-  getLocalSessions
+  getLocalSessions,
+  isFictitiousUser
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
@@ -175,69 +176,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       const athletes = externalAthletes && externalAthletes.length > 0
         ? externalAthletes
-        : allUsers.filter((u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId) || !u.clubId) && u.role === "archer");
+        : allUsers.filter((u) => (u.clubId === activeClubId || (user.clubId && u.clubId === user.clubId)) && u.role === "archer" && u.uid !== user.uid);
       
-      // If empty roster, add some default demo athletes for selection
-      if (athletes.length === 0) {
-        const demoAthletes: UserProfile[] = [
-          {
-            uid: "USR-ATHLETE-DANIELA",
-            email: "daniela@archery101010.com",
-            fullName: "Daniela Rivas",
-            nickname: "daniela",
-            birthDate: "2000-08-12",
-            country: "CR",
-            city: "San José",
-            gender: "F",
-            bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 38, defaultDistance: 70 },
-            physicalData: { height: 168, weight: 58, dominantEye: "R", dominantHand: "R" },
-            clubId: user.clubId,
-            clubName: user.clubName,
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          },
-          {
-            uid: "USR-ATHLETE-CARLOS",
-            email: "carlos@archery101010.com",
-            fullName: "Carlos Mendoza",
-            nickname: "carlos",
-            birthDate: "1998-04-20",
-            country: "CR",
-            city: "Cartago",
-            gender: "M",
-            bowConfig: { type: "Compound", brand: "Hoyt", model: "Altus", poundage: 60, defaultDistance: 50 },
-            physicalData: { height: 178, weight: 74, dominantEye: "R", dominantHand: "R" },
-            clubId: user.clubId,
-            clubName: user.clubName,
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          },
-          {
-            uid: "USR-ATHLETE-SEBASTIAN",
-            email: "sebastian@archery101010.com",
-            fullName: "Sebastián Gómez",
-            nickname: "sebas",
-            birthDate: "2002-11-03",
-            country: "CR",
-            city: "Alajuela",
-            gender: "M",
-            bowConfig: { type: "Barebow", brand: "Hoyt", model: "Satori", poundage: 42, defaultDistance: 18 },
-            physicalData: { height: 182, weight: 81, dominantEye: "L", dominantHand: "R" },
-            clubId: user.clubId,
-            clubName: user.clubName,
-            role: "archer",
-            plan: "FREE",
-            isClubCreator: false
-          }
-        ];
-        const updatedUsersList = [...allUsers, ...demoAthletes];
-        await saveLocalSetting("simulated_users", updatedUsersList);
-        setRoster(demoAthletes);
-      } else {
-        setRoster(athletes);
-      }
+      // Only real linked athletes (no demo/fictitious roster)
+      setRoster(athletes.filter((a) => !isFictitiousUser(a)));
 
       // Load macrocycles (filtrando y eliminando cualquier residuo de demo o plantilla ejemplo)
       const list = await getLocalMacrocycles();

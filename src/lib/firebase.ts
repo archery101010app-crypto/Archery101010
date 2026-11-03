@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableNetwork, disableNetwork } from "firebase/firestore";
+import { getFirestore, initializeFirestore, enableNetwork, disableNetwork, Firestore } from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 
 // Configurations for different environments (dynamically mapped at runtime)
@@ -77,7 +77,18 @@ if (typeof window !== "undefined") {
 const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// ignoreUndefinedProperties: never reject a write because an optional field is `undefined`
+// (root cause of sessions/profiles silently failing to sync to the cloud).
+function createFirestore(): Firestore {
+  try {
+    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+  } catch {
+    // Already initialized (hot reload) – reuse existing instance
+    return getFirestore(app);
+  }
+}
+export const db = createFirestore();
 
 // Safe messaging initialization (only in client browser, checking compatibility)
 export const getMessagingInstance = async () => {

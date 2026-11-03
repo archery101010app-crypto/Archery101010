@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, or } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc } from "firebase/firestore";
 import {
   adCampaignsStore,
   calendarStore,
@@ -8,7 +8,10 @@ import {
   settingsStore,
   athleteStarsStore,
   starHistoryStore,
-  getSyncQueue
+  getSyncQueue,
+  isFictitiousUser,
+  isFictitiousSession,
+  sanitizeForFirestore
 } from "./indexedDB";
 import { UserProfile } from "@/lib/authService";
 
@@ -51,16 +54,40 @@ function isProfileFunctionallyDifferent(p1: UserProfile | null, p2: UserProfile 
 }
 
 let activeUnsubscribes: (() => void)[] = [];
+let activeSyncKey: string | null = null;
+let syncGeneration = 0;
+
+function reportListenerError(name: string, err: any) {
+  console.warn(`Firestore ${name} real-time listener error:`, err?.message || err);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("firestore-sync-error", { detail: { error: err?.message || String(err) } })
+    );
+  }
+}
 
 /**
  * Initializes Firebase real-time listeners for all core collections
  * using Incremental Delta Streaming (snapshot.docChanges()) for < 1ms local-first updates.
+ *
+ * Idempotent: calling it again with the same uid/role/club does NOT tear down and re-create
+ * listeners (rapid listener churn triggers Firestore "INTERNAL ASSERTION FAILED (ca9/b815)").
  */
-export function startRealtimeSync(currentUserUid: string | null) {
+export function startRealtimeSync(
+  currentUserUid: string | null,
+  scope?: { role?: string | null; clubId?: string | null }
+) {
+  if (typeof window === "undefined") return;
+
+  const syncKey = `${currentUserUid || "anon"}|${scope?.role || ""}|${scope?.clubId || ""}`;
+  if (activeSyncKey === syncKey && activeUnsubscribes.length > 0) {
+    return; // Already listening with identical scope
+  }
+
   // Clear any existing active listeners to prevent multiple streams
   stopRealtimeSync();
-
-  if (typeof window === "undefined") return;
+  activeSyncKey = syncKey;
+  const generation = ++syncGeneration;
 
   // Check if the api key is the mock placeholder to prevent console warnings on mock environments
   const isLocalhost =
@@ -82,20 +109,24 @@ export function startRealtimeSync(currentUserUid: string | null) {
   const usersUnsub = onSnapshot(
     collection(db, "users"),
     async (snapshot) => {
+      if (generation !== syncGeneration) return;
       try {
         const usersList: UserProfile[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data() as UserProfile;
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as UserProfile;
           if (data) {
             if (!data.uid) {
-              data.uid = doc.id;
+              data.uid = docSnap.id;
             }
-            usersList.push(data);
+            if (!isFictitiousUser(data)) {
+              usersList.push(data);
+            }
           }
         });
 
         // Save to local simulated_users list, keeping unsynced local users to avoid overwriting them
-        const localUsers = (await settingsStore.getItem<UserProfile[]>("simulated_users")) || [];
+        const rawLocalUsers = (await settingsStore.getItem<UserProfile[]>("simulated_users")) || [];
+        const localUsers = rawLocalUsers.filter((u) => !isFictitiousUser(u));
         const queue = await getSyncQueue();
         const pendingUserUids = new Set(
           queue.filter((q) => q.collection === "users").map((q) => q.payloadId)
@@ -198,53 +229,58 @@ export function startRealtimeSync(currentUserUid: string | null) {
     storeEventName: string
   ) {
     let isFirstSnapshot = true;
-    return onSnapshot(collection(db, collectionName), async (snapshot) => {
-      try {
-        const queue = await getSyncQueue();
-        const pendingIds = new Set(
-          queue.filter((item) => item.collection === collectionName).map((item) => item.payloadId)
-        );
-
-        if (isFirstSnapshot) {
-          isFirstSnapshot = false;
-          const remoteIds = new Set(snapshot.docs.map((d) => d.id));
-          const keysToRemove: string[] = [];
-          await store.iterate((_: any, key: string) => {
-            if (!remoteIds.has(key) && !pendingIds.has(key)) {
-              keysToRemove.push(key);
-            }
-          });
-          await Promise.all([
-            ...keysToRemove.map((k) => store.removeItem(k)),
-            ...snapshot.docs
-              .filter((d) => !pendingIds.has(d.id))
-              .map((d) => store.setItem(d.id, d.data()))
-          ]);
-        } else {
-          const changes = snapshot.docChanges();
-          if (changes.length === 0) return;
-
-          await Promise.all(
-            changes.map(async (change) => {
-              const docId = change.doc.id;
-              if (pendingIds.has(docId)) return;
-
-              if (change.type === "removed") {
-                await store.removeItem(docId);
-              } else {
-                await store.setItem(docId, change.doc.data());
-              }
-            })
+    return onSnapshot(
+      collection(db, collectionName),
+      async (snapshot) => {
+        if (generation !== syncGeneration) return;
+        try {
+          const queue = await getSyncQueue();
+          const pendingIds = new Set(
+            queue.filter((item) => item.collection === collectionName).map((item) => item.payloadId)
           );
-        }
 
-        window.dispatchEvent(
-          new CustomEvent("local-db-change", { detail: { store: storeEventName } })
-        );
-      } catch (err) {
-        console.error(`Error in real-time ${collectionName} sync:`, err);
-      }
-    });
+          if (isFirstSnapshot) {
+            isFirstSnapshot = false;
+            const remoteIds = new Set(snapshot.docs.map((d) => d.id));
+            const keysToRemove: string[] = [];
+            await store.iterate((_: any, key: string) => {
+              if (!remoteIds.has(key) && !pendingIds.has(key)) {
+                keysToRemove.push(key);
+              }
+            });
+            await Promise.all([
+              ...keysToRemove.map((k) => store.removeItem(k)),
+              ...snapshot.docs
+                .filter((d) => !pendingIds.has(d.id))
+                .map((d) => store.setItem(d.id, d.data()))
+            ]);
+          } else {
+            const changes = snapshot.docChanges();
+            if (changes.length === 0) return;
+
+            await Promise.all(
+              changes.map(async (change) => {
+                const docId = change.doc.id;
+                if (pendingIds.has(docId)) return;
+
+                if (change.type === "removed") {
+                  await store.removeItem(docId);
+                } else {
+                  await store.setItem(docId, change.doc.data());
+                }
+              })
+            );
+          }
+
+          window.dispatchEvent(
+            new CustomEvent("local-db-change", { detail: { store: storeEventName } })
+          );
+        } catch (err) {
+          console.error(`Error in real-time ${collectionName} sync:`, err);
+        }
+      },
+      (err) => reportListenerError(collectionName, err)
+    );
   }
 
   // 2. Sync Ad Campaigns Collection (Incremental Real-Time)
@@ -262,124 +298,153 @@ export function startRealtimeSync(currentUserUid: string | null) {
     createIncrementalStoreListener("macrocycles", macrocyclesStore, "macrocycles_local")
   );
 
-  // 5. Sync Sessions Collection (Incremental Real-Time + Scoped Cloud Filter + Live Draft Protection)
-  settingsStore
-    .getItem<UserProfile>("current_user")
-    .then((localUser) => {
-      let isFirstSessionsSnapshot = true;
-      const role = localUser?.role || "archer";
-      const clubId = localUser?.clubId || null;
+  // 5. Sync Sessions (scoped, attached synchronously — no late async listener, no OR query)
+  //    - Archer: only own sessions
+  //    - Coach / Team admin: own sessions + sessions of their club
+  //    - SuperAdmin: whole collection
+  const role = scope?.role || "archer";
+  const clubId = scope?.clubId || null;
+  const isCoachRole = role === "coach" || role === "team_admin" || role === "team_admin_coach";
 
-      // Smart Query Scoping:
-      // - SuperAdmins and Coaches receive global or club-wide telemetry
-      // - Individual archers only download their own sessions (+ their club's sessions if in a club), saving up to 95% Firestore reads
-      let sessionsTarget: any = collection(db, "sessions");
-      if (currentUserUid && role === "archer") {
-        if (clubId) {
-          sessionsTarget = query(
-            collection(db, "sessions"),
-            or(where("userId", "==", currentUserUid), where("clubId", "==", clubId))
-          );
-        } else {
-          sessionsTarget = query(
-            collection(db, "sessions"),
-            where("userId", "==", currentUserUid)
-          );
+  async function applySessionsSnapshot(snapshot: any, isFirst: boolean, isOwnScope: boolean) {
+    const queue = await getSyncQueue();
+    const pendingSessionIds = new Set(
+      queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
+    );
+
+    if (isFirst) {
+      const remoteIds = new Set(snapshot.docs.map((d: any) => d.id));
+      const keysToRemove: string[] = [];
+      const localSessionsToRescue: Array<{ key: string; value: any }> = [];
+
+      await sessionsStore.iterate((value: any, key: string) => {
+        if (isFictitiousSession(value, key)) {
+          keysToRemove.push(key);
+          return;
         }
-      }
-
-      const sessionsUnsub = onSnapshot(sessionsTarget, async (snapshot: any) => {
-        try {
-          const queue = await getSyncQueue();
-          const pendingSessionIds = new Set(
-            queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
-          );
-
-          if (isFirstSessionsSnapshot) {
-            isFirstSessionsSnapshot = false;
-            const remoteIds = new Set(snapshot.docs.map((d: any) => d.id));
-            const keysToRemove: string[] = [];
-
-            await sessionsStore.iterate((value: any, key: string) => {
-              const isOwnLocalDraft =
-                value && value.isDraft && (!currentUserUid || value.userId === currentUserUid);
-              const isDemoSession = typeof key === "string" && key.startsWith("SES-D-");
-              if (
-                !remoteIds.has(key) &&
-                !pendingSessionIds.has(key) &&
-                !isOwnLocalDraft &&
-                !isDemoSession
-              ) {
-                keysToRemove.push(key);
-              }
-            });
-
-            await Promise.all([
-              ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
-              ...snapshot.docs
-                .filter((d: any) => !pendingSessionIds.has(d.id))
-                .map(async (d: any) => {
-                  const data = d.data();
-                  if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
-                    const existingLocal = await sessionsStore.getItem<any>(d.id);
-                    if (
-                      existingLocal &&
-                      (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
-                        (data.updatedAt || data.timestamp || 0)
-                    ) {
-                      return;
-                    }
-                  }
-                  await sessionsStore.setItem(d.id, { ...data, id: d.id });
-                })
-            ]);
-          } else {
-            const changes = snapshot.docChanges();
-            if (changes.length === 0) return;
-
-            await Promise.all(
-              changes.map(async (change: any) => {
-                const docId = change.doc.id;
-                if (pendingSessionIds.has(docId)) return;
-
-                if (change.type === "removed") {
-                  const existingLocal = await sessionsStore.getItem<any>(docId);
-                  if (
-                    existingLocal?.isDraft &&
-                    currentUserUid &&
-                    existingLocal.userId === currentUserUid
-                  ) {
-                    return;
-                  }
-                  await sessionsStore.removeItem(docId);
-                } else {
-                  const data = change.doc.data();
-                  if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
-                    const existingLocal = await sessionsStore.getItem<any>(docId);
-                    if (
-                      existingLocal &&
-                      (existingLocal.updatedAt || existingLocal.timestamp || 0) >=
-                        (data.updatedAt || data.timestamp || 0)
-                    ) {
-                      return;
-                    }
-                  }
-                  await sessionsStore.setItem(docId, { ...data, id: docId });
-                }
-              })
-            );
-          }
-
-          window.dispatchEvent(
-            new CustomEvent("local-db-change", { detail: { store: "sessions_local" } })
-          );
-        } catch (err) {
-          console.error("Error in real-time sessions sync:", err);
+        if (!isOwnScope || !currentUserUid) return;
+        const isOwnSession = value && (value.userId === currentUserUid || value.userUid === currentUserUid);
+        if (!isOwnSession || value.isDraft || value.isDuel) return;
+        // Own completed session missing in the cloud → upload it (NEVER delete user data)
+        if (!remoteIds.has(key) && !pendingSessionIds.has(key)) {
+          localSessionsToRescue.push({ key, value });
         }
       });
-      activeUnsubscribes.push(sessionsUnsub);
-    })
-    .catch((err) => console.error("Failed to initialize scoped sessions listener:", err));
+
+      for (const { key, value } of localSessionsToRescue) {
+        const payload = sanitizeForFirestore({
+          ...value,
+          id: value.id || value.uid || key,
+          userId: currentUserUid,
+          clubId: value.clubId || clubId || null,
+          updatedAt: Date.now()
+        });
+        setDoc(doc(db, "sessions", key), payload, { merge: true }).catch((e) =>
+          console.warn("Could not rescue local session to cloud:", e?.message || e)
+        );
+      }
+
+      await Promise.all([
+        ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
+        ...snapshot.docs
+          .filter((d: any) => !pendingSessionIds.has(d.id) && !isFictitiousSession(d.data(), d.id))
+          .map(async (d: any) => {
+            const data = d.data();
+            if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+              const existingLocal = await sessionsStore.getItem<any>(d.id);
+              if (
+                existingLocal &&
+                (existingLocal.updatedAt || existingLocal.timestamp || 0) >= (data.updatedAt || data.timestamp || 0)
+              ) {
+                return;
+              }
+            }
+            await sessionsStore.setItem(d.id, { ...data, id: d.id });
+          })
+      ]);
+    } else {
+      const changes = snapshot.docChanges();
+      if (changes.length === 0) return;
+
+      await Promise.all(
+        changes.map(async (change: any) => {
+          const docId = change.doc.id;
+          if (pendingSessionIds.has(docId)) return;
+
+          if (change.type === "removed") {
+            const existingLocal = await sessionsStore.getItem<any>(docId);
+            // Never drop the user's own data just because it left a query scope
+            if (
+              existingLocal &&
+              currentUserUid &&
+              (existingLocal.userId === currentUserUid || existingLocal.userUid === currentUserUid) &&
+              !isOwnScope
+            ) {
+              return;
+            }
+            if (existingLocal?.isDraft && currentUserUid && existingLocal.userId === currentUserUid) {
+              return;
+            }
+            await sessionsStore.removeItem(docId);
+          } else {
+            const data = change.doc.data();
+            if (isFictitiousSession(data, docId)) {
+              await sessionsStore.removeItem(docId);
+              return;
+            }
+            if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
+              const existingLocal = await sessionsStore.getItem<any>(docId);
+              if (
+                existingLocal &&
+                (existingLocal.updatedAt || existingLocal.timestamp || 0) >= (data.updatedAt || data.timestamp || 0)
+              ) {
+                return;
+              }
+            }
+            await sessionsStore.setItem(docId, { ...data, id: docId });
+          }
+        })
+      );
+    }
+
+    window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "sessions_local" } }));
+  }
+
+  function attachSessionsListener(target: any, isOwnScope: boolean, label: string) {
+    let isFirst = true;
+    const unsub = onSnapshot(
+      target,
+      async (snapshot: any) => {
+        if (generation !== syncGeneration) return;
+        const first = isFirst;
+        isFirst = false;
+        try {
+          await applySessionsSnapshot(snapshot, first, isOwnScope);
+        } catch (err) {
+          console.error(`Error in real-time sessions sync (${label}):`, err);
+        }
+      },
+      (err: any) => reportListenerError(`sessions:${label}`, err)
+    );
+    activeUnsubscribes.push(unsub);
+  }
+
+  if (role === "superadmin") {
+    attachSessionsListener(collection(db, "sessions"), true, "all");
+  } else if (currentUserUid) {
+    attachSessionsListener(
+      query(collection(db, "sessions"), where("userId", "==", currentUserUid)),
+      true,
+      "own"
+    );
+    if (isCoachRole && clubId) {
+      attachSessionsListener(
+        query(collection(db, "sessions"), where("clubId", "==", clubId)),
+        false,
+        "club"
+      );
+    }
+  }
 
   // 6. Sync Athlete Stars Collection (Incremental Real-Time)
   activeUnsubscribes.push(
@@ -396,9 +461,17 @@ export function startRealtimeSync(currentUserUid: string | null) {
  * Detaches all active Firestore real-time listeners
  */
 export function stopRealtimeSync() {
+  syncGeneration++;
+  activeSyncKey = null;
   if (activeUnsubscribes.length > 0) {
     console.log("Detaching real-time Firestore sync listeners...");
-    activeUnsubscribes.forEach((unsub) => unsub());
+    activeUnsubscribes.forEach((unsub) => {
+      try {
+        unsub();
+      } catch {
+        // ignore
+      }
+    });
     activeUnsubscribes = [];
   }
 }

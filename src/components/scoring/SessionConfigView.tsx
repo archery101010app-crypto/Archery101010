@@ -38,7 +38,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   useEffect(() => {
     async function checkDrafts() {
       const list = await getLocalSessions();
-      const draft = list.find((s) => s.isDraft === true && (s.userId === user.uid || s.userUid === user.uid));
+      const draft = list
+        .filter((s) => s.isDraft === true && !s.isDuel && (s.userId === user.uid || s.userUid === user.uid))
+        .sort((a, b) => (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0))[0];
       if (draft) {
         setDraftSession(draft);
       }
@@ -116,6 +118,19 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const handleDiscardDraft = async () => {
     if (draftSession && confirm("¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.")) {
       await deleteLocalSession(draftSession.id);
+      try {
+        const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "DELETE",
+          payloadId: draftSession.id,
+          payload: null,
+          timestamp: Date.now()
+        });
+      } catch (err) {
+        console.warn("Draft cloud delete deferred:", err);
+      }
       setDraftSession(null);
     }
   };

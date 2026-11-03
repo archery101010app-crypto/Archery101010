@@ -239,6 +239,18 @@ service cloud.firestore {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
     }
 
+    // Club of the requesting coach (null if none)
+    function requesterClubId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('clubId', null)
+        : null;
+    }
+
+    // Coach that owns / belongs to the given club
+    function isCoachOfClub(clubId) {
+      return isCoach() && clubId != null && clubId is string && requesterClubId() == clubId;
+    }
+
     function validOptionalString(data, field, minLen, maxLen) {
       return !(field in data) || data[field] == null ||
         (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
@@ -324,7 +336,7 @@ service cloud.firestore {
         validOptionalList(data, 'ends', 100) &&
         validOptionalString(data, 'sessionNote', 0, 2000) &&
         validOptionalList(data, 'impacts', 500) &&
-        validOptionalNumber(data, 'totalArrowsVolume', 0, 2000) &&
+        validOptionalNumber(data, 'totalArrowsVolume', 0, 10000) &&
         validOptionalMap(data, 'blockStats') &&
         validOptionalBool(data, 'deletedByArcher') &&
         validOptionalBool(data, 'restoredByCoach') &&
@@ -479,19 +491,23 @@ service cloud.firestore {
       // Authenticated users can read profiles for rival searches, club directories, and real-time sync
       allow read: if isAuthenticated();
 
-      // Users can create their own document; coaches can create athlete ('archer') profiles; superadmins can create any profile.
+      // Users can create their own document; coaches can create athlete ('archer') profiles for THEIR club; superadmins can create any profile.
       // Privilege escalation to 'superadmin' is strictly prohibited for standard users.
       allow create: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin() || (isCoach() && request.resource.data.role == 'archer')) &&
+        (isOwner(userId) || isSuperAdmin() ||
+          (isCoach() && request.resource.data.role == 'archer' && isCoachOfClub(request.resource.data.get('clubId', null)))) &&
         request.resource.data.uid == userId &&
         isValidUser(request.resource.data) &&
         (isSuperAdmin() || request.resource.data.role != 'superadmin');
 
-      // Users can update their own profile; coaches can update athlete ('archer') profiles; superadmins can update any profile.
+      // Users can update their own profile; coaches can update athlete ('archer') profiles of THEIR club
+      // (including unlinking them); superadmins can update any profile.
       // Role elevation to 'superadmin' is strictly forbidden.
       // UID is immutable.
       allow update: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin() || (isCoach() && resource.data.role == 'archer' && request.resource.data.role == 'archer')) &&
+        (isOwner(userId) || isSuperAdmin() ||
+          (isCoach() && resource.data.role == 'archer' && request.resource.data.role == 'archer' &&
+            isCoachOfClub(resource.data.get('clubId', null)))) &&
         request.resource.data.uid == userId &&
         request.resource.data.uid == resource.data.uid &&
         isValidUser(request.resource.data) &&
@@ -511,10 +527,11 @@ service cloud.firestore {
         (request.resource.data.userId == request.auth.uid || isSuperAdmin()) &&
         isValidSession(request.resource.data);
 
-      // Session owner, their coach, or superadmin can update (e.g., soft delete, coach note, session restore).
+      // Session owner, the coach of the session's club, or superadmin can update (e.g., soft delete, coach note, session restore).
       // Session ownership cannot be transferred (userId is immutable).
       allow update: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isCoach() || isSuperAdmin()) &&
+        (resource.data.userId == request.auth.uid || isSuperAdmin() ||
+          isCoachOfClub(resource.data.get('clubId', null))) &&
         request.resource.data.userId == resource.data.userId &&
         isValidSession(request.resource.data);
 
