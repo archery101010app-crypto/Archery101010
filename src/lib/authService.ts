@@ -298,10 +298,14 @@ export async function loginUser(email: string, password?: string): Promise<UserP
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
+          // Legacy account with the same email but a different UID: adopt its data under the real Auth UID
+          // and persist users/{authUid} right away so future logins resolve directly (no duplicate lookups).
           user = sanitizeUserProfile({
             ...querySnapshot.docs[0].data(),
-            uid: authUid
+            uid: authUid,
+            email: targetEmail
           });
+          cloudWriteUser(user);
         }
       }
 
@@ -716,7 +720,21 @@ export function isSuperAdmin(user: UserProfile | null): boolean {
   return user?.role === "superadmin";
 }
 
+// De-duplicates concurrent social logins for the same Firebase UID (redirect handler + onAuthStateChanged race)
+const inFlightSocialLogins = new Map<string, Promise<UserProfile>>();
+
 export async function loginSocialUser(email: string, displayName: string, explicitUid?: string): Promise<UserProfile> {
+  const key = explicitUid || auth.currentUser?.uid || email.trim().toLowerCase();
+  const pending = inFlightSocialLogins.get(key);
+  if (pending) return pending;
+  const task = loginSocialUserInternal(email, displayName, explicitUid).finally(() => {
+    inFlightSocialLogins.delete(key);
+  });
+  inFlightSocialLogins.set(key, task);
+  return task;
+}
+
+async function loginSocialUserInternal(email: string, displayName: string, explicitUid?: string): Promise<UserProfile> {
   const targetEmail = email.trim().toLowerCase();
   const isAdminEmail = isSuperAdminEmail(targetEmail);
   const authUid = explicitUid || auth.currentUser?.uid || "";
@@ -725,6 +743,7 @@ export async function loginSocialUser(email: string, displayName: string, explic
     throw new Error("No se pudo verificar tu cuenta de Google. Intenta iniciar sesión de nuevo.");
   }
   let user: UserProfile | undefined = undefined;
+  let needsCloudWrite = false;
 
   const cleanDisplay = (displayName || targetEmail.split("@")[0] || "Arquero").trim();
   const autoNickname = isAdminEmail
@@ -741,10 +760,14 @@ export async function loginSocialUser(email: string, displayName: string, explic
         const q = query(collection(db, "users"), where("email", "==", targetEmail));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
+          // Legacy account with the same email but a different UID: adopt its data under the real Auth UID
+          // and persist users/{authUid} right away so future logins resolve directly (no duplicate lookups).
           user = sanitizeUserProfile({
             ...querySnapshot.docs[0].data(),
-            uid: authUid
+            uid: authUid,
+            email: targetEmail
           });
+          needsCloudWrite = true;
         }
       }
 
@@ -795,10 +818,13 @@ export async function loginSocialUser(email: string, displayName: string, explic
         role: isAdminEmail ? "superadmin" : user.role,
         plan: isAdminEmail ? "PRO" : user.plan,
       });
+      // Profile only existed on this device: make sure it reaches the cloud so the Coach can find it
+      needsCloudWrite = true;
     }
   }
 
-  // 3. Create default profile if user doesn't exist anywhere (leave birthDate empty so ProfileCompletionModal prompts them once)
+  // 3. Create default profile if user doesn't exist anywhere.
+  // No fictitious equipment/body data: blank values, ProfileCompletionModal asks the real data once.
   if (!user) {
     user = {
       uid: authUid,
@@ -806,19 +832,19 @@ export async function loginSocialUser(email: string, displayName: string, explic
       fullName: cleanDisplay,
       nickname: autoNickname,
       birthDate: isAdminEmail ? "1995-05-15" : "",
-      country: "CR",
+      country: isAdminEmail ? "CR" : "",
       city: "",
-      gender: "M",
+      gender: (isAdminEmail ? "M" : "") as any,
       bowConfig: {
-        type: "Barebow",
-        brand: "Hoyt",
-        model: "Satori",
-        poundage: 35,
+        type: "Recurve",
+        brand: "",
+        model: "",
+        poundage: 0,
         defaultDistance: 18
       },
       physicalData: {
-        height: 175,
-        weight: 70,
+        height: 0,
+        weight: 0,
         dominantEye: "R",
         dominantHand: "R"
       },
@@ -836,26 +862,28 @@ export async function loginSocialUser(email: string, displayName: string, explic
       .map(sanitizeUserProfile);
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
-
-    if (isProfileValid(user)) {
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "users",
-        operation: "INSERT",
-        payloadId: user.uid,
-        payload: user,
-        timestamp: Date.now()
-      });
-
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        cloudWriteUser(user);
-      }
-    }
+    // Always persist the new account in the cloud (even before the profile is completed),
+    // otherwise an athlete who closes the app early is invisible to the Coach / invite code.
+    needsCloudWrite = true;
   }
 
   if (isAdminEmail && user.role !== "superadmin") {
     user.role = "superadmin";
     user.plan = "PRO";
+  }
+
+  if (needsCloudWrite) {
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "users",
+      operation: "INSERT",
+      payloadId: user.uid,
+      payload: user,
+      timestamp: Date.now()
+    });
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      cloudWriteUser(user);
+    }
   }
 
   await migrateOfflineGuestData(user.uid);
@@ -865,6 +893,46 @@ export async function loginSocialUser(email: string, displayName: string, explic
 
 const GOOGLE_WEB_CLIENT_ID = "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
 const FIREBASE_AUTH_HANDLER_URI = "https://archery101010-c0bb4.firebaseapp.com/__/auth/handler";
+const OAUTH_NONCE_KEY = "archery_google_oauth_nonce";
+const NATIVE_SIGNIN_TIMEOUT_MS = 120000;
+
+/** Cryptographically random nonce, persisted so the returning id_token can be verified (anti token-injection). */
+function createAndStoreOAuthNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try {
+    localStorage.setItem(OAUTH_NONCE_KEY, JSON.stringify({ nonce, ts: Date.now() }));
+  } catch {}
+  return nonce;
+}
+
+/** Validates that the id_token was issued for OUR client and carries the nonce we generated (single use, 10 min TTL). */
+function verifyGoogleIdTokenNonce(idToken: string): boolean {
+  let stored: { nonce: string; ts: number } | null = null;
+  try {
+    const raw = localStorage.getItem(OAUTH_NONCE_KEY);
+    localStorage.removeItem(OAUTH_NONCE_KEY);
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {}
+  if (!stored || !stored.nonce || Date.now() - stored.ts > 10 * 60 * 1000) return false;
+  try {
+    const part = idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(decodeURIComponent(escape(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "=")))));
+    return claims.nonce === stored.nonce && claims.aud === GOOGLE_WEB_CLIENT_ID;
+  } catch {
+    return false;
+  }
+}
+
+/** Real Google email is mandatory: never fabricate synthetic addresses. */
+function requireRealEmail(...candidates: (string | null | undefined)[]): string {
+  const found = candidates.find((c) => typeof c === "string" && c.includes("@"));
+  if (!found) {
+    throw new Error("Google no compartió tu correo. Vuelve a intentarlo y acepta el permiso de correo electrónico.");
+  }
+  return found;
+}
 
 export async function processSocialRedirectResult(): Promise<UserProfile | null> {
   if (typeof window === "undefined") return null;
@@ -894,17 +962,15 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
     }
 
     if (idToken) {
+      if (!verifyGoogleIdTokenNonce(idToken)) {
+        console.warn("id_token rechazado: nonce/audiencia no coinciden con una solicitud iniciada en este dispositivo.");
+        return null;
+      }
       const credential = GoogleAuthProvider.credential(idToken);
       const result = await signInWithCredential(auth, credential);
       const u = result.user;
-      const email =
-        u.email ||
-        u.providerData?.find((p) => p.email)?.email ||
-        `${u.uid}@google.archery101010.com`;
-      const displayName =
-        u.displayName ||
-        u.providerData?.find((p) => p.displayName)?.displayName ||
-        "Arquero Google";
+      const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
+      const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
       return await loginSocialUser(email, displayName, u.uid);
     }
 
@@ -912,14 +978,8 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
     const result = await getRedirectResult(auth);
     if (result && result.user) {
       const u = result.user;
-      const email =
-        u.email ||
-        u.providerData?.find((p) => p.email)?.email ||
-        `${u.uid}@social.archery101010.com`;
-      const displayName =
-        u.displayName ||
-        u.providerData?.find((p) => p.displayName)?.displayName ||
-        "Arquero";
+      const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
+      const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
       return await loginSocialUser(email, displayName, u.uid);
     }
 
@@ -928,14 +988,8 @@ export async function processSocialRedirectResult(): Promise<UserProfile | null>
       auth.currentUser.providerData.some((p) => p.providerId === "google.com" || p.providerId === "apple.com")
     ) {
       const u = auth.currentUser;
-      const email =
-        u.email ||
-        u.providerData?.find((p) => p.email)?.email ||
-        `${u.uid}@social.archery101010.com`;
-      const displayName =
-        u.displayName ||
-        u.providerData?.find((p) => p.displayName)?.displayName ||
-        "Arquero";
+      const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
+      const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
       return await loginSocialUser(email, displayName, u.uid);
     }
   } catch (err) {
@@ -964,14 +1018,8 @@ export async function authenticateWithSocialProvider(
     try {
       const result = await signInWithPopup(auth, appleProvider);
       const u = result.user;
-      const email =
-        u.email ||
-        u.providerData?.find((p) => p.email)?.email ||
-        `${u.uid}@apple.archery101010.com`;
-      const displayName =
-        u.displayName ||
-        u.providerData?.find((p) => p.displayName)?.displayName ||
-        "Arquero Apple";
+      const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
+      const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
       return await loginSocialUser(email, displayName, u.uid);
     } catch (appleErr: any) {
       if (appleErr?.code === "auth/popup-blocked" || isCapacitorNative) {
@@ -995,7 +1043,13 @@ export async function authenticateWithSocialProvider(
         statusCode?: number;
         error?: string;
       } = await new Promise((resolve) => {
+        // Never hang forever: if the native picker never answers, resolve with a timeout status
+        const timer = setTimeout(() => {
+          delete (window as any).__onNativeGoogleSignIn;
+          resolve({ success: false, statusCode: -2, error: "timeout" });
+        }, NATIVE_SIGNIN_TIMEOUT_MS);
         (window as any).__onNativeGoogleSignIn = (res: any) => {
+          clearTimeout(timer);
           delete (window as any).__onNativeGoogleSignIn;
           resolve(res);
         };
@@ -1006,6 +1060,9 @@ export async function authenticateWithSocialProvider(
         if (payload?.statusCode === 12501 || payload?.statusCode === 16) {
           throw new Error("Inicio de sesión cancelado.");
         }
+        if (payload?.statusCode === -2) {
+          throw new Error("Google tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.");
+        }
         // If native Play Services GoogleSignIn fails with statusCode 10 (e.g., Play App Signing SHA-1 mismatch) or 12500,
         // seamlessly fall through to the Web OAuth 2.0 id_token flow (which uses GOOGLE_WEB_CLIENT_ID and never checks SHA-1)
         console.warn("Native GoogleSignIn fallback to Web OAuth 2.0 id_token flow:", payload?.error || payload?.statusCode);
@@ -1015,16 +1072,9 @@ export async function authenticateWithSocialProvider(
             const credential = GoogleAuthProvider.credential(payload.idToken);
             const result = await signInWithCredential(auth, credential);
             const u = result.user;
-            const email =
-              payload.email ||
-              u.email ||
-              u.providerData?.find((p) => p.email)?.email ||
-              `${u.uid}@google.archery101010.com`;
+            const email = requireRealEmail(payload.email, u.email, u.providerData?.find((p) => p.email)?.email);
             const displayName =
-              payload.displayName ||
-              u.displayName ||
-              u.providerData?.find((p) => p.displayName)?.displayName ||
-              "Arquero Google";
+              payload.displayName || u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
             return await loginSocialUser(email, displayName, u.uid);
           } catch (credErr) {
             console.warn("signInWithCredential warning, falling back to Web OAuth 2.0 id_token flow:", credErr);
@@ -1033,7 +1083,7 @@ export async function authenticateWithSocialProvider(
       }
     }
 
-    const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const nonce = createAndStoreOAuthNonce();
     const oauthUrl =
       `https://accounts.google.com/o/oauth2/v2/auth` +
       `?client_id=${encodeURIComponent(GOOGLE_WEB_CLIENT_ID)}` +
@@ -1054,14 +1104,8 @@ export async function authenticateWithSocialProvider(
   try {
     const result = await signInWithPopup(auth, provider);
     const u = result.user;
-    const email =
-      u.email ||
-      u.providerData?.find((p) => p.email)?.email ||
-      `${u.uid}@google.archery101010.com`;
-    const displayName =
-      u.displayName ||
-      u.providerData?.find((p) => p.displayName)?.displayName ||
-      "Arquero Google";
+    const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
+    const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
 
     return await loginSocialUser(email, displayName, u.uid);
   } catch (popupErr: any) {

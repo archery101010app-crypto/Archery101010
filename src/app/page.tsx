@@ -155,13 +155,7 @@ export default function Home() {
   // Check authentication status and initialize database on mount
   useEffect(() => {
     async function initApp() {
-      try {
-        // Seed default ad campaigns if none exist in local storage
-        const { seedDemoAdCampaigns } = await import("@/lib/adManager");
-        await seedDemoAdCampaigns();
-      } catch (err) {
-        console.error("Error seeding default ad campaigns:", err);
-      }
+      // Demo ad campaigns are no longer auto-seeded: campaigns come only from the Super Admin panel.
 
       try {
         const loggedUser = await getLoggedUser();
@@ -210,7 +204,13 @@ export default function Home() {
         // Clean up all mock/demo/legacy users and fictitious sessions from local DB and sync queue
         try {
           const { getLocalSetting, saveLocalSetting, getSyncQueue, removeFromSyncQueue, purgeAllFictitiousData, FAKE_CLUB_IDS } = await import("@/lib/db/indexedDB");
-          await purgeAllFictitiousData();
+          // Heavy fictitious-data purge runs only once per app version (faster startup)
+          const { APP_VERSION } = await import("@/lib/version");
+          const lastPurge = await getLocalSetting<string>("fictitious_purge_version", "");
+          if (lastPurge !== APP_VERSION) {
+            await purgeAllFictitiousData();
+            await saveLocalSetting("fictitious_purge_version", APP_VERSION);
+          }
 
           // Athletes that were "linked" to a non-existent fallback club must relink with their real Coach code
           if (

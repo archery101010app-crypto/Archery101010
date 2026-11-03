@@ -511,7 +511,14 @@ service cloud.firestore {
         request.resource.data.uid == userId &&
         request.resource.data.uid == resource.data.uid &&
         isValidUser(request.resource.data) &&
-        (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin'));
+        (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin')) &&
+        // Anti self-escalation: a user cannot change their OWN role while belonging to a club
+        // (prevents an athlete from turning into "coach" of the club they joined and editing teammates).
+        (isSuperAdmin() || !isOwner(userId) ||
+          request.resource.data.role == resource.data.role ||
+          request.resource.data.get('clubId', null) == null ||
+          resource.data.get('isClubCreator', false) == true ||
+          (request.resource.data.get('isClubCreator', false) == true && resource.data.get('clubId', null) == null));
 
       // Users can delete their own profile; superadmins can delete any profile
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());

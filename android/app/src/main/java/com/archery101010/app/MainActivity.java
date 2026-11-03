@@ -53,15 +53,12 @@ public class MainActivity extends BridgeActivity {
                         sendAccountError(code, "Cancelado");
                         return;
                     }
-                    // When Play Store App Signing key or Play Services returns code 10 / 12500,
-                    // never return error 10 to JS — immediately launch Web OAuth 2.0 id_token flow
-                    getSharedPreferences("archery_auth_prefs", MODE_PRIVATE)
-                        .edit()
-                        .putBoolean("prefer_web_oauth", true)
-                        .apply();
-                    launchWebGoogleOAuthFallback();
+                    // Code 10 / 12500 / network errors: report to JS, which launches the Web OAuth 2.0
+                    // id_token flow with a verified nonce. Never persist a permanent preference: a transient
+                    // failure must not disable the native account picker forever.
+                    sendAccountError(code, "Native Google Sign-In failed");
                 } catch (Exception ex) {
-                    launchWebGoogleOAuthFallback();
+                    sendAccountError(-1, ex.getMessage());
                 }
             }
         );
@@ -71,7 +68,6 @@ public class MainActivity extends BridgeActivity {
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
             WebView webView = getBridge().getWebView();
-            webView.clearCache(true);
             CookieManager.getInstance().setAcceptCookie(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
             WebSettings settings = webView.getSettings();
@@ -219,12 +215,8 @@ public class MainActivity extends BridgeActivity {
         public void startGoogleSignIn() {
             runOnUiThread(() -> {
                 try {
-                    boolean preferWebOAuth = getSharedPreferences("archery_auth_prefs", MODE_PRIVATE)
-                        .getBoolean("prefer_web_oauth", false);
-                    if (preferWebOAuth) {
-                        launchWebGoogleOAuthFallback();
-                        return;
-                    }
+                    // Clear any legacy "prefer_web_oauth" flag left by older builds
+                    getSharedPreferences("archery_auth_prefs", MODE_PRIVATE).edit().remove("prefer_web_oauth").apply();
                     GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                         .requestIdToken(GOOGLE_WEB_CLIENT_ID)
                         .requestEmail()
@@ -235,7 +227,7 @@ public class MainActivity extends BridgeActivity {
                         googleSignInLauncher.launch(client.getSignInIntent());
                     });
                 } catch (Exception e) {
-                    launchWebGoogleOAuthFallback();
+                    sendAccountError(-1, e.getMessage());
                 }
             });
         }

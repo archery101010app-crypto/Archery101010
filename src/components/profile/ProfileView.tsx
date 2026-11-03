@@ -1230,7 +1230,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       )}
 
       {/* Superadmin Panel Direct Link */}
-      {(user.role === "superadmin" || user.email?.toLowerCase().includes("admin")) && onNavigate && (
+      {user.role === "superadmin" && onNavigate && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-2.5">
           <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
             <Shield size={14} className="text-cyan-neon" />

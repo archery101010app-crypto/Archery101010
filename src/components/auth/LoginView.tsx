@@ -98,6 +98,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   }, []);
 
   // Check for OAuth redirect completion (Google)
+  const [isAndroidNativeApp, setIsAndroidNativeApp] = useState(false);
+  useEffect(() => {
+    // Apple Sign-In popups are not supported inside the Android WebView: hide the button there
+    const w = window as any;
+    setIsAndroidNativeApp(!!w.ArcheryNativeAuth || w.Capacitor?.getPlatform?.() === "android");
+  }, []);
+
   useEffect(() => {
     let resolved = false;
 
@@ -491,6 +498,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <span>{t("googleLogin")}</span>
           </button>
 
+          {!isAndroidNativeApp && (
           <button
             type="button"
             disabled={loading}
@@ -502,6 +510,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             </svg>
             <span>{t("appleLogin")}</span>
           </button>
+          )}
         </div>
       </div>
 
