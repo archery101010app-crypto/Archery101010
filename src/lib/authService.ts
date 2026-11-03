@@ -929,44 +929,31 @@ export async function authenticateWithSocialProvider(
         if (payload?.statusCode === 12501 || payload?.statusCode === 16) {
           throw new Error("Inicio de sesión cancelado.");
         }
-        throw new Error(
-          payload?.error
-            ? `No se pudo completar el acceso con Google (${payload.error}).`
-            : "Inicio de sesión con Google cancelado."
-        );
-      }
-
-      if (payload.idToken) {
-        try {
-          const credential = GoogleAuthProvider.credential(payload.idToken);
-          const result = await signInWithCredential(auth, credential);
-          const u = result.user;
-          const email =
-            payload.email ||
-            u.email ||
-            u.providerData?.find((p) => p.email)?.email ||
-            `${u.uid}@google.archery101010.com`;
-          const displayName =
-            payload.displayName ||
-            u.displayName ||
-            u.providerData?.find((p) => p.displayName)?.displayName ||
-            "Arquero Google";
-          return await loginSocialUser(email, displayName, u.uid);
-        } catch (credErr) {
-          console.warn("signInWithCredential warning, using verified native Google account:", credErr);
+        // If native Play Services GoogleSignIn fails with statusCode 10 (e.g., Play App Signing SHA-1 mismatch) or 12500,
+        // seamlessly fall through to the Web OAuth 2.0 id_token flow (which uses GOOGLE_WEB_CLIENT_ID and never checks SHA-1)
+        console.warn("Native GoogleSignIn fallback to Web OAuth 2.0 id_token flow:", payload?.error || payload?.statusCode);
+      } else {
+        if (payload.idToken) {
+          try {
+            const credential = GoogleAuthProvider.credential(payload.idToken);
+            const result = await signInWithCredential(auth, credential);
+            const u = result.user;
+            const email =
+              payload.email ||
+              u.email ||
+              u.providerData?.find((p) => p.email)?.email ||
+              `${u.uid}@google.archery101010.com`;
+            const displayName =
+              payload.displayName ||
+              u.displayName ||
+              u.providerData?.find((p) => p.displayName)?.displayName ||
+              "Arquero Google";
+            return await loginSocialUser(email, displayName, u.uid);
+          } catch (credErr) {
+            console.warn("signInWithCredential warning, falling back to Web OAuth 2.0 id_token flow:", credErr);
+          }
         }
       }
-
-      if (payload.email) {
-        const fallbackUid = payload.googleId ? `GGL-${payload.googleId}` : undefined;
-        return await loginSocialUser(
-          payload.email,
-          payload.displayName || "Arquero Google",
-          fallbackUid
-        );
-      }
-
-      throw new Error("No se pudo obtener el correo de la cuenta de Google seleccionada.");
     }
 
     const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);

@@ -35,26 +35,10 @@ public class MainActivity extends BridgeActivity {
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
-    private ActivityResultLauncher<Intent> googleSignInFallbackLauncher;
+    private volatile String activeAppOrigin = "https://localhost";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        googleSignInFallbackLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                Intent data = result.getData();
-                Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
-                try {
-                    GoogleSignInAccount account = task.getResult(ApiException.class);
-                    sendAccountSuccess(account);
-                } catch (ApiException e) {
-                    sendAccountError(e.getStatusCode(), e.getMessage());
-                } catch (Exception ex) {
-                    sendAccountError(-1, ex.getMessage());
-                }
-            }
-        );
-
         googleSignInLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -64,23 +48,7 @@ public class MainActivity extends BridgeActivity {
                     GoogleSignInAccount account = task.getResult(ApiException.class);
                     sendAccountSuccess(account);
                 } catch (ApiException e) {
-                    int code = e.getStatusCode();
-                    if (code == 10 || code == 12500) {
-                        // Fallback to basic profile/email sign-in if OAuth client SHA-1 is still propagating
-                        try {
-                            GoogleSignInOptions basicGso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestEmail()
-                                .requestProfile()
-                                .build();
-                            GoogleSignInClient basicClient = GoogleSignIn.getClient(MainActivity.this, basicGso);
-                            googleSignInFallbackLauncher.launch(basicClient.getSignInIntent());
-                            return;
-                        } catch (Exception fallbackEx) {
-                            sendAccountError(code, e.getMessage());
-                            return;
-                        }
-                    }
-                    sendAccountError(code, e.getMessage());
+                    sendAccountError(e.getStatusCode(), e.getMessage());
                 } catch (Exception ex) {
                     sendAccountError(-1, ex.getMessage());
                 }
@@ -111,11 +79,21 @@ public class MainActivity extends BridgeActivity {
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();
                     if (uri != null) {
+                        String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
+                        String path = uri.getPath() != null ? uri.getPath() : "";
+                        if (request.isForMainFrame() && !path.startsWith("/__/auth/handler")) {
+                            if (host.equals("localhost")) {
+                                activeAppOrigin = "https://localhost";
+                            } else if (host.equals("archery101010-c0bb4.web.app")) {
+                                activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                            }
+                        }
                         String urlStr = uri.toString();
                         if (urlStr.startsWith("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") ||
                             urlStr.startsWith("https://archery101010-c0bb4.web.app/__/auth/handler")) {
+                            String targetOrigin = activeAppOrigin != null ? activeAppOrigin : "https://localhost";
                             String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><script>" +
-                                "window.location.replace('https://localhost/' + window.location.search + window.location.hash);" +
+                                "window.location.replace('" + targetOrigin + "/' + window.location.search + window.location.hash);" +
                                 "</script></head><body style=\"background:#050505\"></body></html>";
                             return new WebResourceResponse(
                                 "text/html",

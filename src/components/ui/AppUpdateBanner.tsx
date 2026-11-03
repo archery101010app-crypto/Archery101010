@@ -36,25 +36,21 @@ export default function AppUpdateBanner() {
 
     async function checkRemoteVersion() {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (
+        typeof window !== "undefined" &&
+        (window.location.hash.includes("id_token") || window.location.search.includes("id_token"))
+      ) {
+        return;
+      }
       try {
         const res = await fetch(
-          `https://archery101010-c0bb4.web.app/version.json?t=${Date.now()}`,
+          `https://archery101010-c0bb4.web.app/app-version.json?t=${Date.now()}`,
           { cache: "no-store" }
         );
         if (!res.ok) return;
         const data: RemoteVersionInfo = await res.json();
         if (mounted && data?.version && isNewerVersion(data.version, APP_VERSION)) {
           setRemoteInfo(data);
-          // If running from local bundled APK assets (localhost), auto-OTA switch to live web build seamlessly
-          const isNativeLocal =
-            typeof window !== "undefined" &&
-            window.location.hostname === "localhost" &&
-            (Capacitor.isNativePlatform() || !!(window as any).ArcheryNativeAuth);
-          if (isNativeLocal) {
-            window.location.replace(
-              `https://archery101010-c0bb4.web.app/?v=${data.version}&t=${Date.now()}`
-            );
-          }
         }
       } catch {
         // Silent fallback when offline or unreachable
