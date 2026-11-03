@@ -24,9 +24,11 @@ export function countScoredArrows(s: any): number {
 /** Total arrows shot in the session (confirmed volume first, then counted arrows, then grid size). */
 export function getSessionArrows(s: any): number {
   if (!s) return 0;
-  if (typeof s.totalArrowsVolume === "number" && s.totalArrowsVolume > 0) return s.totalArrowsVolume;
-  const counted = countScoredArrows(s);
-  if (counted > 0) return counted + (s.warmupArrows || 0);
+  const counted = countScoredArrows(s) + (s.warmupArrows || 0);
+  if (typeof s.totalArrowsVolume === "number" && s.totalArrowsVolume > 0) {
+    return Math.max(s.totalArrowsVolume, counted);
+  }
+  if (counted > 0) return counted;
   return (s.endsCount || 0) * (s.arrowsPerEnd || 0) + (s.warmupArrows || 0);
 }
 

@@ -36,7 +36,7 @@ interface AthleteDetailSheetProps {
   onUnlinkAthlete?: (athlete: UserProfile) => void;
 }
 
-type SubTab = "PERFIL" | "SESIONES" | "RECORDS" | "TENDENCIAS" | "NOTAS";
+type SubTab = "PERFIL" | "SESIONES" | "VOLUMEN" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
 export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession, onOpenPlanImporter, onUnlinkAthlete }: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
@@ -161,7 +161,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 )}
               </div>
               <p className="text-[11.6px] text-white/85 leading-snug mt-0.5 truncate">
-                {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"} · Club {athlete.clubName || "Independiente"}
+                {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"}
               </p>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                   type="button"
                   onClick={() => setShowUnlinkConfirm(true)}
                   className="shrink-0 py-2.5 px-3 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
-                  title="Desvincular alumno de tu club"
+                  title="Desvincular alumno"
                 >
                   <UserMinus size={13} className="shrink-0" />
                   <span>Desvincular</span>
@@ -198,6 +198,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
           {[
             { id: "PERFIL", label: "Perfil", icon: User },
             { id: "SESIONES", label: "Puntuaciones", icon: History },
+            { id: "VOLUMEN", label: "Volumen", icon: Target },
             { id: "RECORDS", label: "Récords", icon: Award },
             { id: "TENDENCIAS", label: "Tendencias", icon: LineChart },
             { id: "NOTAS", label: "Notas Coach", icon: MessageSquare }
@@ -207,7 +208,14 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as SubTab)}
+                onClick={() => {
+                  const nextTab = tab.id as SubTab;
+                  setActiveTab(nextTab);
+                  if (nextTab === "SESIONES") {
+                    const firstScored = scoredSessions.find(s => s.deletedByArcher !== true);
+                    setExpandedSessionId(firstScored ? firstScored.id : null);
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.6px] font-black uppercase tracking-wider transition-all border shrink-0 cursor-pointer ${
                   active
                     ? "bg-cyan-neon/15 border-cyan-neon/30 text-cyan-neon shadow-glow-cyan"
@@ -367,7 +375,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[11.6px] text-white font-black tracking-wider uppercase flex items-center gap-1.5">
                       <UserMinus size={13} />
-                      <span>Vinculación con el Club</span>
+                      <span>Vinculación con el Coach</span>
                     </span>
                     <p className="text-[10.8px] text-white/75 leading-relaxed">
                       Retira a este atleta de tu lista de alumnos activos. Sus puntuaciones personales no se borrarán de su cuenta.
@@ -379,25 +387,25 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                     className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
                   >
                     <UserMinus size={14} className="shrink-0" />
-                    <span>Desvincular Alumno del Club</span>
+                    <span>Desvincular Alumno</span>
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 2: SESIONES */}
+          {/* TAB 2: PUNTUACIONES (SOLO PUNTAJES REPORTADOS Y DIANA CON TELEMETRÍA) */}
           {activeTab === "SESIONES" && (
             <div className="flex flex-col gap-4">
-              {/* Sesiones Activas */}
+              {/* Puntajes Reportados Activos */}
               <div className="flex flex-col gap-3">
-                <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Sesiones Activas</span>
-                {athleteSessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
+                <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Puntajes Reportados</span>
+                {scoredSessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
                   <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
-                    Este atleta no tiene sesiones activas registradas.
+                    Este atleta no tiene puntuaciones reportadas aún.
                   </p>
                 ) : (
-                  athleteSessions.filter(s => s.deletedByArcher !== true).map((sess) => {
+                  scoredSessions.filter(s => s.deletedByArcher !== true).map((sess) => {
                     const isExpanded = expandedSessionId === sess.id;
                     const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
                       weekday: "short",
@@ -420,17 +428,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col text-right">
-                              {isVolumeSession(sess) ? (
-                                <>
-                                  <span className="text-sm font-black text-cyan-neon">{getSessionArrows(sess)}</span>
-                                  <span className="text-[9.3px] text-white">flechas</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-sm font-black text-cyan-neon">{getSessionScore(sess)}</span>
-                                  <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
-                                </>
-                              )}
+                              <span className="text-sm font-black text-cyan-neon">{getSessionScore(sess)}</span>
+                              <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
                             </div>
                             {isExpanded ? <ChevronUp size={14} className="text-white" /> : <ChevronDown size={14} className="text-white" />}
                           </div>
@@ -446,7 +445,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                             >
                               <div className="p-4 flex flex-col gap-4">
                                 <div className="flex flex-col items-center gap-2">
-                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
+                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos y Telemetría</span>
                                   <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
@@ -549,7 +548,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
 
                                 {sess.ends && (
                                   <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Desglose de Flechas por End</span>
+                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
                                         <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
@@ -585,11 +584,11 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 )}
               </div>
 
-              {/* Sesiones Eliminadas por el Arquero */}
-              {athleteSessions.filter(s => s.deletedByArcher === true).length > 0 && (
+              {/* Puntuaciones Eliminadas por el Arquero */}
+              {scoredSessions.filter(s => s.deletedByArcher === true).length > 0 && (
                 <div className="flex flex-col gap-3 mt-2 border-t border-white/[0.05] pt-4">
-                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Sesiones Eliminadas por el Arquero</span>
-                  {athleteSessions.filter(s => s.deletedByArcher === true).map((sess) => {
+                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Puntuaciones Eliminadas por el Arquero</span>
+                  {scoredSessions.filter(s => s.deletedByArcher === true).map((sess) => {
                     const isExpanded = expandedSessionId === sess.id;
                     const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
                       weekday: "short",
@@ -615,17 +614,8 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col text-right">
-                              {isVolumeSession(sess) ? (
-                                <>
-                                  <span className="text-sm font-black text-white">{getSessionArrows(sess)}</span>
-                                  <span className="text-[9.3px] text-white">flechas</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-sm font-black text-white">{getSessionScore(sess)}</span>
-                                  <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
-                                </>
-                              )}
+                              <span className="text-sm font-black text-white">{getSessionScore(sess)}</span>
+                              <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
                             </div>
                             {onRestoreSession && (
                               <button
@@ -652,7 +642,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                             >
                               <div className="p-4 flex flex-col gap-4">
                                 <div className="flex flex-col items-center gap-2">
-                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos Reconstruida</span>
+                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos y Telemetría</span>
                                   <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                                     {(() => {
                                       const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
@@ -755,7 +745,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
 
                                 {sess.ends && (
                                   <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Desglose de Flechas</span>
+                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
                                         <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
@@ -783,6 +773,81 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               )}
             </div>
           )}
+
+          {/* TAB 2.5: VOLUMEN (SOLO NÚMERO TOTAL DE FLECHAS POR SESIÓN INCLUYENDO LAS DE PUNTAJES) */}
+          {activeTab === "VOLUMEN" && (() => {
+            const volumeList = athleteSessions.filter(
+              (s) => s.deletedByArcher !== true && getSessionArrows(s) > 0
+            );
+            const totalArrowsAll = volumeList.reduce((acc, s) => acc + getSessionArrows(s), 0);
+
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="bg-neutral-900/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
+                      Volumen Total Acumulado
+                    </span>
+                    <span className="text-[11.6px] text-white mt-0.5">
+                      Incluye sesiones de volumen y de puntajes
+                    </span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-2xl font-black text-cyan-neon tabular-nums">
+                      {totalArrowsAll}
+                    </span>
+                    <span className="text-[9.3px] text-white font-bold uppercase">
+                      flechas totales
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">
+                    Flechas Tiradas por Sesión ({volumeList.length})
+                  </span>
+                  {volumeList.length === 0 ? (
+                    <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
+                      Este atleta aún no tiene flechas registradas.
+                    </p>
+                  ) : (
+                    volumeList.map((sess) => {
+                      const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short"
+                      });
+                      const arrowsCount = getSessionArrows(sess);
+
+                      return (
+                        <div
+                          key={sess.id}
+                          className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center"
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-[12.8px] text-white font-extrabold uppercase">
+                              {dateStr}
+                            </span>
+                            <span className="text-[10.5px] text-white mt-0.5">
+                              {sess.practiceType || "Sesión"} · {sess.distance || 18}m
+                            </span>
+                          </div>
+                          <div className="flex flex-col text-right">
+                            <span className="text-base font-black text-cyan-neon tabular-nums">
+                              {arrowsCount}
+                            </span>
+                            <span className="text-[9.3px] text-white font-bold">
+                              flechas
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* TAB 3: RECORDS */}
           {activeTab === "RECORDS" && (

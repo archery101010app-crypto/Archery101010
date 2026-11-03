@@ -242,9 +242,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     return () => window.removeEventListener("local-db-change", handleDbChange);
   }, [user?.uid]);
 
-  // Filter application trigger
+  // Filter application trigger (only scored sessions for Puntuaciones tab)
   useEffect(() => {
-    let result = [...sessions].filter(s => s.deletedByArcher !== true);
+    let result = [...sessions].filter(s => s.deletedByArcher !== true && hasRealScore(s));
 
     // 1. Date range filter
     const now = Date.now();
@@ -423,7 +423,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
               }`}
             >
-              Sesiones
+              Puntuaciones
             </button>
             <button
               onClick={() => setActiveTab("VOLUME")}
@@ -484,8 +484,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       {[
                         { id: "ALL", label: t("filterAll") },
                         { id: "Control", label: t("practiceControl") },
-                        { id: "Práctica", label: t("practicePractice") },
-                        { id: "Volumen", label: t("practiceVolume") }
+                        { id: "Práctica", label: t("practicePractice") }
                       ].map((f) => (
                         <button
                           key={f.id}
@@ -675,19 +674,19 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
           </div>
 
-          {/* Simplied List of Volume sessions */}
+          {/* Simplified List of Volume sessions (only total arrows shot per session including scored sessions) */}
           <div className="flex flex-col gap-2">
             <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1">
-              Registro Histórico de Carga
+              Flechas Tiradas por Sesión
             </h4>
             
             <div className="flex flex-col gap-2">
-              {sessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
+              {sessions.filter(s => s.deletedByArcher !== true && getSessionArrows(s) > 0).length === 0 ? (
                 <div className="text-center py-8 text-white text-xs">
                   No hay sesiones para calcular volumen.
                 </div>
               ) : (
-                sessions.filter(s => s.deletedByArcher !== true).map((s) => {
+                sessions.filter(s => s.deletedByArcher !== true && getSessionArrows(s) > 0).map((s) => {
                   const arrows = getSessionArrows(s);
                   return (
                     <div
@@ -695,13 +694,13 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       className="bg-[#0D1017] border border-white/[0.08] p-3.5 rounded-2xl flex justify-between items-center"
                     >
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[10.5px] text-white font-bold">{formatDate(s.timestamp)}</span>
-                        <span className="text-xs font-bold text-white uppercase">{s.format} ({s.distance}m)</span>
+                        <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
+                        <span className="text-[10.5px] text-white">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-cyan-neon">+{arrows}</span>
-                        <span className="text-[10.5px] text-white block font-bold uppercase">
-                          {s.practiceType === "Control" ? t("practiceControl") : s.practiceType}
+                        <span className="text-base font-black text-cyan-neon tabular-nums">{arrows}</span>
+                        <span className="text-[10.5px] text-white block font-bold">
+                          flechas
                         </span>
                       </div>
                     </div>

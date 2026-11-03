@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Award, Share2, Filter, ChevronDown, ChevronUp, User, Target, Calendar, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { DIANA_PRESETS } from "../../scoring/ScoringView";
+import { DIANA_PRESETS, getDianaPresetKey } from "../../scoring/ScoringView";
+import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore, countScoredArrows } from "@/lib/scoring/sessionMetrics";
 
 interface CoachSessionsTabProps {
@@ -13,7 +14,7 @@ interface CoachSessionsTabProps {
 }
 
 export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTabProps) {
-  const [filterType, setFilterType] = useState<string>("ALL");
+  const [subMode, setSubMode] = useState<"SCORES" | "VOLUME">("SCORES");
   const [selectedAthleteUid, setSelectedAthleteUid] = useState<string>("ALL");
   const [starRanking, setStarRanking] = useState<any[]>([]);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -47,11 +48,13 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
   // Only real shooting sessions (not duels)
   const athleteSessions = sessions.filter(s => !s.isDuel && s.deletedByArcher !== true);
 
-  // Filtered by selected athlete and practice type
+  // Filtered by selected athlete and mode (SCORES vs VOLUME)
   const filteredSessions = athleteSessions.filter(s => {
     const matchesAthlete = selectedAthleteUid === "ALL" || s.userId === selectedAthleteUid || s.userUid === selectedAthleteUid;
-    const matchesType = filterType === "ALL" || s.practiceType === filterType;
-    return matchesAthlete && matchesType;
+    if (subMode === "SCORES") {
+      return matchesAthlete && hasRealScore(s);
+    }
+    return matchesAthlete && getSessionArrows(s) > 0;
   });
 
   // Calculate weekly ranking (Top 3 scores)
@@ -141,7 +144,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         </div>
       )}
 
-      {/* Control Filters: Selector de Alumno y Tipo de Práctica */}
+      {/* Control Filters: Selector de Alumno y Sub-pestañas Puntuaciones | Volumen */}
       <div className="bg-neutral-900/50 p-3 rounded-2xl border border-white/5 flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
         {/* Selector de Alumno Específico */}
         <div className="flex items-center gap-2 flex-1">
@@ -160,21 +163,28 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           </select>
         </div>
 
-        {/* Tipo de Práctica */}
-        <div className="flex gap-1 overflow-x-auto no-scrollbar shrink-0">
-          {["ALL", "Control", "Práctica", "Torneo", "Volumen"].map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilterType(type)}
-              className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                filterType === type
-                  ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
-                  : "bg-neutral-950 border border-white/5 text-white hover:text-white"
-              }`}
-            >
-              {type === "ALL" ? "Todos" : type}
-            </button>
-          ))}
+        {/* Selector Puntuaciones | Volumen */}
+        <div className="flex gap-1.5 shrink-0">
+          <button
+            onClick={() => setSubMode("SCORES")}
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              subMode === "SCORES"
+                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                : "bg-neutral-950 border border-white/5 text-white hover:text-white"
+            }`}
+          >
+            Puntuaciones
+          </button>
+          <button
+            onClick={() => setSubMode("VOLUME")}
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+              subMode === "VOLUME"
+                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                : "bg-neutral-950 border border-white/5 text-white hover:text-white"
+            }`}
+          >
+            Volumen
+          </button>
         </div>
       </div>
 
@@ -182,19 +192,62 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center px-1">
           <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
-            Resultados de Puntos Recibidos ({filteredSessions.length})
+            {subMode === "SCORES"
+              ? `Puntajes Reportados (${filteredSessions.length})`
+              : `Volumen por Sesión (${filteredSessions.length})`}
           </span>
           <span className="text-[10.5px] text-white">
-            Orden cronológico más reciente
+            {subMode === "VOLUME"
+              ? `Total: ${filteredSessions.reduce((acc, s) => acc + getSessionArrows(s), 0)} flechas`
+              : "Orden cronológico más reciente"}
           </span>
         </div>
 
         {filteredSessions.length === 0 ? (
           <div className="text-center py-10 bg-neutral-900/20 border border-white/5 rounded-2xl">
             <Target size={24} className="text-white mx-auto mb-2" />
-            <p className="text-xs text-white font-bold">No hay resultados que coincidan con los filtros.</p>
-            <p className="text-[11.6px] text-white mt-1">Los alumnos registrados enviarán sus puntuaciones aquí al finalizar cada sesión.</p>
+            <p className="text-xs text-white font-bold">
+              {subMode === "SCORES"
+                ? "No hay puntuaciones reportadas aún."
+                : "No hay sesiones con volumen de flechas registrado."}
+            </p>
           </div>
+        ) : subMode === "VOLUME" ? (
+          filteredSessions.map((sess) => {
+            const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+              weekday: "short",
+              day: "numeric",
+              month: "short"
+            });
+            const totalArrows = getSessionArrows(sess);
+
+            return (
+              <div
+                key={sess.id}
+                className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-xs text-cyan-neon shrink-0">
+                    {(sess.userName || "AT").substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white text-xs font-bold leading-tight truncate">
+                      {sess.userName || "Alumno"}
+                    </span>
+                    <span className="text-[10.5px] text-white mt-0.5 truncate">
+                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col text-right shrink-0">
+                  <span className="text-base font-black text-cyan-neon leading-tight tabular-nums">
+                    {totalArrows}
+                  </span>
+                  <span className="text-[9.3px] text-white font-bold">flechas</span>
+                </div>
+              </div>
+            );
+          })
         ) : (
           filteredSessions.map((sess) => {
             const isExpanded = expandedSessionId === sess.id;
@@ -208,27 +261,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
               minute: "2-digit"
             });
 
-            // Calculate arrows and average
-            const isVol = isVolumeSession(sess);
-            const scoredArrows = isVol ? 0 : countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
-            const totalArrows = getSessionArrows(sess);
+            const scoredArrows = countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
             const realScore = getSessionScore(sess);
-            const avgPerArrow = !isVol && scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
+            const avgPerArrow = scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
             const bowTypeEs = sess.bowType === "Recurve" ? "Recurvo" : sess.bowType === "Compound" ? "Compuesto" : (sess.bowType || "Arco");
-
-            // Count 10s and Xs
-            let count10 = 0;
-            let countX = 0;
-            if (sess.ends && Array.isArray(sess.ends)) {
-              sess.ends.forEach((e: any) => {
-                if (e.arrows && Array.isArray(e.arrows)) {
-                  e.arrows.forEach((v: string) => {
-                    if (v === "10") count10++;
-                    if (v === "X") countX++;
-                  });
-                }
-              });
-            }
 
             return (
               <div
@@ -262,29 +298,17 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
                   <div className="flex items-center gap-2.5 shrink-0">
                     <div className="flex flex-col text-right">
-                      {isVol ? (
-                        <>
-                          <div className="flex items-baseline gap-1 justify-end">
-                            <span className="text-base font-black text-cyan-neon leading-tight">{totalArrows}</span>
-                            <span className="text-[9.3px] text-white font-bold">flechas</span>
-                          </div>
-                          <span className="text-[9.3px] text-yellow-gold font-bold">Volumen</span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-baseline gap-1 justify-end">
-                            <span className="text-base font-black text-cyan-neon leading-tight">
-                              {realScore}
-                            </span>
-                            <span className="text-[9.3px] text-white font-bold">
-                              /{getSessionMaxScore(sess)}
-                            </span>
-                          </div>
-                          <span className="text-[9.3px] text-yellow-gold font-bold">
-                            {avgPerArrow} pts/fl
-                          </span>
-                        </>
-                      )}
+                      <div className="flex items-baseline gap-1 justify-end">
+                        <span className="text-base font-black text-cyan-neon leading-tight">
+                          {realScore}
+                        </span>
+                        <span className="text-[9.3px] text-white font-bold">
+                          /{getSessionMaxScore(sess)}
+                        </span>
+                      </div>
+                      <span className="text-[9.3px] text-yellow-gold font-bold">
+                        {avgPerArrow} pts/fl
+                      </span>
                     </div>
                     {isExpanded ? (
                       <ChevronUp size={15} className="text-cyan-neon" />
@@ -294,7 +318,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                 </div>
 
-                {/* Expanded Details: Series, Flechas, Notas e Impactos */}
+                {/* Expanded Details: Diana con Telemetría y Puntajes por End */}
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div
@@ -303,31 +327,115 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       exit={{ height: 0, opacity: 0 }}
                       className="border-t border-white/5 bg-neutral-950/70 p-4 flex flex-col gap-3.5"
                     >
-                      {/* Metric capsules */}
-                      <div className="grid grid-cols-4 gap-2 text-center bg-neutral-900/60 p-2.5 rounded-xl border border-white/5">
-                        <div className="flex flex-col">
-                          <span className="text-[9.3px] text-white uppercase font-bold">Flechas</span>
-                          <span className="text-xs font-black text-white">{totalArrows}</span>
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                          Diana de Impactos y Telemetría
+                        </span>
+                        <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                          {(() => {
+                            const presetType = getDianaPresetKey(sess.bowType, sess.distance, sess.format, sess.targetType);
+                            const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                            const disp = sess.impacts && sess.impacts.length > 0
+                              ? calculateDispersionStats(
+                                  sess.impacts,
+                                  Number(sess.distance) || 18,
+                                  sess.bowType,
+                                  sess.format,
+                                  sess.targetType
+                                )
+                              : null;
+
+                            return (
+                              <svg viewBox="0 0 100 100" className="w-full h-full">
+                                {presetRings.map((ring, index) => (
+                                  <circle
+                                    key={index}
+                                    cx="50"
+                                    cy="50"
+                                    r={ring.r}
+                                    fill={ring.fill}
+                                    stroke={ring.stroke}
+                                    strokeWidth={0.1}
+                                  />
+                                ))}
+                                {disp && (
+                                  <g className="pointer-events-none">
+                                    {disp.hullPolygon.length >= 3 && (
+                                      <polygon
+                                        points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                                        fill="rgba(0, 229, 255, 0.15)"
+                                        stroke="#00E5FF"
+                                        strokeWidth="0.45"
+                                        strokeDasharray="1.2,0.8"
+                                      />
+                                    )}
+                                    {disp.hullPolygon.length === 2 && (
+                                      <line
+                                        x1={disp.hullPolygon[0].x}
+                                        y1={disp.hullPolygon[0].y}
+                                        x2={disp.hullPolygon[1].x}
+                                        y2={disp.hullPolygon[1].y}
+                                        stroke="#00E5FF"
+                                        strokeWidth="0.45"
+                                        strokeDasharray="1.2,0.8"
+                                      />
+                                    )}
+                                    <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                    <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
+                                    <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                    <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                  </g>
+                                )}
+                                {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
+                                  <g key={iIdx}>
+                                    <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
+                                    <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
+                                  </g>
+                                ))}
+                              </svg>
+                            );
+                          })()}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[9.3px] text-white uppercase font-bold">Promedio</span>
-                          <span className="text-xs font-black text-cyan-neon">{avgPerArrow}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[9.3px] text-white uppercase font-bold">10s</span>
-                          <span className="text-xs font-black text-yellow-gold">{count10}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[9.3px] text-white uppercase font-bold">Xs</span>
-                          <span className="text-xs font-black text-yellow-gold">{countX}</span>
-                        </div>
+                        {sess.impacts && sess.impacts.length > 0 && (() => {
+                          const presetType = getDianaPresetKey(sess.bowType, sess.distance, sess.format, sess.targetType);
+                          const analysis = calculateDispersionAnalysis(
+                            sess.impacts,
+                            Number(sess.distance) || 18,
+                            sess.bowType || "Recurve",
+                            presetType,
+                            sess.format,
+                            sess.targetType
+                          );
+                          if (!analysis) return null;
+                          return (
+                            <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
+                                  Análisis de Grupo y Mira
+                                </span>
+                                <span className="text-[11.6px] tabular-nums font-black text-white">
+                                  Ø {analysis.spreadCm.toFixed(1)} cm
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11.6px]">
+                                <span className="text-white">Centro del grupo (+):</span>
+                                <span className="font-bold text-yellow-gold">
+                                  {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
+                                </span>
+                              </div>
+                              <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
+                                <span>{analysis.adviceText}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Desglose de Series (Ends) */}
                       {sess.ends && Array.isArray(sess.ends) && sess.ends.length > 0 && (
                         <div className="flex flex-col gap-1.5">
                           <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
-                            Desglose de Series ({sess.ends.length} tandas)
+                            Puntajes por Serie ({sess.ends.length} tandas)
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                             {sess.ends.map((endItem: any, endIdx: number) => {
