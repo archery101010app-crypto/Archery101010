@@ -48,9 +48,20 @@ public class MainActivity extends BridgeActivity {
                     GoogleSignInAccount account = task.getResult(ApiException.class);
                     sendAccountSuccess(account);
                 } catch (ApiException e) {
-                    sendAccountError(e.getStatusCode(), e.getMessage());
+                    int code = e.getStatusCode();
+                    if (code == 12501 || code == 16) {
+                        sendAccountError(code, "Cancelado");
+                        return;
+                    }
+                    // When Play Store App Signing key or Play Services returns code 10 / 12500,
+                    // never return error 10 to JS — immediately launch Web OAuth 2.0 id_token flow
+                    getSharedPreferences("archery_auth_prefs", MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("prefer_web_oauth", true)
+                        .apply();
+                    launchWebGoogleOAuthFallback();
                 } catch (Exception ex) {
-                    sendAccountError(-1, ex.getMessage());
+                    launchWebGoogleOAuthFallback();
                 }
             }
         );
@@ -60,9 +71,11 @@ public class MainActivity extends BridgeActivity {
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
             WebView webView = getBridge().getWebView();
+            webView.clearCache(true);
             CookieManager.getInstance().setAcceptCookie(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
             WebSettings settings = webView.getSettings();
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setDomStorageEnabled(true);
             String defaultUa = settings.getUserAgentString();
@@ -184,11 +197,34 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    private void launchWebGoogleOAuthFallback() {
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String nonce = Long.toString(System.currentTimeMillis(), 36);
+                String oauthUrl =
+                    "https://accounts.google.com/o/oauth2/v2/auth" +
+                    "?client_id=" + Uri.encode(GOOGLE_WEB_CLIENT_ID) +
+                    "&redirect_uri=" + Uri.encode("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") +
+                    "&response_type=id_token" +
+                    "&scope=" + Uri.encode("openid email profile") +
+                    "&nonce=" + Uri.encode(nonce) +
+                    "&prompt=select_account";
+                getBridge().getWebView().loadUrl(oauthUrl);
+            }
+        });
+    }
+
     public class ArcheryNativeAuth {
         @JavascriptInterface
         public void startGoogleSignIn() {
             runOnUiThread(() -> {
                 try {
+                    boolean preferWebOAuth = getSharedPreferences("archery_auth_prefs", MODE_PRIVATE)
+                        .getBoolean("prefer_web_oauth", false);
+                    if (preferWebOAuth) {
+                        launchWebGoogleOAuthFallback();
+                        return;
+                    }
                     GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                         .requestIdToken(GOOGLE_WEB_CLIENT_ID)
                         .requestEmail()
@@ -199,7 +235,7 @@ public class MainActivity extends BridgeActivity {
                         googleSignInLauncher.launch(client.getSignInIntent());
                     });
                 } catch (Exception e) {
-                    sendAccountError(-1, e.getMessage());
+                    launchWebGoogleOAuthFallback();
                 }
             });
         }

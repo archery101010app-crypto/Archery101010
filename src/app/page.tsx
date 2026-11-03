@@ -819,16 +819,21 @@ export default function Home() {
 
   // Not authenticated flow
   if (!user) {
-    return authScreen === "LOGIN" ? (
-      <LoginView
-        onLoginSuccess={handleLoginSuccess}
-        onNavigateToRegister={() => setAuthScreen("REGISTER")}
-      />
-    ) : (
-      <RegisterView
-        onRegisterSuccess={handleRegisterSuccess}
-        onNavigateToLogin={() => setAuthScreen("LOGIN")}
-      />
+    return (
+      <>
+        <AppUpdateBanner />
+        {authScreen === "LOGIN" ? (
+          <LoginView
+            onLoginSuccess={handleLoginSuccess}
+            onNavigateToRegister={() => setAuthScreen("REGISTER")}
+          />
+        ) : (
+          <RegisterView
+            onRegisterSuccess={handleRegisterSuccess}
+            onNavigateToLogin={() => setAuthScreen("LOGIN")}
+          />
+        )}
+      </>
     );
   }
 
