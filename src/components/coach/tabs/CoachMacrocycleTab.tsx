@@ -637,7 +637,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                 </button>
                 <button
                   onClick={() => handleDelete(selectedMacro.id)}
-                  className="px-2.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/25 transition cursor-pointer flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                  className="px-2.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer flex items-center gap-1.5 text-xs font-black uppercase tracking-wider"
                   title="Desvincular y eliminar este plan"
                 >
                   <Unlink size={13} />
@@ -777,7 +777,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                           <button
                             type="button"
                             onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
-                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                            className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white active:scale-95 transition cursor-pointer"
                             title={`Desvincular a ${athlete.fullName} de este plan`}
                           >
                             <UserMinus size={14} />
@@ -921,7 +921,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                               <button
                                 type="button"
                                 onClick={() => handleRemovePhase(phase.id)}
-                                className="p-1.5 rounded bg-red-500/10 text-red-400 hover:text-red-300 ml-1.5 cursor-pointer"
+                                className="p-1.5 rounded bg-white hover:bg-neutral-200 text-black ml-1.5 cursor-pointer"
                                 title="Eliminar etapa"
                               >
                                 <Trash2 size={11} />

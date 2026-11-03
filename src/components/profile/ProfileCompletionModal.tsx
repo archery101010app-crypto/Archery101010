@@ -102,8 +102,8 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
         </p>
 
         {error && (
-          <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3 flex items-center gap-2 text-red-rival text-xs">
-            <AlertCircle size={16} />
+          <div className="bg-white border border-white rounded-xl p-3 flex items-center gap-2 text-black font-bold text-xs">
+            <AlertCircle size={16} className="shrink-0 text-black" />
             <span>{error}</span>
           </div>
         )}

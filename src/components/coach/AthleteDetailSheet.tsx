@@ -182,7 +182,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 <button
                   type="button"
                   onClick={() => setShowUnlinkConfirm(true)}
-                  className="shrink-0 py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/35 text-red-400 hover:text-red-300 text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                  className="shrink-0 py-2.5 px-3 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
                   title="Desvincular alumno de tu club"
                 >
                   <UserMinus size={13} className="shrink-0" />
@@ -363,9 +363,9 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               </div>
 
               {onUnlinkAthlete && (
-                <div className="bg-red-950/15 p-4 rounded-2xl border border-red-500/20 flex flex-col gap-2.5 mt-1">
+                <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/10 flex flex-col gap-2.5 mt-1">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11.6px] text-red-400 font-black tracking-wider uppercase flex items-center gap-1.5">
+                    <span className="text-[11.6px] text-white font-black tracking-wider uppercase flex items-center gap-1.5">
                       <UserMinus size={13} />
                       <span>Vinculación con el Club</span>
                     </span>
@@ -376,7 +376,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                   <button
                     type="button"
                     onClick={() => setShowUnlinkConfirm(true)}
-                    className="w-full py-2.5 px-4 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
+                    className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
                   >
                     <UserMinus size={14} className="shrink-0" />
                     <span>Desvincular Alumno del Club</span>
@@ -588,7 +588,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
               {/* Sesiones Eliminadas por el Arquero */}
               {athleteSessions.filter(s => s.deletedByArcher === true).length > 0 && (
                 <div className="flex flex-col gap-3 mt-2 border-t border-white/[0.05] pt-4">
-                  <span className="text-[10.5px] text-red-500 font-black uppercase tracking-wider pl-1">Sesiones Eliminadas por el Arquero</span>
+                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Sesiones Eliminadas por el Arquero</span>
                   {athleteSessions.filter(s => s.deletedByArcher === true).map((sess) => {
                     const isExpanded = expandedSessionId === sess.id;
                     const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
@@ -600,7 +600,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                     return (
                       <div
                         key={sess.id}
-                        className="bg-neutral-950/40 rounded-2xl border border-red-950/20 overflow-hidden transition-all duration-305"
+                        className="bg-neutral-950/40 rounded-2xl border border-white/15 overflow-hidden transition-all duration-305"
                       >
                         <div
                           onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
@@ -609,7 +609,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                           <div className="flex flex-col">
                             <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5">
                               <span>{sess.practiceType} · {sess.format}</span>
-                              <span className="text-[8.7px] bg-red-rival/10 border border-red-rival/20 text-red-rival px-1 rounded-full font-black uppercase leading-none py-0.5">ELIMINADA</span>
+                              <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5">ELIMINADA</span>
                             </span>
                             <span className="text-[10.5px] text-white mt-0.5">{dateStr} · {sess.distance}m</span>
                           </div>
@@ -950,10 +950,10 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 initial={{ scale: 0.94, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.94, opacity: 0, y: 10 }}
-                className="w-full max-w-sm bg-[#0D1017] border border-red-500/35 rounded-3xl p-5 flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)]"
+                className="w-full max-w-sm bg-[#0D1017] border border-white/15 rounded-3xl p-5 flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)]"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-white border border-white flex items-center justify-center text-black shrink-0">
                     <AlertTriangle size={20} />
                   </div>
                   <div className="flex flex-col min-w-0">
@@ -986,7 +986,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                         onUnlinkAthlete(athlete);
                       }
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-lg"
+                    className="flex-1 py-2.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-lg"
                   >
                     <UserMinus size={14} />
                     <span>Sí, Desvincular</span>

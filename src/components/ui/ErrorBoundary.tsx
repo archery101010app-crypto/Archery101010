@@ -71,7 +71,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-black-oled text-white relative overflow-hidden">
           {/* Clean Editorial Alert Box */}
           <div className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] rounded-3xl p-6 flex flex-col items-center gap-5 shadow-2xl relative z-10">
-            <div className="w-12 h-12 rounded-2xl bg-red-rival/10 border border-red-rival/25 flex items-center justify-center text-red-rival">
+            <div className="w-12 h-12 rounded-2xl bg-white border border-white flex items-center justify-center text-black">
               <ShieldAlert size={22} />
             </div>
 
@@ -87,7 +87,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
             {/* Debug Code Block */}
             <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[11.6px] tabular-nums text-left max-h-[110px] overflow-y-auto scrollbar-thin">
-              <span className="text-red-rival font-bold">Detalle técnico:</span>
+              <span className="inline-block w-fit px-2 py-0.5 rounded bg-white text-black font-black text-[10px] uppercase">Detalle técnico:</span>
               <span className="text-white break-all">{this.state.error?.toString() || "Error desconocido"}</span>
             </div>
 

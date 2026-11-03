@@ -114,7 +114,7 @@ export default function CoachDuelsTab({ athletes, sessions }: CoachDuelsTabProps
                   duel.outcome === "win"
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20 shadow-glow-cyan"
                     : duel.outcome === "loss"
-                    ? "bg-red-rival/15 text-red-rival border border-red-rival/20"
+                    ? "bg-white text-black border border-white"
                     : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/20"
                 }`}>
                   {duel.outcome === "win" ? "Victoria" : duel.outcome === "loss" ? "Derrota" : "Empate"}

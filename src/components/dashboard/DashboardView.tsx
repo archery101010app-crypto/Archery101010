@@ -321,7 +321,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
-                className="text-red-rival font-bold cursor-pointer border-b border-red-rival/60 truncate"
+                className="px-2 py-0.5 rounded-full bg-white text-black font-black text-[10.5px] uppercase tracking-wider cursor-pointer truncate"
               >
                 {language === "es" ? "Completar perfil" : "Complete profile"}
               </span>
@@ -331,8 +331,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   ? "Recurvo"
                   : user?.bowConfig?.type === "Compound"
                     ? "Compuesto"
-                    : user?.bowConfig?.type || "Barebow"}{" "}
-                · {user?.bowConfig?.defaultDistance || 18} m
+                    : user?.bowConfig?.type || "Barebow"}
               </span>
             )}
           </p>

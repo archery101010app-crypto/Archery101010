@@ -182,7 +182,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               </div>
               <button
                 onClick={handleDiscardDraft}
-                className="w-8 h-8 rounded-lg border border-red-rival/25 bg-red-rival/10 text-red-rival hover:bg-red-rival/20 flex items-center justify-center shrink-0 transition cursor-pointer"
+                className="w-8 h-8 rounded-lg border border-white bg-white text-black hover:bg-neutral-200 flex items-center justify-center shrink-0 transition cursor-pointer"
                 title="Descartar Borrador"
               >
                 <Trash2 size={13} />

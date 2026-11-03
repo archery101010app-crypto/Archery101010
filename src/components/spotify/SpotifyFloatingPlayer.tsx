@@ -918,7 +918,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                     className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
                   />
                   {linkError && (
-                    <p className="text-[11.6px] text-red-400 font-semibold leading-snug px-1">
+                    <p className="text-[11.6px] bg-white text-black font-bold leading-snug p-2.5 rounded-xl">
                       {linkError}
                     </p>
                   )}

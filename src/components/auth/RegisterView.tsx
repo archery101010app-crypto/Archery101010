@@ -178,8 +178,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
       {/* Main Step Container */}
       <div className="flex-1 flex flex-col justify-center max-w-sm w-full mx-auto my-auto py-2">
         {error && (
-          <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3 flex items-center gap-2 text-red-rival text-sm mb-4">
-            <AlertCircle size={18} />
+          <div className="bg-white border border-white rounded-xl p-3 flex items-center gap-2 text-black font-bold text-sm mb-4">
+            <AlertCircle size={18} className="shrink-0 text-black" />
             <span>{error}</span>
           </div>
         )}

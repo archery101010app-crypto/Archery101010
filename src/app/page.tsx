@@ -1217,7 +1217,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(true)}
-                        className="w-full h-11 bg-[#111620] border border-white/[0.08] text-red-rival font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.05] transition flex items-center justify-center"
+                        className="w-full h-11 bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
                         Descartar Borrador
                       </button>
@@ -1225,7 +1225,7 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <span className="text-[11.6px] text-red-rival font-black tracking-widest uppercase block mb-1">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-black text-[11px] font-black tracking-widest uppercase mb-1.5">
                       CONFIRMACIÓN DE DESCARTE
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -1239,7 +1239,7 @@ export default function Home() {
                     <div className="mt-2 flex flex-col gap-2 w-full">
                       <button
                         onClick={handleDiscardDraft}
-                        className="w-full h-11 bg-red-rival text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-red-700 transition flex items-center justify-center"
+                        className="w-full h-11 bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
                         Sí, Descartar Permanentemente
                       </button>

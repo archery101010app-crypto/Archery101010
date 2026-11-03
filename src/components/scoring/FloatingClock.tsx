@@ -400,7 +400,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   <span
                     className={`px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wider border inline-flex items-center justify-center gap-2 whitespace-nowrap ${
                       lightState === "RED"
-                        ? "bg-red-600/20 border-red-500/50 text-red-400"
+                        ? "bg-white border-white text-black"
                         : lightState === "YELLOW"
                         ? "bg-yellow-gold/20 border-yellow-gold/50 text-yellow-gold"
                         : "bg-green-success/20 border-green-success/50 text-green-success"
@@ -506,7 +506,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Emergency Stop / Alto al Fuego (WA Rule 13.4 - 5 rapid horn blasts) */}
                 <button
                   onClick={handleEmergencyStop}
-                  className="h-11 px-6 rounded-full bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-red-400/40 active:scale-95 transition cursor-pointer"
+                  className="h-11 px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
                   title="Detención inmediata de tiro según reglamento World Archery"
                 >
                   <AlertTriangle size={16} />

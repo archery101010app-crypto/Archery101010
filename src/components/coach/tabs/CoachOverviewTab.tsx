@@ -143,8 +143,8 @@ export default function CoachOverviewTab({
 
       {/* Inactividad Alertas */}
       {inactiveAthletes.length > 0 && (
-        <div className="bg-red-950/20 border border-red-900/30 p-3 rounded-2xl flex items-start gap-2.5">
-          <AlertTriangle className="text-red-rival shrink-0 mt-0.5" size={16} />
+        <div className="bg-neutral-900/50 border border-white/15 p-3 rounded-2xl flex items-start gap-2.5">
+          <AlertTriangle className="text-white shrink-0 mt-0.5" size={16} />
           <div className="flex flex-col">
             <span className="text-white text-xs font-bold">Atletas sin actividad esta semana</span>
             <p className="text-[10.5px] text-white mt-0.5">
@@ -155,7 +155,7 @@ export default function CoachOverviewTab({
                 <button
                   key={ath.uid}
                   onClick={() => onViewAthlete(ath)}
-                  className="text-[10.5px] bg-red-950/40 text-red-rival hover:text-white border border-red-500/20 px-2 py-0.5 rounded-full font-bold transition"
+                  className="text-[10.5px] bg-white text-black hover:bg-neutral-200 border border-white px-2.5 py-0.5 rounded-full font-black transition cursor-pointer"
                 >
                   {ath.fullName} → </button>
               ))}

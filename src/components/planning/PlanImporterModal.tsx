@@ -848,8 +848,8 @@ export default function PlanImporterModal({
           )}
 
           {importError && (
-            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 flex items-center gap-2 text-rose-300 text-xs font-bold">
-              <AlertCircle size={15} className="shrink-0" />
+            <div className="bg-white border border-white rounded-2xl p-3 flex items-center gap-2 text-black text-xs font-bold">
+              <AlertCircle size={15} className="shrink-0 text-black" />
               <span>{importError}</span>
             </div>
           )}
@@ -864,7 +864,7 @@ export default function PlanImporterModal({
                 <button
                   type="button"
                   onClick={handleClearAllDays}
-                  className="text-[10.5px] text-rose-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                  className="text-[10.5px] bg-white hover:bg-neutral-200 text-black font-black px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition"
                 >
                   <Trash2 size={11} />
                   <span>Limpiar todo</span>

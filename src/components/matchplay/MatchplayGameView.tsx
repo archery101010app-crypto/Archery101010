@@ -2411,13 +2411,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               {/* Rival ready box */}
               {isFriendDuel && !isRivalConnected ? (
-                <div className="p-3 rounded-2xl border bg-red-950/20 border-red-500/25 text-red-400 flex flex-col items-center gap-2 transition-all duration-200">
-                  <div className="w-10 h-10 rounded-full bg-neutral-950 border border-red-500/25 flex items-center justify-center text-xs font-black relative">
+                <div className="p-3 rounded-2xl border bg-[#0D1017] border-white/15 text-white flex flex-col items-center gap-2 transition-all duration-200">
+                  <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/15 flex items-center justify-center text-xs font-black relative">
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-neutral-950" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-white border-2 border-neutral-950" />
                   </div>
                   <span className="text-[11.6px] font-bold truncate max-w-full">{config.rival.fullName}</span>
-                  <span className="text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white text-black font-black uppercase tracking-wider whitespace-nowrap">
                     Desconectado
                   </span>
                   <button
@@ -2444,7 +2444,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         alert("Error al verificar la conexión.");
                       }
                     }}
-                    className="mt-1 px-2.5 py-1 rounded-lg bg-[#0D1017] border border-white/10 hover:bg-neutral-800 text-white font-extrabold text-[9.3px] uppercase tracking-wider transition-all cursor-pointer"
+                    className="mt-1 px-2.5 py-1 rounded-lg bg-white hover:bg-neutral-200 border border-white text-black font-black text-[9.3px] uppercase tracking-wider transition-all cursor-pointer"
                   >
                     Verificar
                   </button>
@@ -3137,7 +3137,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   <>
                     <button
                       onClick={declineCall}
-                      className="flex-1 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 font-black text-xs uppercase tracking-wider transition active:scale-95"
+                      className="flex-1 py-3 rounded-xl bg-white border border-white text-black hover:bg-neutral-200 font-black text-xs uppercase tracking-wider transition active:scale-95"
                     >
                       Rechazar
                     </button>
@@ -3151,7 +3151,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 ) : (
                   <button
                     onClick={cancelCall}
-                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider transition active:scale-95"
+                    className="w-full py-3 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider transition active:scale-95"
                   >
                     Cancelar
                   </button>
@@ -3641,7 +3641,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     onClick={() => {
                       onBack();
                     }}
-                    className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 hover:bg-red-500/25 text-red-400 font-bold text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                    className="w-full py-2.5 rounded-xl bg-white border border-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
                   >
                     Abandonar y Cerrar Match
                   </button>

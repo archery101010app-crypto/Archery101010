@@ -1088,7 +1088,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => handleDeleteDraft(dr.uid)}
-                      className="h-8 w-8 rounded-xl border border-white/10 hover:border-red-rival/40 text-white hover:text-red-rival flex items-center justify-center cursor-pointer transition active:scale-95"
+                      className="h-8 w-8 rounded-xl border border-white bg-white hover:bg-neutral-200 text-black flex items-center justify-center cursor-pointer transition active:scale-95"
                       title="Eliminar Duelo"
                     >
                       <Trash2 size={13} />
@@ -1161,7 +1161,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         h.outcome === "win"
                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                           : h.outcome === "loss"
-                          ? "bg-red-500/10 border-red-500/30 text-red-400"
+                          ? "bg-white border-white text-black"
                           : "bg-white/[0.05] border-white/10 text-white"
                       }`}>
                         {h.outcome === "win" ? "Victoria" : h.outcome === "loss" ? "Derrota" : "Empate"}

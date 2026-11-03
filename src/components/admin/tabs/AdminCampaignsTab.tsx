@@ -294,7 +294,7 @@ export default function AdminCampaignsTab() {
                 alert("¡Historial de visualizaciones e impresiones de anuncios limpiado con éxito!");
               }
             }}
-            className="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
+            className="py-2.5 px-4 bg-white hover:bg-neutral-200 text-black border border-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
           >
             <span>Limpiar Impresiones</span>
           </button>
@@ -433,7 +433,7 @@ export default function AdminCampaignsTab() {
               </button>
               <button
                 onClick={() => handleDeleteCampaign(camp.id)}
-                className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/10 transition cursor-pointer"
+                className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer"
                 title="Eliminar"
               >
                 <Trash2 size={12} />
@@ -529,7 +529,7 @@ export default function AdminCampaignsTab() {
                       {slides.length > 1 && (
                         <button
                           onClick={() => handleRemoveSlide(slide.id)}
-                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black transition"
                           title="Eliminar Slide"
                         >
                           <Trash2 size={12} />

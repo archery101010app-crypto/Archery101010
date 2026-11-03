@@ -554,7 +554,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const getEventBadgeColor = (type: string) => {
     switch (type) {
       case "competition":
-        return "bg-red-rival/15 text-red-rival border-red-rival/20";
+        return "bg-white text-black border-white";
       case "training":
         return "bg-cyan-neon/15 text-cyan-neon border-cyan-neon/20";
       case "meeting":
@@ -1071,7 +1071,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               <button
                 type="button"
                 onClick={() => handleRequestUnlink(currentPlan)}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-red-rival font-bold text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
+                className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
                 title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
               >
                 <Unlink size={11} />
@@ -1480,7 +1480,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   if (m) handleRequestUnlink(m);
                   else if (macrocycles.length > 0) handleRequestUnlink(macrocycles[0]);
                 }}
-                className="text-[11.6px] text-red-rival hover:text-red-rival font-bold uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition cursor-pointer"
+                className="text-[11.6px] text-black hover:bg-neutral-200 font-black uppercase tracking-wider flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-white active:scale-95 transition cursor-pointer"
               >
                 <Unlink size={11} />
                 <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
@@ -1637,7 +1637,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         </button>
                         <button
                           onClick={() => handleDelete(ev.id)}
-                          className="p-1.5 rounded-lg border border-red-500/10 bg-red-500/5 text-red-400 hover:bg-red-500/10 transition cursor-pointer"
+                          className="p-1.5 rounded-lg border border-white bg-white text-black hover:bg-neutral-200 transition cursor-pointer"
                           title="Eliminar"
                         >
                           <Trash2 size={11} />
@@ -1809,7 +1809,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 handleDeleteDailyAssignment(coachAssignment.id);
                               }
                             }}
-                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-red-rival border border-rose-500/25 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                            className="p-1.5 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
                             title="Borrar o Desvincular"
                           >
                             <Trash2 size={11} />
@@ -2341,7 +2341,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     <button
                       type="button"
                       onClick={() => handleDeleteDailyAssignment(assignmentEventId)}
-                      className="px-3.5 py-3 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-red-rival font-black text-xs uppercase tracking-wider cursor-pointer transition"
+                      className="px-3.5 py-3 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider cursor-pointer transition"
                     >
                       Borrar
                     </button>
@@ -2510,7 +2510,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <X size={16} />
               </button>
 
-              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-red-rival">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-white flex items-center justify-center text-black">
                 <Unlink size={24} />
               </div>
 
@@ -2521,7 +2521,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <p className="text-xs text-white mt-1 leading-relaxed">
                   Plan: <strong className="text-white">{macroToUnlink.name}</strong>
                 </p>
-                <p className="text-[12.8px] text-red-rival mt-1.5 leading-relaxed bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                <p className="text-[12.8px] text-black font-bold mt-1.5 leading-relaxed bg-white p-2.5 rounded-xl border border-white">
                   Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.
                 </p>
               </div>
@@ -2566,7 +2566,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   type="button"
                   onClick={handleConfirmUnlink}
                   disabled={isUnlinking}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase cursor-pointer transition shadow-lg flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase cursor-pointer transition shadow-lg flex items-center justify-center gap-1.5"
                 >
                   {isUnlinking ? (
                     <RefreshCw size={14} className="animate-spin" />

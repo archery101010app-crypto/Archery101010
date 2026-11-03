@@ -351,12 +351,12 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                       <span
                                         key={aIdx}
                                         className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10.5px] shrink-0 ${
-                                          arrowVal === "X" || arrowVal === "10"
-                                            ? "bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30"
-                                            : arrowVal === "9" || arrowVal === "8"
-                                            ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                                            : arrowVal === "7" || arrowVal === "6"
-                                            ? "bg-blue-500/20 text-cyan-neon border border-blue-500/30"
+                                          arrowVal === "X" || arrowVal === "10" || arrowVal === "9"
+                                            ? "bg-yellow-gold text-black border border-yellow-gold"
+                                            : arrowVal === "8" || arrowVal === "7"
+                                            ? "bg-red-500 text-white border border-red-500/30"
+                                            : arrowVal === "6" || arrowVal === "5"
+                                            ? "bg-blue-500 text-white border border-blue-500/30"
                                             : "bg-neutral-800 text-white border border-neutral-700"
                                         }`}
                                       >

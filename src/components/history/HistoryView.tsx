@@ -722,7 +722,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 </button>
                 <button
                   onClick={() => setConfirmDeleteId(selectedSession.id)}
-                  className="p-2 rounded-xl bg-neutral-900 border border-red-rival/20 text-red-rival cursor-pointer"
+                  className="p-2 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -1028,7 +1028,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               <div className="flex gap-3 mt-2">
                 <button
                   onClick={() => handleDelete(confirmDeleteId)}
-                  className="flex-1 py-3 rounded-full bg-red-rival text-white font-bold text-xs uppercase cursor-pointer"
+                  className="flex-1 py-3 rounded-full bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase cursor-pointer transition"
                 >
                   Eliminar
                 </button>

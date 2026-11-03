@@ -1600,7 +1600,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   }
                 }}
                 disabled={tallyCount === 0}
-                className="px-4 py-2 bg-neutral-900 border border-white/5 hover:border-red-rival/30 hover:bg-red-rival/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-white/5 text-red-rival text-[11.6px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
+                className="px-4 py-2 bg-white hover:bg-neutral-200 border border-white disabled:opacity-30 disabled:hover:bg-white text-black text-[11.6px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition"
               >
                 Restar Flecha (-1)
               </button>
@@ -1839,7 +1839,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </button>
               <button
                 onClick={() => handleScoreInput("M")}
-                className="flex-1 py-3 rounded-xl border border-red-rival/30 bg-red-rival/10 text-red-rival font-extrabold text-xs uppercase cursor-pointer hover:bg-red-rival/20 transition active:scale-95"
+                className="flex-1 py-3 rounded-xl border border-white bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase cursor-pointer transition active:scale-95"
               >
                 Fallo (M)
               </button>
@@ -2292,7 +2292,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </button>
                 <button
                   onClick={handleDiscard}
-                  className="w-full h-11 rounded-xl bg-red-rival/15 border border-red-rival/35 text-red-rival font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer hover:bg-red-rival/25 transition"
+                  className="w-full h-11 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer active:scale-95 transition"
                 >
                   Descartar Entrenamiento
                 </button>

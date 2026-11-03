@@ -376,8 +376,8 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         </h2>
 
         {error && (
-          <div className="bg-red-rival/10 border border-red-rival/40 rounded-xl p-3.5 flex items-start gap-2.5 text-red-rival text-xs whitespace-pre-line leading-relaxed text-left">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div className="bg-white border border-white rounded-xl p-3.5 flex items-start gap-2.5 text-black font-bold text-xs whitespace-pre-line leading-relaxed text-left">
+            <AlertCircle size={16} className="shrink-0 mt-0.5 text-black" />
             <span>{error}</span>
           </div>
         )}
@@ -543,8 +543,8 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               </p>
 
               {resetModalError && (
-                <div className="bg-red-rival/10 border border-red-rival/30 rounded-xl p-3 flex items-start gap-2 text-red-rival text-xs leading-relaxed">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <div className="bg-white border border-white rounded-xl p-3 flex items-start gap-2 text-black font-bold text-xs leading-relaxed">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-black" />
                   <span>{resetModalError}</span>
                 </div>
               )}

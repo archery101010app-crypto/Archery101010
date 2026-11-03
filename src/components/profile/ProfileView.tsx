@@ -642,7 +642,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleRemoveBow(idx)}
-                        className="h-7 px-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-rival text-[11.6px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        className="h-7 px-2.5 rounded-lg bg-white hover:bg-neutral-200 border border-white text-black text-[11.6px] font-black flex items-center gap-1.5 transition cursor-pointer"
                         title="Eliminar este arco"
                       >
                         <Trash2 size={12} />
@@ -912,15 +912,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </div>
 
           {clubJoinFeedback && (
-            <div className={`p-3 rounded-2xl text-xs font-medium flex items-center gap-2 border ${
+            <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border ${
               clubJoinFeedback.type === "success" 
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" 
-                : "bg-red-500/10 border-red-500/30 text-red-300"
+                : "bg-white border-white text-black"
             }`}>
               {clubJoinFeedback.type === "success" ? (
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
               ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-black" />
               )}
               <span className="leading-snug">{clubJoinFeedback.message}</span>
             </div>
@@ -978,7 +978,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <button
                   type="button"
                   onClick={handleLeaveClub}
-                  className="text-[12.8px] text-red-400/80 hover:text-red-400 font-bold transition-colors cursor-pointer py-1 px-2"
+                  className="text-xs bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
                 >
                   Desvincularme del club
                 </button>
@@ -1260,7 +1260,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Log out Action Button */}
       <button
         onClick={handleLogoutClick}
-        className="w-full py-3.5 mt-1 rounded-full border border-red-rival/30 hover:bg-red-rival/5 text-red-rival font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-3.5 mt-1 rounded-full bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <LogOut size={16} />
         <span>{t("logout")}</span>
@@ -1269,7 +1269,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Delete Account & Data Action Button (Google Play / App Store Policy Requirement) */}
       <button
         onClick={() => setIsDeleteAccountOpen(true)}
-        className="w-full py-2.5 rounded-full border border-white/5 hover:border-red-rival/40 text-white hover:text-red-rival font-bold text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-2.5 rounded-full border border-white/10 hover:bg-white hover:text-black text-white font-bold text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <Trash2 size={13} />
         <span>Eliminar mi cuenta y datos</span>
@@ -1290,7 +1290,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               exit={{ scale: 0.96, y: 10 }}
               className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-4 shadow-2xl text-center"
             >
-              <div className="w-11 h-11 rounded-2xl bg-red-rival/10 border border-red-rival/25 flex items-center justify-center mx-auto text-red-rival">
+              <div className="w-11 h-11 rounded-2xl bg-white border border-white flex items-center justify-center mx-auto text-black">
                 <Trash2 size={20} />
               </div>
               <h3 className="text-white text-base font-black tracking-tight">
@@ -1312,7 +1312,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   type="button"
                   disabled={isDeletingAccount}
                   onClick={handleConfirmDeleteAccount}
-                  className="flex-1 h-11 rounded-2xl bg-red-rival hover:brightness-110 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
+                  className="flex-1 h-11 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
                 >
                   {isDeletingAccount ? "Eliminando..." : "Eliminar"}
                 </button>

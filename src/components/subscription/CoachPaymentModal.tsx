@@ -213,7 +213,7 @@ export default function CoachPaymentModal({
             <div
               className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
                 statusMessage.isError
-                  ? "bg-red-500/10 border-red-500/20 text-red-400"
+                  ? "bg-white border-white text-black"
                   : "bg-cyan-neon/10 border-cyan-neon/25 text-cyan-neon"
               }`}
             >
