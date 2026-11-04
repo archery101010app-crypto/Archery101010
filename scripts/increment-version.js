@@ -55,7 +55,7 @@ if (fs.existsSync(swPath)) {
   console.warn("public/sw.js not found, skipping cache name bump");
 }
 
-// 5. Update android/app/build.gradle versionCode and versionName
+// 5. Update android/app/build.gradle and android/wear/build.gradle versionCode and versionName
 const gradlePath = path.join(__dirname, '../android/app/build.gradle');
 const vCode = 40000 + parts[1] * 100 + parts[2];
 if (fs.existsSync(gradlePath)) {
@@ -65,6 +65,15 @@ if (fs.existsSync(gradlePath)) {
   gradleContent = gradleContent.replace(/versionName\s+["'].*?["']/, `versionName "${displayVersion}"`);
   fs.writeFileSync(gradlePath, gradleContent, 'utf8');
   console.log(`Updated android/app/build.gradle with: versionCode ${vCode}, versionName "${displayVersion}"`);
+}
+const wearGradlePath = path.join(__dirname, '../android/wear/build.gradle');
+const wearVCode = 100000 + vCode;
+if (fs.existsSync(wearGradlePath)) {
+  let wearGradleContent = fs.readFileSync(wearGradlePath, 'utf8');
+  wearGradleContent = wearGradleContent.replace(/versionCode\s+\d+/, `versionCode ${wearVCode}`);
+  wearGradleContent = wearGradleContent.replace(/versionName\s+["'].*?["']/, `versionName "${displayVersion}"`);
+  fs.writeFileSync(wearGradlePath, wearGradleContent, 'utf8');
+  console.log(`Updated android/wear/build.gradle with: versionCode ${wearVCode}, versionName "${displayVersion}"`);
 }
 
 // 6. Write public/version.json and public/app-version.json for automatic in-app update detection

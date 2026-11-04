@@ -1,0 +1,38 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "com.archery101010.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.archery101010.app"
+        minSdkVersion 26
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Wear OS form-factor versionCode offset (+100000 over mobile versionCode)
+        versionCode 145300
+        versionName "2.53"
+    }
+
+    signingConfigs {
+        release {
+            if (file("../app/archery101010-upload.jks").exists()) {
+                storeFile file("../app/archery101010-upload.jks")
+                storePassword "archery101010"
+                keyAlias "archery101010"
+                keyPassword "archery101010"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core:$androidxCoreVersion"
+}
