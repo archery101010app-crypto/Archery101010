@@ -567,22 +567,21 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <ArrowLeft size={16} />
         </button>
         <div className="min-w-0">
-          <h2 className="text-white text-[17.6px] sm:text-[19.8px] font-black uppercase tracking-wide truncate leading-tight">
+          <h2 className="text-white text-[20.2px] sm:text-[22.8px] font-black uppercase tracking-wide truncate leading-tight">
             {t("settingsTitle")}
           </h2>
-          <p className="text-[11.6px] text-white uppercase tracking-wider truncate">Ajustes</p>
         </div>
       </div>
 
       {/* User Header Profile Card */}
       <div className="bg-[#0D1017] p-4 rounded-3xl border border-white/[0.08] flex items-center gap-4 relative overflow-hidden">
-        <div className="w-15 h-15 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/40 flex items-center justify-center text-cyan-neon font-black text-lg shrink-0">
+        <div className="w-15 h-15 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/40 flex items-center justify-center text-cyan-neon font-black text-[20.7px] shrink-0">
           {user.fullName.substring(0, 2).toUpperCase()}
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-white font-extrabold text-base truncate">{user.fullName}</span>
-            <span className={`text-[10.5px] font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap shrink-0 ${
+            <span className="text-white font-extrabold text-[18.4px] truncate">{user.fullName}</span>
+            <span className={`text-[12.1px] font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap shrink-0 ${
               user.plan === "PRO" 
                 ? "bg-yellow-gold/10 border border-yellow-gold/30 text-yellow-gold"
                 : "bg-white/[0.06] border border-white/15 text-white"
@@ -590,10 +589,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               {user.plan}
             </span>
           </div>
-          <span className="text-[11.6px] text-white mt-0.5 truncate">{user.email}</span>
+          <span className="text-[13.3px] text-white mt-0.5 truncate">{user.email}</span>
           
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <span className="text-[10.5px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap">
+            <span className="text-[12.1px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap">
               {user.role === "archer"
                 ? "Atleta"
                 : user.role === "coach"
@@ -607,7 +606,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 : user.role}
             </span>
             {user.nickname && (
-              <span className="text-[10.5px] text-white font-bold tabular-nums truncate">
+              <span className="text-[12.1px] text-white font-bold tabular-nums truncate">
                 @{user.nickname}
               </span>
             )}
@@ -618,14 +617,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* SECTION 1: Personal Data */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 md:p-5 flex flex-col gap-3">
         <div className="flex justify-between items-center border-b border-white/5 pb-3">
-          <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">{t("personalData")}</h4>
+          <h4 className="text-white text-[13.8px] md:text-[16.1px] font-black uppercase tracking-wider">{t("personalData")}</h4>
           <button
             type="button"
             onClick={() => {
               if (editPersonal) handleSavePersonal();
               else setEditPersonal(true);
             }}
-            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11.6px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
+            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[13.3px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
           >
             {editPersonal ? "Guardar" : "Editar"}
           </button>
@@ -635,54 +634,54 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <div className="flex flex-col gap-3 mt-1">
             <div className="grid grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Nombre</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Nombre</label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
                   placeholder=""
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Alias</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Alias</label>
                 <input
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
                   placeholder=""
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Nacimiento</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Nacimiento</label>
                 <input
                   type="date"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none uppercase [color-scheme:dark] transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none uppercase [color-scheme:dark] transition"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Ciudad</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Ciudad</label>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
                   placeholder={t("city")}
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">País</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">País</label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
                 >
                   {COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code} className="bg-black text-white">{c.flag} {c.name}</option>
@@ -690,11 +689,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Género</label>
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Género</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
                 >
                   <option value="M" className="bg-black text-white">{t("genderM")}</option>
                   <option value="F" className="bg-black text-white">{t("genderF")}</option>
@@ -703,12 +702,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Club (Opcional)</label>
+              <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Club (Opcional)</label>
               <input
                 type="text"
                 value={clubName}
                 onChange={(e) => setClubName(e.target.value)}
-                className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
                 placeholder="Club (Opcional)"
               />
             </div>
@@ -716,34 +715,34 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         ) : (
           <div className="flex flex-col gap-2 mt-1">
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Nombre:</span>
-              <span className="text-white text-xs font-bold">{user.fullName}</span>
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Nombre:</span>
+              <span className="text-white text-[13.8px] font-bold">{user.fullName}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Alias para Retos:</span>
-              <span className="text-cyan-neon text-xs tabular-nums font-bold">@{user.nickname || "arquero"}</span>
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Alias para Retos:</span>
+              <span className="text-cyan-neon text-[13.8px] tabular-nums font-bold">@{user.nickname || "arquero"}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Club (Opcional):</span>
-              <span className="text-white text-xs font-bold">{clubName.trim() || "—"}</span>
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Club (Opcional):</span>
+              <span className="text-white text-[13.8px] font-bold">{clubName.trim() || "—"}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Nacimiento:</span>
-              <span className="text-white text-xs font-bold">{user.birthDate}</span>
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Nacimiento:</span>
+              <span className="text-white text-[13.8px] font-bold">{user.birthDate}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Ciudad:</span>
-              <span className="text-white text-xs font-bold">{user.city || "-"}</span>
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Ciudad:</span>
+              <span className="text-white text-[13.8px] font-bold">{user.city || "-"}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">País:</span>
-              <span className="text-white text-xs font-bold">
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">País:</span>
+              <span className="text-white text-[13.8px] font-bold">
                 {COUNTRIES.find((c) => c.code === user.country)?.flag} {COUNTRIES.find((c) => c.code === user.country)?.name}
               </span>
             </div>
             <div className="flex justify-between items-center py-1.5">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Género:</span>
-              <span className="text-white text-xs font-bold">
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Género:</span>
+              <span className="text-white text-[13.8px] font-bold">
                 {user.gender === "M" ? t("genderM") : user.gender === "F" ? t("genderF") : t("genderO")}
               </span>
             </div>
@@ -757,7 +756,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         <div className="flex justify-between items-center border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <Target size={18} className="text-cyan-neon" />
-            <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">
+            <h4 className="text-white text-[13.8px] md:text-[16.1px] font-black uppercase tracking-wider">
               {t("bowConfig")}
             </h4>
           </div>
@@ -767,7 +766,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               if (editBow) handleSaveBow();
               else setEditBow(true);
             }}
-            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11.6px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
+            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[13.3px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
           >
             {editBow ? "Guardar" : "Editar"}
           </button>
@@ -786,7 +785,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 >
                   {/* Bow Header */}
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <h5 className="text-white text-xs font-black uppercase tracking-wider">
+                    <h5 className="text-white text-[13.8px] font-black uppercase tracking-wider">
                       Arco #{bowNumber}
                     </h5>
 
@@ -794,7 +793,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleRemoveBow(idx)}
-                        className="h-7 px-2.5 rounded-lg bg-white hover:bg-neutral-200 border border-white text-black text-[11.6px] font-black flex items-center gap-1.5 transition cursor-pointer"
+                        className="h-7 px-2.5 rounded-lg bg-white hover:bg-neutral-200 border border-white text-black text-[13.3px] font-black flex items-center gap-1.5 transition cursor-pointer"
                         title="Eliminar este arco"
                       >
                         <Trash2 size={12} />
@@ -805,7 +804,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
                   {/* Tipo de Arco Selector */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                    <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                       Tipo de Arco
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -817,7 +816,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`h-10 flex items-center justify-center rounded-xl text-[12.8px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                            className={`h-10 flex items-center justify-center rounded-xl text-[14.7px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                               isSelected
                                 ? "bg-cyan-neon text-black border-cyan-neon"
                                 : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
@@ -833,7 +832,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   {/* Fila: Marca y Modelo */}
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                         Marca
                       </label>
                       <input
@@ -841,11 +840,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         value={bow.brand}
                         onChange={(e) => handleUpdateBow(idx, { brand: e.target.value })}
                         placeholder="Ej. Hoyt, Mathews"
-                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition placeholder:text-white"
+                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition placeholder:text-white"
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                         Modelo
                       </label>
                       <input
@@ -853,7 +852,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         value={bow.model}
                         onChange={(e) => handleUpdateBow(idx, { model: e.target.value })}
                         placeholder="Ej. Satori, TRX"
-                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition placeholder:text-white"
+                        className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition placeholder:text-white"
                       />
                     </div>
                   </div>
@@ -861,7 +860,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   {/* Fila: Potencia y Apertura */}
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                         Potencia
                       </label>
                       <div className="relative flex items-center">
@@ -871,15 +870,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.poundage || ""}
                           onChange={(e) => handleUpdateBow(idx, { poundage: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 38"
-                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-12 rounded-xl outline-none transition placeholder:text-white"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-12 rounded-xl outline-none transition placeholder:text-white"
                         />
-                        <span className="absolute right-3 text-[12.8px] text-cyan-neon font-black pointer-events-none uppercase">
+                        <span className="absolute right-3 text-[14.7px] text-cyan-neon font-black pointer-events-none uppercase">
                           lbs
                         </span>
                       </div>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                         Apertura
                       </label>
                       <div className="relative flex items-center">
@@ -889,9 +888,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.drawLength || ""}
                           onChange={(e) => handleUpdateBow(idx, { drawLength: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 28.5"
-                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs pl-3.5 pr-10 rounded-xl outline-none transition placeholder:text-white"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-10 rounded-xl outline-none transition placeholder:text-white"
                         />
-                        <span className="absolute right-3.5 text-sm text-cyan-neon font-black pointer-events-none">
+                        <span className="absolute right-3.5 text-[16.1px] text-cyan-neon font-black pointer-events-none">
                           &quot;
                         </span>
                       </div>
@@ -900,14 +899,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
                   {/* Fila: Lateralidad / Orientación */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[11.6px] text-white uppercase font-black tracking-widest">
+                    <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                       Lateralidad / Orientación
                     </label>
                     <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "RH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                           (bow.hand || "RH") === "RH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
@@ -918,7 +917,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "LH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
                           bow.hand === "LH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
@@ -937,7 +936,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <button
                 type="button"
                 onClick={handleAddBow}
-                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
+                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-[13.8px] uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
               >
                 <Plus size={15} />
                 <span>+ Agregar Arco #2</span>
@@ -949,7 +948,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <button
                 type="button"
                 onClick={handleAddBow}
-                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
+                className="h-12 w-full rounded-xl border border-dashed border-cyan-neon/30 hover:border-cyan-neon bg-cyan-neon/5 hover:bg-cyan-neon/10 text-cyan-neon font-black text-[13.8px] uppercase tracking-widest flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
               >
                 <Plus size={15} />
                 <span>+ Agregar Arco #3</span>
@@ -960,7 +959,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             <button
               type="button"
               onClick={handleSaveBow}
-              className="h-12 w-full rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition shadow-glow-cyan cursor-pointer active:scale-[0.99]"
+              className="h-12 w-full rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black font-black text-[13.8px] uppercase tracking-widest flex items-center justify-center gap-2 transition shadow-glow-cyan cursor-pointer active:scale-[0.99]"
             >
               <Check size={16} strokeWidth={3} />
               <span>Guardar Arcos</span>
@@ -979,37 +978,37 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   className="bg-neutral-950/70 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-md"
                 >
                   <div className="border-b border-white/5 pb-2 flex items-center justify-between">
-                    <span className="text-white text-xs font-black uppercase tracking-wider">
-                      Arco #{bowNumber} {isPrimary && <span className="text-white font-bold text-[11.6px]">(Principal)</span>}
+                    <span className="text-white text-[13.8px] font-black uppercase tracking-wider">
+                      Arco #{bowNumber} {isPrimary && <span className="text-white font-bold text-[13.3px]">(Principal)</span>}
                     </span>
-                    <span className="text-[11.6px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon">
+                    <span className="text-[13.3px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon">
                       {typeName}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Marca</span>
-                      <span className="text-white text-xs font-bold truncate">
+                      <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Marca</span>
+                      <span className="text-white text-[13.8px] font-bold truncate">
                         {bow.brand || "Sin especificar"}
                       </span>
                     </div>
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Modelo</span>
-                      <span className="text-white text-xs font-bold truncate">
+                      <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Modelo</span>
+                      <span className="text-white text-[13.8px] font-bold truncate">
                         {bow.model || "Sin especificar"}
                       </span>
                     </div>
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Potencia / Apertura</span>
-                      <span className="text-white text-xs font-bold">
+                      <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Potencia / Apertura</span>
+                      <span className="text-white text-[13.8px] font-bold">
                         {bow.poundage ? `${bow.poundage} lbs` : "-"}
                         {bow.drawLength ? ` • ${bow.drawLength}"` : ""}
                       </span>
                     </div>
                     <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Orientación</span>
-                      <span className="text-cyan-neon text-xs font-black uppercase">
+                      <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Orientación</span>
+                      <span className="text-cyan-neon text-[13.8px] font-black uppercase">
                         {(bow.hand || "RH") === "RH" ? "Diestro (RH)" : "Zurdo (LH)"}
                       </span>
                     </div>
@@ -1019,7 +1018,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             })}
 
             {bowsList.length < 3 && (
-              <p className="text-[11.6px] text-white text-center pt-0.5 italic">
+              <p className="text-[13.3px] text-white text-center pt-0.5 italic">
                 {bowsList.length === 1 
                   ? '¿Tienes otro arco? Toca "Editar" para registrar tu Arco #2.' 
                   : '¿Tienes un tercer arco? Toca "Editar" para registrar tu Arco #3.'}
@@ -1032,8 +1031,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* SECTION 4: Preferences Notifications */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex items-center justify-between gap-3">
         <div className="flex flex-col min-w-0">
-          <span className="text-white text-xs font-black uppercase tracking-wider">{t("pushNotif")}</span>
-          <span className="text-[11.6px] text-white leading-snug">Alertas de retos, duelos 1v1 y recordatorios</span>
+          <span className="text-white text-[13.8px] font-black uppercase tracking-wider">{t("pushNotif")}</span>
+          <span className="text-[13.3px] text-white leading-snug">Alertas de retos, duelos 1v1 y recordatorios</span>
         </div>
         <button
           onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
@@ -1051,19 +1050,19 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* SECTION 4.5: Mi Entrenador (Disponible para todos los usuarios para poder vincularse/desvincularse siempre) */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+          <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider flex items-center gap-1.5">
             <Users className="w-4 h-4 text-cyan-neon" />
             Mi Entrenador (Coach)
           </h4>
           {linkedToCoach && (
-            <span className="text-[12.6px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-neon/15 text-white border border-cyan-neon/35 flex items-center gap-1">
+            <span className="text-[14.5px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-neon/15 text-white border border-cyan-neon/35 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon" /> Vinculado
             </span>
           )}
         </div>
 
         {clubJoinFeedback && (
-          <div className={`p-3.5 rounded-2xl text-[14.4px] font-bold flex items-center justify-center text-center gap-2.5 border ${
+          <div className={`p-3.5 rounded-2xl text-[16.6px] font-bold flex items-center justify-center text-center gap-2.5 border ${
             clubJoinFeedback.type === "success" 
               ? "bg-cyan-neon/10 border-cyan-neon/35 text-white" 
               : "bg-white border-white text-black"
@@ -1082,7 +1081,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             {/* Información del Entrenador */}
             <div className="bg-neutral-950/30 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10.5px] text-white uppercase font-black tracking-wider flex items-center gap-1">
+                <span className="text-[12.1px] text-white uppercase font-black tracking-wider flex items-center gap-1">
                   <Users className="w-3 h-3 text-cyan-neon" /> Tu Entrenador
                 </span>
                 {coachProfile?.whatsappNumber && (
@@ -1090,21 +1089,21 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     href={`https://wa.me/${coachProfile.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola Coach ${coachProfile.fullName}, soy ${user.fullName}. Te escribo desde Archery 101010.`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[11.6px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[13.3px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
                   >
                     <MessageCircle className="w-3 h-3" /> WhatsApp
                   </a>
                 )}
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-[13.8px]">
                 <span className="text-white font-bold">
                   {coachProfile?.fullName || user.coachName || "Entrenador Asignado"}
                 </span>
-                <span className="text-[11.6px] text-white">
+                <span className="text-[13.3px] text-white">
                   {coachProfile?.email || user.coachEmail || "En línea"}
                 </span>
               </div>
-              <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[11.6px] text-cyan-300 leading-snug flex items-center gap-1.5">
+              <div className="bg-cyan-brand/10 border border-cyan-neon/15 rounded-xl p-2 text-[13.3px] text-cyan-300 leading-snug flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon shrink-0" />
                 <span>Tus planillas y series se sincronizan en tiempo real con el panel de tu coach.</span>
               </div>
@@ -1115,7 +1114,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <button
                 type="button"
                 onClick={handleLeaveClub}
-                className="text-xs bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
+                className="text-[13.8px] bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider rounded-xl transition-colors cursor-pointer py-1.5 px-3"
               >
                 Desvincularme del Coach
               </button>
@@ -1123,7 +1122,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-[12.8px] text-white leading-snug">
+            <p className="text-[14.7px] text-white leading-snug">
               Pídele a tu entrenador su código de 6 dígitos para vincularte como su alumno. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
             </p>
 
@@ -1134,13 +1133,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 value={athleteInviteCode}
                 onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
                 placeholder="Código de 6 dígitos"
-                className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
+                className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-[13.8px] text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
               />
               <button
                 type="button"
                 onClick={handleJoinClub}
                 disabled={!athleteInviteCode.trim() || isJoiningClub}
-                className="px-4 py-2.5 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-cyan-neon text-black font-black text-[13.8px] uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               >
                 {isJoiningClub ? "Vinculando..." : "Vincular"}
               </button>
@@ -1153,7 +1152,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {isCoachProfile && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider">Configuración de Coach</h4>
+            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider">Configuración de Coach</h4>
             {user.role !== "superadmin" && (
               <button
                 type="button"
@@ -1167,7 +1166,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     }
                   }
                 }}
-                className="text-[10.5px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
+                className="text-[12.1px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
               >
                 Volver a modo Atleta
               </button>
@@ -1177,9 +1176,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <div className="flex flex-col gap-3 mt-1">
             {/* Invite code (6 dígitos) */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">Código para Alumnos (6 dígitos)</span>
+              <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">Código para Alumnos (6 dígitos)</span>
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
+                <span className="flex-1 text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
                   {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                     ? user.clubInviteCode
                     : "······"}
@@ -1201,7 +1200,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
                     }
                   }}
-                  className="px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-xs font-bold transition cursor-pointer active:scale-95"
+                  className="px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold transition cursor-pointer active:scale-95"
                   title="Generar nuevo código de 6 dígitos"
                 >
                   Nuevo
@@ -1211,18 +1210,18 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
             {/* Coach personal WhatsApp */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">WhatsApp del Coach</span>
+              <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">WhatsApp del Coach</span>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={clubWhatsApp}
                   onChange={(e) => setClubWhatsApp(e.target.value)}
-                  className="flex-1 bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
+                  className="flex-1 bg-neutral-950 border border-gray-border text-white text-[13.8px] p-2.5 rounded-xl outline-none"
                   placeholder="Ej. +50688888888"
                 />
                 <button
                   onClick={handleSaveClubWhatsApp}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-xs cursor-pointer active:scale-95 transition"
+                  className="px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-[13.8px] cursor-pointer active:scale-95 transition"
                 >
                   Ok
                 </button>
@@ -1232,7 +1231,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             {/* Linked students roster directly in Coach Profile */}
             <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.06]">
               <div className="flex items-center justify-between">
-                <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">
+                <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">
                   Mis Alumnos Vinculados ({coachStudents.length})
                 </span>
                 {(onOpenCoachPortal || onNavigate) && (
@@ -1242,7 +1241,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       if (onOpenCoachPortal) onOpenCoachPortal();
                       else if (onNavigate) onNavigate("HOME");
                     }}
-                    className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer"
+                    className="text-[12.1px] text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer"
                   >
                     Abrir Portal Coach →
                   </button>
@@ -1250,7 +1249,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
 
               {coachStudents.length === 0 ? (
-                <p className="text-[11px] text-neutral-400 bg-neutral-950/60 border border-white/5 rounded-xl p-3">
+                <p className="text-[12.7px] text-neutral-400 bg-neutral-950/60 border border-white/5 rounded-xl p-3">
                   Aún no tienes arqueros vinculados. Comparte tu código de 6 dígitos para que tus alumnos lo ingresen en su Perfil.
                 </p>
               ) : (
@@ -1261,20 +1260,20 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       className="flex items-center justify-between gap-2 bg-neutral-950 border border-white/[0.06] rounded-xl px-3 py-2"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-xs shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-[13.8px] shrink-0">
                           {(student.fullName || "A").charAt(0).toUpperCase()}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-bold text-white truncate">
+                          <span className="text-[13.8px] font-bold text-white truncate">
                             {student.fullName || "Arquero"}
                           </span>
-                          <span className="text-[10px] text-neutral-400 truncate">
+                          <span className="text-[11.5px] text-neutral-400 truncate">
                             {student.email}
                             {student.clubName ? ` • ${student.clubName}` : ""}
                           </span>
                         </div>
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/20 px-2 py-0.5 rounded-lg shrink-0">
+                      <span className="text-[11.5px] font-black uppercase tracking-wider text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/20 px-2 py-0.5 rounded-lg shrink-0">
                         {student.bowConfig?.type || "Recurve"}
                       </span>
                     </div>
@@ -1289,16 +1288,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Superadmin Panel Direct Link */}
       {user.role === "superadmin" && onNavigate && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-2.5">
-          <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+          <h3 className="text-[13.8px] font-black text-white uppercase tracking-widest flex items-center gap-2">
             <Shield size={14} className="text-cyan-neon" />
             <span>Panel de Administración</span>
           </h3>
-          <p className="text-[11.6px] text-white leading-relaxed">
+          <p className="text-[13.3px] text-white leading-relaxed">
             Tienes privilegios de Super Administrador para gestionar usuarios, publicidad y ajustes.
           </p>
           <button
             onClick={() => onNavigate("ADMIN")}
-            className="w-full py-2.5 rounded-xl bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-bold text-xs uppercase cursor-pointer hover:bg-cyan-neon/20 transition active:scale-98"
+            className="w-full py-2.5 rounded-xl bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-bold text-[13.8px] uppercase cursor-pointer hover:bg-cyan-neon/20 transition active:scale-98"
           >
             Abrir Panel Admin
           </button>
@@ -1311,7 +1310,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Política de Privacidad Button */}
       <button
         onClick={() => window.open("/privacy", "_blank")}
-        className="w-full py-3 mt-1 rounded-full border border-white/10 hover:bg-white/5 text-white hover:text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-3 mt-1 rounded-full border border-white/10 hover:bg-white/5 text-white hover:text-white font-black text-[13.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <Shield size={15} />
         <span>Política de Privacidad</span>
@@ -1320,7 +1319,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Log out Action Button */}
       <button
         onClick={handleLogoutClick}
-        className="w-full py-3.5 mt-1 rounded-full bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-3.5 mt-1 rounded-full bg-white hover:bg-neutral-200 border border-white text-black font-black text-[13.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <LogOut size={16} />
         <span>{t("logout")}</span>
@@ -1329,7 +1328,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Delete Account & Data Action Button (Google Play / App Store Policy Requirement) */}
       <button
         onClick={() => setIsDeleteAccountOpen(true)}
-        className="w-full py-2.5 rounded-full border border-white/10 hover:bg-white hover:text-black text-white font-bold text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+        className="w-full py-2.5 rounded-full border border-white/10 hover:bg-white hover:text-black text-white font-bold text-[14.7px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <Trash2 size={13} />
         <span>Eliminar mi cuenta y datos</span>
@@ -1353,10 +1352,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               <div className="w-11 h-11 rounded-2xl bg-white border border-white flex items-center justify-center mx-auto text-black">
                 <Trash2 size={20} />
               </div>
-              <h3 className="text-white text-base font-black tracking-tight">
+              <h3 className="text-white text-[18.4px] font-black tracking-tight">
                 ¿Eliminar cuenta permanentemente?
               </h3>
-              <p className="text-xs text-white leading-relaxed">
+              <p className="text-[13.8px] text-white leading-relaxed">
                 Esta acción es <strong className="text-white">irreversible</strong>. Se eliminarán tu perfil (<span className="text-white tabular-nums">{user.email}</span>), arcos, sesiones, historial de duelos y récords.
               </p>
               <div className="flex gap-2.5 mt-2">
@@ -1364,7 +1363,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   type="button"
                   disabled={isDeletingAccount}
                   onClick={() => setIsDeleteAccountOpen(false)}
-                  className="flex-1 h-11 rounded-2xl bg-[#121620] border border-white/[0.08] text-white hover:text-white font-bold text-xs uppercase tracking-wider cursor-pointer transition"
+                  className="flex-1 h-11 rounded-2xl bg-[#121620] border border-white/[0.08] text-white hover:text-white font-bold text-[13.8px] uppercase tracking-wider cursor-pointer transition"
                 >
                   Cancelar
                 </button>
@@ -1372,7 +1371,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   type="button"
                   disabled={isDeletingAccount}
                   onClick={handleConfirmDeleteAccount}
-                  className="flex-1 h-11 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
+                  className="flex-1 h-11 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-[13.8px] uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
                 >
                   {isDeletingAccount ? "Eliminando..." : "Eliminar"}
                 </button>

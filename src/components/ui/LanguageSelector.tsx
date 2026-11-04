@@ -29,14 +29,14 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Globe size={15} className="text-cyan-neon shrink-0" />
-            <h4 className="text-white text-xs font-black uppercase tracking-wider">
+            <Globe size={17} className="text-cyan-neon shrink-0" />
+            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider">
               {t("appLanguage")}
             </h4>
           </div>
           <span
             translate="no"
-            className="notranslate text-[11px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-full"
+            className="notranslate text-[12.7px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-full"
           >
             {currentOption.flag} {currentOption.nativeName}
           </span>
@@ -50,7 +50,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 key={lang.code}
                 type="button"
                 onClick={() => handleSelect(lang.code)}
-                className={`h-10 px-3 rounded-xl border text-xs font-bold flex items-center justify-between transition cursor-pointer ${
+                className={`h-10 px-3 rounded-xl border text-[13.8px] font-bold flex items-center justify-between transition cursor-pointer ${
                   isSelected
                     ? "bg-[#111622] border-cyan-neon text-white"
                     : "bg-[#090B0F] border-white/[0.06] text-white/80 hover:border-white/20"
@@ -60,7 +60,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                   <span>{lang.flag}</span>
                   <span className="truncate">{lang.nativeName}</span>
                 </span>
-                {isSelected && <Check size={13} className="text-cyan-neon shrink-0" />}
+                {isSelected && <Check size={15} className="text-cyan-neon shrink-0" />}
               </button>
             );
           })}
