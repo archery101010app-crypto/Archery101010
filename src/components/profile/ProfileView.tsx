@@ -27,11 +27,12 @@ interface ProfileViewProps {
   onLogout: () => void;
   onProfileUpdated: (updatedUser: UserProfile) => void;
   onNavigate?: (screen: any) => void;
+  onOpenCoachPortal?: () => void;
 }
 
 import { COUNTRIES } from "@/lib/countries";
 
-export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, onNavigate }: ProfileViewProps) {
+export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, onNavigate, onOpenCoachPortal }: ProfileViewProps) {
   const { t } = useLanguage();
   
   // Section edit toggles
@@ -384,10 +385,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
     }
     loadCoachStudents();
     const handleRosterChange = () => loadCoachStudents();
+    const handleDbChange = (e: any) => {
+      if (!e?.detail || e.detail.store === "simulated_users") {
+        loadCoachStudents();
+      }
+    };
     window.addEventListener("users-roster-updated", handleRosterChange);
+    window.addEventListener("local-db-change", handleDbChange);
     return () => {
       cancelled = true;
       window.removeEventListener("users-roster-updated", handleRosterChange);
+      window.removeEventListener("local-db-change", handleDbChange);
     };
   }, [isCoachProfile, user.uid, user.clubId, user.clubInviteCode, user.isClubCreator, user.role]);
 
@@ -1208,10 +1216,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <span className="text-[10.5px] text-white font-bold uppercase tracking-wider">
                   Mis Alumnos Vinculados ({coachStudents.length})
                 </span>
-                {onNavigate && (
+                {(onOpenCoachPortal || onNavigate) && (
                   <button
                     type="button"
-                    onClick={() => onNavigate("COACH")}
+                    onClick={() => {
+                      if (onOpenCoachPortal) onOpenCoachPortal();
+                      else if (onNavigate) onNavigate("HOME");
+                    }}
                     className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider hover:underline cursor-pointer"
                   >
                     Abrir Portal Coach →

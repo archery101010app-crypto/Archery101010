@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getLoggedUser, UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
+import { getLoggedUser, UserProfile, isLinkedToExternalCoach, CoachLinkNotification, markLocalUserWrite, hasRecentLocalUserWrite } from "@/lib/authService";
 import LoginView from "@/components/auth/LoginView";
 import RegisterView from "@/components/auth/RegisterView";
 import DashboardView from "@/components/dashboard/DashboardView";
@@ -29,7 +29,7 @@ import "@/lib/starsManager";
 import "canvas-confetti";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Star } from "lucide-react";
+import { Star, Users, CheckCircle2 } from "lucide-react";
 
 // Ads Imports
 import BannerWidget from "@/components/ads/BannerWidget";
@@ -65,6 +65,7 @@ export default function Home() {
   const [dbVersion, setDbVersion] = useState(0);
 
   const [pendingInvitation, setPendingInvitation] = useState<any | null>(null);
+  const [pendingCoachLinkNotif, setPendingCoachLinkNotif] = useState<CoachLinkNotification | null>(null);
   const [backToast, setBackToast] = useState<string | null>(null);
   const [showCoachPaymentModal, setShowCoachPaymentModal] = useState<boolean>(false);
 
@@ -108,6 +109,12 @@ export default function Home() {
       return registerModalDismiss(() => setPendingInvitation(null));
     }
   }, [pendingInvitation]);
+
+  useEffect(() => {
+    if (pendingCoachLinkNotif) {
+      return registerModalDismiss(() => setPendingCoachLinkNotif(null));
+    }
+  }, [pendingCoachLinkNotif]);
 
   useEffect(() => {
     if (showDiscardConfirm) {
@@ -277,36 +284,72 @@ export default function Home() {
               const snap = await getDoc(doc(db, "users", loggedUser.uid));
               if (snap.exists()) {
                 const rawCloud = { ...(snap.data() as UserProfile), uid: loggedUser.uid };
-                const externalCoachUid = getExternalCoachUid(rawCloud);
-                const cloudLinked = isLinkedToExternalCoach(rawCloud);
-                const normalizedCloud: UserProfile = {
-                  ...loggedUser,
-                  ...rawCloud,
-                  uid: loggedUser.uid,
-                  role: cloudLinked && rawCloud.role !== "superadmin" ? "archer" : rawCloud.role || loggedUser.role,
-                  isClubCreator: cloudLinked ? false : !!rawCloud.isClubCreator,
-                  clubInviteCode: cloudLinked || (!rawCloud.isClubCreator && rawCloud.role === "archer") ? "" : (rawCloud.clubInviteCode || ""),
-                  coachId: cloudLinked ? (rawCloud.coachId || externalCoachUid || null) : null
-                };
-                await saveLocalSetting("current_user", normalizedCloud);
-                setUser(normalizedCloud);
+                const localUpdatedAt = Number(loggedUser.updatedAt || 0);
+                const cloudUpdatedAt = Number(rawCloud.updatedAt || 0);
+                // If local profile has a recent local write or newer updatedAt than cloud, do not let a stale cloud doc overwrite it
+                if (!hasRecentLocalUserWrite(loggedUser.uid) && (cloudUpdatedAt === 0 || cloudUpdatedAt >= localUpdatedAt)) {
+                  const externalCoachUid = getExternalCoachUid(rawCloud);
+                  const cloudLinked = isLinkedToExternalCoach(rawCloud);
+                  const normalizedCloud: UserProfile = {
+                    ...loggedUser,
+                    ...rawCloud,
+                    uid: loggedUser.uid,
+                    role: cloudLinked && rawCloud.role !== "superadmin" ? "archer" : rawCloud.role || loggedUser.role,
+                    isClubCreator: cloudLinked ? false : !!rawCloud.isClubCreator,
+                    clubInviteCode: cloudLinked || (!rawCloud.isClubCreator && rawCloud.role === "archer") ? "" : (rawCloud.clubInviteCode || ""),
+                    coachId: cloudLinked ? (rawCloud.coachId || externalCoachUid || null) : null
+                  };
+                  await saveLocalSetting("current_user", normalizedCloud);
+                  setUser(normalizedCloud);
 
-                if (
-                  rawCloud.isClubCreator !== normalizedCloud.isClubCreator ||
-                  rawCloud.role !== normalizedCloud.role ||
-                  (rawCloud.coachId || null) !== (normalizedCloud.coachId || null) ||
-                  (rawCloud.clubInviteCode || "") !== (normalizedCloud.clubInviteCode || "")
-                ) {
-                  await setDoc(
-                    doc(db, "users", loggedUser.uid),
-                    {
-                      role: normalizedCloud.role,
-                      isClubCreator: normalizedCloud.isClubCreator,
-                      coachId: normalizedCloud.coachId || null,
-                      clubInviteCode: normalizedCloud.clubInviteCode || ""
-                    },
-                    { merge: true }
-                  ).catch(() => {});
+                  if (
+                    rawCloud.isClubCreator !== normalizedCloud.isClubCreator ||
+                    rawCloud.role !== normalizedCloud.role ||
+                    (rawCloud.coachId || null) !== (normalizedCloud.coachId || null) ||
+                    (rawCloud.clubInviteCode || "") !== (normalizedCloud.clubInviteCode || "")
+                  ) {
+                    const repairTs = Date.now();
+                    markLocalUserWrite(loggedUser.uid, repairTs);
+                    await setDoc(
+                      doc(db, "users", loggedUser.uid),
+                      {
+                        role: normalizedCloud.role,
+                        isClubCreator: normalizedCloud.isClubCreator,
+                        coachId: normalizedCloud.coachId || null,
+                        clubInviteCode: normalizedCloud.clubInviteCode || "",
+                        updatedAt: repairTs
+                      },
+                      { merge: true }
+                    ).catch(() => {});
+                  }
+
+                  // If athlete is linked to an external coach, ensure all their local sessions carry the coach's clubId
+                  if (cloudLinked && normalizedCloud.clubId) {
+                    try {
+                      const { getLocalSessions, saveLocalSession, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+                      const allSessions = await getLocalSessions();
+                      const untagged = allSessions.filter(
+                        (s) =>
+                          (s.userId === loggedUser.uid || s.userUid === loggedUser.uid) &&
+                          !s.isDraft &&
+                          s.clubId !== normalizedCloud.clubId
+                      );
+                      for (const sess of untagged) {
+                        const tagged = { ...sess, clubId: normalizedCloud.clubId };
+                        await saveLocalSession(sess.id, tagged);
+                        await addToSyncQueue({
+                          id: generateResilientId("TXN"),
+                          collection: "sessions",
+                          operation: "UPDATE",
+                          payloadId: sess.id,
+                          payload: tagged,
+                          timestamp: Date.now()
+                        });
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }
                 }
               }
             } catch (cloudSyncErr) {
@@ -575,6 +618,127 @@ export default function Home() {
       unsubscribe();
     };
   }, [user?.uid]);
+
+  // Listen in real-time for Coach Linking Notifications when an athlete bonds via the 6-digit code
+  useEffect(() => {
+    if (!user?.uid || isLinkedToExternalCoach(user)) return;
+    const isCoachCapable =
+      user.role === "coach" ||
+      user.role === "team_admin" ||
+      user.role === "team_admin_coach" ||
+      user.role === "superadmin" ||
+      user.isClubCreator === true;
+    if (!isCoachCapable) return;
+
+    const currentUid = user.uid;
+    let unsubscribe: () => void = () => {};
+
+    const playLinkChime = () => {
+      try {
+        if (typeof window === "undefined") return;
+        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const freqs = [523.25, 659.25, 783.99];
+        freqs.forEach((f, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(f, now + idx * 0.08);
+          gain.gain.setValueAtTime(0.08, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.25);
+        });
+      } catch {
+        // ignore audio context restrictions
+      }
+    };
+
+    async function initCoachLinkListener() {
+      try {
+        const { collection, query, where, onSnapshot, doc, getDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const { getLocalSetting, saveLocalSetting, isFictitiousUser } = await import("@/lib/db/indexedDB");
+
+        const q = query(
+          collection(db, "coach_notifications"),
+          where("coachUid", "==", currentUid),
+          where("read", "==", false)
+        );
+
+        unsubscribe = onSnapshot(
+          q,
+          async (snapshot) => {
+            const seenMap = await getLocalSetting<Record<string, number>>(`seen_coach_link_notif_ts_${currentUid}`, {});
+
+            for (const snap of snapshot.docs) {
+              const data = snap.data() as CoachLinkNotification;
+              const notifId = snap.id || data.id;
+              const notifTs = Number(data?.updatedAt || data?.createdAt || 0);
+              const lastSeenTs = Number(seenMap?.[notifId] || 0);
+              if (!data || data.read === true || (lastSeenTs > 0 && notifTs > 0 && lastSeenTs >= notifTs)) continue;
+
+              // Immediately pull the athlete's latest profile into simulated_users so the Coach roster updates instantly
+              if (data.athleteUid) {
+                try {
+                  const athSnap = await getDoc(doc(db, "users", data.athleteUid));
+                  if (athSnap.exists()) {
+                    const athData = { ...(athSnap.data() as UserProfile), uid: data.athleteUid };
+                    if (!isFictitiousUser(athData)) {
+                      const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                      const merged = [athData, ...localUsers.filter((u) => u.uid !== data.athleteUid)];
+                      await saveLocalSetting("simulated_users", merged);
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: merged.length } }));
+                      }
+                    }
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+
+              // Trigger haptic, chime, and system notification
+              import("@/lib/haptics")
+                .then(({ triggerHaptic }) => triggerHaptic("confirm"))
+                .catch(() => {});
+              playLinkChime();
+
+              try {
+                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+                  new Notification("🎯 ¡Nuevo Alumno Vinculado!", {
+                    body: `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
+                    icon: "/icons/icon-192x192.png"
+                  });
+                }
+              } catch {
+                // ignore
+              }
+
+              setPendingCoachLinkNotif({
+                ...data,
+                id: notifId
+              });
+              break;
+            }
+          },
+          (err) => console.warn("Coach link notification listener error:", err?.message || err)
+        );
+      } catch (err) {
+        console.warn("Error setting up coach link notification listener:", err);
+      }
+    }
+
+    initCoachLinkListener();
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid, user?.role, user?.isClubCreator, user?.clubId, user?.coachId]);
 
   // Check active ad campaigns on screen, user, or local database change
   useEffect(() => {
@@ -1131,6 +1295,12 @@ export default function Home() {
             onLogout={handleLogout}
             onProfileUpdated={(updated) => setUser(updated)}
             onNavigate={setCurrentScreen}
+            onOpenCoachPortal={() => {
+              if (!isLinkedToExternalCoach(user)) {
+                setCoachViewMode(true);
+                setCurrentScreen("HOME");
+              }
+            }}
           />
         )}
       </main>
@@ -1434,6 +1604,109 @@ export default function Home() {
                   className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                 >
                   Rechazar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Coach Linking Notification Modal (New Athlete Bonded) */}
+      <AnimatePresence>
+        {pendingCoachLinkNotif && user && (
+          <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 12 }}
+              className="w-full max-w-[350px] bg-[#0B0E14] border border-emerald-500/35 p-6 rounded-3xl flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+                <div className="flex-1 bg-emerald-400" />
+                <div className="flex-1 bg-cyan-neon" />
+                <div className="flex-1 bg-yellow-gold" />
+              </div>
+
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 mt-1">
+                <CheckCircle2 size={28} />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-emerald-400">
+                  NUEVO ALUMNO VINCULADO
+                </span>
+                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                  {pendingCoachLinkNotif.athleteName || "Arquero Vinculado"}
+                </h3>
+                <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
+                  Se ha vinculado exitosamente a tu equipo usando tu código de entrenador. Sus entrenamientos, puntajes y gráficas ya están sincronizados en tu portal.
+                </p>
+              </div>
+
+              <div className="bg-[#111620] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex items-center gap-3 text-left">
+                <div className="w-9 h-9 rounded-xl bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-xs shrink-0">
+                  {(pendingCoachLinkNotif.athleteName || "AR").substring(0, 2).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-xs font-black text-white truncate">
+                    {pendingCoachLinkNotif.athleteName || "Arquero"}
+                  </span>
+                  <span className="text-[10.5px] text-white/80 truncate">
+                    {pendingCoachLinkNotif.bowType
+                      ? `${pendingCoachLinkNotif.bowType === "Recurve" ? "Recurvo" : pendingCoachLinkNotif.bowType === "Compound" ? "Compuesto" : pendingCoachLinkNotif.bowType}`
+                      : "Arquero"}
+                    {pendingCoachLinkNotif.athleteEmail ? ` · ${pendingCoachLinkNotif.athleteEmail}` : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-1">
+                <button
+                  onClick={async () => {
+                    const notifToAck = pendingCoachLinkNotif;
+                    setPendingCoachLinkNotif(null);
+                    try {
+                      const { getLocalSetting, saveLocalSetting } = await import("@/lib/db/indexedDB");
+                      const seenKey = `seen_coach_link_notif_ts_${user.uid}`;
+                      const prevMap = await getLocalSetting<Record<string, number>>(seenKey, {});
+                      const ackTs = Number(notifToAck.updatedAt || notifToAck.createdAt || Date.now());
+                      await saveLocalSetting(seenKey, { ...prevMap, [notifToAck.id]: ackTs });
+                      const { doc, setDoc } = await import("firebase/firestore");
+                      const { db } = await import("@/lib/firebase");
+                      await setDoc(doc(db, "coach_notifications", notifToAck.id), { read: true, updatedAt: Date.now() }, { merge: true });
+                    } catch {
+                      // ignore
+                    }
+                    if (!isLinkedToExternalCoach(user)) {
+                      setCoachViewMode(true);
+                      setCurrentScreen("HOME");
+                    }
+                  }}
+                  className="w-full h-11 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-2"
+                >
+                  <Users size={15} />
+                  <span>Ver en Portal Coach</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    const notifToAck = pendingCoachLinkNotif;
+                    setPendingCoachLinkNotif(null);
+                    try {
+                      const { getLocalSetting, saveLocalSetting } = await import("@/lib/db/indexedDB");
+                      const seenKey = `seen_coach_link_notif_ts_${user.uid}`;
+                      const prevMap = await getLocalSetting<Record<string, number>>(seenKey, {});
+                      const ackTs = Number(notifToAck.updatedAt || notifToAck.createdAt || Date.now());
+                      await saveLocalSetting(seenKey, { ...prevMap, [notifToAck.id]: ackTs });
+                      const { doc, setDoc } = await import("firebase/firestore");
+                      const { db } = await import("@/lib/firebase");
+                      await setDoc(doc(db, "coach_notifications", notifToAck.id), { read: true, updatedAt: Date.now() }, { merge: true });
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center"
+                >
+                  Entendido
                 </button>
               </div>
             </motion.div>

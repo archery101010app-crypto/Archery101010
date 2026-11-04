@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UserProfile, updateProfile, isLinkedToExternalCoach, getCanonicalCoachClubId } from "@/lib/authService";
+import { UserProfile, updateProfile, isLinkedToExternalCoach, getCanonicalCoachClubId, CoachLinkNotification } from "@/lib/authService";
 import { 
   getLocalSessions, 
   getLocalSetting, 
@@ -20,7 +20,9 @@ import {
   ShieldCheck,
   Building2,
   Share2,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 // Sub-components / Tabs
@@ -49,6 +51,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   const [selectedAthlete, setSelectedAthlete] = useState<UserProfile | null>(null);
   const [showPlanImporter, setShowPlanImporter] = useState(false);
   const [importerPreselectedIds, setImporterPreselectedIds] = useState<string[]>([]);
+  const [linkNotifications, setLinkNotifications] = useState<CoachLinkNotification[]>([]);
 
   const handleOpenPlanImporter = (preselectedAthleteId?: string) => {
     setImporterPreselectedIds(preselectedAthleteId ? [preselectedAthleteId] : []);
@@ -318,6 +321,23 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     ensureClean6DigitCode();
 
     // Listen for realtime database changes (new athlete sessions or roster updates synced from cloud)
+    const refreshFromLocalDb = async () => {
+      const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+      const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
+      const clubArchers = allUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
+      setAthletes(clubArchers);
+
+      const linkedUids = new Set(clubArchers.map((a) => a.uid));
+      const freshSessions = await getLocalSessions();
+      const realLinkedSessions = freshSessions.filter(
+        (s) =>
+          !isFictitiousSession(s, s.id) &&
+          !s.isDraft &&
+          linkedUids.has(s.userId || s.userUid)
+      );
+      setSessions(realLinkedSessions);
+    };
+
     const handleDbChange = async (e: any) => {
       if (
         !e.detail ||
@@ -325,25 +345,56 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         e.detail.store === "settings_local" ||
         e.detail.store === "simulated_users"
       ) {
-        const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
-        const clubArchers = allUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
-        setAthletes(clubArchers);
-
-        const linkedUids = new Set(clubArchers.map((a) => a.uid));
-        const freshSessions = await getLocalSessions();
-        const realLinkedSessions = freshSessions.filter(
-          (s) =>
-            !isFictitiousSession(s, s.id) &&
-            !s.isDraft &&
-            linkedUids.has(s.userId || s.userUid)
-        );
-        setSessions(realLinkedSessions);
+        await refreshFromLocalDb();
       }
     };
 
+    const handleRosterUpdated = () => {
+      refreshFromLocalDb();
+    };
+
+    // Real-time listener for unread Coach Link Notifications inside the Coach Portal
+    let unsubNotifs: () => void = () => {};
+    (async () => {
+      try {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return;
+        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const qNotifs = query(
+          collection(db, "coach_notifications"),
+          where("coachUid", "==", user.uid),
+          where("read", "==", false)
+        );
+        unsubNotifs = onSnapshot(
+          qNotifs,
+          (snap) => {
+            const list: CoachLinkNotification[] = [];
+            snap.forEach((d) => {
+              const data = d.data() as CoachLinkNotification;
+              if (data && !data.read) {
+                list.push({ ...data, id: d.id });
+              }
+            });
+            list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            setLinkNotifications(list);
+            if (list.length > 0) {
+              loadCoachData();
+            }
+          },
+          () => {}
+        );
+      } catch {
+        // ignore
+      }
+    })();
+
     window.addEventListener("local-db-change", handleDbChange);
-    return () => window.removeEventListener("local-db-change", handleDbChange);
+    window.addEventListener("users-roster-updated", handleRosterUpdated);
+    return () => {
+      unsubNotifs();
+      window.removeEventListener("local-db-change", handleDbChange);
+      window.removeEventListener("users-roster-updated", handleRosterUpdated);
+    };
   }, [user, activeClubId]);
 
   // Unlink athlete from club callback
@@ -359,6 +410,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       }
 
       // 2. Update athlete in simulated_users (clear clubId & coachId without touching archer's optional clubName)
+      const unlinkTs = Date.now();
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       let updatedAthleteRecord: UserProfile | null = null;
       const updatedUsers = allUsers.map((u) => {
@@ -371,7 +423,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             coachId: null,
             coachName: null,
             coachEmail: null,
-            clubInviteCode: ""
+            clubInviteCode: "",
+            updatedAt: unlinkTs
           };
           return updatedAthleteRecord;
         }
@@ -392,7 +445,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         coachId: null,
         coachName: null,
         coachEmail: null,
-        clubInviteCode: ""
+        clubInviteCode: "",
+        updatedAt: unlinkTs
       };
       try {
         if (typeof navigator === "undefined" || navigator.onLine) {
@@ -407,7 +461,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               coachId: null,
               coachName: null,
               coachEmail: null,
-              clubInviteCode: ""
+              clubInviteCode: "",
+              updatedAt: unlinkTs
             },
             { merge: true }
           );
@@ -637,6 +692,80 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           </div>
         </div>
       </div>
+
+      {/* Real-time New Linked Student Notification Banner */}
+      <AnimatePresence>
+        {linkNotifications.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex flex-col gap-2"
+          >
+            {linkNotifications.map((notif) => (
+              <div
+                key={notif.id}
+                className="bg-emerald-500/10 border border-emerald-500/35 rounded-2xl p-3.5 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[10.5px] font-black uppercase tracking-wider text-emerald-400">
+                      ¡Nuevo Alumno Vinculado!
+                    </span>
+                    <span className="text-xs font-bold text-white truncate">
+                      {notif.athleteName || "Arquero"} se vinculó con tu código de 6 dígitos
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const targetAth = athletes.find((a) => a.uid === notif.athleteUid);
+                      if (targetAth) {
+                        setSelectedAthlete(targetAth);
+                      } else {
+                        setActiveTab("ATHLETES");
+                      }
+                      setLinkNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+                      try {
+                        const { doc, setDoc } = await import("firebase/firestore");
+                        const { db } = await import("@/lib/firebase");
+                        await setDoc(doc(db, "coach_notifications", notif.id), { read: true }, { merge: true });
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[10.5px] uppercase tracking-wider cursor-pointer transition"
+                  >
+                    Ver Ficha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setLinkNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+                      try {
+                        const { doc, setDoc } = await import("firebase/firestore");
+                        const { db } = await import("@/lib/firebase");
+                        await setDoc(doc(db, "coach_notifications", notif.id), { read: true }, { merge: true });
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="p-1.5 rounded-xl bg-black/40 border border-white/10 text-white/70 hover:text-white cursor-pointer transition"
+                    title="Descartar aviso"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES */}
       <div className="flex bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 justify-between shrink-0">

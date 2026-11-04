@@ -13,7 +13,7 @@ import {
   isFictitiousSession,
   sanitizeForFirestore
 } from "./indexedDB";
-import { UserProfile } from "@/lib/authService";
+import { UserProfile, hasRecentLocalUserWrite } from "@/lib/authService";
 
 /**
  * Helper to check if two user profiles are functionally different, ignoring transient synchronization timestamps.
@@ -84,7 +84,11 @@ export function startRealtimeSync(
 ) {
   if (typeof window === "undefined") return;
 
-  const syncKey = `${currentUserUid || "anon"}|${scope?.role || ""}|${scope?.clubId || ""}`;
+  const role = scope?.role || "archer";
+  const clubId = scope?.clubId || null;
+  const isCoachRole = role === "coach" || role === "team_admin" || role === "team_admin_coach";
+  // Only coach roles attach a club-scoped sessions listener; archers keep the same listener stream when linking/unlinking
+  const syncKey = `${currentUserUid || "anon"}|${role}|${isCoachRole ? clubId || "" : ""}`;
   if (activeSyncKey === syncKey && activeUnsubscribes.length > 0) {
     return; // Already listening with identical scope
   }
@@ -139,28 +143,39 @@ export function startRealtimeSync(
             .filter(
               (q) =>
                 q.collection === "users" &&
-                q.status === "pending" &&
-                (q.attempts || 0) === 0 &&
-                nowQueueMs - (q.timestamp || 0) < 30000
+                nowQueueMs - (q.timestamp || 0) < 60000
             )
             .map((q) => q.payloadId)
         );
+        for (const localU of localUsers) {
+          if (hasRecentLocalUserWrite(localU.uid)) {
+            pendingUserUids.add(localU.uid);
+          }
+        }
+        if (currentUserUid && hasRecentLocalUserWrite(currentUserUid)) {
+          pendingUserUids.add(currentUserUid);
+        }
 
-        // Rebuild merged list: prefer local user profile if it has a pending write in the queue
+        const localByUid = new Map(localUsers.map((u) => [u.uid, u]));
+
+        // Rebuild merged list: prefer local user profile if it has a pending write or newer updatedAt timestamp
         const mergedList: UserProfile[] = [];
 
-        // Add remote users who do not have pending local edits
         for (const remoteU of usersList) {
-          if (!pendingUserUids.has(remoteU.uid)) {
+          const localU = localByUid.get(remoteU.uid);
+          const localIsNewer =
+            localU &&
+            typeof localU.updatedAt === "number" &&
+            typeof remoteU.updatedAt === "number" &&
+            localU.updatedAt > remoteU.updatedAt;
+          if (!pendingUserUids.has(remoteU.uid) && !localIsNewer) {
             mergedList.push(remoteU);
           }
         }
 
-        // Add local users who have pending edits, or who were not in the remote list
+        // Add local users who have pending edits, newer local timestamps, or who were not in the remote list
         for (const localU of localUsers) {
-          if (pendingUserUids.has(localU.uid)) {
-            mergedList.push(localU);
-          } else if (!usersList.some((u) => u.uid === localU.uid)) {
+          if (!mergedList.some((u) => u.uid === localU.uid)) {
             mergedList.push(localU);
           }
         }
@@ -169,7 +184,6 @@ export function startRealtimeSync(
         const nowMs = Date.now();
         const isOnline = (u?: UserProfile | null) =>
           !!u?.lastActiveAt && nowMs - u.lastActiveAt < 120000;
-        const localByUid = new Map(localUsers.map((u) => [u.uid, u]));
         let rosterMeaningfullyChanged = mergedList.length !== localUsers.length;
         if (!rosterMeaningfullyChanged) {
           for (const u of mergedList) {
@@ -188,11 +202,17 @@ export function startRealtimeSync(
         await settingsStore.setItem("simulated_users", mergedList);
 
         // Check if currently logged-in user profile has changed remotely
-        // Protect the current_user from being overwritten if there are pending local updates in the sync queue!
+        // Protect the current_user from being overwritten if there are pending/recent local updates!
         if (currentUserUid && !pendingUserUids.has(currentUserUid)) {
           const updatedCurrentUser = usersList.find((u) => u.uid === currentUserUid);
           if (updatedCurrentUser) {
             const localCurrent = await settingsStore.getItem<UserProfile>("current_user");
+
+            const localIsNewer =
+              localCurrent &&
+              typeof localCurrent.updatedAt === "number" &&
+              typeof updatedCurrentUser.updatedAt === "number" &&
+              localCurrent.updatedAt > updatedCurrentUser.updatedAt;
 
             // Helper to check if a profile has all mandatory fields (matches authService.ts)
             const isProfileValid = (u: UserProfile | null | undefined): boolean => {
@@ -208,7 +228,9 @@ export function startRealtimeSync(
             const isLocalValid = isProfileValid(localCurrent);
             const isRemoteValid = isProfileValid(updatedCurrentUser);
 
-            if (isLocalValid && !isRemoteValid) {
+            if (localIsNewer) {
+              // Skip overwriting a newer local profile with an older snapshot
+            } else if (isLocalValid && !isRemoteValid) {
               console.warn(
                 "[Sync] Local profile is complete, but remote is missing mandatory fields. Skip overwrite to avoid reset loop."
               );
@@ -240,6 +262,7 @@ export function startRealtimeSync(
           window.dispatchEvent(
             new CustomEvent("local-db-change", { detail: { store: "simulated_users" } })
           );
+          window.dispatchEvent(new CustomEvent("users-roster-updated"));
         }
       } catch (err) {
         console.error("Error in real-time users sync:", err);
@@ -336,10 +359,6 @@ export function startRealtimeSync(
   //    - Archer: only own sessions
   //    - Coach / Team admin: own sessions + sessions of their club
   //    - SuperAdmin: whole collection
-  const role = scope?.role || "archer";
-  const clubId = scope?.clubId || null;
-  const isCoachRole = role === "coach" || role === "team_admin" || role === "team_admin_coach";
-
   async function applySessionsSnapshot(snapshot: any, isFirst: boolean, isOwnScope: boolean) {
     const queue = await getSyncQueue();
     const pendingSessionIds = new Set(

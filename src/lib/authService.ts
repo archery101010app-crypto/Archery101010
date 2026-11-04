@@ -65,6 +65,36 @@ export interface UserProfile {
   profileSetupCompleted?: boolean;
   lastActiveAt?: number;
   createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface CoachLinkNotification {
+  id: string;
+  coachUid: string;
+  athleteUid: string;
+  athleteName: string;
+  athleteEmail?: string;
+  bowType?: string;
+  country?: string;
+  clubId?: string;
+  type: "athlete_linked" | "athlete_unlinked";
+  read: boolean;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+const recentLocalUserWrites = new Map<string, number>();
+
+export function markLocalUserWrite(uid: string, ts: number = Date.now()): void {
+  if (!uid) return;
+  recentLocalUserWrites.set(uid, ts);
+}
+
+export function hasRecentLocalUserWrite(uid: string, windowMs: number = 15000): boolean {
+  if (!uid) return false;
+  const ts = recentLocalUserWrites.get(uid);
+  if (!ts) return false;
+  return Date.now() - ts < windowMs;
 }
 
 const LOGIN_TIMEOUT_MS = 5000;
@@ -580,6 +610,7 @@ export async function registerUser(
 
   // Strip password and actAsCoach so they are NEVER saved in UserProfile
   const { actAsCoach, password: _discardedPassword, ...userFields } = profileData;
+  let linkedCoachOnRegister: UserProfile | null = null;
 
   if (!isAdminEmail) {
     if (profileData.clubId === "CREATE_NEW" && isAdult) {
@@ -594,6 +625,7 @@ export async function registerUser(
       finalRole = "archer";
       const clubCoach = await findClubOwnerByInviteCode(profileData.clubId, uid);
       if (clubCoach && clubCoach.uid !== uid) {
+        linkedCoachOnRegister = clubCoach;
         userFields.clubId = getCanonicalCoachClubId(clubCoach);
         userFields.coachId = clubCoach.uid;
         userFields.coachName = clubCoach.fullName || "Entrenador";
@@ -612,6 +644,7 @@ export async function registerUser(
     userFields.clubId = null;
   }
 
+  const nowTs = Date.now();
   const newProfile: UserProfile = sanitizeUserProfile({
     ...userFields,
     email: normalizedEmail,
@@ -636,8 +669,12 @@ export async function registerUser(
       dominantEye: "R",
       dominantHand: "R"
     },
-    createdAt: Date.now()
+    createdAt: nowTs,
+    updatedAt: nowTs
   });
+
+  markLocalUserWrite(newProfile.uid, nowTs);
+  await saveLocalSetting("current_user", newProfile);
 
   // Save to local cache without plaintext password
   const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", []))
@@ -653,16 +690,62 @@ export async function registerUser(
     operation: "INSERT",
     payloadId: newProfile.uid,
     payload: newProfile,
-    timestamp: Date.now()
+    timestamp: nowTs
   });
 
   if (typeof navigator !== "undefined" && navigator.onLine) {
     cloudWriteUser(newProfile);
   }
 
+  if (linkedCoachOnRegister) {
+    emitCoachLinkNotification(linkedCoachOnRegister, newProfile, "athlete_linked").catch(() => {});
+  }
+
   await migrateOfflineGuestData(newProfile.uid);
-  await saveLocalSetting("current_user", newProfile);
   return newProfile;
+}
+
+export async function emitCoachLinkNotification(
+  coach: Partial<UserProfile>,
+  athlete: UserProfile,
+  type: "athlete_linked" | "athlete_unlinked" = "athlete_linked"
+): Promise<void> {
+  if (!coach?.uid || !athlete?.uid || coach.uid === athlete.uid) return;
+  const now = Date.now();
+  const notifId = `NTF-LINK-${coach.uid}-${athlete.uid}`;
+  const notif: CoachLinkNotification = {
+    id: notifId,
+    coachUid: coach.uid,
+    athleteUid: athlete.uid,
+    athleteName: athlete.fullName || athlete.nickname || "Arquero",
+    athleteEmail: athlete.email || "",
+    bowType: athlete.bowConfig?.type || athlete.bows?.[0]?.type || "Recurve",
+    country: athlete.country || "CR",
+    clubId: getCanonicalCoachClubId(coach),
+    type,
+    read: false,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  try {
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "coach_notifications",
+      operation: "UPDATE",
+      payloadId: notifId,
+      payload: notif,
+      timestamp: now
+    });
+  } catch {}
+
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    try {
+      await withTimeout(setDoc(doc(db, "coach_notifications", notifId), notif, { merge: true }), 6000);
+    } catch (err: any) {
+      console.warn("Coach link notification queued for background sync:", err?.message || err);
+    }
+  }
 }
 
 export async function updateProfile(uid: string, updates: Partial<UserProfile>): Promise<UserProfile> {
@@ -676,10 +759,44 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     index = usersList.length - 1;
   }
 
-  if (index !== -1) {
-    const updatedUser = sanitizeUserProfile({ ...usersList[index], ...updates, profileSetupCompleted: true });
+  // Fallback if neither simulated_users nor current_user has uid yet: fetch from Firestore
+  if (index === -1 && (typeof navigator === "undefined" || navigator.onLine)) {
+    try {
+      const snap = await withTimeout(getDoc(doc(db, "users", uid)), LOGIN_TIMEOUT_MS);
+      if (snap.exists()) {
+        const fetched = sanitizeUserProfile({ ...snap.data(), uid });
+        usersList.push(fetched);
+        index = usersList.length - 1;
+      }
+    } catch {}
+  }
 
+  const nowTs = Date.now();
+
+  if (index !== -1) {
+    const updatedUser = sanitizeUserProfile({
+      ...usersList[index],
+      ...updates,
+      uid,
+      profileSetupCompleted: true,
+      updatedAt: nowTs
+    });
+
+    markLocalUserWrite(uid, nowTs);
     usersList[index] = updatedUser;
+
+    // Persist current_user FIRST before any async cloud write or sync trigger can fire a snapshot listener
+    if (currentLogged && currentLogged.uid === uid) {
+      currentLogged = sanitizeUserProfile({
+        ...currentLogged,
+        ...updates,
+        uid,
+        profileSetupCompleted: true,
+        updatedAt: nowTs
+      });
+      await saveLocalSetting("current_user", currentLogged);
+    }
+
     await saveLocalSetting("simulated_users", usersList);
 
     await addToSyncQueue({
@@ -688,7 +805,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
       operation: "UPDATE",
       payloadId: updatedUser.uid,
       payload: updatedUser,
-      timestamp: Date.now()
+      timestamp: nowTs
     });
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -696,15 +813,18 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
       import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
     }
 
-    if (currentLogged && currentLogged.uid === uid) {
-      currentLogged = sanitizeUserProfile({ ...currentLogged, ...updates, profileSetupCompleted: true });
-      await saveLocalSetting("current_user", currentLogged);
-    }
-    return usersList[index];
+    return updatedUser;
   }
 
   if (currentLogged && currentLogged.uid === uid) {
-    const updated = sanitizeUserProfile({ ...currentLogged, ...updates, profileSetupCompleted: true });
+    const updated = sanitizeUserProfile({
+      ...currentLogged,
+      ...updates,
+      uid,
+      profileSetupCompleted: true,
+      updatedAt: nowTs
+    });
+    markLocalUserWrite(uid, nowTs);
     await saveLocalSetting("current_user", updated);
 
     await addToSyncQueue({
@@ -713,7 +833,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
       operation: "UPDATE",
       payloadId: updated.uid,
       payload: updated,
-      timestamp: Date.now()
+      timestamp: nowTs
     });
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -1373,14 +1493,21 @@ export async function joinClubByInviteCode(
   // 4. Confirm the link reached the cloud right away (so the Coach sees the athlete immediately)
   try {
     await withTimeout(
-      setDoc(doc(db, "users", userUid), sanitizeUserProfile({ ...updated, uid: userUid }), { merge: true }),
+      setDoc(
+        doc(db, "users", userUid),
+        sanitizeUserProfile({ ...updated, uid: userUid, updatedAt: Date.now() }),
+        { merge: true }
+      ),
       8000
     );
   } catch (err: any) {
     console.warn("Link saved locally; cloud confirmation pending in sync queue:", err?.message || err);
   }
 
-  // 5. Re-tag the athlete's existing sessions with the new clubId so the Coach receives their history
+  // 5. Emit real-time Coach linking notification so the Coach is alerted immediately
+  emitCoachLinkNotification(clubCoach, updated, "athlete_linked").catch(() => {});
+
+  // 6. Re-tag the athlete's existing sessions with the new clubId so the Coach receives their history
   try {
     const localSessions = await getLocalSessions();
     for (const s of localSessions) {
@@ -1395,6 +1522,20 @@ export async function joinClubByInviteCode(
           payload: retagged,
           timestamp: Date.now()
         });
+      }
+    }
+    if (typeof navigator === "undefined" || navigator.onLine) {
+      const snapSess = await withTimeout(
+        getDocs(query(collection(db, "sessions"), where("userId", "==", userUid))),
+        6000
+      ).catch(() => null);
+      if (snapSess) {
+        for (const d of snapSess.docs) {
+          const data = d.data();
+          if (data && !data.isDraft && data.clubId !== resolvedClubId) {
+            await setDoc(doc(db, "sessions", d.id), { clubId: resolvedClubId, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+          }
+        }
       }
     }
   } catch (err) {

@@ -200,6 +200,22 @@ service cloud.firestore {
     //   - createdAt: string / number / timestamp (optional)
     //   - updatedAt: string / number / timestamp (optional)
     //
+    // Collection: coach_notifications
+    // Document ID: {notificationId} (e.g., "NTF-LINK-{coachUid}-{athleteUid}")
+    // Fields:
+    //   - id: string (required, 1-128 chars)
+    //   - coachUid: string (required, 1-128 chars) [Immutable]
+    //   - athleteUid: string (required, 1-128 chars) [Immutable]
+    //   - athleteName: string (required, 1-100 chars)
+    //   - athleteEmail: string (optional, 0-128 chars)
+    //   - bowType: string (optional, 0-30 chars)
+    //   - country: string (optional, 0-10 chars)
+    //   - clubId: string (optional, 0-100 chars)
+    //   - type: string (required: 'athlete_linked' | 'athlete_unlinked')
+    //   - read: bool (required)
+    //   - createdAt: number / timestamp (required)
+    //   - updatedAt: number / timestamp (optional)
+    //
     // ===============================================================
 
     // ===============================================================
@@ -228,8 +244,8 @@ service cloud.firestore {
 
     function isCoach() {
       return isAuthenticated() && (
-        isSuperAdmin() ||
         request.auth.token.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'] ||
+        isSuperAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['coach', 'team_admin_coach', 'team_admin'])
       );
@@ -248,34 +264,36 @@ service cloud.firestore {
 
     // Coach that owns / belongs to the given club
     function isCoachOfClub(clubId) {
-      return isCoach() && clubId != null && clubId is string && requesterClubId() == clubId;
+      return clubId != null && clubId is string && isCoach() && requesterClubId() == clubId;
     }
 
+    // Optimized CEL optional validators: use data.get(field, null) == null to avoid
+    // duplicate map membership + indexing expressions and stay well below the 1,000-expression limit.
     function validOptionalString(data, field, minLen, maxLen) {
-      return !(field in data) || data[field] == null ||
-        (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
+      return data.get(field, null) == null ||
+        (data[field] is string && data[field].size() <= maxLen);
     }
 
     function validOptionalNumber(data, field, minVal, maxVal) {
-      return !(field in data) || data[field] == null ||
+      return data.get(field, null) == null ||
         (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
     }
 
     function validOptionalBool(data, field) {
-      return !(field in data) || data[field] == null || data[field] is bool;
+      return data.get(field, null) == null || data[field] is bool;
     }
 
     function validOptionalList(data, field, maxSize) {
-      return !(field in data) || data[field] == null ||
+      return data.get(field, null) == null ||
         (data[field] is list && data[field].size() <= maxSize);
     }
 
     function validOptionalMap(data, field) {
-      return !(field in data) || data[field] == null || data[field] is map;
+      return data.get(field, null) == null || data[field] is map;
     }
 
     function validOptionalDateOrTimestamp(data, field) {
-      return !(field in data) || data[field] == null ||
+      return data.get(field, null) == null ||
         data[field] is number ||
         data[field] is timestamp ||
         (data[field] is string && data[field].size() <= 50);
@@ -301,7 +319,7 @@ service cloud.firestore {
         validOptionalString(data, 'country', 0, 10) &&
         validOptionalString(data, 'city', 0, 100) &&
         validOptionalString(data, 'gender', 0, 20) &&
-        (!('plan' in data) || data.plan in ['FREE', 'PRO']) &&
+        (data.get('plan', null) == null || data.plan in ['FREE', 'PRO']) &&
         validOptionalDateOrTimestamp(data, 'proExpiresAt') &&
         validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalString(data, 'coachId', 0, 128) &&
@@ -313,6 +331,7 @@ service cloud.firestore {
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalBool(data, 'isClubCreator') &&
         validOptionalString(data, 'whatsappNumber', 0, 30) &&
+        validOptionalString(data, 'fcmToken', 0, 512) &&
         validOptionalBool(data, 'profileSetupCompleted') &&
         validOptionalMap(data, 'bowConfig') &&
         validOptionalList(data, 'bows', 10) &&
@@ -486,6 +505,22 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
+    function isValidCoachNotification(data) {
+      return data.keys().hasAll(['id', 'coachUid', 'athleteUid', 'athleteName', 'type', 'read', 'createdAt']) &&
+        validString(data.id, 1, 128) &&
+        validString(data.coachUid, 1, 128) &&
+        validString(data.athleteUid, 1, 128) &&
+        validString(data.athleteName, 1, 100) &&
+        data.type in ['athlete_linked', 'athlete_unlinked'] &&
+        data.read is bool &&
+        validOptionalDateOrTimestamp(data, 'createdAt') &&
+        validOptionalString(data, 'athleteEmail', 0, 128) &&
+        validOptionalString(data, 'bowType', 0, 30) &&
+        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -498,34 +533,34 @@ service cloud.firestore {
       // Users can create their own document; coaches can create athlete ('archer') profiles for THEIR club; superadmins can create any profile.
       // Privilege escalation to 'superadmin' is strictly prohibited for standard users.
       allow create: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin() ||
-          (isCoach() && request.resource.data.role == 'archer' && isCoachOfClub(request.resource.data.get('clubId', null)))) &&
         request.resource.data.uid == userId &&
-        isValidUser(request.resource.data) &&
-        (isSuperAdmin() || request.resource.data.role != 'superadmin');
+        (isOwner(userId) || isSuperAdmin() ||
+          (request.resource.data.role == 'archer' && isCoachOfClub(request.resource.data.get('clubId', null)))) &&
+        (request.resource.data.role != 'superadmin' || isSuperAdmin()) &&
+        isValidUser(request.resource.data);
 
       // Users can update their own profile; coaches can update athlete ('archer') profiles of THEIR club
       // (including unlinking them); superadmins can update any profile.
       // Role elevation to 'superadmin' is strictly forbidden.
       // UID is immutable.
       allow update: if isAuthenticated() &&
-        (isOwner(userId) || isSuperAdmin() ||
-          (isCoach() && request.resource.data.role == 'archer' &&
-            (isCoachOfClub(resource.data.get('clubId', null)) || resource.data.get('coachId', null) == request.auth.uid))) &&
         request.resource.data.uid == userId &&
         request.resource.data.uid == resource.data.get('uid', userId) &&
-        isValidUser(request.resource.data) &&
-        (isSuperAdmin() || (resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin')) &&
+        (isOwner(userId) || isSuperAdmin() ||
+          (request.resource.data.role == 'archer' &&
+            ((resource.data.get('coachId', null) == request.auth.uid && isCoach()) ||
+             isCoachOfClub(resource.data.get('clubId', null))))) &&
+        ((resource.data.role != 'superadmin' && request.resource.data.role != 'superadmin') || isSuperAdmin()) &&
         // Anti self-escalation: a user can always set their own role to 'archer',
         // and can only hold a coach/admin role when not linked to an external coach (coachId == null)
         // and when clubId is either null or their own canonical CLB-<uid>.
-        (isSuperAdmin() || !isOwner(userId) ||
-          request.resource.data.role == 'archer' ||
+        (request.resource.data.role == 'archer' || !isOwner(userId) ||
           (request.resource.data.get('coachId', null) == null && (
             request.resource.data.get('clubId', null) == null ||
             request.resource.data.get('clubId', '') == 'CLB-' + userId ||
             request.resource.data.get('clubId', '') == 'CLB-' + userId.replace('USR-', '')
-          )));
+          )) || isSuperAdmin()) &&
+        isValidUser(request.resource.data);
 
       // Users can delete their own profile; superadmins can delete any profile
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
@@ -698,6 +733,38 @@ service cloud.firestore {
       allow create: if isSuperAdmin() && isValidAdCampaign(request.resource.data);
       allow update: if isSuperAdmin() && isValidAdCampaign(request.resource.data);
       allow delete: if isSuperAdmin();
+    }
+
+    // 10. Coach Notifications Collection (doc id: notificationId)
+    match /coach_notifications/{notificationId} {
+      // Coach recipient, athlete sender, or superadmin can read linking notifications
+      allow read: if isAuthenticated() &&
+        (resource.data.coachUid == request.auth.uid ||
+         resource.data.athleteUid == request.auth.uid ||
+         isSuperAdmin());
+
+      // Athlete linking to coach (or coach/superadmin) can create notification
+      allow create: if isAuthenticated() &&
+        (request.resource.data.athleteUid == request.auth.uid ||
+         request.resource.data.coachUid == request.auth.uid ||
+         isSuperAdmin()) &&
+        isValidCoachNotification(request.resource.data);
+
+      // Coach recipient or athlete sender can update (e.g. mark read or re-trigger on re-link).
+      // coachUid and athleteUid are immutable.
+      allow update: if isAuthenticated() &&
+        (resource.data.coachUid == request.auth.uid ||
+         resource.data.athleteUid == request.auth.uid ||
+         isSuperAdmin()) &&
+        request.resource.data.coachUid == resource.data.coachUid &&
+        request.resource.data.athleteUid == resource.data.athleteUid &&
+        isValidCoachNotification(request.resource.data);
+
+      // Coach recipient or superadmin can delete notifications
+      allow delete: if isAuthenticated() &&
+        (resource.data.coachUid == request.auth.uid ||
+         resource.data.athleteUid == request.auth.uid ||
+         isSuperAdmin());
     }
 
     // Default Deny for any unspecified paths
