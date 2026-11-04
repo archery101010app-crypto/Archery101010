@@ -615,9 +615,6 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         </div>
       </div>
 
-      {/* SECTION 0: App Language Selector */}
-      <LanguageSelector variant="card" />
-
       {/* SECTION 1: Personal Data */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center">
@@ -1285,6 +1282,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           </button>
         </div>
       )}
+
+      {/* App Language Selector (ubicado arriba de Política de Privacidad) */}
+      <LanguageSelector variant="card" />
 
       {/* Política de Privacidad Button */}
       <button
