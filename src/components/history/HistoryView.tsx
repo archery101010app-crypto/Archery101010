@@ -10,6 +10,7 @@ import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, C
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
+import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles, parseBowPoundageLbs } from "@/lib/scoring/biometricsEngine";
 import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
@@ -89,7 +90,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         archerName,
         dateStr,
         sessionNote: session.sessionNote,
-        dispersion
+        dispersion,
+        activeKcal: getSessionActiveKcal(session, user),
+        distanceWalkedM: getSessionDistanceWalkedM(session),
+        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs)
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -122,7 +126,10 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         format: session.format || "World Archery",
         archerName,
         dateStr,
-        sessionNote: session.sessionNote
+        sessionNote: session.sessionNote,
+        activeKcal: getSessionActiveKcal(session, user),
+        distanceWalkedM: getSessionDistanceWalkedM(session),
+        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs)
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -577,6 +584,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       <span className="text-[11.6px] text-white truncate">
                         {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
+                      <span className="text-[10.5px] font-bold text-white/80 truncate">
+                        {getSessionActiveKcal(session, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(session), false)}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -696,6 +706,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
                         <span className="text-[10.5px] text-white">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
+                        <span className="text-[10px] font-bold text-white/80">
+                          {getSessionActiveKcal(s, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(s), false)}
+                        </span>
                       </div>
                       <div className="text-right">
                         <span className="text-base font-black text-cyan-neon tabular-nums">{arrows}</span>
@@ -811,6 +824,26 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
                 <span className="text-[9.3px] text-white uppercase block">Rondas</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.endsCount} Ends</span>
+              </div>
+            </div>
+
+            {/* Biometric Summary: Kcal + Distancia Recorrida */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl">
+                <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                  KCAL
+                </span>
+                <span className="text-base font-black text-white mt-0.5 block tabular-nums">
+                  {getSessionActiveKcal(selectedSession, user)} kcal
+                </span>
+              </div>
+              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl">
+                <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                  DISTANCIA RECORRIDA
+                </span>
+                <span className="text-base font-black text-white mt-0.5 block tabular-nums">
+                  {formatKmAndMiles(getSessionDistanceWalkedM(selectedSession), false)}
+                </span>
               </div>
             </div>
 

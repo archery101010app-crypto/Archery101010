@@ -2,6 +2,7 @@
 
 import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull, getExactTargetDimensions } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
+import { calculateFallbackDistanceM, calculateActiveKcal, formatKmAndMiles } from "./biometricsEngine";
 
 export interface EndSummaryItem {
   arrows: string[];
@@ -23,6 +24,9 @@ export interface TargetShotChartParams {
   dateStr?: string;
   sessionNote?: string;
   dispersion?: DispersionAnalysis | null;
+  activeKcal?: number;
+  distanceWalkedM?: number;
+  bowPoundageLbs?: number;
 }
 
 declare global {
@@ -477,34 +481,73 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 404);
 
-  // 6. Telemetry KPI Boxes (3 Columns)
+  // 6. Telemetry KPI Boxes (4 Harmonious Columns: PRECISIÓN | AGRUPACIÓN | KCAL | DISTANCIA RECORRIDA)
+  // Only Header + Data (no small subtitle text)
   const cardY = 710;
   const cardHeight = 112;
+  const boxGap = 16;
+  const boxW = 231; // 4 * 231 + 3 * 16 = 972px total width (54..1026)
+
+  const computedDistanceM =
+    typeof params.distanceWalkedM === "number" && params.distanceWalkedM > 0
+      ? Math.round(params.distanceWalkedM)
+      : calculateFallbackDistanceM({
+          isVolume: false,
+          arrowsCount: totalArrowsCount,
+          completedEndsCount: validEnds.length,
+          distanceM: Number(distanceM) || 18,
+          arrowsPerEnd: validEnds[0]?.arrows?.length || 6
+        });
+
+  const computedKcal =
+    typeof params.activeKcal === "number" && params.activeKcal > 0
+      ? Math.round(params.activeKcal)
+      : calculateActiveKcal({
+          arrowsCount: totalArrowsCount,
+          distanceWalkedM: computedDistanceM,
+          bowPoundageLbs: params.bowPoundageLbs || 36
+        });
 
   drawStatBox(
     ctx,
     54,
     cardY,
-    306,
+    boxW,
     cardHeight,
     "PRECISIÓN",
-    `${tensCount} (10+X) • ${xsCount} Xs`,
-    `${totalArrowsCount} flechas • ${goldPct}% en el 10`
+    `${tensCount} (10+X) • ${xsCount} Xs`
   );
 
   const spreadText = dispersion ? `Ø ${dispersion.spreadCm.toFixed(1)} cm` : "Activa";
-  const groupQuality = dispersion ? dispersion.groupQuality : `${totalArrowsCount} flechas registradas`;
-  drawStatBox(ctx, 387, cardY, 306, cardHeight, "AGRUPACIÓN", spreadText, groupQuality);
+  drawStatBox(
+    ctx,
+    54 + (boxW + boxGap) * 1,
+    cardY,
+    boxW,
+    cardHeight,
+    "AGRUPACIÓN",
+    spreadText
+  );
 
-  const centerText = dispersion ? dispersion.clockDirection : "Centro";
-  const isCenteredGroup =
-    !dispersion ||
-    centerText.toLowerCase().includes("centro") ||
-    (dispersion.verticalDirection === "CENTRADO" && dispersion.horizontalDirection === "CENTRADO");
-  const directionTelemetry = isCenteredGroup
-    ? "Agrupación centrada en el 10"
-    : `Tendencia a las ${centerText}`;
-  drawStatBox(ctx, 720, cardY, 306, cardHeight, "CENTRO DE GRUPO", centerText, directionTelemetry);
+  drawStatBox(
+    ctx,
+    54 + (boxW + boxGap) * 2,
+    cardY,
+    boxW,
+    cardHeight,
+    "KCAL",
+    `${computedKcal} kcal`
+  );
+
+  drawStatBox(
+    ctx,
+    54 + (boxW + boxGap) * 3,
+    cardY,
+    boxW,
+    cardHeight,
+    "DISTANCIA RECORRIDA",
+    formatKmAndMiles(computedDistanceM, false)
+  );
 
   // 7. Compact End-by-End Scorecard Strip (Sin título, centrado simétrico y E1..En +100% de tamaño)
   if (validEnds.length > 0) {
@@ -564,8 +607,7 @@ function drawStatBox(
   w: number,
   h: number,
   title: string,
-  main: string,
-  sub: string
+  main: string
 ) {
   const appFont = "Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
@@ -575,18 +617,14 @@ function drawStatBox(
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 15.9px ${appFont}`;
+  ctx.font = `800 14.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(title, x + 18, y + 31, w - 36);
+  ctx.fillText(title, x + 16, y + 40, w - 32);
 
   ctx.font = `900 22px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(main, x + 18, y + 63, w - 36);
-
-  ctx.font = `600 13px ${appFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(sub, x + 18, y + 91, w - 36);
+  ctx.fillText(main, x + 16, y + 78, w - 32);
 }
 
 export interface ShareTargetResult {

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { DIANA_PRESETS, getDianaPresetKey } from "../../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore, countScoredArrows } from "@/lib/scoring/sessionMetrics";
+import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles } from "@/lib/scoring/biometricsEngine";
 
 interface CoachSessionsTabProps {
   athletes: UserProfile[];
@@ -235,7 +236,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {sess.userName || "Alumno"}
                     </span>
                     <span className="text-[10.5px] text-white mt-0.5 truncate">
-                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m
+                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                     </span>
                   </div>
                 </div>
@@ -291,7 +292,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         </span>
                       </div>
                       <span className="text-[10.5px] text-white mt-0.5 truncate">
-                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {dateStr} {timeStr}
+                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {getSessionActiveKcal(sess)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)} · {dateStr} {timeStr}
                       </span>
                     </div>
                   </div>
@@ -429,6 +430,21 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                             </div>
                           );
                         })()}
+                        {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
+                        <div className="w-full grid grid-cols-2 gap-2 mt-1">
+                          <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
+                            <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                              {getSessionActiveKcal(sess)} kcal
+                            </span>
+                          </div>
+                          <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
+                            <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                              {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Desglose de Series (Ends) */}

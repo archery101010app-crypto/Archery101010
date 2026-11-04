@@ -7,10 +7,22 @@ import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting,
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X, Clock } from "lucide-react";
+import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSquare, Maximize2, Undo2, Share2, Crosshair, Camera, Sparkles, Compass, X, Clock, Watch } from "lucide-react";
 import confetti from "canvas-confetti";
 import { calculateDispersionAnalysis, DispersionAnalysis, getConvexHull } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
+import {
+  BiometricSessionSnapshot,
+  calculateHaversineMeters,
+  calculateFallbackDistanceM,
+  calculateActiveKcal,
+  formatKmAndMiles,
+  parseBowPoundageLbs,
+  parseAthleteWeightKg,
+  publishWatchState,
+  subscribeWatchMessages
+} from "@/lib/scoring/biometricsEngine";
+import SmartwatchMiniApp from "@/components/watch/SmartwatchMiniApp";
 import StravaShareModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -239,9 +251,64 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
 
+  // Biometric GPS Distance + Active Kcal + Open Smartwatch Companion states
+  const [gpsDistanceM, setGpsDistanceM] = useState<number>(() => Number(config?.gpsDistanceM) || 0);
+  const [gpsActive, setGpsActive] = useState<boolean>(false);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean>(
+    config?.practiceType === "Volumen"
+  );
+  const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
+  const lastGpsCoordRef = useRef<{ lat: number; lon: number; ts: number } | null>(null);
+
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // High-Precision GPS Walking Tracker (tracks entire session movement: line <-> target + field)
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
+    let watchId: number | null = null;
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          if (typeof accuracy === "number" && accuracy > 30) {
+            return; // Ignore low-accuracy indoor/cell tower jumps
+          }
+          setGpsActive(true);
+          const now = Date.now();
+          const prev = lastGpsCoordRef.current;
+          if (prev) {
+            const deltaM = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
+            const dtSec = Math.max(0.5, (now - prev.ts) / 1000);
+            const speedMs = deltaM / dtSec;
+            // Filter stationary GPS jitter (<2.2m) and unrealistic spikes (>7.5 m/s)
+            if (deltaM >= 2.2 && deltaM <= 45 && speedMs <= 7.5) {
+              setGpsDistanceM((curr) => curr + deltaM);
+              lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+            }
+          } else {
+            lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+          }
+        },
+        () => {
+          setGpsActive(false);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 2000,
+          timeout: 10000
+        }
+      );
+    } catch {}
+    return () => {
+      if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch {}
+      }
+    };
+  }, []);
 
   // Intercept Android hardware back button so the archer does not accidentally exit an active scoring session
   useEffect(() => {
@@ -266,6 +333,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   }, [showDispersionDrawer]);
 
+  useEffect(() => {
+    if (isWatchModalOpen) {
+      return registerModalDismiss(() => setIsWatchModalOpen(false));
+    }
+  }, [isWatchModalOpen]);
+
   // Keep endNote synchronized with the currently selected End
   useEffect(() => {
     setEndNote(ends[currentEndIdx]?.note || "");
@@ -284,6 +357,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       setEnds(config.ends);
       setImpacts(config.impacts || []);
       setSessionNote(config.sessionNote || "");
+      if (typeof config.gpsDistanceM === "number" && config.gpsDistanceM > 0) {
+        setGpsDistanceM(config.gpsDistanceM);
+      } else if (typeof config.distanceWalkedM === "number" && config.distanceWalkedM > 0) {
+        setGpsDistanceM(config.distanceWalkedM);
+      }
       
       // Calculate first empty cell to focus on
       let targetEnd = 0;
@@ -344,13 +422,99 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return sum;
   };
 
+  // Real-time Biometric Calculations: Walking Distance (GPS + Fallback) & Active Kcal (Bow Draw + Walking)
+  const totalShotArrows = useMemo(() => {
+    if (config.practiceType === "Volumen") return tallyCount;
+    return ends.reduce((sum, e) => sum + e.arrows.filter((a) => a !== "").length, 0);
+  }, [config.practiceType, tallyCount, ends]);
+
+  const completedEndsCount = useMemo(() => {
+    return ends.filter(
+      (e) => e.arrows.length > 0 && e.arrows.every((a) => a !== "" && a !== undefined)
+    ).length;
+  }, [ends]);
+
+  const fallbackDistanceM = useMemo(() => {
+    return calculateFallbackDistanceM({
+      isVolume: config.practiceType === "Volumen",
+      arrowsCount: totalShotArrows,
+      completedEndsCount,
+      distanceM: Number(config.distance) || 18,
+      arrowsPerEnd: Number(config.arrowsPerEnd) || 6
+    });
+  }, [config.practiceType, totalShotArrows, completedEndsCount, config.distance, config.arrowsPerEnd]);
+
+  const distanceWalkedM = useMemo(() => {
+    return Math.max(Math.round(gpsDistanceM), fallbackDistanceM);
+  }, [gpsDistanceM, fallbackDistanceM]);
+
+  const bowPoundageLbs = useMemo(() => {
+    return parseBowPoundageLbs(user, config?.bowPoundageLbs);
+  }, [user, config?.bowPoundageLbs]);
+
+  const athleteWeightKg = useMemo(() => {
+    return parseAthleteWeightKg(user);
+  }, [user]);
+
+  const activeKcal = useMemo(() => {
+    return calculateActiveKcal({
+      arrowsCount: totalShotArrows + (Number(config.warmupArrows) || 0),
+      distanceWalkedM,
+      bowPoundageLbs,
+      athleteWeightKg
+    });
+  }, [totalShotArrows, config.warmupArrows, distanceWalkedM, bowPoundageLbs, athleteWeightKg]);
+
+  const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
+    return {
+      sessionId: config.draftId || config.id || `SES-DRAFT-${user.uid}`,
+      arrowsCount: totalShotArrows,
+      distanceM: Number(config.distance) || 18,
+      arrowsPerEnd: Number(config.arrowsPerEnd) || 6,
+      completedEnds: completedEndsCount,
+      currentEndIndex: currentEndIdx,
+      gpsDistanceM: Math.round(gpsDistanceM),
+      distanceWalkedM,
+      gpsActive,
+      activeKcal,
+      bowPoundageLbs,
+      practiceType: config.practiceType || "Práctica",
+      bowType: config.bowType || user.bowConfig?.type || "Recurve",
+      autoDetectEnabled,
+      updatedAt: Date.now()
+    };
+  }, [
+    config.draftId,
+    config.id,
+    user.uid,
+    totalShotArrows,
+    config.distance,
+    config.arrowsPerEnd,
+    completedEndsCount,
+    currentEndIdx,
+    gpsDistanceM,
+    distanceWalkedM,
+    gpsActive,
+    activeKcal,
+    bowPoundageLbs,
+    config.practiceType,
+    config.bowType,
+    user.bowConfig?.type,
+    autoDetectEnabled
+  ]);
+
+  // Publish live state to Open Smartwatch Companion (Wear OS, Garmin IQ, /watch)
+  useEffect(() => {
+    publishWatchState(liveWatchSnapshot);
+  }, [liveWatchSnapshot]);
+
   // Autoguardado en caliente instantáneo (0ms Local-First + Real-Time Turbo Sync) tras cada tiro o cambio de notas
   useEffect(() => {
     if (ends.length === 0) return;
 
     // Evitamos autoguardar si es el estado inicial vacío
     const hasAnyShot = ends.some((e) => e.arrows.some((a) => a !== ""));
-    if (!hasAnyShot && impacts.length === 0) return;
+    if (!hasAnyShot && impacts.length === 0 && tallyCount === 0) return;
 
     const autoSave = async () => {
       const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
@@ -371,7 +535,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         maxScore: Math.min(2000, Number(config.maxScore) || 300),
         score: config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore()),
         isVolumeOnly: config.practiceType === "Volumen",
-        totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : undefined,
+        totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : totalShotArrows,
+        distanceWalkedM,
+        gpsDistanceM: Math.round(gpsDistanceM),
+        activeKcal,
+        bowPoundageLbs,
         ends: ends.slice(0, 100),
         sessionNote: sessionNote || "",
         impacts: impacts.slice(0, 500),
@@ -397,7 +565,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
 
     autoSave();
-  }, [ends, impacts, sessionNote]);
+  }, [ends, impacts, sessionNote, tallyCount, distanceWalkedM, activeKcal]);
 
   // Scroll active row into view in keyboard table
   useEffect(() => {
@@ -600,7 +768,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         format: config.format || "World Archery",
         archerName,
         sessionNote,
-        dispersion: globalDispersion
+        dispersion: globalDispersion,
+        activeKcal,
+        distanceWalkedM,
+        bowPoundageLbs
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -849,8 +1020,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
       maxScore: Math.min(2000, Number(config.maxScore) || 300),
       score: config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore()),
-        isVolumeOnly: config.practiceType === "Volumen",
-        totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : undefined,
+      isVolumeOnly: config.practiceType === "Volumen",
+      totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : totalShotArrows,
+      distanceWalkedM,
+      gpsDistanceM: Math.round(gpsDistanceM),
+      activeKcal,
+      bowPoundageLbs,
       ends: ends.slice(0, 100),
       sessionNote: sessionNote || "",
       impacts: impacts.slice(0, 500),
@@ -963,6 +1138,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       isDraft: false,
       singleBlockSaved: true,
       totalArrowsVolume: Math.min(10000, finalVolume || 0),
+      distanceWalkedM,
+      gpsDistanceM: Math.round(gpsDistanceM),
+      activeKcal,
+      bowPoundageLbs,
       blockStats: {
         b1Score: scoreB1,
         b2Score: 0,
@@ -1083,7 +1262,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       impacts: impacts.slice(0, 500),
       isDraft: false,
       isVolumeOnly: isVolMode,
-      totalArrowsVolume: Math.min(10000, finalVolume || (isVolMode ? tallyCount : effectiveEndsCount * (Number(config.arrowsPerEnd) || 3)))
+      totalArrowsVolume: Math.min(10000, finalVolume || (isVolMode ? tallyCount : effectiveEndsCount * (Number(config.arrowsPerEnd) || 3))),
+      distanceWalkedM,
+      gpsDistanceM: Math.round(gpsDistanceM),
+      activeKcal,
+      bowPoundageLbs
     };
     if (blockStats) {
       rawSessionObj.blockStats = blockStats;
@@ -1240,7 +1423,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         format: config.format || "World Archery",
         archerName,
         sessionNote,
-        dispersion: globalDispersion
+        dispersion: globalDispersion,
+        activeKcal,
+        distanceWalkedM,
+        bowPoundageLbs
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -1253,6 +1439,31 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const playTallyClickSound = () => {
     playRealisticMechanicalClockClick();
     triggerHaptic("tick");
+  };
+
+  const handleTallyDecrement = () => {
+    if (tallyCount <= 0) return;
+    playTallyClickSound();
+    const nextCount = Math.max(0, tallyCount - 1);
+    setTallyCount(nextCount);
+
+    const updatedEnds = [...ends];
+    let prevArrowIdx = currentArrowIdx - 1;
+    let prevEndIdx = currentEndIdx;
+    if (prevArrowIdx < 0) {
+      prevEndIdx = Math.max(0, currentEndIdx - 1);
+      prevArrowIdx = (config.arrowsPerEnd || 3) - 1;
+    }
+    if (updatedEnds[prevEndIdx]) {
+      const targetEnd = { ...updatedEnds[prevEndIdx] };
+      const targetArrows = [...targetEnd.arrows];
+      targetArrows[prevArrowIdx] = "";
+      targetEnd.arrows = targetArrows;
+      updatedEnds[prevEndIdx] = targetEnd;
+      setEnds(updatedEnds);
+    }
+    setCurrentArrowIdx(prevArrowIdx);
+    setCurrentEndIdx(prevEndIdx);
   };
 
   const handleTallyIncrement = () => {
@@ -1305,6 +1516,39 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     setCurrentArrowIdx(nextArrowIdx);
     setCurrentEndIdx(nextEndIdx);
   };
+
+  // Handle commands coming from Open Smartwatch Companion (/watch or native Wear OS / Garmin IQ)
+  const handleWatchArrowDelta = (delta: number) => {
+    if (delta > 0) {
+      if (config.practiceType === "Volumen") {
+        handleTallyIncrement();
+      } else {
+        handleScoreInput("10");
+      }
+    } else if (delta < 0) {
+      if (config.practiceType === "Volumen") {
+        handleTallyDecrement();
+      } else {
+        handleBackspace();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const unsub = subscribeWatchMessages((msg) => {
+      if (msg.type === "INCREMENT_ARROW") {
+        handleWatchArrowDelta(msg.delta);
+      } else if (msg.type === "TOGGLE_AUTO_DETECT") {
+        setAutoDetectEnabled(msg.enabled);
+      } else if (msg.type === "FINISH_SESSION_FROM_WATCH") {
+        setIsWatchModalOpen(false);
+        setIsFinishing(true);
+      } else if (msg.type === "REQUEST_STATE") {
+        publishWatchState(liveWatchSnapshot);
+      }
+    });
+    return unsub;
+  });
 
   const handleTallyReset = () => {
     if (!confirm("¿Deseas reiniciar el contador de flechas a cero?")) return;
@@ -1466,6 +1710,52 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           )}
         </div>
       )}
+
+      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App */}
+      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 relative overflow-hidden">
+        <div
+          className="absolute top-0 left-12 right-12 h-[2px]"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, #00A8F3 25%, #FF0000 50%, #FFF200 75%, transparent)"
+          }}
+        />
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex flex-col min-w-0 pr-3 border-r border-white/10">
+            <span className="text-[9.5px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  gpsActive
+                    ? "bg-[#00A8F3] shadow-[0_0_6px_#00A8F3]"
+                    : "bg-[#FFF200] shadow-[0_0_6px_#FFF200]"
+                }`}
+              />
+              <span>DISTANCIA RECORRIDA</span>
+            </span>
+            <span className="text-xs sm:text-sm font-black text-white tabular-nums mt-0.5 truncate">
+              {formatKmAndMiles(distanceWalkedM, false)}
+            </span>
+          </div>
+
+          <div className="flex flex-col min-w-0">
+            <span className="text-[9.5px] font-black uppercase tracking-wider text-white">
+              KCAL
+            </span>
+            <span className="text-xs sm:text-sm font-black text-white tabular-nums mt-0.5">
+              {activeKcal} <span className="text-[11px] font-extrabold text-[#FF0000]">kcal</span>
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsWatchModalOpen(true)}
+          className="px-3 py-1.5 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition shadow-[0_0_12px_rgba(255,242,0,0.25)]"
+        >
+          <Watch size={13} className="shrink-0" />
+          <span>Reloj</span>
+        </button>
+      </div>
 
       {/* SCORING COMPONENT MODES */}
       <div className="flex-1 flex flex-col justify-center min-h-[300px] py-1">
@@ -2193,6 +2483,26 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
               )}
 
+              {/* Biometric Summary in Finish Modal (Kcal + Distancia Recorrida for Archer & Coach) */}
+              <div className="bg-neutral-950/60 p-3.5 rounded-2xl border border-white/10 grid grid-cols-2 gap-3 text-center">
+                <div>
+                  <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                    KCAL
+                  </span>
+                  <p className="text-lg font-black text-white mt-0.5 tabular-nums">
+                    {activeKcal} <span className="text-xs text-[#FF0000]">kcal</span>
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                    DISTANCIA RECORRIDA
+                  </span>
+                  <p className="text-base font-black text-white mt-0.5 tabular-nums">
+                    {formatKmAndMiles(distanceWalkedM, false)}
+                  </p>
+                </div>
+              </div>
+
               {/* Bloques y Fatiga report (para WA600/720) */}
               {isBlockFormat && (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
@@ -2709,6 +3019,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         </div>
       )}
+
+      {/* Open Smartwatch Companion Mini-App Modal */}
+      <SmartwatchMiniApp
+        isOpen={isWatchModalOpen}
+        onClose={() => setIsWatchModalOpen(false)}
+        liveSnapshot={liveWatchSnapshot}
+        onIncrementArrow={(delta) => handleWatchArrowDelta(delta)}
+        onToggleAutoDetect={(enabled) => setAutoDetectEnabled(enabled)}
+        onFinishAndSendToCoach={() => {
+          setIsWatchModalOpen(false);
+          setIsFinishing(true);
+        }}
+      />
 
       {/* Strava-Style Share Preview Modal */}
       <StravaShareModal

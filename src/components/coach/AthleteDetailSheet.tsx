@@ -26,6 +26,7 @@ import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
+import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles } from "@/lib/scoring/biometricsEngine";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -424,7 +425,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                         >
                           <div className="flex flex-col">
                             <span className="text-[12.8px] text-white font-extrabold uppercase">{sess.practiceType} · {sess.format}</span>
-                            <span className="text-[10.5px] text-white mt-0.5">{dateStr} · {sess.distance}m</span>
+                            <span className="text-[10.5px] text-white mt-0.5">{dateStr} · {sess.distance}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col text-right">
@@ -544,6 +545,21 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       </div>
                                     );
                                   })()}
+                                  {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
+                                  <div className="w-full grid grid-cols-2 gap-2 mt-1">
+                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
+                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                        {getSessionActiveKcal(sess, athlete)} kcal
+                                      </span>
+                                    </div>
+                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
+                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                        {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
 
                                 {sess.ends && (
@@ -741,6 +757,21 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                       </div>
                                     );
                                   })()}
+                                  {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
+                                  <div className="w-full grid grid-cols-2 gap-2 mt-1">
+                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
+                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                        {getSessionActiveKcal(sess, athlete)} kcal
+                                      </span>
+                                    </div>
+                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
+                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                        {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
 
                                 {sess.ends && (
@@ -829,7 +860,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                               {dateStr}
                             </span>
                             <span className="text-[10.5px] text-white mt-0.5">
-                              {sess.practiceType || "Sesión"} · {sess.distance || 18}m
+                              {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                             </span>
                           </div>
                           <div className="flex flex-col text-right">
