@@ -42,14 +42,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
-    private Sensor stepCounter;
     private Vibrator vibrator;
 
     private int screenIndex = 0; // 0..3
     private int arrowCount = 0;
     private boolean autoDetectEnabled = true;
     private long lastShotTimestamp = 0L;
-    private float lastReadingTimeStatus = 0f;
+    private long lastStepTimestamp = 0L;
 
     // Scoring state
     private int currentEnd = 1;
@@ -59,7 +58,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int totalScoredArrows = 0;
 
     // Biometrics state
-    private float initialSteps = -1f;
     private float walkedMeters = 0f;
     private int distanceMeters = 50;
     private float bowPoundageLbs = 38f;
@@ -81,7 +79,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
@@ -92,13 +89,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onResume() {
         super.onResume();
-        if (sensorManager != null) {
-            if (accelerometer != null) {
-                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
-            }
-            if (stepCounter != null) {
-                sensorManager.registerListener(this, stepCounter, SensorManager.SENSOR_DELAY_UI);
-            }
+        if (sensorManager != null && accelerometer != null) {
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         }
     }
 
@@ -154,7 +146,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER && autoDetectEnabled) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             float ax = event.values[0];
             float ay = event.values[1];
             float az = event.values[2];
@@ -162,21 +154,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
             long now = System.currentTimeMillis();
             // Bow release signature on wrist (> 13.5 m/s^2 linear spike with 2.4s cooldown)
-            if (linearMag >= 13.5 && (now - lastShotTimestamp) > 2400L) {
+            if (autoDetectEnabled && linearMag >= 13.5 && (now - lastShotTimestamp) > 2400L) {
                 lastShotTimestamp = now;
                 arrowCount++;
-                lastReadingTimeStatus = 1f;
                 triggerHaptic(55);
                 saveState();
                 if (canvasView != null) canvasView.invalidate();
-            }
-        } else if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
-            float steps = event.values[0];
-            if (initialSteps < 0f) {
-                initialSteps = steps;
-            } else {
-                float deltaSteps = Math.max(0f, steps - initialSteps);
-                walkedMeters = deltaSteps * 0.76f; // Average stride 0.76m
+            } else if (linearMag >= 3.2 && linearMag < 10.5 && (now - lastStepTimestamp) > 480L && (now - lastShotTimestamp) > 1500L) {
+                // Walking cadence detected via standard accelerometer (zero health permissions required)
+                lastStepTimestamp = now;
+                walkedMeters += 0.76f;
                 if (canvasView != null) canvasView.invalidate();
             }
         }
@@ -333,7 +320,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     currentEnd = 1;
                     currentEndArrows.clear();
                     walkedMeters = 0f;
-                    initialSteps = -1f;
                     saveState();
                     screenIndex = 0;
                     invalidate();
