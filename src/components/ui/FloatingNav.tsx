@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 
-function SpotifyNavIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+function SpotifyNavIcon({ size = 21, className = "" }: { size?: number; className?: string }) {
   return (
     <svg 
       width={size} 
@@ -93,7 +93,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {/* Icon wrapper */}
               <div className="relative flex items-center justify-center">
                 <Icon
-                  size={18}
+                  size={21}
                   className={`transition-colors duration-200 relative z-10 ${
                     isActive
                       ? "text-cyan-neon"
@@ -104,7 +104,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[10px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                className={`text-[11.5px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

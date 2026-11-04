@@ -54,7 +54,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
       <div translate="no" className="notranslate flex items-center gap-2 select-none min-w-0">
         <div className="flex items-baseline gap-1">
           <div 
-            className="flex text-[19.8px] tracking-tighter font-extrabold brand-logo-101010" 
+            className="flex text-[23.8px] tracking-tighter font-extrabold brand-logo-101010" 
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
             <span className="text-cyan-neon">10</span>
