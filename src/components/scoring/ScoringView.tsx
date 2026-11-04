@@ -1711,8 +1711,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         </div>
       )}
 
-      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App */}
-      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 relative overflow-hidden">
+      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App (+20% size, centered & harmonious) */}
+      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-2 relative overflow-hidden">
         <div
           className="absolute top-0 left-12 right-12 h-[2px]"
           style={{
@@ -1720,11 +1720,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               "linear-gradient(90deg, transparent, #00A8F3 25%, #FF0000 50%, #FFF200 75%, transparent)"
           }}
         />
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="flex flex-col min-w-0 pr-3 border-r border-white/10">
-            <span className="text-[9.5px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+        <div className="flex items-center justify-around gap-2 min-w-0 flex-1">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-2 border-r border-white/10">
+            <span className="text-[11.4px] font-black uppercase tracking-wider text-white flex items-center justify-center gap-1.5 leading-tight">
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                className={`w-2 h-2 rounded-full shrink-0 ${
                   gpsActive
                     ? "bg-[#00A8F3] shadow-[0_0_6px_#00A8F3]"
                     : "bg-[#FFF200] shadow-[0_0_6px_#FFF200]"
@@ -1732,17 +1732,17 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               />
               <span>DISTANCIA RECORRIDA</span>
             </span>
-            <span className="text-xs sm:text-sm font-black text-white tabular-nums mt-0.5 truncate">
+            <span className="text-[14.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-1 leading-tight truncate">
               {formatKmAndMiles(distanceWalkedM, false)}
             </span>
           </div>
 
-          <div className="flex flex-col min-w-0">
-            <span className="text-[9.5px] font-black uppercase tracking-wider text-white">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 px-2">
+            <span className="text-[11.4px] font-black uppercase tracking-wider text-white leading-tight">
               KCAL
             </span>
-            <span className="text-xs sm:text-sm font-black text-white tabular-nums mt-0.5">
-              {activeKcal} <span className="text-[11px] font-extrabold text-[#FF0000]">kcal</span>
+            <span className="text-[14.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-1 leading-tight whitespace-nowrap">
+              {activeKcal} <span className="text-[13.2px] font-black text-white">kcal</span>
             </span>
           </div>
         </div>
@@ -1750,10 +1750,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <button
           type="button"
           onClick={() => setIsWatchModalOpen(true)}
-          className="px-3 py-1.5 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition shadow-[0_0_12px_rgba(255,242,0,0.25)]"
+          className="px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[12.6px] uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 cursor-pointer active:scale-95 transition shadow-[0_0_12px_rgba(255,242,0,0.25)]"
         >
-          <Watch size={13} className="shrink-0" />
-          <span>Reloj</span>
+          <Watch size={16} className="shrink-0" />
+          <span>Smartwatch</span>
         </button>
       </div>
 
@@ -2485,19 +2485,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
               {/* Biometric Summary in Finish Modal (Kcal + Distancia Recorrida for Archer & Coach) */}
               <div className="bg-neutral-950/60 p-3.5 rounded-2xl border border-white/10 grid grid-cols-2 gap-3 text-center">
-                <div>
-                  <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-[12px] text-white uppercase font-black tracking-wider block">
                     KCAL
                   </span>
-                  <p className="text-lg font-black text-white mt-0.5 tabular-nums">
-                    {activeKcal} <span className="text-xs text-[#FF0000]">kcal</span>
+                  <p className="text-xl font-black text-white mt-0.5 tabular-nums">
+                    {activeKcal} <span className="text-sm font-black text-white">kcal</span>
                   </p>
                 </div>
-                <div>
-                  <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-[12px] text-white uppercase font-black tracking-wider block">
                     DISTANCIA RECORRIDA
                   </span>
-                  <p className="text-base font-black text-white mt-0.5 tabular-nums">
+                  <p className="text-[19px] font-black text-white mt-0.5 tabular-nums">
                     {formatKmAndMiles(distanceWalkedM, false)}
                   </p>
                 </div>

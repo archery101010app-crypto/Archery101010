@@ -382,7 +382,7 @@ export default function SmartwatchMiniApp({
               <div className="text-[11px] font-black text-white tracking-tight">
                 <span className="text-[#00A8F3]">{kmVal}km</span>
                 <span className="text-white/50 mx-1">·</span>
-                <span className="text-[#FF0000]">{activeState.activeKcal}kcal</span>
+                <span className="text-white">{activeState.activeKcal}kcal</span>
               </div>
               <span className="text-[8px] font-extrabold text-[#FFF200] tracking-[0.14em] uppercase">
                 TANDA {currentTanda} · {activeState.distanceM}M
@@ -434,7 +434,7 @@ export default function SmartwatchMiniApp({
                 </div>
                 <div className="text-[22px] font-black text-white tracking-tight leading-tight mt-0.5">
                   {activeState.activeKcal}
-                  <span className="text-[12px] font-extrabold text-[#FF0000] ml-1">kcal</span>
+                  <span className="text-[12px] font-extrabold text-white ml-1">kcal</span>
                 </div>
               </div>
               <span className="text-[9px] font-black text-[#FFF200] border border-[#FFF200]/45 bg-[#FFF200]/10 px-2 py-1 rounded-lg uppercase">

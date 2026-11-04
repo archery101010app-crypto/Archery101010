@@ -505,7 +505,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#FF0000"));
             canvas.drawRoundRect(btnRightSecondary, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#FF4D4D"));
+            paint.setColor(Color.WHITE);
             canvas.drawText("DESHACER", btnRightSecondary.centerX(), btnY + 20f * scale, paint);
         }
 
