@@ -1619,48 +1619,40 @@ export default function Home() {
               initial={{ scale: 0.94, opacity: 0, y: 12 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.94, opacity: 0, y: 12 }}
-              className="w-full max-w-[350px] bg-[#0B0E14] border border-emerald-500/35 p-6 rounded-3xl flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
+              className="w-full max-w-[360px] bg-[#0B0E14] border border-white/[0.12] p-6 rounded-3xl flex flex-col items-center gap-4 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 right-0 h-[3px] flex">
-                <div className="flex-1 bg-emerald-400" />
+              <div className="absolute top-0 left-0 right-0 h-[3.5px] flex">
                 <div className="flex-1 bg-cyan-neon" />
+                <div className="flex-1 bg-red-rival" />
                 <div className="flex-1 bg-yellow-gold" />
               </div>
 
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 mt-1">
-                <CheckCircle2 size={28} />
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-cyan-neon/12 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon mt-1">
+                <CheckCircle2 size={30} />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-emerald-400">
+              <div className="w-full flex flex-col items-center gap-2 px-1">
+                <span className="text-[13.2px] font-black uppercase tracking-widest text-white text-center">
                   NUEVO ALUMNO VINCULADO
                 </span>
-                <h3 className="text-white text-base font-black uppercase tracking-wide">
+                <h3 className="text-white text-[19.2px] font-black uppercase tracking-wide text-center leading-tight break-words max-w-full">
                   {pendingCoachLinkNotif.athleteName || "Arquero Vinculado"}
                 </h3>
-                <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
-                  Se ha vinculado exitosamente a tu equipo usando tu código de entrenador. Sus entrenamientos, puntajes y gráficas ya están sincronizados en tu portal.
+                <p className="text-[14.4px] font-semibold text-white leading-relaxed text-center [text-wrap:balance]">
+                  Sus entrenamientos, puntajes y gráficas ya están sincronizados en tu portal.
                 </p>
               </div>
 
-              <div className="bg-[#111620] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex items-center gap-3 text-left">
-                <div className="w-9 h-9 rounded-xl bg-cyan-neon/15 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon font-black text-xs shrink-0">
+              <div className="w-full bg-[#111620] border border-white/[0.10] rounded-2xl px-4 py-3 flex items-center justify-center gap-3 text-center">
+                <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-white font-black text-[14.4px] shrink-0">
                   {(pendingCoachLinkNotif.athleteName || "AR").substring(0, 2).toUpperCase()}
                 </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-xs font-black text-white truncate">
-                    {pendingCoachLinkNotif.athleteName || "Arquero"}
-                  </span>
-                  <span className="text-[10.5px] text-white/80 truncate">
-                    {pendingCoachLinkNotif.bowType
-                      ? `${pendingCoachLinkNotif.bowType === "Recurve" ? "Recurvo" : pendingCoachLinkNotif.bowType === "Compound" ? "Compuesto" : pendingCoachLinkNotif.bowType}`
-                      : "Arquero"}
-                    {pendingCoachLinkNotif.athleteEmail ? ` · ${pendingCoachLinkNotif.athleteEmail}` : ""}
-                  </span>
-                </div>
+                <span className="text-[14.4px] font-black text-white text-center leading-snug break-words">
+                  {pendingCoachLinkNotif.athleteName || "Arquero"}
+                </span>
               </div>
 
-              <div className="flex flex-col gap-2 mt-1">
+              <div className="w-full flex flex-col gap-2.5 mt-1">
                 <button
                   onClick={async () => {
                     const notifToAck = pendingCoachLinkNotif;
@@ -1682,9 +1674,8 @@ export default function Home() {
                       setCurrentScreen("HOME");
                     }
                   }}
-                  className="w-full h-11 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-2"
+                  className="w-full h-12 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[14.4px] uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-2 text-center"
                 >
-                  <Users size={15} />
                   <span>Ver en Portal Coach</span>
                 </button>
                 <button
@@ -1704,7 +1695,7 @@ export default function Home() {
                       // ignore
                     }
                   }}
-                  className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center"
+                  className="w-full h-11 bg-[#111620] border border-white/[0.10] text-white font-black text-[14.4px] uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center text-center"
                 >
                   Entendido
                 </button>

@@ -1037,22 +1037,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             Mi Entrenador (Coach)
           </h4>
           {linkedToCoach && (
-            <span className="text-[10.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Vinculado
+            <span className="text-[12.6px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-neon/15 text-white border border-cyan-neon/35 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-cyan-neon" /> Vinculado
             </span>
           )}
         </div>
 
         {clubJoinFeedback && (
-          <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border ${
+          <div className={`p-3.5 rounded-2xl text-[14.4px] font-bold flex items-center justify-center text-center gap-2.5 border ${
             clubJoinFeedback.type === "success" 
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" 
+              ? "bg-cyan-neon/10 border-cyan-neon/35 text-white" 
               : "bg-white border-white text-black"
           }`}>
             {clubJoinFeedback.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-cyan-neon" />
             ) : (
-              <AlertCircle className="w-4 h-4 shrink-0 text-black" />
+              <AlertCircle className="w-5 h-5 shrink-0 text-black" />
             )}
             <span className="leading-snug">{clubJoinFeedback.message}</span>
           </div>

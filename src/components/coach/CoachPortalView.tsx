@@ -705,18 +705,18 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             {linkNotifications.map((notif) => (
               <div
                 key={notif.id}
-                className="bg-emerald-500/10 border border-emerald-500/35 rounded-2xl p-3.5 flex items-center justify-between gap-3"
+                className="bg-[#0B0E14] border border-cyan-neon/35 rounded-2xl p-4 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                    <CheckCircle2 size={18} />
+                  <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon shrink-0">
+                    <CheckCircle2 size={20} />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[10.5px] font-black uppercase tracking-wider text-emerald-400">
+                    <span className="text-[12.6px] font-black uppercase tracking-wider text-white">
                       ¡Nuevo Alumno Vinculado!
                     </span>
-                    <span className="text-xs font-bold text-white truncate">
-                      {notif.athleteName || "Arquero"} se vinculó con tu código de 6 dígitos
+                    <span className="text-[14.4px] font-black text-white truncate">
+                      {notif.athleteName || "Arquero"}
                     </span>
                   </div>
                 </div>
@@ -739,7 +739,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                         // ignore
                       }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-black text-[10.5px] uppercase tracking-wider cursor-pointer transition"
+                    className="px-3.5 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[12.6px] uppercase tracking-wider cursor-pointer transition"
                   >
                     Ver Ficha
                   </button>
@@ -755,10 +755,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                         // ignore
                       }
                     }}
-                    className="p-1.5 rounded-xl bg-black/40 border border-white/10 text-white/70 hover:text-white cursor-pointer transition"
+                    className="p-2 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition"
                     title="Descartar aviso"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
                 </div>
               </div>
