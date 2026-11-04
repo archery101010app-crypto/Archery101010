@@ -337,29 +337,29 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="flex items-center justify-between px-1 gap-3">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-white text-[19.8px] sm:text-[22px] font-bold tracking-tight truncate">
+            <h2 className="text-white text-[23.8px] sm:text-[26.4px] font-bold tracking-tight truncate">
               {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
             </h2>
             {customClubName && (
-              <span className="text-cyan-neon text-[11px] font-bold bg-[#0D1017] px-2.5 py-0.5 rounded-full border border-white/15 tracking-wide truncate max-w-[180px] shrink-0">
+              <span className="text-cyan-neon text-[13.2px] font-bold bg-[#0D1017] px-2.5 py-0.5 rounded-full border border-white/15 tracking-wide truncate max-w-[180px] shrink-0">
                 {customClubName}
               </span>
             )}
             {user.plan === "PRO" && (
-              <span className="text-yellow-gold text-[10.5px] font-bold bg-yellow-gold/10 px-2 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
+              <span className="text-yellow-gold text-[12.6px] font-bold bg-yellow-gold/10 px-2.5 py-0.5 rounded-md border border-yellow-gold/25 tracking-wider uppercase shrink-0">
                 {t("proBadge")}
               </span>
             )}
           </div>
-          <p className="text-xs text-white mt-0.5 truncate flex items-center gap-1.5 font-semibold">
-            <span className="text-[11.6px] font-bold uppercase tracking-wider text-white shrink-0">
+          <p className="text-[16.7px] text-white mt-0.5 truncate flex items-center gap-1.5 font-semibold">
+            <span className="text-[13.9px] font-bold uppercase tracking-wider text-white shrink-0">
               {clubCountryObj.flag}
             </span>
             <span className="text-white">·</span>
             {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
-                className="px-2 py-0.5 rounded-full bg-white text-black font-black text-[10.5px] uppercase tracking-wider cursor-pointer truncate"
+                className="px-2 py-0.5 rounded-full bg-white text-black font-black text-[12.6px] uppercase tracking-wider cursor-pointer truncate"
               >
                 {language === "es" ? "Completar perfil" : "Complete profile"}
               </span>
@@ -379,7 +379,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[11.6px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[165px]"
+            className="h-9 px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[13.9px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[175px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
             <span className="truncate">{todayMission.title}</span>
@@ -393,7 +393,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => onNavigate("HISTORY")}
-          className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 sm:p-5 flex flex-col justify-between min-h-[178px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
+          className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.08] p-4 sm:p-5 flex flex-col justify-between min-h-[184px] cursor-pointer hover:border-white/20 transition-colors duration-200 group min-w-0 overflow-hidden"
         >
           {(() => {
             const scored = sessions
@@ -429,23 +429,23 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
             return (
               <>
-                <div className="flex flex-col gap-1 min-w-0">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-white font-extrabold uppercase tracking-[0.08em] leading-none">
+                    <span className="text-[13.2px] text-white font-extrabold uppercase tracking-[0.08em] leading-none">
                       {t("weeklyProgress")}
                     </span>
                     {hasData && (
-                      <span className="text-[11px] font-black text-cyan-neon tabular-nums leading-none">
+                      <span className="text-[13.2px] font-black text-cyan-neon tabular-nums leading-none">
                         {latestPct}%
                       </span>
                     )}
                   </div>
                   {hasData ? (
-                    <span className="text-xs font-black text-white tabular-nums leading-tight">
+                    <span className="text-[16.7px] font-black text-white tabular-nums leading-tight">
                       {latest.score}<span className="text-white font-semibold"> / {latest.maxScore} pts</span>
                     </span>
                   ) : (
-                    <span className="text-[11px] text-white font-semibold leading-tight">
+                    <span className="text-[13.2px] text-white font-semibold leading-tight">
                       {language === "es" ? "Sin rondas registradas" : "No rounds logged"}
                     </span>
                   )}
@@ -481,7 +481,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                   </svg>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.07] text-[11px] text-white tabular-nums leading-none">
+                <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-white/[0.07] text-[13.2px] text-white tabular-nums leading-none">
                   <span className="truncate">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
                     <strong className="text-white font-black">
@@ -517,12 +517,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <div className="flex items-center justify-between gap-2 pt-0.5 min-w-0">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#080A0F] border border-white/[0.12] shrink-0">
               <span className="h-1.5 w-1.5 rounded-full bg-green-success shrink-0" />
-              <span className="text-[10.2px] font-black uppercase tracking-wider text-white whitespace-nowrap">
+              <span className="text-[12.2px] font-black uppercase tracking-wider text-white whitespace-nowrap">
                 {t("liveArenaTitle")}
               </span>
             </div>
 
-            <span className="text-[10.2px] font-extrabold uppercase tracking-[0.08em] text-white truncate">
+            <span className="text-[12.2px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
               {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
@@ -530,7 +530,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           {/* Row 2: Full-width Centered Title */}
           <div className="flex items-center justify-center w-full text-center py-1.5">
             <h3
-              className="w-full text-white text-[17px] sm:text-[22px] font-black uppercase tracking-wider leading-tight group-hover:text-cyan-neon transition-colors text-center mx-auto"
+              className="w-full text-white text-[20.4px] sm:text-[26.4px] font-black uppercase tracking-wider leading-tight group-hover:text-cyan-neon transition-colors text-center mx-auto"
               style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
             >
               {t("duelsTitle")}
@@ -539,23 +539,23 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
           {/* Row 3: Symmetrical 2-Column Footer (Real Duel Record + Clean CTA Button) */}
           <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
-            <div className="min-h-[42px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2.5 flex items-center justify-center gap-2 overflow-hidden">
+            <div className="min-h-[44px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-2 flex items-center justify-center gap-1.5 overflow-hidden">
               <div className="flex items-baseline gap-1">
-                <span className="text-[10.2px] font-black uppercase tracking-wide text-cyan-neon">
+                <span className="text-[12.2px] font-black uppercase tracking-tight text-cyan-neon">
                   {language === "es" ? "VICTORIAS" : "WINS"}
                 </span>
-                <span className="text-xs font-black text-white tabular-nums">{duelStats.wins}</span>
+                <span className="text-[16.7px] font-black text-white tabular-nums">{duelStats.wins}</span>
               </div>
               <span className="text-white font-bold">·</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-[10.2px] font-black uppercase tracking-wide text-yellow-gold">
+                <span className="text-[12.2px] font-black uppercase tracking-tight text-yellow-gold">
                   {language === "es" ? "DUELOS" : "DUELS"}
                 </span>
-                <span className="text-xs font-black text-white tabular-nums">{duelStats.total}</span>
+                <span className="text-[16.7px] font-black text-white tabular-nums">{duelStats.total}</span>
               </div>
             </div>
 
-            <div className="min-h-[42px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[12px] sm:text-[13px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
+            <div className="min-h-[44px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[14.4px] sm:text-[15.6px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
               <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
             </div>
           </div>
@@ -567,7 +567,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           whileHover={{ scale: 1.005 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => onNavigate("TARGET")}
-          className="col-span-3 w-full h-13 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-sm sm:text-base tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center active:scale-[0.99] text-center px-4"
+          className="col-span-3 w-full h-14 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.3px] sm:text-[18.6px] tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center active:scale-[0.99] text-center px-4"
         >
           <span className="truncate">{t("newSession")}</span>
         </motion.button>
@@ -576,17 +576,17 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         <motion.div
           variants={cardVariants}
           onClick={() => setIsStarsDrawerOpen(true)}
-          className="col-span-3 bg-[#0D1017] rounded-2xl border border-yellow-gold/25 hover:border-yellow-gold/50 px-4 py-3 cursor-pointer transition-all duration-200 flex items-center justify-between gap-3 group"
+          className="col-span-3 bg-[#0D1017] rounded-2xl border border-yellow-gold/25 hover:border-yellow-gold/50 px-4 py-3.5 cursor-pointer transition-all duration-200 flex items-center justify-between gap-3 group"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-yellow-gold/15 border border-yellow-gold/35 flex items-center justify-center text-yellow-gold shrink-0">
-              <Star size={16} className="fill-yellow-gold text-yellow-gold" />
+            <div className="w-10 h-10 rounded-xl bg-yellow-gold/15 border border-yellow-gold/35 flex items-center justify-center text-yellow-gold shrink-0">
+              <Star size={18} className="fill-yellow-gold text-yellow-gold" />
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[11px] font-black uppercase tracking-[0.1em] text-white truncate">
+            <div className="flex flex-col min-w-0 gap-0.5">
+              <span className="text-[13.2px] font-black uppercase tracking-[0.08em] text-white truncate">
                 Estrellas 101010 · WA 720
               </span>
-              <span className="text-[10.5px] font-semibold text-white truncate">
+              <span className="text-[12.6px] font-semibold text-white truncate">
                 {athleteStar && athleteStar.highestStarLevel > 0
                   ? `Nivel actual: Estrella ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`
                   : "8 niveles oficiales · Recurvo 70 m y Compuesto 50 m"}
@@ -594,7 +594,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </div>
           </div>
 
-          <span className="h-7 px-3 rounded-lg bg-yellow-gold text-black font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center shrink-0">
+          <span className="h-8 px-3.5 rounded-lg bg-yellow-gold text-black font-black text-[12.6px] uppercase tracking-wider flex items-center justify-center shrink-0">
             {language === "es" ? "Ver" : "View"}
           </span>
         </motion.div>
