@@ -616,15 +616,16 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       </div>
 
       {/* SECTION 1: Personal Data */}
-      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider">{t("personalData")}</h4>
+      <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 md:p-5 flex flex-col gap-3">
+        <div className="flex justify-between items-center border-b border-white/5 pb-3">
+          <h4 className="text-white text-xs md:text-sm font-black uppercase tracking-wider">{t("personalData")}</h4>
           <button
+            type="button"
             onClick={() => {
               if (editPersonal) handleSavePersonal();
               else setEditPersonal(true);
             }}
-            className="text-xs text-cyan-neon font-bold hover:underline cursor-pointer"
+            className="h-8 px-3.5 rounded-lg bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11.6px] font-black uppercase tracking-wider transition cursor-pointer flex items-center justify-center"
           >
             {editPersonal ? "Guardar" : "Editar"}
           </button>
@@ -632,96 +633,117 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         {editPersonal ? (
           <div className="flex flex-col gap-3 mt-1">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Nombre</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  placeholder=""
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Alias</label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  placeholder=""
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Nacimiento</label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none uppercase [color-scheme:dark] transition"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Ciudad</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                  placeholder={t("city")}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">País</label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code} className="bg-black text-white">{c.flag} {c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Género</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none [color-scheme:dark] transition"
+                >
+                  <option value="M" className="bg-black text-white">{t("genderM")}</option>
+                  <option value="F" className="bg-black text-white">{t("genderF")}</option>
+                  <option value="O" className="bg-black text-white">{t("genderO")}</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11.6px] text-white uppercase font-black tracking-widest">Club (Opcional)</label>
               <input
                 type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder=""
-              />
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className="w-full bg-neutral-950 border border-gray-border text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder=""
+                value={clubName}
+                onChange={(e) => setClubName(e.target.value)}
+                className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 rounded-xl outline-none transition"
+                placeholder="Club (Opcional)"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none uppercase [color-scheme:dark]"
-              />
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none"
-                placeholder={t("city")}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none [color-scheme:dark]"
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code} className="bg-black text-white">{c.flag} {c.name}</option>
-                ))}
-              </select>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none [color-scheme:dark]"
-              >
-                <option value="M" className="bg-black text-white">{t("genderM")}</option>
-                <option value="F" className="bg-black text-white">{t("genderF")}</option>
-                <option value="O" className="bg-black text-white">{t("genderO")}</option>
-              </select>
-            </div>
-            <input
-              type="text"
-              value={clubName}
-              onChange={(e) => setClubName(e.target.value)}
-              className="w-full bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs p-2.5 rounded-xl outline-none"
-              placeholder="Club (Opcional)"
-            />
           </div>
         ) : (
           <div className="flex flex-col gap-2 mt-1">
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">Nombre:</span>
-              <span className="text-white font-bold">{user.fullName}</span>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Nombre:</span>
+              <span className="text-white text-xs font-bold">{user.fullName}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">Alias para Retos:</span>
-              <span className="text-cyan-neon tabular-nums font-bold">@{user.nickname || "arquero"}</span>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Alias para Retos:</span>
+              <span className="text-cyan-neon text-xs tabular-nums font-bold">@{user.nickname || "arquero"}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">Club (Opcional):</span>
-              <span className="text-white font-bold">{clubName.trim() || "—"}</span>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Club (Opcional):</span>
+              <span className="text-white text-xs font-bold">{clubName.trim() || "—"}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">Nacimiento:</span>
-              <span className="text-white font-bold">{user.birthDate}</span>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Nacimiento:</span>
+              <span className="text-white text-xs font-bold">{user.birthDate}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">Ciudad:</span>
-              <span className="text-white font-bold">{user.city || "-"}</span>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Ciudad:</span>
+              <span className="text-white text-xs font-bold">{user.city || "-"}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-gray-border/20">
-              <span className="text-white">País:</span>
-              <span className="text-white font-bold">
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">País:</span>
+              <span className="text-white text-xs font-bold">
                 {COUNTRIES.find((c) => c.code === user.country)?.flag} {COUNTRIES.find((c) => c.code === user.country)?.name}
               </span>
             </div>
-            <div className="flex justify-between text-xs py-1">
-              <span className="text-white">Género:</span>
-              <span className="text-white font-bold">
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Género:</span>
+              <span className="text-white text-xs font-bold">
                 {user.gender === "M" ? t("genderM") : user.gender === "F" ? t("genderF") : t("genderO")}
               </span>
             </div>
