@@ -711,11 +711,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon shrink-0">
                     <CheckCircle2 size={20} />
                   </div>
-                  <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                     <span className="text-[12.6px] font-black uppercase tracking-wider text-white">
                       ¡Nuevo Alumno Vinculado!
                     </span>
-                    <span className="text-[14.4px] font-black text-white truncate">
+                    <span
+                      className="text-[13.5px] font-normal uppercase tracking-[0.04em] text-white truncate"
+                      style={{ fontFamily: "'Good Times', 'Outfit', sans-serif" }}
+                    >
                       {notif.athleteName || "Arquero"}
                     </span>
                   </div>

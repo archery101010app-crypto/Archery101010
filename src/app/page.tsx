@@ -1619,7 +1619,7 @@ export default function Home() {
               initial={{ scale: 0.94, opacity: 0, y: 12 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.94, opacity: 0, y: 12 }}
-              className="w-full max-w-[360px] bg-[#0B0E14] border border-white/[0.12] p-6 rounded-3xl flex flex-col items-center gap-4 text-center shadow-2xl relative overflow-hidden"
+              className="w-full max-w-[360px] bg-[#0B0E14] border border-white/[0.12] px-6 py-7 rounded-3xl flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden"
             >
               <div className="absolute top-0 left-0 right-0 h-[3.5px] flex">
                 <div className="flex-1 bg-cyan-neon" />
@@ -1627,32 +1627,23 @@ export default function Home() {
                 <div className="flex-1 bg-yellow-gold" />
               </div>
 
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-cyan-neon/12 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon mt-1">
-                <CheckCircle2 size={30} />
+              <div className="mx-auto w-[60px] h-[60px] rounded-[18px] bg-cyan-neon/12 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon mt-0.5">
+                <CheckCircle2 size={32} />
               </div>
 
-              <div className="w-full flex flex-col items-center gap-2 px-1">
-                <span className="text-[13.2px] font-black uppercase tracking-widest text-white text-center">
+              <div className="w-full flex flex-col items-center gap-3 px-1">
+                <span className="text-[13.5px] font-black uppercase tracking-[0.14em] text-white text-center">
                   NUEVO ALUMNO VINCULADO
                 </span>
-                <h3 className="text-white text-[19.2px] font-black uppercase tracking-wide text-center leading-tight break-words max-w-full">
+                <h3
+                  className="text-white text-[19px] font-normal uppercase tracking-[0.05em] text-center leading-[1.35] break-words max-w-full"
+                  style={{ fontFamily: "'Good Times', 'Outfit', sans-serif" }}
+                >
                   {pendingCoachLinkNotif.athleteName || "Arquero Vinculado"}
                 </h3>
-                <p className="text-[14.4px] font-semibold text-white leading-relaxed text-center [text-wrap:balance]">
-                  Sus entrenamientos, puntajes y gráficas ya están sincronizados en tu portal.
-                </p>
               </div>
 
-              <div className="w-full bg-[#111620] border border-white/[0.10] rounded-2xl px-4 py-3 flex items-center justify-center gap-3 text-center">
-                <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-white font-black text-[14.4px] shrink-0">
-                  {(pendingCoachLinkNotif.athleteName || "AR").substring(0, 2).toUpperCase()}
-                </div>
-                <span className="text-[14.4px] font-black text-white text-center leading-snug break-words">
-                  {pendingCoachLinkNotif.athleteName || "Arquero"}
-                </span>
-              </div>
-
-              <div className="w-full flex flex-col gap-2.5 mt-1">
+              <div className="w-full flex flex-col gap-2.5 mt-0.5">
                 <button
                   onClick={async () => {
                     const notifToAck = pendingCoachLinkNotif;
@@ -1674,7 +1665,7 @@ export default function Home() {
                       setCurrentScreen("HOME");
                     }
                   }}
-                  className="w-full h-12 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[14.4px] uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center gap-2 text-center"
+                  className="w-full h-12 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[14.4px] uppercase tracking-wider rounded-[13px] cursor-pointer active:scale-95 transition flex items-center justify-center gap-2 text-center"
                 >
                   <span>Ver en Portal Coach</span>
                 </button>
@@ -1695,7 +1686,7 @@ export default function Home() {
                       // ignore
                     }
                   }}
-                  className="w-full h-11 bg-[#111620] border border-white/[0.10] text-white font-black text-[14.4px] uppercase tracking-wider rounded-xl cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center text-center"
+                  className="w-full h-11 bg-[#111620] border border-white/[0.10] text-white font-black text-[14.4px] uppercase tracking-wider rounded-[13px] cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center text-center"
                 >
                   Entendido
                 </button>
