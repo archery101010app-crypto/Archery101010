@@ -141,15 +141,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       <div className="flex items-center gap-2.5">
         <button
           onClick={onBack}
-          className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
+          className="w-10 h-10 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={18} />
         </button>
         <div className="min-w-0">
-          <h2 className="text-white text-[17.6px] sm:text-[19.8px] font-black uppercase tracking-wide truncate leading-tight">
+          <h2 className="text-white text-[21.1px] sm:text-[23.8px] font-black uppercase tracking-wide truncate leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[11.6px] text-white uppercase tracking-wider truncate">Configuración</p>
+          <p className="text-[13.9px] text-white uppercase tracking-wider truncate">Configuración</p>
         </div>
       </div>
 
@@ -164,14 +164,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           >
             <div className="flex justify-between items-start gap-2">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11.6px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
-                  <RotateCcw size={11} />
+                <span className="text-[13.9px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
+                  <RotateCcw size={13} />
                   Sesión Pausada
                 </span>
-                <h4 className="text-white text-xs font-bold mt-1 truncate">
+                <h4 className="text-white text-[16.7px] font-bold mt-1 truncate">
                   {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
                 </h4>
-                <p className="text-[10.5px] text-white">
+                <p className="text-[12.6px] text-white">
                   Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
                     month: "short",
                     day: "numeric",
@@ -185,15 +185,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 className="w-8 h-8 rounded-lg border border-white bg-white text-black hover:bg-neutral-200 flex items-center justify-center shrink-0 transition cursor-pointer"
                 title="Descartar Borrador"
               >
-                <Trash2 size={13} />
+                <Trash2 size={14} />
               </button>
             </div>
             
             <button
               onClick={handleResumeDraft}
-              className="w-full h-10 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
+              className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16.7px] uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={15} />
               <span>Reanudar Entrenamiento</span>
             </button>
           </motion.div>
@@ -201,7 +201,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Practice Type Chips */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-white font-bold uppercase tracking-wider">
+          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
             {t("practiceType")}
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -210,7 +210,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setPracticeType(type)}
-                className={`h-11 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-2 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -220,7 +220,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               </button>
             ))}
           </div>
-          <p className="text-[11.2px] text-white/70 leading-snug px-1">
+          <p className="text-[13.4px] text-white/70 leading-snug px-1">
             {practiceType === "Control" && "Simulación oficial de torneo con tiempos, diana activa y planilla reglamentaria."}
             {practiceType === "Práctica" && "Entrenamiento libre con análisis de agrupación y notas por ronda."}
             {practiceType === "Volumen" && "Contador rápido de carga física de flechas sin puntuación en diana."}
@@ -229,7 +229,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Format Chips */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-white font-bold uppercase tracking-wider">
+          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
             {t("sessionFormat")}
           </label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -244,7 +244,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={fmt.id}
                 type="button"
                 onClick={() => handleFormatChange(fmt.id)}
-                className={`h-10 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-1.5 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   format === fmt.id
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -255,7 +255,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             ))}
           </div>
           {format !== "Libre" && (
-            <p className="text-[11.6px] text-cyan-neon tabular-nums font-bold px-1">
+            <p className="text-[13.9px] text-cyan-neon tabular-nums font-bold px-1">
               {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
               {bowType === "Compound" && format === "WA 300" ? " · 10 Reducido Oficial" : ""}
               {bowType === "Compound" && format === "Vegas 300" ? " · 10 Completo" : ""}
@@ -265,7 +265,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Bow Type Chips */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-white font-bold uppercase tracking-wider">
+          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
             {t("bowType")}
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -274,7 +274,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-11 px-2 rounded-xl border text-xs font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-2 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -288,7 +288,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
         {/* Distance Chips presets */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-white font-bold uppercase tracking-wider">
+          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
             {t("distance")}
           </label>
           <div className="grid grid-cols-5 gap-2 w-full">
@@ -308,7 +308,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     }
                   }
                 }}
-                className={`h-11 rounded-xl border text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
+                className={`h-12 rounded-xl border text-[16.7px] font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -328,20 +328,20 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             className="grid grid-cols-2 gap-3"
           >
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white font-bold">{t("rounds")}</label>
+              <label className="text-[16.7px] text-white font-bold">{t("rounds")}</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setEndsCount(Math.max(1, endsCount - 1))}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-lg cursor-pointer"
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-bold text-white text-sm tabular-nums">{endsCount}</span>
+                <span className="flex-1 text-center font-bold text-white text-[16.7px] tabular-nums">{endsCount}</span>
                 <button
                   type="button"
                   onClick={() => setEndsCount(endsCount + 1)}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-lg cursor-pointer"
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
                 >
                   +
                 </button>
@@ -349,20 +349,20 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-white font-bold">Flechas</label>
+              <label className="text-[16.7px] text-white font-bold">Flechas</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setArrowsPerEnd(Math.max(1, arrowsPerEnd - 1))}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-lg cursor-pointer"
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-bold text-white text-sm tabular-nums">{arrowsPerEnd}</span>
+                <span className="flex-1 text-center font-bold text-white text-[16.7px] tabular-nums">{arrowsPerEnd}</span>
                 <button
                   type="button"
                   onClick={() => setArrowsPerEnd(Math.min(12, arrowsPerEnd + 1))}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-lg cursor-pointer"
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
                 >
                   +
                 </button>
@@ -375,7 +375,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-3.5 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+          className="w-full py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.7px] tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
         >
           <span>{t("startSessionBtn")}</span>
         </motion.button>
