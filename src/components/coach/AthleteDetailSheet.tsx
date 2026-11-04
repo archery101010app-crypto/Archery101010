@@ -552,7 +552,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
                                         <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-bold">End {idx + 1}</span>
+                                          <span className="text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                                           <div className="flex gap-1">
                                             {end.arrows.map((arr: string, aIdx: number) => (
                                               <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white">
@@ -749,7 +749,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
                                         <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-bold">End {idx + 1}</span>
+                                          <span className="text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                                           <div className="flex gap-1">
                                             {end.arrows.map((arr: string, aIdx: number) => (
                                               <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white">

@@ -2784,7 +2784,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                           : "border-neutral-900/35 bg-neutral-950/45 text-white"
                     }`}
                   >
-                    <span className="text-[9.9px] uppercase font-black tracking-wider opacity-60">Set {idx + 1}</span>
+                    <span className="text-[11px] uppercase font-black tracking-wider text-white tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                     <div className="text-[11.6px] font-black mt-0.5 flex gap-1 items-center">
                       <span className="text-cyan-neon">{userEnd.length > 0 ? userSum : "—"}</span>
                       <span className="text-white text-[9.3px] font-normal">vs</span>
@@ -2833,7 +2833,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                         isCurrent ? "bg-cyan-neon/5 border-cyan-neon/20" : ""
                       }`}
                     >
-                      <td className="py-2 px-1 font-bold text-white">{idx + 1}</td>
+                      <td className="py-2 px-1 font-black text-white tabular-nums">{String(idx + 1).padStart(2, "0")}</td>
                       
                       {/* User shots */}
                       <td className="py-2 px-1">

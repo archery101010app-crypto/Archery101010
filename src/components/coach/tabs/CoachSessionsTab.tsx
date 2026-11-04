@@ -451,8 +451,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                   key={endIdx}
                                   className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-900/80 border border-white/5 text-[12.8px]"
                                 >
-                                  <span className="text-[10.5px] text-white font-bold shrink-0">
-                                    Serie #{endIdx + 1}
+                                  <span className="text-[11.6px] text-white font-black tabular-nums shrink-0">
+                                    {String(endIdx + 1).padStart(2, "0")}
                                   </span>
                                   <div className="flex items-center gap-1 flex-wrap justify-center">
                                     {endArrows.map((arrowVal, aIdx) => (

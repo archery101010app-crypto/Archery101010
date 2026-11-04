@@ -1344,40 +1344,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         </div>
 
-        {/* Single Integrated WA Clock Control + Mode Switcher */}
+        {/* Mode Switcher */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("open-archery-clock"))}
-            title="Abrir Cronómetro Oficial WA"
-            className={`h-9 px-2.5 rounded-xl border flex items-center gap-1.5 cursor-pointer transition active:scale-95 ${
-              clockTimeStr
-                ? clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-                  ? "bg-red-600/20 border-red-500/60 text-white"
-                  : clockIsWarn
-                  ? "bg-yellow-gold/20 border-yellow-gold/60 text-yellow-gold"
-                  : "bg-green-success/20 border-green-success/60 text-green-success"
-                : "bg-[#0D1017] border-white/[0.12] hover:border-cyan-neon/50 text-white"
-            }`}
-          >
-            {clockTimeStr ? (
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                  clockPhase === "prep" || clockPhase === "stop" || clockIsOver
-                    ? "bg-red-500"
-                    : clockIsWarn
-                    ? "bg-yellow-gold"
-                    : "bg-green-success"
-                }`}
-              />
-            ) : (
-              <Clock size={14} className="text-cyan-neon shrink-0" />
-            )}
-            <span className="text-[11px] font-black uppercase tracking-wider tabular-nums">
-              {clockTimeStr || "Reloj"}
-            </span>
-          </button>
-
           <div className="flex bg-[#0D1017] p-0.5 rounded-xl border border-white/[0.08]">
             <button
               onClick={() => setMode("TARGET")}
@@ -1882,16 +1850,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           setCurrentArrowIdx(0);
                         }
                       }}
-                      className={`flex flex-col items-center justify-center p-1.5 rounded-xl border min-w-[54px] cursor-pointer transition-all ${
+                      className={`flex flex-col items-center justify-center p-1.5 rounded-xl border min-w-[54px] cursor-pointer transition-all text-white ${
                         isCurrent 
-                          ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon shadow-glow-cyan" 
+                          ? "border-cyan-neon bg-cyan-neon/15 shadow-glow-cyan" 
                           : isCompleted 
-                            ? "border-neutral-800 bg-neutral-900/60 text-white hover:border-neutral-700" 
-                            : "border-neutral-900/35 bg-neutral-950/45 text-white"
+                            ? "border-neutral-800 bg-neutral-900/60 hover:border-neutral-700" 
+                            : "border-neutral-900/35 bg-neutral-950/45"
                       }`}
                     >
-                      <span className="text-[9.3px] uppercase font-black tracking-wider opacity-60">End {idx + 1}</span>
-                      <span className="text-xs font-black mt-0.5">
+                      <span className="text-[11px] uppercase font-black tracking-wider text-white tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
+                      <span className="text-xs font-black mt-0.5 text-white tabular-nums">
                         {isCompleted || (idx === currentEndIdx && total > 0) ? total : "—"}
                       </span>
                     </div>
@@ -1967,7 +1935,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                             isCurrent ? "bg-cyan-brand/5" : ""
                           }`}
                         >
-                        <td className="py-2 px-3 font-bold text-center text-white">{idx + 1}</td>
+                        <td className="py-2 px-3 font-black text-center text-white tabular-nums">{String(idx + 1).padStart(2, "0")}</td>
                         <td className="py-2 px-3 flex items-center justify-center gap-1">
                           {e.arrows.map((a, arrowIdx) => {
                             const isCellEditing = isCurrent && currentArrowIdx === arrowIdx;
@@ -2126,12 +2094,37 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         )}
       </div>
 
+      {/* Barra de Cronómetro Oficial WA (idéntica a NUEVO ENTRENAMIENTO) ubicada encima de Notas del End */}
+      {currentEndIdx < config.endsCount && (
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-archery-clock"))}
+          title="Abrir Cronómetro Oficial WA"
+          className="w-full h-14 mt-2 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.3px] sm:text-[18.6px] tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center gap-2.5 active:scale-[0.99] text-center px-4"
+        >
+          {clockTimeStr && (
+            <span
+              className={`w-2.5 h-2.5 rounded-full shrink-0 animate-pulse ${
+                clockPhase === "prep" || clockPhase === "stop" || clockIsOver
+                  ? "bg-red-600"
+                  : clockIsWarn
+                  ? "bg-yellow-500"
+                  : "bg-black"
+              }`}
+            />
+          )}
+          <span className="truncate tabular-nums">
+            {clockTimeStr ? `CRONÓMETRO · ${clockTimeStr}` : "CRONÓMETRO"}
+          </span>
+        </button>
+      )}
+
       {/* End Note expansion (during the session) */}
       {config.includeNotes && currentEndIdx < config.endsCount && (
         <div className="flex flex-col gap-1.5 mt-2 bg-neutral-900/30 p-3.5 rounded-2xl border border-white/5">
           <div className="flex items-center gap-1.5 text-xs text-white font-bold uppercase tracking-wider">
             <MessageSquare size={13} className="text-cyan-neon" />
-            <span>Nota del End {currentEndIdx + 1}</span>
+            <span>Nota del End {String(currentEndIdx + 1).padStart(2, "0")}</span>
           </div>
           <textarea
             value={endNote}

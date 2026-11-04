@@ -693,7 +693,7 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
         (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
         0
       );
-      return `• End ${idx + 1}: ${valid.join(", ")}  →  *${endSum}* pts`;
+      return `• ${String(idx + 1).padStart(2, "0")}: ${valid.join(", ")}  →  *${endSum}* pts`;
     })
     .filter(Boolean)
     .join("\n");

@@ -854,7 +854,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 {selectedSession.ends?.map((e: any, idx: number) => (
                   <div key={idx} className="flex flex-col border-b border-gray-border/20 pb-2 last:border-b-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-white font-bold">End {idx + 1}</span>
+                      <span className="text-xs text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                       <div className="flex items-center gap-1">
                         {e.arrows.map((a: string, arrowIdx: number) => (
                           <div
