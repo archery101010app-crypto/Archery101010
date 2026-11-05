@@ -289,6 +289,12 @@ export function subscribeWatchMessages(
       if (parsed && parsed.type) onMessage(parsed);
     } catch {}
   };
+  (window as any).__onNativeWatchMessage = (jsonStr: string) => {
+    try {
+      const parsed = JSON.parse(jsonStr) as WatchCommandMessage;
+      if (parsed && parsed.type) onMessage(parsed);
+    } catch {}
+  };
 
   return () => {
     window.removeEventListener("storage", handleStorage);

@@ -24,6 +24,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.wearable.MessageClient;
+import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.Wearable;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -82,6 +86,8 @@ public class MainActivity extends BridgeActivity {
 
             webView.addJavascriptInterface(new ArcheryNativeAuth(), "ArcheryNativeAuth");
             webView.addJavascriptInterface(new ArcheryNativeShare(), "ArcheryNativeShare");
+            webView.addJavascriptInterface(new ArcheryWatchNativeBridge(), "ArcheryWatchNativeBridge");
+            initWearableListener();
 
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
                 @Override
@@ -322,5 +328,48 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception ignored) {}
             });
         }
+    }
+
+    public class ArcheryWatchNativeBridge {
+        @JavascriptInterface
+        public void onSessionTelemetryUpdate(final String snapshotJson) {
+            broadcastToWearNodes("/archery101010/telemetry", snapshotJson != null ? snapshotJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+        }
+
+        @JavascriptInterface
+        public void sendWatchCommand(final String cmdJson) {
+            broadcastToWearNodes("/archery101010/command", cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+        }
+    }
+
+    private void broadcastToWearNodes(final String path, final byte[] data) {
+        try {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                if (nodes != null) {
+                    for (Node node : nodes) {
+                        Wearable.getMessageClient(this).sendMessage(node.getId(), path, data);
+                    }
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void initWearableListener() {
+        try {
+            Wearable.getMessageClient(this).addListener((MessageEvent event) -> {
+                if (event == null || event.getPath() == null) return;
+                String path = event.getPath();
+                if (path.startsWith("/archery101010/")) {
+                    String payload = new String(event.getData(), StandardCharsets.UTF_8);
+                    runOnUiThread(() -> {
+                        if (getBridge() != null && getBridge().getWebView() != null) {
+                            String safePayload = JSONObject.quote(payload);
+                            String js = "if (window.__onNativeWatchMessage) { window.__onNativeWatchMessage(" + safePayload + "); }";
+                            getBridge().getWebView().evaluateJavascript(js, null);
+                        }
+                    });
+                }
+            });
+        } catch (Exception ignored) {}
     }
 }

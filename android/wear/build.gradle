@@ -9,8 +9,8 @@ android {
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Wear OS form-factor versionCode offset (+100000 over mobile versionCode)
-        versionCode 145600
-        versionName "2.56"
+        versionCode 145700
+        versionName "2.57"
     }
 
     signingConfigs {
@@ -35,4 +35,5 @@ android {
 
 dependencies {
     implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "com.google.android.gms:play-services-wearable:19.0.0"
 }

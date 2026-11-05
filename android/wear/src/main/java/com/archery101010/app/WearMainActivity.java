@@ -22,6 +22,12 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import com.google.android.gms.wearable.MessageClient;
+import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.Wearable;
+import org.json.JSONObject;
+import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -84,6 +90,60 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         canvasView = new WearCanvasView(this);
         setContentView(canvasView);
+
+        initWearCommunication();
+    }
+
+    private void initWearCommunication() {
+        try {
+            Wearable.getMessageClient(this).addListener((MessageEvent event) -> {
+                if (event == null || event.getPath() == null) return;
+                String path = event.getPath();
+                if ("/archery101010/telemetry".equals(path)) {
+                    try {
+                        String jsonStr = new String(event.getData(), StandardCharsets.UTF_8);
+                        JSONObject obj = new JSONObject(jsonStr);
+                        if (obj.has("arrowsCount")) {
+                            arrowCount = obj.optInt("arrowsCount", arrowCount);
+                        }
+                        if (obj.has("activeKcal")) {
+                            // sync phone activeKcal if available
+                        }
+                        if (obj.has("currentEndIndex")) {
+                            currentEnd = obj.optInt("currentEndIndex", 0) + 1;
+                        }
+                        if (obj.has("distanceWalkedM")) {
+                            walkedMeters = (float) obj.optDouble("distanceWalkedM", walkedMeters);
+                        }
+                        if (obj.has("distanceM")) {
+                            distanceMeters = obj.optInt("distanceM", distanceMeters);
+                        }
+                        if (obj.has("bowPoundageLbs")) {
+                            bowPoundageLbs = (float) obj.optDouble("bowPoundageLbs", bowPoundageLbs);
+                        }
+                        saveState();
+                        runOnUiThread(() -> {
+                            if (canvasView != null) canvasView.invalidate();
+                        });
+                    } catch (Exception ignored) {}
+                }
+            });
+            // Request latest state from phone on startup
+            sendToPhone("/archery101010/command", "{\"type\":\"REQUEST_STATE\"}");
+        } catch (Exception ignored) {}
+    }
+
+    private void sendToPhone(String path, String jsonPayload) {
+        try {
+            byte[] data = jsonPayload != null ? jsonPayload.getBytes(StandardCharsets.UTF_8) : new byte[0];
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                if (nodes != null) {
+                    for (Node node : nodes) {
+                        Wearable.getMessageClient(this).sendMessage(node.getId(), path, data);
+                    }
+                }
+            });
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -159,6 +219,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 arrowCount++;
                 triggerHaptic(55);
                 saveState();
+                sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
             } else if (linearMag >= 3.2 && linearMag < 10.5 && (now - lastStepTimestamp) > 480L && (now - lastShotTimestamp) > 1500L) {
                 // Walking cadence detected via standard accelerometer (zero health permissions required)
@@ -253,14 +314,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     arrowCount++;
                     triggerHaptic(45);
                     saveState();
+                    sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
                     invalidate();
                     return;
                 }
                 if (btnRightSecondary.contains(x, y)) {
-                    if (arrowCount > 0) arrowCount--;
-                    triggerHaptic(25);
-                    saveState();
-                    invalidate();
+                    if (arrowCount > 0) {
+                        arrowCount--;
+                        triggerHaptic(25);
+                        saveState();
+                        sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\"}");
+                        invalidate();
+                    }
                     return;
                 }
             } else if (screenIndex == 1) {
