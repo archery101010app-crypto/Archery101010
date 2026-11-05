@@ -56,8 +56,10 @@ export default function Home() {
   const [showIntro, setShowIntro] = useState(() => {
     if (typeof window !== "undefined") {
       try {
+        const search = window.location.search || "";
         if (
-          window.location.search.includes("skipIntro=1") ||
+          search.includes("skipIntro=1") ||
+          search.includes("v=") ||
           sessionStorage.getItem("archery_intro_shown") === "1"
         ) {
           return false;
