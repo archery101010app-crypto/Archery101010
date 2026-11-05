@@ -30,15 +30,21 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch event - offline fallback (Network-first style for dynamic dashboard content)
+// Fetch event - offline fallback (Network-first with no-store on HTML navigations so stale versions never flash)
 self.addEventListener("fetch", (event) => {
-  // Let the browser handle standard requests, fallback to cache if offline
   if (event.request.method !== "GET") return;
 
+  const isNavigation =
+    event.request.mode === "navigate" ||
+    (event.request.headers.get("accept") || "").includes("text/html");
+
+  const networkFetch = isNavigation
+    ? fetch(event.request, { cache: "no-store" })
+    : fetch(event.request);
+
   event.respondWith(
-    fetch(event.request)
+    networkFetch
       .then((response) => {
-        // Cache successful requests dynamically
         if (response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -48,12 +54,10 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache if network is down
         return caches.match(event.request).then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If no cache match, return basic offline placeholder response
           return new Response("Offline mode active. Connect to the internet to load this resource.", { status: 503, statusText: "Offline" });
         });
       })

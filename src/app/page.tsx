@@ -53,7 +53,19 @@ export default function Home() {
   const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
   const [loading, setLoading] = useState(true);
   const [unlockedStar, setUnlockedStar] = useState<any | null>(null);
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        if (
+          window.location.search.includes("skipIntro=1") ||
+          sessionStorage.getItem("archery_intro_shown") === "1"
+        ) {
+          return false;
+        }
+      } catch {}
+    }
+    return true;
+  });
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [dismissedProfileModal, setDismissedProfileModal] = useState(false);
@@ -1109,7 +1121,16 @@ export default function Home() {
   };
 
   if (showIntro) {
-    return <IntroScreen onComplete={() => setShowIntro(false)} />;
+    return (
+      <IntroScreen
+        onComplete={() => {
+          try {
+            sessionStorage.setItem("archery_intro_shown", "1");
+          } catch {}
+          setShowIntro(false);
+        }}
+      />
+    );
   }
 
   if (loading) {

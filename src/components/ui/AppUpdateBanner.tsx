@@ -56,8 +56,11 @@ export default function AppUpdateBanner() {
             window.location.hostname === "localhost" &&
             (Capacitor.isNativePlatform() || !!(window as any).ArcheryNativeAuth);
           if (isNativeLocal) {
+            try {
+              sessionStorage.setItem("archery_intro_shown", "1");
+            } catch {}
             window.location.replace(
-              `https://archery101010-c0bb4.web.app/?v=${data.version}&t=${Date.now()}${window.location.hash || ""}`
+              `https://archery101010-c0bb4.web.app/?v=${data.version}&skipIntro=1${window.location.hash || ""}`
             );
           }
         }
