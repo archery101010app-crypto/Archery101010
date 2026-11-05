@@ -53,7 +53,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 className={`h-10 px-3 rounded-xl border text-[13.8px] font-bold flex items-center justify-between transition cursor-pointer ${
                   isSelected
                     ? "bg-[#111622] border-cyan-neon text-white"
-                    : "bg-[#090B0F] border-white/[0.06] text-white/80 hover:border-white/20"
+                    : "bg-[#090B0F] border-white/[0.06] text-white hover:border-white/20"
                 }`}
               >
                 <span className="flex items-center gap-2 truncate">
@@ -80,7 +80,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
       >
         <Globe size={13} className="text-cyan-neon shrink-0" />
         <span>{currentOption.shortLabel}</span>
-        <ChevronDown size={12} className="text-white/60" />
+        <ChevronDown size={12} className="text-white" />
       </button>
 
       <AnimatePresence>

@@ -129,7 +129,7 @@ export default function CoachPaymentModal({
                   {t("freeToday")}
                 </span>
               </div>
-              <p className="text-xs text-white/70 font-medium mt-0.5">
+              <p className="text-xs text-white font-medium mt-0.5">
                 {t("launchAccessSubtitle")}
               </p>
             </div>
@@ -171,7 +171,7 @@ export default function CoachPaymentModal({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-col">
-                    <span className="text-xs text-white/50 line-through tabular-nums font-semibold">
+                    <span className="text-xs text-white line-through tabular-nums font-semibold">
                       {isAnnual ? `$89.91 ${t("perYear")}` : `$9.99 ${t("perMonth")}`}
                     </span>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -232,7 +232,7 @@ export default function CoachPaymentModal({
             >
               {isProcessing ? t("activating") : t("continueFreeBtn")}
             </button>
-            <span className="text-[11px] text-center text-white/60">
+            <span className="text-[11px] text-center text-white">
               {t("noCardRequired")}
             </span>
             <span className="text-[11px] text-center text-white font-bold">
@@ -241,7 +241,7 @@ export default function CoachPaymentModal({
           </div>
 
           {/* Footer minimalista */}
-          <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between text-[11px] text-white/60">
+          <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between text-[11px] text-white">
             <button
               type="button"
               onClick={handleRestore}

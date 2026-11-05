@@ -428,7 +428,7 @@ export default function AdminDashboardTab() {
             <PieChart size={16} />
             <span>Estadística Demográfica e Inteligencia Comercial</span>
           </h3>
-          <span className="text-[11px] font-bold text-white/70">
+          <span className="text-[11px] font-bold text-white">
             Datos en vivo ({users.length} suscriptores)
           </span>
         </div>
@@ -518,7 +518,7 @@ export default function AdminDashboardTab() {
             <div className="flex flex-col gap-1.5 text-[11px]">
               <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon">Países Principales</span>
               {topCountries.length === 0 ? (
-                <span className="text-white/60">Sin datos</span>
+                <span className="text-white">Sin datos</span>
               ) : (
                 topCountries.slice(0, 3).map(([code, count]) => {
                   const cInfo = COUNTRIES[code] || { flag: "🌐", name: code };
@@ -541,7 +541,7 @@ export default function AdminDashboardTab() {
                 <span>Ciudades Principales</span>
               </span>
               {topCities.length === 0 ? (
-                <span className="text-white/60">Sin ciudades registradas</span>
+                <span className="text-white">Sin ciudades registradas</span>
               ) : (
                 topCities.slice(0, 3).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
@@ -586,7 +586,7 @@ export default function AdminDashboardTab() {
                 Top Marcas Registradas
               </span>
               {topBrands.length === 0 ? (
-                <span className="text-white/60">Sin marcas registradas</span>
+                <span className="text-white">Sin marcas registradas</span>
               ) : (
                 topBrands.slice(0, 3).map(([brand, count]) => (
                   <div key={brand} className="flex items-center justify-between">

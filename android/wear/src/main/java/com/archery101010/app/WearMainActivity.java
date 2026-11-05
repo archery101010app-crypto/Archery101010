@@ -535,9 +535,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
         }
 
+        private void drawCenteredText(Canvas canvas, String text, float cx, float cy) {
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            float baseline = cy - (fm.ascent + fm.descent) / 2f;
+            canvas.drawText(text, cx, baseline, paint);
+        }
+
         private void drawTricolorHeader(Canvas canvas, float cx, float topY, float scale) {
             paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(15f * scale);
+            paint.setTextSize(13.5f * scale);
 
             String p0 = "ARCHERY ";
             String p1 = "10";
@@ -565,10 +571,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawText(p3, startX + w0 + w1 + w2, topY, paint);
 
             // Subtle tricolor underline bar
-            float barW = 104f * scale;
-            float barH = 2.2f * scale;
+            float barW = 96f * scale;
+            float barH = 2f * scale;
             float barX = cx - barW / 2f;
-            float barY = topY + 5f * scale;
+            float barY = topY + 4.5f * scale;
             paint.setShader(new LinearGradient(
                     barX, barY, barX + barW, barY,
                     new int[]{Color.parseColor("#00A8F3"), Color.parseColor("#FF0000"), Color.parseColor("#FFF200")},
@@ -598,8 +604,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawCircle(cx, h / 2f, Math.min(w, h) / 2f - 2f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            // Tricolor Header: ARCHERY 101010
-            drawTricolorHeader(canvas, cx, 32f * scale, scale);
+            // Tricolor Header: ARCHERY 101010 (positioned within circular top safe zone)
+            drawTricolorHeader(canvas, cx, 29f * scale, scale);
 
             if (screenIndex == 0) {
                 drawCounterScreen(canvas, w, h, cx, scale);
@@ -612,46 +618,51 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
 
             // Bottom page dots (4 screens)
-            float dotY = h - 14f * scale;
-            float dotSpacing = 12f * scale;
+            float dotY = h - 13f * scale;
+            float dotSpacing = 11f * scale;
             float startDotX = cx - (1.5f * dotSpacing);
             for (int i = 0; i < 4; i++) {
                 if (i == screenIndex) {
                     paint.setColor(Color.parseColor("#00A8F3"));
-                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 3.3f * scale, paint);
+                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 3.2f * scale, paint);
                 } else {
-                    paint.setColor(Color.parseColor("#33333A"));
-                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 2.3f * scale, paint);
+                    paint.setColor(Color.parseColor("#44444F"));
+                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 2.2f * scale, paint);
                 }
             }
         }
 
         private void drawCounterScreen(Canvas canvas, int w, int h, float cx, float scale) {
-            // Auto-Detector Pill
-            float pillW = 148f * scale;
-            float pillH = 20f * scale;
-            btnToggleDetector.set(cx - pillW / 2f, 44f * scale, cx + pillW / 2f, 44f * scale + pillH);
+            // Auto-Detector Pill (Circular Safe Zone)
+            float pillW = 138f * scale;
+            float pillH = 19f * scale;
+            btnToggleDetector.set(cx - pillW / 2f, 41f * scale, cx + pillW / 2f, 41f * scale + pillH);
             paint.setColor(Color.parseColor("#0A0A0E"));
             canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.2f * scale);
-            paint.setColor(autoDetectEnabled ? Color.parseColor("#00A8F3") : Color.parseColor("#33333A"));
+            paint.setColor(autoDetectEnabled ? Color.parseColor("#00A8F3") : Color.parseColor("#4A4A55"));
             canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setColor(autoDetectEnabled ? Color.parseColor("#00A8F3") : Color.GRAY);
+            paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9.5f * scale);
-            canvas.drawText(autoDetectEnabled ? "● DETECTOR ACTIVO" : "○ DETECTOR PAUSADO", cx, 57.5f * scale, paint);
+            paint.setTextSize(8.8f * scale);
+            drawCenteredText(
+                    canvas,
+                    autoDetectEnabled ? "● DETECTOR ACTIVO" : "○ DETECTOR PAUSADO",
+                    cx,
+                    btnToggleDetector.centerY()
+            );
 
             // 4-Digit Mechanical Counter Housing
             String digits = String.format(Locale.US, "%04d", Math.min(9999, Math.max(0, arrowCount)));
-            float slotW = 35f * scale;
-            float slotH = 54f * scale;
-            float gap = 5f * scale;
+            float slotW = 34f * scale;
+            float slotH = 50f * scale;
+            float gap = 4.5f * scale;
             float totalW = 4 * slotW + 3 * gap;
             float startX = cx - totalW / 2f;
-            float topY = 74f * scale;
+            float topY = 67f * scale;
 
             for (int i = 0; i < 4; i++) {
                 float sx = startX + i * (slotW + gap);
@@ -661,86 +672,93 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1.4f * scale);
-                paint.setColor(i == 3 ? Color.parseColor("#FFF200") : Color.parseColor("#2A2A32"));
+                paint.setColor(i == 3 ? Color.parseColor("#FFF200") : Color.parseColor("#2E2E38"));
                 canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
-                paint.setColor(i == 3 ? Color.parseColor("#FFF200") : Color.WHITE);
-                paint.setTextSize(34f * scale);
+                paint.setColor(Color.WHITE);
+                paint.setTextSize(31f * scale);
                 paint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
-                canvas.drawText(String.valueOf(digits.charAt(i)), sx + slotW / 2f, topY + 39f * scale, paint);
+                drawCenteredText(canvas, String.valueOf(digits.charAt(i)), rect.centerX(), rect.centerY());
             }
 
             paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(9.5f * scale);
+            paint.setTextSize(8.8f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText("CONTADOR AUTOMÁTICO DE FLECHAS", cx, 144f * scale, paint);
+            drawCenteredText(canvas, "CONTADOR AUTOMÁTICO", cx, 130f * scale);
 
-            // Bottom Action Buttons: +1 FLECHA and DESHACER
-            float btnW = 84f * scale;
-            float btnH = 32f * scale;
-            float btnY = 156f * scale;
-            btnLeftPrimary.set(cx - btnW - 4f * scale, btnY, cx - 4f * scale, btnY + btnH);
-            btnRightSecondary.set(cx + 4f * scale, btnY, cx + btnW + 4f * scale, btnY + btnH);
+            // Bottom Action Buttons: +1 FLECHA and DESHACER (148px total width = 33px bezel clearance per side)
+            float btnW = 71f * scale;
+            float btnH = 29f * scale;
+            float btnY = 143f * scale;
+            btnLeftPrimary.set(cx - btnW - 3f * scale, btnY, cx - 3f * scale, btnY + btnH);
+            btnRightSecondary.set(cx + 3f * scale, btnY, cx + btnW + 3f * scale, btnY + btnH);
 
             paint.setColor(Color.parseColor("#0A1826"));
-            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            paint.setTextSize(10.5f * scale);
-            canvas.drawText("+1 FLECHA", btnLeftPrimary.centerX(), btnY + 20f * scale, paint);
+            paint.setTextSize(9.5f * scale);
+            drawCenteredText(canvas, "+1 FLECHA", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
             paint.setColor(Color.parseColor("#1A0808"));
-            canvas.drawRoundRect(btnRightSecondary, 10f * scale, 10f * scale, paint);
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#FF0000"));
-            canvas.drawRoundRect(btnRightSecondary, 10f * scale, 10f * scale, paint);
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            canvas.drawText("DESHACER", btnRightSecondary.centerX(), btnY + 20f * scale, paint);
+            drawCenteredText(canvas, "DESHACER", btnRightSecondary.centerX(), btnRightSecondary.centerY());
         }
 
         private void drawScorePadScreen(Canvas canvas, int w, int h, float cx, float scale) {
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9.5f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("RONDA " + currentEnd + "/" + syncedEndsCount + "  •  " + totalScore + " PTS", cx, 52f * scale, paint);
+            paint.setTextSize(9f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(
+                    canvas,
+                    "RONDA " + currentEnd + "/" + syncedEndsCount + "  •  " + totalScore + " PTS",
+                    cx,
+                    47f * scale
+            );
 
             // Dynamic Current Arrow Slots (syncedArrowsPerEnd, e.g., 3 or 6)
             int slotsCount = Math.max(1, Math.min(6, syncedArrowsPerEnd));
-            float gap = (slotsCount <= 3 ? 6f : 3.5f) * scale;
-            float totalSlotsW = 156f * scale;
+            float gap = (slotsCount <= 3 ? 5f : 3f) * scale;
+            float totalSlotsW = 148f * scale;
             float slotW = (totalSlotsW - (slotsCount - 1) * gap) / slotsCount;
-            float slotH = 28f * scale;
+            float slotH = 24f * scale;
             float startX = cx - totalSlotsW / 2f;
-            float slotY = 59f * scale;
+            float slotY = 56f * scale;
 
             for (int i = 0; i < slotsCount; i++) {
                 float sx = startX + i * (slotW + gap);
                 rect.set(sx, slotY, sx + slotW, slotY + slotH);
                 String val = i < currentEndArrows.size() ? currentEndArrows.get(i) : "—";
                 paint.setColor(Color.parseColor("#0C0C10"));
-                canvas.drawRoundRect(rect, 7f * scale, 7f * scale, paint);
+                canvas.drawRoundRect(rect, 6f * scale, 6f * scale, paint);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1.2f * scale);
-                paint.setColor(i == currentEndArrows.size() ? Color.parseColor("#00A8F3") : Color.parseColor("#2A2A32"));
-                canvas.drawRoundRect(rect, 7f * scale, 7f * scale, paint);
+                paint.setColor(i == currentEndArrows.size() ? Color.parseColor("#00A8F3") : Color.parseColor("#2E2E38"));
+                canvas.drawRoundRect(rect, 6f * scale, 6f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
-                paint.setColor("X".equals(val) || "10".equals(val) || "9".equals(val) ? Color.parseColor("#FFF200") : Color.WHITE);
-                paint.setTextSize((slotsCount <= 3 ? 14f : 11.5f) * scale);
-                canvas.drawText(val, rect.centerX(), slotY + 19f * scale, paint);
+                paint.setColor(Color.WHITE);
+                paint.setTextSize((slotsCount <= 3 ? 12.5f : 10.5f) * scale);
+                drawCenteredText(canvas, val, rect.centerX(), rect.centerY());
             }
 
             // 6 Keypad Buttons (2 rows x 3 cols): X, 10, 9 / 8, 7, M
-            float keyW = 50f * scale;
-            float keyH = 30f * scale;
-            float kGap = 6f * scale;
+            float keyW = 46f * scale;
+            float keyH = 26f * scale;
+            float kGap = 5f * scale;
             float kStartX = cx - (3 * keyW + 2 * kGap) / 2f;
-            float kStartY = 93f * scale;
+            float kStartY = 85f * scale;
 
             for (int i = 0; i < 6; i++) {
                 int row = i / 3;
@@ -750,125 +768,150 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 scoreButtons[i].set(kx, ky, kx + keyW, ky + keyH);
 
                 if (i < 3) {
+                    paint.setColor(Color.parseColor("#191604"));
+                } else if (i < 5) {
+                    paint.setColor(Color.parseColor("#1D0606"));
+                } else {
+                    paint.setColor(Color.parseColor("#14141A"));
+                }
+                canvas.drawRoundRect(scoreButtons[i], 7f * scale, 7f * scale, paint);
+
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1.3f * scale);
+                if (i < 3) {
                     paint.setColor(Color.parseColor("#FFF200"));
                 } else if (i < 5) {
                     paint.setColor(Color.parseColor("#FF0000"));
                 } else {
-                    paint.setColor(Color.parseColor("#1E1E24"));
+                    paint.setColor(Color.parseColor("#4A4A58"));
                 }
-                canvas.drawRoundRect(scoreButtons[i], 8f * scale, 8f * scale, paint);
+                canvas.drawRoundRect(scoreButtons[i], 7f * scale, 7f * scale, paint);
+                paint.setStyle(Paint.Style.FILL);
 
-                paint.setColor(i < 3 ? Color.BLACK : Color.WHITE);
-                paint.setTextSize(14f * scale);
-                canvas.drawText(scoreLabels[i], scoreButtons[i].centerX(), ky + 20f * scale, paint);
+                paint.setColor(Color.WHITE);
+                paint.setTextSize(13f * scale);
+                drawCenteredText(canvas, scoreLabels[i], scoreButtons[i].centerX(), scoreButtons[i].centerY());
             }
 
-            // Bottom row: BORRAR and SIG. RONDA
-            float btnW = 78f * scale;
-            float btnH = 26f * scale;
-            float btnY = 165f * scale;
-            btnLeftPrimary.set(cx - btnW - 4f * scale, btnY, cx - 4f * scale, btnY + btnH);
-            btnRightSecondary.set(cx + 4f * scale, btnY, cx + btnW + 4f * scale, btnY + btnH);
+            // Bottom row: BORRAR and SIG. RONDA (148px total width within circular safe zone)
+            float btnW = 71f * scale;
+            float btnH = 25f * scale;
+            float btnY = 148f * scale;
+            btnLeftPrimary.set(cx - btnW - 3f * scale, btnY, cx - 3f * scale, btnY + btnH);
+            btnRightSecondary.set(cx + 3f * scale, btnY, cx + btnW + 3f * scale, btnY + btnH);
 
             paint.setColor(Color.parseColor("#16161C"));
-            canvas.drawRoundRect(btnLeftPrimary, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.2f * scale);
+            paint.setColor(Color.parseColor("#3E3E4A"));
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            paint.setTextSize(9.5f * scale);
-            canvas.drawText("BORRAR", btnLeftPrimary.centerX(), btnY + 16.5f * scale, paint);
+            paint.setTextSize(8.8f * scale);
+            drawCenteredText(canvas, "BORRAR", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
             paint.setColor(Color.parseColor("#0A1826"));
-            canvas.drawRoundRect(btnRightSecondary, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.2f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnRightSecondary, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("SIG. RONDA →", btnRightSecondary.centerX(), btnY + 16.5f * scale, paint);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "SIG. RONDA →", btnRightSecondary.centerX(), btnRightSecondary.centerY());
         }
 
         private void drawBiometricsScreen(Canvas canvas, int w, int h, float cx, float scale) {
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9.5f * scale);
-            paint.setColor(Color.parseColor("#FFF200"));
-            canvas.drawText("TELEMETRÍA DE CAMPO Y ENERGÍA", cx, 52f * scale, paint);
+            paint.setTextSize(9f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "TELEMETRÍA Y ENERGÍA", cx, 47f * scale);
 
-            // Card 1: KCAL
-            float cardW = 168f * scale;
-            float cardH = 44f * scale;
-            rect.set(cx - cardW / 2f, 60f * scale, cx + cardW / 2f, 60f * scale + cardH);
+            // Card 1: KCAL (152px width inside circular safe zone)
+            float cardW = 152f * scale;
+            float cardH = 41f * scale;
+            rect.set(cx - cardW / 2f, 56f * scale, cx + cardW / 2f, 56f * scale + cardH);
             paint.setColor(Color.parseColor("#0B0B0F"));
             canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#FF0000"));
             canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(9f * scale);
+            paint.setTextSize(8.5f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText("KCAL", cx, 75f * scale, paint);
-            paint.setTextSize(19f * scale);
-            paint.setColor(Color.parseColor("#FFF200"));
-            canvas.drawText(getActiveKcal() + " kcal", cx, 96f * scale, paint);
+            drawCenteredText(canvas, "KCAL", cx, 66.5f * scale);
+            paint.setTextSize(17.5f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getActiveKcal() + " kcal", cx, 84.5f * scale);
 
             // Card 2: DISTANCIA RECORRIDA (0.00km/0.00mi)
-            rect.set(cx - cardW / 2f, 110f * scale, cx + cardW / 2f, 110f * scale + cardH);
+            rect.set(cx - cardW / 2f, 102f * scale, cx + cardW / 2f, 102f * scale + cardH);
             paint.setColor(Color.parseColor("#0B0B0F"));
             canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(9f * scale);
+            paint.setTextSize(8.5f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText("DISTANCIA RECORRIDA", cx, 125f * scale, paint);
-            paint.setTextSize(16f * scale);
+            drawCenteredText(canvas, "DISTANCIA RECORRIDA", cx, 112.5f * scale);
+            paint.setTextSize(14.5f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText(getFormattedKmAndMi(), cx, 146f * scale, paint);
+            drawCenteredText(canvas, getFormattedKmAndMi(), cx, 130.5f * scale);
 
-            // Live GPS + Steps telemetry sync pill (no manual round-based distance addition)
-            btnLeftPrimary.set(cx - 76f * scale, 161f * scale, cx + 76f * scale, 187f * scale);
+            // Live GPS + Steps telemetry sync pill
+            float pillW = 144f * scale;
+            float pillH = 24f * scale;
+            btnLeftPrimary.set(cx - pillW / 2f, 149f * scale, cx + pillW / 2f, 149f * scale + pillH);
             paint.setColor(Color.parseColor("#0A1826"));
-            canvas.drawRoundRect(btnLeftPrimary, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(btnLeftPrimary, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.2f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnLeftPrimary, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(btnLeftPrimary, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(8.8f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("GPS + PASOS EN VIVO • AUTO", cx, 177.5f * scale, paint);
+            paint.setTextSize(8.3f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "GPS + PASOS EN VIVO • AUTO", cx, btnLeftPrimary.centerY());
         }
 
         private void drawSummaryScreen(Canvas canvas, int w, int h, float cx, float scale) {
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9.5f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("RESUMEN DE SESIÓN", cx, 52f * scale, paint);
-
-            paint.setTextSize(28f * scale);
+            paint.setTextSize(9f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText(totalScore + " PTS", cx, 84f * scale, paint);
+            drawCenteredText(canvas, "RESUMEN DE SESIÓN", cx, 48f * scale);
 
-            paint.setTextSize(11f * scale);
-            paint.setColor(Color.parseColor("#FFF200"));
-            canvas.drawText(arrowCount + " FLECHAS  •  " + getActiveKcal() + " KCAL", cx, 106f * scale, paint);
-
-            paint.setTextSize(11f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText(getFormattedKmAndMi(), cx, 126f * scale, paint);
-
-            btnLeftPrimary.set(cx - 78f * scale, 145f * scale, cx + 78f * scale, 180f * scale);
-            paint.setColor(Color.parseColor("#0A1826"));
-            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.5f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
-            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(26f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, totalScore + " PTS", cx, 76f * scale);
 
             paint.setTextSize(10.5f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText("GUARDAR Y REINICIAR", cx, 166.5f * scale, paint);
+            drawCenteredText(canvas, arrowCount + " FLECHAS  •  " + getActiveKcal() + " KCAL", cx, 102f * scale);
+
+            paint.setTextSize(10.5f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getFormattedKmAndMi(), cx, 121f * scale);
+
+            float btnW = 144f * scale;
+            float btnH = 30f * scale;
+            btnLeftPrimary.set(cx - btnW / 2f, 142f * scale, cx + btnW / 2f, 142f * scale + btnH);
+            paint.setColor(Color.parseColor("#0A1826"));
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.4f * scale);
+            paint.setColor(Color.parseColor("#00A8F3"));
+            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            paint.setTextSize(9.5f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "GUARDAR Y REINICIAR", cx, btnLeftPrimary.centerY());
         }
     }
 }

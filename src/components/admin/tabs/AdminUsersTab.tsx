@@ -702,7 +702,7 @@ export default function AdminUsersTab() {
                         ? `${calculateAge(selectedUser.birthDate)} años (${getWACategory(calculateAge(selectedUser.birthDate))})`
                         : "N/A"}
                     </span>
-                    <span className="text-white/70 text-[10.5px] block">{selectedUser.birthDate || ""}</span>
+                    <span className="text-white text-[10.5px] block">{selectedUser.birthDate || ""}</span>
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">ID Usuario</span>

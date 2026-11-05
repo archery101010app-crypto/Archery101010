@@ -293,7 +293,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
-                    Alias <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                    Alias <span className="text-white font-medium normal-case">(Opcional)</span>
                   </label>
                   <input
                     type="text"
@@ -305,7 +305,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">
-                    Club <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                    Club <span className="text-white font-medium normal-case">(Opcional)</span>
                   </label>
                   <input
                     type="text"

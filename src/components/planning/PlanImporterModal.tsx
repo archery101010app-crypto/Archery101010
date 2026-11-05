@@ -610,7 +610,7 @@ export default function PlanImporterModal({
                           >
                             Marcar todos
                           </button>
-                          <span className="text-white/30">·</span>
+                          <span className="text-white">·</span>
                           <button
                             type="button"
                             onClick={() => setSelectedAthleteIds([])}
@@ -840,7 +840,7 @@ export default function PlanImporterModal({
               <button
                 type="button"
                 onClick={() => setStatusMessage(null)}
-                className="text-white/60 hover:text-white cursor-pointer"
+                className="text-white hover:text-white cursor-pointer"
               >
                 <X size={14} />
               </button>

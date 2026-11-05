@@ -1428,7 +1428,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         ) : null}
                       </div>
                     ) : (
-                      <div className="py-1.5 flex items-center text-xs text-white/50">
+                      <div className="py-1.5 flex items-center text-xs text-white">
                         <span>Sin actividades programadas</span>
                       </div>
                     )}

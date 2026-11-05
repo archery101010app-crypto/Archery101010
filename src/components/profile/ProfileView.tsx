@@ -1262,7 +1262,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     }
                   }
                 }}
-                className="text-[12.1px] text-neutral-300 hover:text-white underline font-bold cursor-pointer"
+                className="text-[12.1px] text-white hover:text-white underline font-bold cursor-pointer"
               >
                 Volver a modo Atleta
               </button>
@@ -1345,7 +1345,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
 
               {coachStudents.length === 0 ? (
-                <p className="text-[12.7px] text-neutral-400 bg-neutral-950/60 border border-white/5 rounded-xl p-3">
+                <p className="text-[12.7px] text-white bg-neutral-950/60 border border-white/5 rounded-xl p-3">
                   Aún no tienes arqueros vinculados. Comparte tu código de 6 dígitos para que tus alumnos lo ingresen en su Perfil.
                 </p>
               ) : (
@@ -1363,7 +1363,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           <span className="text-[13.8px] font-bold text-white truncate">
                             {student.fullName || "Arquero"}
                           </span>
-                          <span className="text-[11.5px] text-neutral-400 truncate">
+                          <span className="text-[11.5px] text-white truncate">
                             {student.email}
                             {student.clubName ? ` • ${student.clubName}` : ""}
                           </span>

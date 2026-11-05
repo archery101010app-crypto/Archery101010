@@ -2774,7 +2774,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
                     Volumen Total de Flechas
                   </span>
-                  <span className="text-[10px] text-white/80">
+                  <span className="text-[10px] text-white">
                     Para tu historial de volumen
                   </span>
                 </div>
@@ -3097,11 +3097,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   {/* Target Face & Dispersion spread compact 2-column row */}
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
-                      <span className="text-[10.5px] font-black uppercase text-white/70 tracking-wider">Diana Oficial</span>
+                      <span className="text-[10.5px] font-black uppercase text-white tracking-wider">Diana Oficial</span>
                       <span className="tabular-nums font-bold text-xs text-white truncate">{activeAnalysis.targetName}</span>
                     </div>
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
-                      <span className="text-[10.5px] font-black uppercase text-white/70 tracking-wider">Diámetro Grupo</span>
+                      <span className="text-[10.5px] font-black uppercase text-white tracking-wider">Diámetro Grupo</span>
                       <span className="tabular-nums font-black text-xs text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
                     </div>
                   </div>

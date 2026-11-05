@@ -133,7 +133,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
-                Alias <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+                Alias <span className="text-white font-medium normal-case">(Opcional)</span>
               </label>
               <input
                 type="text"
@@ -207,7 +207,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
-              Club <span className="text-white/50 font-medium normal-case">(Opcional)</span>
+              Club <span className="text-white font-medium normal-case">(Opcional)</span>
             </label>
             <input
               type="text"

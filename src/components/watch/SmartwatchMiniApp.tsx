@@ -208,10 +208,10 @@ export default function SmartwatchMiniApp({
   }) => {
     const borderClass =
       pillColor === "yellow"
-        ? "border-[#FFF200]/55 text-[#FFF200]"
+        ? "border-[#FFF200]/65 text-white"
         : pillColor === "red"
-        ? "border-[#FF0000]/55 text-white"
-        : "border-[#00A8F3]/55 text-white";
+        ? "border-[#FF0000]/65 text-white"
+        : "border-[#00A8F3]/65 text-white";
     const dotClass =
       pillColor === "yellow"
         ? "bg-[#FFF200] shadow-[0_0_8px_#FFF200]"
@@ -232,10 +232,10 @@ export default function SmartwatchMiniApp({
         <button
           type="button"
           onClick={onClickPill}
-          className={`flex items-center gap-1.5 bg-white/[0.05] border ${borderClass} px-2.5 py-0.5 rounded-full text-[8.5px] font-black tracking-[0.13em] uppercase transition active:scale-95 cursor-pointer`}
+          className={`flex items-center justify-center gap-1.5 bg-white/[0.06] border ${borderClass} px-3 py-0.5 rounded-full text-[8.5px] font-black tracking-[0.11em] uppercase whitespace-nowrap transition active:scale-95 cursor-pointer`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
-          <span>{pillText}</span>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
+          <span className="text-white">{pillText}</span>
         </button>
       </div>
     );
@@ -244,8 +244,8 @@ export default function SmartwatchMiniApp({
   // 4-Digit Mechanical Drum Counter for Smartwatch
   const WatchMechanicalCounter = ({ highlightGold = false }: { highlightGold?: boolean }) => (
     <div
-      className={`w-[248px] rounded-[16px] p-2.5 relative shadow-[inset_0_2px_8px_rgba(0,0,0,0.95),0_8px_20px_rgba(0,0,0,0.85)] border ${
-        highlightGold ? "border-[#FFF200]/70" : "border-white/15"
+      className={`w-[236px] rounded-[16px] p-2.5 relative shadow-[inset_0_2px_8px_rgba(0,0,0,0.95),0_8px_20px_rgba(0,0,0,0.85)] border ${
+        highlightGold ? "border-[#FFF200]/75" : "border-white/20"
       }`}
       style={{
         background: "linear-gradient(180deg, #11151E 0%, #06080C 50%, #0E121A 100%)"
@@ -261,11 +261,7 @@ export default function SmartwatchMiniApp({
       />
       <div className="flex items-center justify-between px-1 mb-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#1E232D] border border-[#3E4554]" />
-        <span
-          className={`text-[8.5px] font-black tracking-[0.18em] uppercase ${
-            highlightGold ? "text-[#FFF200]" : "text-white"
-          }`}
-        >
+        <span className="text-[8.5px] font-black tracking-[0.15em] uppercase text-white whitespace-nowrap tabular-nums">
           {highlightGold
             ? `FLECHA #${activeState.arrowsCount} REGISTRADA`
             : "VOLUMEN · FLECHAS"}
@@ -273,7 +269,7 @@ export default function SmartwatchMiniApp({
         <span className="w-1.5 h-1.5 rounded-full bg-[#1E232D] border border-[#3E4554]" />
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 bg-[#020305] p-1.5 rounded-xl border border-white/10">
+      <div className="grid grid-cols-4 gap-1.5 bg-[#020305] p-1.5 rounded-xl border border-white/15">
         {digits.map((digitStr, i) => {
           const num = Number(digitStr);
           const prevDigit = (num + 9) % 10;
@@ -283,17 +279,17 @@ export default function SmartwatchMiniApp({
             <div
               key={i}
               onClick={() => handleArrowDelta(1, "watch_manual")}
-              className={`h-[60px] rounded-lg flex flex-col items-center justify-center relative overflow-hidden cursor-pointer select-none border ${
+              className={`h-[58px] rounded-lg flex flex-col items-center justify-center relative overflow-hidden cursor-pointer select-none border ${
                 isUnits
-                  ? "border-[#FFF200]/65 shadow-[inset_0_0_10px_rgba(255,242,0,0.12)]"
-                  : "border-white/15"
+                  ? "border-[#FFF200]/75 shadow-[inset_0_0_10px_rgba(255,242,0,0.14)]"
+                  : "border-white/20"
               }`}
               style={{
                 background:
                   "linear-gradient(180deg, #030407 0%, #131822 28%, #1A212E 50%, #131822 72%, #030407 100%)"
               }}
             >
-              <span className="font-mono text-[10px] font-bold text-white/20 leading-none">
+              <span className="font-mono text-[9.5px] font-bold text-white leading-none opacity-35 tabular-nums">
                 {prevDigit}
               </span>
               <AnimatePresence mode="popLayout">
@@ -303,14 +299,12 @@ export default function SmartwatchMiniApp({
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -14, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 450, damping: 28 }}
-                  className={`font-mono text-[32px] font-extrabold leading-none my-0.5 ${
-                    isUnits ? "text-[#FFF200]" : "text-white"
-                  }`}
+                  className="font-mono text-[30px] font-extrabold leading-none my-0.5 text-white tabular-nums"
                 >
                   {digitStr}
                 </motion.span>
               </AnimatePresence>
-              <span className="font-mono text-[10px] font-bold text-white/20 leading-none">
+              <span className="font-mono text-[9.5px] font-bold text-white leading-none opacity-35 tabular-nums">
                 {nextDigit}
               </span>
             </div>
@@ -324,7 +318,7 @@ export default function SmartwatchMiniApp({
   const WatchFaceContent = () => (
     <div
       onWheel={handleWheel}
-      className={`relative w-[328px] h-[328px] bg-black border-2 border-white/15 flex flex-col items-center justify-between p-4 overflow-hidden select-none ${
+      className={`relative w-[328px] h-[328px] bg-black border-2 border-white/15 flex flex-col items-center justify-between px-5 py-4 overflow-hidden select-none ${
         watchShape === "ROUND" ? "rounded-full" : "rounded-[56px]"
       }`}
       style={{
@@ -358,33 +352,33 @@ export default function SmartwatchMiniApp({
 
           <WatchMechanicalCounter highlightGold={justDetectedShot} />
 
-          <div className="flex items-center justify-between w-[238px] gap-2 z-10">
+          <div className="flex items-center justify-between w-[224px] gap-2 z-10">
             <button
               type="button"
               onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
-              className="w-11 h-8 rounded-full bg-[#FF0000]/15 border border-[#FF0000]/60 text-white text-xs font-black flex items-center justify-center active:scale-90 transition cursor-pointer"
+              className="w-11 h-8 rounded-full bg-[#FF0000]/20 border border-[#FF0000]/75 text-white text-xs font-black flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
             >
               −1
             </button>
 
             <div
               onClick={() => setScreenIdx(1)}
-              className="flex flex-col items-center cursor-pointer"
+              className="flex flex-col items-center cursor-pointer text-center"
             >
-              <div className="text-[11px] font-black text-white tracking-tight">
-                <span className="text-[#00A8F3]">{kmVal}km</span>
-                <span className="text-white/50 mx-1">·</span>
-                <span className="text-white">{activeState.activeKcal}kcal</span>
+              <div className="text-[11px] font-black text-white tracking-tight whitespace-nowrap tabular-nums">
+                <span>{kmVal} km</span>
+                <span className="text-white mx-1">·</span>
+                <span>{activeState.activeKcal} kcal</span>
               </div>
-              <span className="text-[8px] font-extrabold text-[#FFF200] tracking-[0.14em] uppercase">
-                TANDA {currentTanda} · {activeState.distanceM}M
+              <span className="text-[8.5px] font-extrabold text-white tracking-[0.12em] uppercase whitespace-nowrap tabular-nums">
+                TANDA {currentTanda} · {activeState.distanceM} M
               </span>
             </div>
 
             <button
               type="button"
               onClick={() => handleArrowDelta(1, "watch_manual")}
-              className="w-11 h-8 rounded-full bg-[#FFF200] text-black text-xs font-black flex items-center justify-center shadow-[0_0_12px_rgba(255,242,0,0.35)] active:scale-90 transition cursor-pointer"
+              className="w-11 h-8 rounded-full bg-[#0A1826] border border-[#00A8F3] text-white text-xs font-black flex items-center justify-center shadow-[0_0_12px_rgba(0,168,243,0.3)] active:scale-90 transition cursor-pointer tabular-nums"
             >
               +1
             </button>
@@ -396,46 +390,46 @@ export default function SmartwatchMiniApp({
       {screenIdx === 1 && (
         <>
           <WatchBrandHeader
-            pillText={activeState.gpsActive ? "GPS ACTIVO + RESPALDO" : "RESPALDO AUTOMÁTICO"}
+            pillText={activeState.gpsActive ? "GPS ACTIVO + PASOS" : "DETECTOR DE PASOS ACTIVO"}
             pillColor="yellow"
           />
 
-          <div className="w-[248px] flex flex-col gap-2.5 z-10">
-            <div className="bg-white/[0.035] border border-[#00A8F3]/45 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
-              <div>
-                <div className="text-[8.5px] font-extrabold tracking-[0.14em] text-white uppercase">
+          <div className="w-[236px] flex flex-col gap-2 z-10">
+            <div className="bg-white/[0.04] border border-[#00A8F3]/60 rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[8.5px] font-extrabold tracking-[0.12em] text-white uppercase whitespace-nowrap">
                   DISTANCIA RECORRIDA
                 </div>
-                <div className="text-[21px] font-black text-white tracking-tight leading-tight mt-0.5">
+                <div className="text-[18px] font-black text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
                   {kmVal}
-                  <span className="text-[12px] font-extrabold text-[#00A8F3] ml-0.5">km</span>
+                  <span className="text-[11.5px] font-extrabold text-white ml-0.5">km</span>
                   {" / "}
                   {miVal}
-                  <span className="text-[12px] font-extrabold text-[#00A8F3] ml-0.5">mi</span>
+                  <span className="text-[11.5px] font-extrabold text-white ml-0.5">mi</span>
                 </div>
               </div>
-              <span className="text-[9px] font-black text-[#00A8F3] border border-[#00A8F3]/45 bg-[#00A8F3]/10 px-2 py-1 rounded-lg uppercase">
+              <span className="text-[8.5px] font-black text-white border border-[#00A8F3]/60 bg-[#00A8F3]/15 px-2 py-1 rounded-lg uppercase shrink-0">
                 {activeState.gpsActive ? "GPS" : "AUTO"}
               </span>
             </div>
 
-            <div className="bg-white/[0.035] border border-[#FF0000]/45 rounded-2xl px-3.5 py-2.5 flex items-center justify-between">
-              <div>
-                <div className="text-[8.5px] font-extrabold tracking-[0.14em] text-white uppercase">
+            <div className="bg-white/[0.04] border border-[#FF0000]/60 rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[8.5px] font-extrabold tracking-[0.12em] text-white uppercase whitespace-nowrap">
                   KCAL
                 </div>
-                <div className="text-[22px] font-black text-white tracking-tight leading-tight mt-0.5">
+                <div className="text-[20px] font-black text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
                   {activeState.activeKcal}
-                  <span className="text-[12px] font-extrabold text-white ml-1">kcal</span>
+                  <span className="text-[11.5px] font-extrabold text-white ml-1">kcal</span>
                 </div>
               </div>
-              <span className="text-[9px] font-black text-[#FFF200] border border-[#FFF200]/45 bg-[#FFF200]/10 px-2 py-1 rounded-lg uppercase">
+              <span className="text-[8.5px] font-black text-white border border-[#FFF200]/60 bg-[#FFF200]/15 px-2 py-1 rounded-lg uppercase shrink-0">
                 ACTIVA
               </span>
             </div>
           </div>
 
-          <div className="text-[9px] font-bold text-white/70 tracking-wider uppercase">
+          <div className="text-[9px] font-bold text-white tracking-wider uppercase whitespace-nowrap tabular-nums">
             {activeState.arrowsCount} flechas ({activeState.bowPoundageLbs} lbs)
           </div>
         </>
@@ -454,7 +448,7 @@ export default function SmartwatchMiniApp({
 
           <WatchMechanicalCounter highlightGold={true} />
 
-          <div className="w-[244px] flex items-center justify-between bg-white/[0.04] border border-white/15 rounded-xl px-3 py-1.5 z-10">
+          <div className="w-[232px] flex items-center justify-between bg-white/[0.04] border border-white/20 rounded-xl px-3 py-1.5 z-10">
             <button
               type="button"
               onClick={() =>
@@ -462,10 +456,10 @@ export default function SmartwatchMiniApp({
               }
               className="text-left cursor-pointer"
             >
-              <div className="text-[7.5px] font-extrabold text-[#00A8F3] tracking-[0.12em] uppercase">
+              <div className="text-[8px] font-extrabold text-white tracking-[0.1em] uppercase whitespace-nowrap">
                 SENSIBILIDAD ({sensitivity})
               </div>
-              <div className="text-[10px] font-black text-white uppercase">
+              <div className="text-[10px] font-black text-white uppercase whitespace-nowrap">
                 COMPUESTO / RECURVO
               </div>
             </button>
@@ -473,7 +467,7 @@ export default function SmartwatchMiniApp({
             <button
               type="button"
               onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
-              className="bg-[#FF0000]/20 border border-[#FF0000]/50 px-2.5 py-1 rounded-lg text-[8.5px] font-black text-white uppercase active:scale-95 transition cursor-pointer"
+              className="bg-[#FF0000]/20 border border-[#FF0000]/65 px-2.5 py-1 rounded-lg text-[8.5px] font-black text-white uppercase active:scale-95 transition cursor-pointer shrink-0"
             >
               DESHACER
             </button>
@@ -486,32 +480,32 @@ export default function SmartwatchMiniApp({
         <>
           <WatchBrandHeader pillText="SINCRONIZADO CON COACH" pillColor="cyan" />
 
-          <div className="w-[244px] grid grid-cols-2 gap-1.5 z-10">
-            <div className="bg-white/[0.04] border border-[#00A8F3]/40 rounded-xl p-2">
-              <div className="text-[7.5px] font-extrabold text-white tracking-wider uppercase">
+          <div className="w-[236px] grid grid-cols-2 gap-1.5 z-10">
+            <div className="bg-white/[0.04] border border-[#00A8F3]/55 rounded-xl p-2 text-center">
+              <div className="text-[8px] font-extrabold text-white tracking-wider uppercase">
                 FLECHAS
               </div>
-              <div className="text-[18px] font-black text-white leading-tight mt-0.5">
+              <div className="text-[17px] font-black text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
                 {activeState.arrowsCount}{" "}
-                <span className="text-[10px] text-[#00A8F3]">FL</span>
+                <span className="text-[10px] text-white">FL</span>
               </div>
             </div>
 
-            <div className="bg-white/[0.04] border border-[#FF0000]/40 rounded-xl p-2">
-              <div className="text-[7.5px] font-extrabold text-white tracking-wider uppercase">
+            <div className="bg-white/[0.04] border border-[#FF0000]/55 rounded-xl p-2 text-center">
+              <div className="text-[8px] font-extrabold text-white tracking-wider uppercase">
                 KCAL
               </div>
-              <div className="text-[18px] font-black text-white leading-tight mt-0.5">
+              <div className="text-[17px] font-black text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
                 {activeState.activeKcal}{" "}
-                <span className="text-[10px] text-[#FF0000]">kcal</span>
+                <span className="text-[10px] text-white">kcal</span>
               </div>
             </div>
 
-            <div className="col-span-2 bg-white/[0.04] border border-[#FFF200]/40 rounded-xl p-2">
-              <div className="text-[7.5px] font-extrabold text-white tracking-wider uppercase">
+            <div className="col-span-2 bg-white/[0.04] border border-[#FFF200]/55 rounded-xl p-2 text-center">
+              <div className="text-[8px] font-extrabold text-white tracking-wider uppercase">
                 DISTANCIA RECORRIDA
               </div>
-              <div className="text-[16px] font-black text-white leading-tight mt-0.5">
+              <div className="text-[15.5px] font-black text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
                 {formatKmAndMiles(activeState.distanceWalkedM, true)}
               </div>
             </div>
@@ -520,7 +514,7 @@ export default function SmartwatchMiniApp({
           <button
             type="button"
             onClick={handleFinishSession}
-            className="w-[228px] py-2 rounded-full bg-[#FFF200] text-black text-[9.5px] font-black tracking-[0.12em] uppercase shadow-[0_0_14px_rgba(255,242,0,0.3)] active:scale-95 transition cursor-pointer z-10"
+            className="w-[216px] py-2 rounded-full bg-[#0A1826] border border-[#00A8F3] text-white text-[9.5px] font-black tracking-[0.1em] uppercase shadow-[0_0_14px_rgba(0,168,243,0.3)] active:scale-95 transition cursor-pointer z-10 whitespace-nowrap"
           >
             GUARDAR Y ENVIAR A COACH
           </button>
@@ -546,7 +540,7 @@ export default function SmartwatchMiniApp({
                 setScreenIdx(idx);
               }}
               className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                isCurrent ? activeColor : "w-1.5 bg-white/25"
+                isCurrent ? activeColor : "w-1.5 bg-white/35"
               }`}
               aria-label={`Pantalla ${idx + 1}`}
             />
@@ -565,14 +559,14 @@ export default function SmartwatchMiniApp({
           <button
             type="button"
             onClick={() => setScreenIdx((s) => (s + 3) % 4)}
-            className="px-3 py-1.5 rounded-full bg-neutral-900 border border-white/10 text-white text-[10px] font-black uppercase"
+            className="px-3.5 py-1.5 rounded-full bg-neutral-900 border border-white/20 text-white text-[10px] font-black uppercase"
           >
             ◀ Anterior
           </button>
           <button
             type="button"
             onClick={() => setScreenIdx((s) => (s + 1) % 4)}
-            className="px-3 py-1.5 rounded-full bg-neutral-900 border border-white/10 text-white text-[10px] font-black uppercase"
+            className="px-3.5 py-1.5 rounded-full bg-neutral-900 border border-white/20 text-white text-[10px] font-black uppercase"
           >
             Siguiente ▶
           </button>
@@ -610,7 +604,7 @@ export default function SmartwatchMiniApp({
                   <span className="text-[#FF0000]">10</span>
                   <span className="text-[#FFF200]">10</span>
                 </span>
-                <span className="text-white/60 text-[10px] ml-1">· SMARTWATCH</span>
+                <span className="text-white text-[10px] ml-1">· SMARTWATCH</span>
               </div>
               <h3 className="text-white text-base font-black uppercase mt-0.5">
                 Mini-App Reloj Abierto
@@ -620,7 +614,7 @@ export default function SmartwatchMiniApp({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-9 h-9 rounded-full bg-white/5 border border-white/15 text-white flex items-center justify-center hover:bg-white/10 cursor-pointer"
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/20 text-white flex items-center justify-center hover:bg-white/10 cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -628,15 +622,15 @@ export default function SmartwatchMiniApp({
           </div>
 
           {/* Shape Switcher & Screen Selector */}
-          <div className="w-full flex items-center justify-between gap-2 bg-black/60 border border-white/10 rounded-2xl p-1.5">
+          <div className="w-full flex items-center justify-between gap-2 bg-black/60 border border-white/15 rounded-2xl p-1.5">
             <div className="flex gap-1">
               <button
                 type="button"
                 onClick={() => setWatchShape("ROUND")}
                 className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition cursor-pointer ${
                   watchShape === "ROUND"
-                    ? "bg-[#00A8F3] text-black"
-                    : "text-white/70 hover:text-white"
+                    ? "bg-[#0A1826] border border-[#00A8F3] text-white"
+                    : "text-white hover:bg-white/5"
                 }`}
               >
                 Redondo (Garmin/WearOS)
@@ -646,8 +640,8 @@ export default function SmartwatchMiniApp({
                 onClick={() => setWatchShape("SQUARE")}
                 className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition cursor-pointer ${
                   watchShape === "SQUARE"
-                    ? "bg-[#FFF200] text-black"
-                    : "text-white/70 hover:text-white"
+                    ? "bg-[#1C1804] border border-[#FFF200] text-white"
+                    : "text-white hover:bg-white/5"
                 }`}
               >
                 Cuadrado (WatchOS)
@@ -658,17 +652,17 @@ export default function SmartwatchMiniApp({
               <button
                 type="button"
                 onClick={() => setScreenIdx((s) => (s + 3) % 4)}
-                className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-lg bg-white/5 border border-white/15 text-white flex items-center justify-center cursor-pointer"
               >
                 <ChevronLeft size={14} />
               </button>
-              <span className="text-[10px] font-black text-white px-1">
+              <span className="text-[10px] font-black text-white px-1 tabular-nums">
                 {screenIdx + 1}/4
               </span>
               <button
                 type="button"
                 onClick={() => setScreenIdx((s) => (s + 1) % 4)}
-                className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white flex items-center justify-center cursor-pointer"
+                className="w-7 h-7 rounded-lg bg-white/5 border border-white/15 text-white flex items-center justify-center cursor-pointer"
               >
                 <ChevronRight size={14} />
               </button>
@@ -712,8 +706,8 @@ export default function SmartwatchMiniApp({
                 onClick={() => setScreenIdx(tab.idx)}
                 className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition cursor-pointer ${
                   screenIdx === tab.idx
-                    ? "bg-white text-black border-white"
-                    : "bg-black/60 text-white border-white/10 hover:border-white/25"
+                    ? "bg-[#0A1826] text-white border-[#00A8F3]"
+                    : "bg-black/60 text-white border-white/15 hover:border-white/30"
                 }`}
               >
                 {tab.label}
@@ -722,10 +716,10 @@ export default function SmartwatchMiniApp({
           </div>
 
           {/* Info footer */}
-          <div className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-3 flex items-center justify-between text-[11px] text-white">
+          <div className="w-full bg-white/[0.03] border border-white/15 rounded-2xl p-3 flex items-center justify-between text-[11px] text-white">
             <div className="flex items-center gap-2">
               <Watch size={15} className="text-[#00A8F3] shrink-0" />
-              <span>
+              <span className="text-white">
                 Compatible con <strong>Garmin IQ, Wear OS y WatchOS</strong>. Sincroniza en vivo con tu sesión y Coach.
               </span>
             </div>

@@ -1329,11 +1329,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             >
                               Todos
                             </button>
-                            <span className="text-white/20">·</span>
+                            <span className="text-white">·</span>
                             <button
                               type="button"
                               onClick={() => setSyncSelectedAthleteIds([])}
-                              className="text-[9.5px] font-black uppercase text-white/70 hover:text-white cursor-pointer"
+                              className="text-[9.5px] font-black uppercase text-white hover:text-white cursor-pointer"
                             >
                               Limpiar
                             </button>
@@ -1357,7 +1357,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                                 className={`flex items-center justify-between px-2.5 py-2 rounded-xl border text-left transition cursor-pointer ${
                                   isChecked
                                     ? "bg-cyan-neon/15 border-cyan-neon/50 text-white"
-                                    : "bg-neutral-950/80 border-white/10 text-white/80 hover:border-white/25"
+                                    : "bg-neutral-950/80 border-white/10 text-white hover:border-white/25"
                                 }`}
                               >
                                 <span className="text-xs font-bold truncate">

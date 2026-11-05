@@ -220,7 +220,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               </button>
             ))}
           </div>
-          <p className="text-[13.4px] text-white/70 leading-snug px-1">
+          <p className="text-[13.4px] text-white leading-snug px-1">
             {practiceType === "Control" && "Simulación oficial de torneo con tiempos, diana activa y planilla reglamentaria."}
             {practiceType === "Práctica" && "Entrenamiento libre con análisis de agrupación y notas por ronda."}
             {practiceType === "Volumen" && "Contador rápido de carga física de flechas sin puntuación en diana."}

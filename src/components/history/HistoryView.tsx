@@ -584,7 +584,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       <span className="text-[11.6px] text-white truncate">
                         {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
-                      <span className="text-[10.5px] font-bold text-white/80 truncate">
+                      <span className="text-[10.5px] font-bold text-white truncate">
                         {getSessionActiveKcal(session, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(session), false)}
                       </span>
                     </div>
@@ -706,7 +706,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
                         <span className="text-[10.5px] text-white">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
-                        <span className="text-[10px] font-bold text-white/80">
+                        <span className="text-[10px] font-bold text-white">
                           {getSessionActiveKcal(s, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(s), false)}
                         </span>
                       </div>
@@ -792,7 +792,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                   <span className="text-3xl font-black text-white">
                     {getSessionScore(selectedSession)} <span className="text-xs text-white">/ {getSessionMaxScore(selectedSession)}</span>
                   </span>
-                  <span className="text-[10.5px] text-white/80 font-bold mt-0.5">{getSessionArrows(selectedSession)} flechas</span>
+                  <span className="text-[10.5px] text-white font-bold mt-0.5">{getSessionArrows(selectedSession)} flechas</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Precisión</span>

@@ -128,7 +128,7 @@ export default function AppUpdateBanner() {
             <span className="text-white text-xs font-black uppercase tracking-wider truncate">
               Nueva versión v{remoteInfo.version} lista
             </span>
-            <span className="text-[10.5px] text-white/80 truncate">
+            <span className="text-[10.5px] text-white truncate">
               Actualiza con un toque (tienes v{APP_VERSION})
             </span>
           </div>
@@ -147,7 +147,7 @@ export default function AppUpdateBanner() {
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="p-1.5 rounded-lg text-white/60 hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-lg text-white hover:text-white transition cursor-pointer"
             title="Cerrar aviso"
           >
             <X size={14} />
