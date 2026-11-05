@@ -5,10 +5,14 @@ import { getSessionArrows, countScoredArrows, isVolumeSession } from "./sessionM
 export interface BiometricSessionSnapshot {
   sessionId: string;
   arrowsCount: number;
+  totalScore?: number;
   distanceM: number;
   arrowsPerEnd: number;
+  endsCount?: number;
   completedEnds: number;
   currentEndIndex: number;
+  currentEndArrows?: string[];
+  stepsCount?: number;
   gpsDistanceM: number;
   distanceWalkedM: number;
   gpsActive: boolean;
@@ -24,6 +28,17 @@ export interface BiometricSessionSnapshot {
 export type WatchCommandMessage =
   | { type: "STATE_UPDATE"; payload: BiometricSessionSnapshot }
   | { type: "INCREMENT_ARROW"; delta: number; source: "watch_manual" | "watch_auto" | "phone" }
+  | { type: "DECREMENT_ARROW"; delta?: number; source?: "watch_manual" | "watch_auto" | "phone" }
+  | { type: "UNDO_ARROW" }
+  | { type: "SCORE_INPUT"; payload?: { value: string }; value?: string }
+  | { type: "NEXT_END" }
+  | {
+      type: "SYNC_TELEMETRY_FROM_WATCH";
+      payload?: { stepsCount?: number; distanceWalkedM?: number; activeKcal?: number };
+      stepsCount?: number;
+      distanceWalkedM?: number;
+      activeKcal?: number;
+    }
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean }
   | { type: "FINISH_SESSION_FROM_WATCH" }
   | { type: "REQUEST_STATE" };
@@ -61,6 +76,16 @@ export function parseAthleteWeightKg(user?: any): number {
     return parsed;
   }
   return 72;
+}
+
+/**
+ * Estimates walked distance in meters from step count and optional archer height (cm).
+ */
+export function estimateDistanceFromSteps(stepsCount: number, heightCm?: number): number {
+  const safeSteps = Math.max(0, Number(stepsCount) || 0);
+  const parsedHeight = Number(heightCm) || 0;
+  const strideM = parsedHeight >= 100 && parsedHeight <= 230 ? (parsedHeight * 0.415) / 100 : 0.76;
+  return Math.round(safeSteps * strideM);
 }
 
 /**
@@ -138,6 +163,24 @@ export function calculateActiveKcal(params: {
   return Math.max(0, Math.round(bowEnergyKcal + walkEnergyKcal));
 }
 
+export function calculateArcheryKcal(params: {
+  arrowsShot?: number;
+  arrowsCount?: number;
+  drawWeightLbs?: number;
+  bowPoundageLbs?: number;
+  distanceWalkedM: number;
+  durationMinutes?: number;
+  archerWeightKg?: number;
+  athleteWeightKg?: number;
+}): number {
+  return calculateActiveKcal({
+    arrowsCount: params.arrowsShot ?? params.arrowsCount ?? 0,
+    distanceWalkedM: params.distanceWalkedM,
+    bowPoundageLbs: params.drawWeightLbs ?? params.bowPoundageLbs,
+    athleteWeightKg: params.archerWeightKg ?? params.athleteWeightKg
+  });
+}
+
 /**
  * Formats meters into kilometers and miles:
  * - compact: "0.00km/0.00mi" (used in Official Telemetry Card)
@@ -162,6 +205,12 @@ export function getSessionDistanceWalkedM(session: any): number {
   if (typeof session.distanceWalkedM === "number" && session.distanceWalkedM >= 0) {
     return Math.round(session.distanceWalkedM);
   }
+  if (typeof session.biometrics?.gpsDistanceM === "number" && session.biometrics.gpsDistanceM >= 0) {
+    return Math.round(session.biometrics.gpsDistanceM);
+  }
+  if (typeof session.biometrics?.distanceWalkedM === "number" && session.biometrics.distanceWalkedM >= 0) {
+    return Math.round(session.biometrics.distanceWalkedM);
+  }
   return 0;
 }
 
@@ -172,6 +221,9 @@ export function getSessionActiveKcal(session: any, userProfile?: any): number {
   if (!session) return 0;
   if (typeof session.activeKcal === "number" && session.activeKcal > 0) {
     return Math.round(session.activeKcal);
+  }
+  if (typeof session.biometrics?.activeKcal === "number" && session.biometrics.activeKcal > 0) {
+    return Math.round(session.biometrics.activeKcal);
   }
   const arrows = getSessionArrows(session);
   const distanceWalkedM = getSessionDistanceWalkedM(session);
@@ -192,8 +244,9 @@ export function getSessionActiveKcal(session: any, userProfile?: any): number {
  */
 export function publishWatchState(snapshot: BiometricSessionSnapshot): void {
   if (typeof window === "undefined") return;
+  const serialized = JSON.stringify(snapshot);
   try {
-    localStorage.setItem(WATCH_STORAGE_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(WATCH_STORAGE_KEY, serialized);
   } catch {}
   try {
     if ("BroadcastChannel" in window) {
@@ -204,8 +257,11 @@ export function publishWatchState(snapshot: BiometricSessionSnapshot): void {
   } catch {}
   try {
     // Also notify native Android Wear OS / Garmin Connect IQ bridge if present in APK WebView
-    if ((window as any).ArcheryWatchNativeBridge?.onSessionTelemetryUpdate) {
-      (window as any).ArcheryWatchNativeBridge.onSessionTelemetryUpdate(JSON.stringify(snapshot));
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.onSessionTelemetryUpdate) {
+      bridge.onSessionTelemetryUpdate(serialized);
+    } else if (bridge?.syncTelemetryToWatch) {
+      bridge.syncTelemetryToWatch(serialized);
     }
   } catch {}
 }
@@ -223,17 +279,25 @@ export function readStoredWatchState(): BiometricSessionSnapshot | null {
 
 export function sendWatchCommand(cmd: WatchCommandMessage): void {
   if (typeof window === "undefined") return;
+  const payload = JSON.stringify({ ...cmd, _ts: Date.now() });
   try {
-    localStorage.setItem(
-      WATCH_CMD_STORAGE_KEY,
-      JSON.stringify({ ...cmd, _ts: Date.now() })
-    );
+    localStorage.setItem(WATCH_CMD_STORAGE_KEY, payload);
   } catch {}
   try {
     if ("BroadcastChannel" in window) {
       const ch = new BroadcastChannel(WATCH_CHANNEL_NAME);
       ch.postMessage(cmd);
       ch.close();
+    }
+  } catch {}
+  try {
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.sendWatchCommand) {
+      bridge.sendWatchCommand(payload);
+    } else if (bridge?.syncTelemetryToWatch) {
+      bridge.syncTelemetryToWatch(payload);
+    } else if (bridge?.onSessionTelemetryUpdate) {
+      bridge.onSessionTelemetryUpdate(payload);
     }
   } catch {}
 }
@@ -274,21 +338,26 @@ export function subscribeWatchMessages(
   window.addEventListener("storage", handleStorage);
 
   // Expose global callback for Native Wear OS / Garmin Connect IQ BLE receiver
-  (window as any).onArcheryWatchCommand = (jsonStr: string) => {
+  const nativeWatchWrapper = (jsonStr: string) => {
     try {
-      const parsed = JSON.parse(jsonStr) as WatchCommandMessage;
+      const parsed =
+        typeof jsonStr === "string"
+          ? (JSON.parse(jsonStr) as WatchCommandMessage)
+          : (jsonStr as WatchCommandMessage);
       if (parsed && parsed.type) onMessage(parsed);
     } catch {}
   };
-  (window as any).__onNativeWatchMessage = (jsonStr: string) => {
-    try {
-      const parsed = JSON.parse(jsonStr) as WatchCommandMessage;
-      if (parsed && parsed.type) onMessage(parsed);
-    } catch {}
-  };
+  (window as any).onArcheryWatchCommand = nativeWatchWrapper;
+  (window as any).__onNativeWatchMessage = nativeWatchWrapper;
 
   return () => {
     window.removeEventListener("storage", handleStorage);
+    if ((window as any).__onNativeWatchMessage === nativeWatchWrapper) {
+      delete (window as any).__onNativeWatchMessage;
+    }
+    if ((window as any).onArcheryWatchCommand === nativeWatchWrapper) {
+      delete (window as any).onArcheryWatchCommand;
+    }
     if (channel) {
       try {
         channel.close();

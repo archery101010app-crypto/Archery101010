@@ -14,8 +14,9 @@ import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult }
 import {
   BiometricSessionSnapshot,
   calculateHaversineMeters,
-  calculateFallbackDistanceM,
   calculateActiveKcal,
+  calculateArcheryKcal,
+  estimateDistanceFromSteps,
   formatKmAndMiles,
   parseBowPoundageLbs,
   parseAthleteWeightKg,
@@ -252,13 +253,31 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
 
   // Biometric GPS Distance + Active Kcal + Open Smartwatch Companion states
-  const [gpsDistanceM, setGpsDistanceM] = useState<number>(() => Number(config?.gpsDistanceM) || 0);
+  const [gpsDistanceM, setGpsDistanceM] = useState<number>(
+    () => Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0
+  );
   const [gpsActive, setGpsActive] = useState<boolean>(false);
   const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean>(
     config?.practiceType === "Volumen"
   );
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
-  const lastGpsCoordRef = useRef<{ lat: number; lon: number; ts: number } | null>(null);
+  const lastGpsCoordRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
+  const gpsDistanceAccumRef = useRef<number>(
+    Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0
+  );
+  const stepsCountRef = useRef<number>(
+    Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0
+  );
+  const lastStepTimeRef = useRef<number>(0);
+  const isClosingSessionRef = useRef<boolean>(false);
+
+  const stopNativeLocationTracking = () => {
+    try {
+      if (typeof window !== "undefined" && (window as any).ArcheryLocationNativeBridge?.stopSessionTracking) {
+        (window as any).ArcheryLocationNativeBridge.stopSessionTracking();
+      }
+    } catch {}
+  };
 
   // Refs
   const dianaRef = useRef<SVGSVGElement | null>(null);
@@ -269,20 +288,30 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (typeof window === "undefined") return;
 
     const initialMeters = Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0;
+    const initialSteps = Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0;
+    gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, initialMeters);
+    stepsCountRef.current = Math.max(stepsCountRef.current, initialSteps);
     const hasNativeBridge = Boolean((window as any).ArcheryLocationNativeBridge?.startSessionTracking);
 
     // 1. Register callback from Native Android LocationManager + Accelerometer Step Fusion
-    (window as any).__onNativeMovementUpdate = (meters: number, isGpsLocked: boolean) => {
-      if (typeof meters === "number" && !isNaN(meters)) {
-        setGpsDistanceM((curr) => Math.max(curr, meters));
+    const handleNativeLocationUpdate = (meters: number, isGpsLocked: boolean, nativeSteps?: number) => {
+      if (typeof nativeSteps === "number" && !isNaN(nativeSteps)) {
+        stepsCountRef.current = Math.max(stepsCountRef.current, nativeSteps);
       }
-      setGpsActive(Boolean(isGpsLocked) || true);
+      if (typeof meters === "number" && !isNaN(meters)) {
+        gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, meters);
+      }
+      const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
+      const effectiveDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
+      setGpsDistanceM((curr) => Math.max(curr, effectiveDistM));
+      setGpsActive(Boolean(isGpsLocked));
     };
+    (window as any).__onNativeMovementUpdate = handleNativeLocationUpdate;
+    (window as any).__onNativeLocationUpdate = handleNativeLocationUpdate;
 
     if (hasNativeBridge) {
       try {
         (window as any).ArcheryLocationNativeBridge.startSessionTracking(initialMeters);
-        setGpsActive(true);
       } catch (e) {
         console.warn("Native session location bridge start error:", e);
       }
@@ -290,8 +319,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     // 2. Also run Web Geolocation + Web DeviceMotion step cadence for web/PWA browsers
     let watchId: number | null = null;
-    let stepBufferSinceLastGpsM = 0;
-    let lastWebStepTs = 0;
     let smoothedMag = 9.81;
 
     if (!hasNativeBridge && typeof navigator !== "undefined" && "geolocation" in navigator) {
@@ -299,24 +326,30 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         watchId = navigator.geolocation.watchPosition(
           (pos) => {
             const { latitude, longitude, accuracy } = pos.coords;
-            if (typeof accuracy === "number" && accuracy > 45) {
+            if (typeof accuracy === "number" && accuracy > 35) {
               return;
             }
             setGpsActive(true);
             const now = Date.now();
             const prev = lastGpsCoordRef.current;
             if (prev) {
-              const deltaM = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
-              const dtSec = Math.max(0.3, (now - prev.ts) / 1000);
-              const speedMs = deltaM / dtSec;
-              if (deltaM >= 0.8 && deltaM <= 50 && speedMs <= 8.5) {
-                const extraFromGps = Math.max(0, deltaM - stepBufferSinceLastGpsM);
-                setGpsDistanceM((curr) => curr + extraFromGps);
-                stepBufferSinceLastGpsM = 0;
-                lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+              const delta = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
+              const dtSec = Math.max(0.3, (now - prev.time) / 1000);
+              const speed = delta / dtSec;
+              if (delta > 50 || speed > 8.5) {
+                lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
+                return;
+              }
+              const minDelta = Math.max(1.5, (accuracy || 6) * 0.22);
+              if (delta >= minDelta) {
+                gpsDistanceAccumRef.current += delta;
+                const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
+                const nextDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
+                setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+                lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
               }
             } else {
-              lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+              lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
             }
           },
           () => {},
@@ -329,7 +362,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       } catch {}
     }
 
-    const handleWebMotion = (ev: DeviceMotionEvent) => {
+    const handleMotion = (ev: DeviceMotionEvent) => {
       if (hasNativeBridge) return; // Native bridge already handles accelerometer + GPS fusion
       const acc = ev.accelerationIncludingGravity;
       if (!acc) return;
@@ -337,35 +370,31 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const ay = acc.y || 0;
       const az = acc.z || 0;
       const mag = Math.sqrt(ax * ax + ay * ay + az * az);
-      smoothedMag = 0.85 * smoothedMag + 0.15 * mag;
       const dynamicLinear = mag - smoothedMag;
+      smoothedMag = 0.96 * smoothedMag + 0.04 * mag;
       const now = Date.now();
-      if (dynamicLinear >= 1.85 && dynamicLinear <= 14.0 && now - lastWebStepTs >= 380) {
-        lastWebStepTs = now;
-        const strideM = 0.76;
-        setGpsDistanceM((curr) => curr + strideM);
-        stepBufferSinceLastGpsM += strideM;
-        setGpsActive(true);
+      if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && now - lastStepTimeRef.current > 350) {
+        lastStepTimeRef.current = now;
+        stepsCountRef.current += 1;
+        const estFromSteps = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
+        const nextDistM = Math.max(gpsDistanceAccumRef.current, estFromSteps);
+        setGpsDistanceM((curr) => Math.max(curr, nextDistM));
       }
     };
 
     if (!hasNativeBridge && "DeviceMotionEvent" in window) {
-      window.addEventListener("devicemotion", handleWebMotion);
+      window.addEventListener("devicemotion", handleMotion);
     }
 
     // Stop measuring immediately when the training session ends or exits
     return () => {
-      if (hasNativeBridge) {
-        try {
-          (window as any).ArcheryLocationNativeBridge.stopSessionTracking();
-        } catch {}
-      }
+      stopNativeLocationTracking();
       if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
         try {
           navigator.geolocation.clearWatch(watchId);
         } catch {}
       }
-      window.removeEventListener("devicemotion", handleWebMotion);
+      window.removeEventListener("devicemotion", handleMotion);
     };
   }, []);
 
@@ -406,6 +435,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   // Load settings and restore draft if applicable on mount
   useEffect(() => {
+    isClosingSessionRef.current = false;
+
     async function loadInitialSettings() {
       const size = await getLocalSetting<string>("font_size_scoring", "normal");
       setFontSize(size);
@@ -416,10 +447,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       setEnds(config.ends);
       setImpacts(config.impacts || []);
       setSessionNote(config.sessionNote || "");
-      if (typeof config.gpsDistanceM === "number" && config.gpsDistanceM > 0) {
-        setGpsDistanceM(config.gpsDistanceM);
-      } else if (typeof config.distanceWalkedM === "number" && config.distanceWalkedM > 0) {
-        setGpsDistanceM(config.distanceWalkedM);
+      const savedSteps = Number(config.stepsCount) || Number(config.biometrics?.stepsCount) || 0;
+      if (savedSteps > 0) {
+        stepsCountRef.current = Math.max(stepsCountRef.current, savedSteps);
+      }
+      const savedDist =
+        typeof config.gpsDistanceM === "number" && config.gpsDistanceM > 0
+          ? config.gpsDistanceM
+          : typeof config.distanceWalkedM === "number" && config.distanceWalkedM > 0
+            ? config.distanceWalkedM
+            : typeof config.biometrics?.distanceWalkedM === "number" && config.biometrics.distanceWalkedM > 0
+              ? config.biometrics.distanceWalkedM
+              : 0;
+      if (savedDist > 0) {
+        gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, savedDist);
+        setGpsDistanceM(savedDist);
       }
       
       // Calculate first empty cell to focus on
@@ -516,13 +558,20 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [totalShotArrows, config.warmupArrows, distanceWalkedM, bowPoundageLbs, athleteWeightKg]);
 
   const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
+    const currentArrows = (ends[currentEndIdx]?.arrows || []).filter(
+      (a) => a !== "" && a !== undefined
+    );
     return {
       sessionId: config.draftId || config.id || `SES-DRAFT-${user.uid}`,
       arrowsCount: totalShotArrows,
+      totalScore: config.practiceType === "Volumen" ? 0 : calculateTotalScore(),
       distanceM: Number(config.distance) || 18,
       arrowsPerEnd: Number(config.arrowsPerEnd) || 6,
+      endsCount: Number(config.endsCount) || 12,
       completedEnds: completedEndsCount,
       currentEndIndex: currentEndIdx,
+      currentEndArrows: currentArrows,
+      stepsCount: stepsCountRef.current,
       gpsDistanceM: Math.round(gpsDistanceM),
       distanceWalkedM,
       gpsActive,
@@ -538,8 +587,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     config.id,
     user.uid,
     totalShotArrows,
+    ends,
     config.distance,
     config.arrowsPerEnd,
+    config.endsCount,
     completedEndsCount,
     currentEndIdx,
     gpsDistanceM,
@@ -560,6 +611,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   // Autoguardado en caliente instantáneo (0ms Local-First + Real-Time Turbo Sync) tras cada tiro o cambio de notas
   useEffect(() => {
+    if (isClosingSessionRef.current) return;
     if (ends.length === 0) return;
 
     // Evitamos autoguardar si es el estado inicial vacío
@@ -567,6 +619,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (!hasAnyShot && impacts.length === 0 && tallyCount === 0) return;
 
     const autoSave = async () => {
+      if (isClosingSessionRef.current) return;
       const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
       const nowTs = Date.now();
       const draftObj = sanitizeForFirestore({
@@ -588,8 +641,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : totalShotArrows,
         distanceWalkedM,
         gpsDistanceM: Math.round(gpsDistanceM),
+        stepsCount: stepsCountRef.current,
         activeKcal,
         bowPoundageLbs,
+        biometrics: {
+          activeKcal,
+          distanceWalkedM,
+          stepsCount: stepsCountRef.current
+        },
         ends: ends.slice(0, 100),
         sessionNote: sessionNote || "",
         impacts: impacts.slice(0, 500),
@@ -597,9 +656,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       });
 
       try {
+        if (isClosingSessionRef.current) return;
         // 1. Instant 0ms local IndexedDB write (Offline-First safety shield)
         await saveLocalSession(sessionId, draftObj);
 
+        if (isClosingSessionRef.current) return;
         // 2. Real-Time Turbo Sync: push live arrow telemetry immediately to Firestore (coalesced)
         await addToSyncQueue({
           id: generateResilientId("TXN"),
@@ -1074,8 +1135,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : totalShotArrows,
       distanceWalkedM,
       gpsDistanceM: Math.round(gpsDistanceM),
+      stepsCount: stepsCountRef.current,
       activeKcal,
       bowPoundageLbs,
+      biometrics: {
+        activeKcal,
+        distanceWalkedM,
+        stepsCount: stepsCountRef.current
+      },
       ends: ends.slice(0, 100),
       sessionNote: sessionNote || "",
       impacts: impacts.slice(0, 500),
@@ -1123,10 +1190,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
-  const handleDiscard = async () => {
+  const handleConfirmAbandon = async () => {
+    isClosingSessionRef.current = true;
+    stopNativeLocationTracking();
     await cleanupLiveDrafts();
     onBack(); // exits to Home
   };
+
+  const handleDiscard = handleConfirmAbandon;
 
   const triggerSaveFlow = (type: "full" | "partial") => {
     const scoredArrowsCount = ends.reduce((sum, e) => sum + e.arrows.filter(a => a !== "").length, 0);
@@ -1153,6 +1224,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const executeSavePartialBlock = async (finalVolume: number) => {
+    isClosingSessionRef.current = true;
+    stopNativeLocationTracking();
+    await cleanupLiveDrafts();
+
     const halfEnds = Math.floor(config.endsCount / 2);
     const truncatedEnds = ends.slice(0, halfEnds);
     const truncatedImpacts = impacts.filter((imp) => imp.endIdx < halfEnds);
@@ -1166,6 +1241,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
 
     const nowTs = Date.now();
+    const durationMinutes = Math.max(1, Math.round((nowTs - (config.timestamp || nowTs)) / 60000));
+    const effectiveTotalVolume = Math.min(
+      10000,
+      typeof finalVolume === "number" && !isNaN(finalVolume) && finalVolume >= 0
+        ? Math.round(finalVolume)
+        : 0
+    );
+    const recalculatedKcal = calculateArcheryKcal({
+      arrowsShot: effectiveTotalVolume,
+      drawWeightLbs: bowPoundageLbs,
+      distanceWalkedM,
+      durationMinutes,
+      archerWeightKg: user.physicalData?.weight || athleteWeightKg
+    });
+
     const sessionId = generateResilientId("SES");
     const sessionObj = sanitizeForFirestore({
       id: sessionId,
@@ -1187,11 +1277,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       impacts: truncatedImpacts.slice(0, 500),
       isDraft: false,
       singleBlockSaved: true,
-      totalArrowsVolume: Math.min(10000, finalVolume || 0),
+      totalArrowsVolume: effectiveTotalVolume,
       distanceWalkedM,
       gpsDistanceM: Math.round(gpsDistanceM),
-      activeKcal,
+      activeKcal: recalculatedKcal,
       bowPoundageLbs,
+      biometrics: {
+        activeKcal: recalculatedKcal,
+        distanceWalkedM,
+        stepsCount: stepsCountRef.current
+      },
       blockStats: {
         b1Score: scoreB1,
         b2Score: 0,
@@ -1254,6 +1349,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const executeSaveFull = async (finalVolume: number) => {
+    isClosingSessionRef.current = true;
+    stopNativeLocationTracking();
+    await cleanupLiveDrafts();
+
     const isVolMode = config.practiceType === "Volumen";
     const finalScore = isVolMode ? 0 : calculateTotalScore();
     const sessionId = generateResilientId("SES");
@@ -1284,14 +1383,32 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       ? ends.slice(0, 100)
       : ends.filter((e) => e.arrows.some((a) => a !== "" && a !== undefined));
     const effectiveEnds = scoredEndsList.length > 0 ? scoredEndsList : ends.slice(0, 100);
+    const hasExplicitFinalVolume =
+      typeof finalVolume === "number" && !isNaN(finalVolume) && finalVolume >= 0;
+    const effectiveTotalVolume = Math.min(
+      10000,
+      hasExplicitFinalVolume
+        ? Math.round(finalVolume)
+        : isVolMode
+          ? tallyCount
+          : totalShotArrows
+    );
     const effectiveEndsCount = isVolMode
-      ? Math.min(100, Math.ceil((finalVolume || tallyCount) / (config.arrowsPerEnd || 3)))
+      ? Math.min(100, Math.ceil(effectiveTotalVolume / (config.arrowsPerEnd || 3)))
       : effectiveEnds.length;
     const effectiveMaxScore = isVolMode
       ? 0
       : Math.min(2000, effectiveEndsCount * (Number(config.arrowsPerEnd) || 3) * 10);
 
     const nowTs = Date.now();
+    const durationMinutes = Math.max(1, Math.round((nowTs - (config.timestamp || nowTs)) / 60000));
+    const recalculatedKcal = calculateArcheryKcal({
+      arrowsShot: effectiveTotalVolume,
+      drawWeightLbs: bowPoundageLbs,
+      distanceWalkedM,
+      durationMinutes,
+      archerWeightKg: user.physicalData?.weight || athleteWeightKg
+    });
     const rawSessionObj: Record<string, any> = {
       id: sessionId,
       userId: user.uid,
@@ -1312,11 +1429,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       impacts: impacts.slice(0, 500),
       isDraft: false,
       isVolumeOnly: isVolMode,
-      totalArrowsVolume: Math.min(10000, finalVolume || (isVolMode ? tallyCount : effectiveEndsCount * (Number(config.arrowsPerEnd) || 3))),
+      totalArrowsVolume: effectiveTotalVolume,
       distanceWalkedM,
       gpsDistanceM: Math.round(gpsDistanceM),
-      activeKcal,
-      bowPoundageLbs
+      activeKcal: recalculatedKcal,
+      bowPoundageLbs,
+      biometrics: {
+        activeKcal: recalculatedKcal,
+        distanceWalkedM,
+        stepsCount: stepsCountRef.current
+      }
     };
     if (blockStats) {
       rawSessionObj.blockStats = blockStats;
@@ -1584,21 +1706,66 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   };
 
+  const watchMessageHandlerRef = useRef<(msg: any) => void>(() => {});
+  watchMessageHandlerRef.current = (msg: any) => {
+    if (!msg || !msg.type) return;
+    if (msg.type === "INCREMENT_ARROW") {
+      handleWatchArrowDelta(msg.delta ?? 1);
+    } else if (msg.type === "DECREMENT_ARROW") {
+      handleWatchArrowDelta(msg.delta ?? -1);
+    } else if (msg.type === "UNDO_ARROW") {
+      if (config.practiceType === "Volumen") {
+        handleTallyDecrement();
+      } else {
+        const currentEndArrows = ends[currentEndIdx]?.arrows || [];
+        if (currentEndArrows.some((a) => a !== "" && a !== undefined)) {
+          handleBackspace();
+        }
+      }
+    } else if (msg.type === "SCORE_INPUT") {
+      const scoreVal = msg.payload?.value ?? msg.value;
+      if (scoreVal) {
+        if (config.practiceType === "Volumen") {
+          handleTallyIncrement();
+        } else {
+          handleScoreInput(String(scoreVal));
+        }
+      }
+    } else if (msg.type === "NEXT_END") {
+      if (isCurrentEndComplete) {
+        handleConfirmEnd();
+      } else if (
+        currentEndIdx < config.endsCount - 1 &&
+        (ends[currentEndIdx]?.arrows || []).some((a) => a !== "" && a !== undefined)
+      ) {
+        setCurrentEndIdx((idx) => Math.min(config.endsCount - 1, idx + 1));
+        setCurrentArrowIdx(0);
+      }
+    } else if (msg.type === "SYNC_TELEMETRY_FROM_WATCH") {
+      const incomingSteps = Number(msg.payload?.stepsCount ?? msg.stepsCount) || 0;
+      const incomingDist = Number(msg.payload?.distanceWalkedM ?? msg.distanceWalkedM) || 0;
+      const nextSteps = Math.max(stepsCountRef.current, incomingSteps);
+      stepsCountRef.current = nextSteps;
+      const stepDistM = estimateDistanceFromSteps(nextSteps, user.physicalData?.height);
+      const nextDistM = Math.max(gpsDistanceAccumRef.current, incomingDist, stepDistM);
+      gpsDistanceAccumRef.current = nextDistM;
+      setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+    } else if (msg.type === "TOGGLE_AUTO_DETECT") {
+      setAutoDetectEnabled(Boolean(msg.enabled));
+    } else if (msg.type === "FINISH_SESSION_FROM_WATCH") {
+      setIsWatchModalOpen(false);
+      setIsFinishing(true);
+    } else if (msg.type === "REQUEST_STATE") {
+      publishWatchState(liveWatchSnapshot);
+    }
+  };
+
   useEffect(() => {
     const unsub = subscribeWatchMessages((msg) => {
-      if (msg.type === "INCREMENT_ARROW") {
-        handleWatchArrowDelta(msg.delta);
-      } else if (msg.type === "TOGGLE_AUTO_DETECT") {
-        setAutoDetectEnabled(msg.enabled);
-      } else if (msg.type === "FINISH_SESSION_FROM_WATCH") {
-        setIsWatchModalOpen(false);
-        setIsFinishing(true);
-      } else if (msg.type === "REQUEST_STATE") {
-        publishWatchState(liveWatchSnapshot);
-      }
+      watchMessageHandlerRef.current(msg);
     });
     return unsub;
-  });
+  }, []);
 
   const handleTallyReset = () => {
     if (!confirm("¿Deseas reiniciar el contador de flechas a cero?")) return;

@@ -215,6 +215,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           </div>
         ) : subMode === "VOLUME" ? (
           filteredSessions.map((sess) => {
+            const sessAthlete = athletes.find(
+              (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
+            );
             const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
               weekday: "short",
               day: "numeric",
@@ -236,7 +239,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {sess.userName || "Alumno"}
                     </span>
                     <span className="text-[10.5px] text-white mt-0.5 truncate">
-                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, sessAthlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                     </span>
                   </div>
                 </div>
@@ -251,6 +254,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           })
         ) : (
           filteredSessions.map((sess) => {
+            const sessAthlete = athletes.find(
+              (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
+            );
             const isExpanded = expandedSessionId === sess.id;
             const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
               weekday: "short",
@@ -292,7 +298,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         </span>
                       </div>
                       <span className="text-[10.5px] text-white mt-0.5 truncate">
-                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {getSessionActiveKcal(sess)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)} · {dateStr} {timeStr}
+                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {getSessionActiveKcal(sess, sessAthlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)} · {dateStr} {timeStr}
                       </span>
                     </div>
                   </div>
@@ -435,7 +441,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
                             <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
                             <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                              {getSessionActiveKcal(sess)} kcal
+                              {getSessionActiveKcal(sess, sessAthlete)} kcal
                             </span>
                           </div>
                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">

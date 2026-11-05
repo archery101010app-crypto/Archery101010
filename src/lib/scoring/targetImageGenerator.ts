@@ -2,7 +2,7 @@
 
 import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull, getExactTargetDimensions } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
-import { calculateFallbackDistanceM, calculateActiveKcal, formatKmAndMiles } from "./biometricsEngine";
+import { calculateActiveKcal, formatKmAndMiles } from "./biometricsEngine";
 
 export interface EndSummaryItem {
   arrows: string[];
@@ -489,15 +489,9 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   const boxW = 231; // 4 * 231 + 3 * 16 = 972px total width (54..1026)
 
   const computedDistanceM =
-    typeof params.distanceWalkedM === "number" && params.distanceWalkedM > 0
+    typeof params.distanceWalkedM === "number" && params.distanceWalkedM >= 0
       ? Math.round(params.distanceWalkedM)
-      : calculateFallbackDistanceM({
-          isVolume: false,
-          arrowsCount: totalArrowsCount,
-          completedEndsCount: validEnds.length,
-          distanceM: Number(distanceM) || 18,
-          arrowsPerEnd: validEnds[0]?.arrows?.length || 6
-        });
+      : 0;
 
   const computedKcal =
     typeof params.activeKcal === "number" && params.activeKcal > 0

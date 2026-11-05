@@ -56,43 +56,68 @@ public class MainActivity extends BridgeActivity {
 
     // Native Live Session GPS + Movement Tracker (active ONLY during an active training session)
     private volatile boolean isSessionTrackingActive = false;
+    private volatile double initialSessionMeters = 0.0;
     private volatile double sessionAccumulatedMeters = 0.0;
-    private volatile double stepBufferMetersSinceLastGps = 0.0;
+    private volatile double accumulatedGpsDistanceM = 0.0;
+    private volatile int accumulatedSteps = 0;
     private volatile boolean hasGpsFix = false;
     private Location lastValidGpsLocation = null;
     private long lastGpsFixTimeMs = 0L;
+    private long lastHighAccuracyGpsTimeMs = 0L;
     private long lastStepDetectedTimeMs = 0L;
     private LocationManager nativeLocationManager = null;
     private SensorManager nativeSensorManager = null;
     private Sensor nativeAccelerometer = null;
+    private MessageClient.OnMessageReceivedListener wearMessageListener = null;
 
     private final LocationListener nativeLocationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location loc) {
             if (!isSessionTrackingActive || loc == null) return;
-            if (loc.hasAccuracy() && loc.getAccuracy() > 38f) {
+            if (loc.hasAccuracy() && loc.getAccuracy() > 35f) {
                 return;
             }
-            hasGpsFix = true;
             long now = System.currentTimeMillis();
+            boolean isHighAccuracyFix =
+                "gps".equalsIgnoreCase(loc.getProvider()) ||
+                (loc.hasAccuracy() && loc.getAccuracy() <= 18f);
+            if (isHighAccuracyFix) {
+                lastHighAccuracyGpsTimeMs = now;
+            } else if (
+                lastHighAccuracyGpsTimeMs > 0L &&
+                (now - lastHighAccuracyGpsTimeMs) <= 20000L &&
+                "network".equalsIgnoreCase(loc.getProvider()) &&
+                (!loc.hasAccuracy() || loc.getAccuracy() > 20f)
+            ) {
+                // Ignore coarse cell/Wi-Fi network jump while satellite/high-accuracy GPS was active recently
+                return;
+            }
+
             if (lastValidGpsLocation != null) {
-                float deltaM = lastValidGpsLocation.distanceTo(loc);
-                float dtSec = Math.max(0.4f, (now - lastGpsFixTimeMs) / 1000f);
-                float speedMs = deltaM / dtSec;
-                // Accept real walking/jogging movement (>= 0.8m and <= 50m, speed <= 8.5 m/s)
-                if (deltaM >= 0.8f && deltaM <= 50f && speedMs <= 8.5f) {
-                    // Reconcile with any steps already counted since the last GPS point so we never double-count
-                    double extraFromGps = Math.max(0.0, (double) deltaM - stepBufferMetersSinceLastGps);
-                    sessionAccumulatedMeters += extraFromGps;
-                    stepBufferMetersSinceLastGps = 0.0;
+                float deltaM = loc.distanceTo(lastValidGpsLocation);
+                long dtMs = Math.max(1L, now - lastGpsFixTimeMs);
+                float speedMs = (deltaM * 1000f) / dtMs;
+                if (deltaM > 50f || speedMs > 8.5f) {
+                    // Update anchor on coarse-to-fine GPS jump or signal recovery so it never freezes permanently
                     lastValidGpsLocation = loc;
                     lastGpsFixTimeMs = now;
-                    pushMovementToWebView();
+                    hasGpsFix = true;
+                    return;
+                }
+                float minDeltaM = Math.max(1.5f, loc.hasAccuracy() ? loc.getAccuracy() * 0.22f : 1.5f);
+                if (deltaM >= minDeltaM) {
+                    accumulatedGpsDistanceM += deltaM;
+                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                    lastValidGpsLocation = loc;
+                    lastGpsFixTimeMs = now;
+                    hasGpsFix = true;
+                    emitLocationSnapshot();
                 }
             } else {
                 lastValidGpsLocation = loc;
                 lastGpsFixTimeMs = now;
-                pushMovementToWebView();
+                hasGpsFix = true;
+                emitLocationSnapshot();
             }
         }
 
@@ -116,16 +141,15 @@ public class MainActivity extends BridgeActivity {
             float ay = event.values[1];
             float az = event.values[2];
             double mag = Math.sqrt(ax * ax + ay * ay + az * az);
-            smoothedMag = 0.85 * smoothedMag + 0.15 * mag;
             double dynamicLinear = mag - smoothedMag;
+            smoothedMag = 0.96 * smoothedMag + 0.04 * mag;
             long now = System.currentTimeMillis();
-            // Real walking step waveform detection (works with phone in pocket or hand)
-            if (dynamicLinear >= 1.85 && dynamicLinear <= 14.0 && (now - lastStepDetectedTimeMs) >= 380L) {
+            // Real walking step waveform detection (zero health permissions required)
+            if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && (now - lastStepDetectedTimeMs) >= 350L) {
                 lastStepDetectedTimeMs = now;
-                double strideM = 0.76;
-                sessionAccumulatedMeters += strideM;
-                stepBufferMetersSinceLastGps += strideM;
-                pushMovementToWebView();
+                accumulatedSteps += 1;
+                sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                emitLocationSnapshot();
             }
         }
 
@@ -440,6 +464,11 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void syncTelemetryToWatch(final String snapshotJson) {
+            broadcastToWearNodes("/archery101010/telemetry", snapshotJson != null ? snapshotJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+        }
+
+        @JavascriptInterface
         public void sendWatchCommand(final String cmdJson) {
             broadcastToWearNodes("/archery101010/command", cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
         }
@@ -449,10 +478,14 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void startSessionTracking(final double initialMeters) {
             runOnUiThread(() -> {
-                sessionAccumulatedMeters = Math.max(0.0, initialMeters);
-                stepBufferMetersSinceLastGps = 0.0;
+                initialSessionMeters = Math.max(0.0, initialMeters);
+                sessionAccumulatedMeters = initialSessionMeters;
+                accumulatedGpsDistanceM = initialSessionMeters;
+                accumulatedSteps = initialSessionMeters > 0 ? (int) Math.round(initialSessionMeters / 0.76) : 0;
+                hasGpsFix = false;
                 lastValidGpsLocation = null;
                 lastGpsFixTimeMs = 0L;
+                lastHighAccuracyGpsTimeMs = 0L;
                 isSessionTrackingActive = true;
 
                 // 1. Start immediate step/movement tracking via accelerometer
@@ -480,7 +513,7 @@ public class MainActivity extends BridgeActivity {
                         Manifest.permission.ACCESS_COARSE_LOCATION
                     });
                 }
-                pushMovementToWebView();
+                emitLocationSnapshot();
             });
         }
 
@@ -518,7 +551,6 @@ public class MainActivity extends BridgeActivity {
 
             if (nativeLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 nativeLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
-                hasGpsFix = true;
             }
             if (nativeLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 nativeLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
@@ -526,11 +558,15 @@ public class MainActivity extends BridgeActivity {
             try {
                 if (nativeLocationManager.isProviderEnabled("fused")) {
                     nativeLocationManager.requestLocationUpdates("fused", 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
-                    hasGpsFix = true;
                 }
             } catch (Exception ignored) {}
-            pushMovementToWebView();
+            hasGpsFix = (lastValidGpsLocation != null);
+            emitLocationSnapshot();
         } catch (Exception ignored) {}
+    }
+
+    private void emitLocationSnapshot() {
+        pushMovementToWebView();
     }
 
     private void pushMovementToWebView() {
@@ -538,9 +574,13 @@ public class MainActivity extends BridgeActivity {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 String js = String.format(
                     java.util.Locale.US,
-                    "if (window.__onNativeMovementUpdate) { window.__onNativeMovementUpdate(%.2f, %b); }",
+                    "if (window.__onNativeMovementUpdate) { window.__onNativeMovementUpdate(%.2f, %b, %d); } else if (window.__onNativeLocationUpdate) { window.__onNativeLocationUpdate(%.2f, %b, %d); }",
                     sessionAccumulatedMeters,
-                    hasGpsFix
+                    hasGpsFix,
+                    accumulatedSteps,
+                    sessionAccumulatedMeters,
+                    hasGpsFix,
+                    accumulatedSteps
                 );
                 getBridge().getWebView().evaluateJavascript(js, null);
             }
@@ -561,7 +601,10 @@ public class MainActivity extends BridgeActivity {
 
     private void initWearableListener() {
         try {
-            Wearable.getMessageClient(this).addListener((MessageEvent event) -> {
+            if (wearMessageListener != null) {
+                Wearable.getMessageClient(this).removeListener(wearMessageListener);
+            }
+            wearMessageListener = (MessageEvent event) -> {
                 if (event == null || event.getPath() == null) return;
                 String path = event.getPath();
                 if (path.startsWith("/archery101010/")) {
@@ -574,7 +617,30 @@ public class MainActivity extends BridgeActivity {
                         }
                     });
                 }
-            });
+            };
+            Wearable.getMessageClient(this).addListener(wearMessageListener);
         } catch (Exception ignored) {}
+    }
+
+    @Override
+    public void onDestroy() {
+        isSessionTrackingActive = false;
+        try {
+            if (nativeLocationManager != null) {
+                nativeLocationManager.removeUpdates(nativeLocationListener);
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (nativeSensorManager != null) {
+                nativeSensorManager.unregisterListener(nativeStepSensorListener);
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (wearMessageListener != null) {
+                Wearable.getMessageClient(this).removeListener(wearMessageListener);
+                wearMessageListener = null;
+            }
+        } catch (Exception ignored) {}
+        super.onDestroy();
     }
 }

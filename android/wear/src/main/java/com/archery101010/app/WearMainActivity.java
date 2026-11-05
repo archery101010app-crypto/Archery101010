@@ -16,6 +16,8 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.GestureDetector;
@@ -26,6 +28,7 @@ import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.Wearable;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 
@@ -54,19 +57,40 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int arrowCount = 0;
     private boolean autoDetectEnabled = true;
     private long lastShotTimestamp = 0L;
-    private long lastStepTimestamp = 0L;
+    private long lastStepTimeMs = 0L;
+    private long lastTelemetrySyncTimeMs = 0L;
+    private double smoothedAccelMag = SensorManager.GRAVITY_EARTH;
 
-    // Scoring state
+    // Scoring state (synchronized with phone)
     private int currentEnd = 1;
-    private int totalEnds = 10;
+    private int syncedArrowsPerEnd = 6;
+    private int syncedEndsCount = 12;
+    private int syncedActiveKcal = -1;
+    private int syncedArrowsCount = 0;
+    private float syncedWalkedMeters = 0f;
     private final List<String> currentEndArrows = new ArrayList<>();
     private int totalScore = 0;
     private int totalScoredArrows = 0;
 
-    // Biometrics state
-    private float walkedMeters = 0f;
+    // Biometrics state (real GPS & steps only — never derived from arrow ends)
+    private int stepsCount = 0;
+    private int lastSyncedStepsCount = 0;
+    private float distanceWalkedM = 0f;
     private int distanceMeters = 50;
-    private float bowPoundageLbs = 38f;
+    private float drawWeightLbs = 38f;
+
+    private MessageClient.OnMessageReceivedListener messageListener = null;
+    private final Handler heartbeatHandler = new Handler(Looper.getMainLooper());
+    private final Runnable heartbeatRunnable = new Runnable() {
+        @Override
+        public void run() {
+            sendToPhone("{\"type\":\"REQUEST_STATE\"}");
+            if (stepsCount > lastSyncedStepsCount) {
+                syncTelemetryToPhone();
+            }
+            heartbeatHandler.postDelayed(this, 4000L);
+        }
+    };
 
     private WearCanvasView canvasView;
 
@@ -80,7 +104,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         totalScore = prefs.getInt("totalScore", 0);
         totalScoredArrows = prefs.getInt("totalScoredArrows", 0);
         currentEnd = prefs.getInt("currentEnd", 1);
-        walkedMeters = prefs.getFloat("walkedMeters", 0f);
+        stepsCount = prefs.getInt("stepsCount", 0);
+        distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
+        syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
+        syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -96,41 +123,92 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private void initWearCommunication() {
         try {
-            Wearable.getMessageClient(this).addListener((MessageEvent event) -> {
+            if (messageListener != null) {
+                Wearable.getMessageClient(this).removeListener(messageListener);
+            }
+            messageListener = (MessageEvent event) -> {
                 if (event == null || event.getPath() == null) return;
                 String path = event.getPath();
-                if ("/archery101010/telemetry".equals(path)) {
-                    try {
-                        String jsonStr = new String(event.getData(), StandardCharsets.UTF_8);
-                        JSONObject obj = new JSONObject(jsonStr);
-                        if (obj.has("arrowsCount")) {
-                            arrowCount = obj.optInt("arrowsCount", arrowCount);
-                        }
-                        if (obj.has("activeKcal")) {
-                            // sync phone activeKcal if available
-                        }
-                        if (obj.has("currentEndIndex")) {
-                            currentEnd = obj.optInt("currentEndIndex", 0) + 1;
-                        }
-                        if (obj.has("distanceWalkedM")) {
-                            walkedMeters = (float) obj.optDouble("distanceWalkedM", walkedMeters);
-                        }
-                        if (obj.has("distanceM")) {
-                            distanceMeters = obj.optInt("distanceM", distanceMeters);
-                        }
-                        if (obj.has("bowPoundageLbs")) {
-                            bowPoundageLbs = (float) obj.optDouble("bowPoundageLbs", bowPoundageLbs);
-                        }
-                        saveState();
-                        runOnUiThread(() -> {
-                            if (canvasView != null) canvasView.invalidate();
-                        });
-                    } catch (Exception ignored) {}
+                if (path.startsWith("/archery101010/")) {
+                    String jsonStr = new String(event.getData(), StandardCharsets.UTF_8);
+                    handleIncomingPhonePayload(jsonStr);
                 }
-            });
+            };
+            Wearable.getMessageClient(this).addListener(messageListener);
             // Request latest state from phone on startup
-            sendToPhone("/archery101010/command", "{\"type\":\"REQUEST_STATE\"}");
+            sendToPhone("{\"type\":\"REQUEST_STATE\"}");
         } catch (Exception ignored) {}
+    }
+
+    private void handleIncomingPhonePayload(String json) {
+        if (json == null || json.isEmpty()) return;
+        try {
+            JSONObject obj = new JSONObject(json);
+            if (obj.has("payload") && obj.optJSONObject("payload") != null) {
+                obj = obj.optJSONObject("payload");
+            }
+            if (obj.has("arrowsCount")) {
+                arrowCount = obj.optInt("arrowsCount", arrowCount);
+                syncedArrowsCount = arrowCount;
+                totalScoredArrows = arrowCount;
+            }
+            if (obj.has("totalScore")) {
+                totalScore = Math.max(0, obj.optInt("totalScore", totalScore));
+            }
+            if (obj.has("activeKcal")) {
+                syncedActiveKcal = obj.optInt("activeKcal", -1);
+            }
+            if (obj.has("arrowsPerEnd")) {
+                syncedArrowsPerEnd = Math.max(1, obj.optInt("arrowsPerEnd", 6));
+            }
+            if (obj.has("endsCount")) {
+                syncedEndsCount = Math.max(1, obj.optInt("endsCount", 12));
+            }
+            if (obj.has("currentEndIndex")) {
+                int nextEnd = obj.optInt("currentEndIndex", 0) + 1;
+                if (nextEnd != currentEnd) {
+                    currentEnd = nextEnd;
+                    currentEndArrows.clear();
+                }
+            }
+            if (obj.has("currentEndArrows")) {
+                JSONArray arr = obj.optJSONArray("currentEndArrows");
+                if (arr != null) {
+                    currentEndArrows.clear();
+                    for (int i = 0; i < arr.length() && currentEndArrows.size() < syncedArrowsPerEnd; i++) {
+                        String val = arr.optString(i, "");
+                        if (val != null && !val.isEmpty()) {
+                            currentEndArrows.add(val);
+                        }
+                    }
+                }
+            }
+            if (obj.has("stepsCount")) {
+                stepsCount = Math.max(stepsCount, obj.optInt("stepsCount", stepsCount));
+            }
+            if (obj.has("distanceWalkedM") || obj.has("stepsCount")) {
+                float incomingDist = (float) obj.optDouble("distanceWalkedM", distanceWalkedM);
+                distanceWalkedM = Math.max(Math.max(distanceWalkedM, incomingDist), stepsCount * 0.76f);
+                syncedWalkedMeters = distanceWalkedM;
+            }
+            if (obj.has("distanceM")) {
+                distanceMeters = obj.optInt("distanceM", distanceMeters);
+            }
+            if (obj.has("bowPoundageLbs")) {
+                drawWeightLbs = (float) obj.optDouble("bowPoundageLbs", drawWeightLbs);
+            }
+            if (obj.has("autoDetectEnabled")) {
+                autoDetectEnabled = obj.optBoolean("autoDetectEnabled", autoDetectEnabled);
+            }
+            saveState();
+            runOnUiThread(() -> {
+                if (canvasView != null) canvasView.invalidate();
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void sendToPhone(String jsonPayload) {
+        sendToPhone("/archery101010/command", jsonPayload);
     }
 
     private void sendToPhone(String path, String jsonPayload) {
@@ -146,21 +224,54 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         } catch (Exception ignored) {}
     }
 
+    private void syncTelemetryToPhone() {
+        try {
+            lastSyncedStepsCount = stepsCount;
+            lastTelemetrySyncTimeMs = System.currentTimeMillis();
+            JSONObject payload = new JSONObject();
+            payload.put("stepsCount", stepsCount);
+            payload.put("distanceWalkedM", Math.round(getEffectiveWalkedMeters()));
+            payload.put("activeKcal", getActiveKcal());
+
+            JSONObject cmd = new JSONObject();
+            cmd.put("type", "SYNC_TELEMETRY_FROM_WATCH");
+            cmd.put("payload", payload);
+            cmd.put("stepsCount", stepsCount);
+            cmd.put("distanceWalkedM", Math.round(getEffectiveWalkedMeters()));
+            sendToPhone(cmd.toString());
+        } catch (Exception ignored) {}
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         if (sensorManager != null && accelerometer != null) {
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         }
+        heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        heartbeatHandler.postDelayed(heartbeatRunnable, 4000L);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        heartbeatHandler.removeCallbacks(heartbeatRunnable);
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
         saveState();
+    }
+
+    @Override
+    protected void onDestroy() {
+        heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        if (messageListener != null) {
+            try {
+                Wearable.getMessageClient(this).removeListener(messageListener);
+                messageListener = null;
+            } catch (Exception ignored) {}
+        }
+        super.onDestroy();
     }
 
     private void saveState() {
@@ -169,7 +280,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putInt("totalScore", totalScore);
         editor.putInt("totalScoredArrows", totalScoredArrows);
         editor.putInt("currentEnd", currentEnd);
+        editor.putInt("stepsCount", stepsCount);
         editor.putFloat("walkedMeters", getEffectiveWalkedMeters());
+        editor.putInt("syncedArrowsPerEnd", syncedArrowsPerEnd);
+        editor.putInt("syncedEndsCount", syncedEndsCount);
         editor.apply();
     }
 
@@ -186,14 +300,26 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private float getEffectiveWalkedMeters() {
-        return Math.max(0f, walkedMeters);
+        return Math.max(0f, Math.max(distanceWalkedM, stepsCount * 0.76f));
     }
 
     private int getActiveKcal() {
-        int arrows = Math.max(arrowCount, totalScoredArrows);
-        float drawKcal = arrows * (0.14f + (bowPoundageLbs / 40f) * 0.16f);
-        float walkKcal = (getEffectiveWalkedMeters() / 1000f) * 52f;
-        return Math.round(drawKcal + walkKcal);
+        int arrowsShot = Math.max(arrowCount, totalScoredArrows);
+        float walkedM = getEffectiveWalkedMeters();
+        if (arrowsShot <= 0 && walkedM < 10f) {
+            return syncedActiveKcal > 0 ? syncedActiveKcal : 0;
+        }
+        double kcalPerArrow = 0.56 + (Math.max(15, drawWeightLbs) * 0.0165);
+        double walkKcal = (walkedM / 1000.0) * 72.0 * 0.98;
+        if (syncedActiveKcal >= 0) {
+            int localArrowDelta = Math.max(0, arrowsShot - syncedArrowsCount);
+            float localWalkDelta = Math.max(0f, walkedM - syncedWalkedMeters);
+            int localDeltaKcal = (int) Math.round(
+                (localArrowDelta * kcalPerArrow) + ((localWalkDelta / 1000.0) * 72.0 * 0.98)
+            );
+            return syncedActiveKcal + localDeltaKcal;
+        }
+        return (int) Math.round((arrowsShot * kcalPerArrow) + walkKcal);
     }
 
     private String getFormattedKmAndMi() {
@@ -210,6 +336,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float ay = event.values[1];
             float az = event.values[2];
             double mag = Math.sqrt(ax * ax + ay * ay + az * az);
+            double dynamicLinear = mag - smoothedAccelMag;
+            smoothedAccelMag = 0.96 * smoothedAccelMag + 0.04 * mag;
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
             long now = System.currentTimeMillis();
             // Bow release signature on wrist (> 13.5 m/s^2 linear spike with 2.4s cooldown)
@@ -218,12 +346,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 arrowCount++;
                 triggerHaptic(55);
                 saveState();
-                sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
+                sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
-            } else if (linearMag >= 3.2 && linearMag < 10.5 && (now - lastStepTimestamp) > 480L && (now - lastShotTimestamp) > 1500L) {
-                // Walking cadence detected via standard accelerometer (zero health permissions required)
-                lastStepTimestamp = now;
-                walkedMeters += 0.76f;
+            } else if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && (now - lastStepTimeMs) > 350L && (now - lastShotTimestamp) > 1200L) {
+                // Walking cadence detected via gravity-isolated accelerometer (zero health permissions required)
+                lastStepTimeMs = now;
+                stepsCount++;
+                distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
+                saveState();
+                if ((now - lastTelemetrySyncTimeMs) >= 2500L) {
+                    syncTelemetryToPhone();
+                }
                 if (canvasView != null) canvasView.invalidate();
             }
         }
@@ -306,6 +439,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (btnToggleDetector.contains(x, y)) {
                     autoDetectEnabled = !autoDetectEnabled;
                     triggerHaptic(25);
+                    sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + "}");
                     invalidate();
                     return;
                 }
@@ -313,7 +447,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     arrowCount++;
                     triggerHaptic(45);
                     saveState();
-                    sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
+                    sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
                     invalidate();
                     return;
                 }
@@ -322,7 +456,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         arrowCount--;
                         triggerHaptic(25);
                         saveState();
-                        sendToPhone("/archery101010/command", "{\"type\":\"INCREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\"}");
+                        sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\"}");
                         invalidate();
                     }
                     return;
@@ -330,15 +464,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             } else if (screenIndex == 1) {
                 for (int i = 0; i < 6; i++) {
                     if (scoreButtons[i].contains(x, y)) {
-                        if (currentEndArrows.size() < 3) {
+                        if (currentEndArrows.size() < syncedArrowsPerEnd) {
                             String val = scoreLabels[i];
                             currentEndArrows.add(val);
                             int pts = "X".equals(val) || "10".equals(val) ? 10 : ("M".equals(val) ? 0 : Integer.parseInt(val));
                             totalScore += pts;
                             totalScoredArrows++;
-                            arrowCount = Math.max(arrowCount, totalScoredArrows);
+                            arrowCount = Math.max(arrowCount + 1, totalScoredArrows);
                             triggerHaptic(35);
                             saveState();
+                            sendToPhone("{\"type\":\"SCORE_INPUT\",\"payload\":{\"value\":\"" + val + "\"}}");
                             invalidate();
                         }
                         return;
@@ -350,8 +485,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
                         totalScore = Math.max(0, totalScore - pts);
                         totalScoredArrows = Math.max(0, totalScoredArrows - 1);
+                        arrowCount = Math.max(0, arrowCount - 1);
                         triggerHaptic(25);
                         saveState();
+                        sendToPhone("{\"type\":\"UNDO_ARROW\"}");
                         invalidate();
                     }
                     return;
@@ -359,31 +496,38 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (btnRightSecondary.contains(x, y)) {
                     if (!currentEndArrows.isEmpty()) {
                         currentEndArrows.clear();
-                        currentEnd++;
+                        currentEnd = Math.min(syncedEndsCount, currentEnd + 1);
                         triggerHaptic(45);
                         saveState();
+                        sendToPhone("{\"type\":\"NEXT_END\"}");
                         invalidate();
                     }
                     return;
                 }
             } else if (screenIndex == 2) {
                 if (btnLeftPrimary.contains(x, y)) {
-                    walkedMeters += 100f;
-                    triggerHaptic(30);
-                    saveState();
+                    triggerHaptic(25);
+                    syncTelemetryToPhone();
+                    sendToPhone("{\"type\":\"REQUEST_STATE\"}");
                     invalidate();
                     return;
                 }
             } else if (screenIndex == 3) {
                 if (btnLeftPrimary.contains(x, y)) {
-                    // Save & Reset session
+                    // Finish session on phone first, then reset local watch counters
                     triggerHaptic(70);
+                    sendToPhone("{\"type\":\"FINISH_SESSION_FROM_WATCH\"}");
                     arrowCount = 0;
                     totalScore = 0;
                     totalScoredArrows = 0;
                     currentEnd = 1;
                     currentEndArrows.clear();
-                    walkedMeters = 0f;
+                    stepsCount = 0;
+                    lastSyncedStepsCount = 0;
+                    distanceWalkedM = 0f;
+                    syncedActiveKcal = -1;
+                    syncedArrowsCount = 0;
+                    syncedWalkedMeters = 0f;
                     saveState();
                     screenIndex = 0;
                     invalidate();
@@ -563,16 +707,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setTextSize(9.5f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("RONDA " + currentEnd + "/" + totalEnds + "  •  " + totalScore + " PTS", cx, 52f * scale, paint);
+            canvas.drawText("RONDA " + currentEnd + "/" + syncedEndsCount + "  •  " + totalScore + " PTS", cx, 52f * scale, paint);
 
-            // 3 Current Arrow Slots
-            float slotW = 48f * scale;
+            // Dynamic Current Arrow Slots (syncedArrowsPerEnd, e.g., 3 or 6)
+            int slotsCount = Math.max(1, Math.min(6, syncedArrowsPerEnd));
+            float gap = (slotsCount <= 3 ? 6f : 3.5f) * scale;
+            float totalSlotsW = 156f * scale;
+            float slotW = (totalSlotsW - (slotsCount - 1) * gap) / slotsCount;
             float slotH = 28f * scale;
-            float gap = 6f * scale;
-            float startX = cx - (3 * slotW + 2 * gap) / 2f;
+            float startX = cx - totalSlotsW / 2f;
             float slotY = 59f * scale;
 
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < slotsCount; i++) {
                 float sx = startX + i * (slotW + gap);
                 rect.set(sx, slotY, sx + slotW, slotY + slotH);
                 String val = i < currentEndArrows.size() ? currentEndArrows.get(i) : "—";
@@ -585,7 +731,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setColor("X".equals(val) || "10".equals(val) || "9".equals(val) ? Color.parseColor("#FFF200") : Color.WHITE);
-                paint.setTextSize(14f * scale);
+                paint.setTextSize((slotsCount <= 3 ? 14f : 11.5f) * scale);
                 canvas.drawText(val, rect.centerX(), slotY + 19f * scale, paint);
             }
 
@@ -680,17 +826,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             canvas.drawText(getFormattedKmAndMi(), cx, 146f * scale, paint);
 
-            // Button to add a line-to-target walk round (+100m)
-            btnLeftPrimary.set(cx - 72f * scale, 161f * scale, cx + 72f * scale, 187f * scale);
+            // Live GPS + Steps telemetry sync pill (no manual round-based distance addition)
+            btnLeftPrimary.set(cx - 76f * scale, 161f * scale, cx + 76f * scale, 187f * scale);
             paint.setColor(Color.parseColor("#0A1826"));
             canvas.drawRoundRect(btnLeftPrimary, 8f * scale, 8f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(btnLeftPrimary, 8f * scale, 8f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(9.5f * scale);
+            paint.setTextSize(8.8f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText("+1 IDA Y VUELTA A PACA", cx, 177.5f * scale, paint);
+            canvas.drawText("GPS + PASOS EN VIVO • AUTO", cx, 177.5f * scale, paint);
         }
 
         private void drawSummaryScreen(Canvas canvas, int w, int h, float cx, float scale) {

@@ -64,6 +64,23 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   const [country, setCountry] = useState(user.country);
   const [city, setCity] = useState(user.city || "");
   const [gender, setGender] = useState(user.gender);
+  const [heightCm, setHeightCm] = useState<string>(
+    user.physicalData?.height && user.physicalData.height > 0 ? String(user.physicalData.height) : ""
+  );
+  const [weightKg, setWeightKg] = useState<string>(
+    user.physicalData?.weight && user.physicalData.weight > 0 ? String(user.physicalData.weight) : ""
+  );
+
+  useEffect(() => {
+    if (!editPersonal && !editBow) {
+      setHeightCm(
+        user.physicalData?.height && user.physicalData.height > 0 ? String(user.physicalData.height) : ""
+      );
+      setWeightKg(
+        user.physicalData?.weight && user.physicalData.weight > 0 ? String(user.physicalData.weight) : ""
+      );
+    }
+  }, [user.physicalData, editPersonal, editBow]);
 
   // Multi-Bow Configuration State (Arco #1, Arco #2, Arco #3)
   const parseInitialBows = (u: UserProfile): BowConfig[] => {
@@ -452,6 +469,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
   const handleSavePersonal = async () => {
     try {
+      const parsedHeight = Math.max(0, Number(heightCm) || 0);
+      const parsedWeight = Math.max(0, Number(weightKg) || 0);
+      const primaryHand = bowsList[0]?.hand || user.bowConfig?.hand || (user.physicalData?.dominantHand === "L" ? "LH" : "RH");
       const updated = await updateProfile(user.uid, {
         fullName,
         nickname,
@@ -459,7 +479,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         birthDate,
         city,
         country,
-        gender
+        gender,
+        physicalData: {
+          height: parsedHeight,
+          weight: parsedWeight,
+          dominantEye: user.physicalData?.dominantEye || (primaryHand === "LH" ? "L" : "R"),
+          dominantHand: user.physicalData?.dominantHand || (primaryHand === "LH" ? "L" : "R")
+        }
       });
       onProfileUpdated(updated);
       setEditPersonal(false);
@@ -483,13 +509,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       }));
 
       const primaryBow = cleanedBows[0];
+      const parsedHeight = Math.max(0, Number(heightCm) || 0);
+      const parsedWeight = Math.max(0, Number(weightKg) || 0);
 
       const updated = await updateProfile(user.uid, {
         bowConfig: primaryBow,
         bows: cleanedBows,
         physicalData: {
-          height: user.physicalData?.height || 0,
-          weight: user.physicalData?.weight || 0,
+          height: parsedHeight,
+          weight: parsedWeight,
           dominantEye: user.physicalData?.dominantEye || (primaryBow.hand === "LH" ? "L" : "R"),
           dominantHand: primaryBow.hand === "LH" ? "L" : "R"
         }
@@ -701,6 +729,34 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 </select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Estatura (cm)</label>
+                <input
+                  type="number"
+                  min={80}
+                  max={250}
+                  step="1"
+                  value={heightCm}
+                  onChange={(e) => setHeightCm(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none tabular-nums transition"
+                  placeholder="Ej. 175"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Peso (kg)</label>
+                <input
+                  type="number"
+                  min={25}
+                  max={250}
+                  step="0.5"
+                  value={weightKg}
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none tabular-nums transition"
+                  placeholder="Ej. 72"
+                />
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Club (Opcional)</label>
               <input
@@ -740,10 +796,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 {COUNTRIES.find((c) => c.code === user.country)?.flag} {COUNTRIES.find((c) => c.code === user.country)?.name}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5">
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
               <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Género:</span>
               <span className="text-white text-[13.8px] font-bold">
                 {user.gender === "M" ? t("genderM") : user.gender === "F" ? t("genderF") : t("genderO")}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Estatura (cm):</span>
+              <span className="text-white text-[13.8px] tabular-nums font-bold">
+                {user.physicalData?.height && user.physicalData.height > 0 ? `${user.physicalData.height} cm` : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Peso (kg):</span>
+              <span className="text-white text-[13.8px] tabular-nums font-bold">
+                {user.physicalData?.weight && user.physicalData.weight > 0 ? `${user.physicalData.weight} kg` : "—"}
               </span>
             </div>
           </div>
@@ -774,6 +842,34 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         {editBow ? (
           <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-2.5 bg-neutral-950/80 border border-white/10 rounded-2xl p-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Estatura (cm)</label>
+                <input
+                  type="number"
+                  min={80}
+                  max={250}
+                  step="1"
+                  value={heightCm}
+                  onChange={(e) => setHeightCm(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none tabular-nums transition"
+                  placeholder="Ej. 175"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Peso (kg)</label>
+                <input
+                  type="number"
+                  min={25}
+                  max={250}
+                  step="0.5"
+                  value={weightKg}
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none tabular-nums transition"
+                  placeholder="Ej. 72"
+                />
+              </div>
+            </div>
             {bowsList.map((bow, idx) => {
               const bowNumber = idx + 1;
               const isPrimary = idx === 0;

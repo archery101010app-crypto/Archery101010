@@ -9,7 +9,6 @@ import {
   readStoredWatchState,
   sendWatchCommand,
   subscribeWatchMessages,
-  calculateFallbackDistanceM,
   calculateActiveKcal
 } from "@/lib/scoring/biometricsEngine";
 

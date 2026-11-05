@@ -60,9 +60,16 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastLat = null;
     private var mLastLon = null;
     private var mLastShotMs = 0;
+    private var mBaselineSteps = null;
 
     function initialize() {
         View.initialize();
+        if (Toybox has :ActivityMonitor) {
+            var monInfo = Toybox.ActivityMonitor.getInfo();
+            if (monInfo != null && monInfo has :steps && monInfo.steps != null) {
+                mBaselineSteps = monInfo.steps;
+            }
+        }
         var timer = new Toybox.Timer.Timer();
         timer.start(method(:onSensorTick), 80, true);
     }
@@ -89,6 +96,11 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function updateGpsPosition(info as Position.Info) as Void {
+        if (info != null && info has :elapsedDistance && info.elapsedDistance != null && info.elapsedDistance > gpsDistanceM) {
+            gpsDistanceM = info.elapsedDistance.toFloat();
+            recalculateMetrics();
+            WatchUi.requestUpdate();
+        }
         if (info.accuracy != null && info.accuracy >= Position.QUALITY_POOR && info.position != null) {
             var radians = info.position.toRadians();
             var lat = radians[0];
@@ -101,14 +113,20 @@ class Archery101010WatchView extends WatchUi.View {
                         Math.cos(mLastLat) * Math.cos(lat) * Math.sin(dLon / 2.0) * Math.sin(dLon / 2.0);
                 var c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
                 var stepM = R * c;
-                if (stepM >= 2.2 && stepM <= 25.0) {
+                if (stepM > 50.0) {
+                    mLastLat = lat;
+                    mLastLon = lon;
+                } else if (stepM >= 1.5) {
                     gpsDistanceM += stepM;
+                    mLastLat = lat;
+                    mLastLon = lon;
                     recalculateMetrics();
                     WatchUi.requestUpdate();
                 }
+            } else {
+                mLastLat = lat;
+                mLastLon = lon;
             }
-            mLastLat = lat;
-            mLastLon = lon;
         }
     }
 
@@ -125,9 +143,20 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function recalculateMetrics() as Void {
-        var virtualEnds = arrowsCount / arrowsPerEnd;
-        var fallbackM = virtualEnds * distanceM * 2;
-        distanceWalkedM = (gpsDistanceM > fallbackM) ? gpsDistanceM.toNumber() : fallbackM;
+        var distM = gpsDistanceM;
+        if (Toybox has :ActivityMonitor) {
+            var monInfo = Toybox.ActivityMonitor.getInfo();
+            if (monInfo != null && monInfo has :steps && monInfo.steps != null && mBaselineSteps != null) {
+                var stepDelta = monInfo.steps - mBaselineSteps;
+                if (stepDelta > 0) {
+                    var stepMeters = stepDelta * 0.76;
+                    if (stepMeters > distM) {
+                        distM = stepMeters;
+                    }
+                }
+            }
+        }
+        distanceWalkedM = distM.toNumber();
 
         var kcalPerArrow = 0.56 + (bowPoundageLbs * 0.0165);
         var bowKcal = arrowsCount * kcalPerArrow;
@@ -171,6 +200,7 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
+        recalculateMetrics();
         var w = dc.getWidth();
         var h = dc.getHeight();
         var cx = w / 2;
