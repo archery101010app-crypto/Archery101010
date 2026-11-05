@@ -186,8 +186,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private float getEffectiveWalkedMeters() {
-        float fallbackMeters = Math.max(0, (currentEnd - 1) * distanceMeters * 2f);
-        return Math.max(walkedMeters, fallbackMeters);
+        return Math.max(0f, walkedMeters);
     }
 
     private int getActiveKcal() {

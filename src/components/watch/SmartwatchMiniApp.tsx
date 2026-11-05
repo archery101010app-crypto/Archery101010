@@ -103,14 +103,7 @@ export default function SmartwatchMiniApp({
         sendWatchCommand({ type: "INCREMENT_ARROW", delta, source });
         setInternalSnapshot((prev) => {
           const nextArrows = Math.max(0, prev.arrowsCount + delta);
-          const fallbackM = calculateFallbackDistanceM({
-            isVolume: true,
-            arrowsCount: nextArrows,
-            completedEndsCount: Math.floor(nextArrows / Math.max(1, prev.arrowsPerEnd || 6)),
-            distanceM: prev.distanceM || 50,
-            arrowsPerEnd: prev.arrowsPerEnd || 6
-          });
-          const nextWalked = Math.max(prev.gpsDistanceM || 0, fallbackM);
+          const nextWalked = prev.distanceWalkedM || prev.gpsDistanceM || 0;
           const nextKcal = calculateActiveKcal({
             arrowsCount: nextArrows,
             distanceWalkedM: nextWalked,

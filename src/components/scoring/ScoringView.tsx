@@ -264,53 +264,108 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // High-Precision GPS Walking Tracker (tracks entire session movement: line <-> target + field)
+  // Live Session GPS + Real Walking Movement Tracker (starts on "Comenzar entrenamiento", stops when session ends)
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
+    if (typeof window === "undefined") return;
+
+    const initialMeters = Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0;
+    const hasNativeBridge = Boolean((window as any).ArcheryLocationNativeBridge?.startSessionTracking);
+
+    // 1. Register callback from Native Android LocationManager + Accelerometer Step Fusion
+    (window as any).__onNativeMovementUpdate = (meters: number, isGpsLocked: boolean) => {
+      if (typeof meters === "number" && !isNaN(meters)) {
+        setGpsDistanceM((curr) => Math.max(curr, meters));
+      }
+      setGpsActive(Boolean(isGpsLocked) || true);
+    };
+
+    if (hasNativeBridge) {
+      try {
+        (window as any).ArcheryLocationNativeBridge.startSessionTracking(initialMeters);
+        setGpsActive(true);
+      } catch (e) {
+        console.warn("Native session location bridge start error:", e);
+      }
+    }
+
+    // 2. Also run Web Geolocation + Web DeviceMotion step cadence for web/PWA browsers
     let watchId: number | null = null;
-    try {
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          // Accept up to 45m accuracy (especially on mobile outdoor archery ranges)
-          if (typeof accuracy === "number" && accuracy > 45) {
-            return;
-          }
-          setGpsActive(true);
-          const now = Date.now();
-          const prev = lastGpsCoordRef.current;
-          if (prev) {
-            const deltaM = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
-            const dtSec = Math.max(0.3, (now - prev.ts) / 1000);
-            const speedMs = deltaM / dtSec;
-            // Responsive threshold: detect human walking steps (>= 1.4m and <= 50m, speed <= 8.5 m/s)
-            if (deltaM >= 1.4 && deltaM <= 50 && speedMs <= 8.5) {
-              setGpsDistanceM((curr) => curr + deltaM);
+    let stepBufferSinceLastGpsM = 0;
+    let lastWebStepTs = 0;
+    let smoothedMag = 9.81;
+
+    if (!hasNativeBridge && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const { latitude, longitude, accuracy } = pos.coords;
+            if (typeof accuracy === "number" && accuracy > 45) {
+              return;
+            }
+            setGpsActive(true);
+            const now = Date.now();
+            const prev = lastGpsCoordRef.current;
+            if (prev) {
+              const deltaM = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
+              const dtSec = Math.max(0.3, (now - prev.ts) / 1000);
+              const speedMs = deltaM / dtSec;
+              if (deltaM >= 0.8 && deltaM <= 50 && speedMs <= 8.5) {
+                const extraFromGps = Math.max(0, deltaM - stepBufferSinceLastGpsM);
+                setGpsDistanceM((curr) => curr + extraFromGps);
+                stepBufferSinceLastGpsM = 0;
+                lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+              }
+            } else {
               lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
             }
-          } else {
-            lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
+          },
+          () => {},
+          {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 15000
           }
-        },
-        (err) => {
-          console.warn("GPS watch position error:", err);
-          setGpsActive(false);
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 15000
-        }
-      );
-    } catch (e) {
-      console.warn("Geolocation watch initialization error:", e);
+        );
+      } catch {}
     }
+
+    const handleWebMotion = (ev: DeviceMotionEvent) => {
+      if (hasNativeBridge) return; // Native bridge already handles accelerometer + GPS fusion
+      const acc = ev.accelerationIncludingGravity;
+      if (!acc) return;
+      const ax = acc.x || 0;
+      const ay = acc.y || 0;
+      const az = acc.z || 0;
+      const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+      smoothedMag = 0.85 * smoothedMag + 0.15 * mag;
+      const dynamicLinear = mag - smoothedMag;
+      const now = Date.now();
+      if (dynamicLinear >= 1.85 && dynamicLinear <= 14.0 && now - lastWebStepTs >= 380) {
+        lastWebStepTs = now;
+        const strideM = 0.76;
+        setGpsDistanceM((curr) => curr + strideM);
+        stepBufferSinceLastGpsM += strideM;
+        setGpsActive(true);
+      }
+    };
+
+    if (!hasNativeBridge && "DeviceMotionEvent" in window) {
+      window.addEventListener("devicemotion", handleWebMotion);
+    }
+
+    // Stop measuring immediately when the training session ends or exits
     return () => {
+      if (hasNativeBridge) {
+        try {
+          (window as any).ArcheryLocationNativeBridge.stopSessionTracking();
+        } catch {}
+      }
       if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
         try {
           navigator.geolocation.clearWatch(watchId);
         } catch {}
       }
+      window.removeEventListener("devicemotion", handleWebMotion);
     };
   }, []);
 
@@ -438,19 +493,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     ).length;
   }, [ends]);
 
-  const fallbackDistanceM = useMemo(() => {
-    return calculateFallbackDistanceM({
-      isVolume: config.practiceType === "Volumen",
-      arrowsCount: totalShotArrows,
-      completedEndsCount,
-      distanceM: Number(config.distance) || 18,
-      arrowsPerEnd: Number(config.arrowsPerEnd) || 6
-    });
-  }, [config.practiceType, totalShotArrows, completedEndsCount, config.distance, config.arrowsPerEnd]);
-
+  // Real-time Biometric Distance: 100% real movement during active session (never derived from arrow ends)
   const distanceWalkedM = useMemo(() => {
-    return Math.max(Math.round(gpsDistanceM), fallbackDistanceM);
-  }, [gpsDistanceM, fallbackDistanceM]);
+    return Math.max(0, Math.round(gpsDistanceM));
+  }, [gpsDistanceM]);
 
   const bowPoundageLbs = useMemo(() => {
     return parseBowPoundageLbs(user, config?.bowPoundageLbs);

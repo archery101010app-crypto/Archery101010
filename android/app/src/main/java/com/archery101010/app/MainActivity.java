@@ -1,9 +1,20 @@
 package com.archery101010.app;
 
+import android.Manifest;
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Looper;
 import android.util.Base64;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -13,6 +24,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -39,7 +51,87 @@ public class MainActivity extends BridgeActivity {
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
+    private ActivityResultLauncher<String[]> locationPermissionLauncher;
     private volatile String activeAppOrigin = "https://localhost";
+
+    // Native Live Session GPS + Movement Tracker (active ONLY during an active training session)
+    private volatile boolean isSessionTrackingActive = false;
+    private volatile double sessionAccumulatedMeters = 0.0;
+    private volatile double stepBufferMetersSinceLastGps = 0.0;
+    private volatile boolean hasGpsFix = false;
+    private Location lastValidGpsLocation = null;
+    private long lastGpsFixTimeMs = 0L;
+    private long lastStepDetectedTimeMs = 0L;
+    private LocationManager nativeLocationManager = null;
+    private SensorManager nativeSensorManager = null;
+    private Sensor nativeAccelerometer = null;
+
+    private final LocationListener nativeLocationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location loc) {
+            if (!isSessionTrackingActive || loc == null) return;
+            if (loc.hasAccuracy() && loc.getAccuracy() > 38f) {
+                return;
+            }
+            hasGpsFix = true;
+            long now = System.currentTimeMillis();
+            if (lastValidGpsLocation != null) {
+                float deltaM = lastValidGpsLocation.distanceTo(loc);
+                float dtSec = Math.max(0.4f, (now - lastGpsFixTimeMs) / 1000f);
+                float speedMs = deltaM / dtSec;
+                // Accept real walking/jogging movement (>= 0.8m and <= 50m, speed <= 8.5 m/s)
+                if (deltaM >= 0.8f && deltaM <= 50f && speedMs <= 8.5f) {
+                    // Reconcile with any steps already counted since the last GPS point so we never double-count
+                    double extraFromGps = Math.max(0.0, (double) deltaM - stepBufferMetersSinceLastGps);
+                    sessionAccumulatedMeters += extraFromGps;
+                    stepBufferMetersSinceLastGps = 0.0;
+                    lastValidGpsLocation = loc;
+                    lastGpsFixTimeMs = now;
+                    pushMovementToWebView();
+                }
+            } else {
+                lastValidGpsLocation = loc;
+                lastGpsFixTimeMs = now;
+                pushMovementToWebView();
+            }
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+        @Override
+        public void onProviderEnabled(String provider) {}
+
+        @Override
+        public void onProviderDisabled(String provider) {}
+    };
+
+    private final SensorEventListener nativeStepSensorListener = new SensorEventListener() {
+        private double smoothedMag = 9.81;
+
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (!isSessionTrackingActive || event == null || event.values == null) return;
+            float ax = event.values[0];
+            float ay = event.values[1];
+            float az = event.values[2];
+            double mag = Math.sqrt(ax * ax + ay * ay + az * az);
+            smoothedMag = 0.85 * smoothedMag + 0.15 * mag;
+            double dynamicLinear = mag - smoothedMag;
+            long now = System.currentTimeMillis();
+            // Real walking step waveform detection (works with phone in pocket or hand)
+            if (dynamicLinear >= 1.85 && dynamicLinear <= 14.0 && (now - lastStepDetectedTimeMs) >= 380L) {
+                lastStepDetectedTimeMs = now;
+                double strideM = 0.76;
+                sessionAccumulatedMeters += strideM;
+                stepBufferMetersSinceLastGps += strideM;
+                pushMovementToWebView();
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    };
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -67,6 +159,15 @@ public class MainActivity extends BridgeActivity {
             }
         );
 
+        locationPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            result -> {
+                if (isSessionTrackingActive) {
+                    bindNativeGpsProviders();
+                }
+            }
+        );
+
         super.onCreate(savedInstanceState);
 
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
@@ -79,12 +180,6 @@ public class MainActivity extends BridgeActivity {
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setDomStorageEnabled(true);
             settings.setGeolocationEnabled(true);
-            webView.setWebChromeClient(new android.webkit.WebChromeClient() {
-                @Override
-                public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
-                    callback.invoke(origin, true, false);
-                }
-            });
             String defaultUa = settings.getUserAgentString();
             if (defaultUa != null) {
                 String cleanUa = defaultUa.replace("; wv", "").replace("Version/4.0 ", "");
@@ -94,6 +189,7 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcheryNativeAuth(), "ArcheryNativeAuth");
             webView.addJavascriptInterface(new ArcheryNativeShare(), "ArcheryNativeShare");
             webView.addJavascriptInterface(new ArcheryWatchNativeBridge(), "ArcheryWatchNativeBridge");
+            webView.addJavascriptInterface(new ArcheryLocationNativeBridge(), "ArcheryLocationNativeBridge");
             initWearableListener();
 
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
@@ -347,6 +443,108 @@ public class MainActivity extends BridgeActivity {
         public void sendWatchCommand(final String cmdJson) {
             broadcastToWearNodes("/archery101010/command", cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
         }
+    }
+
+    public class ArcheryLocationNativeBridge {
+        @JavascriptInterface
+        public void startSessionTracking(final double initialMeters) {
+            runOnUiThread(() -> {
+                sessionAccumulatedMeters = Math.max(0.0, initialMeters);
+                stepBufferMetersSinceLastGps = 0.0;
+                lastValidGpsLocation = null;
+                lastGpsFixTimeMs = 0L;
+                isSessionTrackingActive = true;
+
+                // 1. Start immediate step/movement tracking via accelerometer
+                try {
+                    if (nativeSensorManager == null) {
+                        nativeSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+                    }
+                    if (nativeSensorManager != null) {
+                        nativeAccelerometer = nativeSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                        if (nativeAccelerometer != null) {
+                            nativeSensorManager.unregisterListener(nativeStepSensorListener);
+                            nativeSensorManager.registerListener(nativeStepSensorListener, nativeAccelerometer, SensorManager.SENSOR_DELAY_GAME);
+                        }
+                    }
+                } catch (Exception ignored) {}
+
+                // 2. Request OS runtime location permission if needed, then bind GPS + Fused providers
+                boolean fineGranted = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                boolean coarseGranted = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                if (fineGranted || coarseGranted) {
+                    bindNativeGpsProviders();
+                } else if (locationPermissionLauncher != null) {
+                    locationPermissionLauncher.launch(new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    });
+                }
+                pushMovementToWebView();
+            });
+        }
+
+        @JavascriptInterface
+        public void stopSessionTracking() {
+            runOnUiThread(() -> {
+                isSessionTrackingActive = false;
+                hasGpsFix = false;
+                lastValidGpsLocation = null;
+                try {
+                    if (nativeLocationManager != null) {
+                        nativeLocationManager.removeUpdates(nativeLocationListener);
+                    }
+                } catch (Exception ignored) {}
+                try {
+                    if (nativeSensorManager != null) {
+                        nativeSensorManager.unregisterListener(nativeStepSensorListener);
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
+    }
+
+    private void bindNativeGpsProviders() {
+        try {
+            if (nativeLocationManager == null) {
+                nativeLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            }
+            if (nativeLocationManager == null) return;
+            nativeLocationManager.removeUpdates(nativeLocationListener);
+
+            boolean fineGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean coarseGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            if (!fineGranted && !coarseGranted) return;
+
+            if (nativeLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                nativeLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
+                hasGpsFix = true;
+            }
+            if (nativeLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                nativeLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
+            }
+            try {
+                if (nativeLocationManager.isProviderEnabled("fused")) {
+                    nativeLocationManager.requestLocationUpdates("fused", 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
+                    hasGpsFix = true;
+                }
+            } catch (Exception ignored) {}
+            pushMovementToWebView();
+        } catch (Exception ignored) {}
+    }
+
+    private void pushMovementToWebView() {
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String js = String.format(
+                    java.util.Locale.US,
+                    "if (window.__onNativeMovementUpdate) { window.__onNativeMovementUpdate(%.2f, %b); }",
+                    sessionAccumulatedMeters,
+                    hasGpsFix
+                );
+                getBridge().getWebView().evaluateJavascript(js, null);
+            }
+        });
     }
 
     private void broadcastToWearNodes(final String path, final byte[] data) {

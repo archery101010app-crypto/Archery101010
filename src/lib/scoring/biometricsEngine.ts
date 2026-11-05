@@ -134,7 +134,8 @@ export function calculateActiveKcal(params: {
   // Walking energy expenditure (~0.78 kcal per kg per km walked on flat/grass range)
   const walkEnergyKcal = (walkedM / 1000) * weightKg * 0.78;
 
-  return Math.max(1, Math.round(bowEnergyKcal + walkEnergyKcal));
+  if (arrows <= 0 && walkedM <= 0) return 0;
+  return Math.max(0, Math.round(bowEnergyKcal + walkEnergyKcal));
 }
 
 /**
@@ -151,27 +152,17 @@ export function formatKmAndMiles(meters: number, spaced: boolean = false): strin
 }
 
 /**
- * Extracts or computes the session's walked distance in meters (for stored sessions in History, Coach Portal, or Share Card)
+ * Extracts the session's real walked distance in meters (GPS + live movement during session, never derived from arrow ends)
  */
 export function getSessionDistanceWalkedM(session: any): number {
   if (!session) return 0;
-  if (typeof session.distanceWalkedM === "number" && session.distanceWalkedM > 0) {
+  if (typeof session.gpsDistanceM === "number" && session.gpsDistanceM >= 0) {
+    return Math.round(session.gpsDistanceM);
+  }
+  if (typeof session.distanceWalkedM === "number" && session.distanceWalkedM >= 0) {
     return Math.round(session.distanceWalkedM);
   }
-  const arrows = getSessionArrows(session);
-  const distM = Number(session.distance) || 18;
-  const perEnd = Number(session.arrowsPerEnd) || 6;
-  const completedEnds = Array.isArray(session.ends)
-    ? session.ends.filter((e: any) => Array.isArray(e?.arrows) && e.arrows.some((a: string) => a !== "" && a !== undefined)).length
-    : 0;
-
-  return calculateFallbackDistanceM({
-    isVolume: isVolumeSession(session),
-    arrowsCount: arrows,
-    completedEndsCount: completedEnds,
-    distanceM: distM,
-    arrowsPerEnd: perEnd
-  });
+  return 0;
 }
 
 /**
