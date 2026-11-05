@@ -272,18 +272,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { latitude, longitude, accuracy } = pos.coords;
-          if (typeof accuracy === "number" && accuracy > 30) {
-            return; // Ignore low-accuracy indoor/cell tower jumps
+          // Accept up to 45m accuracy (especially on mobile outdoor archery ranges)
+          if (typeof accuracy === "number" && accuracy > 45) {
+            return;
           }
           setGpsActive(true);
           const now = Date.now();
           const prev = lastGpsCoordRef.current;
           if (prev) {
             const deltaM = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
-            const dtSec = Math.max(0.5, (now - prev.ts) / 1000);
+            const dtSec = Math.max(0.3, (now - prev.ts) / 1000);
             const speedMs = deltaM / dtSec;
-            // Filter stationary GPS jitter (<2.2m) and unrealistic spikes (>7.5 m/s)
-            if (deltaM >= 2.2 && deltaM <= 45 && speedMs <= 7.5) {
+            // Responsive threshold: detect human walking steps (>= 1.4m and <= 50m, speed <= 8.5 m/s)
+            if (deltaM >= 1.4 && deltaM <= 50 && speedMs <= 8.5) {
               setGpsDistanceM((curr) => curr + deltaM);
               lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
             }
@@ -291,16 +292,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             lastGpsCoordRef.current = { lat: latitude, lon: longitude, ts: now };
           }
         },
-        () => {
+        (err) => {
+          console.warn("GPS watch position error:", err);
           setGpsActive(false);
         },
         {
           enableHighAccuracy: true,
-          maximumAge: 2000,
-          timeout: 10000
+          maximumAge: 1000,
+          timeout: 15000
         }
       );
-    } catch {}
+    } catch (e) {
+      console.warn("Geolocation watch initialization error:", e);
+    }
     return () => {
       if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
         try {

@@ -78,6 +78,13 @@ public class MainActivity extends BridgeActivity {
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setDomStorageEnabled(true);
+            settings.setGeolocationEnabled(true);
+            webView.setWebChromeClient(new android.webkit.WebChromeClient() {
+                @Override
+                public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
+                    callback.invoke(origin, true, false);
+                }
+            });
             String defaultUa = settings.getUserAgentString();
             if (defaultUa != null) {
                 String cleanUa = defaultUa.replace("; wv", "").replace("Version/4.0 ", "");
