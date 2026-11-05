@@ -10,6 +10,7 @@
     "deploy:test": "next build && firebase deploy -P test",
     "deploy:prod": "next build && firebase deploy -P prod",
     "bump-version": "node scripts/increment-version.js",
+    "publish:play": "node scripts/publish-play-store.js",
     "generate:assets": "node scripts/generate-playstore-assets.js",
     "cap:sync": "next build && npx cap sync",
     "cap:open": "npx cap open android"

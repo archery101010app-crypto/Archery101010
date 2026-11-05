@@ -76,6 +76,15 @@ if (fs.existsSync(wearGradlePath)) {
   console.log(`Updated android/wear/build.gradle with: versionCode ${wearVCode}, versionName "${displayVersion}"`);
 }
 
+// 5b. Update garmin-ciq/manifest.xml version automatically alongside Mobile & Wear OS
+const garminManifestPath = path.join(__dirname, '../garmin-ciq/manifest.xml');
+if (fs.existsSync(garminManifestPath)) {
+  let garminManifest = fs.readFileSync(garminManifestPath, 'utf8');
+  garminManifest = garminManifest.replace(/version=["'][0-9.]+["']/, `version="${newVersion}"`);
+  fs.writeFileSync(garminManifestPath, garminManifest, 'utf8');
+  console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
+}
+
 // 6. Write public/version.json and public/app-version.json for automatic in-app update detection
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');

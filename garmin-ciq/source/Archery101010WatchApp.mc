@@ -113,10 +113,7 @@ class Archery101010WatchView extends WatchUi.View {
                         Math.cos(mLastLat) * Math.cos(lat) * Math.sin(dLon / 2.0) * Math.sin(dLon / 2.0);
                 var c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
                 var stepM = R * c;
-                if (stepM > 50.0) {
-                    mLastLat = lat;
-                    mLastLon = lon;
-                } else if (stepM >= 1.5) {
+                if (stepM >= 1.5 && stepM <= 50.0) {
                     gpsDistanceM += stepM;
                     mLastLat = lat;
                     mLastLon = lon;
@@ -239,13 +236,13 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawRoundedRectangle(rx, startY, boxW, boxH, 8);
 
                 dc.setColor(i == 3 ? 0xFFF200 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(rx + (boxW / 2), startY + (boxH / 2) - 18, Graphics.FONT_NUMBER_MEDIUM, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(rx + (boxW / 2), startY + (boxH / 2), Graphics.FONT_NUMBER_MEDIUM, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h - 52, Graphics.FONT_XTINY, km.format("%.2f") + "km · " + activeKcal.toString() + "kcal", Graphics.TEXT_JUSTIFY_CENTER);
         } else if (screenIdx == 1) {
-            drawArchery101010Header(dc, w, "GPS ACTIVO + RESPALDO");
+            drawArchery101010Header(dc, w, "GPS + PASOS REALES");
 
             dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, cy - 42, Graphics.FONT_XTINY, "DISTANCIA RECORRIDA", Graphics.TEXT_JUSTIFY_CENTER);
