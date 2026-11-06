@@ -3,12 +3,12 @@ package com.archery101010.app;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -36,7 +36,6 @@ import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.PutDataMapRequest;
-import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -47,13 +46,16 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Archery 101010 — Native Wear OS Watch App (Samsung Galaxy Watch, Pixel Watch, TicWatch, Xiaomi Watch)
- * Pure OLED #000000 predominance + ARCHERY 101010 tricolor header (#FFFFFF + #00A8F3 / #FF0000 / #FFF200)
- * 4 Screens:
- *  0: 4-Digit Mechanical Counter + Automatic Wrist Release Detector
- *  1: Quick Score Pad (X, 10, 9, 8, 7, M)
- *  2: Live Kcal + Walked Distance (0.00km/0.00mi)
- *  3: Session Summary & Save
+ * Archery 101010 — Native Wear OS Watch App (Round & Square Smartwatches)
+ * WHOOP / Apple / Nike Matte OLED Design DNA:
+ *  - Official 4K Retina Brand Logo (ARCHERY in Good Times + Geometric 101010)
+ *  - Bundled Outfit Athletic Tabular Typography (Zero coder slashed zeros, zero neon glow)
+ *  - Mathematically Centered Vertical & Horizontal Layout for both Round and Square displays
+ *  - 4 Screens:
+ *      0: Contador y Auto-Tiro (VOLUMEN · FLECHAS + −1 / +1 / Live Km & Kcal)
+ *      1: Puntuación de Tanda (X, 10, 9, 8, 7, M Keypad)
+ *      2: Métricas (Distancia Km/Mi + Gasto Energético Kcal)
+ *      3: Resumen y Envío a Coach
  */
 public class WearMainActivity extends Activity implements SensorEventListener {
 
@@ -88,7 +90,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int stepsCount = 0;
     private int lastSyncedStepsCount = 0;
     private float distanceWalkedM = 0f;
-    private int distanceMeters = 50;
+    private int distanceMeters = 18;
     private float drawWeightLbs = 38f;
 
     // Connection & sync race-condition guards
@@ -129,7 +131,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Archery101010::WearSessionWakeLock");
                 wakeLock.setReferenceCounted(false);
-                wakeLock.acquire(4 * 60 * 60 * 1000L); // Keep sensors alive up to 4h when wrist is lowered
+                wakeLock.acquire(4 * 60 * 60 * 1000L);
             }
         } catch (Exception ignored) {}
 
@@ -241,7 +243,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             };
             Wearable.getDataClient(this).addListener(dataListener);
 
-            // Immediately read any persisted /archery101010/state DataItem on startup
             Wearable.getDataClient(this).getDataItems().addOnSuccessListener((DataItemBuffer dataItems) -> {
                 if (dataItems == null) return;
                 try {
@@ -287,8 +288,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             int incomingArrows = obj.optInt("arrowsCount", -1);
             boolean sessionActive = obj.optBoolean("sessionActive", rootObj.optBoolean("sessionActive", true));
 
-            // Guard 1: If the phone explicitly reports sessionActive == false (or 0 arrows after finish),
-            // clear any finished-session lock and do not overwrite active local shots taken within the last 6s.
             if (!sessionActive) {
                 if (incomingArrows <= 0) {
                     lastFinishedSessionId = "";
@@ -308,7 +307,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 return;
             }
 
-            // Guard 2: Do not revive a session that was finished on the watch
             if (incomingArrows == 0) {
                 lastFinishedSessionId = "";
             } else if (incomingArrows > 0) {
@@ -323,9 +321,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 currentSessionId = incomingSessionId;
             }
 
-            // Guard 3: If the user acted locally on the watch within the last 6s and the phone snapshot
-            // has not yet acknowledged our latest command (_ackCmdSeq < pendingCmdSeq), keep local arrow/score state
-            // intact in BOTH directions (protects both +1 increments AND DESHACER/BORRAR undos).
             boolean hasUnackedLocalAction =
                 ((now - lastLocalActionTimeMs) < 6000L) &&
                 (pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
@@ -474,9 +469,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onPause() {
         super.onPause();
-        // Do NOT unregister accelerometer or stop heartbeatRunnable here:
-        // When the archer lowers their arm to draw/walk, Wear OS enters ambient mode (onPause).
-        // Keeping sensors and sync active ensures zero missed shots or steps during the session.
         saveState();
     }
 
@@ -558,11 +550,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return (int) Math.round((arrowsShot * kcalPerArrow) + walkKcal);
     }
 
-    private String getFormattedKmAndMi() {
-        float meters = getEffectiveWalkedMeters();
-        float km = meters / 1000f;
+    private String getFormattedKm() {
+        float km = getEffectiveWalkedMeters() / 1000f;
+        return String.format(Locale.US, "%.2f", km);
+    }
+
+    private String getFormattedMi() {
+        float km = getEffectiveWalkedMeters() / 1000f;
         float mi = km * 0.621371f;
-        return String.format(Locale.US, "%.2fkm/%.2fmi", km, mi);
+        return String.format(Locale.US, "%.2f", mi);
+    }
+
+    private String getFormattedKmAndMi() {
+        return getFormattedKm() + " km · " + getFormattedMi() + " mi";
     }
 
     @Override
@@ -576,7 +576,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             smoothedAccelMag = 0.96 * smoothedAccelMag + 0.04 * mag;
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
             long now = System.currentTimeMillis();
-            // Bow release signature on wrist (> 13.5 m/s^2 linear spike with 2.4s cooldown)
             if (autoDetectEnabled && linearMag >= 13.5 && (now - lastShotTimestamp) > 2400L) {
                 lastShotTimestamp = now;
                 lastLocalActionTimeMs = now;
@@ -586,7 +585,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
             } else if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && (now - lastStepTimeMs) > 350L && (now - lastShotTimestamp) > 1200L) {
-                // Walking cadence detected via gravity-isolated accelerometer (zero health permissions required)
                 lastStepTimeMs = now;
                 stepsCount++;
                 distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
@@ -604,13 +602,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private class WearCanvasView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG |
+                Paint.FILTER_BITMAP_FLAG |
+                Paint.DITHER_FLAG |
+                Paint.SUBPIXEL_TEXT_FLAG
+        );
         private final RectF rect = new RectF();
         private final GestureDetector gestureDetector;
+
+        // Bundled Outfit Athletic Typography (800 ExtraBold & 700 Bold)
+        private Typeface outfitExtraBold;
+        private Typeface outfitBold;
+
+        // Official 4K Brand Logo Bitmaps (Progressive 2-step supersampled to exact physical pixel width)
+        private Bitmap rawBrandLogo = null;
+        private Bitmap scaledBrandLogo = null;
+        private int cachedLogoWidthPx = 0;
 
         // Interactive hitboxes
         private final RectF btnLeftPrimary = new RectF();
         private final RectF btnRightSecondary = new RectF();
+        private final RectF btnCenterMetrics = new RectF();
+        private final RectF btnCounterChassis = new RectF();
         private final RectF btnToggleDetector = new RectF();
         private final RectF[] scoreButtons = new RectF[6];
         private final String[] scoreLabels = new String[]{"X", "10", "9", "8", "7", "M"};
@@ -622,6 +636,39 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             setFocusable(true);
             setFocusableInTouchMode(true);
+
+            // Load bundled Outfit athletic font for razor-sharp tabular numbers without slashed zeros
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    outfitExtraBold = new Typeface.Builder(context.getAssets(), "fonts/Outfit.ttf")
+                            .setFontVariationSettings("'wght' 800")
+                            .build();
+                    outfitBold = new Typeface.Builder(context.getAssets(), "fonts/Outfit.ttf")
+                            .setFontVariationSettings("'wght' 700")
+                            .build();
+                }
+            } catch (Exception ignored) {}
+            if (outfitExtraBold == null) {
+                try {
+                    Typeface base = Typeface.createFromAsset(context.getAssets(), "fonts/Outfit.ttf");
+                    outfitExtraBold = Typeface.create(base, Typeface.BOLD);
+                    outfitBold = Typeface.create(base, Typeface.BOLD);
+                } catch (Exception ignored) {
+                    outfitExtraBold = Typeface.create("sans-serif", Typeface.BOLD);
+                    outfitBold = Typeface.create("sans-serif-medium", Typeface.BOLD);
+                }
+            }
+
+            // Load official 4K brand logo (1789x131) in unscaled ARGB_8888 quality
+            try {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inScaled = false;
+                opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+                rawBrandLogo = BitmapFactory.decodeResource(context.getResources(), R.drawable.brand_logo_full, opts);
+                if (rawBrandLogo == null) {
+                    rawBrandLogo = BitmapFactory.decodeResource(context.getResources(), R.drawable.brand_logo_header, opts);
+                }
+            } catch (Exception ignored) {}
 
             gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
                 @Override
@@ -660,13 +707,47 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             return gestureDetector.onTouchEvent(event) || super.onTouchEvent(event);
         }
 
+        private boolean isRoundDisplay(int w, int h) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    return getResources().getConfiguration().isScreenRound();
+                } catch (Exception ignored) {}
+            }
+            return Math.abs(w - h) <= 6;
+        }
+
+        private void incrementArrowManually() {
+            lastLocalActionTimeMs = System.currentTimeMillis();
+            arrowCount++;
+            triggerHaptic(45);
+            saveState();
+            sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
+            invalidate();
+        }
+
+        private void decrementArrowManually() {
+            if (arrowCount > 0) {
+                lastLocalActionTimeMs = System.currentTimeMillis();
+                arrowCount--;
+                if (!currentEndArrows.isEmpty()) {
+                    String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
+                    int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
+                    totalScore = Math.max(0, totalScore - pts);
+                    totalScoredArrows = Math.max(0, totalScoredArrows - 1);
+                }
+                triggerHaptic(25);
+                saveState();
+                sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\",\"totalScore\":" + totalScore + "}");
+                invalidate();
+            }
+        }
+
         private void handleTap(float x, float y) {
             if (wakeLock != null && !wakeLock.isHeld()) {
                 try {
                     wakeLock.acquire(4 * 60 * 60 * 1000L);
                 } catch (Exception ignored) {}
             }
-            int w = getWidth();
             int h = getHeight();
 
             // Bottom page indicator tap switches screen
@@ -677,39 +758,32 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 return;
             }
 
+            // Status pill toggles auto-detector on Screen 0
+            if (screenIndex == 0 && btnToggleDetector.contains(x, y)) {
+                lastLocalActionTimeMs = System.currentTimeMillis();
+                autoDetectEnabled = !autoDetectEnabled;
+                triggerHaptic(25);
+                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + "}");
+                invalidate();
+                return;
+            }
+
             if (screenIndex == 0) {
-                if (btnToggleDetector.contains(x, y)) {
-                    lastLocalActionTimeMs = System.currentTimeMillis();
-                    autoDetectEnabled = !autoDetectEnabled;
-                    triggerHaptic(25);
-                    sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + "}");
-                    invalidate();
+                // +1 Button (Right) or tapping the 0000 counter chassis
+                if (btnLeftPrimary.contains(x, y) || btnCounterChassis.contains(x, y)) {
+                    incrementArrowManually();
                     return;
                 }
-                if (btnLeftPrimary.contains(x, y)) {
-                    lastLocalActionTimeMs = System.currentTimeMillis();
-                    arrowCount++;
-                    triggerHaptic(45);
-                    saveState();
-                    sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
-                    invalidate();
-                    return;
-                }
+                // -1 Button (Left)
                 if (btnRightSecondary.contains(x, y)) {
-                    if (arrowCount > 0) {
-                        lastLocalActionTimeMs = System.currentTimeMillis();
-                        arrowCount--;
-                        if (!currentEndArrows.isEmpty()) {
-                            String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
-                            int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
-                            totalScore = Math.max(0, totalScore - pts);
-                            totalScoredArrows = Math.max(0, totalScoredArrows - 1);
-                        }
-                        triggerHaptic(25);
-                        saveState();
-                        sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\",\"totalScore\":" + totalScore + "}");
-                        invalidate();
-                    }
+                    decrementArrowManually();
+                    return;
+                }
+                // Center Km/Kcal telemetry tap jumps to Metrics Screen (Screen 2)
+                if (btnCenterMetrics.contains(x, y)) {
+                    triggerHaptic(20);
+                    screenIndex = 2;
+                    invalidate();
                     return;
                 }
             } else if (screenIndex == 1) {
@@ -775,7 +849,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
             } else if (screenIndex == 3) {
                 if (btnLeftPrimary.contains(x, y)) {
-                    // Finish session on phone first, then reset local watch counters with cooldown guard
                     triggerHaptic(70);
                     lastFinishedTimestampMs = System.currentTimeMillis();
                     lastFinishedSessionId = currentSessionId;
@@ -799,54 +872,89 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void drawCenteredText(Canvas canvas, String text, float cx, float cy) {
+            paint.setTextAlign(Paint.Align.CENTER);
             Paint.FontMetrics fm = paint.getFontMetrics();
             float baseline = cy - (fm.ascent + fm.descent) / 2f;
             canvas.drawText(text, cx, baseline, paint);
         }
 
-        private void drawTricolorHeader(Canvas canvas, float cx, float topY, float scale) {
-            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(13.5f * scale);
+        private Bitmap getSupersampledLogo(int targetWidthPx) {
+            if (rawBrandLogo == null || targetWidthPx <= 0) return null;
+            if (scaledBrandLogo != null && cachedLogoWidthPx == targetWidthPx) {
+                return scaledBrandLogo;
+            }
+            try {
+                float aspect = (float) rawBrandLogo.getWidth() / (float) Math.max(1, rawBrandLogo.getHeight());
+                int targetHeightPx = Math.max(1, Math.round(targetWidthPx / aspect));
+                // 2-step progressive supersampling from 1789px -> 2x target -> 1x target for zero aliasing
+                int midW = Math.min(rawBrandLogo.getWidth(), targetWidthPx * 2);
+                int midH = Math.max(1, Math.round(midW / aspect));
+                Bitmap mid = Bitmap.createScaledBitmap(rawBrandLogo, midW, midH, true);
+                scaledBrandLogo = Bitmap.createScaledBitmap(mid, targetWidthPx, targetHeightPx, true);
+                if (mid != scaledBrandLogo && mid != rawBrandLogo) {
+                    mid.recycle();
+                }
+                cachedLogoWidthPx = targetWidthPx;
+            } catch (Exception ignored) {}
+            return scaledBrandLogo;
+        }
 
-            String p0 = "ARCHERY ";
-            String p1 = "10";
-            String p2 = "10";
-            String p3 = "10";
+        /**
+         * Draws the official 4K ARCHERY 101010 logo + Status Pill at the top of the centered stack.
+         */
+        private void drawBrandHeaderAndPill(
+                Canvas canvas,
+                float cx,
+                float scale,
+                boolean isRound,
+                String pillText,
+                boolean isYellowPill
+        ) {
+            int targetLogoW = Math.round((isRound ? 104f : 116f) * scale);
+            Bitmap logo = getSupersampledLogo(targetLogoW);
+            float logoTopY = 39f * scale;
 
-            float w0 = paint.measureText(p0);
-            float w1 = paint.measureText(p1);
-            float w2 = paint.measureText(p2);
-            float w3 = paint.measureText(p3);
-            float totalW = w0 + w1 + w2 + w3;
-            float startX = cx - totalW / 2f;
+            if (logo != null) {
+                float leftX = Math.round(cx - logo.getWidth() / 2f);
+                canvas.drawBitmap(logo, leftX, Math.round(logoTopY), paint);
+            } else {
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(10.5f * scale);
+                paint.setColor(Color.WHITE);
+                drawCenteredText(canvas, "ARCHERY 101010", cx, logoTopY + 4f * scale);
+            }
 
-            paint.setTextAlign(Paint.Align.LEFT);
+            // Status Pill below official logo
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(6.8f * scale);
+            float textW = paint.measureText(pillText);
+            float pillW = Math.max(114f * scale, textW + 24f * scale);
+            float pillH = 16.5f * scale;
+            float pillTopY = 52.5f * scale;
+
+            btnToggleDetector.set(cx - pillW / 2f, pillTopY, cx + pillW / 2f, pillTopY + pillH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(isYellowPill ? Color.parseColor("#101006") : Color.parseColor("#040B12"));
+            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(isYellowPill ? Color.parseColor("#73FFE500") : Color.parseColor("#6B00A8F3"));
+            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            // Dot + Text inside pill
+            float dotR = 2.1f * scale;
+            float contentW = (dotR * 2f) + (4.5f * scale) + textW;
+            float startX = cx - contentW / 2f;
+            paint.setColor(isYellowPill ? Color.parseColor("#FFE500") : Color.parseColor("#00A8F3"));
+            canvas.drawCircle(startX + dotR, btnToggleDetector.centerY(), dotR, paint);
+
             paint.setColor(Color.WHITE);
-            canvas.drawText(p0, startX, topY, paint);
-
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawText(p1, startX + w0, topY, paint);
-
-            paint.setColor(Color.parseColor("#FF0000"));
-            canvas.drawText(p2, startX + w0 + w1, topY, paint);
-
-            paint.setColor(Color.parseColor("#FFF200"));
-            canvas.drawText(p3, startX + w0 + w1 + w2, topY, paint);
-
-            // Subtle tricolor underline bar
-            float barW = 96f * scale;
-            float barH = 2f * scale;
-            float barX = cx - barW / 2f;
-            float barY = topY + 4.5f * scale;
-            paint.setShader(new LinearGradient(
-                    barX, barY, barX + barW, barY,
-                    new int[]{Color.parseColor("#00A8F3"), Color.parseColor("#FF0000"), Color.parseColor("#FFF200")},
-                    null,
-                    Shader.TileMode.CLAMP
-            ));
-            rect.set(barX, barY, barX + barW, barY + barH);
-            canvas.drawRoundRect(rect, barH, barH, paint);
-            paint.setShader(null);
+            paint.setTextAlign(Paint.Align.LEFT);
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            float baseline = btnToggleDetector.centerY() - (fm.ascent + fm.descent) / 2f;
+            canvas.drawText(pillText, startX + (dotR * 2f) + (4.5f * scale), baseline, paint);
         }
 
         @Override
@@ -855,174 +963,230 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             int w = getWidth();
             int h = getHeight();
             float cx = w / 2f;
+            float cy = h / 2f;
             float scale = Math.min(w, h) / 240f;
+            boolean isRound = isRoundDisplay(w, h);
+            float wMult = isRound ? 1.0f : 1.10f;
 
-            // Pure OLED Black Background
-            canvas.drawColor(Color.BLACK);
+            // Deep Matte OLED Background (#020305)
+            canvas.drawColor(Color.parseColor("#020305"));
 
-            // Subtle outer ring accent
+            // Crisp 1px inner safe bezel ring (Round or Square)
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.5f * scale);
-            paint.setColor(Color.parseColor("#18181D"));
-            canvas.drawCircle(cx, h / 2f, Math.min(w, h) / 2f - 2f * scale, paint);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#17FFFFFF"));
+            if (isRound) {
+                canvas.drawCircle(cx, cy, Math.min(w, h) / 2f - 2.5f * scale, paint);
+            } else {
+                rect.set(2.5f * scale, 2.5f * scale, w - 2.5f * scale, h - 2.5f * scale);
+                canvas.drawRoundRect(rect, 36f * scale, 36f * scale, paint);
+            }
             paint.setStyle(Paint.Style.FILL);
 
-            // Tricolor Header: ARCHERY 101010 (positioned within circular top safe zone)
-            drawTricolorHeader(canvas, cx, 29f * scale, scale);
-
             if (screenIndex == 0) {
-                drawCounterScreen(canvas, w, h, cx, scale);
+                drawCounterScreen(canvas, cx, scale, isRound, wMult);
             } else if (screenIndex == 1) {
-                drawScorePadScreen(canvas, w, h, cx, scale);
+                drawScorePadScreen(canvas, cx, scale, isRound, wMult);
             } else if (screenIndex == 2) {
-                drawBiometricsScreen(canvas, w, h, cx, scale);
+                drawBiometricsScreen(canvas, cx, scale, isRound, wMult);
             } else {
-                drawSummaryScreen(canvas, w, h, cx, scale);
+                drawSummaryScreen(canvas, cx, scale, isRound, wMult);
             }
 
-            // Bottom page dots (4 screens)
-            float dotY = h - 13f * scale;
-            float dotSpacing = 11f * scale;
-            float startDotX = cx - (1.5f * dotSpacing);
+            // Bottom WHOOP-style Pill Pager Dots (y = 223f on virtual 240f grid)
+            float dotY = h - 16.5f * scale;
+            float dotGap = 4.5f * scale;
+            float activeW = 11.5f * scale;
+            float inactiveW = 3.6f * scale;
+            float dotH = 3.6f * scale;
+            float totalDotsW = activeW + 3f * inactiveW + 3f * dotGap;
+            float curX = cx - totalDotsW / 2f;
+
             for (int i = 0; i < 4; i++) {
-                if (i == screenIndex) {
-                    paint.setColor(Color.parseColor("#00A8F3"));
-                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 3.2f * scale, paint);
-                } else {
-                    paint.setColor(Color.parseColor("#44444F"));
-                    canvas.drawCircle(startDotX + i * dotSpacing, dotY, 2.2f * scale, paint);
-                }
+                float itemW = (i == screenIndex) ? activeW : inactiveW;
+                rect.set(curX, dotY - dotH / 2f, curX + itemW, dotY + dotH / 2f);
+                paint.setColor(i == screenIndex ? Color.parseColor("#00A8F3") : Color.parseColor("#38FFFFFF"));
+                canvas.drawRoundRect(rect, dotH / 2f, dotH / 2f, paint);
+                curX += itemW + dotGap;
             }
         }
 
-        private void drawCounterScreen(Canvas canvas, int w, int h, float cx, float scale) {
-            // Auto-Detector Pill (Circular Safe Zone)
-            float pillW = 138f * scale;
-            float pillH = 19f * scale;
-            btnToggleDetector.set(cx - pillW / 2f, 41f * scale, cx + pillW / 2f, 41f * scale + pillH);
-            paint.setColor(Color.parseColor("#0A0A0E"));
-            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+        /**
+         * SCREEN 0: CONTADOR Y AUTO-TIRO (Mathematically centered: 39f..188f around cy = 114f..120f)
+         */
+        private void drawCounterScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
+            String pillLabel = autoDetectEnabled
+                    ? (isPhoneConnected ? "AUTO-TIRO · LIVE" : "AUTO-TIRO ACTIVO")
+                    : "MODO MANUAL";
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, false);
+
+            // Outer Counter Chassis: VOLUMEN · FLECHAS (top = 77f, bottom = 152f, centerY = 114.5f)
+            float chassisW = 168f * scale * wMult;
+            float chassisH = 74f * scale;
+            float chassisTop = 77f * scale;
+            btnCounterChassis.set(cx - chassisW / 2f, chassisTop, cx + chassisW / 2f, chassisTop + chassisH);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(btnCounterChassis, 11.5f * scale, 11.5f * scale, paint);
+
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.2f * scale);
-            paint.setColor(autoDetectEnabled ? Color.parseColor("#00A8F3") : Color.parseColor("#4A4A55"));
-            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#1AFFFFFF"));
+            canvas.drawRoundRect(btnCounterChassis, 11.5f * scale, 11.5f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setColor(Color.WHITE);
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(8.8f * scale);
-            drawCenteredText(
-                    canvas,
-                    autoDetectEnabled ? "● DETECTOR ACTIVO" : "○ DETECTOR PAUSADO",
-                    cx,
-                    btnToggleDetector.centerY()
-            );
+            // Label "VOLUMEN · FLECHAS"
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.4f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            drawCenteredText(canvas, "VOLUMEN · FLECHAS", cx, chassisTop + 10.5f * scale);
 
-            // 4-Digit Mechanical Counter Housing
+            // Inner Dark Tray holding the 4 Digit Cells
+            float trayPad = 7.5f * scale;
+            float trayTop = chassisTop + 18f * scale;
+            float trayBottom = chassisTop + chassisH - 7.5f * scale;
+            rect.set(btnCounterChassis.left + trayPad, trayTop, btnCounterChassis.right - trayPad, trayBottom);
+            paint.setColor(Color.parseColor("#030407"));
+            canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(0.9f * scale);
+            paint.setColor(Color.parseColor("#12FFFFFF"));
+            canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            // 4 Digit Cells (0 0 0 0) in Outfit ExtraBold
             String digits = String.format(Locale.US, "%04d", Math.min(9999, Math.max(0, arrowCount)));
-            float slotW = 34f * scale;
-            float slotH = 50f * scale;
-            float gap = 4.5f * scale;
-            float totalW = 4 * slotW + 3 * gap;
-            float startX = cx - totalW / 2f;
-            float topY = 67f * scale;
+            float innerPad = 4f * scale;
+            float cellGap = 4.2f * scale;
+            float availW = rect.width() - (2f * innerPad) - (3f * cellGap);
+            float cellW = availW / 4f;
+            float cellH = rect.height() - (2f * innerPad);
+            float cellTop = rect.top + innerPad;
+            float startCellX = rect.left + innerPad;
 
             for (int i = 0; i < 4; i++) {
-                float sx = startX + i * (slotW + gap);
-                rect.set(sx, topY, sx + slotW, topY + slotH);
-                paint.setColor(Color.parseColor("#0A0A0D"));
-                canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+                float sx = startCellX + i * (cellW + cellGap);
+                rect.set(sx, cellTop, sx + cellW, cellTop + cellH);
+                boolean isUnits = (i == 3);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(isUnits ? Color.parseColor("#101008") : Color.parseColor("#0B0E15"));
+                canvas.drawRoundRect(rect, 5.5f * scale, 5.5f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.4f * scale);
-                paint.setColor(i == 3 ? Color.parseColor("#FFF200") : Color.parseColor("#2E2E38"));
-                canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+                paint.setStrokeWidth(1.0f * scale);
+                paint.setColor(isUnits ? Color.parseColor("#FFE500") : Color.parseColor("#1EFFFFFF"));
+                canvas.drawRoundRect(rect, 5.5f * scale, 5.5f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
-                paint.setColor(Color.WHITE);
-                paint.setTextSize(31f * scale);
-                paint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(21f * scale);
+                paint.setColor(isUnits ? Color.parseColor("#FFE500") : Color.WHITE);
                 drawCenteredText(canvas, String.valueOf(digits.charAt(i)), rect.centerX(), rect.centerY());
             }
 
-            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(8.5f * scale);
+            // Bottom Symmetrical Row: [-1]  |  0.04 km · 2 kcal / TANDA 1 · 18 M  |  [+1]
+            float rowW = 160f * scale * wMult;
+            float btnW = 30f * scale;
+            float btnH = 22.5f * scale;
+            float btnTop = 163f * scale;
+
+            // Left Button: −1 (stored in btnRightSecondary)
+            btnRightSecondary.set(cx - rowW / 2f, btnTop, cx - rowW / 2f + btnW, btnTop + btnH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#180709"));
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#A6FF1E1E"));
+            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(9.5f * scale);
             paint.setColor(Color.WHITE);
-            String syncSubtitle = isPhoneConnected ? "● TELÉFONO SINCRONIZADO" : "CONTADOR AUTOMÁTICO";
-            drawCenteredText(canvas, syncSubtitle, cx, 130f * scale);
+            drawCenteredText(canvas, "−1", btnRightSecondary.centerX(), btnRightSecondary.centerY());
 
-            // Bottom Action Buttons: +1 FLECHA and DESHACER (148px total width = 33px bezel clearance per side)
-            float btnW = 71f * scale;
-            float btnH = 29f * scale;
-            float btnY = 143f * scale;
-            btnLeftPrimary.set(cx - btnW - 3f * scale, btnY, cx - 3f * scale, btnY + btnH);
-            btnRightSecondary.set(cx + 3f * scale, btnY, cx + btnW + 3f * scale, btnY + btnH);
+            // Center Telemetry (0.04 km · 2 kcal / TANDA 1 · 18 M)
+            btnCenterMetrics.set(btnRightSecondary.right + 4f * scale, btnTop - 2f * scale, cx + rowW / 2f - btnW - 4f * scale, btnTop + btnH + 2f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(8.8f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getFormattedKm() + " km · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
 
-            paint.setColor(Color.parseColor("#0A1826"));
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.6f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            int displayTanda = Math.max(1, currentEnd);
+            drawCenteredText(canvas, "TANDA " + displayTanda + " · " + distanceMeters + " M", cx, btnTop + 17.5f * scale);
+
+            // Right Button: +1 (stored in btnLeftPrimary)
+            btnLeftPrimary.set(cx + rowW / 2f - btnW, btnTop, cx + rowW / 2f, btnTop + btnH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#061523"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.3f * scale);
+            paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.WHITE);
+            paint.setTypeface(outfitExtraBold);
             paint.setTextSize(9.5f * scale);
-            drawCenteredText(canvas, "+1 FLECHA", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
-
-            paint.setColor(Color.parseColor("#1A0808"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.3f * scale);
-            paint.setColor(Color.parseColor("#FF0000"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
-            paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "DESHACER", btnRightSecondary.centerX(), btnRightSecondary.centerY());
+            drawCenteredText(canvas, "+1", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
         }
 
-        private void drawScorePadScreen(Canvas canvas, int w, int h, float cx, float scale) {
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(
+        /**
+         * SCREEN 1: PUNTUACIÓN DE TANDA (Mathematically centered: 39f..188f)
+         */
+        private void drawScorePadScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
+            drawBrandHeaderAndPill(
                     canvas,
-                    "RONDA " + currentEnd + "/" + syncedEndsCount + "  •  " + totalScore + " PTS",
                     cx,
-                    47f * scale
+                    scale,
+                    isRound,
+                    "TANDA " + currentEnd + "/" + syncedEndsCount + " · " + totalScore + " PTS",
+                    false
             );
 
-            // Dynamic Current Arrow Slots (syncedArrowsPerEnd, e.g., 3 or 6)
+            // Dynamic Current Arrow Slots (3 or 6 slots)
             int slotsCount = Math.max(1, Math.min(6, syncedArrowsPerEnd));
-            float gap = (slotsCount <= 3 ? 5f : 3f) * scale;
-            float totalSlotsW = 148f * scale;
+            float gap = (slotsCount <= 3 ? 4.5f : 3.2f) * scale;
+            float totalSlotsW = 162f * scale * wMult;
             float slotW = (totalSlotsW - (slotsCount - 1) * gap) / slotsCount;
-            float slotH = 24f * scale;
+            float slotH = 19.5f * scale;
             float startX = cx - totalSlotsW / 2f;
-            float slotY = 56f * scale;
+            float slotY = 75f * scale;
 
             for (int i = 0; i < slotsCount; i++) {
                 float sx = startX + i * (slotW + gap);
                 rect.set(sx, slotY, sx + slotW, slotY + slotH);
                 String val = i < currentEndArrows.size() ? currentEndArrows.get(i) : "—";
-                paint.setColor(Color.parseColor("#0C0C10"));
-                canvas.drawRoundRect(rect, 6f * scale, 6f * scale, paint);
+                boolean isCurrentSlot = (i == currentEndArrows.size());
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(isCurrentSlot ? Color.parseColor("#061320") : Color.parseColor("#07090E"));
+                canvas.drawRoundRect(rect, 4.5f * scale, 4.5f * scale, paint);
+
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.2f * scale);
-                paint.setColor(i == currentEndArrows.size() ? Color.parseColor("#00A8F3") : Color.parseColor("#2E2E38"));
-                canvas.drawRoundRect(rect, 6f * scale, 6f * scale, paint);
+                paint.setStrokeWidth(1.0f * scale);
+                paint.setColor(isCurrentSlot ? Color.parseColor("#00A8F3") : Color.parseColor("#1FFFFFFF"));
+                canvas.drawRoundRect(rect, 4.5f * scale, 4.5f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize((slotsCount <= 3 ? 10.5f : 8.8f) * scale);
                 paint.setColor(Color.WHITE);
-                paint.setTextSize((slotsCount <= 3 ? 12.5f : 10.5f) * scale);
                 drawCenteredText(canvas, val, rect.centerX(), rect.centerY());
             }
 
             // 6 Keypad Buttons (2 rows x 3 cols): X, 10, 9 / 8, 7, M
-            float keyW = 46f * scale;
-            float keyH = 26f * scale;
-            float kGap = 5f * scale;
-            float kStartX = cx - (3 * keyW + 2 * kGap) / 2f;
-            float kStartY = 85f * scale;
+            float keypadW = 162f * scale * wMult;
+            float kGap = 4.5f * scale;
+            float keyW = (keypadW - 2f * kGap) / 3f;
+            float keyH = 24f * scale;
+            float kStartX = cx - keypadW / 2f;
+            float kStartY = 101f * scale;
 
             for (int i = 0; i < 6; i++) {
                 int row = i / 3;
@@ -1031,151 +1195,263 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 float ky = kStartY + row * (keyH + kGap);
                 scoreButtons[i].set(kx, ky, kx + keyW, ky + keyH);
 
+                paint.setStyle(Paint.Style.FILL);
                 if (i < 3) {
-                    paint.setColor(Color.parseColor("#191604"));
+                    paint.setColor(Color.parseColor("#111007"));
                 } else if (i < 5) {
-                    paint.setColor(Color.parseColor("#1D0606"));
+                    paint.setColor(Color.parseColor("#160708"));
                 } else {
-                    paint.setColor(Color.parseColor("#14141A"));
+                    paint.setColor(Color.parseColor("#0B0E14"));
                 }
-                canvas.drawRoundRect(scoreButtons[i], 7f * scale, 7f * scale, paint);
+                canvas.drawRoundRect(scoreButtons[i], 6f * scale, 6f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.3f * scale);
+                paint.setStrokeWidth(1.0f * scale);
                 if (i < 3) {
-                    paint.setColor(Color.parseColor("#FFF200"));
+                    paint.setColor(Color.parseColor("#99FFE500"));
                 } else if (i < 5) {
-                    paint.setColor(Color.parseColor("#FF0000"));
+                    paint.setColor(Color.parseColor("#99FF1E1E"));
                 } else {
-                    paint.setColor(Color.parseColor("#4A4A58"));
+                    paint.setColor(Color.parseColor("#26FFFFFF"));
                 }
-                canvas.drawRoundRect(scoreButtons[i], 7f * scale, 7f * scale, paint);
+                canvas.drawRoundRect(scoreButtons[i], 6f * scale, 6f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
-                paint.setColor(Color.WHITE);
-                paint.setTextSize(13f * scale);
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(10.5f * scale);
+                if (i < 3) {
+                    paint.setColor(Color.parseColor("#FFE500"));
+                } else if (i < 5) {
+                    paint.setColor(Color.WHITE);
+                } else {
+                    paint.setColor(Color.parseColor("#8E96A4"));
+                }
                 drawCenteredText(canvas, scoreLabels[i], scoreButtons[i].centerX(), scoreButtons[i].centerY());
             }
 
-            // Bottom row: BORRAR and SIG. RONDA (148px total width within circular safe zone)
-            float btnW = 71f * scale;
-            float btnH = 25f * scale;
-            float btnY = 148f * scale;
-            btnLeftPrimary.set(cx - btnW - 3f * scale, btnY, cx - 3f * scale, btnY + btnH);
-            btnRightSecondary.set(cx + 3f * scale, btnY, cx + btnW + 3f * scale, btnY + btnH);
+            // Bottom row: BORRAR and SIG. TANDA →
+            float pairW = 154f * scale * wMult;
+            float btnW = (pairW - 5f * scale) / 2f;
+            float btnH = 21.5f * scale;
+            float btnY = 161.5f * scale;
+            btnLeftPrimary.set(cx - pairW / 2f, btnY, cx - pairW / 2f + btnW, btnY + btnH);
+            btnRightSecondary.set(cx + pairW / 2f - btnW, btnY, cx + pairW / 2f, btnY + btnH);
 
-            paint.setColor(Color.parseColor("#16161C"));
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#0B0E14"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.2f * scale);
-            paint.setColor(Color.parseColor("#3E3E4A"));
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#24FFFFFF"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.WHITE);
-            paint.setTextSize(8.8f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(7.2f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
             drawCenteredText(canvas, "BORRAR", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
-            paint.setColor(Color.parseColor("#0A1826"));
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#061523"));
             canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.2f * scale);
+            paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "SIG. RONDA →", btnRightSecondary.centerX(), btnRightSecondary.centerY());
+            drawCenteredText(canvas, "SIG. TANDA →", btnRightSecondary.centerX(), btnRightSecondary.centerY());
         }
 
-        private void drawBiometricsScreen(Canvas canvas, int w, int h, float cx, float scale) {
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "TELEMETRÍA Y ENERGÍA", cx, 47f * scale);
+        /**
+         * SCREEN 2: MÉTRICAS (KM / KCAL) (Mathematically centered: 39f..188f)
+         */
+        private void drawBiometricsScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "GPS ACTIVO · PASOS", true);
 
-            // Card 1: KCAL (152px width inside circular safe zone)
-            float cardW = 152f * scale;
-            float cardH = 41f * scale;
-            rect.set(cx - cardW / 2f, 56f * scale, cx + cardW / 2f, 56f * scale + cardH);
-            paint.setColor(Color.parseColor("#0B0B0F"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            float cardW = 166f * scale * wMult;
+            float cardH = 38.5f * scale;
+
+            // Card 1: DISTANCIA RECORRIDA (km · mi + GPS badge)
+            float card1Top = 77f * scale;
+            rect.set(cx - cardW / 2f, card1Top, cx + cardW / 2f, card1Top + cardH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.3f * scale);
-            paint.setColor(Color.parseColor("#FF0000"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#7300A8F3"));
+            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(8.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "KCAL", cx, 66.5f * scale);
-            paint.setTextSize(17.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getActiveKcal() + " kcal", cx, 84.5f * scale);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.2f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText("DISTANCIA RECORRIDA", rect.left + 9.5f * scale, card1Top + 13.5f * scale, paint);
 
-            // Card 2: DISTANCIA RECORRIDA (0.00km/0.00mi)
-            rect.set(cx - cardW / 2f, 102f * scale, cx + cardW / 2f, 102f * scale + cardH);
-            paint.setColor(Color.parseColor("#0B0B0F"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(12.2f * scale);
+            paint.setColor(Color.WHITE);
+            canvas.drawText(getFormattedKmAndMi(), rect.left + 9.5f * scale, card1Top + 29.5f * scale, paint);
+
+            // GPS Badge inside Card 1
+            float badgeW = 28f * scale;
+            float badgeH = 14.5f * scale;
+            RectF badgeRect = new RectF(rect.right - badgeW - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
+            paint.setColor(Color.parseColor("#04101C"));
+            canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.3f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setStrokeWidth(0.9f * scale);
+            paint.setColor(Color.parseColor("#8000A8F3"));
+            canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(6.2f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "GPS", badgeRect.centerX(), badgeRect.centerY());
+
+            // Card 2: GASTO ENERGÉTICO (kcal + ACTIVA badge)
+            float card2Top = 121.5f * scale;
+            rect.set(cx - cardW / 2f, card2Top, cx + cardW / 2f, card2Top + cardH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#73FF1E1E"));
+            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(8.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "DISTANCIA RECORRIDA", cx, 112.5f * scale);
-            paint.setTextSize(14.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedKmAndMi(), cx, 130.5f * scale);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.2f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText("GASTO ENERGÉTICO", rect.left + 9.5f * scale, card2Top + 13.5f * scale, paint);
 
-            // Live GPS + Steps telemetry sync pill
-            float pillW = 144f * scale;
-            float pillH = 24f * scale;
-            btnLeftPrimary.set(cx - pillW / 2f, 149f * scale, cx + pillW / 2f, 149f * scale + pillH);
-            paint.setColor(Color.parseColor("#0A1826"));
-            canvas.drawRoundRect(btnLeftPrimary, pillH / 2f, pillH / 2f, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.2f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnLeftPrimary, pillH / 2f, pillH / 2f, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(8.3f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(13f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "GPS + PASOS EN VIVO • AUTO", cx, btnLeftPrimary.centerY());
+            canvas.drawText(getActiveKcal() + " kcal", rect.left + 9.5f * scale, card2Top + 29.5f * scale, paint);
+
+            // ACTIVA Badge inside Card 2
+            float badge2W = 36f * scale;
+            badgeRect.set(rect.right - badge2W - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
+            paint.setColor(Color.parseColor("#101008"));
+            canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(0.9f * scale);
+            paint.setColor(Color.parseColor("#80FFE500"));
+            canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(6.2f * scale);
+            paint.setColor(Color.parseColor("#FFE500"));
+            drawCenteredText(canvas, "ACTIVA", badgeRect.centerX(), badgeRect.centerY());
+
+            // Bottom Sync Subtitle (tap triggers immediate telemetry sync)
+            btnLeftPrimary.set(cx - 75f * scale, 166f * scale, cx + 75f * scale, 190f * scale);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.6f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            drawCenteredText(
+                    canvas,
+                    arrowCount + " FLECHAS · " + Math.round(drawWeightLbs) + " LBS · SYNC EN VIVO",
+                    cx,
+                    175f * scale
+            );
         }
 
-        private void drawSummaryScreen(Canvas canvas, int w, int h, float cx, float scale) {
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "RESUMEN DE SESIÓN", cx, 48f * scale);
+        /**
+         * SCREEN 3: RESUMEN Y ENVÍO A COACH (Mathematically centered: 39f..188f)
+         */
+        private void drawSummaryScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "SINCRONIZADO CON COACH", false);
 
-            paint.setTextSize(26f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, totalScore + " PTS", cx, 76f * scale);
+            float gridW = 166f * scale * wMult;
+            float colGap = 5f * scale;
+            float colW = (gridW - colGap) / 2f;
+            float row1Top = 76f * scale;
+            float row1H = 36f * scale;
 
-            paint.setTextSize(10.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, arrowCount + " FLECHAS  •  " + getActiveKcal() + " KCAL", cx, 102f * scale);
+            // Box 1: FLECHAS
+            rect.set(cx - gridW / 2f, row1Top, cx - gridW / 2f + colW, row1Top + row1H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#7300A8F3"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(10.5f * scale);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.0f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            drawCenteredText(canvas, "FLECHAS", rect.centerX(), row1Top + 10.5f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(12.5f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedKmAndMi(), cx, 121f * scale);
+            drawCenteredText(canvas, arrowCount + " FL", rect.centerX(), row1Top + 25f * scale);
 
-            float btnW = 144f * scale;
-            float btnH = 30f * scale;
-            btnLeftPrimary.set(cx - btnW / 2f, 142f * scale, cx + btnW / 2f, 142f * scale + btnH);
-            paint.setColor(Color.parseColor("#0A1826"));
+            // Box 2: ENERGÍA
+            rect.set(cx + gridW / 2f - colW, row1Top, cx + gridW / 2f, row1Top + row1H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#73FF1E1E"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.0f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            drawCenteredText(canvas, "ENERGÍA", rect.centerX(), row1Top + 10.5f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(12.5f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getActiveKcal() + " kcal", rect.centerX(), row1Top + 25f * scale);
+
+            // Box 3 (Full width): DISTANCIA TOTAL
+            float row2Top = 117f * scale;
+            float row2H = 34f * scale;
+            rect.set(cx - gridW / 2f, row2Top, cx + gridW / 2f, row2Top + row2H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#07090E"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#73FFE500"));
+            canvas.drawRoundRect(rect, 8.5f * scale, 8.5f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.0f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            drawCenteredText(canvas, "DISTANCIA TOTAL", cx, row2Top + 10f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(11.2f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getFormattedKmAndMi(), cx, row2Top + 23.5f * scale);
+
+            // Bottom Action Button: ENVIAR SESIÓN A COACH
+            float btnW = 152f * scale * wMult;
+            float btnH = 22.5f * scale;
+            float btnTop = 160f * scale;
+            btnLeftPrimary.set(cx - btnW / 2f, btnTop, cx + btnW / 2f, btnTop + btnH);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#061523"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.4f * scale);
+            paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setTextSize(9.5f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(7.2f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "GUARDAR Y REINICIAR", cx, btnLeftPrimary.centerY());
+            drawCenteredText(canvas, "ENVIAR SESIÓN A COACH", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
         }
     }
 }
