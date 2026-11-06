@@ -243,6 +243,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Tally Counter State for Volume session
   const [tallyCount, setTallyCount] = useState(0);
 
+  // Synchronous refs so rapid or queued watch commands in the same JS tick never read stale state
+  const endsRef = useRef<EndData[]>(ends);
+  endsRef.current = ends;
+  const currentEndIdxRef = useRef<number>(currentEndIdx);
+  currentEndIdxRef.current = currentEndIdx;
+  const currentArrowIdxRef = useRef<number>(currentArrowIdx);
+  currentArrowIdxRef.current = currentArrowIdx;
+  const editingArrowSlotRef = useRef<number | null>(editingArrowSlot);
+  editingArrowSlotRef.current = editingArrowSlot;
+  const tallyCountRef = useRef<number>(tallyCount);
+  tallyCountRef.current = tallyCount;
+
   // Notes state
   const [endNote, setEndNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
@@ -261,6 +273,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     config?.practiceType === "Volumen"
   );
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
+  const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
+  const watchFinishedSessionRef = useRef<boolean>(false);
   const lastGpsCoordRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
   const gpsDistanceAccumRef = useRef<number>(
     Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0
@@ -563,8 +577,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     );
     return {
       sessionId: config.draftId || config.id || `SES-DRAFT-${user.uid}`,
+      sessionActive: true,
       arrowsCount: totalShotArrows,
-      totalScore: config.practiceType === "Volumen" ? 0 : calculateTotalScore(),
+      totalScore: config.practiceType === "Volumen" ? watchVolumeScore : calculateTotalScore(),
       distanceM: Number(config.distance) || 18,
       arrowsPerEnd: Number(config.arrowsPerEnd) || 6,
       endsCount: Number(config.endsCount) || 12,
@@ -587,6 +602,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     config.id,
     user.uid,
     totalShotArrows,
+    watchVolumeScore,
     ends,
     config.distance,
     config.arrowsPerEnd,
@@ -604,8 +620,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     autoDetectEnabled
   ]);
 
+  const publishResetWatchState = () => {
+    publishWatchState({
+      ...liveWatchSnapshot,
+      sessionActive: false,
+      arrowsCount: 0,
+      totalScore: 0,
+      completedEnds: 0,
+      currentEndIndex: 0,
+      currentEndArrows: [],
+      updatedAt: Date.now()
+    });
+  };
+
   // Publish live state to Open Smartwatch Companion (Wear OS, Garmin IQ, /watch)
   useEffect(() => {
+    if (watchFinishedSessionRef.current || isClosingSessionRef.current) return;
     publishWatchState(liveWatchSnapshot);
   }, [liveWatchSnapshot]);
 
@@ -713,17 +743,47 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [ends, currentEndIdx, config.arrowsPerEnd]);
 
   // Keyboard tactile touch event handler
-  const handleScoreInput = (value: string, fromTargetShot: boolean = false) => {
-    if (currentEndIdx >= config.endsCount) return;
+  const handleScoreInput = (
+    value: string,
+    fromTargetShot: boolean = false,
+    fromWatch: boolean = false
+  ) => {
+    const liveEnds = endsRef.current;
+    const startEndIdx = currentEndIdxRef.current;
+    const startArrowIdx = currentArrowIdxRef.current;
+    const activeEditSlot = fromWatch ? null : editingArrowSlotRef.current;
 
-    // Si el end ya tiene todas las flechas registradas y el usuario NO seleccionó una casilla específica para editar, bloquear
-    const currentEnd = ends[currentEndIdx];
+    if (startEndIdx >= config.endsCount) return;
+
+    let targetEndIdx = startEndIdx;
+    let targetArrowIdx = startArrowIdx;
+
+    // Si el end ya tiene todas las flechas registradas:
+    // - desde el reloj (fromWatch): avanzar automáticamente al siguiente end para no perder ningún tiro
+    // - desde pantalla táctil sin casilla en edición: bloquear hasta confirmar end
+    const currentEnd = liveEnds[targetEndIdx];
     const isEndFull =
       currentEnd &&
       currentEnd.arrows.length === config.arrowsPerEnd &&
       currentEnd.arrows.every((a) => a !== "" && a !== undefined);
-    if (isEndFull && editingArrowSlot === null) {
-      return;
+
+    if (isEndFull && activeEditSlot === null) {
+      if (fromWatch && targetEndIdx < config.endsCount - 1) {
+        targetEndIdx = targetEndIdx + 1;
+        targetArrowIdx = 0;
+        currentEndIdxRef.current = targetEndIdx;
+        setCurrentEndIdx(targetEndIdx);
+      } else {
+        return;
+      }
+    } else if (fromWatch) {
+      const targetArr = liveEnds[targetEndIdx]?.arrows || [];
+      if (targetArr[targetArrowIdx] && targetArr[targetArrowIdx] !== "") {
+        const emptySlot = targetArr.findIndex((a) => !a || a === "");
+        if (emptySlot !== -1) {
+          targetArrowIdx = emptySlot;
+        }
+      }
     }
 
     if (value === "X" || value === "10") {
@@ -736,49 +796,59 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     if (!fromTargetShot && value === "M") {
       setImpacts((prev) =>
-        prev.filter((imp) => !(imp.endIdx === currentEndIdx && imp.arrowIdx === currentArrowIdx))
+        prev.filter((imp) => !(imp.endIdx === targetEndIdx && imp.arrowIdx === targetArrowIdx))
       );
     }
 
-    const existingArrows = ends[currentEndIdx]?.arrows || [];
+    const existingArrows = liveEnds[targetEndIdx]?.arrows || [];
     const updatedArrowsPreview = [...existingArrows];
-    updatedArrowsPreview[currentArrowIdx] = value;
+    updatedArrowsPreview[targetArrowIdx] = value;
 
-    setEnds((prevEnds) => {
-      const newEnds = [...prevEnds];
-      const end = { ...newEnds[currentEndIdx] };
-      const currentArrows = [...end.arrows];
+    const nextEnds = [...liveEnds];
+    if (nextEnds[targetEndIdx]) {
+      nextEnds[targetEndIdx] = {
+        ...nextEnds[targetEndIdx],
+        arrows: updatedArrowsPreview
+      };
+    }
+    endsRef.current = nextEnds;
+    setEnds(nextEnds);
 
-      currentArrows[currentArrowIdx] = value;
-      end.arrows = currentArrows;
-      newEnds[currentEndIdx] = end;
-
-      return newEnds;
-    });
-
+    editingArrowSlotRef.current = null;
     setEditingArrowSlot(null);
 
-    // Advance cell pointer index to next empty slot (sin avanzar de end automáticamente)
-    advanceCell(updatedArrowsPreview);
+    if (targetEndIdx !== startEndIdx) {
+      const nextEmpty = updatedArrowsPreview.findIndex((a, idx) => idx > 0 && (!a || a === ""));
+      const nextSlot = nextEmpty !== -1 ? nextEmpty : Math.min(1, config.arrowsPerEnd - 1);
+      currentArrowIdxRef.current = nextSlot;
+      setCurrentArrowIdx(nextSlot);
+    } else {
+      // Advance cell pointer index to next empty slot (sin avanzar de end automáticamente)
+      advanceCell(updatedArrowsPreview, targetArrowIdx);
+    }
   };
 
-  const advanceCell = (arrowsAfterShot?: string[]) => {
-    const arr = arrowsAfterShot || ends[currentEndIdx]?.arrows || [];
-    // Seek next empty slot starting after currentArrowIdx, then wrap from 0
-    for (let i = currentArrowIdx + 1; i < config.arrowsPerEnd; i++) {
+  const advanceCell = (arrowsAfterShot?: string[], fromArrowIdx?: number) => {
+    const baseArrowIdx = typeof fromArrowIdx === "number" ? fromArrowIdx : currentArrowIdxRef.current;
+    const arr = arrowsAfterShot || endsRef.current[currentEndIdxRef.current]?.arrows || [];
+    // Seek next empty slot starting after baseArrowIdx, then wrap from 0
+    for (let i = baseArrowIdx + 1; i < config.arrowsPerEnd; i++) {
       if (!arr[i] || arr[i] === "") {
+        currentArrowIdxRef.current = i;
         setCurrentArrowIdx(i);
         return;
       }
     }
-    for (let i = 0; i < currentArrowIdx; i++) {
+    for (let i = 0; i < baseArrowIdx; i++) {
       if (!arr[i] || arr[i] === "") {
+        currentArrowIdxRef.current = i;
         setCurrentArrowIdx(i);
         return;
       }
     }
-    if (currentArrowIdx < config.arrowsPerEnd - 1) {
-      setCurrentArrowIdx(currentArrowIdx + 1);
+    if (baseArrowIdx < config.arrowsPerEnd - 1) {
+      currentArrowIdxRef.current = baseArrowIdx + 1;
+      setCurrentArrowIdx(baseArrowIdx + 1);
     }
   };
 
@@ -789,17 +859,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
 
     triggerHaptic("confirm");
+    const curEndIdx = currentEndIdxRef.current;
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
-      if (newEnds[currentEndIdx]) {
-        newEnds[currentEndIdx].note = endNote;
+      if (newEnds[curEndIdx]) {
+        newEnds[curEndIdx] = { ...newEnds[curEndIdx], note: endNote };
       }
+      endsRef.current = newEnds;
       return newEnds;
     });
     setEndNote("");
 
-    if (currentEndIdx < config.endsCount - 1) {
-      setCurrentEndIdx(currentEndIdx + 1);
+    if (curEndIdx < config.endsCount - 1) {
+      currentEndIdxRef.current = curEndIdx + 1;
+      currentArrowIdxRef.current = 0;
+      setCurrentEndIdx(curEndIdx + 1);
       setCurrentArrowIdx(0);
     } else {
       // Completed all ends, trigger session summary notes modal
@@ -808,26 +882,29 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleBackspace = () => {
-    let targetArrow = currentArrowIdx;
-    let targetEnd = currentEndIdx;
+    const liveEnds = endsRef.current;
+    const curEndIdx = currentEndIdxRef.current;
+    const curArrowIdx = currentArrowIdxRef.current;
+    let targetArrow = curArrowIdx;
+    let targetEnd = curEndIdx;
 
     // Si ya completamos todos los ends y la planilla está llena, retrocedemos al último casillero
-    if (currentEndIdx >= config.endsCount) {
+    if (curEndIdx >= config.endsCount) {
       targetEnd = config.endsCount - 1;
       targetArrow = config.arrowsPerEnd - 1;
     } else {
       // Verificamos si la celda actual tiene valor
-      const currentValue = ends[currentEndIdx]?.arrows[currentArrowIdx];
+      const currentValue = liveEnds[curEndIdx]?.arrows[curArrowIdx];
       if (currentValue !== undefined && currentValue !== "") {
         // Si no está vacía, borramos el valor actual sin mover el cursor
-        targetEnd = currentEndIdx;
-        targetArrow = currentArrowIdx;
+        targetEnd = curEndIdx;
+        targetArrow = curArrowIdx;
       } else {
         // Si está vacía, retrocedemos y borramos la celda anterior
-        if (currentArrowIdx > 0) {
-          targetArrow = currentArrowIdx - 1;
-        } else if (currentEndIdx > 0) {
-          targetEnd = currentEndIdx - 1;
+        if (curArrowIdx > 0) {
+          targetArrow = curArrowIdx - 1;
+        } else if (curEndIdx > 0) {
+          targetEnd = curEndIdx - 1;
           targetArrow = config.arrowsPerEnd - 1;
         } else {
           return; // ya estamos en la primera celda vacía
@@ -835,6 +912,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       }
     }
 
+    currentEndIdxRef.current = targetEnd;
+    currentArrowIdxRef.current = targetArrow;
     setCurrentEndIdx(targetEnd);
     setCurrentArrowIdx(targetArrow);
     triggerHaptic("undo");
@@ -845,15 +924,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     );
 
     // Clear the score value in ends
-    setEnds((prevEnds) => {
-      const newEnds = prevEnds.map((e, eIdx) => {
-        if (eIdx !== targetEnd) return e;
-        const arrows = [...e.arrows];
-        arrows[targetArrow] = "";
-        return { ...e, arrows };
-      });
-      return newEnds;
+    const nextEnds = liveEnds.map((e, eIdx) => {
+      if (eIdx !== targetEnd) return e;
+      const arrows = [...e.arrows];
+      arrows[targetArrow] = "";
+      return { ...e, arrows };
     });
+    endsRef.current = nextEnds;
+    setEnds(nextEnds);
   };
 
   // WhatsApp Scorecard Sharing (Strava-style Diana+Planilla Image + Clean Scorecard Text without homepage URL)
@@ -1192,6 +1270,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const handleConfirmAbandon = async () => {
     isClosingSessionRef.current = true;
+    publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();
     onBack(); // exits to Home
@@ -1225,6 +1304,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSavePartialBlock = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();
 
@@ -1350,6 +1430,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSaveFull = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();
 
@@ -1614,16 +1695,20 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleTallyDecrement = () => {
-    if (tallyCount <= 0) return;
+    const activeCount = tallyCountRef.current;
+    if (activeCount <= 0) return;
     playTallyClickSound();
-    const nextCount = Math.max(0, tallyCount - 1);
+    const nextCount = Math.max(0, activeCount - 1);
+    tallyCountRef.current = nextCount;
     setTallyCount(nextCount);
 
-    const updatedEnds = [...ends];
-    let prevArrowIdx = currentArrowIdx - 1;
-    let prevEndIdx = currentEndIdx;
+    const updatedEnds = [...endsRef.current];
+    const activeEndIdx = currentEndIdxRef.current;
+    const activeArrowIdx = currentArrowIdxRef.current;
+    let prevArrowIdx = activeArrowIdx - 1;
+    let prevEndIdx = activeEndIdx;
     if (prevArrowIdx < 0) {
-      prevEndIdx = Math.max(0, currentEndIdx - 1);
+      prevEndIdx = Math.max(0, activeEndIdx - 1);
       prevArrowIdx = (config.arrowsPerEnd || 3) - 1;
     }
     if (updatedEnds[prevEndIdx]) {
@@ -1632,47 +1717,52 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       targetArrows[prevArrowIdx] = "";
       targetEnd.arrows = targetArrows;
       updatedEnds[prevEndIdx] = targetEnd;
+      endsRef.current = updatedEnds;
       setEnds(updatedEnds);
     }
+    currentArrowIdxRef.current = prevArrowIdx;
+    currentEndIdxRef.current = prevEndIdx;
     setCurrentArrowIdx(prevArrowIdx);
     setCurrentEndIdx(prevEndIdx);
   };
 
   const handleTallyIncrement = () => {
-    if (config.practiceType !== "Volumen" && currentEndIdx >= config.endsCount) {
+    const activeEndIdx = currentEndIdxRef.current;
+    const activeArrowIdx = currentArrowIdxRef.current;
+    if (config.practiceType !== "Volumen" && activeEndIdx >= config.endsCount) {
       alert("Has alcanzado el límite de ends programados. Puedes finalizar el entrenamiento o agregar más ends.");
       return;
     }
     
     playTallyClickSound();
     
-    const nextCount = tallyCount + 1;
+    const nextCount = tallyCountRef.current + 1;
+    tallyCountRef.current = nextCount;
     setTallyCount(nextCount);
     
-    let updatedEnds = [...ends];
+    const updatedEnds = [...endsRef.current];
     
     // Dynamically grow the array in volume mode if the current index is out of bounds
-    while (currentEndIdx >= updatedEnds.length) {
+    while (activeEndIdx >= updatedEnds.length) {
       updatedEnds.push({
         arrows: Array.from({ length: config.arrowsPerEnd || 3 }, () => ""),
         note: ""
       });
     }
     
-    const currentEnd = { ...updatedEnds[currentEndIdx] };
+    const currentEnd = { ...updatedEnds[activeEndIdx] };
     const currentArrows = [...currentEnd.arrows];
     
-    currentArrows[currentArrowIdx] = "10";
+    currentArrows[activeArrowIdx] = "10";
     currentEnd.arrows = currentArrows;
-    updatedEnds[currentEndIdx] = currentEnd;
-    setEnds(updatedEnds);
+    updatedEnds[activeEndIdx] = currentEnd;
     
-    let nextArrowIdx = currentArrowIdx + 1;
-    let nextEndIdx = currentEndIdx;
+    let nextArrowIdx = activeArrowIdx + 1;
+    let nextEndIdx = activeEndIdx;
     
     if (nextArrowIdx >= config.arrowsPerEnd) {
       nextArrowIdx = 0;
-      nextEndIdx = currentEndIdx + 1;
+      nextEndIdx = activeEndIdx + 1;
     }
     
     // Ensure the next index also exists in volume mode
@@ -1685,17 +1775,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       }
     }
     
+    endsRef.current = updatedEnds;
+    setEnds(updatedEnds);
+    currentArrowIdxRef.current = nextArrowIdx;
+    currentEndIdxRef.current = nextEndIdx;
     setCurrentArrowIdx(nextArrowIdx);
     setCurrentEndIdx(nextEndIdx);
   };
 
   // Handle commands coming from Open Smartwatch Companion (/watch or native Wear OS / Garmin IQ)
   const handleWatchArrowDelta = (delta: number) => {
+    watchFinishedSessionRef.current = false;
     if (delta > 0) {
       if (config.practiceType === "Volumen") {
         handleTallyIncrement();
       } else {
-        handleScoreInput("10");
+        handleScoreInput("10", false, true);
       }
     } else if (delta < 0) {
       if (config.practiceType === "Volumen") {
@@ -1712,33 +1807,58 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (msg.type === "INCREMENT_ARROW") {
       handleWatchArrowDelta(msg.delta ?? 1);
     } else if (msg.type === "DECREMENT_ARROW") {
+      if (config.practiceType === "Volumen") {
+        const incomingTotal = Number(msg.payload?.totalScore ?? msg.totalScore);
+        setWatchVolumeScore((prev) =>
+          !isNaN(incomingTotal) && incomingTotal >= 0 ? incomingTotal : Math.max(0, prev - 10)
+        );
+      }
       handleWatchArrowDelta(msg.delta ?? -1);
     } else if (msg.type === "UNDO_ARROW") {
+      watchFinishedSessionRef.current = false;
       if (config.practiceType === "Volumen") {
+        const incomingTotal = Number(msg.payload?.totalScore ?? msg.totalScore);
+        setWatchVolumeScore((prev) =>
+          !isNaN(incomingTotal) && incomingTotal >= 0 ? incomingTotal : Math.max(0, prev - 10)
+        );
         handleTallyDecrement();
       } else {
-        const currentEndArrows = ends[currentEndIdx]?.arrows || [];
+        const currentEndArrows = endsRef.current[currentEndIdxRef.current]?.arrows || [];
         if (currentEndArrows.some((a) => a !== "" && a !== undefined)) {
           handleBackspace();
         }
       }
     } else if (msg.type === "SCORE_INPUT") {
+      watchFinishedSessionRef.current = false;
       const scoreVal = msg.payload?.value ?? msg.value;
       if (scoreVal) {
         if (config.practiceType === "Volumen") {
+          const pts = getScoreValue(String(scoreVal));
+          const incomingTotal = Number(msg.payload?.totalScore ?? msg.totalScore);
+          setWatchVolumeScore((prev) =>
+            !isNaN(incomingTotal) && incomingTotal > 0 ? incomingTotal : prev + pts
+          );
           handleTallyIncrement();
         } else {
-          handleScoreInput(String(scoreVal));
+          handleScoreInput(String(scoreVal), false, true);
         }
       }
     } else if (msg.type === "NEXT_END") {
-      if (isCurrentEndComplete) {
+      watchFinishedSessionRef.current = false;
+      const activeEndIdx = currentEndIdxRef.current;
+      const activeEndArrows = endsRef.current[activeEndIdx]?.arrows || [];
+      const activeEndComplete =
+        activeEndArrows.length > 0 && activeEndArrows.every((a) => a !== "" && a !== undefined);
+      if (activeEndComplete) {
         handleConfirmEnd();
       } else if (
-        currentEndIdx < config.endsCount - 1 &&
-        (ends[currentEndIdx]?.arrows || []).some((a) => a !== "" && a !== undefined)
+        activeEndIdx < config.endsCount - 1 &&
+        activeEndArrows.some((a) => a !== "" && a !== undefined)
       ) {
-        setCurrentEndIdx((idx) => Math.min(config.endsCount - 1, idx + 1));
+        const nextIdx = Math.min(config.endsCount - 1, activeEndIdx + 1);
+        currentEndIdxRef.current = nextIdx;
+        currentArrowIdxRef.current = 0;
+        setCurrentEndIdx(nextIdx);
         setCurrentArrowIdx(0);
       }
     } else if (msg.type === "SYNC_TELEMETRY_FROM_WATCH") {
@@ -1753,10 +1873,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     } else if (msg.type === "TOGGLE_AUTO_DETECT") {
       setAutoDetectEnabled(Boolean(msg.enabled));
     } else if (msg.type === "FINISH_SESSION_FROM_WATCH") {
+      watchFinishedSessionRef.current = true;
+      publishResetWatchState();
       setIsWatchModalOpen(false);
       setIsFinishing(true);
     } else if (msg.type === "REQUEST_STATE") {
-      publishWatchState(liveWatchSnapshot);
+      if (!watchFinishedSessionRef.current && !isClosingSessionRef.current) {
+        publishWatchState(liveWatchSnapshot);
+      }
     }
   };
 
@@ -1771,14 +1895,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     if (!confirm("¿Deseas reiniciar el contador de flechas a cero?")) return;
     
     playTallyClickSound();
+    tallyCountRef.current = 0;
+    currentEndIdxRef.current = 0;
+    currentArrowIdxRef.current = 0;
     setTallyCount(0);
+    setWatchVolumeScore(0);
     setCurrentEndIdx(0);
     setCurrentArrowIdx(0);
     
-    const resetEnds = ends.map(e => ({
+    const resetEnds = endsRef.current.map(e => ({
       ...e,
       arrows: Array(config.arrowsPerEnd).fill("")
     }));
+    endsRef.current = resetEnds;
     setEnds(resetEnds);
   };
 
@@ -2850,7 +2979,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <span>Guardar Entrenamiento</span>
                 </button>
                 <button
-                  onClick={() => setIsFinishing(false)}
+                  onClick={() => {
+                    watchFinishedSessionRef.current = false;
+                    setIsFinishing(false);
+                    publishWatchState(liveWatchSnapshot);
+                  }}
                   className="w-full h-11 rounded-xl bg-transparent border border-white/10 text-white hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer"
                 >
                   Seguir Tirando

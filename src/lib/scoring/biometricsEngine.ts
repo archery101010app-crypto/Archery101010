@@ -4,6 +4,7 @@ import { getSessionArrows, countScoredArrows, isVolumeSession } from "./sessionM
 
 export interface BiometricSessionSnapshot {
   sessionId: string;
+  sessionActive?: boolean;
   arrowsCount: number;
   totalScore?: number;
   distanceM: number;
@@ -28,9 +29,19 @@ export interface BiometricSessionSnapshot {
 export type WatchCommandMessage =
   | { type: "STATE_UPDATE"; payload: BiometricSessionSnapshot }
   | { type: "INCREMENT_ARROW"; delta: number; source: "watch_manual" | "watch_auto" | "phone" }
-  | { type: "DECREMENT_ARROW"; delta?: number; source?: "watch_manual" | "watch_auto" | "phone" }
-  | { type: "UNDO_ARROW" }
-  | { type: "SCORE_INPUT"; payload?: { value: string }; value?: string }
+  | {
+      type: "DECREMENT_ARROW";
+      delta?: number;
+      source?: "watch_manual" | "watch_auto" | "phone";
+      totalScore?: number;
+    }
+  | { type: "UNDO_ARROW"; totalScore?: number }
+  | {
+      type: "SCORE_INPUT";
+      payload?: { value: string; totalScore?: number };
+      value?: string;
+      totalScore?: number;
+    }
   | { type: "NEXT_END" }
   | {
       type: "SYNC_TELEMETRY_FROM_WATCH";
@@ -42,6 +53,17 @@ export type WatchCommandMessage =
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean }
   | { type: "FINISH_SESSION_FROM_WATCH" }
   | { type: "REQUEST_STATE" };
+
+export interface WatchConnectionStatus {
+  isNativeAndroid: boolean;
+  bridgeReady: boolean;
+  nativeVersion?: string;
+  connectedNodesCount: number;
+  connectedNodes: Array<{ id: string; displayName: string; isNearby?: boolean }>;
+  lastMessageAt: number;
+  lastPongAt: number;
+  hasCachedState: boolean;
+}
 
 const WATCH_CHANNEL_NAME = "archery_101010_watch_bridge_v1";
 const WATCH_STORAGE_KEY = "archery_101010_watch_state_v1";
@@ -302,6 +324,36 @@ export function sendWatchCommand(cmd: WatchCommandMessage): void {
   } catch {}
 }
 
+const nativeWatchListeners = new Set<(msg: WatchCommandMessage) => void>();
+const seenNativeCmdIds = new Set<string>();
+const watchStatusListeners = new Set<(status: WatchConnectionStatus) => void>();
+
+function ensureGlobalNativeWatchDispatcher(): void {
+  if (typeof window === "undefined") return;
+  const dispatch = (jsonOrObj: any) => {
+    try {
+      const parsed: any =
+        typeof jsonOrObj === "string" ? JSON.parse(jsonOrObj) : jsonOrObj;
+      if (!parsed || !parsed.type) return;
+      if (parsed._cmdId && typeof parsed._cmdId === "string") {
+        if (seenNativeCmdIds.has(parsed._cmdId)) return;
+        seenNativeCmdIds.add(parsed._cmdId);
+        if (seenNativeCmdIds.size > 120) {
+          const first = seenNativeCmdIds.values().next().value;
+          if (first) seenNativeCmdIds.delete(first);
+        }
+      }
+      nativeWatchListeners.forEach((listener) => {
+        try {
+          listener(parsed as WatchCommandMessage);
+        } catch {}
+      });
+    } catch {}
+  };
+  (window as any).__onNativeWatchMessage = dispatch;
+  (window as any).onArcheryWatchCommand = dispatch;
+}
+
 export function subscribeWatchMessages(
   onMessage: (msg: WatchCommandMessage) => void
 ): () => void {
@@ -337,27 +389,21 @@ export function subscribeWatchMessages(
 
   window.addEventListener("storage", handleStorage);
 
-  // Expose global callback for Native Wear OS / Garmin Connect IQ BLE receiver
-  const nativeWatchWrapper = (jsonStr: string) => {
-    try {
-      const parsed =
-        typeof jsonStr === "string"
-          ? (JSON.parse(jsonStr) as WatchCommandMessage)
-          : (jsonStr as WatchCommandMessage);
-      if (parsed && parsed.type) onMessage(parsed);
-    } catch {}
-  };
-  (window as any).onArcheryWatchCommand = nativeWatchWrapper;
-  (window as any).__onNativeWatchMessage = nativeWatchWrapper;
+  // Register listener in the multi-subscriber Set (never overwrites or deletes other subscribers)
+  nativeWatchListeners.add(onMessage);
+  ensureGlobalNativeWatchDispatcher();
+
+  // Flush any commands queued natively while WebView was loading or paused
+  try {
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.flushPendingWatchCommands) {
+      bridge.flushPendingWatchCommands();
+    }
+  } catch {}
 
   return () => {
     window.removeEventListener("storage", handleStorage);
-    if ((window as any).__onNativeWatchMessage === nativeWatchWrapper) {
-      delete (window as any).__onNativeWatchMessage;
-    }
-    if ((window as any).onArcheryWatchCommand === nativeWatchWrapper) {
-      delete (window as any).onArcheryWatchCommand;
-    }
+    nativeWatchListeners.delete(onMessage);
     if (channel) {
       try {
         channel.close();
@@ -365,3 +411,100 @@ export function subscribeWatchMessages(
     }
   };
 }
+
+function parseWatchStatusPayload(raw: any): WatchConnectionStatus {
+  const isNativeAndroid =
+    typeof window !== "undefined" &&
+    Boolean((window as any).ArcheryNativeAuth || (window as any).Capacitor?.isNativePlatform?.());
+  const bridge = typeof window !== "undefined" ? (window as any).ArcheryWatchNativeBridge : null;
+  if (!bridge) {
+    return {
+      isNativeAndroid,
+      bridgeReady: false,
+      connectedNodesCount: 0,
+      connectedNodes: [],
+      lastMessageAt: 0,
+      lastPongAt: 0,
+      hasCachedState: false
+    };
+  }
+  try {
+    const obj = typeof raw === "string" ? JSON.parse(raw) : raw || {};
+    const nodes = Array.isArray(obj.connectedNodes) ? obj.connectedNodes : [];
+    return {
+      isNativeAndroid: true,
+      bridgeReady: true,
+      nativeVersion: obj.nativeVersion || "2.63+",
+      connectedNodesCount:
+        typeof obj.connectedNodesCount === "number" ? obj.connectedNodesCount : nodes.length,
+      connectedNodes: nodes,
+      lastMessageAt: Number(obj.lastMessageAt) || 0,
+      lastPongAt: Number(obj.lastPongAt) || 0,
+      hasCachedState: Boolean(obj.hasCachedState)
+    };
+  } catch {
+    return {
+      isNativeAndroid: true,
+      bridgeReady: true,
+      connectedNodesCount: 0,
+      connectedNodes: [],
+      lastMessageAt: 0,
+      lastPongAt: 0,
+      hasCachedState: false
+    };
+  }
+}
+
+export function requestNativeWatchStatus(): WatchConnectionStatus {
+  if (typeof window === "undefined") {
+    return {
+      isNativeAndroid: false,
+      bridgeReady: false,
+      connectedNodesCount: 0,
+      connectedNodes: [],
+      lastMessageAt: 0,
+      lastPongAt: 0,
+      hasCachedState: false
+    };
+  }
+  try {
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.getWatchConnectionStatus) {
+      const jsonStr = bridge.getWatchConnectionStatus();
+      return parseWatchStatusPayload(jsonStr);
+    }
+  } catch {}
+  return parseWatchStatusPayload(null);
+}
+
+export function pingNativeWatch(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.pingWatch) {
+      bridge.pingWatch();
+    }
+  } catch {}
+  sendWatchCommand({ type: "REQUEST_STATE" });
+}
+
+export function subscribeWatchConnectionStatus(
+  onStatus: (status: WatchConnectionStatus) => void
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  watchStatusListeners.add(onStatus);
+  (window as any).__onWatchConnectionStatus = (raw: any) => {
+    const status = parseWatchStatusPayload(raw);
+    watchStatusListeners.forEach((cb) => {
+      try {
+        cb(status);
+      } catch {}
+    });
+  };
+  const initial = requestNativeWatchStatus();
+  onStatus(initial);
+  return () => {
+    watchStatusListeners.delete(onStatus);
+  };
+}
+

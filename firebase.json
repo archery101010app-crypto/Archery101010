@@ -73,6 +73,19 @@
         ]
       },
       {
+        "source": "/Archery101010-WearOS-v2.64.aab",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.64.aab\""
+          }
+        ]
+      },
+      {
         "source": "/",
         "headers": [
           {
@@ -285,17 +298,42 @@
     "redirects": [
       {
         "source": "/archery-app.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.31.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.apk",
         "type": 302
       },
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.31.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.apk",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.31.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.64.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.apk",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-v2.64.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-Mobile-v2.64.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.apk",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-Mobile-v2.64.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.64.aab",
+        "type": 302
+      },
+      {
+        "source": "/Archery101010-WearOS-v2.64.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.64.apk",
         "type": 302
       },
       {
@@ -421,11 +459,6 @@
       {
         "source": "/Archery101010-v2.19.apk",
         "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.19.apk",
-        "type": 302
-      },
-      {
-        "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-v2.19.aab",
         "type": 302
       },
       {

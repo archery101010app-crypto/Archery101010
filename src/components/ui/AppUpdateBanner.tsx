@@ -28,11 +28,20 @@ function isNewerVersion(remoteVer: string, localVer: string): boolean {
 
 export default function AppUpdateBanner() {
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
+  const [needsNativeWatchApkUpgrade, setNeedsNativeWatchApkUpgrade] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+
+    if (
+      typeof window !== "undefined" &&
+      !!(window as any).ArcheryNativeAuth &&
+      !(window as any).ArcheryWatchNativeBridge
+    ) {
+      setNeedsNativeWatchApkUpgrade(true);
+    }
 
     async function checkRemoteVersion() {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -87,9 +96,17 @@ export default function AppUpdateBanner() {
     };
   }, []);
 
-  if (!remoteInfo || dismissed) return null;
+  if ((!remoteInfo && !needsNativeWatchApkUpgrade) || dismissed) return null;
 
   const handleUpdateNow = async () => {
+    if (needsNativeWatchApkUpgrade && !remoteInfo) {
+      window.open(
+        "https://play.google.com/store/apps/details?id=com.archery101010.app",
+        "_blank"
+      );
+      return;
+    }
+
     setIsUpdating(true);
     try {
       // Unregister stale service workers & clear caches
@@ -106,17 +123,20 @@ export default function AppUpdateBanner() {
         Capacitor.isNativePlatform() ||
         (typeof window !== "undefined" && !!(window as any).ArcheryNativeAuth);
 
+      const targetVersion = remoteInfo?.version || APP_VERSION;
+
       if (isNative) {
         // Instant In-App OTA Update inside the native WebView (no GitHub redirect)
         window.location.replace(
-          `https://archery101010-c0bb4.web.app/?v=${remoteInfo.version}&t=${Date.now()}`
+          `https://archery101010-c0bb4.web.app/?v=${targetVersion}&t=${Date.now()}`
         );
         return;
       }
 
       window.location.reload();
     } catch {
-      window.location.href = `https://archery101010-c0bb4.web.app/?v=${remoteInfo.version}&t=${Date.now()}`;
+      const targetVersion = remoteInfo?.version || APP_VERSION;
+      window.location.href = `https://archery101010-c0bb4.web.app/?v=${targetVersion}&t=${Date.now()}`;
     }
   };
 
@@ -129,10 +149,14 @@ export default function AppUpdateBanner() {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-white text-xs font-black uppercase tracking-wider truncate">
-              Nueva versión v{remoteInfo.version} lista
+              {remoteInfo
+                ? `Nueva versión v${remoteInfo.version} lista`
+                : "Motor Bluetooth Smartwatch disponible"}
             </span>
             <span className="text-[10.5px] text-white truncate">
-              Actualiza con un toque (tienes v{APP_VERSION})
+              {remoteInfo
+                ? `Actualiza con un toque (tienes v${APP_VERSION})`
+                : "Actualiza la app base en Play Store para conectar tu reloj"}
             </span>
           </div>
         </div>
@@ -145,7 +169,13 @@ export default function AppUpdateBanner() {
             className="px-3 py-1.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95"
           >
             <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
-            <span>{isUpdating ? "Actualizando..." : "Actualizar"}</span>
+            <span>
+              {isUpdating
+                ? "Actualizando..."
+                : remoteInfo
+                ? "Actualizar"
+                : "Play Store"}
+            </span>
           </button>
           <button
             type="button"

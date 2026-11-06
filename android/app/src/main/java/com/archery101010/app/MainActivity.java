@@ -36,19 +36,34 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.wearable.DataClient;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
     private static final String GOOGLE_WEB_CLIENT_ID =
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
+    private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
@@ -69,6 +84,16 @@ public class MainActivity extends BridgeActivity {
     private SensorManager nativeSensorManager = null;
     private Sensor nativeAccelerometer = null;
     private MessageClient.OnMessageReceivedListener wearMessageListener = null;
+    private DataClient.OnDataChangedListener wearDataListener = null;
+
+    // Native Wear OS Dual-Channel State Cache & Command Queue (works even when phone screen is off)
+    private volatile String lastWatchSnapshotJson = "";
+    private volatile long lastWatchMessageTimeMs = 0L;
+    private volatile long lastWatchPongTimeMs = 0L;
+    private volatile long lastWatchCmdSeq = 0L;
+    private final List<String> pendingWatchCommands = new ArrayList<>();
+    private final Set<String> processedWatchCmdIds = new LinkedHashSet<>();
+    private volatile JSONArray cachedConnectedNodesJson = new JSONArray();
 
     private final LocationListener nativeLocationListener = new LocationListener() {
         @Override
@@ -460,17 +485,46 @@ public class MainActivity extends BridgeActivity {
     public class ArcheryWatchNativeBridge {
         @JavascriptInterface
         public void onSessionTelemetryUpdate(final String snapshotJson) {
-            broadcastToWearNodes("/archery101010/telemetry", snapshotJson != null ? snapshotJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+            cacheAndSyncWatchState(snapshotJson);
         }
 
         @JavascriptInterface
         public void syncTelemetryToWatch(final String snapshotJson) {
-            broadcastToWearNodes("/archery101010/telemetry", snapshotJson != null ? snapshotJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+            cacheAndSyncWatchState(snapshotJson);
         }
 
         @JavascriptInterface
         public void sendWatchCommand(final String cmdJson) {
-            broadcastToWearNodes("/archery101010/command", cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+            byte[] bytes = cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0];
+            broadcastToWearNodes("/archery101010/command", bytes);
+            if (cmdJson != null && cmdJson.contains("\"STATE_UPDATE\"")) {
+                cacheAndSyncWatchState(cmdJson);
+            }
+        }
+
+        @JavascriptInterface
+        public String getWatchConnectionStatus() {
+            flushPendingWatchCommandsToWebView();
+            refreshWatchConnectionStatus();
+            return buildWatchConnectionStatusJson();
+        }
+
+        @JavascriptInterface
+        public void pingWatch() {
+            try {
+                String pingPayload = "{\"type\":\"PING\",\"_ts\":" + System.currentTimeMillis() + "}";
+                broadcastToWearNodes("/archery101010/ping", pingPayload.getBytes(StandardCharsets.UTF_8));
+                if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
+                    broadcastToWearNodes("/archery101010/telemetry", lastWatchSnapshotJson.getBytes(StandardCharsets.UTF_8));
+                    syncStateDataItemToWear(lastWatchSnapshotJson);
+                }
+                refreshWatchConnectionStatus();
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public void flushPendingWatchCommands() {
+            flushPendingWatchCommandsToWebView();
         }
     }
 
@@ -587,19 +641,398 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    private void broadcastToWearNodes(final String path, final byte[] data) {
+    private String enrichSnapshotWithAckSeq(final String rawJson) {
+        if (rawJson == null || rawJson.isEmpty()) return rawJson;
         try {
-            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
-                if (nodes != null) {
-                    for (Node node : nodes) {
-                        Wearable.getMessageClient(this).sendMessage(node.getId(), path, data);
+            JSONObject obj = new JSONObject(rawJson);
+            obj.put("_ackCmdSeq", lastWatchCmdSeq);
+            if (!obj.has("sessionActive")) {
+                obj.put("sessionActive", true);
+            }
+            return obj.toString();
+        } catch (Exception e) {
+            return rawJson;
+        }
+    }
+
+    private void cacheAndSyncWatchState(final String snapshotJson) {
+        if (snapshotJson == null || snapshotJson.isEmpty()) return;
+        String enriched = enrichSnapshotWithAckSeq(snapshotJson);
+        lastWatchSnapshotJson = enriched;
+        try {
+            getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                .edit()
+                .putString("lastWatchSnapshotJson", enriched)
+                .putLong("lastWatchSnapshotTimeMs", System.currentTimeMillis())
+                .apply();
+        } catch (Exception ignored) {}
+        broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
+        syncStateDataItemToWear(enriched);
+    }
+
+    private void syncStateDataItemToWear(final String snapshotJson) {
+        if (snapshotJson == null || snapshotJson.isEmpty()) return;
+        try {
+            PutDataMapRequest putDataMapReq = PutDataMapRequest.create("/archery101010/state");
+            putDataMapReq.getDataMap().putString("snapshot_json", snapshotJson);
+            putDataMapReq.getDataMap().putLong("updated_at", System.currentTimeMillis());
+            PutDataRequest putDataReq = putDataMapReq.asPutDataRequest().setUrgent();
+            Wearable.getDataClient(this).putDataItem(putDataReq);
+        } catch (Exception ignored) {}
+    }
+
+    private int scorePointsFromLabel(final String label) {
+        if ("X".equalsIgnoreCase(label) || "10".equals(label)) return 10;
+        if ("M".equalsIgnoreCase(label) || label == null || label.isEmpty()) return 0;
+        try {
+            return Integer.parseInt(label);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void applyWatchCommandToCachedState(final String cmdType, final JSONObject cmdObj) {
+        if (cmdType == null || cmdType.isEmpty() || "REQUEST_STATE".equals(cmdType)) return;
+        try {
+            JSONObject state = (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty())
+                ? new JSONObject(lastWatchSnapshotJson)
+                : new JSONObject();
+            if (state.has("payload") && state.optJSONObject("payload") != null) {
+                state = state.optJSONObject("payload");
+            }
+
+            long now = System.currentTimeMillis();
+            state.put("_ackCmdSeq", lastWatchCmdSeq);
+            state.put("updatedAt", now);
+
+            int arrowsPerEnd = Math.max(1, state.optInt("arrowsPerEnd", 6));
+            int endsCount = Math.max(1, state.optInt("endsCount", 12));
+            int curEndIdx = Math.max(0, state.optInt("currentEndIndex", 0));
+            JSONArray curEndArrows = state.optJSONArray("currentEndArrows");
+            if (curEndArrows == null) curEndArrows = new JSONArray();
+
+            if ("FINISH_SESSION_FROM_WATCH".equals(cmdType)) {
+                state.put("sessionActive", false);
+                state.put("arrowsCount", 0);
+                state.put("totalScore", 0);
+                state.put("currentEndIndex", 0);
+                state.put("currentEndArrows", new JSONArray());
+                state.put("completedEnds", 0);
+            } else if ("INCREMENT_ARROW".equals(cmdType)) {
+                int delta = cmdObj != null ? cmdObj.optInt("delta", 1) : 1;
+                int prevArrows = Math.max(0, state.optInt("arrowsCount", 0));
+                int nextArrows = Math.max(0, prevArrows + delta);
+                state.put("arrowsCount", nextArrows);
+                state.put("sessionActive", true);
+
+                String practiceType = state.optString("practiceType", "Práctica");
+                if (!"Volumen".equalsIgnoreCase(practiceType) && delta > 0) {
+                    for (int i = 0; i < delta; i++) {
+                        if (curEndArrows.length() >= arrowsPerEnd) {
+                            if (curEndIdx < endsCount - 1) {
+                                curEndIdx++;
+                                curEndArrows = new JSONArray();
+                            } else {
+                                break;
+                            }
+                        }
+                        curEndArrows.put("10");
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + 10));
+                    }
+                    state.put("currentEndIndex", curEndIdx);
+                    state.put("currentEndArrows", curEndArrows);
+                }
+            } else if ("DECREMENT_ARROW".equals(cmdType) || "UNDO_ARROW".equals(cmdType)) {
+                int prevArrows = Math.max(0, state.optInt("arrowsCount", 0));
+                state.put("arrowsCount", Math.max(0, prevArrows - 1));
+                JSONObject payloadObj = cmdObj != null ? cmdObj.optJSONObject("payload") : null;
+                int explicitTotal = -1;
+                if (cmdObj != null && cmdObj.has("totalScore")) {
+                    explicitTotal = cmdObj.optInt("totalScore", -1);
+                } else if (payloadObj != null && payloadObj.has("totalScore")) {
+                    explicitTotal = payloadObj.optInt("totalScore", -1);
+                }
+                if (curEndArrows.length() > 0) {
+                    String removed = curEndArrows.optString(curEndArrows.length() - 1, "");
+                    JSONArray trimmed = new JSONArray();
+                    for (int i = 0; i < curEndArrows.length() - 1; i++) {
+                        trimmed.put(curEndArrows.optString(i, ""));
+                    }
+                    curEndArrows = trimmed;
+                    state.put("currentEndArrows", curEndArrows);
+                    if (explicitTotal < 0) {
+                        int pts = scorePointsFromLabel(removed);
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) - pts));
                     }
                 }
+                if (explicitTotal >= 0) {
+                    state.put("totalScore", explicitTotal);
+                }
+            } else if ("SCORE_INPUT".equals(cmdType)) {
+                JSONObject payloadObj = cmdObj != null ? cmdObj.optJSONObject("payload") : null;
+                String val = payloadObj != null
+                    ? payloadObj.optString("value", "")
+                    : (cmdObj != null ? cmdObj.optString("value", "") : "");
+                if (!val.isEmpty()) {
+                    if (curEndArrows.length() >= arrowsPerEnd) {
+                        if (curEndIdx < endsCount - 1) {
+                            curEndIdx++;
+                            curEndArrows = new JSONArray();
+                        }
+                    }
+                    if (curEndArrows.length() < arrowsPerEnd) {
+                        curEndArrows.put(val);
+                    }
+                    state.put("currentEndIndex", curEndIdx);
+                    state.put("currentEndArrows", curEndArrows);
+                    state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) + 1));
+                    state.put("sessionActive", true);
+
+                    int pts = scorePointsFromLabel(val);
+                    int incomingTotal = payloadObj != null
+                        ? payloadObj.optInt("totalScore", -1)
+                        : (cmdObj != null ? cmdObj.optInt("totalScore", -1) : -1);
+                    if (incomingTotal >= 0) {
+                        state.put("totalScore", incomingTotal);
+                    } else {
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + pts));
+                    }
+                }
+            } else if ("NEXT_END".equals(cmdType)) {
+                if (curEndIdx < endsCount - 1) {
+                    state.put("currentEndIndex", curEndIdx + 1);
+                    state.put("currentEndArrows", new JSONArray());
+                }
+            } else if ("SYNC_TELEMETRY_FROM_WATCH".equals(cmdType)) {
+                JSONObject payloadObj = cmdObj != null ? cmdObj.optJSONObject("payload") : null;
+                int steps = payloadObj != null
+                    ? payloadObj.optInt("stepsCount", state.optInt("stepsCount", 0))
+                    : (cmdObj != null ? cmdObj.optInt("stepsCount", state.optInt("stepsCount", 0)) : 0);
+                int walkedM = payloadObj != null
+                    ? payloadObj.optInt("distanceWalkedM", state.optInt("distanceWalkedM", 0))
+                    : (cmdObj != null ? cmdObj.optInt("distanceWalkedM", state.optInt("distanceWalkedM", 0)) : 0);
+                state.put("stepsCount", Math.max(state.optInt("stepsCount", 0), steps));
+                state.put("distanceWalkedM", Math.max(state.optInt("distanceWalkedM", 0), walkedM));
+            } else if ("TOGGLE_AUTO_DETECT".equals(cmdType) && cmdObj != null) {
+                state.put("autoDetectEnabled", cmdObj.optBoolean("enabled", true));
+            }
+
+            String updatedJson = state.toString();
+            lastWatchSnapshotJson = updatedJson;
+            try {
+                getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString("lastWatchSnapshotJson", updatedJson)
+                    .putLong("lastWatchSnapshotTimeMs", now)
+                    .apply();
+            } catch (Exception ignored) {}
+            syncStateDataItemToWear(updatedJson);
+        } catch (Exception ignored) {}
+    }
+
+    private String buildWatchConnectionStatusJson() {
+        try {
+            JSONObject status = new JSONObject();
+            status.put("bridgeReady", true);
+            status.put("nativeVersion", "2.64");
+            status.put("connectedNodesCount", cachedConnectedNodesJson.length());
+            status.put("connectedNodes", cachedConnectedNodesJson);
+            status.put("lastMessageAt", lastWatchMessageTimeMs);
+            status.put("lastPongAt", lastWatchPongTimeMs);
+            status.put("hasCachedState", lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty());
+            return status.toString();
+        } catch (Exception e) {
+            return "{\"bridgeReady\":true,\"connectedNodesCount\":0}";
+        }
+    }
+
+    private void emitWatchConnectionStatusToWebView() {
+        final String statusJson = buildWatchConnectionStatusJson();
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String js = "if (window.__onWatchConnectionStatus) { window.__onWatchConnectionStatus(" + statusJson + "); }";
+                getBridge().getWebView().evaluateJavascript(js, null);
+            }
+        });
+    }
+
+    private void refreshWatchConnectionStatus() {
+        try {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                JSONArray arr = new JSONArray();
+                if (nodes != null) {
+                    for (Node node : nodes) {
+                        try {
+                            JSONObject nObj = new JSONObject();
+                            nObj.put("id", node.getId());
+                            nObj.put("displayName", node.getDisplayName());
+                            nObj.put("isNearby", node.isNearby());
+                            arr.put(nObj);
+                        } catch (Exception ignored) {}
+                    }
+                }
+                cachedConnectedNodesJson = arr;
+                emitWatchConnectionStatusToWebView();
+            }).addOnFailureListener(err -> {
+                emitWatchConnectionStatusToWebView();
             });
         } catch (Exception ignored) {}
     }
 
+    private void broadcastToWearNodes(final String path, final byte[] data) {
+        try {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                JSONArray arr = new JSONArray();
+                if (nodes != null) {
+                    for (Node node : nodes) {
+                        Wearable.getMessageClient(this).sendMessage(node.getId(), path, data);
+                        try {
+                            JSONObject nObj = new JSONObject();
+                            nObj.put("id", node.getId());
+                            nObj.put("displayName", node.getDisplayName());
+                            nObj.put("isNearby", node.isNearby());
+                            arr.put(nObj);
+                        } catch (Exception ignored) {}
+                    }
+                }
+                cachedConnectedNodesJson = arr;
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void handleIncomingWatchPayload(final String path, final String payload, final String sourceNodeId) {
+        if (payload == null) return;
+        long now = System.currentTimeMillis();
+        lastWatchMessageTimeMs = now;
+
+        if ("/archery101010/ping".equals(path)) {
+            lastWatchPongTimeMs = now;
+            byte[] pongBytes = ("{\"type\":\"PONG\",\"_ts\":" + now + "}").getBytes(StandardCharsets.UTF_8);
+            if (sourceNodeId != null && !sourceNodeId.isEmpty()) {
+                Wearable.getMessageClient(this).sendMessage(sourceNodeId, "/archery101010/pong", pongBytes);
+            } else {
+                broadcastToWearNodes("/archery101010/pong", pongBytes);
+            }
+            if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
+                String enriched = enrichSnapshotWithAckSeq(lastWatchSnapshotJson);
+                broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
+            }
+            refreshWatchConnectionStatus();
+            return;
+        }
+
+        if ("/archery101010/pong".equals(path)) {
+            lastWatchPongTimeMs = now;
+            refreshWatchConnectionStatus();
+            return;
+        }
+
+        String cmdType = "";
+        String cmdId = "";
+        long cmdSeq = 0L;
+        JSONObject parsedCmdObj = null;
+        try {
+            parsedCmdObj = new JSONObject(payload);
+            cmdType = parsedCmdObj.optString("type", "");
+            cmdId = parsedCmdObj.optString("_cmdId", "");
+            cmdSeq = parsedCmdObj.optLong("_cmdSeq", 0L);
+        } catch (Exception ignored) {}
+
+        // Deduplicate commands delivered simultaneously over MessageClient and DataClient
+        if (!cmdId.isEmpty()) {
+            synchronized (processedWatchCmdIds) {
+                if (processedWatchCmdIds.contains(cmdId)) {
+                    return;
+                }
+                processedWatchCmdIds.add(cmdId);
+                if (processedWatchCmdIds.size() > 120) {
+                    Iterator<String> it = processedWatchCmdIds.iterator();
+                    if (it.hasNext()) {
+                        it.next();
+                        it.remove();
+                    }
+                }
+            }
+        }
+
+        if (cmdSeq > lastWatchCmdSeq) {
+            lastWatchCmdSeq = cmdSeq;
+        }
+
+        // Update native cached snapshot immediately so screen-off REQUEST_STATE replies never serve stale pre-pocket data
+        if (!"REQUEST_STATE".equals(cmdType)) {
+            applyWatchCommandToCachedState(cmdType, parsedCmdObj);
+        }
+
+        // Native immediate reply when watch requests state (works even when phone screen is off/locked in pocket!)
+        if ("REQUEST_STATE".equals(cmdType)) {
+            if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
+                String enriched = enrichSnapshotWithAckSeq(lastWatchSnapshotJson);
+                byte[] stateBytes = enriched.getBytes(StandardCharsets.UTF_8);
+                if (sourceNodeId != null && !sourceNodeId.isEmpty()) {
+                    Wearable.getMessageClient(this).sendMessage(sourceNodeId, "/archery101010/telemetry", stateBytes);
+                } else {
+                    broadcastToWearNodes("/archery101010/telemetry", stateBytes);
+                }
+            }
+        }
+
+        final String finalCmdType = cmdType;
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String safePayload = JSONObject.quote(payload);
+                String js =
+                    "(function() { if (typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" +
+                    safePayload +
+                    "); return 'DELIVERED'; } return 'PENDING'; })()";
+                getBridge().getWebView().evaluateJavascript(js, result -> {
+                    if (result == null || !result.contains("DELIVERED")) {
+                        if (!"REQUEST_STATE".equals(finalCmdType)) {
+                            synchronized (pendingWatchCommands) {
+                                if (pendingWatchCommands.size() < 60) {
+                                    pendingWatchCommands.add(payload);
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (!"REQUEST_STATE".equals(finalCmdType)) {
+                synchronized (pendingWatchCommands) {
+                    if (pendingWatchCommands.size() < 60) {
+                        pendingWatchCommands.add(payload);
+                    }
+                }
+            }
+        });
+    }
+
+    private void flushPendingWatchCommandsToWebView() {
+        final List<String> toFlush;
+        synchronized (pendingWatchCommands) {
+            if (pendingWatchCommands.isEmpty()) return;
+            toFlush = new ArrayList<>(pendingWatchCommands);
+            pendingWatchCommands.clear();
+        }
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                for (String cmdPayload : toFlush) {
+                    String safePayload = JSONObject.quote(cmdPayload);
+                    String js = "if (typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" + safePayload + "); }";
+                    getBridge().getWebView().evaluateJavascript(js, null);
+                }
+            }
+        });
+    }
+
     private void initWearableListener() {
+        try {
+            String savedSnapshot = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                .getString("lastWatchSnapshotJson", "");
+            if (savedSnapshot != null && !savedSnapshot.isEmpty() && lastWatchSnapshotJson.isEmpty()) {
+                lastWatchSnapshotJson = savedSnapshot;
+            }
+        } catch (Exception ignored) {}
+
         try {
             if (wearMessageListener != null) {
                 Wearable.getMessageClient(this).removeListener(wearMessageListener);
@@ -608,18 +1041,48 @@ public class MainActivity extends BridgeActivity {
                 if (event == null || event.getPath() == null) return;
                 String path = event.getPath();
                 if (path.startsWith("/archery101010/")) {
-                    String payload = new String(event.getData(), StandardCharsets.UTF_8);
-                    runOnUiThread(() -> {
-                        if (getBridge() != null && getBridge().getWebView() != null) {
-                            String safePayload = JSONObject.quote(payload);
-                            String js = "if (window.__onNativeWatchMessage) { window.__onNativeWatchMessage(" + safePayload + "); }";
-                            getBridge().getWebView().evaluateJavascript(js, null);
-                        }
-                    });
+                    String payload = event.getData() != null
+                        ? new String(event.getData(), StandardCharsets.UTF_8)
+                        : "";
+                    handleIncomingWatchPayload(path, payload, event.getSourceNodeId());
                 }
             };
             Wearable.getMessageClient(this).addListener(wearMessageListener);
         } catch (Exception ignored) {}
+
+        try {
+            if (wearDataListener != null) {
+                Wearable.getDataClient(this).removeListener(wearDataListener);
+            }
+            wearDataListener = (DataEventBuffer dataEvents) -> {
+                if (dataEvents == null) return;
+                for (DataEvent event : dataEvents) {
+                    if (event.getType() == DataEvent.TYPE_CHANGED) {
+                        DataItem item = event.getDataItem();
+                        if (item != null && item.getUri() != null) {
+                            String path = item.getUri().getPath();
+                            if ("/archery101010/watch_command".equals(path)) {
+                                DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                                String cmdJson = dataMap.getString("command_json", "");
+                                if (cmdJson != null && !cmdJson.isEmpty()) {
+                                    handleIncomingWatchPayload("/archery101010/command", cmdJson, "");
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            Wearable.getDataClient(this).addListener(wearDataListener);
+        } catch (Exception ignored) {}
+
+        refreshWatchConnectionStatus();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        flushPendingWatchCommandsToWebView();
+        refreshWatchConnectionStatus();
     }
 
     @Override
@@ -639,6 +1102,12 @@ public class MainActivity extends BridgeActivity {
             if (wearMessageListener != null) {
                 Wearable.getMessageClient(this).removeListener(wearMessageListener);
                 wearMessageListener = null;
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (wearDataListener != null) {
+                Wearable.getDataClient(this).removeListener(wearDataListener);
+                wearDataListener = null;
             }
         } catch (Exception ignored) {}
         super.onDestroy();

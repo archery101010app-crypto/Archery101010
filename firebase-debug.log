@@ -1,0 +1,98 @@
+[debug] [2026-11-06T03:58:53.943Z] ----------------------------------------------------------------------
+[debug] [2026-11-06T03:58:53.950Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Archery 101010\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-11-06T03:58:53.951Z] CLI Version:   15.33.0
+[debug] [2026-11-06T03:58:53.951Z] Platform:      win32
+[debug] [2026-11-06T03:58:53.951Z] Node Version:  v24.15.0
+[debug] [2026-11-06T03:58:53.951Z] Detected Agent: antigravity
+[debug] [2026-11-06T03:58:53.952Z] Time:          Thu Nov 05 2026 21:58:53 GMT-0600 (hora estándar central)
+[debug] [2026-11-06T03:58:53.952Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-06T03:58:53.986Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-11-06T03:58:58.764Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-06T03:58:58.764Z] > authorizing via signed-in user (archery101010app@gmail.com)
+[debug] [2026-11-06T03:58:58.764Z] [iam] checking project archery101010-c0bb4 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-11-06T03:58:58.766Z] Checked if tokens are valid: false, expires at: 1793912225851
+[debug] [2026-11-06T03:58:58.766Z] Checked if tokens are valid: false, expires at: 1793912225851
+[debug] [2026-11-06T03:58:58.767Z] > refreshing access token with scopes: []
+[debug] [2026-11-06T03:58:58.768Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-11-06T03:58:58.768Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-06T03:58:59.062Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-11-06T03:58:59.063Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-06T03:58:59.092Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions [none]
+[debug] [2026-11-06T03:58:59.093Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions  x-goog-user-project=archery101010-c0bb4
+[debug] [2026-11-06T03:58:59.093Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-11-06T03:58:59.099Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-11-06T03:58:59.099Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-11-06T03:58:59.451Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions 200
+[debug] [2026-11-06T03:58:59.451Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-11-06T03:58:59.452Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:58:59.452Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:58:59.453Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 [none]
+[debug] [2026-11-06T03:59:00.068Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 200
+[debug] [2026-11-06T03:59:00.068Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 {"projectId":"archery101010-c0bb4","projectNumber":"757910399585","displayName":"archery101010","name":"projects/archery101010-c0bb4","resources":{"hostingSite":"archery101010-c0bb4"},"state":"ACTIVE","labels":{"firebase":"enabled"},"etag":"1_62bd1ddd-ed3e-458f-9ec9-a87e118668a3"}
+[info] 
+[info] === Deploying to 'archery101010-c0bb4'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-11-06T03:59:00.075Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:00.075Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:00.075Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 [none]
+[debug] [2026-11-06T03:59:00.702Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 200
+[debug] [2026-11-06T03:59:00.702Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 {"name":"projects/archery101010-c0bb4/sites/archery101010-c0bb4","defaultUrl":"https://archery101010-c0bb4.web.app","appId":"1:757910399585:web:3cbcf50a21971cdc5b5820","type":"DEFAULT_SITE"}
+[debug] [2026-11-06T03:59:00.713Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:00.713Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:00.714Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions [none]
+[debug] [2026-11-06T03:59:00.715Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-11-06T03:59:01.183Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions 200
+[debug] [2026-11-06T03:59:01.184Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions {"name":"projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions/6de067cee8e7c02c","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[archery101010-c0bb4]: beginning deploy... 
+[info] i  hosting[archery101010-c0bb4]: found 122 files in out 
+[debug] [2026-11-06T03:59:01.295Z] [hosting] uploading with 200 concurrency
+[debug] [2026-11-06T03:59:01.359Z] Error: EISDIR: illegal operation on a directory, read
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-11-06T03:59:48.827Z] ----------------------------------------------------------------------
+[debug] [2026-11-06T03:59:48.832Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Archery 101010\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-11-06T03:59:48.833Z] CLI Version:   15.33.0
+[debug] [2026-11-06T03:59:48.833Z] Platform:      win32
+[debug] [2026-11-06T03:59:48.833Z] Node Version:  v24.15.0
+[debug] [2026-11-06T03:59:48.833Z] Detected Agent: antigravity
+[debug] [2026-11-06T03:59:48.833Z] Time:          Thu Nov 05 2026 21:59:48 GMT-0600 (hora estándar central)
+[debug] [2026-11-06T03:59:48.833Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-06T03:59:52.156Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-06T03:59:52.157Z] > authorizing via signed-in user (archery101010app@gmail.com)
+[debug] [2026-11-06T03:59:52.157Z] [iam] checking project archery101010-c0bb4 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-11-06T03:59:52.176Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.177Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.178Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions [none]
+[debug] [2026-11-06T03:59:52.178Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions  x-goog-user-project=archery101010-c0bb4
+[debug] [2026-11-06T03:59:52.178Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-11-06T03:59:52.564Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions 200
+[debug] [2026-11-06T03:59:52.564Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/archery101010-c0bb4:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-11-06T03:59:52.564Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.565Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.565Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 [none]
+[debug] [2026-11-06T03:59:52.932Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 200
+[debug] [2026-11-06T03:59:52.933Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/archery101010-c0bb4 {"projectId":"archery101010-c0bb4","projectNumber":"757910399585","displayName":"archery101010","name":"projects/archery101010-c0bb4","resources":{"hostingSite":"archery101010-c0bb4"},"state":"ACTIVE","labels":{"firebase":"enabled"},"etag":"1_62bd1ddd-ed3e-458f-9ec9-a87e118668a3"}
+[info] 
+[info] === Deploying to 'archery101010-c0bb4'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-11-06T03:59:52.938Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.938Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:52.938Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 [none]
+[debug] [2026-11-06T03:59:53.513Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 200
+[debug] [2026-11-06T03:59:53.513Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4 {"name":"projects/archery101010-c0bb4/sites/archery101010-c0bb4","defaultUrl":"https://archery101010-c0bb4.web.app","appId":"1:757910399585:web:3cbcf50a21971cdc5b5820","type":"DEFAULT_SITE"}
+[debug] [2026-11-06T03:59:53.520Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:53.520Z] Checked if tokens are valid: true, expires at: 1793941138063
+[debug] [2026-11-06T03:59:53.521Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions [none]
+[debug] [2026-11-06T03:59:53.522Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-11-06T03:59:53.931Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions 200
+[debug] [2026-11-06T03:59:53.931Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions {"name":"projects/archery101010-c0bb4/sites/archery101010-c0bb4/versions/205351728efb8c25","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[archery101010-c0bb4]: beginning deploy... 
+[info] i  hosting[archery101010-c0bb4]: found 122 files in out 
+[debug] [2026-11-06T03:59:53.992Z] [hosting] uploading with 200 concurrency
+[debug] [2026-11-06T03:59:54.024Z] Error: EISDIR: illegal operation on a directory, read
+[error] 
+[error] Error: An unexpected error has occurred.

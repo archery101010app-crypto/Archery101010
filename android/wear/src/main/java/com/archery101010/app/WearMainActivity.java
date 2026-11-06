@@ -18,15 +18,25 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import com.google.android.gms.wearable.DataClient;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataItemBuffer;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -52,6 +62,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private SensorManager sensorManager;
     private Sensor accelerometer;
     private Vibrator vibrator;
+    private PowerManager.WakeLock wakeLock;
+    private boolean isSensorRegistered = false;
 
     private int screenIndex = 0; // 0..3
     private int arrowCount = 0;
@@ -79,7 +91,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int distanceMeters = 50;
     private float drawWeightLbs = 38f;
 
+    // Connection & sync race-condition guards
+    private volatile boolean isPhoneConnected = false;
+    private volatile long lastPhoneSyncMs = 0L;
+    private volatile long lastLocalActionTimeMs = 0L;
+    private volatile long lastFinishedTimestampMs = 0L;
+    private volatile String currentSessionId = "";
+    private volatile String lastFinishedSessionId = "";
+    private volatile long cmdSequence = 0L;
+    private volatile long pendingCmdSeq = 0L;
+    private volatile long lastAckedCmdSeq = 0L;
+
     private MessageClient.OnMessageReceivedListener messageListener = null;
+    private DataClient.OnDataChangedListener dataListener = null;
     private final Handler heartbeatHandler = new Handler(Looper.getMainLooper());
     private final Runnable heartbeatRunnable = new Runnable() {
         @Override
@@ -88,6 +112,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (stepsCount > lastSyncedStepsCount) {
                 syncTelemetryToPhone();
             }
+            checkPhoneNodeConnectivity();
             heartbeatHandler.postDelayed(this, 4000L);
         }
     };
@@ -99,6 +124,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Archery101010::WearSessionWakeLock");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire(4 * 60 * 60 * 1000L); // Keep sensors alive up to 4h when wrist is lowered
+            }
+        } catch (Exception ignored) {}
+
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         arrowCount = prefs.getInt("arrowCount", 0);
         totalScore = prefs.getInt("totalScore", 0);
@@ -108,6 +142,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
         syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
         syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
+        cmdSequence = prefs.getLong("cmdSequence", 0L);
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -118,7 +153,33 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         canvasView = new WearCanvasView(this);
         setContentView(canvasView);
 
+        ensureSensorAndHeartbeatActive();
         initWearCommunication();
+    }
+
+    private void ensureSensorAndHeartbeatActive() {
+        if (sensorManager != null && accelerometer != null && !isSensorRegistered) {
+            try {
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                isSensorRegistered = true;
+            } catch (Exception ignored) {}
+        }
+        heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        heartbeatHandler.postDelayed(heartbeatRunnable, 4000L);
+    }
+
+    private void checkPhoneNodeConnectivity() {
+        try {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                boolean hasNodes = nodes != null && !nodes.isEmpty();
+                if (hasNodes != isPhoneConnected) {
+                    isPhoneConnected = hasNodes;
+                    runOnUiThread(() -> {
+                        if (canvasView != null) canvasView.invalidate();
+                    });
+                }
+            });
+        } catch (Exception ignored) {}
     }
 
     private void initWearCommunication() {
@@ -129,30 +190,156 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             messageListener = (MessageEvent event) -> {
                 if (event == null || event.getPath() == null) return;
                 String path = event.getPath();
+                long now = System.currentTimeMillis();
+                isPhoneConnected = true;
+                lastPhoneSyncMs = now;
+
+                if ("/archery101010/ping".equals(path)) {
+                    byte[] pongBytes = ("{\"type\":\"PONG\",\"_ts\":" + now + "}").getBytes(StandardCharsets.UTF_8);
+                    Wearable.getMessageClient(this).sendMessage(event.getSourceNodeId(), "/archery101010/pong", pongBytes);
+                    runOnUiThread(() -> {
+                        if (canvasView != null) canvasView.invalidate();
+                    });
+                    return;
+                }
+                if ("/archery101010/pong".equals(path)) {
+                    runOnUiThread(() -> {
+                        if (canvasView != null) canvasView.invalidate();
+                    });
+                    return;
+                }
                 if (path.startsWith("/archery101010/")) {
-                    String jsonStr = new String(event.getData(), StandardCharsets.UTF_8);
+                    String jsonStr = event.getData() != null
+                        ? new String(event.getData(), StandardCharsets.UTF_8)
+                        : "";
                     handleIncomingPhonePayload(jsonStr);
                 }
             };
             Wearable.getMessageClient(this).addListener(messageListener);
-            // Request latest state from phone on startup
-            sendToPhone("{\"type\":\"REQUEST_STATE\"}");
         } catch (Exception ignored) {}
+
+        try {
+            if (dataListener != null) {
+                Wearable.getDataClient(this).removeListener(dataListener);
+            }
+            dataListener = (DataEventBuffer dataEvents) -> {
+                if (dataEvents == null) return;
+                for (DataEvent event : dataEvents) {
+                    if (event.getType() == DataEvent.TYPE_CHANGED) {
+                        DataItem item = event.getDataItem();
+                        if (item != null && item.getUri() != null && "/archery101010/state".equals(item.getUri().getPath())) {
+                            DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                            String snapshotJson = dataMap.getString("snapshot_json", "");
+                            if (snapshotJson != null && !snapshotJson.isEmpty()) {
+                                isPhoneConnected = true;
+                                lastPhoneSyncMs = System.currentTimeMillis();
+                                handleIncomingPhonePayload(snapshotJson);
+                            }
+                        }
+                    }
+                }
+            };
+            Wearable.getDataClient(this).addListener(dataListener);
+
+            // Immediately read any persisted /archery101010/state DataItem on startup
+            Wearable.getDataClient(this).getDataItems().addOnSuccessListener((DataItemBuffer dataItems) -> {
+                if (dataItems == null) return;
+                try {
+                    for (DataItem item : dataItems) {
+                        if (item != null && item.getUri() != null && "/archery101010/state".equals(item.getUri().getPath())) {
+                            DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                            String snapshotJson = dataMap.getString("snapshot_json", "");
+                            if (snapshotJson != null && !snapshotJson.isEmpty()) {
+                                handleIncomingPhonePayload(snapshotJson);
+                            }
+                        }
+                    }
+                } finally {
+                    dataItems.release();
+                }
+            });
+        } catch (Exception ignored) {}
+
+        checkPhoneNodeConnectivity();
+        sendToPhone("/archery101010/ping", "{\"type\":\"PING\"}", false);
+        sendToPhone("{\"type\":\"REQUEST_STATE\"}");
     }
 
     private void handleIncomingPhonePayload(String json) {
         if (json == null || json.isEmpty()) return;
         try {
-            JSONObject obj = new JSONObject(json);
-            if (obj.has("payload") && obj.optJSONObject("payload") != null) {
-                obj = obj.optJSONObject("payload");
+            JSONObject rootObj = new JSONObject(json);
+            long incomingAckSeq = rootObj.optLong("_ackCmdSeq", 0L);
+            JSONObject obj = rootObj;
+            if (rootObj.has("payload") && rootObj.optJSONObject("payload") != null) {
+                obj = rootObj.optJSONObject("payload");
+                incomingAckSeq = Math.max(incomingAckSeq, obj.optLong("_ackCmdSeq", 0L));
             }
+            if (incomingAckSeq > lastAckedCmdSeq) {
+                lastAckedCmdSeq = incomingAckSeq;
+            }
+
+            long now = System.currentTimeMillis();
+            isPhoneConnected = true;
+            lastPhoneSyncMs = now;
+
+            String incomingSessionId = obj.optString("sessionId", "");
+            int incomingArrows = obj.optInt("arrowsCount", -1);
+            boolean sessionActive = obj.optBoolean("sessionActive", rootObj.optBoolean("sessionActive", true));
+
+            // Guard 1: If the phone explicitly reports sessionActive == false (or 0 arrows after finish),
+            // clear any finished-session lock and do not overwrite active local shots taken within the last 6s.
+            if (!sessionActive) {
+                if (incomingArrows <= 0) {
+                    lastFinishedSessionId = "";
+                }
+                if ((now - lastLocalActionTimeMs) >= 6000L) {
+                    arrowCount = 0;
+                    syncedArrowsCount = 0;
+                    totalScoredArrows = 0;
+                    totalScore = 0;
+                    currentEnd = 1;
+                    currentEndArrows.clear();
+                    saveState();
+                    runOnUiThread(() -> {
+                        if (canvasView != null) canvasView.invalidate();
+                    });
+                }
+                return;
+            }
+
+            // Guard 2: Do not revive a session that was finished on the watch
+            if (incomingArrows == 0) {
+                lastFinishedSessionId = "";
+            } else if (incomingArrows > 0) {
+                if (!lastFinishedSessionId.isEmpty() && incomingSessionId.equals(lastFinishedSessionId)) {
+                    return;
+                }
+                if ((now - lastFinishedTimestampMs) < 15000L && incomingSessionId.isEmpty()) {
+                    return;
+                }
+            }
+            if (!incomingSessionId.isEmpty()) {
+                currentSessionId = incomingSessionId;
+            }
+
+            // Guard 3: If the user acted locally on the watch within the last 6s and the phone snapshot
+            // has not yet acknowledged our latest command (_ackCmdSeq < pendingCmdSeq), keep local arrow/score state
+            // intact in BOTH directions (protects both +1 increments AND DESHACER/BORRAR undos).
+            boolean hasUnackedLocalAction =
+                ((now - lastLocalActionTimeMs) < 6000L) &&
+                (pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
+
             if (obj.has("arrowsCount")) {
-                arrowCount = obj.optInt("arrowsCount", arrowCount);
-                syncedArrowsCount = arrowCount;
-                totalScoredArrows = arrowCount;
+                if (hasUnackedLocalAction) {
+                    syncedArrowsCount = Math.max(0, incomingArrows);
+                } else {
+                    arrowCount = Math.max(0, incomingArrows);
+                    syncedArrowsCount = arrowCount;
+                    totalScoredArrows = arrowCount;
+                }
             }
-            if (obj.has("totalScore")) {
+            if (obj.has("totalScore") && !hasUnackedLocalAction) {
                 totalScore = Math.max(0, obj.optInt("totalScore", totalScore));
             }
             if (obj.has("activeKcal")) {
@@ -164,14 +351,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (obj.has("endsCount")) {
                 syncedEndsCount = Math.max(1, obj.optInt("endsCount", 12));
             }
-            if (obj.has("currentEndIndex")) {
+            if (obj.has("currentEndIndex") && !hasUnackedLocalAction) {
                 int nextEnd = obj.optInt("currentEndIndex", 0) + 1;
                 if (nextEnd != currentEnd) {
                     currentEnd = nextEnd;
                     currentEndArrows.clear();
                 }
             }
-            if (obj.has("currentEndArrows")) {
+            if (obj.has("currentEndArrows") && !hasUnackedLocalAction) {
                 JSONArray arr = obj.optJSONArray("currentEndArrows");
                 if (arr != null) {
                     currentEndArrows.clear();
@@ -197,7 +384,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (obj.has("bowPoundageLbs")) {
                 drawWeightLbs = (float) obj.optDouble("bowPoundageLbs", drawWeightLbs);
             }
-            if (obj.has("autoDetectEnabled")) {
+            if (obj.has("autoDetectEnabled") && !hasUnackedLocalAction) {
                 autoDetectEnabled = obj.optBoolean("autoDetectEnabled", autoDetectEnabled);
             }
             saveState();
@@ -208,19 +395,49 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void sendToPhone(String jsonPayload) {
-        sendToPhone("/archery101010/command", jsonPayload);
+        boolean isRequestState = jsonPayload != null && jsonPayload.contains("\"REQUEST_STATE\"");
+        sendToPhone("/archery101010/command", jsonPayload, !isRequestState);
     }
 
-    private void sendToPhone(String path, String jsonPayload) {
+    private void sendToPhone(String path, String jsonPayload, boolean persistViaDataClient) {
         try {
-            byte[] data = jsonPayload != null ? jsonPayload.getBytes(StandardCharsets.UTF_8) : new byte[0];
+            String enrichedPayload = jsonPayload;
+            long now = System.currentTimeMillis();
+            if (persistViaDataClient && jsonPayload != null && jsonPayload.startsWith("{")) {
+                try {
+                    JSONObject obj = new JSONObject(jsonPayload);
+                    long seq = ++cmdSequence;
+                    String cmdId = now + "-" + seq;
+                    obj.put("_cmdId", cmdId);
+                    obj.put("_cmdSeq", seq);
+                    obj.put("_ts", now);
+                    String cmdType = obj.optString("type", "");
+                    if (!"SYNC_TELEMETRY_FROM_WATCH".equals(cmdType)) {
+                        pendingCmdSeq = seq;
+                    }
+                    enrichedPayload = obj.toString();
+                    saveState();
+                } catch (Exception ignored) {}
+            }
+
+            final byte[] data = enrichedPayload != null ? enrichedPayload.getBytes(StandardCharsets.UTF_8) : new byte[0];
             Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
-                if (nodes != null) {
+                if (nodes != null && !nodes.isEmpty()) {
+                    isPhoneConnected = true;
                     for (Node node : nodes) {
                         Wearable.getMessageClient(this).sendMessage(node.getId(), path, data);
                     }
+                } else {
+                    isPhoneConnected = false;
                 }
             });
+
+            if (persistViaDataClient && enrichedPayload != null) {
+                PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/watch_command");
+                putReq.getDataMap().putString("command_json", enrichedPayload);
+                putReq.getDataMap().putLong("sent_at", now);
+                Wearable.getDataClient(this).putDataItem(putReq.asPutDataRequest().setUrgent());
+            }
         } catch (Exception ignored) {}
     }
 
@@ -245,30 +462,48 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onResume() {
         super.onResume();
-        if (sensorManager != null && accelerometer != null) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            try {
+                wakeLock.acquire(4 * 60 * 60 * 1000L);
+            } catch (Exception ignored) {}
         }
-        heartbeatHandler.removeCallbacks(heartbeatRunnable);
-        heartbeatHandler.postDelayed(heartbeatRunnable, 4000L);
+        ensureSensorAndHeartbeatActive();
+        sendToPhone("{\"type\":\"REQUEST_STATE\"}");
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        heartbeatHandler.removeCallbacks(heartbeatRunnable);
-        if (sensorManager != null) {
-            sensorManager.unregisterListener(this);
-        }
+        // Do NOT unregister accelerometer or stop heartbeatRunnable here:
+        // When the archer lowers their arm to draw/walk, Wear OS enters ambient mode (onPause).
+        // Keeping sensors and sync active ensures zero missed shots or steps during the session.
         saveState();
     }
 
     @Override
     protected void onDestroy() {
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        if (sensorManager != null && isSensorRegistered) {
+            try {
+                sensorManager.unregisterListener(this);
+                isSensorRegistered = false;
+            } catch (Exception ignored) {}
+        }
         if (messageListener != null) {
             try {
                 Wearable.getMessageClient(this).removeListener(messageListener);
                 messageListener = null;
+            } catch (Exception ignored) {}
+        }
+        if (dataListener != null) {
+            try {
+                Wearable.getDataClient(this).removeListener(dataListener);
+                dataListener = null;
+            } catch (Exception ignored) {}
+        }
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try {
+                wakeLock.release();
             } catch (Exception ignored) {}
         }
         super.onDestroy();
@@ -284,6 +519,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putFloat("walkedMeters", getEffectiveWalkedMeters());
         editor.putInt("syncedArrowsPerEnd", syncedArrowsPerEnd);
         editor.putInt("syncedEndsCount", syncedEndsCount);
+        editor.putLong("cmdSequence", cmdSequence);
         editor.apply();
     }
 
@@ -343,6 +579,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             // Bow release signature on wrist (> 13.5 m/s^2 linear spike with 2.4s cooldown)
             if (autoDetectEnabled && linearMag >= 13.5 && (now - lastShotTimestamp) > 2400L) {
                 lastShotTimestamp = now;
+                lastLocalActionTimeMs = now;
                 arrowCount++;
                 triggerHaptic(55);
                 saveState();
@@ -424,6 +661,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void handleTap(float x, float y) {
+            if (wakeLock != null && !wakeLock.isHeld()) {
+                try {
+                    wakeLock.acquire(4 * 60 * 60 * 1000L);
+                } catch (Exception ignored) {}
+            }
             int w = getWidth();
             int h = getHeight();
 
@@ -437,6 +679,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             if (screenIndex == 0) {
                 if (btnToggleDetector.contains(x, y)) {
+                    lastLocalActionTimeMs = System.currentTimeMillis();
                     autoDetectEnabled = !autoDetectEnabled;
                     triggerHaptic(25);
                     sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + "}");
@@ -444,6 +687,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     return;
                 }
                 if (btnLeftPrimary.contains(x, y)) {
+                    lastLocalActionTimeMs = System.currentTimeMillis();
                     arrowCount++;
                     triggerHaptic(45);
                     saveState();
@@ -453,10 +697,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 if (btnRightSecondary.contains(x, y)) {
                     if (arrowCount > 0) {
+                        lastLocalActionTimeMs = System.currentTimeMillis();
                         arrowCount--;
+                        if (!currentEndArrows.isEmpty()) {
+                            String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
+                            int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
+                            totalScore = Math.max(0, totalScore - pts);
+                            totalScoredArrows = Math.max(0, totalScoredArrows - 1);
+                        }
                         triggerHaptic(25);
                         saveState();
-                        sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\"}");
+                        sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\",\"totalScore\":" + totalScore + "}");
                         invalidate();
                     }
                     return;
@@ -464,23 +715,31 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             } else if (screenIndex == 1) {
                 for (int i = 0; i < 6; i++) {
                     if (scoreButtons[i].contains(x, y)) {
-                        if (currentEndArrows.size() < syncedArrowsPerEnd) {
-                            String val = scoreLabels[i];
-                            currentEndArrows.add(val);
-                            int pts = "X".equals(val) || "10".equals(val) ? 10 : ("M".equals(val) ? 0 : Integer.parseInt(val));
-                            totalScore += pts;
-                            totalScoredArrows++;
-                            arrowCount = Math.max(arrowCount + 1, totalScoredArrows);
-                            triggerHaptic(35);
-                            saveState();
-                            sendToPhone("{\"type\":\"SCORE_INPUT\",\"payload\":{\"value\":\"" + val + "\"}}");
-                            invalidate();
+                        lastLocalActionTimeMs = System.currentTimeMillis();
+                        if (currentEndArrows.size() >= syncedArrowsPerEnd) {
+                            if (currentEnd < syncedEndsCount) {
+                                currentEndArrows.clear();
+                                currentEnd++;
+                            } else {
+                                return;
+                            }
                         }
+                        String val = scoreLabels[i];
+                        currentEndArrows.add(val);
+                        int pts = "X".equals(val) || "10".equals(val) ? 10 : ("M".equals(val) ? 0 : Integer.parseInt(val));
+                        totalScore += pts;
+                        totalScoredArrows++;
+                        arrowCount = Math.max(arrowCount + 1, totalScoredArrows);
+                        triggerHaptic(35);
+                        saveState();
+                        sendToPhone("{\"type\":\"SCORE_INPUT\",\"payload\":{\"value\":\"" + val + "\",\"totalScore\":" + totalScore + "}}");
+                        invalidate();
                         return;
                     }
                 }
                 if (btnLeftPrimary.contains(x, y)) {
                     if (!currentEndArrows.isEmpty()) {
+                        lastLocalActionTimeMs = System.currentTimeMillis();
                         String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
                         int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
                         totalScore = Math.max(0, totalScore - pts);
@@ -488,13 +747,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         arrowCount = Math.max(0, arrowCount - 1);
                         triggerHaptic(25);
                         saveState();
-                        sendToPhone("{\"type\":\"UNDO_ARROW\"}");
+                        sendToPhone("{\"type\":\"UNDO_ARROW\",\"totalScore\":" + totalScore + "}");
                         invalidate();
                     }
                     return;
                 }
                 if (btnRightSecondary.contains(x, y)) {
                     if (!currentEndArrows.isEmpty()) {
+                        lastLocalActionTimeMs = System.currentTimeMillis();
                         currentEndArrows.clear();
                         currentEnd = Math.min(syncedEndsCount, currentEnd + 1);
                         triggerHaptic(45);
@@ -508,14 +768,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (btnLeftPrimary.contains(x, y)) {
                     triggerHaptic(25);
                     syncTelemetryToPhone();
+                    sendToPhone("/archery101010/ping", "{\"type\":\"PING\"}", false);
                     sendToPhone("{\"type\":\"REQUEST_STATE\"}");
                     invalidate();
                     return;
                 }
             } else if (screenIndex == 3) {
                 if (btnLeftPrimary.contains(x, y)) {
-                    // Finish session on phone first, then reset local watch counters
+                    // Finish session on phone first, then reset local watch counters with cooldown guard
                     triggerHaptic(70);
+                    lastFinishedTimestampMs = System.currentTimeMillis();
+                    lastFinishedSessionId = currentSessionId;
                     sendToPhone("{\"type\":\"FINISH_SESSION_FROM_WATCH\"}");
                     arrowCount = 0;
                     totalScore = 0;
@@ -683,9 +946,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
 
             paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            paint.setTextSize(8.8f * scale);
+            paint.setTextSize(8.5f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "CONTADOR AUTOMÁTICO", cx, 130f * scale);
+            String syncSubtitle = isPhoneConnected ? "● TELÉFONO SINCRONIZADO" : "CONTADOR AUTOMÁTICO";
+            drawCenteredText(canvas, syncSubtitle, cx, 130f * scale);
 
             // Bottom Action Buttons: +1 FLECHA and DESHACER (148px total width = 33px bezel clearance per side)
             float btnW = 71f * scale;

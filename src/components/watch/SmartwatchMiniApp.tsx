@@ -2,13 +2,17 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Watch, Smartphone, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Watch, Smartphone, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import {
   BiometricSessionSnapshot,
+  WatchConnectionStatus,
   formatKmAndMiles,
+  publishWatchState,
   readStoredWatchState,
   sendWatchCommand,
   subscribeWatchMessages,
+  subscribeWatchConnectionStatus,
+  pingNativeWatch,
   calculateActiveKcal
 } from "@/lib/scoring/biometricsEngine";
 
@@ -61,6 +65,25 @@ export default function SmartwatchMiniApp({
   });
 
   const activeState = liveSnapshot || internalSnapshot;
+
+  const [watchConnStatus, setWatchConnStatus] = useState<WatchConnectionStatus>({
+    isNativeAndroid: false,
+    bridgeReady: false,
+    connectedNodesCount: 0,
+    connectedNodes: [],
+    lastMessageAt: 0,
+    lastPongAt: 0,
+    hasCachedState: false
+  });
+  const [isSyncingWatch, setIsSyncingWatch] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const unsub = subscribeWatchConnectionStatus((status) => {
+      setWatchConnStatus(status);
+    });
+    return unsub;
+  }, [isOpen]);
 
   // Listen to BroadcastChannel / localStorage updates when running standalone on /watch
   useEffect(() => {
@@ -619,6 +642,66 @@ export default function SmartwatchMiniApp({
                 <X size={16} />
               </button>
             )}
+          </div>
+
+          {/* Estado de Conexión Smartwatch (Diagnóstico Bluetooth Wear OS + Botón Sincronizar) */}
+          <div
+            className={`w-full rounded-2xl px-3 py-2.5 border flex items-center justify-between gap-2 ${
+              watchConnStatus.isNativeAndroid && !watchConnStatus.bridgeReady
+                ? "bg-[#FF0000]/10 border-[#FF0000]/50"
+                : watchConnStatus.connectedNodesCount > 0
+                ? "bg-[#00A8F3]/10 border-[#00A8F3]/50"
+                : "bg-white/[0.04] border-white/15"
+            }`}
+          >
+            <div className="flex flex-col min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    watchConnStatus.isNativeAndroid && !watchConnStatus.bridgeReady
+                      ? "bg-[#FF0000] shadow-[0_0_6px_#FF0000]"
+                      : watchConnStatus.connectedNodesCount > 0
+                      ? "bg-[#00A8F3] shadow-[0_0_6px_#00A8F3]"
+                      : "bg-[#FFF200] shadow-[0_0_6px_#FFF200]"
+                  }`}
+                />
+                <span className="text-[10.5px] font-black uppercase tracking-wider text-white truncate">
+                  {watchConnStatus.isNativeAndroid && !watchConnStatus.bridgeReady
+                    ? "App Base Desactualizada (Sin Puente Bluetooth)"
+                    : watchConnStatus.connectedNodesCount > 0
+                    ? `Reloj Conectado: ${watchConnStatus.connectedNodes
+                        .map((n) => n.displayName || "Wear OS")
+                        .join(", ")}`
+                    : watchConnStatus.bridgeReady
+                    ? "Motor Wear OS Activo · Buscando Reloj"
+                    : "Sincronización En Vivo Activa"}
+                </span>
+              </div>
+              <span className="text-[10px] text-white leading-snug mt-0.5">
+                {watchConnStatus.isNativeAndroid && !watchConnStatus.bridgeReady
+                  ? "Actualiza la app desde Google Play o instala el APK v2.64 para activar el motor Bluetooth del reloj."
+                  : watchConnStatus.connectedNodesCount > 0
+                  ? "Sincronización bidireccional activa (funciona incluso con la pantalla apagada)."
+                  : watchConnStatus.bridgeReady
+                  ? "Abre Archery 101010 en tu reloj. Teléfono y reloj deben venir ambos de Play Store (o ambos de APK)."
+                  : "Los tiros, rondas, distancia y kcal se sincronizan al instante."}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(25);
+                setIsSyncingWatch(true);
+                publishWatchState(activeState);
+                pingNativeWatch();
+                setTimeout(() => setIsSyncingWatch(false), 700);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-[#0A1826] border border-[#00A8F3] text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
+            >
+              <RefreshCw size={12} className={isSyncingWatch ? "animate-spin" : ""} />
+              <span>Sincronizar</span>
+            </button>
           </div>
 
           {/* Shape Switcher & Screen Selector */}
