@@ -808,13 +808,21 @@ export default function Home() {
         const { auth } = await import("@/lib/firebase");
         unsub = onAuthStateChanged(auth, async (fbUser) => {
           if (cancelled) return;
+          if (typeof window !== "undefined" && (window as any).__archeryManualLogout) return;
           const online = typeof navigator === "undefined" || navigator.onLine;
           if (!online) return;
           if (!fbUser || fbUser.uid !== user.uid) {
+            try {
+              const { getLocalSetting } = await import("@/lib/db/indexedDB");
+              const currentSaved = await getLocalSetting("current_user", null);
+              if (!currentSaved || (typeof window !== "undefined" && (window as any).__archeryManualLogout)) {
+                return;
+              }
+            } catch {}
             console.warn("[Auth Guard] Firebase session missing or mismatched. Forcing re-login.");
             alert("Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.");
             try {
-              const { logoutUser } = await import("@/lib/authService");
+              const { logoutUser } = await import("@/lib/firebase").then(() => import("@/lib/authService"));
               await logoutUser();
             } catch {
               // ignore
@@ -1051,23 +1059,38 @@ export default function Home() {
   }, [user?.uid]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
+    if (typeof window !== "undefined") {
+      (window as any).__archeryManualLogout = false;
+    }
     setUser(loggedInUser);
     setCurrentScreen("HOME");
     setDismissedProfileModal(false);
   };
 
   const handleRegisterSuccess = (registeredUser: UserProfile) => {
+    if (typeof window !== "undefined") {
+      (window as any).__archeryManualLogout = false;
+    }
     setUser(registeredUser);
     setCurrentScreen("HOME");
     setDismissedProfileModal(false);
   };
 
   const handleLogout = async () => {
-    if (user?.uid) {
+    if (typeof window !== "undefined") {
+      (window as any).__archeryManualLogout = true;
+    }
+    const outgoingUid = user?.uid;
+    setUser(null);
+    setAuthScreen("LOGIN");
+    setSessionConfig(null);
+    setDismissedProfileModal(false);
+
+    if (outgoingUid) {
       try {
         const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
-        await setDoc(doc(db, "users", user.uid), {
+        await setDoc(doc(db, "users", outgoingUid), {
           lastActiveAt: 0
         }, { merge: true });
       } catch (err) {
@@ -1080,10 +1103,6 @@ export default function Home() {
     } catch (err) {
       console.warn("Failed to logout cleanly:", err);
     }
-    setUser(null);
-    setAuthScreen("LOGIN");
-    setSessionConfig(null);
-    setDismissedProfileModal(false);
   };
 
   const handleReturnToLoginFromProfile = async () => {

@@ -241,6 +241,11 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcheryLocationNativeBridge(), "ArcheryLocationNativeBridge");
             initWearableListener();
 
+            if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
+                activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                webView.loadUrl("https://archery101010-c0bb4.web.app/");
+            }
+
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -253,6 +258,10 @@ public class MainActivity extends BridgeActivity {
                                 activeAppOrigin = "https://localhost";
                             } else if (host.equals("archery101010-c0bb4.web.app")) {
                                 activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                                getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
+                                    .edit()
+                                    .putBoolean("prefer_remote_ota", true)
+                                    .apply();
                             }
                         }
                         String urlStr = uri.toString();

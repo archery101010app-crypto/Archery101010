@@ -848,12 +848,21 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 }
 
 export async function logoutUser(): Promise<void> {
+  if (typeof window !== "undefined") {
+    (window as any).__archeryManualLogout = true;
+  }
+  await saveLocalSetting("current_user", null);
   try {
     await signOut(auth);
   } catch (err) {
     console.warn("Firebase signOut warning:", err);
+  } finally {
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        (window as any).__archeryManualLogout = false;
+      }, 3000);
+    }
   }
-  await saveLocalSetting("current_user", null);
 }
 
 /**

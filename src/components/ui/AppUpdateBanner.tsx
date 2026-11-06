@@ -60,18 +60,6 @@ export default function AppUpdateBanner() {
         const data: RemoteVersionInfo = await res.json();
         if (mounted && data?.version && isNewerVersion(data.version, APP_VERSION)) {
           setRemoteInfo(data);
-          const isNativeLocal =
-            typeof window !== "undefined" &&
-            window.location.hostname === "localhost" &&
-            (Capacitor.isNativePlatform() || !!(window as any).ArcheryNativeAuth);
-          if (isNativeLocal) {
-            try {
-              sessionStorage.setItem("archery_intro_shown", "1");
-            } catch {}
-            window.location.replace(
-              `https://archery101010-c0bb4.web.app/?v=${data.version}&skipIntro=1${window.location.hash || ""}`
-            );
-          }
         }
       } catch {
         // Silent fallback when offline or unreachable
