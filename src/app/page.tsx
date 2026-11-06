@@ -1156,8 +1156,53 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-black-oled text-cyan-neon font-black text-[19.8px] tracking-widest animate-pulse">
-        ARCHERY 101010
+      <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-between py-16 px-0 overflow-hidden select-none">
+        <div className="h-2" />
+        <div className="relative flex items-center justify-center w-full flex-1 my-2 px-0">
+          <div className="absolute w-72 h-72 rounded-full border border-dashed border-cyan-neon/15 flex items-center justify-center pointer-events-none">
+            <div className="w-64 h-64 rounded-full border border-dotted border-red-rival/10" />
+          </div>
+          <div className="absolute w-56 h-56 rounded-full border border-cyan-neon/20 border-t-transparent border-b-transparent pointer-events-none" />
+          <div className="relative z-10 flex items-center justify-center w-[76.5%] mx-auto px-0">
+            <img
+              src="/images/logo_final.png?v=7"
+              alt="Archery 101010"
+              className="w-full h-auto max-h-[290px] object-contain"
+              draggable={false}
+            />
+          </div>
+        </div>
+        <div className="w-full flex flex-col items-center justify-center min-h-[90px] px-6 -translate-y-8 sm:-translate-y-12">
+          <h1
+            className="text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-[0.28em] text-center"
+            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          >
+            Your Archery App
+          </h1>
+          <div className="w-[235px] sm:w-[265px] h-7 relative overflow-hidden mt-1.5">
+            <svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 200 20"
+              className="absolute inset-0 pointer-events-none opacity-85"
+            >
+              <path
+                d="M 12,5 Q 100,15 188,5"
+                fill="none"
+                stroke="url(#loading-slogan-gradient)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+              <defs>
+                <linearGradient id="loading-slogan-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#00BFFF" />
+                  <stop offset="50%" stopColor="#FF0000" />
+                  <stop offset="100%" stopColor="#FFE500" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+        </div>
       </div>
     );
   }
