@@ -1,4 +1,4 @@
-<?xml version="2.69.0"?>
+<?xml version="2.70.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application entry="Archery101010WatchApp" id="a1010100-1010-4101-8101-010101010101" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.2.0" name="@Strings.AppName" type="watch-app" version="2.63.0">
         <iq:products>

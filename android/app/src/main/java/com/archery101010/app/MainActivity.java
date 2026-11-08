@@ -1270,26 +1270,12 @@ public class MainActivity extends BridgeActivity {
         topBar.setPadding(padH, padV, padH, padV);
 
         TextView titleView = new TextView(this);
-        titleView.setText("Spotify · Iniciar Sesión (Audio Completo)");
+        titleView.setText("Conectar con Spotify · Se cerrará automáticamente");
         titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         topBar.addView(titleView, titleLp);
-
-        TextView doneBtn = new TextView(this);
-        doneBtn.setText("Listo ✓");
-        doneBtn.setTextColor(Color.BLACK);
-        doneBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        doneBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        doneBtn.setBackgroundColor(Color.parseColor("#1DB954"));
-        doneBtn.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
-        LinearLayout.LayoutParams doneLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        doneLp.rightMargin = dpToPx(8);
-        topBar.addView(doneBtn, doneLp);
 
         TextView closeBtn = new TextView(this);
         closeBtn.setText("✕");
@@ -1317,6 +1303,34 @@ public class MainActivity extends BridgeActivity {
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setUserAgentString(DESKTOP_CHROME_UA);
 
+        final android.os.Handler autoWatchHandler = new android.os.Handler(Looper.getMainLooper());
+        final boolean[] autoCompleted = new boolean[]{ false };
+
+        final Runnable autoCompleteIfAuthenticated = () -> {
+            if (autoCompleted[0]) return;
+            if (captureAndPersistSpotifyCookies()) {
+                autoCompleted[0] = true;
+                autoWatchHandler.removeCallbacksAndMessages(null);
+                try {
+                    if (dialog.isShowing()) {
+                        dialog.dismiss();
+                    }
+                } catch (Exception ignored) {}
+                dispatchSpotifyLoginResult(true);
+            }
+        };
+
+        final Runnable periodicCookieWatcher = new Runnable() {
+            @Override
+            public void run() {
+                if (autoCompleted[0] || !dialog.isShowing()) return;
+                autoCompleteIfAuthenticated.run();
+                if (!autoCompleted[0] && dialog.isShowing()) {
+                    autoWatchHandler.postDelayed(this, 350L);
+                }
+            }
+        };
+
         loginWv.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -1329,23 +1343,6 @@ public class MainActivity extends BridgeActivity {
         });
 
         loginWv.setWebViewClient(new WebViewClient() {
-            private boolean completed = false;
-
-            private void checkCompletion(String currentUrl) {
-                if (completed) return;
-                boolean hasSpDc = captureAndPersistSpotifyCookies();
-                if (!hasSpDc) return;
-                String lower = currentUrl != null ? currentUrl.toLowerCase() : "";
-                if (lower.startsWith("https://open.spotify.com") ||
-                    lower.contains("accounts.spotify.com") && lower.contains("/status")) {
-                    completed = true;
-                    try {
-                        dialog.dismiss();
-                    } catch (Exception ignored) {}
-                    dispatchSpotifyLoginResult(true);
-                }
-            }
-
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -1361,25 +1358,22 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                checkCompletion(url);
+                autoCompleteIfAuthenticated.run();
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                checkCompletion(url);
+                autoCompleteIfAuthenticated.run();
             }
         });
 
-        doneBtn.setOnClickListener(v -> {
-            boolean ok = captureAndPersistSpotifyCookies();
-            try {
-                dialog.dismiss();
-            } catch (Exception ignored) {}
-            dispatchSpotifyLoginResult(ok);
+        dialog.setOnDismissListener(d -> {
+            autoWatchHandler.removeCallbacksAndMessages(null);
         });
 
         closeBtn.setOnClickListener(v -> {
+            autoWatchHandler.removeCallbacksAndMessages(null);
             boolean ok = captureAndPersistSpotifyCookies();
             try {
                 dialog.dismiss();
@@ -1395,6 +1389,7 @@ public class MainActivity extends BridgeActivity {
 
         dialog.setContentView(root);
         dialog.show();
+        autoWatchHandler.postDelayed(periodicCookieWatcher, 350L);
 
         String loginUrl = "https://accounts.spotify.com/es/login?continue=" +
             Uri.encode("https://open.spotify.com/");

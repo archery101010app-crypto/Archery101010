@@ -166,7 +166,18 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         setOauthClientIdInput(savedClientId);
       }
 
-      syncNativeSpotifySessionStatus();
+      const nativeActive = syncNativeSpotifySessionStatus();
+      if (nativeActive && !savedAccount) {
+        const autoAcc: ConnectedSpotifyAccount = {
+          username: "spotify",
+          displayName: "Cuenta Spotify Vinculada",
+          product: "premium",
+          authMode: "session",
+          connectedAt: new Date().toISOString()
+        };
+        setConnectedAccount(autoAcc);
+        await saveLocalSetting("spotify_connected_account", autoAcc);
+      }
 
       // Check if returning from Spotify OAuth 2.0 PKCE callback
       const callbackResult = await handleSpotifyOAuthCallbackIfPresent();
@@ -207,13 +218,20 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     (window as any).__onNativeSpotifyLoginSuccess = async (res?: { connected?: boolean; hasSpDc?: boolean }) => {
       const ok = Boolean(res?.connected || res?.hasSpDc);
       setHasNativeSessionCookie(ok);
-      setIframeReloadKey((prev) => prev + 1);
       if (ok) {
-        setAccountFeedback("¡Sesión de Spotify vinculada! Canciones 100% completas activadas.");
-      } else {
-        setAccountFeedback("No se detectó sesión iniciada en Spotify. Inicia sesión y pulsa Listo ✓.");
+        const autoAcc: ConnectedSpotifyAccount = {
+          username: "spotify",
+          displayName: "Cuenta Spotify Vinculada",
+          product: "premium",
+          authMode: "session",
+          connectedAt: new Date().toISOString()
+        };
+        setConnectedAccount(autoAcc);
+        await saveLocalSetting("spotify_connected_account", autoAcc);
+        setIframeReloadKey((prev) => prev + 1);
+        setAccountFeedback("¡Spotify conectado automáticamente! Reproducción al 100% activada.");
+        setTimeout(() => setAccountFeedback(null), 4000);
       }
-      setTimeout(() => setAccountFeedback(null), 4500);
     };
 
     const handleToggle = () => {
@@ -723,152 +741,74 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
               ref={scrollContainerRef}
               className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 pb-8 scrollbar-none"
             >
-              {/* 0. Cuenta Suscrita / Usuario de Spotify */}
+              {/* 0. Conexión Automática de Spotify (1 Solo Toque · Cero Formularios) */}
               <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
-                {connectedAccount && !showAccountForm ? (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0 font-black text-xs uppercase">
-                          {connectedAccount.displayName.slice(0, 2)}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-black text-white truncate">
-                              {connectedAccount.displayName}
-                            </span>
-                            <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
-                              {hasNativeSessionCookie ? "AUDIO 100% COMPLETO" : "FALTA SESIÓN EN APP"}
-                            </span>
-                          </div>
-                          <span className="text-[11.6px] text-white truncate">
-                            Usuario: @{connectedAccount.username}
+                {connectedAccount && hasNativeSessionCookie ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0 font-black text-xs uppercase">
+                        <Check size={15} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-white truncate">
+                            Spotify Conectado
+                          </span>
+                          <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
+                            AUDIO 100% COMPLETO
                           </span>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={handleRefreshOAuthPlaylists}
-                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-[#1DB954] cursor-pointer transition"
-                          title="Sincronizar reproductor con tu cuenta"
-                        >
-                          <RefreshCw size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowAccountForm(true)}
-                          className="px-2 py-1 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-[10.5px] font-bold text-white hover:text-white cursor-pointer transition"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDisconnectAccount}
-                          className="p-1.5 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
-                          title="Desvincular cuenta"
-                        >
-                          <LogOut size={12} />
-                        </button>
+                        <span className="text-[11.2px] text-white/80 truncate">
+                          Reproducción completa sin límite de 30s activa
+                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-0.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => handleConnectSpotifyAccount(true)}
-                        className={`flex-1 py-2 px-2.5 rounded-xl border text-[11.6px] font-black flex items-center justify-center gap-1.5 cursor-pointer transition ${
-                          hasNativeSessionCookie
-                            ? "bg-[#0B0E14] hover:bg-white/[0.04] border-white/[0.08] text-[#1DB954]"
-                            : "bg-[#1DB954] hover:bg-[#1ED760] border-[#1DB954] text-black uppercase tracking-wider"
-                        }`}
+                        onClick={handleRefreshOAuthPlaylists}
+                        className="p-2 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-[#1DB954] cursor-pointer transition"
+                        title="Actualizar reproductor"
                       >
-                        <UserCheck size={13} />
-                        <span>
-                          {hasNativeSessionCookie
-                            ? "Reautenticar Sesión Premium en Spotify"
-                            : "Activar Canciones 100% Completas (Iniciar Sesión)"}
-                        </span>
+                        <RefreshCw size={13} />
                       </button>
-                      {connectedAccount.username && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            window.open(
-                              `https://open.spotify.com/user/${encodeURIComponent(connectedAccount.username)}`,
-                              "_blank",
-                              "noopener,noreferrer"
-                            )
-                          }
-                          className="py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[11.6px] font-bold text-white flex items-center gap-1 cursor-pointer transition shrink-0"
-                        >
-                          <span>Mi Perfil</span>
-                          <ExternalLink size={10} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleDisconnectAccount}
+                        className="p-2 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
+                        title="Desvincular cuenta"
+                      >
+                        <LogOut size={13} />
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <UserPlus size={14} className="text-[#1DB954]" />
+                        <UserCheck size={14} className="text-[#1DB954]" />
                         <span className="text-xs font-black uppercase tracking-wider text-white">
-                          Conectar Cuenta Suscrita de Spotify
+                          Activar Canciones Completas
                         </span>
                       </div>
-                      {connectedAccount && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAccountForm(false)}
-                          className="text-[11.6px] text-white hover:text-white font-bold cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      )}
+                      <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30">
+                        1 SOLO TOQUE
+                      </span>
                     </div>
 
                     <p className="text-[11.6px] text-white leading-snug">
-                      Ingresa tu usuario de Spotify e inicia sesión en tu cuenta suscrita para escuchar <strong className="text-white">canciones completas</strong> sin límite de 30 segundos.
+                      Toca abajo para iniciar sesión en Spotify. La ventana se cerrará <strong className="text-white">automáticamente</strong> y activará todas las canciones al 100%.
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={usernameInput}
-                        onChange={(e) => setUsernameInput(e.target.value)}
-                        placeholder="Tu usuario, correo o link de perfil"
-                        className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition"
-                      />
-                      <input
-                        type="text"
-                        value={displayNameInput}
-                        onChange={(e) => setDisplayNameInput(e.target.value)}
-                        placeholder="Tu nombre (ej. Coach / Arquero)"
-                        className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition"
-                      />
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleConnectSpotifyAccount(true)}
-                        className="flex-1 py-2.5 px-3 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
-                      >
-                        <UserCheck size={14} />
-                        <span>Iniciar Sesión en Spotify y Conectar</span>
-                      </button>
-                      {usernameInput.trim() && (
-                        <button
-                          type="button"
-                          onClick={() => handleConnectSpotifyAccount(false)}
-                          className="py-2.5 px-3 rounded-xl bg-[#0B0E14] hover:bg-white/[0.05] border border-white/[0.08] text-white font-bold text-[11.6px] uppercase tracking-wider cursor-pointer transition"
-                        >
-                          Solo Guardar Usuario
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectSpotifyAccount(true)}
+                      className="w-full py-2.5 px-3 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
+                    >
+                      <UserCheck size={15} />
+                      <span>Conectar mi Spotify</span>
+                    </button>
                   </div>
                 )}
 
