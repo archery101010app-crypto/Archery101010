@@ -105,6 +105,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
   // Connected Spotify Account States
   const [connectedAccount, setConnectedAccount] = useState<ConnectedSpotifyAccount | null>(null);
+  const [hasNativeSessionCookie, setHasNativeSessionCookie] = useState<boolean>(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
   const [displayNameInput, setDisplayNameInput] = useState("");
@@ -118,6 +119,22 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loginPopupWatchingRef = useRef(false);
+
+  // Check Native Android Spotify Session Cookie (`sp_dc`)
+  const syncNativeSpotifySessionStatus = () => {
+    if (typeof window === "undefined") return false;
+    const bridge = (window as any).ArcherySpotifyBridge;
+    if (bridge && typeof bridge.hasActiveSpotifySession === "function") {
+      try {
+        const active = Boolean(bridge.hasActiveSpotifySession());
+        setHasNativeSessionCookie(active);
+        return active;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
 
   // Load active playlist, custom playlists, and connected Spotify account on mount
   useEffect(() => {
@@ -148,6 +165,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       if (savedClientId) {
         setOauthClientIdInput(savedClientId);
       }
+
+      syncNativeSpotifySessionStatus();
 
       // Check if returning from Spotify OAuth 2.0 PKCE callback
       const callbackResult = await handleSpotifyOAuthCallbackIfPresent();
@@ -185,7 +204,20 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     }
     loadSpotifyConfig();
 
+    (window as any).__onNativeSpotifyLoginSuccess = async (res?: { connected?: boolean; hasSpDc?: boolean }) => {
+      const ok = Boolean(res?.connected || res?.hasSpDc);
+      setHasNativeSessionCookie(ok);
+      setIframeReloadKey((prev) => prev + 1);
+      if (ok) {
+        setAccountFeedback("¡Sesión de Spotify vinculada! Canciones 100% completas activadas.");
+      } else {
+        setAccountFeedback("No se detectó sesión iniciada en Spotify. Inicia sesión y pulsa Listo ✓.");
+      }
+      setTimeout(() => setAccountFeedback(null), 4500);
+    };
+
     const handleToggle = () => {
+      syncNativeSpotifySessionStatus();
       setIsOpen((prev) => {
         const next = !prev;
         if (next) setHasLoadedIframe(true);
@@ -193,7 +225,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       });
     };
     window.addEventListener("open-spotify-player", handleToggle);
-    return () => window.removeEventListener("open-spotify-player", handleToggle);
+    return () => {
+      window.removeEventListener("open-spotify-player", handleToggle);
+    };
   }, []);
 
   // Refresh embedded player automatically when user returns from Spotify login window
@@ -263,9 +297,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setIsPlaying((prev) => !prev);
   };
 
-  // Connect Spotify Account (User + Official Spotify Web Session Login for full tracks)
+  // Connect Spotify Account (User + Official In-App Spotify Web Session Login for 100% full tracks)
   const handleConnectSpotifyAccount = async (openSpotifyLoginPopup: boolean) => {
-    const cleanUser = extractSpotifyUsername(usernameInput || displayNameInput || " arquero");
+    const cleanUser = extractSpotifyUsername(usernameInput || displayNameInput || "arquero");
     const cleanDisplay =
       displayNameInput.trim() ||
       (usernameInput.trim() ? extractSpotifyUsername(usernameInput) : "Mi Cuenta Spotify");
@@ -283,6 +317,15 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setShowAccountForm(false);
 
     if (openSpotifyLoginPopup) {
+      const nativeBridge = typeof window !== "undefined" ? (window as any).ArcherySpotifyBridge : null;
+      if (nativeBridge && typeof nativeBridge.openSpotifyLogin === "function") {
+        nativeBridge.openSpotifyLogin();
+        setAccountFeedback(
+          "Inicia sesión dentro de la ventana de Spotify y toca 'Listo ✓' para reproducir canciones 100% completas."
+        );
+        return;
+      }
+
       loginPopupWatchingRef.current = true;
       const loginUrl =
         "https://accounts.spotify.com/es/login?continue=" +
@@ -299,6 +342,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         "Inicia sesión en la ventana de Spotify. Al volver aquí, tu reproductor tendrá acceso completo."
       );
     } else {
+      syncNativeSpotifySessionStatus();
       setIframeReloadKey((prev) => prev + 1);
       setAccountFeedback("Usuario de Spotify vinculado correctamente.");
       setTimeout(() => setAccountFeedback(null), 3000);
@@ -315,6 +359,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   };
 
   const handleRefreshOAuthPlaylists = async () => {
+    syncNativeSpotifySessionStatus();
     if (connectedAccount?.accessToken) {
       const pls = await fetchUserSpotifyPlaylists(connectedAccount.accessToken);
       if (pls.length > 0) {
@@ -344,10 +389,18 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   };
 
   const handleDisconnectAccount = async () => {
+    try {
+      const nativeBridge = typeof window !== "undefined" ? (window as any).ArcherySpotifyBridge : null;
+      if (nativeBridge && typeof nativeBridge.clearSpotifySession === "function") {
+        nativeBridge.clearSpotifySession();
+      }
+    } catch {}
+    setHasNativeSessionCookie(false);
     setConnectedAccount(null);
     setUsernameInput("");
     setDisplayNameInput("");
     await saveLocalSetting("spotify_connected_account", null);
+    setIframeReloadKey((prev) => prev + 1);
     setAccountFeedback("Cuenta desvinculada.");
     setTimeout(() => setAccountFeedback(null), 2000);
   };
@@ -685,7 +738,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                               {connectedAccount.displayName}
                             </span>
                             <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
-                              SUSCRIPCIÓN ACTIVA
+                              {hasNativeSessionCookie ? "AUDIO 100% COMPLETO" : "FALTA SESIÓN EN APP"}
                             </span>
                           </div>
                           <span className="text-[11.6px] text-white truncate">
@@ -725,10 +778,18 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                       <button
                         type="button"
                         onClick={() => handleConnectSpotifyAccount(true)}
-                        className="flex-1 py-1.5 px-2.5 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.08] text-[11.6px] font-bold text-[#1DB954] flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        className={`flex-1 py-2 px-2.5 rounded-xl border text-[11.6px] font-black flex items-center justify-center gap-1.5 cursor-pointer transition ${
+                          hasNativeSessionCookie
+                            ? "bg-[#0B0E14] hover:bg-white/[0.04] border-white/[0.08] text-[#1DB954]"
+                            : "bg-[#1DB954] hover:bg-[#1ED760] border-[#1DB954] text-black uppercase tracking-wider"
+                        }`}
                       >
-                        <UserCheck size={12} />
-                        <span>Autenticar Sesión Premium en Spotify</span>
+                        <UserCheck size={13} />
+                        <span>
+                          {hasNativeSessionCookie
+                            ? "Reautenticar Sesión Premium en Spotify"
+                            : "Activar Canciones 100% Completas (Iniciar Sesión)"}
+                        </span>
                       </button>
                       {connectedAccount.username && (
                         <button
