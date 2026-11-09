@@ -285,6 +285,41 @@ class Archery101010WatchView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    function undoLastScore() as Void {
+        if (currentEndArrows.size() <= 0) {
+            return;
+        }
+        var lastIdx = currentEndArrows.size() - 1;
+        var removed = currentEndArrows[lastIdx];
+        currentEndArrows = currentEndArrows.slice(0, lastIdx);
+        var pts = (removed.equals("X") || removed.equals("10")) ? 10 : removed.equals("M") ? 0 : removed.toNumber();
+        totalScore = (totalScore >= pts) ? (totalScore - pts) : 0;
+        if (arrowsCount > 0) {
+            arrowsCount = arrowsCount - 1;
+        }
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(50, 40)]);
+        }
+        recalculateMetrics();
+        syncWithPhoneApp("UNDO_ARROW", null);
+        WatchUi.requestUpdate();
+    }
+
+    function advanceNextEnd() as Void {
+        if (currentEndArrows.size() <= 0) {
+            return;
+        }
+        currentEndArrows = [];
+        if (currentEnd < endsCount) {
+            currentEnd = currentEnd + 1;
+        }
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(70, 60)]);
+        }
+        syncWithPhoneApp("NEXT_END", null);
+        WatchUi.requestUpdate();
+    }
+
     function recalculateMetrics() as Void {
         var distM = gpsDistanceM;
         if (Toybox has :ActivityMonitor) {
@@ -325,26 +360,63 @@ class Archery101010WatchView extends WatchUi.View {
         Communications.transmit(payload, null, new CommListener());
     }
 
-    function drawArchery101010Header(dc as Graphics.Dc, w as Lang.Number, statusLabel as Lang.String) as Void {
+    function drawArchery101010Header(dc as Graphics.Dc, w as Lang.Number, s as Lang.Float, statusLabel as Lang.String) as Void {
         var cx = w / 2;
+        var topY = (24.0 * s).toNumber();
+        var pillY = (44.0 * s).toNumber();
+
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx - 28, 16, Graphics.FONT_XTINY, "ARCHERY", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx - (26.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "ARCHERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + 18, 16, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx + (17.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + 34, 16, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx + (32.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + 50, 16, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx + (47.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         var isYellow = (statusLabel.find("CAMINANDO") != null) || (statusLabel.find("GPS") != null);
+        var pillW = (132.0 * s).toNumber();
+        var pillH = (18.0 * s).toNumber();
+        var pillX = cx - (pillW / 2);
+
+        dc.setColor(isYellow ? 0x101006 : 0x040B12, Graphics.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(pillX, pillY, pillW, pillH, pillH / 2);
         dc.setColor(isYellow ? 0xFFE500 : 0x00A8F3, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, 35, Graphics.FONT_XTINY, statusLabel, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawRoundedRectangle(pillX, pillY, pillW, pillH, pillH / 2);
+
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, pillY + (pillH / 2), Graphics.FONT_XTINY, statusLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
+
+    function drawPagerDots(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, s as Lang.Float) as Void {
+        var cx = w / 2;
+        var dotY = h - (15.0 * s).toNumber();
+        var activeW = (12.0 * s).toNumber();
+        var inactiveW = (4.0 * s).toNumber();
+        var dotH = (4.0 * s).toNumber();
+        var gap = (5.0 * s).toNumber();
+        var totalW = activeW + (3 * inactiveW) + (3 * gap);
+        var curX = cx - (totalW / 2);
+
+        for (var i = 0; i < 4; i++) {
+            var itemW = (i == screenIdx) ? activeW : inactiveW;
+            dc.setColor((i == screenIdx) ? 0x00A8F3 : 0x334155, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(curX, dotY - (dotH / 2), itemW, dotH, dotH / 2);
+            curX = curX + itemW + gap;
+        }
+    }
+
+    public var lastScreenWidth = 240;
+    public var lastScreenHeight = 240;
 
     function onUpdate(dc as Graphics.Dc) as Void {
         recalculateMetrics();
         var w = dc.getWidth();
         var h = dc.getHeight();
+        lastScreenWidth = w;
+        lastScreenHeight = h;
+        var minDim = (w < h) ? w : h;
+        var s = minDim / 240.0;
         var cx = w / 2;
         var cy = h / 2;
 
@@ -361,7 +433,7 @@ class Archery101010WatchView extends WatchUi.View {
             var pillTxt = !autoDetectEnabled
                 ? "MODO MANUAL"
                 : ((System.getTimer() < mWalkingLockUntilMs) ? "PAUSA · CAMINANDO" : ("AUTO · " + sensTxt + " · LIVE"));
-            drawArchery101010Header(dc, w, pillTxt);
+            drawArchery101010Header(dc, w, s, pillTxt);
 
             var d3 = (arrowsCount / 1000) % 10;
             var d2 = (arrowsCount / 100) % 10;
@@ -369,57 +441,161 @@ class Archery101010WatchView extends WatchUi.View {
             var d0 = arrowsCount % 10;
             var digits = [d3, d2, d1, d0];
 
-            var boxW = 40;
-            var boxH = 56;
-            var gap = 5;
+            var boxW = (36.0 * s).toNumber();
+            var boxH = (52.0 * s).toNumber();
+            var gap = (5.0 * s).toNumber();
             var totalW = (boxW * 4) + (gap * 3);
             var startX = cx - (totalW / 2);
-            var startY = cy - (boxH / 2) - 4;
+            var startY = (82.0 * s).toNumber();
 
             for (var i = 0; i < 4; i++) {
                 var rx = startX + i * (boxW + gap);
-                dc.setColor(0x0B0E15, Graphics.COLOR_TRANSPARENT);
-                dc.fillRoundedRectangle(rx, startY, boxW, boxH, 7);
+                dc.setColor(i == 3 ? 0x101008 : 0x0B0E15, Graphics.COLOR_TRANSPARENT);
+                dc.fillRoundedRectangle(rx, startY, boxW, boxH, (7.0 * s).toNumber());
                 dc.setColor(i == 3 ? 0xFFE500 : 0x2A2F3A, Graphics.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(rx, startY, boxW, boxH, 7);
+                dc.drawRoundedRectangle(rx, startY, boxW, boxH, (7.0 * s).toNumber());
 
                 dc.setColor(i == 3 ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
                 dc.drawText(rx + (boxW / 2), startY + (boxH / 2), Graphics.FONT_NUMBER_MEDIUM, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h - 54, Graphics.FONT_XTINY, mts.toString() + " mts · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h - 36, Graphics.FONT_XTINY, "TANDA " + currentEnd.toString() + " · " + distanceM.toString() + " M", Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (screenIdx == 1) {
-            drawArchery101010Header(dc, w, "TANDA " + currentEnd.toString() + "/" + endsCount.toString() + " · " + totalScore.toString() + " PTS");
+            // Bottom row: [-1] | mts & kcal | [+1]
+            var rowY = (154.0 * s).toNumber();
+            var btnW = (32.0 * s).toNumber();
+            var btnH = (24.0 * s).toNumber();
+            var rowW = (164.0 * s).toNumber();
 
-            var selVal = scoreLabels[selectedScoreIdx];
-            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy - 18, Graphics.FONT_MEDIUM, "MARCAR: " + selVal, Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 18, Graphics.FONT_XTINY, "SELECT = ANOTAR · BACK = CAMBIAR", Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (screenIdx == 2) {
-            drawArchery101010Header(dc, w, "GPS · PASOS EN VIVO");
+            // -1 Button
+            var minusX = cx - (rowW / 2);
+            dc.setColor(0x180709, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(minusX, rowY, btnW, btnH, btnH / 2);
+            dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(minusX, rowY, btnW, btnH, btnH / 2);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), Graphics.FONT_XTINY, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy - 40, Graphics.FONT_XTINY, "DISTANCIA RECORRIDA", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy - 20, Graphics.FONT_SMALL, mtsFtStr, Graphics.TEXT_JUSTIFY_CENTER);
-
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 12, Graphics.FONT_XTINY, "GASTO ENERGÉTICO", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 32, Graphics.FONT_SMALL, activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER);
-        } else {
-            drawArchery101010Header(dc, w, "RESUMEN DE SESIÓN");
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy - 26, Graphics.FONT_SMALL, arrowsCount.toString() + " FL · " + totalScore.toString() + " PTS", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 2, Graphics.FONT_XTINY, mtsFtStr + " · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER);
+            // +1 Button
+            var plusX = cx + (rowW / 2) - btnW;
+            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(plusX, rowY, btnW, btnH, btnH / 2);
             dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 32, Graphics.FONT_XTINY, "SELECT = ENVIAR A COACH", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawRoundedRectangle(plusX, rowY, btnW, btnH, btnH / 2);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), Graphics.FONT_XTINY, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, rowY + (6.0 * s).toNumber(), Graphics.FONT_XTINY, mts.toString() + " mts · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, rowY + (20.0 * s).toNumber(), Graphics.FONT_XTINY, "TANDA " + currentEnd.toString() + " · " + distanceM.toString() + " M", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        } else if (screenIdx == 1) {
+            drawArchery101010Header(dc, w, s, "TANDA " + currentEnd.toString() + "/" + endsCount.toString() + " · " + totalScore.toString() + " PTS");
+
+            // 6 Tactile Score Keys (2x3) for Touch + Physical Highlight
+            var padW = (160.0 * s).toNumber();
+            var kGap = (5.0 * s).toNumber();
+            var keyW = (padW - (2 * kGap)) / 3;
+            var keyH = (28.0 * s).toNumber();
+            var kStartX = cx - (padW / 2);
+            var kStartY = (78.0 * s).toNumber();
+
+            for (var k = 0; k < 6; k++) {
+                var r = k / 3;
+                var c = k % 3;
+                var kx = kStartX + c * (keyW + kGap);
+                var ky = kStartY + r * (keyH + kGap);
+                var isSel = (k == selectedScoreIdx);
+
+                dc.setColor(k < 3 ? 0x121107 : (k < 5 ? 0x160708 : 0x0B0E15), Graphics.COLOR_TRANSPARENT);
+                dc.fillRoundedRectangle(kx, ky, keyW, keyH, (6.0 * s).toNumber());
+                dc.setColor(isSel ? 0x00A8F3 : (k < 3 ? 0xFFE500 : (k < 5 ? 0xFF1E1E : 0x475569)), Graphics.COLOR_TRANSPARENT);
+                dc.drawRoundedRectangle(kx, ky, keyW, keyH, (6.0 * s).toNumber());
+
+                dc.setColor(k < 3 ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), Graphics.FONT_SMALL, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
+
+            // Bottom Actions: BORRAR | SIG. TANDA
+            var actY = (146.0 * s).toNumber();
+            var actW = (padW - kGap) / 2;
+            var actH = (22.0 * s).toNumber();
+
+            dc.setColor(0x0B0E15, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(kStartX, actY, actW, actH, actH / 2);
+            dc.setColor(0x475569, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(kStartX, actY, actW, actH, actH / 2);
+            dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(kStartX + (actW / 2), actY + (actH / 2), Graphics.FONT_XTINY, "BORRAR", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var nextX = kStartX + actW + kGap;
+            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(nextX, actY, actW, actH, actH / 2);
+            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(nextX, actY, actW, actH, actH / 2);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(nextX + (actW / 2), actY + (actH / 2), Graphics.FONT_XTINY, "SIG. TANDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        } else if (screenIdx == 2) {
+            drawArchery101010Header(dc, w, s, "GPS ACTIVO · PASOS");
+
+            var cardW = (164.0 * s).toNumber();
+            var cardH = (40.0 * s).toNumber();
+            var cardX = cx - (cardW / 2);
+            var card1Y = (76.0 * s).toNumber();
+            var card2Y = (122.0 * s).toNumber();
+
+            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(cardX, card1Y, cardW, cardH, (9.0 * s).toNumber());
+            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(cardX, card1Y, cardW, cardH, (9.0 * s).toNumber());
+            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card1Y + (11.0 * s).toNumber(), Graphics.FONT_XTINY, "DISTANCIA RECORRIDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card1Y + (27.0 * s).toNumber(), Graphics.FONT_SMALL, mtsFtStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(cardX, card2Y, cardW, cardH, (9.0 * s).toNumber());
+            dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(cardX, card2Y, cardW, cardH, (9.0 * s).toNumber());
+            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card2Y + (11.0 * s).toNumber(), Graphics.FONT_XTINY, "GASTO ENERGÉTICO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card2Y + (27.0 * s).toNumber(), Graphics.FONT_SMALL, activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, (176.0 * s).toNumber(), Graphics.FONT_XTINY, arrowsCount.toString() + " FL · " + bowPoundageLbs.toString() + " LBS · SYNC", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        } else {
+            drawArchery101010Header(dc, w, s, "SINCRONIZADO CON COACH");
+
+            var sumW = (164.0 * s).toNumber();
+            var sumX = cx - (sumW / 2);
+            var sumY = (78.0 * s).toNumber();
+            var sumH = (68.0 * s).toNumber();
+
+            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(sumX, sumY, sumW, sumH, (10.0 * s).toNumber());
+            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(sumX, sumY, sumW, sumH, (10.0 * s).toNumber());
+
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, sumY + (22.0 * s).toNumber(), Graphics.FONT_SMALL, arrowsCount.toString() + " FL · " + totalScore.toString() + " PTS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, sumY + (48.0 * s).toNumber(), Graphics.FONT_XTINY, mtsFtStr + " · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var ctaW = (152.0 * s).toNumber();
+            var ctaH = (24.0 * s).toNumber();
+            var ctaX = cx - (ctaW / 2);
+            var ctaY = (156.0 * s).toNumber();
+            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(ctaX, ctaY, ctaW, ctaH, ctaH / 2);
+            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
+            dc.drawRoundedRectangle(ctaX, ctaY, ctaW, ctaH, ctaH / 2);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, ctaY + (ctaH / 2), Graphics.FONT_XTINY, "ENVIAR A COACH", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
+
+        drawPagerDots(dc, w, h, s);
     }
 }
 
@@ -464,9 +640,82 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
 
     function onTap(clickEvent) {
         var coords = clickEvent.getCoordinates();
-        if (coords != null && coords.size() >= 2 && coords[1] <= 66 && mView.screenIdx == 0) {
+        if (coords == null || coords.size() < 2) {
+            return false;
+        }
+        var tx = coords[0];
+        var ty = coords[1];
+        var w = mView.lastScreenWidth;
+        var h = mView.lastScreenHeight;
+        var minDim = (w < h) ? w : h;
+        var s = minDim / 240.0;
+        var cx = w / 2;
+
+        // Bottom pager dots tap switches screen
+        if (ty >= (h - (30.0 * s))) {
+            mView.screenIdx = (mView.screenIdx + 1) % 4;
+            WatchUi.requestUpdate();
+            return true;
+        }
+
+        // Top pill tap on Screen 0 cycles sensitivity
+        if (mView.screenIdx == 0 && ty <= (68.0 * s)) {
             mView.cycleSensitivityMode();
             return true;
+        }
+
+        if (mView.screenIdx == 0) {
+            // Bottom row -1 / +1 buttons
+            if (ty >= (146.0 * s) && ty <= (186.0 * s)) {
+                if (tx < (cx - (36.0 * s))) {
+                    if (mView.arrowsCount > 0) {
+                        mView.incrementArrow(-1, false);
+                    }
+                    return true;
+                } else if (tx > (cx + (36.0 * s))) {
+                    mView.incrementArrow(1, false);
+                    return true;
+                }
+            }
+            // Tap on 4-digit counter increments +1
+            if (ty >= (76.0 * s) && ty <= (140.0 * s)) {
+                mView.incrementArrow(1, false);
+                return true;
+            }
+        } else if (mView.screenIdx == 1) {
+            var padW = 160.0 * s;
+            var kGap = 5.0 * s;
+            var keyW = (padW - (2.0 * kGap)) / 3.0;
+            var keyH = 28.0 * s;
+            var kStartX = cx - (padW / 2.0);
+            var kStartY = 78.0 * s;
+
+            for (var k = 0; k < 6; k++) {
+                var r = k / 3;
+                var c = k % 3;
+                var kx = kStartX + c * (keyW + kGap);
+                var ky = kStartY + r * (keyH + kGap);
+                if (tx >= kx && tx <= (kx + keyW) && ty >= ky && ty <= (ky + keyH)) {
+                    mView.selectedScoreIdx = k;
+                    mView.recordScoreInput(mView.scoreLabels[k]);
+                    return true;
+                }
+            }
+
+            // Bottom BORRAR | SIG. TANDA touch buttons
+            if (ty >= (142.0 * s) && ty <= (174.0 * s)) {
+                if (tx < cx) {
+                    mView.undoLastScore();
+                } else {
+                    mView.advanceNextEnd();
+                }
+                return true;
+            }
+        } else if (mView.screenIdx == 3) {
+            if (ty >= (150.0 * s) && ty <= (186.0 * s)) {
+                mView.syncWithPhoneApp("FINISH_SESSION_FROM_WATCH", null);
+                return true;
+            }
         }
         return false;
     }
