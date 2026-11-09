@@ -72,6 +72,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -84,6 +85,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
+    private static volatile WeakReference<MainActivity> activeInstanceRef = new WeakReference<>(null);
+
+    public static MainActivity getActiveInstance() {
+        return activeInstanceRef != null ? activeInstanceRef.get() : null;
+    }
+
+    public void onBackgroundWatchEvent(final String path, final String payload, final String sourceNodeId) {
+        handleIncomingWatchPayload(path, payload, sourceNodeId);
+    }
+
     private static final String GOOGLE_WEB_CLIENT_ID =
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
     private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
@@ -258,6 +269,7 @@ public class MainActivity extends BridgeActivity {
         );
 
         super.onCreate(savedInstanceState);
+        activeInstanceRef = new WeakReference<>(this);
 
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
@@ -998,9 +1010,16 @@ public class MainActivity extends BridgeActivity {
 
     private String buildWatchConnectionStatusJson() {
         try {
+            String appVer = "2.75";
+            try {
+                String vName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                if (vName != null && !vName.isEmpty()) {
+                    appVer = vName;
+                }
+            } catch (Exception ignored) {}
             JSONObject status = new JSONObject();
             status.put("bridgeReady", true);
-            status.put("nativeVersion", "2.64");
+            status.put("nativeVersion", appVer);
             status.put("connectedNodesCount", cachedConnectedNodesJson.length());
             status.put("connectedNodes", cachedConnectedNodesJson);
             status.put("lastMessageAt", lastWatchMessageTimeMs);
@@ -1173,6 +1192,26 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void flushPendingWatchCommandsToWebView() {
+        try {
+            String persistedQueue = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                .getString("pendingWatchCommandsJson", "[]");
+            if (persistedQueue != null && !persistedQueue.isEmpty() && !"[]".equals(persistedQueue)) {
+                getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString("pendingWatchCommandsJson", "[]")
+                    .apply();
+                JSONArray arr = new JSONArray(persistedQueue);
+                synchronized (pendingWatchCommands) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        String cmd = arr.optString(i, "");
+                        if (cmd != null && !cmd.isEmpty() && pendingWatchCommands.size() < 60) {
+                            pendingWatchCommands.add(cmd);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         final List<String> toFlush;
         synchronized (pendingWatchCommands) {
             if (pendingWatchCommands.isEmpty()) return;
@@ -1643,12 +1682,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        activeInstanceRef = new WeakReference<>(this);
         flushPendingWatchCommandsToWebView();
         refreshWatchConnectionStatus();
     }
 
     @Override
     public void onDestroy() {
+        if (activeInstanceRef != null && activeInstanceRef.get() == this) {
+            activeInstanceRef = new WeakReference<>(null);
+        }
         isSessionTrackingActive = false;
         try {
             if (nativeLocationManager != null) {

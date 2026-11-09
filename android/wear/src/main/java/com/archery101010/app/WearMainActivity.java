@@ -39,6 +39,7 @@ import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
@@ -52,12 +53,42 @@ import java.util.Locale;
  *  - Bundled Outfit Athletic Tabular Typography (Zero coder slashed zeros, zero neon glow)
  *  - Mathematically Centered Vertical & Horizontal Layout for both Round and Square displays
  *  - 4 Screens:
- *      0: Contador y Auto-Tiro (VOLUMEN · FLECHAS + −1 / +1 / Live Km & Kcal)
+ *      0: Contador y Auto-Tiro (VOLUMEN · FLECHAS + −1 / +1 / Live Mts & Kcal)
  *      1: Puntuación de Tanda (X, 10, 9, 8, 7, M Keypad)
- *      2: Métricas (Distancia Km/Mi + Gasto Energético Kcal)
+ *      2: Métricas (Distancia Mts/Ft + Gasto Energético Kcal)
  *      3: Resumen y Envío a Coach
  */
 public class WearMainActivity extends Activity implements SensorEventListener {
+    private static volatile WeakReference<WearMainActivity> activeInstanceRef = new WeakReference<>(null);
+
+    public static WearMainActivity getActiveInstance() {
+        return activeInstanceRef != null ? activeInstanceRef.get() : null;
+    }
+
+    public void onBackgroundPhoneEvent(final String path, final String payload, final String sourceNodeId) {
+        long now = System.currentTimeMillis();
+        isPhoneConnected = true;
+        lastPhoneSyncMs = now;
+        if ("/archery101010/ping".equals(path)) {
+            byte[] pongBytes = ("{\"type\":\"PONG\",\"_ts\":" + now + "}").getBytes(StandardCharsets.UTF_8);
+            if (sourceNodeId != null && !sourceNodeId.isEmpty()) {
+                Wearable.getMessageClient(this).sendMessage(sourceNodeId, "/archery101010/pong", pongBytes);
+            }
+            runOnUiThread(() -> {
+                if (canvasView != null) canvasView.invalidate();
+            });
+            return;
+        }
+        if ("/archery101010/pong".equals(path)) {
+            runOnUiThread(() -> {
+                if (canvasView != null) canvasView.invalidate();
+            });
+            return;
+        }
+        if (payload != null && !payload.isEmpty()) {
+            handleIncomingPhonePayload(payload);
+        }
+    }
 
     private static final String PREFS_NAME = "archery_101010_wear_prefs";
 
@@ -124,6 +155,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        activeInstanceRef = new WeakReference<>(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         try {
@@ -457,6 +489,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onResume() {
         super.onResume();
+        activeInstanceRef = new WeakReference<>(this);
         if (wakeLock != null && !wakeLock.isHeld()) {
             try {
                 wakeLock.acquire(4 * 60 * 60 * 1000L);
@@ -474,6 +507,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     @Override
     protected void onDestroy() {
+        if (activeInstanceRef != null && activeInstanceRef.get() == this) {
+            activeInstanceRef = new WeakReference<>(null);
+        }
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
         if (sensorManager != null && isSensorRegistered) {
             try {
