@@ -94,6 +94,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
+    private Sensor stepDetector;
     private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
@@ -101,10 +102,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int screenIndex = 0; // 0..3
     private int arrowCount = 0;
     private boolean autoDetectEnabled = true;
+    // Sensitivity level: 0 = BAJA (less sensitive), 1 = MEDIA (default), 2 = ALTA (more sensitive)
+    private int sensitivityLevel = 1;
     private long lastShotTimestamp = 0L;
     private long lastStepTimeMs = 0L;
+    private long prevStepTimeMs = 0L;
+    private long walkingLockUntilMs = 0L;
     private long lastTelemetrySyncTimeMs = 0L;
     private double smoothedAccelMag = SensorManager.GRAVITY_EARTH;
+    private final double[] preShotLinearHistory = new double[16];
+    private int preShotHistoryIdx = 0;
+    private int preShotHistoryCount = 0;
 
     // Scoring state (synchronized with phone)
     private int currentEnd = 1;
@@ -176,11 +184,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
         syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
         syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
+        autoDetectEnabled = prefs.getBoolean("autoDetectEnabled", true);
+        sensitivityLevel = Math.max(0, Math.min(2, prefs.getInt("sensitivityLevel", 1)));
         cmdSequence = prefs.getLong("cmdSequence", 0L);
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
@@ -195,6 +206,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (sensorManager != null && accelerometer != null && !isSensorRegistered) {
             try {
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                if (stepDetector != null) {
+                    sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_NORMAL);
+                }
                 isSensorRegistered = true;
             } catch (Exception ignored) {}
         }
@@ -547,6 +561,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putFloat("walkedMeters", getEffectiveWalkedMeters());
         editor.putInt("syncedArrowsPerEnd", syncedArrowsPerEnd);
         editor.putInt("syncedEndsCount", syncedEndsCount);
+        editor.putBoolean("autoDetectEnabled", autoDetectEnabled);
+        editor.putInt("sensitivityLevel", sensitivityLevel);
         editor.putLong("cmdSequence", cmdSequence);
         editor.apply();
     }
@@ -600,8 +616,50 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return getFormattedKm() + " mts · " + getFormattedMi() + " ft";
     }
 
+    private boolean isPreShotAnchorSteady(double maxQuietAvg) {
+        if (preShotHistoryCount < 8) {
+            return true;
+        }
+        // Inspect the oldest 10 samples (approx 120ms-320ms BEFORE the release peak)
+        int samplesToCheck = Math.min(10, preShotHistoryCount - 3);
+        if (samplesToCheck <= 0) return true;
+        double sum = 0.0;
+        int oldestIdx = (preShotHistoryIdx - preShotHistoryCount + 16) % 16;
+        for (int i = 0; i < samplesToCheck; i++) {
+            int idx = (oldestIdx + i) % 16;
+            sum += preShotLinearHistory[idx];
+        }
+        double avg = sum / samplesToCheck;
+        return avg <= maxQuietAvg;
+    }
+
+    private void recordDetectedStep(long now) {
+        prevStepTimeMs = lastStepTimeMs;
+        lastStepTimeMs = now;
+        if ((now - prevStepTimeMs) <= 4200L) {
+            // 2+ consecutive steps = archer is walking; lock auto-shot for 3.8s after last step
+            walkingLockUntilMs = now + 3800L;
+        } else {
+            walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 2200L);
+        }
+        stepsCount++;
+        distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
+        saveState();
+        if ((now - lastTelemetrySyncTimeMs) >= 2500L) {
+            syncTelemetryToPhone();
+        }
+        if (canvasView != null) canvasView.invalidate();
+    }
+
     @Override
     public void onSensorChanged(SensorEvent event) {
+        long now = System.currentTimeMillis();
+        if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
+            if ((now - lastStepTimeMs) > 300L && (now - lastShotTimestamp) > 1200L) {
+                recordDetectedStep(now);
+            }
+            return;
+        }
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             float ax = event.values[0];
             float ay = event.values[1];
@@ -610,24 +668,36 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double dynamicLinear = mag - smoothedAccelMag;
             smoothedAccelMag = 0.96 * smoothedAccelMag + 0.04 * mag;
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
-            long now = System.currentTimeMillis();
-            if (autoDetectEnabled && linearMag >= 13.5 && (now - lastShotTimestamp) > 2400L) {
+
+            // Sensitivity thresholds: 0 = BAJA, 1 = MEDIA (default), 2 = ALTA
+            double shotThreshold = (sensitivityLevel == 0) ? 20.5 : ((sensitivityLevel == 2) ? 14.2 : 16.8);
+            double quietLimit = (sensitivityLevel == 0) ? 2.1 : ((sensitivityLevel == 2) ? 3.2 : 2.6);
+            long shotCooldownMs = (sensitivityLevel == 0) ? 3800L : ((sensitivityLevel == 2) ? 2600L : 3200L);
+
+            boolean isWalkingBlocked = (now < walkingLockUntilMs) || ((now - lastStepTimeMs) < 2200L);
+
+            if (autoDetectEnabled
+                    && !isWalkingBlocked
+                    && linearMag >= shotThreshold
+                    && (now - lastShotTimestamp) > shotCooldownMs
+                    && isPreShotAnchorSteady(quietLimit)) {
                 lastShotTimestamp = now;
                 lastLocalActionTimeMs = now;
+                preShotHistoryCount = 0;
                 arrowCount++;
                 triggerHaptic(55);
                 saveState();
                 sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
-            } else if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && (now - lastStepTimeMs) > 350L && (now - lastShotTimestamp) > 1200L) {
-                lastStepTimeMs = now;
-                stepsCount++;
-                distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
-                saveState();
-                if ((now - lastTelemetrySyncTimeMs) >= 2500L) {
-                    syncTelemetryToPhone();
-                }
-                if (canvasView != null) canvasView.invalidate();
+            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastStepTimeMs) > 380L && (now - lastShotTimestamp) > 1400L) {
+                recordDetectedStep(now);
+            }
+
+            // Record sample into pre-shot stillness ring buffer
+            preShotLinearHistory[preShotHistoryIdx] = Math.min(linearMag, 12.0);
+            preShotHistoryIdx = (preShotHistoryIdx + 1) % 16;
+            if (preShotHistoryCount < 16) {
+                preShotHistoryCount++;
             }
         }
     }
@@ -793,12 +863,23 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 return;
             }
 
-            // Status pill toggles auto-detector on Screen 0
+            // Status pill cycles sensitivity & auto-detector on Screen 0:
+            // AUTO · MEDIA (1) -> AUTO · BAJA (0) -> AUTO · ALTA (2) -> MODO MANUAL (off) -> AUTO · MEDIA (1)
             if (screenIndex == 0 && btnToggleDetector.contains(x, y)) {
                 lastLocalActionTimeMs = System.currentTimeMillis();
-                autoDetectEnabled = !autoDetectEnabled;
+                if (!autoDetectEnabled) {
+                    autoDetectEnabled = true;
+                    sensitivityLevel = 1; // MEDIA
+                } else if (sensitivityLevel == 1) {
+                    sensitivityLevel = 0; // BAJA (less sensitive)
+                } else if (sensitivityLevel == 0) {
+                    sensitivityLevel = 2; // ALTA (more sensitive)
+                } else {
+                    autoDetectEnabled = false; // MODO MANUAL
+                }
                 triggerHaptic(25);
-                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + "}");
+                saveState();
+                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + ",\"sensitivityLevel\":" + sensitivityLevel + "}");
                 invalidate();
                 return;
             }
@@ -1077,10 +1158,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
          * SCREEN 0: CONTADOR Y AUTO-TIRO (Mathematically centered: 39f..188f around cy = 114f..120f)
          */
         private void drawCounterScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            String pillLabel = autoDetectEnabled
-                    ? (isPhoneConnected ? "AUTO-TIRO · LIVE" : "AUTO-TIRO ACTIVO")
-                    : "MODO MANUAL";
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, false);
+            long now = System.currentTimeMillis();
+            boolean isWalkingPaused = autoDetectEnabled && (now < walkingLockUntilMs);
+            String sensLabel = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA");
+            String pillLabel;
+            if (!autoDetectEnabled) {
+                pillLabel = "MODO MANUAL";
+            } else if (isWalkingPaused) {
+                pillLabel = "PAUSA · CAMINANDO";
+                postInvalidateDelayed(Math.max(250L, (walkingLockUntilMs - now) + 60L));
+            } else {
+                pillLabel = "AUTO · " + sensLabel + (isPhoneConnected ? " · LIVE" : "");
+            }
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, isWalkingPaused);
 
             // Outer Counter Chassis: VOLUMEN · FLECHAS (top = 77f, bottom = 152f, centerY = 114.5f)
             float chassisW = 168f * scale * wMult;

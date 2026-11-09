@@ -67,6 +67,7 @@ class Archery101010WatchView extends WatchUi.View {
     public var distanceWalkedM = 0;
     public var activeKcal = 0;
     public var autoDetectEnabled = true;
+    public var sensitivityLevel = 1; // 0: BAJA, 1: MEDIA, 2: ALTA
     public var selectedScoreIdx = 0; // 0:X, 1:10, 2:9, 3:8, 4:7, 5:M
     public var scoreLabels = ["X", "10", "9", "8", "7", "M"];
     public var currentEndArrows = [];
@@ -75,6 +76,9 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastLon = null;
     private var mLastShotMs = 0;
     private var mBaselineSteps = null;
+    private var mLastObservedSteps = null;
+    private var mWalkingLockUntilMs = 0;
+    private var mPreShotQuietEmaMg = 120.0;
 
     function initialize() {
         View.initialize();
@@ -82,6 +86,7 @@ class Archery101010WatchView extends WatchUi.View {
             var monInfo = Toybox.ActivityMonitor.getInfo();
             if (monInfo != null && monInfo has :steps && monInfo.steps != null) {
                 mBaselineSteps = monInfo.steps;
+                mLastObservedSteps = monInfo.steps;
             }
         }
         var timer = new Toybox.Timer.Timer();
@@ -92,6 +97,17 @@ class Archery101010WatchView extends WatchUi.View {
         if (!autoDetectEnabled) {
             return;
         }
+        var now = System.getTimer();
+        if (Toybox has :ActivityMonitor) {
+            var monInfo = Toybox.ActivityMonitor.getInfo();
+            if (monInfo != null && monInfo has :steps && monInfo.steps != null) {
+                if (mLastObservedSteps != null && monInfo.steps > mLastObservedSteps) {
+                    mLastObservedSteps = monInfo.steps;
+                    mWalkingLockUntilMs = now + 3800;
+                    WatchUi.requestUpdate();
+                }
+            }
+        }
         var info = Sensor.getInfo();
         if (info has :accel && info.accel != null) {
             var ax = info.accel[0];
@@ -100,10 +116,16 @@ class Archery101010WatchView extends WatchUi.View {
             var magMg = Math.sqrt(ax * ax + ay * ay + az * az);
             var deltaMg = (magMg - 1000.0).abs();
 
-            var now = System.getTimer();
-            if (deltaMg >= 2100.0 && (now - mLastShotMs) > 2600) {
+            var thresholdMg = (sensitivityLevel == 0) ? 2450.0 : ((sensitivityLevel == 2) ? 1850.0 : 2150.0);
+            var quietLimitMg = (sensitivityLevel == 0) ? 220.0 : ((sensitivityLevel == 2) ? 340.0 : 270.0);
+            var cooldownMs = (sensitivityLevel == 0) ? 3800 : ((sensitivityLevel == 2) ? 2600 : 3200);
+
+            if (now >= mWalkingLockUntilMs && deltaMg >= thresholdMg && (now - mLastShotMs) > cooldownMs && mPreShotQuietEmaMg <= quietLimitMg) {
                 mLastShotMs = now;
                 incrementArrow(1, true);
+            }
+            if (deltaMg < 900.0) {
+                mPreShotQuietEmaMg = (0.82 * mPreShotQuietEmaMg) + (0.18 * deltaMg);
             }
         }
     }
@@ -274,7 +296,11 @@ class Archery101010WatchView extends WatchUi.View {
         var mtsFtStr = mts.toString() + " mts · " + ft.toString() + " ft";
 
         if (screenIdx == 0) {
-            drawArchery101010Header(dc, w, autoDetectEnabled ? "AUTO-TIRO · LIVE" : "MODO MANUAL");
+            var sensTxt = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA");
+            var pillTxt = !autoDetectEnabled
+                ? "MODO MANUAL"
+                : ((System.getTimer() < mWalkingLockUntilMs) ? "PAUSA · CAMINANDO" : ("AUTO · " + sensTxt + " · LIVE"));
+            drawArchery101010Header(dc, w, pillTxt);
 
             var d3 = (arrowsCount / 1000) % 10;
             var d2 = (arrowsCount / 100) % 10;

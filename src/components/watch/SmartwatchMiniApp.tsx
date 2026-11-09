@@ -37,7 +37,7 @@ export default function SmartwatchMiniApp({
 }: SmartwatchMiniAppProps) {
   const [screenIdx, setScreenIdx] = useState<number>(0); // 0: Contador, 1: Métricas, 2: Auto-Tiro, 3: Resumen
   const [watchShape, setWatchShape] = useState<"ROUND" | "SQUARE">("ROUND");
-  const [sensitivity, setSensitivity] = useState<"ALTA" | "MEDIA" | "BAJA">("ALTA");
+  const [sensitivity, setSensitivity] = useState<"ALTA" | "MEDIA" | "BAJA">("MEDIA");
   const [justDetectedShot, setJustDetectedShot] = useState<boolean>(false);
   const [, setWristImpulseLevel] = useState<number>(0);
 
@@ -144,8 +144,9 @@ export default function SmartwatchMiniApp({
     [onIncrementArrow, triggerHaptic]
   );
 
-  // Automatic Wrist Release Detector using DeviceMotionEvent
+  // Automatic Wrist Release Detector using DeviceMotionEvent with Pre-Shot Anchor Stillness Filter
   const lastShotRef = useRef<number>(0);
+  const preShotQuietEmaRef = useRef<number>(1.2);
   useEffect(() => {
     if (!isOpen || !activeState.autoDetectEnabled) return;
     if (typeof window === "undefined" || !("DeviceMotionEvent" in window)) return;
@@ -155,7 +156,13 @@ export default function SmartwatchMiniApp({
       MEDIA: 21.5,
       BAJA: 26.0
     };
+    const quietLimitMap = {
+      ALTA: 3.4,
+      MEDIA: 2.7,
+      BAJA: 2.1
+    };
     const threshold = thresholdMap[sensitivity];
+    const quietLimit = quietLimitMap[sensitivity];
 
     const handleMotion = (event: DeviceMotionEvent) => {
       const acc = event.accelerationIncludingGravity || event.acceleration;
@@ -169,9 +176,16 @@ export default function SmartwatchMiniApp({
       setWristImpulseLevel(Math.min(100, Math.round((dynamicSpike / threshold) * 100)));
 
       const now = Date.now();
-      if (dynamicSpike >= threshold && now - lastShotRef.current > 3200) {
+      if (
+        dynamicSpike >= threshold &&
+        now - lastShotRef.current > 3200 &&
+        preShotQuietEmaRef.current <= quietLimit
+      ) {
         lastShotRef.current = now;
         handleArrowDelta(1, "watch_auto");
+      }
+      if (dynamicSpike < 9.0) {
+        preShotQuietEmaRef.current = 0.82 * preShotQuietEmaRef.current + 0.18 * dynamicSpike;
       }
     };
 
@@ -181,12 +195,23 @@ export default function SmartwatchMiniApp({
 
   const handleToggleAuto = () => {
     triggerHaptic(30);
-    const next = !activeState.autoDetectEnabled;
-    if (onToggleAutoDetect) {
-      onToggleAutoDetect(next);
+    if (!activeState.autoDetectEnabled) {
+      setSensitivity("MEDIA");
+      if (onToggleAutoDetect) onToggleAutoDetect(true);
+      else {
+        sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: true });
+        setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: true }));
+      }
+    } else if (sensitivity === "MEDIA") {
+      setSensitivity("BAJA");
+    } else if (sensitivity === "BAJA") {
+      setSensitivity("ALTA");
     } else {
-      sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: next });
-      setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: next }));
+      if (onToggleAutoDetect) onToggleAutoDetect(false);
+      else {
+        sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
+        setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
+      }
     }
   };
 
@@ -335,7 +360,7 @@ export default function SmartwatchMiniApp({
                 justDetectedShot
                   ? "SUELTA DETECTADA · +1"
                   : activeState.autoDetectEnabled
-                  ? "AUTO-TIRO ACTIVO"
+                  ? `AUTO · ${sensitivity}`
                   : "MODO MANUAL"
               }
               pillColor={justDetectedShot ? "yellow" : "cyan"}

@@ -38,11 +38,15 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     @Published var distanceWalkedM: Double = 0.0
     @Published var syncedActiveKcal: Int = -1
     @Published var autoDetectEnabled: Bool = true
+    @Published var sensitivityLevel: Int = 1 // 0: BAJA, 1: MEDIA, 2: ALTA
+    @Published var isWalkingPaused: Bool = false
     @Published var isPhoneConnected: Bool = false
 
     private let motionManager = CMMotionManager()
     private let pedometer = CMPedometer()
     private var lastShotTimeMs: Int64 = 0
+    private var walkingLockUntilMs: Int64 = 0
+    private var preShotQuietEmaG: Double = 0.12
     private var cmdSequence: Int64 = 0
 
     override init() {
@@ -55,12 +59,43 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         startSensors()
     }
 
+    func cycleSensitivityMode() {
+        if !autoDetectEnabled {
+            autoDetectEnabled = true
+            sensitivityLevel = 1
+        } else if sensitivityLevel == 1 {
+            sensitivityLevel = 0
+        } else if sensitivityLevel == 0 {
+            sensitivityLevel = 2
+        } else {
+            autoDetectEnabled = false
+        }
+        WKInterfaceDevice.current().play(.click)
+    }
+
+    var currentStatusPillLabel: String {
+        if !autoDetectEnabled {
+            return "MODO MANUAL"
+        }
+        if isWalkingPaused {
+            return "PAUSA · CAMINANDO"
+        }
+        let sens = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA")
+        return "AUTO · \(sens) · LIVE"
+    }
+
     private func startSensors() {
         if CMPedometer.isStepCountingAvailable() {
             pedometer.startUpdates(from: Date()) { [weak self] data, _ in
                 guard let self = self, let data = data else { return }
                 DispatchQueue.main.async {
-                    self.stepsCount = data.numberOfSteps.intValue
+                    let newSteps = data.numberOfSteps.intValue
+                    if newSteps > self.stepsCount {
+                        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+                        self.walkingLockUntilMs = nowMs + 3800
+                        self.isWalkingPaused = true
+                    }
+                    self.stepsCount = newSteps
                     let pedDist = data.distance?.doubleValue ?? (Double(self.stepsCount) * 0.76)
                     self.distanceWalkedM = max(self.distanceWalkedM, pedDist)
                 }
@@ -74,9 +109,24 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                 let magG = sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z)
                 let linearG = abs(magG - 1.0)
                 let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-                if linearG >= 1.85 && (nowMs - self.lastShotTimeMs) > 2500 {
+
+                if self.isWalkingPaused && nowMs >= self.walkingLockUntilMs {
+                    self.isWalkingPaused = false
+                }
+
+                let thresholdG = (self.sensitivityLevel == 0) ? 2.10 : ((self.sensitivityLevel == 2) ? 1.48 : 1.75)
+                let quietLimitG = (self.sensitivityLevel == 0) ? 0.21 : ((self.sensitivityLevel == 2) ? 0.33 : 0.26)
+                let cooldownMs: Int64 = (self.sensitivityLevel == 0) ? 3800 : ((self.sensitivityLevel == 2) ? 2600 : 3200)
+
+                if nowMs >= self.walkingLockUntilMs
+                    && linearG >= thresholdG
+                    && (nowMs - self.lastShotTimeMs) > cooldownMs
+                    && self.preShotQuietEmaG <= quietLimitG {
                     self.lastShotTimeMs = nowMs
                     self.incrementArrow(delta: 1, source: "watch_auto")
+                }
+                if linearG < 0.90 {
+                    self.preShotQuietEmaG = (0.82 * self.preShotQuietEmaG) + (0.18 * linearG)
                 }
             }
         }
@@ -267,8 +317,8 @@ struct CounterWatchScreen: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            WatchBrandHeaderView(pillText: vm.autoDetectEnabled ? "AUTO-TIRO · LIVE" : "MODO MANUAL")
-                .onTapGesture { vm.autoDetectEnabled.toggle() }
+            WatchBrandHeaderView(pillText: vm.currentStatusPillLabel)
+                .onTapGesture { vm.cycleSensitivityMode() }
 
             HStack(spacing: 4) {
                 ForEach(0..<4, id: \.self) { idx in
