@@ -1,1 +1,0 @@
-(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,59141,e=>{"use strict";var t=e.i(53699),a=e.i(8827),s=e.i(43375);e.s(["auth",()=>t.auth,"db",()=>t.db,"default",()=>t.default,"disableNetwork",()=>s.disableNetwork,"enableNetwork",()=>a.enableNetwork,"getMessagingInstance",()=>t.getMessagingInstance])}]);
