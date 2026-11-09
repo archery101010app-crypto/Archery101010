@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, MessageCircle, X, Camera, Sparkles, Circle } from "lucide-react";
+import { Share2, MessageCircle, X, Camera, ImagePlus, Circle } from "lucide-react";
 import {
   ShareTargetResult,
-  TelemetryCardThemeMode,
   renderTargetShotChartCanvas,
   triggerNativeImageShare
 } from "@/lib/scoring/targetImageGenerator";
@@ -15,20 +14,43 @@ interface StravaShareModalProps {
   onClose: () => void;
 }
 
+type ActiveButtonTab = "black" | "upload" | "camera";
+
 export default function StravaShareModal({ shareResult, onClose }: StravaShareModalProps) {
-  const [themeMode, setThemeMode] = useState<TelemetryCardThemeMode>("black");
+  const [activeTab, setActiveTab] = useState<ActiveButtonTab>("black");
   const [customPhotoUrl, setCustomPhotoUrl] = useState<string | null>(null);
   const [activeDataUrl, setActiveDataUrl] = useState<string>("");
   const [isRendering, setIsRendering] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (shareResult) {
-      setThemeMode(shareResult.params?.themeMode || "black");
+      setActiveTab("black");
       setCustomPhotoUrl(shareResult.params?.backgroundPhotoUrl || null);
       setActiveDataUrl(shareResult.dataUrl);
     }
   }, [shareResult]);
+
+  // Listen for native Android camera capture result (from MainActivity.java)
+  useEffect(() => {
+    const handleNativeCameraPhoto = (event: Event) => {
+      const customEvent = event as CustomEvent<{ dataUrl?: string }>;
+      const dataUrl = customEvent.detail?.dataUrl;
+      if (dataUrl && typeof dataUrl === "string") {
+        setCustomPhotoUrl(dataUrl);
+        setActiveTab("camera");
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("archery-native-camera-photo", handleNativeCameraPhoto);
+      return () => {
+        window.removeEventListener("archery-native-camera-photo", handleNativeCameraPhoto);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (!shareResult?.params) return;
@@ -37,16 +59,17 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     const regenerateCard = async () => {
       setIsRendering(true);
       try {
+        const isPhotoDesign = (activeTab === "upload" || activeTab === "camera") && Boolean(customPhotoUrl);
         const canvas = await renderTargetShotChartCanvas({
           ...shareResult.params,
-          themeMode,
-          backgroundPhotoUrl: themeMode === "photo" ? customPhotoUrl : null
+          themeMode: isPhotoDesign ? "photo" : "black",
+          backgroundPhotoUrl: isPhotoDesign ? customPhotoUrl : null
         });
         if (!cancelled) {
           setActiveDataUrl(canvas.toDataURL("image/png"));
         }
       } catch (err) {
-        console.error("Error rendering telemetry mode:", err);
+        console.error("Error rendering telemetry card:", err);
       } finally {
         if (!cancelled) {
           setIsRendering(false);
@@ -58,28 +81,39 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     return () => {
       cancelled = true;
     };
-  }, [themeMode, customPhotoUrl, shareResult]);
+  }, [activeTab, customPhotoUrl, shareResult]);
 
   if (!shareResult) return null;
 
   const currentDataUrl = activeDataUrl || shareResult.dataUrl;
 
-  const handleSelectPhotoMode = () => {
-    if (!customPhotoUrl) {
-      fileInputRef.current?.click();
-    } else {
-      setThemeMode("photo");
-    }
+  const handleUploadPhotoClick = () => {
+    uploadInputRef.current?.click();
   };
 
-  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTakeCameraPhotoClick = () => {
+    if (typeof window !== "undefined" && window.ArcheryNativeShare?.takeCameraPhoto) {
+      try {
+        window.ArcheryNativeShare.takeCameraPhoto();
+        return;
+      } catch (err) {
+        console.error("Native takeCameraPhoto error:", err);
+      }
+    }
+    cameraInputRef.current?.click();
+  };
+
+  const handlePhotoFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    sourceTab: "upload" | "camera"
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setCustomPhotoUrl(reader.result);
-        setThemeMode("photo");
+        setActiveTab(sourceTab);
       }
     };
     reader.readAsDataURL(file);
@@ -89,7 +123,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
   const handleNativeShareAgain = async () => {
     const { fileName, captionText } = shareResult;
     const modeSuffix =
-      themeMode === "photo" ? "-Foto" : themeMode === "transparent" ? "-Transparente" : "";
+      activeTab === "upload" ? "-Foto" : activeTab === "camera" ? "-Camara" : "";
     const outFileName = fileName.replace(/\.png$/i, `${modeSuffix}.png`);
     await triggerNativeImageShare(currentDataUrl, outFileName, "ARCHERY 101010 THE APP", captionText);
   };
@@ -97,7 +131,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
   const handleWhatsAppShare = async () => {
     const { fileName, captionText } = shareResult;
     const modeSuffix =
-      themeMode === "photo" ? "-Foto" : themeMode === "transparent" ? "-Transparente" : "";
+      activeTab === "upload" ? "-Foto" : activeTab === "camera" ? "-Camara" : "";
     const outFileName = fileName.replace(/\.png$/i, `${modeSuffix}.png`);
 
     if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
@@ -132,11 +166,22 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[200000] bg-black/94 backdrop-blur-md flex flex-col items-center justify-between p-3.5 sm:p-4 overflow-y-auto"
       >
+        {/* Gallery File Picker (Sube Foto) */}
         <input
-          ref={fileInputRef}
+          ref={uploadInputRef}
           type="file"
           accept="image/*"
-          onChange={handlePhotoFileChange}
+          onChange={(e) => handlePhotoFileChange(e, "upload")}
+          className="hidden"
+        />
+
+        {/* Direct Camera Capture Fallback for Mobile Browsers (Toma Foto) */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => handlePhotoFileChange(e, "camera")}
           className="hidden"
         />
 
@@ -162,77 +207,55 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
           </button>
         </div>
 
-        {/* 3-Mode Selector Bar: Fondo Negro | Tu Foto Detrás | Fondo Transparente */}
+        {/* 3-Mode Selector Bar: Fondo Negro | Sube Foto | Toma Foto */}
         <div className="w-full max-w-sm flex flex-col gap-1.5 my-1.5 shrink-0">
           <div className="grid grid-cols-3 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
             <button
               type="button"
-              onClick={() => setThemeMode("black")}
+              onClick={() => setActiveTab("black")}
               className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                themeMode === "black"
+                activeTab === "black"
                   ? "bg-white text-[#04060A] shadow-sm"
                   : "bg-transparent text-white/75 hover:text-white"
               }`}
             >
-              <Circle size={10} className={themeMode === "black" ? "fill-current" : ""} />
+              <Circle size={10} className={activeTab === "black" ? "fill-current" : ""} />
               <span>Fondo Negro</span>
             </button>
 
             <button
               type="button"
-              onClick={handleSelectPhotoMode}
+              onClick={handleUploadPhotoClick}
               className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                themeMode === "photo"
+                activeTab === "upload"
+                  ? "bg-white text-[#04060A] shadow-sm"
+                  : "bg-transparent text-white/75 hover:text-white"
+              }`}
+            >
+              <ImagePlus size={12.5} strokeWidth={2.5} />
+              <span>Sube Foto</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleTakeCameraPhotoClick}
+              className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === "camera"
                   ? "bg-white text-[#04060A] shadow-sm"
                   : "bg-transparent text-white/75 hover:text-white"
               }`}
             >
               <Camera size={12.5} strokeWidth={2.5} />
-              <span>Tu Foto Detrás</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setThemeMode("transparent")}
-              className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                themeMode === "transparent"
-                  ? "bg-white text-[#04060A] shadow-sm"
-                  : "bg-transparent text-white/75 hover:text-white"
-              }`}
-            >
-              <Sparkles size={12.5} strokeWidth={2.5} />
-              <span>Transparente</span>
+              <span>Toma Foto</span>
             </button>
           </div>
-
-          {themeMode === "photo" && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-8 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white text-[10.5px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
-            >
-              <Camera size={12} />
-              <span>{customPhotoUrl ? "Cambiar Foto de Fondo" : "Elegir Foto de Galería o Cámara"}</span>
-            </button>
-          )}
         </div>
 
         {/* Center Preview Card (Vertical 9:16 Proportion) */}
         <motion.div
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          style={
-            themeMode === "transparent"
-              ? {
-                  backgroundColor: "#0B0F17",
-                  backgroundImage:
-                    "linear-gradient(45deg, #161E2E 25%, transparent 25%), linear-gradient(-45deg, #161E2E 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #161E2E 75%), linear-gradient(-45deg, transparent 75%, #161E2E 75%)",
-                  backgroundSize: "20px 20px",
-                  backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0"
-                }
-              : { backgroundColor: "#05070B" }
-          }
-          className="relative w-full max-w-[290px] sm:max-w-[315px] my-1.5 rounded-3xl overflow-hidden border border-white/15 shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
+          className="relative w-full max-w-[290px] sm:max-w-[315px] my-1.5 rounded-3xl overflow-hidden border border-white/15 bg-[#05070B] shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
         >
           <img
             src={currentDataUrl}

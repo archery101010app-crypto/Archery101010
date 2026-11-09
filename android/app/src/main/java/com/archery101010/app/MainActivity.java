@@ -6,7 +6,10 @@ import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Typeface;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -15,9 +18,11 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -88,6 +93,8 @@ public class MainActivity extends BridgeActivity {
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
+    private ActivityResultLauncher<Intent> cameraCaptureLauncher;
+    private File pendingCameraCaptureFile = null;
     private volatile String activeAppOrigin = "https://localhost";
     private Dialog spotifyLoginDialog = null;
 
@@ -235,6 +242,17 @@ public class MainActivity extends BridgeActivity {
             result -> {
                 if (isSessionTrackingActive) {
                     bindNativeGpsProviders();
+                }
+            }
+        );
+
+        cameraCaptureLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    new Thread(() -> {
+                        processCapturedCameraPhoto(result.getData());
+                    }).start();
                 }
             }
         );
@@ -523,6 +541,111 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception ignored) {}
             });
         }
+
+        @JavascriptInterface
+        public void takeCameraPhoto() {
+            runOnUiThread(() -> {
+                try {
+                    File photoFile = new File(getCacheDir(), "archery_camera_" + System.currentTimeMillis() + ".jpg");
+                    pendingCameraCaptureFile = photoFile;
+                    Uri photoUri = FileProvider.getUriForFile(
+                        MainActivity.this,
+                        getPackageName() + ".fileprovider",
+                        photoFile
+                    );
+                    Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                    takePictureIntent.setClipData(ClipData.newRawUri("Foto", photoUri));
+                    takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    cameraCaptureLauncher.launch(takePictureIntent);
+                } catch (Exception e) {
+                    try {
+                        Intent fallbackIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                        cameraCaptureLauncher.launch(fallbackIntent);
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+    }
+
+    private void processCapturedCameraPhoto(Intent data) {
+        try {
+            Bitmap bmp = null;
+            int rotationDegrees = 0;
+
+            if (pendingCameraCaptureFile != null && pendingCameraCaptureFile.exists() && pendingCameraCaptureFile.length() > 0) {
+                try {
+                    ExifInterface exif = new ExifInterface(pendingCameraCaptureFile.getAbsolutePath());
+                    int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                    if (orientation == ExifInterface.ORIENTATION_ROTATE_90) rotationDegrees = 90;
+                    else if (orientation == ExifInterface.ORIENTATION_ROTATE_180) rotationDegrees = 180;
+                    else if (orientation == ExifInterface.ORIENTATION_ROTATE_270) rotationDegrees = 270;
+                } catch (Exception ignored) {}
+
+                BitmapFactory.Options boundsOpts = new BitmapFactory.Options();
+                boundsOpts.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(pendingCameraCaptureFile.getAbsolutePath(), boundsOpts);
+
+                int sampleSize = 1;
+                int maxDim = Math.max(boundsOpts.outWidth, boundsOpts.outHeight);
+                while (maxDim / sampleSize > 2160) {
+                    sampleSize *= 2;
+                }
+
+                BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+                decodeOpts.inSampleSize = sampleSize;
+                bmp = BitmapFactory.decodeFile(pendingCameraCaptureFile.getAbsolutePath(), decodeOpts);
+            } else if (data != null && data.getExtras() != null) {
+                Object raw = data.getExtras().get("data");
+                if (raw instanceof Bitmap) {
+                    bmp = (Bitmap) raw;
+                }
+            }
+
+            if (bmp == null) return;
+
+            int w = bmp.getWidth();
+            int h = bmp.getHeight();
+            float maxTargetEdge = 1920f;
+            float scale = Math.min(1f, maxTargetEdge / Math.max(w, h));
+
+            if (rotationDegrees != 0 || scale < 1f) {
+                Matrix matrix = new Matrix();
+                if (scale < 1f) {
+                    matrix.postScale(scale, scale);
+                }
+                if (rotationDegrees != 0) {
+                    matrix.postRotate(rotationDegrees);
+                }
+                Bitmap transformed = Bitmap.createBitmap(bmp, 0, 0, w, h, matrix, true);
+                if (transformed != bmp) {
+                    bmp.recycle();
+                    bmp = transformed;
+                }
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bmp.compress(Bitmap.CompressFormat.JPEG, 90, baos);
+            String base64Jpeg = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+            final String dataUrl = "data:image/jpeg;base64," + base64Jpeg;
+
+            try {
+                if (pendingCameraCaptureFile != null && pendingCameraCaptureFile.exists()) {
+                    pendingCameraCaptureFile.delete();
+                }
+            } catch (Exception ignored) {}
+
+            runOnUiThread(() -> {
+                if (getBridge() != null && getBridge().getWebView() != null) {
+                    JSONObject detail = new JSONObject();
+                    try {
+                        detail.put("dataUrl", dataUrl);
+                    } catch (Exception ignored) {}
+                    String js = "window.dispatchEvent(new CustomEvent('archery-native-camera-photo', { detail: " + detail.toString() + " }));";
+                    getBridge().getWebView().evaluateJavascript(js, null);
+                }
+            });
+        } catch (Exception ignored) {}
     }
 
     public class ArcheryWatchNativeBridge {

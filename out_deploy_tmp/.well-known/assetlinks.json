@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.archery101010.app",
+      "sha256_cert_fingerprints": [
+        "BC:FD:32:A7:15:47:AC:F5:BD:3E:6F:5F:F1:2B:75:8D:D7:0B:12:BC:0C:CC:03:19:5A:B1:D6:E4:32:3A:05:AE"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.web.archery101010_c0bb4.twa",
+      "sha256_cert_fingerprints": [
+        "BC:FD:32:A7:15:47:AC:F5:BD:3E:6F:5F:F1:2B:75:8D:D7:0B:12:BC:0C:CC:03:19:5A:B1:D6:E4:32:3A:05:AE"
+      ]
+    }
+  }
+]

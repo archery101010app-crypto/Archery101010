@@ -39,6 +39,7 @@ declare global {
       shareImage: (base64Png: string, fileName: string, title: string, captionText: string) => void;
       shareWhatsAppImage: (base64Png: string, fileName: string, captionText: string) => void;
       shareWhatsAppText: (text: string) => void;
+      takeCameraPhoto?: () => void;
     };
   }
 }
