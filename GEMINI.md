@@ -26,3 +26,6 @@
     *   Eliminar textos explicativos largos o redundantes; priorizar indicadores compactos (`● LIVE`, `SYNC`, pills minimalistas).
 4.  **Flujo de Autorización Visual (Muestra PNG 4K Previa):**
     *   Cuando el usuario solicite cambios de diseño o interfaz con revisión previa, generar primero un **PNG en máxima calidad 4K Retina** (`--force-device-scale-factor=4`), verificarlo visualmente y entregarle el enlace directo en Firebase Hosting antes de modificar el código de producción.
+5.  **PROHIBICIÓN ABSOLUTA DE MARCAS REGISTRADAS EN PUBLICACIONES Y UI:**
+    *   **NUNCA** escribir ni mencionar nombres de marcas registradas de terceros (como `Strava`, `WHOOP`, `Nike`, `Instagram`, `Facebook`, `Garmin`, `Apple Watch`, etc.) dentro de artes promocionales, pósters, carruseles, tarjetas compartibles, capturas de tienda o textos visibles de la interfaz.
+    *   Esas referencias existen únicamente como inspiración interna de estilo, pero en cualquier material público o visual solo debe aparecer la marca propia **`ARCHERY 101010`** / **`THE APP`** y términos descriptivos genéricos (*"Redes Sociales"*, *"Smartwatch Deportivo"*, *"Reloj Inteligente"*, *"Tienda de Aplicaciones"*).

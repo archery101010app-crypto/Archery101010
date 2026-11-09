@@ -24,6 +24,9 @@ description: >-
   - En esferas circulares (Smartwatch `288px × 288px`), verificar matemáticamente el ancho de la cuerda circular en la coordenada `Y` superior para que el logo y los pills queden 100% contenidos con margen libre a ambos lados.
   - En encabezados de tarjetas/modales, mantener logo, estado (`● LIVE`), acción (`SYNC`) y cierre (`✕`) en una sola línea horizontal armónica.
 
+- **PROHIBICIÓN ESTRICTA DE MARCAS REGISTRADAS DE TERCEROS:**
+  - **JAMÁS** incluir nombres de marcas registradas externas (`Strava`, `WHOOP`, `Nike`, `Garmin`, `Apple Watch`, `Instagram`, `Facebook`, etc.) en pósters, carruseles, publicaciones de marketing, capturas promocionales ni textos visibles de la app. Usar únicamente **`ARCHERY 101010`** / **`THE APP`** y descriptores genéricos (*"Redes Sociales"*, *"Reloj Inteligente"*, *"Smartwatch Deportivo"*).
+
 ## 2. Flujo de Muestra Previa 4K Retina (Sin Instalar sin Autorización)
 1. Generar la maqueta HTML/CSS y renderizar la captura con Microsoft Edge Headless a `--force-device-scale-factor=4` (calidad 4K Retina).
 2. Inspeccionar siempre el PNG resultante con `read_file` para comprobar centrado, tipografía, nitidez y contención antes de mostrarlo al usuario.
