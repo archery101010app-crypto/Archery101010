@@ -247,8 +247,8 @@ export default function SmartwatchMiniApp({
           srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
           alt="ARCHERY 101010"
           className={`${
-            isSquare ? "h-[9.5px]" : "h-[8.5px]"
-          } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+            isSquare ? "h-[10px]" : "h-[9.2px]"
+          } w-auto object-contain select-none pointer-events-none brightness-125 contrast-125 [image-rendering:-webkit-optimize-contrast]`}
           draggable={false}
         />
         <button

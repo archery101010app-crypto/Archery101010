@@ -889,10 +889,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 int midW = Math.min(rawBrandLogo.getWidth(), targetWidthPx * 2);
                 int midH = Math.max(1, Math.round(midW / aspect));
                 Bitmap mid = Bitmap.createScaledBitmap(rawBrandLogo, midW, midH, true);
-                scaledBrandLogo = Bitmap.createScaledBitmap(mid, targetWidthPx, targetHeightPx, true);
-                if (mid != scaledBrandLogo && mid != rawBrandLogo) {
+                Bitmap scaled = Bitmap.createScaledBitmap(mid, targetWidthPx, targetHeightPx, true);
+                if (mid != scaled && mid != rawBrandLogo) {
                     mid.recycle();
                 }
+                // Boost sub-pixel alpha from downsampling so white and 101010 colors have 100% full brightness
+                Bitmap bright = scaled.copy(Bitmap.Config.ARGB_8888, true);
+                int w = bright.getWidth();
+                int h = bright.getHeight();
+                int[] pixels = new int[w * h];
+                bright.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int p = pixels[i];
+                    int a = (p >>> 24) & 0xFF;
+                    if (a > 6) {
+                        int boostedA = Math.min(255, Math.round(a * 1.9f));
+                        pixels[i] = (boostedA << 24) | (p & 0x00FFFFFF);
+                    }
+                }
+                bright.setPixels(pixels, 0, w, 0, 0, w, h);
+                if (scaled != bright && scaled != rawBrandLogo) {
+                    scaled.recycle();
+                }
+                scaledBrandLogo = bright;
                 cachedLogoWidthPx = targetWidthPx;
             } catch (Exception ignored) {}
             return scaledBrandLogo;
@@ -909,9 +928,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 String pillText,
                 boolean isYellowPill
         ) {
-            int targetLogoW = Math.round((isRound ? 104f : 116f) * scale);
+            int targetLogoW = Math.round((isRound ? 114f : 124f) * scale);
             Bitmap logo = getSupersampledLogo(targetLogoW);
-            float logoTopY = 39f * scale;
+            float logoTopY = 38.5f * scale;
+
+            // Ensure Paint is at 100% opacity (255) before drawing the brand logo bitmap
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha(255);
+            paint.setFilterBitmap(true);
 
             if (logo != null) {
                 float leftX = Math.round(cx - logo.getWidth() / 2f);
@@ -981,6 +1006,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawRoundRect(rect, 36f * scale, 36f * scale, paint);
             }
             paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha(255);
 
             if (screenIndex == 0) {
                 drawCounterScreen(canvas, cx, scale, isRound, wMult);
