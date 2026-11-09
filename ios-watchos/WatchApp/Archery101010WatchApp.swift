@@ -45,12 +45,24 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private let motionManager = CMMotionManager()
     private let pedometer = CMPedometer()
     private var lastShotTimeMs: Int64 = 0
+    private var lastStepTimeMs: Int64 = 0
+    private var prevStepTimeMs: Int64 = 0
     private var walkingLockUntilMs: Int64 = 0
-    private var preShotQuietEmaG: Double = 0.12
+    private var smoothedMagG: Double = 1.0
+    private var preShotLinearHistory: [Double] = Array(repeating: 0.10, count: 16)
+    private var preShotHistoryIdx: Int = 0
+    private var preShotHistoryCount: Int = 0
     private var cmdSequence: Int64 = 0
 
     override init() {
         super.init()
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "autoDetectEnabled") != nil {
+            autoDetectEnabled = defaults.bool(forKey: "autoDetectEnabled")
+        }
+        if defaults.object(forKey: "sensitivityLevel") != nil {
+            sensitivityLevel = max(0, min(2, defaults.integer(forKey: "sensitivityLevel")))
+        }
         if WCSession.isSupported() {
             let session = WCSession.default
             session.delegate = self
@@ -59,18 +71,52 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         startSensors()
     }
 
+    private func isPreShotAnchorSteady(maxQuietAvgG: Double) -> Bool {
+        if preShotHistoryCount < 8 {
+            return true
+        }
+        let samplesToCheck = min(10, preShotHistoryCount - 3)
+        if samplesToCheck <= 0 { return true }
+        var sum = 0.0
+        let oldestIdx = (preShotHistoryIdx - preShotHistoryCount + 16) % 16
+        for i in 0..<samplesToCheck {
+            let idx = (oldestIdx + i) % 16
+            sum += preShotLinearHistory[idx]
+        }
+        return (sum / Double(samplesToCheck)) <= maxQuietAvgG
+    }
+
+    private func recordDetectedStep(nowMs: Int64) {
+        prevStepTimeMs = lastStepTimeMs
+        lastStepTimeMs = nowMs
+        if (nowMs - prevStepTimeMs) <= 4200 {
+            walkingLockUntilMs = nowMs + 3800
+        } else {
+            walkingLockUntilMs = max(walkingLockUntilMs, nowMs + 2200)
+        }
+        isWalkingPaused = true
+    }
+
     func cycleSensitivityMode() {
         if !autoDetectEnabled {
             autoDetectEnabled = true
-            sensitivityLevel = 1
+            sensitivityLevel = 1 // MEDIA
         } else if sensitivityLevel == 1 {
-            sensitivityLevel = 0
+            sensitivityLevel = 0 // BAJA
         } else if sensitivityLevel == 0 {
-            sensitivityLevel = 2
+            sensitivityLevel = 2 // ALTA
         } else {
-            autoDetectEnabled = false
+            autoDetectEnabled = false // MODO MANUAL
         }
+        let defaults = UserDefaults.standard
+        defaults.set(autoDetectEnabled, forKey: "autoDetectEnabled")
+        defaults.set(sensitivityLevel, forKey: "sensitivityLevel")
         WKInterfaceDevice.current().play(.click)
+        sendCommandToPhone([
+            "type": "TOGGLE_AUTO_DETECT",
+            "enabled": autoDetectEnabled,
+            "sensitivityLevel": sensitivityLevel
+        ])
     }
 
     var currentStatusPillLabel: String {
@@ -92,8 +138,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     let newSteps = data.numberOfSteps.intValue
                     if newSteps > self.stepsCount {
                         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-                        self.walkingLockUntilMs = nowMs + 3800
-                        self.isWalkingPaused = true
+                        self.recordDetectedStep(nowMs: nowMs)
                     }
                     self.stepsCount = newSteps
                     let pedDist = data.distance?.doubleValue ?? (Double(self.stepsCount) * 0.76)
@@ -107,6 +152,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
                 guard let self = self, self.autoDetectEnabled, let acc = data?.acceleration else { return }
                 let magG = sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z)
+                let dynamicG = magG - self.smoothedMagG
+                self.smoothedMagG = (0.95 * self.smoothedMagG) + (0.05 * magG)
                 let linearG = abs(magG - 1.0)
                 let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
 
@@ -114,19 +161,28 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     self.isWalkingPaused = false
                 }
 
-                let thresholdG = (self.sensitivityLevel == 0) ? 2.10 : ((self.sensitivityLevel == 2) ? 1.48 : 1.75)
+                let thresholdG = (self.sensitivityLevel == 0) ? 2.10 : ((self.sensitivityLevel == 2) ? 1.45 : 1.72)
                 let quietLimitG = (self.sensitivityLevel == 0) ? 0.21 : ((self.sensitivityLevel == 2) ? 0.33 : 0.26)
                 let cooldownMs: Int64 = (self.sensitivityLevel == 0) ? 3800 : ((self.sensitivityLevel == 2) ? 2600 : 3200)
+                let isWalkingBlocked = (nowMs < self.walkingLockUntilMs) || ((nowMs - self.lastStepTimeMs) < 2200)
 
-                if nowMs >= self.walkingLockUntilMs
+                if !isWalkingBlocked
                     && linearG >= thresholdG
                     && (nowMs - self.lastShotTimeMs) > cooldownMs
-                    && self.preShotQuietEmaG <= quietLimitG {
+                    && self.isPreShotAnchorSteady(maxQuietAvgG: quietLimitG) {
                     self.lastShotTimeMs = nowMs
+                    self.preShotHistoryCount = 0
                     self.incrementArrow(delta: 1, source: "watch_auto")
+                } else if dynamicG >= 0.12 && dynamicG <= 1.15 && (nowMs - self.lastStepTimeMs) > 380 && (nowMs - self.lastShotTimeMs) > 1400 {
+                    self.recordDetectedStep(nowMs: nowMs)
+                    self.stepsCount += 1
+                    self.distanceWalkedM = max(self.distanceWalkedM + 0.76, Double(self.stepsCount) * 0.76)
                 }
-                if linearG < 0.90 {
-                    self.preShotQuietEmaG = (0.82 * self.preShotQuietEmaG) + (0.18 * linearG)
+
+                self.preShotLinearHistory[self.preShotHistoryIdx] = min(linearG, 1.2)
+                self.preShotHistoryIdx = (self.preShotHistoryIdx + 1) % 16
+                if self.preShotHistoryCount < 16 {
+                    self.preShotHistoryCount += 1
                 }
             }
         }
@@ -287,23 +343,36 @@ struct ArcheryWatchPagerView: View {
 
 struct WatchBrandHeaderView: View {
     let pillText: String
+    var isYellowPill: Bool = false
 
     var body: some View {
+        let accentColor = isYellowPill
+            ? Color(red: 1, green: 229/255, blue: 0)
+            : Color(red: 0/255, green: 168/255, blue: 243/255)
+        let bgFill = isYellowPill
+            ? Color(red: 16/255, green: 16/255, blue: 6/255)
+            : Color(red: 4/255, green: 11/255, blue: 18/255)
+
         VStack(spacing: 3) {
             Image("brand_logo_full")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 11)
-            Text(pillText)
-                .font(.system(size: 8.5, weight: .heavy, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(Color(red: 4/255, green: 11/255, blue: 18/255))
-                .overlay(
-                    Capsule().stroke(Color(red: 0/255, green: 168/255, blue: 243/255).opacity(0.55), lineWidth: 1)
-                )
-                .clipShape(Capsule())
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(accentColor)
+                    .frame(width: 4.5, height: 4.5)
+                Text(pillText)
+                    .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(bgFill)
+            .overlay(
+                Capsule().stroke(accentColor.opacity(0.55), lineWidth: 1)
+            )
+            .clipShape(Capsule())
         }
     }
 }
@@ -317,7 +386,10 @@ struct CounterWatchScreen: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            WatchBrandHeaderView(pillText: vm.currentStatusPillLabel)
+            WatchBrandHeaderView(
+                pillText: vm.currentStatusPillLabel,
+                isYellowPill: vm.autoDetectEnabled && vm.isWalkingPaused
+            )
                 .onTapGesture { vm.cycleSensitivityMode() }
 
             HStack(spacing: 4) {

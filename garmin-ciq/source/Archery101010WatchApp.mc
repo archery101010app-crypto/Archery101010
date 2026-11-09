@@ -75,10 +75,15 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastLat = null;
     private var mLastLon = null;
     private var mLastShotMs = 0;
+    private var mLastStepMs = 0;
+    private var mPrevStepMs = 0;
     private var mBaselineSteps = null;
     private var mLastObservedSteps = null;
     private var mWalkingLockUntilMs = 0;
-    private var mPreShotQuietEmaMg = 120.0;
+    private var mSmoothedMagMg = 1000.0;
+    private var mPreShotRingMg = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0];
+    private var mPreShotRingIdx = 0;
+    private var mPreShotRingCount = 0;
 
     function initialize() {
         View.initialize();
@@ -90,7 +95,39 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
         var timer = new Toybox.Timer.Timer();
-        timer.start(method(:onSensorTick), 80, true);
+        timer.start(method(:onSensorTick), 60, true);
+    }
+
+    function isPreShotAnchorSteady(maxQuietAvgMg as Lang.Float) as Lang.Boolean {
+        if (mPreShotRingCount < 6) {
+            return true;
+        }
+        var checkCount = 7;
+        var sum = 0.0;
+        var oldestIdx = (mPreShotRingIdx - mPreShotRingCount + 10) % 10;
+        for (var i = 0; i < checkCount; i++) {
+            var idx = (oldestIdx + i) % 10;
+            sum = sum + mPreShotRingMg[idx];
+        }
+        return (sum / checkCount) <= maxQuietAvgMg;
+    }
+
+    function cycleSensitivityMode() as Void {
+        if (!autoDetectEnabled) {
+            autoDetectEnabled = true;
+            sensitivityLevel = 1; // MEDIA
+        } else if (sensitivityLevel == 1) {
+            sensitivityLevel = 0; // BAJA
+        } else if (sensitivityLevel == 0) {
+            sensitivityLevel = 2; // ALTA
+        } else {
+            autoDetectEnabled = false; // MODO MANUAL
+        }
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(60, 40)]);
+        }
+        syncWithPhoneApp("TOGGLE_AUTO_DETECT", null);
+        WatchUi.requestUpdate();
     }
 
     function onSensorTick() as Void {
@@ -103,6 +140,7 @@ class Archery101010WatchView extends WatchUi.View {
             if (monInfo != null && monInfo has :steps && monInfo.steps != null) {
                 if (mLastObservedSteps != null && monInfo.steps > mLastObservedSteps) {
                     mLastObservedSteps = monInfo.steps;
+                    mLastStepMs = now;
                     mWalkingLockUntilMs = now + 3800;
                     WatchUi.requestUpdate();
                 }
@@ -114,18 +152,39 @@ class Archery101010WatchView extends WatchUi.View {
             var ay = info.accel[1];
             var az = info.accel[2];
             var magMg = Math.sqrt(ax * ax + ay * ay + az * az);
+            var dynamicMg = magMg - mSmoothedMagMg;
+            mSmoothedMagMg = (0.94 * mSmoothedMagMg) + (0.06 * magMg);
             var deltaMg = (magMg - 1000.0).abs();
 
             var thresholdMg = (sensitivityLevel == 0) ? 2450.0 : ((sensitivityLevel == 2) ? 1850.0 : 2150.0);
-            var quietLimitMg = (sensitivityLevel == 0) ? 220.0 : ((sensitivityLevel == 2) ? 340.0 : 270.0);
+            var quietLimitMg = (sensitivityLevel == 0) ? 210.0 : ((sensitivityLevel == 2) ? 330.0 : 265.0);
             var cooldownMs = (sensitivityLevel == 0) ? 3800 : ((sensitivityLevel == 2) ? 2600 : 3200);
 
-            if (now >= mWalkingLockUntilMs && deltaMg >= thresholdMg && (now - mLastShotMs) > cooldownMs && mPreShotQuietEmaMg <= quietLimitMg) {
+            var isWalkingBlocked = (now < mWalkingLockUntilMs) || ((now - mLastStepMs) < 2200);
+
+            if (!isWalkingBlocked
+                && deltaMg >= thresholdMg
+                && (now - mLastShotMs) > cooldownMs
+                && isPreShotAnchorSteady(quietLimitMg)) {
                 mLastShotMs = now;
+                mPreShotRingCount = 0;
                 incrementArrow(1, true);
+            } else if (dynamicMg >= 135.0 && dynamicMg <= 1150.0 && (now - mLastStepMs) > 380 && (now - mLastShotMs) > 1400) {
+                mPrevStepMs = mLastStepMs;
+                mLastStepMs = now;
+                if ((now - mPrevStepMs) <= 4200) {
+                    mWalkingLockUntilMs = now + 3800;
+                } else if ((now + 2200) > mWalkingLockUntilMs) {
+                    mWalkingLockUntilMs = now + 2200;
+                }
+                WatchUi.requestUpdate();
             }
-            if (deltaMg < 900.0) {
-                mPreShotQuietEmaMg = (0.82 * mPreShotQuietEmaMg) + (0.18 * deltaMg);
+
+            var cappedMg = (deltaMg > 1200.0) ? 1200.0 : deltaMg;
+            mPreShotRingMg[mPreShotRingIdx] = cappedMg;
+            mPreShotRingIdx = (mPreShotRingIdx + 1) % 10;
+            if (mPreShotRingCount < 10) {
+                mPreShotRingCount = mPreShotRingCount + 1;
             }
         }
     }
@@ -257,7 +316,8 @@ class Archery101010WatchView extends WatchUi.View {
             "totalScore" => totalScore,
             "distanceWalkedM" => distanceWalkedM,
             "activeKcal" => activeKcal,
-            "autoDetectEnabled" => autoDetectEnabled
+            "autoDetectEnabled" => autoDetectEnabled,
+            "sensitivityLevel" => sensitivityLevel
         };
         if (scoreVal != null) {
             payload["value"] = scoreVal;
@@ -276,7 +336,8 @@ class Archery101010WatchView extends WatchUi.View {
         dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
         dc.drawText(cx + 50, 16, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER);
 
-        dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
+        var isYellow = (statusLabel.find("CAMINANDO") != null) || (statusLabel.find("GPS") != null);
+        dc.setColor(isYellow ? 0xFFE500 : 0x00A8F3, Graphics.COLOR_TRANSPARENT);
         dc.drawText(cx, 35, Graphics.FONT_XTINY, statusLabel, Graphics.TEXT_JUSTIFY_CENTER);
     }
 
@@ -394,6 +455,20 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         mView.screenIdx = (mView.screenIdx + 3) % 4;
         WatchUi.requestUpdate();
         return true;
+    }
+
+    function onMenu() {
+        mView.cycleSensitivityMode();
+        return true;
+    }
+
+    function onTap(clickEvent) {
+        var coords = clickEvent.getCoordinates();
+        if (coords != null && coords.size() >= 2 && coords[1] <= 66 && mView.screenIdx == 0) {
+            mView.cycleSensitivityMode();
+            return true;
+        }
+        return false;
     }
 
     function onBack() {
