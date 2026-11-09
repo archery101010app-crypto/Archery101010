@@ -2,7 +2,7 @@
 
 import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull, getExactTargetDimensions } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
-import { calculateActiveKcal, formatKmAndMiles } from "./biometricsEngine";
+import { calculateActiveKcal, formatMetersAndFeet } from "./biometricsEngine";
 
 export interface EndSummaryItem {
   arrows: string[];
@@ -512,7 +512,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     { title: "PROMEDIO", main: `${avgArrow} PTS` },
     { title: "PRECISIÓN", main: `${tensCount} 10s • ${xsCount} Xs` },
     { title: "KCAL", main: `${computedKcal} kcal` },
-    { title: "DISTANCIA", main: formatKmAndMiles(computedDistanceM, false) }
+    { title: "DISTANCIA", main: formatMetersAndFeet(computedDistanceM, false) }
   ];
 
   kpiItems.forEach((item, idx) => {

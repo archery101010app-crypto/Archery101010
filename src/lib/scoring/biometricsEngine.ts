@@ -204,16 +204,19 @@ export function calculateArcheryKcal(params: {
 }
 
 /**
- * Formats meters into kilometers and miles:
- * - compact: "0.00km/0.00mi" (used in Official Telemetry Card)
- * - spaced: "0.00km / 0.00mi" (used in Smartwatch & Session UI)
+ * Formats walking distance in meters into meters (mts) and feet (ft):
+ * - compact: "15mts/49ft" (used in Official Telemetry Card, Session UI, History & Coach Portal)
+ * - spaced: "15mts / 49ft" (used in Smartwatch & Session UI)
  */
-export function formatKmAndMiles(meters: number, spaced: boolean = false): string {
-  const safeMeters = Math.max(0, Number(meters) || 0);
-  const km = safeMeters / 1000;
-  const mi = safeMeters / 1609.344;
+export function formatMetersAndFeet(meters: number, spaced: boolean = false): string {
+  const safeMeters = Math.max(0, Math.round(Number(meters) || 0));
+  const ft = Math.round(safeMeters * 3.28084);
   const sep = spaced ? " / " : "/";
-  return `${km.toFixed(2)}km${sep}${mi.toFixed(2)}mi`;
+  return `${safeMeters}mts${sep}${ft}ft`;
+}
+
+export function formatKmAndMiles(meters: number, spaced: boolean = false): string {
+  return formatMetersAndFeet(meters, spaced);
 }
 
 /**

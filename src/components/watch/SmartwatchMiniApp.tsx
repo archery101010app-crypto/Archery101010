@@ -211,8 +211,8 @@ export default function SmartwatchMiniApp({
   const digits = String(Math.max(0, Math.min(9999, activeState.arrowsCount)))
     .padStart(4, "0")
     .split("");
-  const kmVal = (Math.max(0, activeState.distanceWalkedM) / 1000).toFixed(2);
-  const miVal = (Math.max(0, activeState.distanceWalkedM) / 1609.344).toFixed(2);
+  const mtsVal = Math.round(Math.max(0, Number(activeState.distanceWalkedM) || 0));
+  const ftVal = Math.round(mtsVal * 3.28084);
   const currentTanda =
     Math.floor(activeState.arrowsCount / Math.max(1, activeState.arrowsPerEnd || 6)) + 1;
   const isSquare = watchShape === "SQUARE";
@@ -362,7 +362,7 @@ export default function SmartwatchMiniApp({
                 className="flex flex-col items-center cursor-pointer text-center"
               >
                 <div className="text-[10.5px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
-                  {kmVal} km · {activeState.activeKcal} kcal
+                  {mtsVal} mts · {activeState.activeKcal} kcal
                 </div>
                 <span className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1.5px]">
                   TANDA {currentTanda} · {activeState.distanceM} M
@@ -395,9 +395,9 @@ export default function SmartwatchMiniApp({
                     DISTANCIA RECORRIDA
                   </div>
                   <div className="text-[14.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
-                    {kmVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">km</span>
+                    {mtsVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">mts</span>
                     {" · "}
-                    {miVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">mi</span>
+                    {ftVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">ft</span>
                   </div>
                 </div>
                 <span className="text-[7px] font-extrabold text-white border border-[#00A8F3]/50 bg-[#04101C] px-1.5 py-0.5 rounded uppercase shrink-0">

@@ -551,18 +551,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private String getFormattedKm() {
-        float km = getEffectiveWalkedMeters() / 1000f;
-        return String.format(Locale.US, "%.2f", km);
+        int mts = Math.max(0, Math.round(getEffectiveWalkedMeters()));
+        return String.valueOf(mts);
     }
 
     private String getFormattedMi() {
-        float km = getEffectiveWalkedMeters() / 1000f;
-        float mi = km * 0.621371f;
-        return String.format(Locale.US, "%.2f", mi);
+        int ft = Math.max(0, Math.round(getEffectiveWalkedMeters() * 3.28084f));
+        return String.valueOf(ft);
     }
 
     private String getFormattedKmAndMi() {
-        return getFormattedKm() + " km · " + getFormattedMi() + " mi";
+        return getFormattedKm() + " mts · " + getFormattedMi() + " ft";
     }
 
     @Override
@@ -1107,12 +1106,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "−1", btnRightSecondary.centerX(), btnRightSecondary.centerY());
 
-            // Center Telemetry (0.04 km · 2 kcal / TANDA 1 · 18 M)
+            // Center Telemetry (15 mts · 2 kcal / TANDA 1 · 18 M)
             btnCenterMetrics.set(btnRightSecondary.right + 4f * scale, btnTop - 2f * scale, cx + rowW / 2f - btnW - 4f * scale, btnTop + btnH + 2f * scale);
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(8.8f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedKm() + " km · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
+            drawCenteredText(canvas, getFormattedKm() + " mts · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
 
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.6f * scale);
