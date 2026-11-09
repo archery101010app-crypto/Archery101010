@@ -80,7 +80,8 @@ if (fs.existsSync(wearGradlePath)) {
 const garminManifestPath = path.join(__dirname, '../garmin-ciq/manifest.xml');
 if (fs.existsSync(garminManifestPath)) {
   let garminManifest = fs.readFileSync(garminManifestPath, 'utf8');
-  garminManifest = garminManifest.replace(/version=["'][0-9.]+["']/, `version="${newVersion}"`);
+  garminManifest = garminManifest.replace(/^<\?xml\s+version=["'][^"']+["']\?>/, '<?xml version="1.0"?>');
+  garminManifest = garminManifest.replace(/(<iq:application[^>]*?\bversion=["'])[0-9.]+(["'])/, `$1${newVersion}$2`);
   fs.writeFileSync(garminManifestPath, garminManifest, 'utf8');
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }

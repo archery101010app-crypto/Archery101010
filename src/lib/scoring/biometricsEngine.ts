@@ -281,12 +281,16 @@ export function publishWatchState(snapshot: BiometricSessionSnapshot): void {
     }
   } catch {}
   try {
-    // Also notify native Android Wear OS / Garmin Connect IQ bridge if present in APK WebView
+    // Notify native Android Wear OS / Garmin Connect IQ bridge or Apple iOS WKWebView WatchConnectivity bridge
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.onSessionTelemetryUpdate) {
       bridge.onSessionTelemetryUpdate(serialized);
     } else if (bridge?.syncTelemetryToWatch) {
       bridge.syncTelemetryToWatch(serialized);
+    }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "onSessionTelemetryUpdate", payload: serialized });
     }
   } catch {}
 }
@@ -323,6 +327,10 @@ export function sendWatchCommand(cmd: WatchCommandMessage): void {
       bridge.syncTelemetryToWatch(payload);
     } else if (bridge?.onSessionTelemetryUpdate) {
       bridge.onSessionTelemetryUpdate(payload);
+    }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "syncTelemetryToWatch", payload });
     }
   } catch {}
 }
@@ -401,6 +409,10 @@ export function subscribeWatchMessages(
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.flushPendingWatchCommands) {
       bridge.flushPendingWatchCommands();
+    }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "flushPendingWatchCommands" });
     }
   } catch {}
 
@@ -486,6 +498,10 @@ export function pingNativeWatch(): void {
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.pingWatch) {
       bridge.pingWatch();
+    }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "pingWatch" });
     }
   } catch {}
   sendWatchCommand({ type: "REQUEST_STATE" });
