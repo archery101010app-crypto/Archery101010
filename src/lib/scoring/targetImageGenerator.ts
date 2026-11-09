@@ -9,6 +9,8 @@ export interface EndSummaryItem {
   note?: string;
 }
 
+export type TelemetryCardThemeMode = "black" | "photo" | "transparent";
+
 export interface TargetShotChartParams {
   impacts: ShotImpactData[];
   ends?: EndSummaryItem[];
@@ -27,6 +29,8 @@ export interface TargetShotChartParams {
   activeKcal?: number;
   distanceWalkedM?: number;
   bowPoundageLbs?: number;
+  themeMode?: TelemetryCardThemeMode;
+  backgroundPhotoUrl?: string | null;
 }
 
 declare global {
@@ -42,7 +46,7 @@ declare global {
 /**
  * If an archer scored in Keyboard Mode (or only plotted partial impacts),
  * synthesize realistic target ring coordinates for every scored arrow so the
- * Strava-style target chart always looks complete and accurate.
+ * telemetry target chart always looks complete and accurate.
  */
 export function synthesizeImpactsFromEnds(
   existingImpacts: ShotImpactData[],
@@ -68,7 +72,6 @@ export function synthesizeImpactsFromEnds(
         globalIdx++;
         return;
       }
-      // Find matching ring radius
       const ringIdx = sortedRings.findIndex((r) => r.v === val);
       let innerR = 0;
       let outerR = 4.0;
@@ -77,7 +80,6 @@ export function synthesizeImpactsFromEnds(
         innerR = ringIdx > 0 ? sortedRings[ringIdx - 1].r : 0;
       }
       const midR = (innerR + outerR) * 0.5;
-      // Golden-angle spiral distribution for natural visual grouping
       const angle = globalIdx * 2.399963229728653 + 0.45;
       const jitterR = ((globalIdx % 5) - 2) * ((outerR - innerR) * 0.14);
       const r = Math.max(0.4, midR + jitterR);
@@ -118,15 +120,17 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-function loadWatermarkImage(): Promise<HTMLImageElement | null> {
+function loadImageAsset(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !src) {
       resolve(null);
       return;
     }
     const img = new Image();
-    img.crossOrigin = "anonymous";
-    const timeout = setTimeout(() => resolve(null), 2500);
+    if (!src.startsWith("data:") && !src.startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
+    const timeout = setTimeout(() => resolve(null), 3500);
     img.onload = () => {
       clearTimeout(timeout);
       resolve(img);
@@ -135,36 +139,31 @@ function loadWatermarkImage(): Promise<HTMLImageElement | null> {
       clearTimeout(timeout);
       resolve(null);
     };
-    img.src = "/images/101010-the-app-watermark.png";
+    img.src = src;
   });
 }
 
-function drawFallback101010TheApp(ctx: CanvasRenderingContext2D, centerX: number, centerY: number) {
+function drawFallbackArchery101010TheApp(ctx: CanvasRenderingContext2D, centerX: number, topY: number) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 50px 'Good Times', 'Outfit', sans-serif";
-  // Draw 10 (Cyan), 10 (Red), 10 (Yellow)
-  const offset = 98;
-  ctx.fillStyle = "#00A8F3";
-  ctx.fillText("10", centerX - offset, centerY - 18);
-  ctx.fillStyle = "#FF0000";
-  ctx.fillText("10", centerX, centerY - 18);
-  ctx.fillStyle = "#FFF200";
-  ctx.fillText("10", centerX + offset, centerY - 18);
-
-  ctx.font = "900 22px 'Good Times', 'Outfit', sans-serif";
+  ctx.font = "900 54px 'Good Times', 'Outfit', sans-serif";
   ctx.fillStyle = "#FFFFFF";
-  ctx.letterSpacing = "7px";
-  ctx.fillText("THE APP", centerX, centerY + 30);
+  ctx.fillText("ARCHERY 101010", centerX, topY + 28);
+
+  ctx.font = "900 32px 'Good Times', 'Outfit', sans-serif";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.letterSpacing = "8px";
+  ctx.fillText("THE APP", centerX, topY + 96);
   ctx.restore();
 }
 
 /**
- * Renders an Ultra-HD (2x Retina: 2160x1984) Squared Screenshot Canvas
- * featuring the Virtual Target on the LEFT, the "101010 THE APP" brand panel
- * aligned on the RIGHT of the target, pure white headers matching the app's
- * typography, Telemetry KPI Boxes, and End-by-End Strip.
+ * Renders an Ultra-HD Vertical 9:16 (2x Retina: 2160x3840) Telemetry Card Canvas
+ * supporting 3 official modes:
+ * - "black": Deep OLED Black background with +30% Centered Target (754px)
+ * - "photo": Custom Archer Photo background with +20% Left-Aligned Target (547px) & Smoked Glass
+ * - "transparent": 100% Alpha Transparent PNG with +20% Left-Aligned Target (547px) & Smoked Glass
  */
 export async function renderTargetShotChartCanvas(params: TargetShotChartParams): Promise<HTMLCanvasElement> {
   const {
@@ -180,7 +179,9 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     format = "World Archery",
     archerName,
     dateStr = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }),
-    dispersion: initialDispersion
+    dispersion: initialDispersion,
+    themeMode = "black",
+    backgroundPhotoUrl = null
   } = params;
 
   const impacts = synthesizeImpactsFromEnds(rawImpacts, ends, presetType);
@@ -190,22 +191,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format)
       : null);
 
-  const validEnds = ends
-    .map((e, idx) => {
-      const validArrows = (e.arrows || []).filter((a) => a !== "");
-      if (validArrows.length === 0) return null;
-      const endSum = validArrows.reduce(
-        (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
-        0
-      );
-      return { idx: idx + 1, sum: endSum, arrows: validArrows };
-    })
-    .filter(Boolean) as Array<{ idx: number; sum: number; arrows: string[] }>;
-
-  // Logical layout dimensions (scaled 2x for Ultra-HD 2160px output)
+  // Vertical 9:16 layout dimensions (scaled 2x for Ultra-HD 2160x3840 output)
   const logicalWidth = 1080;
-  const logicalHeight = validEnds.length > 0 ? 992 : 880;
-  const hdScale = 2; // 2160 x 1984 Ultra-HD resolution
+  const logicalHeight = 1920;
+  const hdScale = 2;
 
   const canvas = document.createElement("canvas");
   canvas.width = logicalWidth * hdScale;
@@ -223,7 +212,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     } catch {}
   }
 
-  const appFont = "Inter, system-ui, -apple-system, sans-serif";
+  const appFont = "Inter, Outfit, system-ui, -apple-system, sans-serif";
 
   const totalArrowsCount =
     ends.length > 0
@@ -231,107 +220,169 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       : impacts.length;
   const effectiveMaxScore = totalArrowsCount > 0 ? totalArrowsCount * 10 : maxScore;
 
-  // 1. Deep OLED Carbon Background
-  const bgGrad = ctx.createRadialGradient(540, 450, 90, 540, 500, 820);
-  bgGrad.addColorStop(0, "#101827");
-  bgGrad.addColorStop(0.5, "#070B12");
-  bgGrad.addColorStop(1, "#020305");
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+  const isBlackMode = themeMode === "black";
+  const isPhotoMode = themeMode === "photo";
+  const isTransparentMode = themeMode === "transparent";
 
-  // Subtle ambient halo behind the left target
-  const haloGrad = ctx.createRadialGradient(294, 452, 80, 294, 452, 310);
-  haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.10)");
-  haloGrad.addColorStop(0.65, "rgba(255, 242, 0, 0.03)");
-  haloGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = haloGrad;
-  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+  // 1. Background Layer based on selected themeMode
+  if (isBlackMode) {
+    const bgGrad = ctx.createRadialGradient(540, 845, 90, 540, 960, 1120);
+    bgGrad.addColorStop(0, "#101827");
+    bgGrad.addColorStop(0.52, "#070B12");
+    bgGrad.addColorStop(1, "#020305");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
-  // Outer Frame Border (Squared & tightly fitted)
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    // Subtle ambient halo behind the center target
+    const haloGrad = ctx.createRadialGradient(540, 771, 90, 540, 771, 430);
+    haloGrad.addColorStop(0, "rgba(0, 229, 255, 0.09)");
+    haloGrad.addColorStop(0.55, "rgba(255, 242, 0, 0.03)");
+    haloGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = haloGrad;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+  } else if (isPhotoMode) {
+    const bgImg = backgroundPhotoUrl ? await loadImageAsset(backgroundPhotoUrl) : null;
+    if (bgImg && bgImg.width > 0 && bgImg.height > 0) {
+      const scale = Math.max(logicalWidth / bgImg.width, logicalHeight / bgImg.height);
+      const sw = bgImg.width * scale;
+      const sh = bgImg.height * scale;
+      const sx = (logicalWidth - sw) / 2;
+      const sy = (logicalHeight - sh) / 2;
+      ctx.drawImage(bgImg, sx, sy, sw, sh);
+    } else {
+      // Fallback dark slate if user hasn't picked a photo yet
+      const fallbackGrad = ctx.createLinearGradient(0, 0, 0, logicalHeight);
+      fallbackGrad.addColorStop(0, "#0F172A");
+      fallbackGrad.addColorStop(0.5, "#090D16");
+      fallbackGrad.addColorStop(1, "#04060A");
+      ctx.fillStyle = fallbackGrad;
+      ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+    }
+
+    // Cinematic vignette for crisp legibility over any photo
+    const vigGrad = ctx.createLinearGradient(0, 0, 0, logicalHeight);
+    vigGrad.addColorStop(0, "rgba(4, 7, 12, 0.62)");
+    vigGrad.addColorStop(0.22, "rgba(4, 7, 12, 0.12)");
+    vigGrad.addColorStop(0.58, "rgba(4, 7, 12, 0.10)");
+    vigGrad.addColorStop(0.78, "rgba(4, 7, 12, 0.48)");
+    vigGrad.addColorStop(1, "rgba(4, 7, 12, 0.78)");
+    ctx.fillStyle = vigGrad;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+  } else if (isTransparentMode) {
+    // 100% Pure Alpha Channel Transparency
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
+  }
+
+  // Outer Frame Border (x=24, y=36, w=1032, h=1848, r=38)
+  ctx.strokeStyle = isBlackMode ? "rgba(255, 255, 255, 0.14)" : "rgba(255, 255, 255, 0.22)";
   ctx.lineWidth = 2.5;
-  drawRoundedRect(ctx, 24, 24, logicalWidth - 48, logicalHeight - 48, 36);
+  drawRoundedRect(ctx, 24, 36, logicalWidth - 48, logicalHeight - 72, 38);
   ctx.stroke();
 
   // Top Accent Line (Cyan -> Red -> Yellow 101010 DNA)
-  const topLineGrad = ctx.createLinearGradient(140, 24, 940, 24);
+  const topLineGrad = ctx.createLinearGradient(140, 36, 940, 36);
   topLineGrad.addColorStop(0, "rgba(0, 168, 243, 0)");
   topLineGrad.addColorStop(0.25, "#00A8F3");
   topLineGrad.addColorStop(0.5, "#FF0000");
   topLineGrad.addColorStop(0.75, "#FFF200");
   topLineGrad.addColorStop(1, "rgba(255, 242, 0, 0)");
   ctx.strokeStyle = topLineGrad;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 4.5;
   ctx.beginPath();
-  ctx.moveTo(140, 25);
-  ctx.lineTo(940, 25);
+  ctx.moveTo(140, 36.5);
+  ctx.lineTo(940, 36.5);
   ctx.stroke();
 
-  // 2. Top Athlete Header & Score Hero Card (Pure Solid White Typography)
-  ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  const boxFillStyle = isBlackMode
+    ? "rgba(255, 255, 255, 0.04)"
+    : isPhotoMode
+      ? "rgba(6, 10, 16, 0.46)"
+      : "rgba(8, 12, 20, 0.56)";
+  const boxStrokeStyle = isBlackMode
+    ? "rgba(255, 255, 255, 0.12)"
+    : "rgba(255, 255, 255, 0.24)";
+
+  // 2. Top Header Row
+  // TELEMETRÍA OFICIAL (+30% box & text: 411x62, r=31, font 25.4px)
+  ctx.fillStyle = isBlackMode ? "rgba(255, 255, 255, 0.05)" : boxFillStyle;
+  ctx.strokeStyle = isBlackMode ? "rgba(255, 255, 255, 0.20)" : "rgba(255, 255, 255, 0.26)";
   ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, 54, 48, 306, 44, 22);
+  drawRoundedRect(ctx, 54, 76, 411, 62, 31);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 19px ${appFont}`;
+  ctx.font = `800 25.4px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("TELEMETRÍA OFICIAL", 207, 77);
+  ctx.textBaseline = "middle";
+  ctx.fillText("TELEMETRÍA OFICIAL", 54 + 411 / 2, 76 + 62 / 2 + 1);
 
-  // Archer Name (-15% size: 35.7px)
-  ctx.font = `900 35.7px ${appFont}`;
+  // Archer Name & Subtitle
+  ctx.save();
+  if (!isBlackMode) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 2;
+  }
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `900 42px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(archerName || "Arquero", 54, 136, 680);
+  ctx.fillText(archerName || "Arquero", 54, 198, 630);
 
-  // Category, Distance, Format & Date (Solid White)
   const displayBowType =
     bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
-  ctx.font = `700 21px ${appFont}`;
+  ctx.font = `700 22.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${displayBowType} • ${distanceM}m • ${format} • ${dateStr}`, 54, 172, 680);
+  ctx.fillText(`${displayBowType} • ${distanceM}m • ${format} • ${dateStr}`, 54, 236, 630);
+  ctx.restore();
 
-  // Total Score Hero Badge (Top Right)
-  ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-  ctx.strokeStyle = "rgba(253, 216, 53, 0.42)";
+  // PUNTUACIÓN TOTAL Box (+15% box & text: 315x168, r=32, x=711, y=76)
+  ctx.fillStyle = boxFillStyle;
+  ctx.strokeStyle = isBlackMode ? "rgba(253, 216, 53, 0.55)" : "rgba(253, 216, 53, 0.68)";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 766, 52, 260, 130, 26);
+  drawRoundedRect(ctx, 711, 76, 315, 168, 32);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `800 17.2px ${appFont}`;
+  const scoreBoxCenterX = 711 + 315 / 2; // 868.5
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `800 20.7px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PUNTUACIÓN TOTAL", 896, 83);
+  ctx.fillText("PUNTUACIÓN TOTAL", scoreBoxCenterX, 114);
 
-  ctx.font = `900 54px ${appFont}`;
+  ctx.font = `900 69px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${score}`, 896, 138);
+  ctx.fillText(`${score}`, scoreBoxCenterX, 182);
 
   const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
-  ctx.font = `700 16px ${appFont}`;
+  ctx.font = `700 19.6px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`/ ${effectiveMaxScore} pts (${pct}%)`, 896, 166);
+  ctx.fillText(`/ ${effectiveMaxScore} pts (${pct}%)`, scoreBoxCenterX, 218);
 
-  // 3. Split Hero Row: Virtual Target on the LEFT + "101010 THE APP" on the RIGHT
-  const targetCenterX = 294;
-  const targetCenterY = 452;
-  const targetRadius = 228; // 456px diameter (x: 66..522, y: 224..680)
+  // 3. Virtual Target Position & Size based on Design 1 (Black) vs Design 2 (Photo / Transparent)
+  // Design 1 (Black): +30% centered target -> diameter 754px (radius 377px), center (540, 771)
+  // Design 2 (Photo/Transparent): +20% left-aligned target -> diameter 547px (radius 273.5px), center (339.5, 722.5)
+  const targetDiameter = isBlackMode ? 754 : 547;
+  const targetRadius = targetDiameter / 2;
+  const targetCenterX = isBlackMode ? 540 : 66 + targetRadius; // 540 or 339.5
+  const targetCenterY = isBlackMode ? 771 : 722.5;
+  const targetScaleFactor = targetRadius / 228; // Relative to original 228px radius
 
   // Target shadow
   ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-  ctx.shadowBlur = 36;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
+  ctx.shadowBlur = 42;
   ctx.beginPath();
   ctx.arc(targetCenterX, targetCenterY, targetRadius, 0, Math.PI * 2);
-  ctx.fillStyle = "#000000";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
   ctx.fill();
   ctx.restore();
 
   // Concentric WA rings
+  ctx.save();
+  ctx.globalAlpha = isPhotoMode ? 0.90 : isTransparentMode ? 0.96 : 1.0;
   const rings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
   rings.forEach((ring) => {
     const currentR = (ring.r / 48) * targetRadius;
@@ -340,159 +391,108 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.fillStyle = ring.fill;
     ctx.fill();
     ctx.strokeStyle = ring.stroke;
-    ctx.lineWidth = ring.v === "X" ? 1.5 : 2;
+    ctx.lineWidth = (ring.v === "X" ? 1.5 : 2) * targetScaleFactor;
     ctx.stroke();
   });
+  ctx.restore();
 
   // Center spider (+)
+  const spiderHalf = 10 * targetScaleFactor;
   ctx.strokeStyle = "rgba(0, 0, 0, 0.65)";
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.5 * targetScaleFactor;
   ctx.beginPath();
-  ctx.moveTo(targetCenterX - 10, targetCenterY);
-  ctx.lineTo(targetCenterX + 10, targetCenterY);
-  ctx.moveTo(targetCenterX, targetCenterY - 10);
-  ctx.lineTo(targetCenterX, targetCenterY + 10);
+  ctx.moveTo(targetCenterX - spiderHalf, targetCenterY);
+  ctx.lineTo(targetCenterX + spiderHalf, targetCenterY);
+  ctx.moveTo(targetCenterX, targetCenterY - spiderHalf);
+  ctx.lineTo(targetCenterX, targetCenterY + spiderHalf);
   ctx.stroke();
 
-  // 4. Centroid & Grouping Polygon on Left Target
-  if (dispersion && impacts.length >= 2) {
-    const cx = targetCenterX + ((dispersion.centroidX - 50) / 48) * targetRadius;
-    const cy = targetCenterY + ((dispersion.centroidY - 50) / 48) * targetRadius;
-    const activeDiameterCm = getExactTargetDimensions(distanceM, bowType, presetType).visibleDiameterCm;
-    const rx = (dispersion.spreadCm / activeDiameterCm) * (targetRadius * 2) * 0.5;
-    const clampedRx = Math.max(12, Math.min(targetRadius * 0.95, rx));
+  // 4. Plotted Arrow Impacts on Target
+  const outerHoleR = 11 * targetScaleFactor;
+  const innerArrowR = 9.5 * targetScaleFactor;
+  const arrowFontPx = Math.round(10 * targetScaleFactor * 10) / 10;
 
-    ctx.save();
-    ctx.strokeStyle = "rgba(0, 229, 255, 0.85)";
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([7, 5]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, clampedRx, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0, 229, 255, 0.08)";
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-
-    if (impacts.length >= 3) {
-      const hull = getConvexHull(impacts.map((i) => ({ x: i.x, y: i.y })));
-      if (hull.length >= 3) {
-        ctx.save();
-        ctx.strokeStyle = "rgba(0, 229, 255, 0.9)";
-        ctx.lineWidth = 2.2;
-        ctx.setLineDash([7, 5]);
-        ctx.fillStyle = "rgba(0, 229, 255, 0.10)";
-        ctx.beginPath();
-        hull.forEach((p, idx) => {
-          const hx = targetCenterX + ((p.x - 50) / 48) * targetRadius;
-          const hy = targetCenterY + ((p.y - 50) / 48) * targetRadius;
-          if (idx === 0) ctx.moveTo(hx, hy);
-          else ctx.lineTo(hx, hy);
-        });
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // Group Center Crosshair (+)
-    ctx.strokeStyle = "#00E5FF";
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    ctx.moveTo(cx - 13, cy);
-    ctx.lineTo(cx + 13, cy);
-    ctx.moveTo(cx, cy - 13);
-    ctx.lineTo(cx, cy + 13);
-    ctx.stroke();
-
-    ctx.fillStyle = "#00E5FF";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 5. Plotted Arrow Impacts on Left Target
   impacts.forEach((imp, idx) => {
     const ix = targetCenterX + ((imp.x - 50) / 48) * targetRadius;
     const iy = targetCenterY + ((imp.y - 50) / 48) * targetRadius;
 
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-    ctx.shadowBlur = 7;
+    ctx.shadowBlur = 7 * targetScaleFactor;
     ctx.beginPath();
-    ctx.arc(ix, iy, 11.5, 0, Math.PI * 2);
+    ctx.arc(ix, iy, outerHoleR, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
     ctx.fill();
     ctx.restore();
 
     ctx.beginPath();
-    ctx.arc(ix, iy, 9.5, 0, Math.PI * 2);
+    ctx.arc(ix, iy, innerArrowR, 0, Math.PI * 2);
     ctx.fillStyle = "#FFD700";
     ctx.fill();
     ctx.strokeStyle = "#000000";
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.8 * targetScaleFactor;
     ctx.stroke();
 
-    ctx.font = `900 10px ${appFont}`;
+    ctx.font = `900 ${arrowFontPx}px ${appFont}`;
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(imp.value || String(idx + 1), ix, iy);
+    ctx.fillText(imp.value || String(idx + 1), ix, iy + 0.5);
   });
 
-  // Reset textBaseline
   ctx.textBaseline = "alphabetic";
 
-  // 5B. RIGHT SIDE OF TARGET: Clean Open Brand Lockup ("101010 THE APP") + Average
-  const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
-  const goldPct = totalArrowsCount > 0 ? Math.round((tensCount / totalArrowsCount) * 100) : 0;
+  // 5. Official Brand Lockup ("ARCHERY 101010" + centered below "THE APP") positioned at y=1343
+  const [brandFullImg, wmImg] = await Promise.all([
+    loadImageAsset("/images/brand_logo_full.png"),
+    loadImageAsset("/images/101010-the-app-watermark.png")
+  ]);
 
-  const rightBoxX = 556;
-  const rightBoxY = 224;
-  const rightBoxW = 470;
-  const rightCenterX = rightBoxX + rightBoxW / 2; // 791
+  const brandTopY = 1343;
+  if (brandFullImg) {
+    ctx.save();
+    if (!isBlackMode) {
+      ctx.shadowColor = "rgba(0, 0, 0, 0.92)";
+      ctx.shadowBlur = 22;
+      ctx.shadowOffsetY = 4;
+    }
+    const brandW = 780;
+    const brandH = Math.round((brandFullImg.height / brandFullImg.width) * brandW); // ~57px
+    ctx.drawImage(brandFullImg, Math.round(540 - brandW / 2), brandTopY, brandW, brandH);
 
-  // Draw "101010 THE APP" Watermark (No "ARCHERY" prefix, no outer box border)
-  const wmImg = await loadWatermarkImage();
-  const stampCenterY = rightBoxY + 148;
-  if (wmImg) {
-    const wmW = 410;
-    const wmH = Math.round((wmImg.height / wmImg.width) * wmW); // ~179px
-    ctx.drawImage(wmImg, Math.round(rightCenterX - wmW / 2), Math.round(stampCenterY - wmH / 2), wmW, wmH);
+    if (wmImg) {
+      // Crop exact "THE APP" from 101010-the-app-watermark.png (sx=240, sy=440, sw=1120, sh=210)
+      const subW = 460;
+      const subH = Math.round((210 / 1120) * subW); // ~86px
+      ctx.drawImage(
+        wmImg,
+        240,
+        440,
+        1120,
+        210,
+        Math.round(540 - subW / 2),
+        brandTopY + brandH + 18,
+        subW,
+        subH
+      );
+    } else {
+      ctx.font = "900 32px 'Good Times', 'Outfit', sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "center";
+      ctx.letterSpacing = "8px";
+      ctx.fillText("THE APP", 540, brandTopY + brandH + 62);
+    }
+    ctx.restore();
   } else {
-    drawFallback101010TheApp(ctx, rightCenterX, stampCenterY);
+    drawFallbackArchery101010TheApp(ctx, 540, brandTopY);
   }
 
-  // Subtle horizontal divider separating Brand Lockup and Average Score
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(rightBoxX + 44, rightBoxY + 292);
-  ctx.lineTo(rightBoxX + rightBoxW - 44, rightBoxY + 292);
-  ctx.stroke();
-
-  // Telemetry summary below the logo
-  ctx.font = `800 17.2px ${appFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "center";
-  ctx.fillText("PROMEDIO POR FLECHA", rightCenterX, rightBoxY + 350);
-
-  ctx.font = `900 42px ${appFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${avgArrow} PTS`, rightCenterX, rightBoxY + 404);
-
-  // 6. Telemetry KPI Boxes (4 Harmonious Columns: PRECISIÓN | AGRUPACIÓN | KCAL | DISTANCIA RECORRIDA)
-  // Only Header + Data (no small subtitle text)
-  const cardY = 710;
-  const cardHeight = 112;
-  const boxGap = 16;
-  const boxW = 231; // 4 * 231 + 3 * 16 = 972px total width (54..1026)
-
+  // 6. Bottom 4 Harmonious & Centered KPI Stat Boxes (PROMEDIO | PRECISIÓN | KCAL | DISTANCIA)
+  const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
   const computedDistanceM =
     typeof params.distanceWalkedM === "number" && params.distanceWalkedM >= 0
       ? Math.round(params.distanceWalkedM)
       : 0;
-
   const computedKcal =
     typeof params.activeKcal === "number" && params.activeKcal > 0
       ? Math.round(params.activeKcal)
@@ -502,79 +502,68 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
           bowPoundageLbs: params.bowPoundageLbs || 36
         });
 
-  drawStatBox(
-    ctx,
-    54,
-    cardY,
-    boxW,
-    cardHeight,
-    "PRECISIÓN",
-    `${tensCount} (10+X) • ${xsCount} Xs`
-  );
+  const cardY = 1698;
+  const cardHeight = 146;
+  const boxGap = 16;
+  const boxW = 231; // 4 * 231 + 3 * 16 = 972px (54..1026)
 
-  const spreadText = dispersion ? `Ø ${dispersion.spreadCm.toFixed(1)} cm` : "Activa";
-  drawStatBox(
-    ctx,
-    54 + (boxW + boxGap) * 1,
-    cardY,
-    boxW,
-    cardHeight,
-    "AGRUPACIÓN",
-    spreadText
-  );
+  const kpiItems = [
+    { title: "PROMEDIO", main: `${avgArrow} PTS` },
+    { title: "PRECISIÓN", main: `${tensCount} 10s • ${xsCount} Xs` },
+    { title: "KCAL", main: `${computedKcal} kcal` },
+    { title: "DISTANCIA", main: formatKmAndMiles(computedDistanceM, false) }
+  ];
 
-  drawStatBox(
-    ctx,
-    54 + (boxW + boxGap) * 2,
-    cardY,
-    boxW,
-    cardHeight,
-    "KCAL",
-    `${computedKcal} kcal`
-  );
-
-  drawStatBox(
-    ctx,
-    54 + (boxW + boxGap) * 3,
-    cardY,
-    boxW,
-    cardHeight,
-    "DISTANCIA RECORRIDA",
-    formatKmAndMiles(computedDistanceM, false)
-  );
-
-  // 7. Compact End-by-End Scorecard Strip (Sin título, centrado simétrico y E1..En +100% de tamaño)
-  if (validEnds.length > 0) {
-    const stripX = 54;
-    const stripY = 840;
-    const stripW = 972;
-    const stripH = 100;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1.5;
-    drawRoundedRect(ctx, stripX, stripY, stripW, stripH, 20);
-    ctx.fill();
-    ctx.stroke();
-
-    const displayEnds = validEnds.slice(0, 12);
-    const colW = Math.min(115, Math.floor((stripW - 40) / displayEnds.length));
-    const totalColsW = displayEnds.length * colW;
-    const startX = stripX + (stripW - totalColsW) / 2;
-
-    displayEnds.forEach((item, i) => {
-      const cellCenterX = startX + i * colW + colW * 0.5;
-      ctx.font = `800 25px ${appFont}`;
-      ctx.fillStyle = "#FFFFFF";
-      ctx.textAlign = "center";
-      ctx.fillText(String(item.idx).padStart(2, "0"), cellCenterX, stripY + 38);
-
-      ctx.font = `900 40px ${appFont}`;
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(`${item.sum}`, cellCenterX, stripY + 84);
-    });
-  }
+  kpiItems.forEach((item, idx) => {
+    const bx = 54 + (boxW + boxGap) * idx;
+    drawCenteredStatBox(
+      ctx,
+      bx,
+      cardY,
+      boxW,
+      cardHeight,
+      item.title,
+      item.main,
+      boxFillStyle,
+      boxStrokeStyle
+    );
+  });
 
   return canvas;
+}
+
+function drawCenteredStatBox(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  title: string,
+  main: string,
+  fillStyle: string,
+  strokeStyle: string
+) {
+  const appFont = "Inter, Outfit, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = fillStyle;
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, x, y, w, h, 24);
+  ctx.fill();
+  ctx.stroke();
+
+  const centerX = x + w / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  // Header (+25% and +20% -> 19.6px)
+  ctx.font = `800 19.6px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(title, centerX, y + 56, w - 16);
+
+  // Value (+20% -> 27.6px)
+  ctx.font = `900 27.6px ${appFont}`;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(main, centerX, y + 104, w - 16);
 }
 
 /**
@@ -594,74 +583,36 @@ export async function generateTargetShotChartBlob(params: TargetShotChartParams)
   });
 }
 
-function drawStatBox(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  title: string,
-  main: string
-) {
-  const appFont = "Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
-  ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, x, y, w, h, 20);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.font = `800 14.5px ${appFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "left";
-  ctx.fillText(title, x + 16, y + 40, w - 32);
-
-  ctx.font = `900 22px ${appFont}`;
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(main, x + 16, y + 78, w - 32);
-}
-
 export interface ShareTargetResult {
   sharedNatively: boolean;
   dataUrl: string;
   fileName: string;
   captionText: string;
+  params: TargetShotChartParams;
 }
 
 /**
- * Generates the Strava-style "101010 THE APP" screenshot and triggers
- * Native Android Image Share (in APK) or Web Share API (in mobile browsers),
- * while also returning the DataURL so the app can display the preview modal.
+ * Triggers Native Android Image Share (in APK) or Web Share API (in mobile browsers),
+ * with download fallback.
  */
-export async function shareTargetShotChart(params: TargetShotChartParams): Promise<ShareTargetResult> {
-  const canvas = await renderTargetShotChartCanvas(params);
-  const dataUrl = canvas.toDataURL("image/png");
-  const fileName = `101010-TheApp-Diana-${Date.now()}.png`;
-  const title = `Diana ${params.archerName || "Arquero"} • 101010 THE APP`;
-  const totalArrows =
-    params.ends && params.ends.length > 0
-      ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
-      : params.impacts?.length || 0;
-  const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
-  const captionText =
-    `🎯 *101010 THE APP*\n` +
-    `• *Arquero:* ${params.archerName || "Arquero"}\n` +
-    `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
-    `• *Precisión:* ${params.tensCount} (10+X) | ${params.xsCount} Xs · ${params.distanceM}m`;
-
-  // 1. Native Android APK Bridge (100% reliable in Capacitor Android WebView)
+export async function triggerNativeImageShare(
+  dataUrl: string,
+  fileName: string,
+  title: string,
+  captionText: string
+): Promise<boolean> {
   if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareImage) {
     try {
       window.ArcheryNativeShare.shareImage(dataUrl, fileName, title, captionText);
-      return { sharedNatively: true, dataUrl, fileName, captionText };
+      return true;
     } catch (err) {
       console.error("Native shareImage bridge error:", err);
     }
   }
 
-  // 2. Mobile Browser Web Share API Level 2 (File share)
   try {
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png", 0.95));
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
     if (blob && typeof navigator !== "undefined" && navigator.canShare) {
       const file = new File([blob], fileName, { type: "image/png" });
       if (navigator.canShare({ files: [file] })) {
@@ -670,22 +621,63 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
           title,
           text: captionText
         });
-        return { sharedNatively: true, dataUrl, fileName, captionText };
+        return true;
       }
     }
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      return { sharedNatively: true, dataUrl, fileName, captionText };
+      return true;
     }
   }
 
-  return { sharedNatively: false, dataUrl, fileName, captionText };
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  return false;
+}
+
+/**
+ * Generates the initial "ARCHERY 101010 THE APP" vertical telemetry image and
+ * returns the ShareTargetResult so the preview modal opens with the 3 theme options:
+ * - Fondo Negro
+ * - Tu Foto Detrás
+ * - Fondo Transparente
+ */
+export async function shareTargetShotChart(params: TargetShotChartParams): Promise<ShareTargetResult> {
+  const initialParams: TargetShotChartParams = {
+    ...params,
+    themeMode: params.themeMode || "black"
+  };
+  const canvas = await renderTargetShotChartCanvas(initialParams);
+  const dataUrl = canvas.toDataURL("image/png");
+  const fileName = `Archery101010-Telemetria-${Date.now()}.png`;
+  const totalArrows =
+    params.ends && params.ends.length > 0
+      ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
+      : params.impacts?.length || 0;
+  const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
+  const captionText =
+    `🎯 *ARCHERY 101010 THE APP*\n` +
+    `• *Arquero:* ${params.archerName || "Arquero"}\n` +
+    `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
+    `• *Precisión:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${params.distanceM}m`;
+
+  return {
+    sharedNatively: false,
+    dataUrl,
+    fileName,
+    captionText,
+    params: initialParams
+  };
 }
 
 /**
  * Formats the complete Scorecard (Planilla) WITHOUT any homepage URL so WhatsApp
  * never converts it into a homepage link preview, and shares it junto con la
- * captura gráfica 101010 THE APP directamente por WhatsApp.
+ * captura gráfica ARCHERY 101010 THE APP directamente por WhatsApp.
  */
 export async function shareScorecardWhatsAppNative(params: TargetShotChartParams): Promise<ShareTargetResult> {
   const {
@@ -730,9 +722,8 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     .filter(Boolean)
     .join("\n");
 
-  // Clean WhatsApp scorecard text — NO URLs so WhatsApp never shows a homepage link card
   const message =
-    `*PLANILLA OFICIAL · 101010 THE APP*\n` +
+    `*PLANILLA OFICIAL · ARCHERY 101010 THE APP*\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `• *Arquero:* ${archerName || "Arquero"}\n` +
     `• *Arco:* ${bowLabel}\n` +
@@ -741,27 +732,25 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `*PUNTUACIÓN TOTAL:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
     `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
-    `• *Promedio/Flecha:* ${avgPerArrow} pts\n` +
+    `• *Promedio:* ${avgPerArrow} pts\n` +
     (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
     (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🎯 *101010 THE APP*`;
+    `🎯 *ARCHERY 101010 THE APP*`;
 
   const canvas = await renderTargetShotChartCanvas(params);
   const dataUrl = canvas.toDataURL("image/png");
-  const fileName = `101010-TheApp-Planilla-${Date.now()}.png`;
+  const fileName = `Archery101010-Planilla-${Date.now()}.png`;
 
-  // 1. Native Android APK WhatsApp Image + Scorecard Caption Share
   if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
     try {
       window.ArcheryNativeShare.shareWhatsAppImage(dataUrl, fileName, message);
-      return { sharedNatively: true, dataUrl, fileName, captionText: message };
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
     } catch (err) {
       console.error("Native shareWhatsAppImage error:", err);
     }
   }
 
-  // 2. Mobile Browser Web Share API with Image + Full Planilla Text
   try {
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png", 0.95));
     if (blob && typeof navigator !== "undefined" && navigator.canShare) {
@@ -769,22 +758,21 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `Planilla ${archerName || "Arquero"} • 101010 THE APP`,
+          title: `Planilla ${archerName || "Arquero"} • ARCHERY 101010 THE APP`,
           text: message
         });
-        return { sharedNatively: true, dataUrl, fileName, captionText: message };
+        return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
       }
     }
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      return { sharedNatively: true, dataUrl, fileName, captionText: message };
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
     }
   }
 
-  // 3. Direct WhatsApp URI fallback (text without any URL)
   const encoded = encodeURIComponent(message);
   if (typeof window !== "undefined") {
     window.location.href = `whatsapp://send?text=${encoded}`;
   }
-  return { sharedNatively: false, dataUrl, fileName, captionText: message };
+  return { sharedNatively: false, dataUrl, fileName, captionText: message, params };
 }
