@@ -4,4 +4,6 @@
     <string name="title_activity_main">Archery 101010</string>
     <string name="package_name">com.archery101010.app</string>
     <string name="custom_url_scheme">com.archery101010.app</string>
+    <!-- Spotify Developer Dashboard Client ID (App Remote). Redirect URI: archery101010://spotify-callback -->
+    <string name="spotify_client_id" translatable="false"></string>
 </resources>

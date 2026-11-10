@@ -54,6 +54,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import androidx.wear.remote.interactions.RemoteActivityHelper;
+import com.spotify.android.appremote.api.ConnectionParams;
+import com.spotify.android.appremote.api.Connector;
+import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.protocol.types.PlayerState;
 import com.google.android.gms.wearable.CapabilityClient;
 import com.google.android.gms.wearable.CapabilityInfo;
 import com.google.android.gms.wearable.DataClient;
@@ -1378,9 +1382,91 @@ public class MainActivity extends BridgeActivity {
     }
 
     public class ArcherySpotifyBridge {
+        /** Legacy entry point: now connects the official Spotify App Remote player (no embedded login page). */
         @JavascriptInterface
         public void openSpotifyLogin() {
-            runOnUiThread(() -> showInAppSpotifyLoginDialog());
+            runOnUiThread(() -> connectSpotifyRemote(null));
+        }
+
+        @JavascriptInterface
+        public boolean isSpotifyAppInstalled() {
+            return isSpotifyAppInstalledInternal();
+        }
+
+        /**
+         * Opens a playlist / album / track directly in the official Spotify app (full songs, background
+         * playback, works for every user). Falls back to the web player or the Play Store listing.
+         */
+        @JavascriptInterface
+        public void openInSpotifyApp(final String spotifyUri, final String webUrl) {
+            runOnUiThread(() -> {
+                try {
+                    if (isSpotifyAppInstalledInternal()) {
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(spotifyUri));
+                        i.setPackage("com.spotify.music");
+                        i.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://" + getPackageName()));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                        return;
+                    }
+                } catch (Exception ignored) {}
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception e) {
+                    openPhonePlayStoreListing("com.spotify.music");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean isSpotifyPlayerConnected() {
+            return spotifyRemote != null && spotifyRemote.isConnected();
+        }
+
+        @JavascriptInterface
+        public boolean hasSpotifyClientId() {
+            return !resolveSpotifyClientId(null).isEmpty();
+        }
+
+        @JavascriptInterface
+        public void connectSpotifyPlayer(final String clientId) {
+            runOnUiThread(() -> connectSpotifyRemote(clientId));
+        }
+
+        @JavascriptInterface
+        public void spotifyPlay(final String spotifyUri) {
+            runOnUiThread(() -> {
+                if (spotifyRemote != null && spotifyRemote.isConnected()) {
+                    spotifyRemote.getPlayerApi().play(spotifyUri);
+                } else {
+                    pendingSpotifyUri = spotifyUri;
+                    connectSpotifyRemote(null);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void spotifyTogglePlay() {
+            runOnUiThread(() -> {
+                if (spotifyRemote == null || !spotifyRemote.isConnected()) return;
+                if (lastSpotifyPaused) spotifyRemote.getPlayerApi().resume();
+                else spotifyRemote.getPlayerApi().pause();
+            });
+        }
+
+        @JavascriptInterface
+        public void spotifyPause() {
+            runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().pause(); });
+        }
+
+        @JavascriptInterface
+        public void spotifyNext() {
+            runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().skipNext(); });
+        }
+
+        @JavascriptInterface
+        public void spotifyPrevious() {
+            runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().skipPrevious(); });
         }
 
         @JavascriptInterface
@@ -1496,6 +1582,110 @@ public class MainActivity extends BridgeActivity {
                 getBridge().getWebView().evaluateJavascript(js, null);
             }
         });
+    }
+
+    // ───────────── Official Spotify App Remote (playback controlled from ARCHERY 101010) ─────────────
+    private static final String SPOTIFY_REDIRECT_URI = "archery101010://spotify-callback";
+    private SpotifyAppRemote spotifyRemote = null;
+    private volatile String pendingSpotifyUri = null;
+    private volatile boolean lastSpotifyPaused = true;
+    private boolean spotifyConnecting = false;
+
+    private boolean isSpotifyAppInstalledInternal() {
+        try {
+            getPackageManager().getPackageInfo("com.spotify.music", 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String resolveSpotifyClientId(String fromJs) {
+        if (fromJs != null && !fromJs.trim().isEmpty()) {
+            getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).edit().putString("client_id", fromJs.trim()).apply();
+            return fromJs.trim();
+        }
+        String saved = getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).getString("client_id", "");
+        if (saved != null && !saved.trim().isEmpty()) return saved.trim();
+        try {
+            return getString(R.string.spotify_client_id).trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private void emitSpotifyRemoteState(boolean connected, String error, PlayerState ps) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("connected", connected);
+            o.put("appInstalled", isSpotifyAppInstalledInternal());
+            if (error != null) o.put("error", error);
+            if (ps != null) {
+                lastSpotifyPaused = ps.isPaused;
+                o.put("isPaused", ps.isPaused);
+                if (ps.track != null) {
+                    o.put("track", ps.track.name);
+                    o.put("artist", ps.track.artist != null ? ps.track.artist.name : "");
+                    o.put("uri", ps.track.uri);
+                    o.put("durationMs", ps.track.duration);
+                }
+                o.put("positionMs", ps.playbackPosition);
+            }
+            final String js = "if (window.__onSpotifyRemoteState) { window.__onSpotifyRemoteState(" + o + "); }";
+            runOnUiThread(() -> {
+                if (getBridge() != null && getBridge().getWebView() != null) {
+                    getBridge().getWebView().evaluateJavascript(js, null);
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void connectSpotifyRemote(String clientIdFromJs) {
+        if (!isSpotifyAppInstalledInternal()) {
+            emitSpotifyRemoteState(false, "SPOTIFY_NOT_INSTALLED", null);
+            openPhonePlayStoreListing("com.spotify.music");
+            return;
+        }
+        final String clientId = resolveSpotifyClientId(clientIdFromJs);
+        if (clientId.isEmpty()) {
+            emitSpotifyRemoteState(false, "MISSING_CLIENT_ID", null);
+            return;
+        }
+        if (spotifyRemote != null && spotifyRemote.isConnected()) {
+            onSpotifyRemoteReady();
+            return;
+        }
+        if (spotifyConnecting) return;
+        spotifyConnecting = true;
+        ConnectionParams params = new ConnectionParams.Builder(clientId)
+            .setRedirectUri(SPOTIFY_REDIRECT_URI)
+            .showAuthView(true) // authorization happens inside the official Spotify app
+            .build();
+        SpotifyAppRemote.connect(this, params, new Connector.ConnectionListener() {
+            @Override
+            public void onConnected(SpotifyAppRemote remote) {
+                spotifyConnecting = false;
+                spotifyRemote = remote;
+                onSpotifyRemoteReady();
+            }
+
+            @Override
+            public void onFailure(Throwable error) {
+                spotifyConnecting = false;
+                String code = error != null ? error.getClass().getSimpleName() : "UNKNOWN";
+                emitSpotifyRemoteState(false, code, null);
+            }
+        });
+    }
+
+    private void onSpotifyRemoteReady() {
+        if (spotifyRemote == null) return;
+        spotifyRemote.getPlayerApi().subscribeToPlayerState().setEventCallback(ps -> emitSpotifyRemoteState(true, null, ps));
+        emitSpotifyRemoteState(true, null, null);
+        if (pendingSpotifyUri != null) {
+            spotifyRemote.getPlayerApi().play(pendingSpotifyUri);
+            pendingSpotifyUri = null;
+        }
     }
 
     private void showInAppSpotifyLoginDialog() {
@@ -1787,6 +1977,12 @@ public class MainActivity extends BridgeActivity {
             activeInstanceRef = new WeakReference<>(null);
         }
         isSessionTrackingActive = false;
+        try {
+            if (spotifyRemote != null) {
+                SpotifyAppRemote.disconnect(spotifyRemote); // music keeps playing in the Spotify engine
+                spotifyRemote = null;
+            }
+        } catch (Exception ignored) {}
         try {
             if (nativeLocationManager != null) {
                 nativeLocationManager.removeUpdates(nativeLocationListener);

@@ -120,6 +120,54 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loginPopupWatchingRef = useRef(false);
 
+  // Official Spotify App Remote (Android native): playback is controlled from ARCHERY 101010
+  type SpotifyRemoteState = {
+    connected: boolean;
+    appInstalled?: boolean;
+    error?: string;
+    isPaused?: boolean;
+    track?: string;
+    artist?: string;
+  };
+  const [remoteState, setRemoteState] = useState<SpotifyRemoteState>({ connected: false });
+  const getNativeSpotify = () =>
+    typeof window !== "undefined" && typeof (window as any).ArcherySpotifyBridge?.connectSpotifyPlayer === "function"
+      ? (window as any).ArcherySpotifyBridge
+      : null;
+  const remoteActive = remoteState.connected && Boolean(getNativeSpotify());
+
+  useEffect(() => {
+    (window as any).__onSpotifyRemoteState = (s: SpotifyRemoteState) => {
+      setRemoteState((prev) => ({ ...prev, ...s }));
+      if (s.connected) {
+        if (typeof s.isPaused === "boolean") {
+          setIsPlaying(!s.isPaused);
+          if (!s.isPaused) setIsMiniBarActive(true);
+        }
+        setAccountFeedback(null);
+      } else if (s.error) {
+        const msg =
+          s.error === "SPOTIFY_NOT_INSTALLED"
+            ? "Instala la app de Spotify (se abrió la tienda) y vuelve a tocar Conectar."
+            : s.error === "MISSING_CLIENT_ID"
+            ? "Falta activar la llave de Spotify de ARCHERY 101010 (Client ID)."
+            : s.error === "UserNotAuthorizedException"
+            ? "Autoriza ARCHERY 101010 en la ventana de Spotify y vuelve a intentar."
+            : s.error === "NotLoggedInException"
+            ? "Abre la app de Spotify, inicia sesión y vuelve a tocar Conectar."
+            : "No se pudo conectar con Spotify. Abre la app de Spotify una vez y reintenta.";
+        setAccountFeedback(msg);
+      }
+    };
+    // Silent reconnect if the native player was authorized before
+    const nb = getNativeSpotify();
+    if (nb && nb.hasSpotifyClientId?.() && nb.isSpotifyAppInstalled?.()) {
+      try {
+        nb.connectSpotifyPlayer("");
+      } catch {}
+    }
+  }, []);
+
   // Check Native Android Spotify Session Cookie (`sp_dc`)
   const syncNativeSpotifySessionStatus = () => {
     if (typeof window === "undefined") return false;
@@ -311,6 +359,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   };
 
   const handleTogglePlayPause = () => {
+    const nb = getNativeSpotify();
+    if (nb && remoteState.connected) {
+      nb.spotifyTogglePlay();
+      return;
+    }
     sendSpotifyCommand("toggle");
     setIsPlaying((prev) => !prev);
   };
@@ -335,12 +388,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setShowAccountForm(false);
 
     if (openSpotifyLoginPopup) {
-      const nativeBridge = typeof window !== "undefined" ? (window as any).ArcherySpotifyBridge : null;
-      if (nativeBridge && typeof nativeBridge.openSpotifyLogin === "function") {
-        nativeBridge.openSpotifyLogin();
-        setAccountFeedback(
-          "Inicia sesión dentro de la ventana de Spotify y toca 'Listo ✓' para reproducir canciones 100% completas."
-        );
+      const nativeBridge = getNativeSpotify();
+      if (nativeBridge) {
+        // Official Spotify App Remote: authorization happens inside the Spotify app (no embedded login page)
+        nativeBridge.connectSpotifyPlayer(oauthClientIdInput || "");
+        setAccountFeedback("Conectando con la app de Spotify…");
         return;
       }
 
@@ -568,12 +620,25 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     await saveLocalSetting("spotify_active_id", item.id);
     await saveLocalSetting("spotify_active_type", itemType);
 
+    // Native official player: start the full playlist right away
+    const nb = getNativeSpotify();
+    if (nb && remoteState.connected) {
+      nb.spotifyPlay(`spotify:${itemType}:${item.id}`);
+    }
+
     // Scroll to top of modal so user can press play or pick a track
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleOpenInNativeSpotify = () => {
     const webUrl = `https://open.spotify.com/${activeType}/${activePlaylistId}`;
+    const nb = typeof window !== "undefined" ? (window as any).ArcherySpotifyBridge : null;
+    if (nb && typeof nb.openInSpotifyApp === "function") {
+      // Native Android: open straight in the Spotify app (full songs, keeps playing in background)
+      nb.openInSpotifyApp(`spotify:${activeType}:${activePlaylistId}`, webUrl);
+      setIsPlaying(true);
+      return;
+    }
     window.open(webUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -666,6 +731,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             {/* Close Button (✕) - stops player and hides mini-bar */}
             <button
               onClick={() => {
+                const nb = getNativeSpotify();
+                if (nb && remoteState.connected) nb.spotifyPause();
                 sendSpotifyCommand("pause");
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
@@ -705,7 +772,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                     Spotify
                   </h3>
                   <span className="text-[10.5px] text-[#1DB954] font-bold tracking-widest uppercase">
-                    {connectedAccount
+                    {remoteActive
+                      ? `Conectado · ${remoteState.track || "Spotify"}`
+                      : connectedAccount && !getNativeSpotify()
                       ? `Conectado · ${connectedAccount.displayName}`
                       : "Audio continuo en tus rondas"}
                   </span>
@@ -743,7 +812,58 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             >
               {/* 0. Conexión Automática de Spotify (1 Solo Toque · Cero Formularios) */}
               <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
-                {connectedAccount && hasNativeSessionCookie ? (
+                {remoteActive ? (
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0">
+                          <Check size={15} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-black text-white truncate">
+                            {remoteState.track || "Spotify Conectado"}
+                          </span>
+                          <span className="text-[11.2px] text-white/70 truncate">
+                            {remoteState.artist || "Elige una playlist abajo"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
+                        ● LIVE
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => getNativeSpotify()?.spotifyPrevious()}
+                        className="py-2 rounded-xl bg-[#0B0E14] border border-white/[0.08] text-white text-[11px] font-black uppercase cursor-pointer active:scale-95 transition"
+                      >
+                        ◀◀
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTogglePlayPause}
+                        className="py-2 rounded-xl bg-[#1DB954] text-black flex items-center justify-center cursor-pointer active:scale-95 transition"
+                      >
+                        {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => getNativeSpotify()?.spotifyNext()}
+                        className="py-2 rounded-xl bg-[#0B0E14] border border-white/[0.08] text-white text-[11px] font-black uppercase cursor-pointer active:scale-95 transition"
+                      >
+                        ▶▶
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => getNativeSpotify()?.spotifyPlay(`spotify:${activeType}:${activePlaylistId}`)}
+                      className="w-full py-2 rounded-xl bg-[#0B0E14] border border-[#1DB954]/40 text-[#1DB954] text-[11px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                    >
+                      Reproducir playlist seleccionada
+                    </button>
+                  </div>
+                ) : connectedAccount && hasNativeSessionCookie && !getNativeSpotify() ? (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0 font-black text-xs uppercase">
@@ -789,7 +909,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                       <div className="flex items-center gap-1.5">
                         <UserCheck size={14} className="text-[#1DB954]" />
                         <span className="text-xs font-black uppercase tracking-wider text-white">
-                          Activar Canciones Completas
+                          Canciones Completas
                         </span>
                       </div>
                       <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30">
@@ -798,16 +918,16 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                     </div>
 
                     <p className="text-[11.6px] text-white leading-snug">
-                      Toca abajo para iniciar sesión en Spotify. La ventana se cerrará <strong className="text-white">automáticamente</strong> y activará todas las canciones al 100%.
+                      Elige tu playlist abajo y toca el botón: se abre en <strong className="text-white">tu app de Spotify</strong> y la música sigue sonando mientras registras tus flechas.
                     </p>
 
                     <button
                       type="button"
-                      onClick={() => handleConnectSpotifyAccount(true)}
+                      onClick={handleOpenInNativeSpotify}
                       className="w-full py-2.5 px-3 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
                     >
-                      <UserCheck size={15} />
-                      <span>Conectar mi Spotify</span>
+                      <Play size={14} fill="currentColor" />
+                      <span>Escuchar completo en Spotify</span>
                     </button>
                   </div>
                 )}
