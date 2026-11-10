@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
+import { downloadOrShareFile } from "@/lib/fileDownload";
 
 export interface ParsedDailyEntry {
   date: string; // YYYY-MM-DD
@@ -94,7 +95,7 @@ export function isValidDateCell(raw?: string): boolean {
   // Excel serial date (40000..60000)
   if (/^\d{5}(?:\.\d+)?$/.test(cleaned)) {
     const num = parseFloat(cleaned);
-    if (num >= 43000 && num <= 55000) return true;
+    if (num >= 40000 && num <= 60000) return true;
   }
 
   // YYYY-MM-DD or YYYY/MM/DD
@@ -275,20 +276,37 @@ export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
 
 /**
  * Extracts a Google Sheets ID from any shared URL and fetches its CSV content directly.
- * Uses multiple fallback endpoints (/gviz/tq and /export?format=csv) for maximum compatibility.
+ * Tries /export?format=csv first (preserves mixed numeric/text calendar grid cells) with /gviz/tq as fallback.
  */
 export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boolean; csv?: string; error?: string }> {
   try {
     const trimmed = sheetUrl.trim();
+    const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+    const gid = gidMatch ? gidMatch[1] : "";
 
-    // Support published links (/spreadsheets/d/e/2PACX-.../pub)
+    const isValidSheetCsv = (csvText: string): boolean => {
+      const csvLower = (csvText || "").toLowerCase();
+      return Boolean(
+        csvText &&
+        csvText.trim().length > 0 &&
+        !csvText.trim().startsWith("<!DOCTYPE html>") &&
+        !csvText.trim().startsWith("<html") &&
+        !csvLower.includes("offline mode active") &&
+        !csvLower.includes("connect to the internet") &&
+        !csvLower.includes("accounts.google.com/servicelogin")
+      );
+    };
+
+    // Support published links (/spreadsheets/d/e/2PACX-.../pub or /pubhtml)
     if (trimmed.includes("/spreadsheets/d/e/")) {
-      const pubBase = trimmed.split("?")[0].replace(/\/pubhtml$/, "/pub");
-      const pubUrl = `${pubBase}?output=csv`;
+      const pubBase = trimmed.split(/[?#]/)[0].replace(/\/pubhtml$/, "/pub");
+      const pubUrl = gid
+        ? `${pubBase}?gid=${gid}&single=true&output=csv`
+        : `${pubBase}?output=csv`;
       const resp = await fetch(pubUrl);
       if (resp.ok) {
         const text = await resp.text();
-        if (text && !text.trim().startsWith("<!DOCTYPE html>") && !text.trim().startsWith("<html")) {
+        if (isValidSheetCsv(text)) {
           return { ok: true, csv: text };
         }
       }
@@ -303,13 +321,12 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
     }
 
     const sheetId = idMatch[1];
-    const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
-    const gid = gidMatch ? gidMatch[1] : "";
+    const gidParam = gid ? `&gid=${gid}` : "";
 
-    // Candidate URLs in order of reliability across mobile/desktop browsers
+    // Try /export?format=csv FIRST so mixed numeric/text cells in 7-column calendar grids aren't nulled out by gviz/tq
     const candidateUrls = [
-      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ""}`,
-      `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gid ? `&gid=${gid}` : ""}`
+      `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`,
+      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gidParam}`
     ];
 
     for (const url of candidateUrls) {
@@ -317,16 +334,7 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
         const response = await fetch(url);
         if (!response.ok) continue;
         const csvText = await response.text();
-        const csvLower = (csvText || "").toLowerCase();
-        if (
-          csvText &&
-          csvText.trim().length > 0 &&
-          !csvText.trim().startsWith("<!DOCTYPE html>") &&
-          !csvText.trim().startsWith("<html") &&
-          !csvLower.includes("offline mode active") &&
-          !csvLower.includes("connect to the internet") &&
-          !csvLower.includes("accounts.google.com/servicelogin")
-        ) {
+        if (isValidSheetCsv(csvText)) {
           return { ok: true, csv: csvText };
         }
       } catch {
@@ -429,10 +437,10 @@ function classifyHeader(hRaw: string): "date" | "startDate" | "endDate" | "title
   const h = hRaw.trim().toLowerCase();
   if (!h) return "unknown";
 
-  if (h.includes("inicio") || h.includes("desde") || h.includes("start")) return "startDate";
-  if (h.includes("fin") || h.includes("hasta") || h.includes("end")) return "endDate";
+  if (/\binicio\b|fecha\s*inicio|\bdesde\b|start\s*date|\bstart\b/.test(h)) return "startDate";
+  if (/\bfin\b|fecha\s*fin|\btermino\b|\btérmino\b|end\s*date|\bhasta\b|\bend\b/.test(h)) return "endDate";
   if (h === "fecha" || h.includes("fecha") || h === "día" || h === "dia" || h.startsWith("día ") || h.startsWith("dia ") || h === "date" || h === "day") return "date";
-  if (h.includes("sesion") || h.includes("sesión") && h.includes("sem")) return "sessions";
+  if ((h.includes("sesion") || h.includes("sesión")) && h.includes("sem")) return "sessions";
   if (h.includes("flecha") || h.includes("volumen") || h.includes("tiros") || h.includes("arrows") || h.includes("cant")) return "arrows";
   if (h.includes("actividad") || h.includes("tarea") || h.includes("entrenamiento") || h.includes("trabajo") || h.includes("ejercicio") || h.includes("rutina") || h.includes("sesión") || h.includes("sesion") || h.includes("título") || h.includes("titulo") || h.includes("etapa") || h.includes("fase") || h.includes("nombre") || h.includes("plan")) return "title";
   if (h.includes("enfoque") || h.includes("técnica") || h.includes("tecnica") || h.includes("foco") || h.includes("objetivo")) return "focus";
@@ -1128,42 +1136,34 @@ export function generateDailySampleCsvTemplate(): string {
 }
 
 /**
- * Triggers a browser download of the Stages sample template in CSV/Excel format
+ * Triggers an Android-compatible download/share of the Stages sample template in CSV format
  */
-export function downloadSampleTemplate(): void {
-  const csvContent = "\uFEFF" + generateSampleCsvTemplate();
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", "Plantilla_Por_Etapas_Archery101010.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+export function downloadSampleTemplate(): Promise<boolean> {
+  return downloadOrShareFile({
+    data: generateSampleCsvTemplate(),
+    mimeType: "text/csv;charset=utf-8",
+    addUtf8Bom: true,
+    fileName: "Plantilla_Por_Etapas_Archery101010.csv"
+  });
 }
 
 /**
- * Triggers a browser download of the Day-by-Day sample template in CSV/Excel format
+ * Triggers an Android-compatible download/share of the Day-by-Day sample template in CSV format
  */
-export function downloadDailySampleTemplate(): void {
-  const csvContent = "\uFEFF" + generateDailySampleCsvTemplate();
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", "Plantilla_Dia_Por_Dia_Archery101010.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+export function downloadDailySampleTemplate(): Promise<boolean> {
+  return downloadOrShareFile({
+    data: generateDailySampleCsvTemplate(),
+    mimeType: "text/csv;charset=utf-8",
+    addUtf8Bom: true,
+    fileName: "Plantilla_Dia_Por_Dia_Archery101010.csv"
+  });
 }
 
 /**
- * Generates and downloads a clean, 100% blank .xlsx Excel workbook with the dates of the selected month
+ * Generates and downloads/shares a clean, 100% blank .xlsx Excel workbook with the dates of the selected month
  * and zero pre-written or invented activities.
  */
-export function downloadFormattedExcelTemplate(year?: number, month?: number): void {
+export function downloadFormattedExcelTemplate(year?: number, month?: number): Promise<boolean> {
   const y = year || new Date().getFullYear();
   const m = month || (new Date().getMonth() + 1); // 1..12
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -1237,37 +1237,49 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): v
   wsGrid["!cols"] = Array.from({ length: 7 }, () => ({ wch: 24 }));
   XLSX.utils.book_append_sheet(wb, wsGrid, `Calendario ${mName}`);
 
-  XLSX.writeFile(wb, `Formato_Plan_${mName}_${y}_Archery101010.xlsx`);
+  const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return downloadOrShareFile({
+    data: wbOut,
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    fileName: `Formato_Plan_${mName}_${y}_Archery101010.xlsx`
+  });
 }
 
 /**
- * Exports an existing cycle into an Excel-ready CSV file
+ * Exports an existing cycle into an Excel-ready CSV file (Android & Web compatible)
  */
-export function exportCycleToCsv(cycle: Macrocycle): void {
+export function exportCycleToCsv(cycle: Macrocycle): Promise<boolean> {
+  const escapeCsvCell = (value: string | number | null | undefined): string =>
+    `"${String(value ?? "").replace(/"/g, '""')}"`;
+
   const rows = [
-    ["Nombre de la Etapa", "Fecha Inicio", "Fecha Fin", "Sesiones por Semana", "Flechas por Semana", "Notas para los Arqueros"]
+    [
+      "Nombre de la Etapa",
+      "Fecha Inicio",
+      "Fecha Fin",
+      "Sesiones por Semana",
+      "Flechas por Semana",
+      "Notas para los Arqueros"
+    ].map(escapeCsvCell)
   ];
 
   cycle.phases.forEach((p) => {
     rows.push([
-      `"${p.name.replace(/"/g, '""')}"`,
-      p.startDate,
-      p.endDate,
-      String(p.weeklySessionGoal),
-      String(p.weeklyArrowGoal),
-      `"${(p.notes || "").replace(/"/g, '""')}"`
+      escapeCsvCell(p.name),
+      escapeCsvCell(p.startDate),
+      escapeCsvCell(p.endDate),
+      escapeCsvCell(p.weeklySessionGoal),
+      escapeCsvCell(p.weeklyArrowGoal),
+      escapeCsvCell(p.notes || "")
     ]);
   });
 
-  const csvContent = "\uFEFF" + rows.map((r) => r.join(",")).join("\r\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  const safeName = cycle.name.replace(/[^a-zA-Z0-9_\-]/g, "_");
-  link.setAttribute("download", `Plan_${safeName}_Archery101010.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const csvContent = rows.map((r) => r.join(",")).join("\r\n");
+  const safeName = (cycle.name || "Macrociclo").replace(/[^a-zA-Z0-9_\-]/g, "_");
+  return downloadOrShareFile({
+    data: csvContent,
+    mimeType: "text/csv;charset=utf-8",
+    addUtf8Bom: true,
+    fileName: `Plan_${safeName}_Archery101010.csv`
+  });
 }

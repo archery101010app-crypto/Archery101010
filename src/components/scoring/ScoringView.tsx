@@ -11,6 +11,7 @@ import { ArrowLeft, Target, Keyboard, Save, SkipForward, ArrowRight, MessageSqua
 import confetti from "canvas-confetti";
 import { calculateDispersionAnalysis, DispersionAnalysis, getConvexHull } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
+import * as biometricsEngine from "@/lib/scoring/biometricsEngine";
 import {
   BiometricSessionSnapshot,
   calculateHaversineMeters,
@@ -571,14 +572,43 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   }, [totalShotArrows, config.warmupArrows, distanceWalkedM, bowPoundageLbs, athleteWeightKg]);
 
+  // Stable active session ID per session + separate physical watch arrow counter for scored rounds
+  const activeSessionIdRef = useRef<string>(
+    config.draftId || config.id || generateResilientId("SES")
+  );
+  const [watchPhysicalArrows, setWatchPhysicalArrows] = useState<number>(0);
+  const watchPhysicalArrowsRef = useRef<number>(0);
+  const endNoteRef = useRef<string>(endNote);
+  endNoteRef.current = endNote;
+
+  useEffect(() => {
+    if (config.draftId || config.id) {
+      activeSessionIdRef.current = config.draftId || config.id;
+    }
+  }, [config.draftId, config.id]);
+
+  // Initialize phone-watch cloud pairing code dynamically if exported by biometricsEngine
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    try {
+      (biometricsEngine as any).getOrCreatePhoneWatchPairingCode?.(user.uid);
+    } catch {
+      // Ignore if cloud pairing helper is unavailable or offline
+    }
+  }, [user?.uid]);
+
   const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
     const currentArrows = (ends[currentEndIdx]?.arrows || []).filter(
       (a) => a !== "" && a !== undefined
     );
+    const effectiveWatchArrows =
+      config.practiceType === "Volumen"
+        ? tallyCount
+        : Math.max(totalShotArrows, watchPhysicalArrows);
     return {
-      sessionId: config.draftId || config.id || `SES-DRAFT-${user.uid}`,
+      sessionId: activeSessionIdRef.current,
       sessionActive: true,
-      arrowsCount: totalShotArrows,
+      arrowsCount: effectiveWatchArrows,
       totalScore: config.practiceType === "Volumen" ? watchVolumeScore : calculateTotalScore(),
       distanceM: Number(config.distance) || 18,
       arrowsPerEnd: Number(config.arrowsPerEnd) || 6,
@@ -601,7 +631,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     config.draftId,
     config.id,
     user.uid,
+    tallyCount,
     totalShotArrows,
+    watchPhysicalArrows,
     watchVolumeScore,
     ends,
     config.distance,
@@ -621,8 +653,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   ]);
 
   const publishResetWatchState = () => {
+    watchPhysicalArrowsRef.current = 0;
+    setWatchPhysicalArrows(0);
     publishWatchState({
       ...liveWatchSnapshot,
+      sessionId: "",
       sessionActive: false,
       arrowsCount: 0,
       totalScore: 0,
@@ -853,21 +888,30 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleConfirmEnd = () => {
+    const curEndIdx = currentEndIdxRef.current;
+    const liveEndArrows = endsRef.current[curEndIdx]?.arrows || [];
+    const liveEndComplete =
+      liveEndArrows.length === config.arrowsPerEnd &&
+      liveEndArrows.every((a) => a !== "" && a !== undefined);
     // Blindaje: No permitir pasar al siguiente end si no se han anotado las flechas
-    if (!isCurrentEndComplete) {
+    if (!liveEndComplete) {
       return;
     }
 
     triggerHaptic("confirm");
-    const curEndIdx = currentEndIdxRef.current;
+    const noteToSave = endNoteRef.current;
     setEnds((prevEnds) => {
       const newEnds = [...prevEnds];
       if (newEnds[curEndIdx]) {
-        newEnds[curEndIdx] = { ...newEnds[curEndIdx], note: endNote };
+        newEnds[curEndIdx] = {
+          ...newEnds[curEndIdx],
+          note: noteToSave || newEnds[curEndIdx].note || "",
+        };
       }
       endsRef.current = newEnds;
       return newEnds;
     });
+    endNoteRef.current = "";
     setEndNote("");
 
     if (curEndIdx < config.endsCount - 1) {
@@ -1178,7 +1222,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       diana.removeEventListener("touchend", handleTouchEnd);
       diana.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [currentEndIdx, currentArrowIdx, editingArrowSlot, ends, config, presetRings]);
+  }, [mode, currentEndIdx, currentArrowIdx, editingArrowSlot, ends, config, presetRings]);
 
   // Keep confirmedVolume synced whenever the Finish modal opens
   useEffect(() => {
@@ -1479,7 +1523,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       : effectiveEnds.length;
     const effectiveMaxScore = isVolMode
       ? 0
-      : Math.min(2000, effectiveEndsCount * (Number(config.arrowsPerEnd) || 3) * 10);
+      : totalShotArrows > 0
+        ? Math.min(2000, totalShotArrows * 10)
+        : Math.min(2000, effectiveEndsCount * (Number(config.arrowsPerEnd) || 3) * 10);
 
     const nowTs = Date.now();
     const durationMinutes = Math.max(1, Math.round((nowTs - (config.timestamp || nowTs)) / 60000));
@@ -1786,18 +1832,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   // Handle commands coming from Open Smartwatch Companion (/watch or native Wear OS / Garmin IQ)
   const handleWatchArrowDelta = (delta: number) => {
     watchFinishedSessionRef.current = false;
-    if (delta > 0) {
-      if (config.practiceType === "Volumen") {
+    if (config.practiceType === "Volumen") {
+      if (delta > 0) {
         handleTallyIncrement();
-      } else {
-        handleScoreInput("10", false, true);
-      }
-    } else if (delta < 0) {
-      if (config.practiceType === "Volumen") {
+      } else if (delta < 0) {
         handleTallyDecrement();
-      } else {
-        handleBackspace();
       }
+    } else if (delta !== 0) {
+      // Scored rounds (Control / Práctica): track physical watch arrow counter separately;
+      // NEVER inject a fake "10" into scorecard ends (scores come strictly from SCORE_INPUT or phone input).
+      const nextPhysical = Math.max(0, watchPhysicalArrowsRef.current + delta);
+      watchPhysicalArrowsRef.current = nextPhysical;
+      setWatchPhysicalArrows(nextPhysical);
+      playTallyClickSound();
     }
   };
 
@@ -1848,18 +1895,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const activeEndIdx = currentEndIdxRef.current;
       const activeEndArrows = endsRef.current[activeEndIdx]?.arrows || [];
       const activeEndComplete =
-        activeEndArrows.length > 0 && activeEndArrows.every((a) => a !== "" && a !== undefined);
+        activeEndArrows.length === config.arrowsPerEnd &&
+        activeEndArrows.every((a) => a !== "" && a !== undefined);
       if (activeEndComplete) {
         handleConfirmEnd();
-      } else if (
-        activeEndIdx < config.endsCount - 1 &&
-        activeEndArrows.some((a) => a !== "" && a !== undefined)
-      ) {
-        const nextIdx = Math.min(config.endsCount - 1, activeEndIdx + 1);
-        currentEndIdxRef.current = nextIdx;
-        currentArrowIdxRef.current = 0;
-        setCurrentEndIdx(nextIdx);
-        setCurrentArrowIdx(0);
       }
     } else if (msg.type === "SYNC_TELEMETRY_FROM_WATCH") {
       const incomingSteps = Number(msg.payload?.stepsCount ?? msg.stepsCount) || 0;
@@ -2822,8 +2861,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-bold">Precisión</span>
-                    <p className="text-2xl font-black text-yellow-gold mt-0.5">
-                      {config.maxScore > 0 ? Math.round((calculateTotalScore() / config.maxScore) * 100) : 0}%
+                    <p className="text-2xl font-black text-yellow-gold mt-0.5 tabular-nums">
+                      {(() => {
+                        const shotArrowsCount = ends.reduce(
+                          (sum, e) => sum + e.arrows.filter((a) => a !== "" && a !== undefined).length,
+                          0
+                        );
+                        const effectiveModalMaxScore =
+                          shotArrowsCount > 0 ? Math.min(2000, shotArrowsCount * 10) : config.maxScore;
+                        return effectiveModalMaxScore > 0
+                          ? Math.round((calculateTotalScore() / effectiveModalMaxScore) * 100)
+                          : 0;
+                      })()}%
                     </p>
                   </div>
                 </div>

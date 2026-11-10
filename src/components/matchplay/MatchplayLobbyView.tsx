@@ -38,7 +38,7 @@ const RIVAL_LIST = [
     clubName: "Club Halcones",
     clubLogo: "2",
     clubCountry: "CR",
-    bowConfig: { type: "Recurve", brand: "Hoyt", model: "Helix", poundage: 42, defaultDistance: 70 },
+    bowConfig: { type: "Recurve", brand: "Olímpico", model: "Pro", poundage: 42, defaultDistance: 70 },
     rating: "9.1",
     status: "online"
   },
@@ -50,7 +50,7 @@ const RIVAL_LIST = [
     clubName: "Nock Archery",
     clubLogo: "3",
     clubCountry: "MX",
-    bowConfig: { type: "Compound", brand: "Mathews", model: "TRX", poundage: 58, defaultDistance: 50 },
+    bowConfig: { type: "Compound", brand: "Compuesto", model: "Pro", poundage: 58, defaultDistance: 50 },
     rating: "9.4",
     status: "online"
   },
@@ -62,7 +62,7 @@ const RIVAL_LIST = [
     clubName: "Real Arquería",
     clubLogo: "1",
     clubCountry: "ES",
-    bowConfig: { type: "Recurve", brand: "Win&Win", model: "Wiawis", poundage: 44, defaultDistance: 70 },
+    bowConfig: { type: "Recurve", brand: "Olímpico", model: "Pro", poundage: 44, defaultDistance: 70 },
     rating: "9.6",
     status: "online"
   },
@@ -74,7 +74,7 @@ const RIVAL_LIST = [
     clubName: "Club Halcones",
     clubLogo: "2",
     clubCountry: "CR",
-    bowConfig: { type: "Barebow", brand: "Gillo", model: "G1", poundage: 36, defaultDistance: 18 },
+    bowConfig: { type: "Barebow", brand: "Raso", model: "Clásico", poundage: 36, defaultDistance: 18 },
     rating: "8.2",
     status: "busy"
   },
@@ -86,7 +86,7 @@ const RIVAL_LIST = [
     clubName: "Flechas Andinas",
     clubLogo: "4",
     clubCountry: "CO",
-    bowConfig: { type: "Compound", brand: "PSE", model: "Supra", poundage: 56, defaultDistance: 50 },
+    bowConfig: { type: "Compound", brand: "Compuesto", model: "Élite", poundage: 56, defaultDistance: 50 },
     rating: "8.9",
     status: "online"
   }
@@ -115,7 +115,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [customDistance, setCustomDistance] = useState<number>(user?.bowConfig?.defaultDistance || 70);
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
   const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("FRIEND");
-  const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; text: string } | null>(null);
+  const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; system?: string; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
 
@@ -141,26 +141,32 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       console.error("Error updating matchplay alias:", err);
     }
   };
-  // Sincronización automática de presencia y cola en el lobby
+  // Sincronización automática de presencia y cola en el lobby (optimizada a 60s y sin errores en modo invitado)
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
     const uid = user.uid;
 
     const updateLobbyPresence = async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        const { doc, updateDoc } = await import("firebase/firestore");
+        const { db, auth } = await import("@/lib/firebase");
+        if (!auth.currentUser || auth.currentUser.uid !== uid) return;
+        const now = Date.now();
         const docRef = doc(db, "users", uid);
-        await setDoc(docRef, {
-          lastActiveAt: Date.now()
-        }, { merge: true });
-        console.log("[Lobby Presence] Updated presence in Firestore.");
-      } catch (err) {
-        console.error("[Lobby Presence] Error updating presence:", err);
+        await updateDoc(docRef, {
+          lastActiveAt: now,
+          updatedAt: now
+        });
+      } catch (err: any) {
+        if (err?.code !== "not-found") {
+          console.warn("[Lobby Presence] Error updating presence:", err);
+        }
       }
     };
 
     const triggerBgSync = () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
       import("@/lib/db/syncManager")
         .then(({ runSync }) => {
           runSync().catch((err) => console.error("[Lobby] Background sync failed:", err));
@@ -172,9 +178,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     updateLobbyPresence();
     triggerBgSync();
 
-    // Set up intervals
-    const presenceInterval = setInterval(updateLobbyPresence, 20000); // presence every 20s
-    const syncInterval = setInterval(triggerBgSync, 15000); // bg sync every 15s
+    // Set up intervals (60s presence heartbeat, 30s background sync)
+    const presenceInterval = setInterval(updateLobbyPresence, 60000);
+    const syncInterval = setInterval(triggerBgSync, 30000);
 
     return () => {
       clearInterval(presenceInterval);
@@ -265,12 +271,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           if (snap.exists()) {
             const data = snap.data();
             if (data.status === "accepted") {
-              // Challenger transitions to Arena
+              // Challenger transitions to Arena preserving custom duel settings
               const matchConfig = {
                 id: data.roomCode,
                 bowType: data.bowType,
                 distance: data.distance,
-                system: data.bowType === "Compound" ? "cumulative" : "set",
+                system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
+                ...(data.targetFace || data.targetType ? { targetFace: data.targetFace || data.targetType, targetType: data.targetType || data.targetFace } : {}),
                 isCreator: true,
                 rival: {
                   uid: data.receiverUid,
@@ -313,10 +320,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     const code = "MAT-" + Math.random().toString(36).substring(2, 5).toUpperCase() + "-" + Math.random().toString(36).substring(2, 5).toUpperCase();
     
     try {
-      const { collection, doc, setDoc } = await import("firebase/firestore");
+      const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("@/lib/firebase");
 
       const inviteId = `INV-${Date.now()}`;
+      const resolvedSystem = rival.bowConfig.type === "Compound" ? "cumulative" : "set";
       
       const inviteData = {
         senderUid: user.uid,
@@ -324,6 +332,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         receiverUid: rival.uid,
         bowType: rival.bowConfig.type,
         distance: rival.bowConfig.defaultDistance,
+        system: resolvedSystem,
         status: "pending",
         roomCode: code,
         createdAt: Date.now()
@@ -337,6 +346,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         id: code,
         bowType: rival.bowConfig.type,
         distance: rival.bowConfig.defaultDistance,
+        system: resolvedSystem,
         creatorUid: user.uid,
         creatorName: user.fullName,
         creatorConnected: true,
@@ -382,8 +392,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     clubCountry: u.clubCountry || u.country || "CR",
     bowConfig: {
       type: (u.bowConfig?.type || "Barebow") as "Recurve" | "Compound" | "Barebow",
-      brand: u.bowConfig?.brand || "Hoyt",
-      model: u.bowConfig?.model || "Satori",
+      brand: u.bowConfig?.brand || "Olímpico",
+      model: u.bowConfig?.model || "Estándar",
       poundage: u.bowConfig?.poundage || 35,
       defaultDistance: u.bowConfig?.defaultDistance || 18
     },
@@ -469,38 +479,48 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       const codeSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
       const bowCode = customBow === "Compound" ? "C" : customBow === "Recurve" ? "R" : "B";
       const generatedCode = `INV-${bowCode}${customDistance}-${codeSuffix}`;
+      const resolvedSystem = customBow === "Compound" ? "cumulative" : "set";
       
-      const shareUrl = typeof window !== "undefined" && !window.location.origin.includes("localhost")
+      const isLocalDev =
+        typeof window === "undefined" ||
+        window.location.origin.includes("localhost") ||
+        window.location.origin.includes("127.0.0.1") ||
+        window.location.protocol === "file:";
+      const shareUrl = !isLocalDev
         ? `${window.location.origin}?join=${generatedCode}`
-        : `https://archery101010.com?join=${generatedCode}`;
+        : `https://archery101010-c0bb4.web.app?join=${generatedCode}`;
 
       const shareText = `¡Te desafío a una Eliminatoria Online 1 vs 1 en Archery 101010!\n\nFormato: ${customBow === "Recurve" ? "Recurvo" : customBow === "Compound" ? "Compuesto" : "Barebow"} a ${customDistance}m\nCódigo de Sala: ${generatedCode}\n\nEntra al duelo en vivo aquí:\n${shareUrl}`;
 
       // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
-      setDoc(doc(db, "active_duels", generatedCode), {
-        id: generatedCode,
-        bowType: customBow,
-        distance: customDistance,
-        creatorUid: user.uid,
-        creatorName: user.fullName,
-        creatorConnected: true,
-        creatorConnectedAt: Date.now(),
-        playerUid: "",
-        playerName: "",
-        playerConnected: false,
-        playerConnectedAt: 0,
-        creatorReady: false,
-        playerReady: false,
-        status: "waiting",
-        updatedAt: Date.now()
-      }).catch((err) => {
-        console.error("Error creating active duel in Firestore immediately:", err);
-      });
+      if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
+        setDoc(doc(db, "active_duels", generatedCode), {
+          id: generatedCode,
+          bowType: customBow,
+          distance: customDistance,
+          system: resolvedSystem,
+          creatorUid: user.uid,
+          creatorName: user.fullName,
+          creatorConnected: true,
+          creatorConnectedAt: Date.now(),
+          playerUid: "",
+          playerName: "",
+          playerConnected: false,
+          playerConnectedAt: 0,
+          creatorReady: false,
+          playerReady: false,
+          status: "waiting",
+          updatedAt: Date.now()
+        }).catch((err) => {
+          console.error("Error creating active duel in Firestore immediately:", err);
+        });
+      }
 
       setGeneratedInvite({
         code: generatedCode,
         bowType: customBow,
         distance: customDistance,
+        system: resolvedSystem,
         text: shareText
       });
       setIsCreatingRoom(false);
@@ -566,15 +586,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           id: data.id,
           bowType: data.bowType,
           distance: data.distance,
-          system: data.bowType === "Compound" ? "cumulative" : "set",
+          system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
+          ...(data.targetFace || data.targetType ? { targetFace: data.targetFace || data.targetType, targetType: data.targetType || data.targetFace } : {}),
           isCreator: false,
           rival: {
-            uid: "RIV-FRIEND-CREATOR",
+            uid: data.creatorUid || "RIV-FRIEND-CREATOR",
             fullName: data.creatorName || "Anfitrión del Duelo",
-            country: "CR",
+            country: data.creatorCountry || "CR",
             clubName: "Lobby Archery",
             clubLogo: "1",
-            clubCountry: "CR",
+            clubCountry: data.creatorCountry || "CR",
             rating: 9.2
           }
         };

@@ -556,8 +556,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       await deleteUserAccount(user.uid);
       setIsDeleteAccountOpen(false);
       onLogout();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error deleting user account:", e);
+      alert(
+        e?.message ||
+          "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta."
+      );
     } finally {
       setIsDeletingAccount(false);
     }
@@ -570,17 +574,18 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
     if (key === "notif_push" && nextVal === true) {
       try {
-        const { requestPushPermissionAndRegister } = await import("@/lib/pushNotifications");
-        const token = await requestPushPermissionAndRegister(user.uid);
-        if (token) {
-          alert("¡Notificaciones Push activadas con éxito! Recibirás alertas de duelos en este dispositivo.");
+        const { configurePushOrInAppNotifications } = await import("@/lib/pushNotifications");
+        const outcome = await configurePushOrInAppNotifications(user.uid);
+        if (outcome.enabled) {
+          alert(outcome.message);
         } else {
-          alert("No se pudieron activar las notificaciones push. Verifica los permisos de tu navegador.");
+          alert(outcome.message);
           setVal(false);
           await saveLocalSetting(key, false);
         }
       } catch (err) {
         console.error("Error activating push notifications:", err);
+        alert("Alertas internas de la app activadas en este dispositivo.");
       }
     }
   };
@@ -936,7 +941,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         type="text"
                         value={bow.brand}
                         onChange={(e) => handleUpdateBow(idx, { brand: e.target.value })}
-                        placeholder="Ej. Hoyt, Mathews"
+                        placeholder="Ej. Olímpico, Pro"
                         className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition placeholder:text-white"
                       />
                     </div>
@@ -948,7 +953,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                         type="text"
                         value={bow.model}
                         onChange={(e) => handleUpdateBow(idx, { model: e.target.value })}
-                        placeholder="Ej. Satori, TRX"
+                        placeholder="Ej. Competición"
                         className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition placeholder:text-white"
                       />
                     </div>
@@ -1258,6 +1263,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     const res = await leaveCurrentClub(user.uid);
                     if (res.success && res.user) {
                       setCoachProfile(null);
+                      setCoachStudents([]);
                       onProfileUpdated(res.user);
                       window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: res.user } }));
                     }
@@ -1406,7 +1412,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
       {/* Política de Privacidad Button */}
       <button
-        onClick={() => window.open("/privacy", "_blank")}
+        onClick={() => {
+          if (typeof window !== "undefined") {
+            if (window.location.protocol === "file:") {
+              window.open("https://archery101010-c0bb4.web.app/privacy", "_blank", "noopener,noreferrer");
+            } else {
+              window.location.href = "/privacy";
+            }
+          }
+        }}
         className="w-full py-3 mt-1 rounded-full border border-white/10 hover:bg-white/5 text-white hover:text-white font-black text-[13.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
       >
         <Shield size={15} />

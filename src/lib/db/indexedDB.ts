@@ -55,6 +55,7 @@ export interface SyncItem {
   payload: any; // the actual data to write/modify
   timestamp: number;
   attempts: number;
+  lastAttemptAt?: number;
   status: "pending" | "failed";
 }
 
@@ -82,6 +83,7 @@ export interface CalendarEvent {
   customFields?: Array<{ label: string; value: string }>;
   dailyItems?: string[];
   completedItems?: number[];
+  completedByAthlete?: Record<string, number[]>;
   isRestDay?: boolean;
   isCompleted?: boolean;
 }

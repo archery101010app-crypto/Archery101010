@@ -81,7 +81,12 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     }
   };
 
+  const maxAllowedEnds = Math.min(60, Math.max(1, Math.floor(200 / Math.max(1, arrowsPerEnd))));
+
   const handleStart = () => {
+    const safeArrowsPerEnd = Math.min(12, Math.max(1, arrowsPerEnd));
+    const safeMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / safeArrowsPerEnd)));
+    const safeEndsCount = Math.min(safeMaxEnds, Math.max(1, endsCount));
     onStartSession({
       practiceType,
       format,
@@ -90,9 +95,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       distance,
       autoScore: true,
       includeNotes: true,
-      endsCount,
-      arrowsPerEnd,
-      maxScore: endsCount * arrowsPerEnd * 10,
+      endsCount: safeEndsCount,
+      arrowsPerEnd: safeArrowsPerEnd,
+      maxScore: Math.min(2000, safeEndsCount * safeArrowsPerEnd * 10),
       warmupArrows: 0
     });
   };
@@ -340,8 +345,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 <span className="flex-1 text-center font-bold text-white text-[16.7px] tabular-nums">{endsCount}</span>
                 <button
                   type="button"
-                  onClick={() => setEndsCount(endsCount + 1)}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
+                  onClick={() => setEndsCount(Math.min(maxAllowedEnds, endsCount + 1))}
+                  disabled={endsCount >= maxAllowedEnds}
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer disabled:opacity-35"
                 >
                   +
                 </button>
@@ -361,8 +367,16 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 <span className="flex-1 text-center font-bold text-white text-[16.7px] tabular-nums">{arrowsPerEnd}</span>
                 <button
                   type="button"
-                  onClick={() => setArrowsPerEnd(Math.min(12, arrowsPerEnd + 1))}
-                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer"
+                  onClick={() => {
+                    const nextArrows = Math.min(12, arrowsPerEnd + 1);
+                    const nextMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / nextArrows)));
+                    setArrowsPerEnd(nextArrows);
+                    if (endsCount > nextMaxEnds) {
+                      setEndsCount(nextMaxEnds);
+                    }
+                  }}
+                  disabled={arrowsPerEnd >= 12}
+                  className="px-3.5 py-3 text-cyan-neon font-black text-[20.9px] cursor-pointer disabled:opacity-35"
                 >
                   +
                 </button>

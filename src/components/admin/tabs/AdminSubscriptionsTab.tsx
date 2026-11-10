@@ -1,16 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { CreditCard, Shield, Calendar, DollarSign, Activity, ToggleLeft, ToggleRight, ArrowUpDown, Clock } from "lucide-react";
-import { motion } from "framer-motion";
-import { UserProfile } from "@/lib/authService";
+import { CreditCard, ToggleLeft, ToggleRight, Clock } from "lucide-react";
+import { UserProfile, updateProfile } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
 
 interface SubscriptionLog {
   id: string;
+  userId?: string;
   userName: string;
   previousPlan: "FREE" | "PRO";
   newPlan: "FREE" | "PRO";
+  expiresAt?: number;
   timestamp: string;
   reason: string;
 }
@@ -26,37 +27,47 @@ export default function AdminSubscriptionsTab() {
 
       // Load real audit logs from IndexedDB
       const savedLogs = await getLocalSetting<SubscriptionLog[]>("sub_audit_logs", []);
-      // Purge any legacy dummy logs (e.g. LOG-1, LOG-2)
-      const cleanLogs = savedLogs.filter(l => l.id !== "LOG-1" && l.id !== "LOG-2");
+      const cleanLogs = savedLogs.filter((l) => l.id !== "LOG-1" && l.id !== "LOG-2");
       setLogs(cleanLogs);
     }
     loadData();
+
+    const handleRosterUpdate = () => {
+      loadData();
+    };
+    window.addEventListener("users-roster-updated", handleRosterUpdate);
+    return () => window.removeEventListener("users-roster-updated", handleRosterUpdate);
   }, []);
 
-  const handleTogglePlan = async (uid: string) => {
-    const user = users.find((u) => u.uid === uid);
+  const handleTogglePlan = async (targetUid: string) => {
+    const user = users.find((u) => u.uid === targetUid);
     if (!user) return;
 
-    const previousPlan = user.plan;
-    const newPlan = previousPlan === "FREE" ? "PRO" : "FREE";
+    const previousPlan = user.plan || "FREE";
+    const nextPlan: "FREE" | "PRO" = previousPlan === "PRO" ? "FREE" : "PRO";
+    const now = Date.now();
+    const nextExpiresAt = nextPlan === "PRO" ? now + 365 * 24 * 60 * 60 * 1000 : 0;
 
-    const updatedUsers = users.map((u) => {
-      if (u.uid === uid) {
-        return { ...u, plan: newPlan as "FREE" | "PRO" };
-      }
-      return u;
+    // 1. Update local profile + sync queue via canonical updateProfile
+    await updateProfile(targetUid, {
+      plan: nextPlan,
+      proExpiresAt: nextExpiresAt
     });
 
+    const updatedUsers = users.map((u) =>
+      u.uid === targetUid ? { ...u, plan: nextPlan, proExpiresAt: nextExpiresAt, updatedAt: now } : u
+    );
     setUsers(updatedUsers);
-    await saveLocalSetting("simulated_users", updatedUsers);
 
-    // Save to logs
+    // 2. Build audit log entry
     const newLog: SubscriptionLog = {
-      id: generateResilientId("LOG"),
-      userName: user.fullName,
+      id: generateResilientId("SUB"),
+      userId: targetUid,
+      userName: user.fullName || user.email,
       previousPlan,
-      newPlan,
-      timestamp: new Date().toISOString().split("T")[0],
+      newPlan: nextPlan,
+      expiresAt: nextExpiresAt,
+      timestamp: new Date(now).toISOString().split("T")[0],
       reason: "Override manual por SuperAdmin"
     };
 
@@ -64,13 +75,36 @@ export default function AdminSubscriptionsTab() {
     setLogs(updatedLogs);
     await saveLocalSetting("sub_audit_logs", updatedLogs);
 
-    // Also update logged user if it's the active one
-    const currentLogged = await getLocalSetting<UserProfile | null>("current_user", null);
-    if (currentLogged && currentLogged.uid === uid) {
-      await saveLocalSetting("current_user", {
-        ...currentLogged,
-        plan: newPlan as "FREE" | "PRO"
-      });
+    // 3. Persist directly to Firestore users/{targetUid} + subscription_audit_logs
+    try {
+      const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+      const { db, auth } = await import("@/lib/firebase");
+      if (auth.currentUser) {
+        await updateDoc(doc(db, "users", targetUid), {
+          plan: nextPlan,
+          proExpiresAt: nextExpiresAt,
+          updatedAt: now
+        }).catch(async () => {
+          await setDoc(
+            doc(db, "users", targetUid),
+            {
+              ...user,
+              uid: targetUid,
+              plan: nextPlan,
+              proExpiresAt: nextExpiresAt,
+              updatedAt: now
+            },
+            { merge: true }
+          );
+        });
+
+        await setDoc(doc(db, "subscription_audit_logs", newLog.id), {
+          ...newLog,
+          createdAt: now
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Could not sync SuperAdmin plan override directly to cloud:", err);
     }
   };
 
@@ -79,7 +113,7 @@ export default function AdminSubscriptionsTab() {
       {/* Header */}
       <div>
         <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
-        <p className="text-xs text-white">Gestiona accesos premium, métodos de pago simulados y overrides de planes.</p>
+        <p className="text-xs text-white">Gestiona accesos premium y overrides de planes.</p>
       </div>
 
       {/* Grid: 2 sections (List + History Log) */}
@@ -156,7 +190,7 @@ export default function AdminSubscriptionsTab() {
                   <div className="absolute left-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
                   <div className="flex justify-between items-center">
                     <span className="text-[11.6px] font-bold text-white">{log.userName}</span>
-                    <span className="text-[9.3px] text-white font-semibold">{log.timestamp}</span>
+                    <span className="text-[9.3px] text-white font-semibold tabular-nums">{log.timestamp}</span>
                   </div>
                   <p className="text-[11.6px] text-white leading-normal">
                     Cambió de <span className="font-bold text-white">{log.previousPlan}</span> a{" "}

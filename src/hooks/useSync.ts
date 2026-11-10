@@ -49,17 +49,33 @@ export function useSync() {
   // Run automatically when network reconnection is detected and listen to queue changes
   useEffect(() => {
     const handleOnline = () => {
-      runSync(handleSyncProgress);
+      runSync(handleSyncProgress, true);
     };
 
     const handleQueueChange = () => {
-      checkQueue();
+      getSyncQueue()
+        .then((queue) => {
+          setPendingCount(queue.length);
+          if (queue.length === 0) {
+            setSyncStatus("Sincronizado");
+          }
+        })
+        .catch(() => {});
     };
 
     const handleSyncError = (e: any) => {
-      const errMsg = e.detail?.error || "";
-      if (errMsg.includes("permission-denied") || errMsg.includes("insufficient permissions")) {
+      const errMsg = String(e.detail?.error || "");
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setSyncStatus("Sin conexión");
+      } else if (errMsg.includes("permission-denied") || errMsg.includes("insufficient permissions")) {
         setSyncStatus("Sin permisos en la nube");
+      } else if (
+        errMsg.includes("NETWORK_TIMEOUT") ||
+        errMsg.includes("unavailable") ||
+        errMsg.includes("Failed to fetch") ||
+        errMsg.includes("network-request-failed")
+      ) {
+        setSyncStatus("Señal débil · Reintentando");
       } else {
         setSyncStatus("Error de Firestore");
       }

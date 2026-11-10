@@ -15,13 +15,14 @@ import {
   UserCheck, 
   Calendar, 
   Flame,
-  Target
+  Target,
+  Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
-
-import { COUNTRIES_MAP as COUNTRIES } from "@/lib/countries";
+import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
+import { COUNTRIES, COUNTRIES_MAP } from "@/lib/countries";
+import { downloadOrShareFile } from "@/lib/fileDownload";
 
 export default function AdminUsersTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -170,8 +171,8 @@ export default function AdminUsersTab() {
     return "Master (50+)";
   };
 
-  // Export users to CSV / Excel
-  const handleExportCSV = () => {
+  // Export users to CSV / Excel using mobile-resilient download/share helper
+  const handleExportCSV = async () => {
     if (users.length === 0) {
       alert("No hay usuarios para exportar.");
       return;
@@ -211,7 +212,11 @@ export default function AdminUsersTab() {
     };
 
     const rows = users.map((u) => {
-      const countryName = COUNTRIES[u.country]?.name || u.country || "N/A";
+      const countryName =
+        COUNTRIES.find((c) => c.code === u.country)?.name ||
+        COUNTRIES_MAP[u.country]?.name ||
+        u.country ||
+        "N/A";
       const age = calculateAge(u.birthDate);
       const waCategory = getWACategory(age);
       const genderLabel =
@@ -257,27 +262,67 @@ export default function AdminUsersTab() {
 
     // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel compatibility with special characters
     const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
     const today = new Date().toISOString().split("T")[0];
-    link.setAttribute("href", url);
-    link.setAttribute("download", `suscriptores_demografia_archery101010_${today}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await downloadOrShareFile({
+      filename: `suscriptores_demografia_archery101010_${today}.csv`,
+      mimeType: "text/csv;charset=utf-8",
+      data: csvContent,
+      shareTitle: "Suscriptores ARCHERY 101010"
+    });
   };
 
-  const handleTogglePlan = async (uid: string) => {
-    const userToUpdate = users.find((u) => u.uid === uid);
+  const handleTogglePlan = async (targetUid: string) => {
+    const userToUpdate = users.find((u) => u.uid === targetUid);
     if (!userToUpdate) return;
 
     try {
       const { updateProfile } = await import("@/lib/authService");
-      const newPlan = userToUpdate.plan === "FREE" ? "PRO" : "FREE";
-      const updatedProfile = await updateProfile(uid, { plan: newPlan });
-      setUsers(users.map((u) => (u.uid === uid ? updatedProfile : u)));
+      const now = Date.now();
+      const nextPlan: "FREE" | "PRO" = userToUpdate.plan === "FREE" ? "PRO" : "FREE";
+      const proExpiresAt = nextPlan === "PRO" ? now + 365 * 24 * 60 * 60 * 1000 : 0;
+
+      const updatedProfile = await updateProfile(targetUid, {
+        plan: nextPlan,
+        proExpiresAt
+      });
+
+      const auditEntry = {
+        id: generateResilientId("SUB"),
+        userId: targetUid,
+        email: userToUpdate.email || "",
+        plan: nextPlan,
+        sku: nextPlan === "PRO" ? "admin_manual_pro_annual" : "admin_manual_free_revoke",
+        source: "superadmin_users_tab",
+        activatedAt: now,
+        expiresAt: proExpiresAt,
+        updatedAt: now
+      };
+      const localLogs = await getLocalSetting<any[]>("sub_audit_logs", []);
+      await saveLocalSetting("sub_audit_logs", [auditEntry, ...localLogs]);
+
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+          const { db, auth } = await import("@/lib/firebase");
+          if (auth.currentUser) {
+            await updateDoc(doc(db, "users", targetUid), {
+              plan: nextPlan,
+              proExpiresAt,
+              updatedAt: now
+            });
+            await setDoc(doc(db, "subscription_audit_logs", auditEntry.id), auditEntry, {
+              merge: true
+            });
+          }
+        } catch (cloudErr) {
+          console.warn("[Admin Users] Could not sync plan toggle directly to Firestore:", cloudErr);
+        }
+      }
+
+      setUsers((prev) => prev.map((u) => (u.uid === targetUid ? updatedProfile : u)));
+      setSelectedUser((prev) => (prev?.uid === targetUid ? updatedProfile : prev));
+      setSyncMessage(`Plan actualizado a ${nextPlan} para ${userToUpdate.fullName}`);
+      setTimeout(() => setSyncMessage(null), 3500);
     } catch (err) {
       console.error("Error toggling plan:", err);
     }
@@ -293,9 +338,25 @@ export default function AdminUsersTab() {
       const currentIndex = roles.indexOf(userToUpdate.role);
       const nextIndex = (currentIndex + 1) % roles.length;
       const newRole = roles[nextIndex];
+      const now = Date.now();
 
       const updatedProfile = await updateProfile(uid, { role: newRole });
-      setUsers(users.map((u) => (u.uid === uid ? updatedProfile : u)));
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const { doc, updateDoc } = await import("firebase/firestore");
+          const { db, auth } = await import("@/lib/firebase");
+          if (auth.currentUser) {
+            await updateDoc(doc(db, "users", uid), {
+              role: newRole,
+              updatedAt: now
+            });
+          }
+        } catch (cloudErr) {
+          console.warn("[Admin Users] Could not sync role toggle directly to Firestore:", cloudErr);
+        }
+      }
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? updatedProfile : u)));
+      setSelectedUser((prev) => (prev?.uid === uid ? updatedProfile : prev));
     } catch (err) {
       console.error("Error toggling role:", err);
     }
@@ -353,7 +414,7 @@ export default function AdminUsersTab() {
         <div>
           <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex items-center gap-2">
             <span>Arqueros Inscritos</span>
-            <span className="text-[15.8px] bg-cyan-neon/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-0.5 rounded-full font-black">
+            <span className="text-[15.8px] bg-cyan-neon/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-0.5 rounded-full font-black tabular-nums">
               {totalCount} Total
             </span>
           </h2>
@@ -404,15 +465,15 @@ export default function AdminUsersTab() {
             <UserCheck size={12} className="text-cyan-neon" />
             Total Registrados
           </span>
-          <span className="text-xl font-black text-white mt-1">{totalCount}</span>
+          <span className="text-xl font-black text-white mt-1 tabular-nums">{totalCount}</span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
-            
+            <Flame size={12} className="text-yellow-gold" />
             Nuevos (48h)
           </span>
-          <span className="text-xl font-black text-yellow-gold mt-1 flex items-center gap-1.5">
+          <span className="text-xl font-black text-yellow-gold mt-1 flex items-center gap-1.5 tabular-nums">
             {recentCount}
             {recentCount > 0 && (
               <span className="text-[10.5px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-yellow-gold font-bold uppercase">
@@ -424,10 +485,10 @@ export default function AdminUsersTab() {
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
-            
+            <Crown size={12} className="text-yellow-gold" />
             Suscripciones PRO
           </span>
-          <span className="text-xl font-black text-yellow-gold mt-1">{proCount}</span>
+          <span className="text-xl font-black text-yellow-gold mt-1 tabular-nums">{proCount}</span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
@@ -435,7 +496,7 @@ export default function AdminUsersTab() {
             <Shield size={12} className="text-cyan-neon" />
             Coaches / Clubes
           </span>
-          <span className="text-xl font-black text-cyan-neon mt-1">{coachCount}</span>
+          <span className="text-xl font-black text-cyan-neon mt-1 tabular-nums">{coachCount}</span>
         </div>
       </div>
 
@@ -521,7 +582,12 @@ export default function AdminUsersTab() {
         ) : (
           <div className="flex flex-col gap-2.5">
             {filteredUsers.map((u) => {
-              const countryInfo = COUNTRIES[u.country] || { flag: u.country || "INT", name: u.country || "Desconocido" };
+              const countryInfo =
+                COUNTRIES_MAP[u.country] ||
+                COUNTRIES.find((c) => c.code === u.country) || {
+                  flag: u.country || "INT",
+                  name: u.country || "Desconocido"
+                };
               const isRecent = isRecentUser(u);
 
               return (
@@ -560,7 +626,7 @@ export default function AdminUsersTab() {
 
                       {/* Sub-row: Demographics, Club & Primary Bow */}
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-white flex-wrap">
-                        <span className="text-yellow-gold font-bold">
+                        <span className="text-yellow-gold font-bold tabular-nums">
                           {calculateAge(u.birthDate) !== null ? `${calculateAge(u.birthDate)} años` : "Edad N/D"}
                         </span>
                         <span>·</span>
@@ -602,7 +668,7 @@ export default function AdminUsersTab() {
                     {/* Plan badge */}
                     <span className={`text-[10.5px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
                       u.plan === "PRO"
-                        ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20 shadow-[0_0_10px_rgba(255,229,0,0.05)]"
+                        ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/25"
                         : "bg-white/5 text-white border-white/5"
                     }`}>
                       {u.plan}
@@ -629,7 +695,7 @@ export default function AdminUsersTab() {
                         className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold hover:text-yellow-gold transition cursor-pointer"
                         title="Alternar Plan (FREE / PRO)"
                       >
-                        
+                        <Crown size={13} />
                       </button>
                     </div>
                   </div>
@@ -658,7 +724,7 @@ export default function AdminUsersTab() {
                     {getInitials(selectedUser.fullName)}
                   </div>
                   <span className="absolute -bottom-1 -right-1 text-[10.5px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
-                    {COUNTRIES[selectedUser.country]?.flag || selectedUser.country || "INT"}
+                    {COUNTRIES_MAP[selectedUser.country]?.flag || selectedUser.country || "INT"}
                   </span>
                 </div>
                 <div className="min-w-0">
@@ -686,7 +752,7 @@ export default function AdminUsersTab() {
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">País / Ciudad</span>
                     <span className="text-white font-medium">
-                      {COUNTRIES[selectedUser.country]?.flag} {selectedUser.city ? `${selectedUser.city}, ` : ""}{COUNTRIES[selectedUser.country]?.name || selectedUser.country || "N/A"}
+                      {COUNTRIES_MAP[selectedUser.country]?.flag} {selectedUser.city ? `${selectedUser.city}, ` : ""}{COUNTRIES_MAP[selectedUser.country]?.name || selectedUser.country || "N/A"}
                     </span>
                   </div>
                   <div>
@@ -697,12 +763,12 @@ export default function AdminUsersTab() {
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">Edad / Nacimiento</span>
-                    <span className="text-yellow-gold font-bold">
+                    <span className="text-yellow-gold font-bold tabular-nums">
                       {calculateAge(selectedUser.birthDate) !== null
                         ? `${calculateAge(selectedUser.birthDate)} años (${getWACategory(calculateAge(selectedUser.birthDate))})`
                         : "N/A"}
                     </span>
-                    <span className="text-white text-[10.5px] block">{selectedUser.birthDate || ""}</span>
+                    <span className="text-white text-[10.5px] block tabular-nums">{selectedUser.birthDate || ""}</span>
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
@@ -728,11 +794,11 @@ export default function AdminUsersTab() {
                     </div>
                     <div>
                       <span className="text-[10.5px] text-white uppercase font-bold block">Potencia</span>
-                      <span className="text-white font-medium">{selectedUser.bowConfig?.poundage || 0} lbs</span>
+                      <span className="text-white font-medium tabular-nums">{selectedUser.bowConfig?.poundage || 0} lbs</span>
                     </div>
                     <div>
                       <span className="text-[10.5px] text-white uppercase font-bold block">Distancia Default</span>
-                      <span className="text-white font-medium">{selectedUser.bowConfig?.defaultDistance || 18}m</span>
+                      <span className="text-white font-medium tabular-nums">{selectedUser.bowConfig?.defaultDistance || 18}m</span>
                     </div>
                   </div>
                 </div>
@@ -746,7 +812,6 @@ export default function AdminUsersTab() {
                     <span className="text-white font-bold text-right truncate">
                       {selectedUser.clubName || "Arquero Independiente"}
                     </span>
-
                     <span className="text-white">ID Club:</span>
                     <span className="text-white font-bold text-right truncate text-[11.6px]">
                       {selectedUser.clubId || "Ninguno"}

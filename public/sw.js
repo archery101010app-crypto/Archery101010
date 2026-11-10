@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.87";
+const CACHE_NAME = "archery-101010-cache-v2.88";
 const ASSETS_TO_CACHE = [
   "/",
   "/favicon.ico"
@@ -30,13 +30,36 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch event - offline fallback (Network-first with no-store on HTML navigations so stale versions never flash)
+// Fetch event - strict same-origin GET only (never intercept Firestore, Google Auth, Spotify, or chrome-extension://)
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  let url;
+  try {
+    url = new URL(event.request.url);
+  } catch {
+    return;
+  }
+
+  // Only handle same-origin HTTP/HTTPS requests
+  if (url.origin !== self.location.origin) return;
+
+  // Never cache or intercept live version manifests or Firebase Auth redirect handlers
+  if (
+    url.pathname === "/version.json" ||
+    url.pathname === "/app-version.json" ||
+    url.pathname.startsWith("/__/auth/")
+  ) {
+    return;
+  }
+
+  const acceptHeader = event.request.headers.get("accept") || "";
   const isNavigation =
-    event.request.mode === "navigate" ||
-    (event.request.headers.get("accept") || "").includes("text/html");
+    event.request.mode === "navigate" || acceptHeader.includes("text/html");
+  const isJsOrCssChunk =
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css");
 
   const networkFetch = isNavigation
     ? fetch(event.request, { cache: "no-store" })
@@ -45,21 +68,53 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     networkFetch
       .then((response) => {
-        if (response.status === 200) {
+        if (response && response.ok && response.status === 200 && response.type === "basic") {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+            cache.put(event.request, responseClone).catch(() => {});
           });
         }
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+      .catch(async () => {
+        // Retry once bypassing stale connection state for JS/CSS chunks when online
+        if (isJsOrCssChunk) {
+          try {
+            const retryRes = await fetch(event.request, { cache: "no-cache" });
+            if (retryRes && retryRes.ok) {
+              const retryClone = retryRes.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, retryClone).catch(() => {});
+              });
+              return retryRes;
+            }
+          } catch {
+            // Fall through to cache match
           }
-          return new Response("Offline mode active. Connect to the internet to load this resource.", { status: 503, statusText: "Offline" });
-        });
+        }
+
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        if (isNavigation) {
+          const cachedRoot = await caches.match("/");
+          if (cachedRoot) {
+            return cachedRoot;
+          }
+          return new Response(
+            "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ARCHERY 101010</title></head><body style=\"background:#020305;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px\"><div><h2 style=\"margin:0 0 8px\">Modo sin conexión</h2><p style=\"opacity:0.75;font-size:14px\">Conéctate a internet una vez para sincronizar los recursos locales.</p></div></body></html>",
+            {
+              status: 503,
+              statusText: "Offline",
+              headers: { "Content-Type": "text/html; charset=utf-8" }
+            }
+          );
+        }
+
+        // Never return plain-text 503 for JS/CSS/API assets so chunk loaders get standard network error semantics
+        return Response.error();
       })
   );
 });

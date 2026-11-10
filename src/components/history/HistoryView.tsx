@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession, isFictitiousSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession, getLocalSetting, isFictitiousSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight, Camera } from "lucide-react";
@@ -18,11 +18,36 @@ import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 interface HistoryViewProps {
   user: UserProfile;
   initialTab?: "SESSIONS" | "VOLUME";
+  coachViewMode?: boolean;
   onBack: () => void;
 }
 
-export default function HistoryView({ user, initialTab, onBack }: HistoryViewProps) {
+export default function HistoryView({
+  user,
+  initialTab,
+  coachViewMode = false,
+  onBack
+}: HistoryViewProps) {
   const { language, t } = useLanguage();
+  const isCoachResultsView = Boolean(
+    coachViewMode &&
+      (user?.clubId ||
+        user?.role === "coach" ||
+        user?.role === "team_admin" ||
+        user?.role === "team_admin_coach")
+  );
+  const effectiveClubId = user?.clubId || (user?.uid ? `CLB-${user.uid}` : "");
+  const canonicalClubId = user?.uid ? `CLB-${user.uid.replace("USR-", "")}` : "";
+  const [athleteNamesByUid, setAthleteNamesByUid] = useState<Record<string, string>>({});
+
+  const getSessionAthleteName = (session: any): string => {
+    if (!session) return "Arquero";
+    if (session.userName && String(session.userName).trim()) return String(session.userName).trim();
+    const uidKey = session.userId || session.userUid || "";
+    if (uidKey && athleteNamesByUid[uidKey]) return athleteNamesByUid[uidKey];
+    if (uidKey && uidKey === user?.uid) return user.fullName || user.nickname || "Arquero";
+    return "Arquero";
+  };
   
   // Data State
   const [sessions, setSessions] = useState<any[]>([]);
@@ -60,7 +85,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     if (!session) return;
     setIsGeneratingImage(true);
     try {
-      const archerName = user.nickname || user.fullName || "Arquero";
+      const archerName = isCoachResultsView
+        ? getSessionAthleteName(session)
+        : user.nickname || user.fullName || "Arquero";
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
       const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
       const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
@@ -78,7 +105,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
 
       const result = await shareTargetShotChart({
         impacts: session.impacts || [],
-        ends: session.ends || [],
+        ends: session.impacts ? session.ends || [] : session.ends || [],
         presetType,
         score: session.score || 0,
         maxScore: session.maxScore || 300,
@@ -107,7 +134,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     if (!session) return;
     setIsGeneratingImage(true);
     try {
-      const archerName = user.nickname || user.fullName || "Arquero";
+      const archerName = isCoachResultsView
+        ? getSessionAthleteName(session)
+        : user.nickname || user.fullName || "Arquero";
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
       const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
       const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
@@ -140,15 +169,47 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   };
 
   const loadSessions = async () => {
-    const list = await getLocalSessions();
+    const [list, cachedUsers] = await Promise.all([
+      getLocalSessions(),
+      getLocalSetting<UserProfile[]>("simulated_users", [])
+    ]);
+
+    if (cachedUsers.length > 0) {
+      const map: Record<string, string> = {};
+      for (const u of cachedUsers) {
+        if (u?.uid) {
+          map[u.uid] = u.fullName || u.nickname || "Arquero";
+        }
+      }
+      if (user?.uid) {
+        map[user.uid] = user.fullName || user.nickname || "Arquero";
+      }
+      setAthleteNamesByUid(map);
+    }
+
+    const targetClubId = user?.clubId || (user?.uid ? `CLB-${user.uid}` : "");
+    const altCoachClubId = user?.uid ? `CLB-${user.uid}` : "";
     const ownList: any[] = [];
 
     for (const s of list) {
       if (isFictitiousSession(s, s.id)) continue;
       if (s.isDuel) continue; // duels live in the Matchplay history
+      if (s.deletedByArcher === true) continue;
+
+      if (isCoachResultsView) {
+        if (s.isDraft) continue;
+        const matchesClub =
+          Boolean(s.clubId) &&
+          (s.clubId === targetClubId ||
+            (Boolean(canonicalClubId) && s.clubId === canonicalClubId) ||
+            (Boolean(altCoachClubId) && s.clubId === altCoachClubId));
+        if (!matchesClub) continue;
+        ownList.push(s);
+        continue;
+      }
+
       const isMine = s.userId === user.uid || s.userUid === user.uid;
       if (!isMine) continue;
-      if (s.deletedByArcher === true) continue;
 
       // Auto-rescue any draft session that already has scored arrows so the user never loses a session
       if (s.isDraft) {
@@ -206,27 +267,48 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
   useEffect(() => {
     loadSessions();
 
-    // Also pull user's own sessions directly from Firestore to ensure 100% cloud-to-history consistency
+    // Pull user's own (or club's, in Coach mode) sessions from Firestore for 100% cloud-to-history consistency
     async function syncOwnSessionsFromCloud() {
-      if (typeof navigator === "undefined" || !navigator.onLine || !user?.uid) return;
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.onLine ||
+        !user?.uid ||
+        user.uid === "USR-GUEST-OFFLINE"
+      ) {
+        return;
+      }
       try {
         const { collection, query, where, getDocs } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        const q = query(collection(db, "sessions"), where("userId", "==", user.uid));
-        const snap = await getDocs(q);
+        const { db, auth } = await import("@/lib/firebase");
+        if (!auth.currentUser) return;
+
+        const queries = [query(collection(db, "sessions"), where("userId", "==", user.uid))];
+        if (isCoachResultsView) {
+          const clubIdsToFetch = new Set<string>(
+            [effectiveClubId, canonicalClubId, `CLB-${user.uid}`].filter(Boolean)
+          );
+          for (const cid of clubIdsToFetch) {
+            queries.push(query(collection(db, "sessions"), where("clubId", "==", cid)));
+          }
+        }
+
+        const snaps = await Promise.allSettled(queries.map((qItem) => getDocs(qItem)));
         let changed = false;
-        for (const d of snap.docs) {
-          const data = d.data();
-          if (data && !isFictitiousSession(data, d.id)) {
-            const existing = await getLocalSession(d.id);
-            const shouldUpdate =
-              !existing ||
-              data.restoredByCoach === true ||
-              (data.coachFeedback && data.coachFeedback !== existing.coachFeedback) ||
-              (data.updatedAt && data.updatedAt > (existing.updatedAt || existing.timestamp || 0));
-            if (shouldUpdate) {
-              await saveLocalSession(d.id, { ...data, id: d.id });
-              changed = true;
+        for (const res of snaps) {
+          if (res.status !== "fulfilled") continue;
+          for (const d of res.value.docs) {
+            const data = d.data();
+            if (data && !isFictitiousSession(data, d.id)) {
+              const existing = await getLocalSession(d.id);
+              const shouldUpdate =
+                !existing ||
+                data.restoredByCoach === true ||
+                (data.coachFeedback && data.coachFeedback !== existing.coachFeedback) ||
+                (data.updatedAt && data.updatedAt > (existing.updatedAt || existing.timestamp || 0));
+              if (shouldUpdate) {
+                await saveLocalSession(d.id, { ...data, id: d.id });
+                changed = true;
+              }
             }
           }
         }
@@ -234,20 +316,24 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
           loadSessions();
         }
       } catch (err) {
-        console.warn("Could not fetch user sessions from cloud:", err);
+        console.warn("Could not fetch sessions from cloud:", err);
       }
     }
     syncOwnSessionsFromCloud();
 
     const handleDbChange = (e: Event) => {
       const customEvent = e as CustomEvent;
-      if (!customEvent.detail || customEvent.detail.store === "sessions_local") {
+      if (
+        !customEvent.detail ||
+        customEvent.detail.store === "sessions_local" ||
+        customEvent.detail.store === "simulated_users"
+      ) {
         loadSessions();
       }
     };
     window.addEventListener("local-db-change", handleDbChange);
     return () => window.removeEventListener("local-db-change", handleDbChange);
-  }, [user?.uid]);
+  }, [user?.uid, user?.clubId, coachViewMode, isCoachResultsView]);
 
   // Filter application trigger (only scored sessions for Puntuaciones tab)
   useEffect(() => {
@@ -276,9 +362,9 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
     setFilteredSessions(result);
   }, [dateFilter, practiceFilter, bowFilter, sessions]);
 
-  // Personal Best (Best Score) calculation separated by format + bowType + distance + maxScore
+  // Personal Best (Best Score) calculation separated by athlete (in Coach mode) + format + bowType + distance + maxScore
   const getCategoryKey = (s: any) =>
-    `${s.bowType || "Recurve"}_${s.format || "Libre"}_${s.distance || 18}_${s.maxScore || 300}`;
+    `${isCoachResultsView ? `${s.userId || s.userUid || "own"}_` : ""}${s.bowType || "Recurve"}_${s.format || "Libre"}_${s.distance || 18}_${s.maxScore || 300}`;
 
   const pbByCategory = React.useMemo(() => {
     const map: Record<string, number> = {};
@@ -292,7 +378,7 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
         }
       });
     return map;
-  }, [sessions]);
+  }, [sessions, isCoachResultsView]);
 
   const isSessionPB = (s: any): boolean => {
     if (!hasRealScore(s)) return false;
@@ -557,7 +643,12 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                     className="bg-[#0D1017] border border-white/[0.08] p-4 rounded-2xl cursor-pointer hover:border-cyan-neon/20 transition-all duration-200 flex items-center justify-between group"
                   >
                     <div className="flex flex-col gap-1 w-[70%] min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isCoachResultsView && (
+                          <span className="text-[9.5px] bg-cyan-neon/10 text-cyan-neon px-2 py-0.5 rounded-md border border-cyan-neon/25 font-black uppercase tracking-wider truncate max-w-[150px]">
+                            {getSessionAthleteName(session)}
+                          </span>
+                        )}
                         <span className="text-[11.6px] text-white font-bold">{formatDate(session.timestamp)}</span>
                         <span className="text-[9.3px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
                           {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
@@ -703,8 +794,15 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                       key={s.id}
                       className="bg-[#0D1017] border border-white/[0.08] p-3.5 rounded-2xl flex justify-between items-center"
                     >
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
+                      <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {isCoachResultsView && (
+                            <span className="text-[9px] bg-cyan-neon/10 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/25 font-black uppercase tracking-wider truncate max-w-[140px]">
+                              {getSessionAthleteName(s)}
+                            </span>
+                          )}
+                          <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
+                        </div>
                         <span className="text-[10.5px] text-white">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
                         <span className="text-[10px] font-bold text-white">
                           {getSessionActiveKcal(s, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(s), false)}
@@ -752,20 +850,29 @@ export default function HistoryView({ user, initialTab, onBack }: HistoryViewPro
                 >
                   <Share2 size={16} />
                 </button>
-                <button
-                  onClick={() => setConfirmDeleteId(selectedSession.id)}
-                  className="p-2 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {(!isCoachResultsView || !selectedSession.userId || selectedSession.userId === user.uid) && (
+                  <button
+                    onClick={() => setConfirmDeleteId(selectedSession.id)}
+                    className="p-2 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Title / Header */}
             <div>
-              <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                Detalle de Entrenamiento
-              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-white text-lg font-black uppercase tracking-wide">
+                  Detalle de Entrenamiento
+                </h3>
+                {isCoachResultsView && (
+                  <span className="text-[10px] bg-cyan-neon/10 text-cyan-neon px-2 py-0.5 rounded-md border border-cyan-neon/25 font-black uppercase tracking-wider">
+                    {getSessionAthleteName(selectedSession)}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-white mt-0.5">
                 {formatDate(selectedSession.timestamp)} · {selectedSession.format}
               </p>

@@ -13,7 +13,7 @@ import {
   Plus,
   Target
 } from "lucide-react";
-import { isVolumeSession, getSessionArrows, getSessionScore } from "@/lib/scoring/sessionMetrics";
+import { isVolumeSession, getSessionArrows, getSessionScore, countScoredArrows } from "@/lib/scoring/sessionMetrics";
 
 interface CoachOverviewTabProps {
   user: UserProfile;
@@ -35,13 +35,23 @@ export default function CoachOverviewTab({
   onNavigate
 }: CoachOverviewTabProps) {
   const presentCount = Object.values(attendance).filter(Boolean).length;
+
+  const getSafeActivityArrows = (act: any): number => {
+    if (act?.isDraft) {
+      return Math.max(
+        Number(act.totalArrowsVolume) || 0,
+        countScoredArrows(act) + (Number(act.warmupArrows) || 0)
+      );
+    }
+    return getSessionArrows(act);
+  };
   
   // Find inactive athletes (no session in last 7 days)
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const inactiveAthletes = athletes.filter(ath => {
     const athActivities = recentActivities.filter(a => a.userId === ath.uid || a.userUid === ath.uid);
     if (athActivities.length === 0) return true;
-    const lastActivity = Math.max(...athActivities.map(a => a.timestamp || 0));
+    const lastActivity = Math.max(...athActivities.map(a => a.updatedAt || a.timestamp || 0));
     return lastActivity < oneWeekAgo;
   });
 
@@ -59,7 +69,7 @@ export default function CoachOverviewTab({
           ¡Hola, Coach {user.fullName}!
         </h3>
         <p className="text-[12.8px] text-white mt-1">
-          Tu equipo tiene <span className="text-cyan-neon font-bold">{athletes.length} atletas activos</span> esta semana. Aquí tienes el resumen del día para tus alumnos.
+          Tu equipo tiene <span className="text-cyan-neon font-bold tabular-nums">{athletes.length} atletas activos</span> esta semana. Aquí tienes el resumen del día para tus alumnos.
         </p>
       </div>
 
@@ -68,15 +78,15 @@ export default function CoachOverviewTab({
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
           <span className="text-[10.5px] text-white font-black uppercase tracking-wider truncate">Atletas</span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-white truncate">{athletes.length}</span>
+            <span className="text-2xl font-black text-white truncate tabular-nums">{athletes.length}</span>
             <span className="text-[9.3px] text-white truncate">Registrados</span>
           </div>
         </div>
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
           <span className="text-[10.5px] text-white font-black uppercase tracking-wider truncate">Volumen total</span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-cyan-neon truncate">
-              {recentActivities.reduce((acc, act) => acc + getSessionArrows(act), 0)}
+            <span className="text-2xl font-black text-cyan-neon truncate tabular-nums">
+              {recentActivities.reduce((acc, act) => acc + getSafeActivityArrows(act), 0)}
             </span>
             <span className="text-[9.3px] text-white truncate">Flechas tiradas</span>
           </div>
@@ -84,7 +94,7 @@ export default function CoachOverviewTab({
         <div className="bg-neutral-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
           <span className="text-[10.5px] text-white font-black uppercase tracking-wider truncate">Asistencia</span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-yellow-gold truncate">{presentCount}</span>
+            <span className="text-2xl font-black text-yellow-gold truncate tabular-nums">{presentCount}</span>
             <span className="text-[9.3px] text-white truncate">Presentes hoy</span>
           </div>
         </div>
@@ -97,7 +107,7 @@ export default function CoachOverviewTab({
             <h4 className="text-white text-xs font-black uppercase tracking-wider">Control de Asistencia del Día</h4>
             <p className="text-[10.5px] text-white mt-0.5">Marca los arqueros que asisten al entrenamiento de hoy</p>
           </div>
-          <span className="text-[11.6px] px-2.5 py-0.5 rounded-full bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black shrink-0 whitespace-nowrap">
+          <span className="text-[11.6px] px-2.5 py-0.5 rounded-full bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon font-black shrink-0 whitespace-nowrap tabular-nums">
             {presentCount} / {athletes.length}
           </span>
         </div>
@@ -121,12 +131,12 @@ export default function CoachOverviewTab({
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-bold leading-tight truncate">{ath.fullName}</span>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate">{formatBowTypeEs(ath.bowConfig?.type)} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
+                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">{formatBowTypeEs(ath.bowConfig?.type)} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}</span>
                   </div>
                 </div>
                 <div className="text-white shrink-0">
                   {isPresent ? (
-                    <span className="text-[10.5px] bg-cyan-neon text-black font-extrabold px-2 py-1 rounded-full uppercase tracking-wider shadow-glow-cyan whitespace-nowrap">
+                    <span className="text-[10.5px] bg-cyan-neon text-black font-extrabold px-2 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
                       Presente
                     </span>
                   ) : (
@@ -173,27 +183,50 @@ export default function CoachOverviewTab({
             <p className="text-[11.6px] text-white text-center py-2">No hay actividad reciente registrada.</p>
           ) : (
             recentActivities.map((act) => {
-              const dateStr = new Date(act.timestamp).toLocaleDateString(undefined, {
+              const actTime = act.updatedAt || act.timestamp || Date.now();
+              const dateStr = new Date(actTime).toLocaleDateString(undefined, {
                 day: "numeric",
                 month: "short"
               });
+              const liveArrows = getSafeActivityArrows(act);
               
               return (
                 <div key={act.id || act.uid} className="flex gap-3 relative">
                   {/* Timeline dot */}
-                  <div className="w-7 h-7 rounded-full bg-[#0D0F12] border border-white/10 flex items-center justify-center text-cyan-neon z-10 shrink-0">
+                  <div
+                    className={`w-7 h-7 rounded-full bg-[#0D0F12] border flex items-center justify-center z-10 shrink-0 ${
+                      act.isDraft
+                        ? "border-emerald-500/40 text-emerald-400"
+                        : "border-white/10 text-cyan-neon"
+                    }`}
+                  >
                     <Target size={12} />
                   </div>
                   
                   <div className="flex-1 flex flex-col">
-                    <div className="flex justify-between items-start">
-                      <span className="text-white text-xs font-bold leading-tight">
-                        {act.userName}
-                      </span>
-                      <span className="text-[9.3px] text-white font-bold uppercase">{dateStr}</span>
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <span className="text-white text-xs font-bold leading-tight truncate">
+                          {act.userName || "Arquero"}
+                        </span>
+                        {act.isDraft && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                            ● EN VIVO
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9.3px] text-white font-bold uppercase shrink-0">{dateStr}</span>
                     </div>
-                    <p className="text-[11.6px] text-white mt-0.5">
-                      {act.isDuel ? (
+                    <p className="text-[11.6px] text-white mt-0.5 tabular-nums">
+                      {act.isDraft ? (
+                        <span>
+                          Tirando sesión en vivo ({act.format || act.practiceType || "Práctica"}) ·{" "}
+                          <span className="text-emerald-400 font-extrabold">
+                            {getSessionScore(act) > 0 ? `${getSessionScore(act)} pts · ` : ""}
+                            {liveArrows} flechas
+                          </span>
+                        </span>
+                      ) : act.isDuel ? (
                         <span>
                           Completó un Duelo con <span className="text-cyan-neon font-extrabold">{act.opponent}</span> · Resultado:{" "}
                           <span className={act.outcome === "win" ? "text-cyan-neon font-black" : act.outcome === "loss" ? "text-red-rival font-black" : "text-yellow-gold font-black"}>
@@ -203,7 +236,7 @@ export default function CoachOverviewTab({
                       ) : isVolumeSession(act) ? (
                         <span>
                           Registró sesión de <span className="text-white font-bold">Volumen</span> ·{" "}
-                          <span className="text-cyan-neon font-extrabold">{getSessionArrows(act)} flechas</span>
+                          <span className="text-cyan-neon font-extrabold">{liveArrows} flechas</span>
                         </span>
                       ) : (
                         <span>

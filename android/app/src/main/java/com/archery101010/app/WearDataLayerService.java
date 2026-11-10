@@ -13,6 +13,9 @@ import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -25,6 +28,9 @@ import org.json.JSONObject;
  */
 public class WearDataLayerService extends WearableListenerService {
     private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
+    private static final int MAX_RECENT_CMD_IDS = 50;
+    private static final Set<String> recentProcessedCmdIds = new LinkedHashSet<>();
+    private static boolean recentIdsLoadedFromPrefs = false;
 
     @Override
     public void onMessageReceived(MessageEvent event) {
@@ -60,6 +66,69 @@ public class WearDataLayerService extends WearableListenerService {
         }
     }
 
+    private int scorePointsFromLabel(final String label) {
+        if ("X".equalsIgnoreCase(label) || "10".equals(label)) return 10;
+        if ("M".equalsIgnoreCase(label) || label == null || label.isEmpty()) return 0;
+        try {
+            int val = Integer.parseInt(label.trim());
+            return Math.max(0, Math.min(10, val));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private boolean isDuplicateAndRecordCmdId(final String cmdId, final SharedPreferences prefs) {
+        if (cmdId == null || cmdId.isEmpty()) return false;
+        synchronized (recentProcessedCmdIds) {
+            if (!recentIdsLoadedFromPrefs) {
+                recentIdsLoadedFromPrefs = true;
+                try {
+                    String rawArr = prefs.getString("recentProcessedWatchCmdIdsJson", "[]");
+                    JSONArray arr = new JSONArray(rawArr);
+                    for (int i = 0; i < arr.length(); i++) {
+                        String id = arr.optString(i, "");
+                        if (id != null && !id.isEmpty()) {
+                            recentProcessedCmdIds.add(id);
+                        }
+                    }
+                } catch (Exception ignored) {}
+                String legacySingle = prefs.getString("lastProcessedWatchCmdId", "");
+                if (legacySingle != null && !legacySingle.isEmpty()) {
+                    recentProcessedCmdIds.add(legacySingle);
+                }
+                while (recentProcessedCmdIds.size() > MAX_RECENT_CMD_IDS) {
+                    Iterator<String> it = recentProcessedCmdIds.iterator();
+                    if (it.hasNext()) {
+                        it.next();
+                        it.remove();
+                    }
+                }
+            }
+            if (recentProcessedCmdIds.contains(cmdId)) {
+                return true;
+            }
+            recentProcessedCmdIds.add(cmdId);
+            while (recentProcessedCmdIds.size() > MAX_RECENT_CMD_IDS) {
+                Iterator<String> it = recentProcessedCmdIds.iterator();
+                if (it.hasNext()) {
+                    it.next();
+                    it.remove();
+                }
+            }
+        }
+        return false;
+    }
+
+    private String serializeRecentCmdIds() {
+        synchronized (recentProcessedCmdIds) {
+            JSONArray arr = new JSONArray();
+            for (String id : recentProcessedCmdIds) {
+                arr.put(id);
+            }
+            return arr.toString();
+        }
+    }
+
     private void handleWatchEvent(String path, String payload, String sourceNodeId) {
         MainActivity active = MainActivity.getActiveInstance();
         if (active != null) {
@@ -91,8 +160,8 @@ public class WearDataLayerService extends WearableListenerService {
         try {
             JSONObject cmdObj = new JSONObject(payload);
             String cmdType = cmdObj.optString("type", "");
-            String cmdId = cmdObj.optString("_cmdId", "");
-            long cmdSeq = cmdObj.optLong("_cmdSeq", 0L);
+            String cmdId = cmdObj.optString("_cmdId", cmdObj.optString("cmdId", ""));
+            long cmdSeq = cmdObj.optLong("_cmdSeq", cmdObj.optLong("cmdSeq", 0L));
 
             if ("REQUEST_STATE".equals(cmdType)) {
                 if (savedSnapshot != null && !savedSnapshot.isEmpty()) {
@@ -101,9 +170,8 @@ public class WearDataLayerService extends WearableListenerService {
                 return;
             }
 
-            // Deduplicate against last processed command ID in SharedPreferences
-            String lastCmdId = prefs.getString("lastProcessedWatchCmdId", "");
-            if (!cmdId.isEmpty() && cmdId.equals(lastCmdId)) {
+            // Bounded LinkedHashSet deduplication across interleaved MessageClient + DataClient deliveries
+            if (isDuplicateAndRecordCmdId(cmdId, prefs)) {
                 return;
             }
 
@@ -115,11 +183,11 @@ public class WearDataLayerService extends WearableListenerService {
             } catch (Exception e) {
                 queueArr = new JSONArray();
             }
-            if (queueArr.length() < 60) {
+            if (queueArr.length() < 100) {
                 queueArr.put(payload);
             }
 
-            // Also update the cached snapshot state in SharedPreferences so watch gets instant ACK
+            // Update the cached snapshot state in SharedPreferences so watch gets accurate instant ACK
             JSONObject state = (savedSnapshot != null && !savedSnapshot.isEmpty())
                 ? new JSONObject(savedSnapshot)
                 : new JSONObject();
@@ -131,21 +199,117 @@ public class WearDataLayerService extends WearableListenerService {
             }
             state.put("updatedAt", now);
 
+            int arrowsPerEnd = Math.max(1, state.optInt("arrowsPerEnd", 6));
+            int endsCount = Math.max(1, state.optInt("endsCount", 12));
+            int curEndIdx = Math.max(0, state.optInt("currentEndIndex", 0));
+            JSONArray curEndArrows = state.optJSONArray("currentEndArrows");
+            if (curEndArrows == null) {
+                curEndArrows = new JSONArray();
+            }
+
             if ("INCREMENT_ARROW".equals(cmdType)) {
                 int delta = cmdObj.optInt("delta", 1);
                 state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) + delta));
                 state.put("sessionActive", true);
+                String practiceType = state.optString("practiceType", "Práctica");
+                if (!"Volumen".equalsIgnoreCase(practiceType) && delta > 0) {
+                    for (int i = 0; i < delta; i++) {
+                        if (curEndArrows.length() >= arrowsPerEnd) {
+                            if (curEndIdx < endsCount - 1) {
+                                curEndIdx++;
+                                curEndArrows = new JSONArray();
+                            } else {
+                                break;
+                            }
+                        }
+                        curEndArrows.put("10");
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + 10));
+                    }
+                    state.put("currentEndIndex", curEndIdx);
+                    state.put("currentEndArrows", curEndArrows);
+                }
             } else if ("DECREMENT_ARROW".equals(cmdType) || "UNDO_ARROW".equals(cmdType)) {
                 state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) - 1));
+                JSONObject payloadObj = cmdObj.optJSONObject("payload");
+                int explicitTotal = cmdObj.has("totalScore")
+                    ? cmdObj.optInt("totalScore", -1)
+                    : (payloadObj != null && payloadObj.has("totalScore") ? payloadObj.optInt("totalScore", -1) : -1);
+                if (curEndArrows.length() > 0) {
+                    String removed = curEndArrows.optString(curEndArrows.length() - 1, "");
+                    JSONArray trimmed = new JSONArray();
+                    for (int i = 0; i < curEndArrows.length() - 1; i++) {
+                        trimmed.put(curEndArrows.optString(i, ""));
+                    }
+                    curEndArrows = trimmed;
+                    state.put("currentEndArrows", curEndArrows);
+                    if (explicitTotal < 0) {
+                        int pts = scorePointsFromLabel(removed);
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) - pts));
+                    }
+                }
+                if (explicitTotal >= 0) {
+                    state.put("totalScore", explicitTotal);
+                }
+            } else if ("SCORE_INPUT".equals(cmdType)) {
+                JSONObject payloadObj = cmdObj.optJSONObject("payload");
+                String val = payloadObj != null && payloadObj.has("value")
+                    ? payloadObj.optString("value", "")
+                    : cmdObj.optString("value", "");
+                if (!val.isEmpty()) {
+                    if (curEndArrows.length() >= arrowsPerEnd) {
+                        if (curEndIdx < endsCount - 1) {
+                            curEndIdx++;
+                            curEndArrows = new JSONArray();
+                        }
+                    }
+                    if (curEndArrows.length() < arrowsPerEnd) {
+                        curEndArrows.put(val);
+                    }
+                    state.put("currentEndIndex", curEndIdx);
+                    state.put("currentEndArrows", curEndArrows);
+                    state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) + 1));
+                    state.put("sessionActive", true);
+
+                    int pts = scorePointsFromLabel(val);
+                    int incomingTotal = payloadObj != null && payloadObj.has("totalScore")
+                        ? payloadObj.optInt("totalScore", -1)
+                        : (cmdObj.has("totalScore") ? cmdObj.optInt("totalScore", -1) : -1);
+                    if (incomingTotal >= 0) {
+                        state.put("totalScore", incomingTotal);
+                    } else {
+                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + pts));
+                    }
+                }
+            } else if ("NEXT_END".equals(cmdType)) {
+                if (curEndIdx < endsCount - 1) {
+                    state.put("currentEndIndex", curEndIdx + 1);
+                    state.put("currentEndArrows", new JSONArray());
+                }
+            } else if ("SYNC_TELEMETRY_FROM_WATCH".equals(cmdType)) {
+                JSONObject payloadObj = cmdObj.optJSONObject("payload");
+                int steps = payloadObj != null
+                    ? payloadObj.optInt("stepsCount", state.optInt("stepsCount", 0))
+                    : cmdObj.optInt("stepsCount", state.optInt("stepsCount", 0));
+                int walkedM = payloadObj != null
+                    ? payloadObj.optInt("distanceWalkedM", state.optInt("distanceWalkedM", 0))
+                    : cmdObj.optInt("distanceWalkedM", state.optInt("distanceWalkedM", 0));
+                state.put("stepsCount", Math.max(state.optInt("stepsCount", 0), steps));
+                state.put("distanceWalkedM", Math.max(state.optInt("distanceWalkedM", 0), walkedM));
+            } else if ("TOGGLE_AUTO_DETECT".equals(cmdType)) {
+                state.put("autoDetectEnabled", cmdObj.optBoolean("enabled", true));
             } else if ("FINISH_SESSION_FROM_WATCH".equals(cmdType)) {
                 state.put("sessionActive", false);
                 state.put("arrowsCount", 0);
                 state.put("totalScore", 0);
+                state.put("currentEndIndex", 0);
+                state.put("currentEndArrows", new JSONArray());
+                state.put("completedEnds", 0);
             }
 
             String updatedSnapshot = state.toString();
             prefs.edit()
                 .putString("lastProcessedWatchCmdId", cmdId)
+                .putString("recentProcessedWatchCmdIdsJson", serializeRecentCmdIds())
                 .putString("pendingWatchCommandsJson", queueArr.toString())
                 .putString("lastWatchSnapshotJson", updatedSnapshot)
                 .putLong("lastWatchSnapshotTimeMs", now)

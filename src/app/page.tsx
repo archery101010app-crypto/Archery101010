@@ -265,18 +265,15 @@ export default function Home() {
             await saveLocalSetting("simulated_users", cleanedUsers);
             console.log("[Auth Startup] Cleaned legacy/fictitious users from local database:", localUsers.length - cleanedUsers.length, "removed.");
           }
+          // Clean only legacy synthetic non-Firebase user entries (never delete real or pending user writes!)
           const queue = await getSyncQueue();
           for (const item of queue) {
-            const isFailedOrStaleUserWrite =
-              item.collection === "users" &&
-              (item.status === "failed" ||
-                (item.attempts || 0) > 0 ||
-                Date.now() - (item.timestamp || 0) > 30000);
+            const pid = String(item.payloadId || "");
             if (
-              isFailedOrStaleUserWrite ||
-              (item.collection === "users" &&
-                !String(item.payloadId || "").startsWith("USR-ATH-") &&
-                (String(item.payloadId || "").startsWith("USR-") || item.payload?.password))
+              item.collection === "users" &&
+              pid !== "USR-GUEST-OFFLINE" &&
+              !pid.startsWith("USR-ATH-") &&
+              pid.startsWith("USR-")
             ) {
               await removeFromSyncQueue(item.id);
             }
@@ -284,8 +281,11 @@ export default function Home() {
 
           // Reconcile logged-in user against Firestore on startup so any remote Coach link/unlink
           // or self-healed role is applied immediately and never overwritten by stale local IndexedDB state
+          const { auth } = await import("@/lib/firebase");
           if (
             loggedUser &&
+            loggedUser.uid !== "USR-GUEST-OFFLINE" &&
+            auth.currentUser &&
             !isLegacyOrDemoUser(loggedUser) &&
             !isIncompleteUser(loggedUser) &&
             typeof navigator !== "undefined" &&
@@ -485,50 +485,46 @@ export default function Home() {
     initApp();
   }, []);
  
-  // If the user is linked as an athlete to an external Coach, ensure coachViewMode is off
+  // If the user is an archer or linked to an external Coach, ensure coachViewMode is off
   useEffect(() => {
-    if (coachViewMode && isLinkedToExternalCoach(user)) {
+    if (coachViewMode && (user?.role === "archer" || isLinkedToExternalCoach(user))) {
       setCoachViewMode(false);
     }
-  }, [coachViewMode, user?.uid, user?.clubId, user?.coachId, user?.isClubCreator]);
+  }, [coachViewMode, user?.uid, user?.role, user?.clubId, user?.coachId, user?.isClubCreator]);
 
-  // Periodic user presence heartbeat to mark user as online in Firestore (self-healing)
+  // Periodic user presence heartbeat (throttled to 120s; skips Offline Guest & missing Auth)
   useEffect(() => {
-    if (!user?.uid || !user?.fullName?.trim()) return;
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || !user?.fullName?.trim()) return;
     const uid = user.uid;
 
     const updatePresence = async () => {
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        if (typeof navigator !== "undefined" && !navigator.onLine) return;
+        const { auth, db } = await import("@/lib/firebase");
+        if (!auth.currentUser || auth.currentUser.uid !== uid) return;
+        const { doc, updateDoc } = await import("firebase/firestore");
         const { runSync } = await import("@/lib/db/syncManager");
-        const docRef = doc(db, "users", uid);
-        // Only write heartbeat identity fields — never overwrite role, clubId, coachId, isClubCreator, or clubInviteCode!
-        await setDoc(
-          docRef,
-          {
-            uid: user.uid,
-            email: user.email,
-            fullName: user.fullName,
-            lastActiveAt: Date.now()
-          },
-          { merge: true }
-        );
+        const now = Date.now();
+        // Use updateDoc (ignoring not-found) so heartbeat never triggers an invalid create rule error
+        await updateDoc(doc(db, "users", uid), {
+          lastActiveAt: now,
+          updatedAt: now
+        }).catch(() => {});
         runSync().catch(() => {});
-      } catch (err) {
+      } catch {
         // Silently catch offline/network errors
       }
     };
 
     updatePresence();
-    const interval = setInterval(updatePresence, 25000);
+    const interval = setInterval(updatePresence, 120000);
 
     return () => clearInterval(interval);
-  }, [user?.uid, user?.fullName, user?.email]);
+  }, [user?.uid, user?.fullName]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
 
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get("join");
@@ -543,7 +539,8 @@ export default function Home() {
         const code = joinCode.toUpperCase().trim();
         try {
           const { doc, getDoc, updateDoc } = await import("firebase/firestore");
-          const { db } = await import("@/lib/firebase");
+          const { auth, db } = await import("@/lib/firebase");
+          if (!auth.currentUser) return;
 
           const docRef = doc(db, "active_duels", code);
           const docSnap = await getDoc(docRef);
@@ -565,10 +562,12 @@ export default function Home() {
               id: data.id,
               bowType: data.bowType,
               distance: data.distance,
-              system: data.bowType === "Compound" ? "cumulative" : "set",
+              targetFace: data.targetFace,
+              targetType: data.targetType || data.targetFace,
+              system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
               isCreator: false,
               rival: {
-                uid: "RIV-FRIEND-CREATOR",
+                uid: data.creatorUid || "RIV-FRIEND-CREATOR",
                 fullName: data.creatorName || "Anfitrión del Duelo",
                 country: data.creatorCountry || "CR",
                 clubName: "Lobby Archery",
@@ -595,32 +594,54 @@ export default function Home() {
 
   // Listen for real-time duel invitations directed to the logged-in user
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
     const currentUid = user.uid;
 
     let unsubscribe: () => void = () => {};
+    let authUnsub: () => void = () => {};
+    let cancelled = false;
 
     async function initInviteListener() {
       try {
         const { collection, query, where, onSnapshot } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const { auth, db } = await import("@/lib/firebase");
 
-        const q = query(
-          collection(db, "duel_invitations"),
-          where("receiverUid", "==", currentUid),
-          where("status", "==", "pending")
-        );
+        const attach = () => {
+          if (cancelled || !auth.currentUser || auth.currentUser.uid !== currentUid) return;
+          unsubscribe();
+          const q = query(
+            collection(db, "duel_invitations"),
+            where("receiverUid", "==", currentUid),
+            where("status", "==", "pending")
+          );
 
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          snapshot.forEach((snap) => {
-            const data = snap.data();
-            // Show pending invitation modal
-            setPendingInvitation({
-              id: snap.id,
-              ...data
-            });
+          unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+              snapshot.forEach((snap) => {
+                const data = snap.data();
+                setPendingInvitation({
+                  id: snap.id,
+                  ...data
+                });
+              });
+            },
+            (err) => console.warn("Duel invitation listener error:", err?.message || err)
+          );
+        };
+
+        if (auth.currentUser?.uid === currentUid) {
+          attach();
+        } else {
+          authUnsub = onAuthStateChanged(auth, (fbUser) => {
+            if (fbUser?.uid === currentUid) {
+              attach();
+            } else {
+              unsubscribe();
+            }
           });
-        }, (err) => console.warn("Duel invitation listener error:", err?.message || err));
+        }
       } catch (err) {
         console.error("Error setting up real-time duel invitation listener:", err);
       }
@@ -629,13 +650,15 @@ export default function Home() {
     initInviteListener();
 
     return () => {
+      cancelled = true;
+      authUnsub();
       unsubscribe();
     };
   }, [user?.uid]);
 
   // Listen in real-time for Coach Linking Notifications when an athlete bonds via the 6-digit code
   useEffect(() => {
-    if (!user?.uid || isLinkedToExternalCoach(user)) return;
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || isLinkedToExternalCoach(user)) return;
     const isCoachCapable =
       user.role === "coach" ||
       user.role === "team_admin" ||
@@ -646,6 +669,8 @@ export default function Home() {
 
     const currentUid = user.uid;
     let unsubscribe: () => void = () => {};
+    let authUnsub: () => void = () => {};
+    let cancelled = false;
 
     const playLinkChime = () => {
       try {
@@ -675,73 +700,90 @@ export default function Home() {
     async function initCoachLinkListener() {
       try {
         const { collection, query, where, onSnapshot, doc, getDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const { auth, db } = await import("@/lib/firebase");
         const { getLocalSetting, saveLocalSetting, isFictitiousUser } = await import("@/lib/db/indexedDB");
 
-        const q = query(
-          collection(db, "coach_notifications"),
-          where("coachUid", "==", currentUid),
-          where("read", "==", false)
-        );
+        const attach = () => {
+          if (cancelled || !auth.currentUser || auth.currentUser.uid !== currentUid) return;
+          unsubscribe();
+          const q = query(
+            collection(db, "coach_notifications"),
+            where("coachUid", "==", currentUid),
+            where("read", "==", false)
+          );
 
-        unsubscribe = onSnapshot(
-          q,
-          async (snapshot) => {
-            const seenMap = await getLocalSetting<Record<string, number>>(`seen_coach_link_notif_ts_${currentUid}`, {});
+          unsubscribe = onSnapshot(
+            q,
+            async (snapshot) => {
+              const seenMap = await getLocalSetting<Record<string, number>>(`seen_coach_link_notif_ts_${currentUid}`, {});
 
-            for (const snap of snapshot.docs) {
-              const data = snap.data() as CoachLinkNotification;
-              const notifId = snap.id || data.id;
-              const notifTs = Number(data?.updatedAt || data?.createdAt || 0);
-              const lastSeenTs = Number(seenMap?.[notifId] || 0);
-              if (!data || data.read === true || (lastSeenTs > 0 && notifTs > 0 && lastSeenTs >= notifTs)) continue;
+              for (const snap of snapshot.docs) {
+                const data = snap.data() as CoachLinkNotification;
+                const notifId = snap.id || data.id;
+                const notifTs = Number(data?.updatedAt || data?.createdAt || 0);
+                const lastSeenTs = Number(seenMap?.[notifId] || 0);
+                if (!data || data.read === true || (lastSeenTs > 0 && notifTs > 0 && lastSeenTs >= notifTs)) continue;
 
-              // Immediately pull the athlete's latest profile into simulated_users so the Coach roster updates instantly
-              if (data.athleteUid) {
-                try {
-                  const athSnap = await getDoc(doc(db, "users", data.athleteUid));
-                  if (athSnap.exists()) {
-                    const athData = { ...(athSnap.data() as UserProfile), uid: data.athleteUid };
-                    if (!isFictitiousUser(athData)) {
-                      const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-                      const merged = [athData, ...localUsers.filter((u) => u.uid !== data.athleteUid)];
-                      await saveLocalSetting("simulated_users", merged);
-                      if (typeof window !== "undefined") {
-                        window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: merged.length } }));
+                // Immediately pull the athlete's latest profile into simulated_users so the Coach roster updates instantly
+                if (data.athleteUid) {
+                  try {
+                    const athSnap = await getDoc(doc(db, "users", data.athleteUid));
+                    if (athSnap.exists()) {
+                      const athData = { ...(athSnap.data() as UserProfile), uid: data.athleteUid };
+                      if (!isFictitiousUser(athData)) {
+                        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                        const merged = [athData, ...localUsers.filter((u) => u.uid !== data.athleteUid)];
+                        await saveLocalSetting("simulated_users", merged);
+                        if (typeof window !== "undefined") {
+                          window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: merged.length } }));
+                        }
                       }
                     }
+                  } catch {
+                    // ignore
+                  }
+                }
+
+                // Trigger haptic, chime, and system notification
+                import("@/lib/haptics")
+                  .then(({ triggerHaptic }) => triggerHaptic("confirm"))
+                  .catch(() => {});
+                playLinkChime();
+
+                try {
+                  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+                    new Notification("¡Nuevo Alumno Vinculado!", {
+                      body: `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
+                      icon: "/icons/icon-192x192.png"
+                    });
                   }
                 } catch {
                   // ignore
                 }
+
+                setPendingCoachLinkNotif({
+                  ...data,
+                  id: notifId
+                });
+                break;
               }
+            },
+            (err) => console.warn("Coach link notification listener error:", err?.message || err)
+          );
+        };
 
-              // Trigger haptic, chime, and system notification
-              import("@/lib/haptics")
-                .then(({ triggerHaptic }) => triggerHaptic("confirm"))
-                .catch(() => {});
-              playLinkChime();
-
-              try {
-                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-                  new Notification("🎯 ¡Nuevo Alumno Vinculado!", {
-                    body: `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
-                    icon: "/icons/icon-192x192.png"
-                  });
-                }
-              } catch {
-                // ignore
-              }
-
-              setPendingCoachLinkNotif({
-                ...data,
-                id: notifId
-              });
-              break;
+        if (auth.currentUser?.uid === currentUid) {
+          attach();
+        } else {
+          authUnsub = onAuthStateChanged(auth, (fbUser) => {
+            if (fbUser?.uid === currentUid) {
+              attach();
+            } else {
+              unsubscribe();
             }
-          },
-          (err) => console.warn("Coach link notification listener error:", err?.message || err)
-        );
+          });
+        }
       } catch (err) {
         console.warn("Error setting up coach link notification listener:", err);
       }
@@ -750,6 +792,8 @@ export default function Home() {
     initCoachLinkListener();
 
     return () => {
+      cancelled = true;
+      authUnsub();
       unsubscribe();
     };
   }, [user?.uid, user?.role, user?.isClubCreator, user?.clubId, user?.coachId]);
@@ -779,15 +823,47 @@ export default function Home() {
     checkAds();
   }, [currentScreen, user?.uid, user?.role, user?.plan, dbVersion]);
 
-  // Start real-time Firestore synchronization when user is authenticated.
-  // startRealtimeSync is idempotent per (uid, role, clubId) — avoids listener churn that
-  // crashes the Firestore SDK with "INTERNAL ASSERTION FAILED (ca9 / b815)".
+  // Start real-time Firestore synchronization when user is authenticated in Firebase Auth (never for Offline Guest).
   useEffect(() => {
-    if (user?.uid) {
-      startRealtimeSync(user.uid, { role: user.role, clubId: user.clubId || null });
-    } else {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
       stopRealtimeSync();
+      return;
     }
+
+    let authUnsub: () => void = () => {};
+    let cancelled = false;
+    const uid = user.uid;
+    const scope = { role: user.role, clubId: user.clubId || null };
+
+    (async () => {
+      try {
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const { auth } = await import("@/lib/firebase");
+        if (cancelled) return;
+
+        if (auth.currentUser?.uid === uid) {
+          startRealtimeSync(uid, scope);
+        } else {
+          stopRealtimeSync();
+        }
+
+        authUnsub = onAuthStateChanged(auth, (fbUser) => {
+          if (cancelled) return;
+          if (fbUser && fbUser.uid === uid) {
+            startRealtimeSync(uid, scope);
+          } else {
+            stopRealtimeSync();
+          }
+        });
+      } catch {
+        stopRealtimeSync();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      authUnsub();
+    };
   }, [user?.uid, user?.role, user?.clubId]);
 
   useEffect(() => {
@@ -936,7 +1012,7 @@ export default function Home() {
   // (repeated enableNetwork calls while onSnapshot is active trigger Firestore INTERNAL ASSERTION FAILED ca9/b815)
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
       const uid = user.uid;
 
       if (document.visibilityState === "visible") {
@@ -944,12 +1020,16 @@ export default function Home() {
           const { runSync } = await import("@/lib/db/syncManager");
           runSync().catch(() => {});
 
-          if (user.fullName?.trim()) {
-            const { db } = await import("@/lib/firebase");
-            const { doc, setDoc } = await import("firebase/firestore");
-            await setDoc(doc(db, "users", uid), {
-              lastActiveAt: Date.now()
-            }, { merge: true });
+          if (user.fullName?.trim() && (typeof navigator === "undefined" || navigator.onLine)) {
+            const { auth, db } = await import("@/lib/firebase");
+            if (auth.currentUser && auth.currentUser.uid === uid) {
+              const { doc, updateDoc } = await import("firebase/firestore");
+              const now = Date.now();
+              await updateDoc(doc(db, "users", uid), {
+                lastActiveAt: now,
+                updatedAt: now
+              }).catch(() => {});
+            }
           }
         } catch (err) {
           console.error("[Firebase Reconnect] Error during visibility sync:", err);
@@ -961,12 +1041,16 @@ export default function Home() {
           return;
         }
         try {
-          const { db } = await import("@/lib/firebase");
-          const { doc, setDoc } = await import("firebase/firestore");
-          await setDoc(doc(db, "users", uid), {
-            lastActiveAt: 0
-          }, { merge: true });
-        } catch (err) {
+          if (typeof navigator !== "undefined" && !navigator.onLine) return;
+          const { auth, db } = await import("@/lib/firebase");
+          if (auth.currentUser && auth.currentUser.uid === uid) {
+            const { doc, updateDoc } = await import("firebase/firestore");
+            await updateDoc(doc(db, "users", uid), {
+              lastActiveAt: 0,
+              updatedAt: Date.now()
+            }).catch(() => {});
+          }
+        } catch {
           // Silently catch errors
         }
       }
@@ -1086,13 +1170,16 @@ export default function Home() {
     setSessionConfig(null);
     setDismissedProfileModal(false);
 
-    if (outgoingUid) {
+    if (outgoingUid && outgoingUid !== "USR-GUEST-OFFLINE") {
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        await setDoc(doc(db, "users", outgoingUid), {
-          lastActiveAt: 0
-        }, { merge: true });
+        const { auth, db } = await import("@/lib/firebase");
+        if (auth.currentUser && auth.currentUser.uid === outgoingUid && (typeof navigator === "undefined" || navigator.onLine)) {
+          const { doc, updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "users", outgoingUid), {
+            lastActiveAt: 0,
+            updatedAt: Date.now()
+          }).catch(() => {});
+        }
       } catch (err) {
         console.warn("Failed to clean up presence on logout:", err);
       }
@@ -1364,6 +1451,7 @@ export default function Home() {
           <HistoryView
             user={user}
             initialTab={initialHistoryTab}
+            coachViewMode={coachViewMode}
             onBack={() => setCurrentScreen("HOME")}
           />
         )}
@@ -1645,20 +1733,24 @@ export default function Home() {
                         updatedAt: Date.now()
                       });
 
-                      // Setup match configuration for Arena
+                      // Setup match configuration for Arena (preserving custom duel settings)
                       const matchConfig = {
                         id: pendingInvitation.roomCode,
                         bowType: pendingInvitation.bowType,
                         distance: pendingInvitation.distance,
-                        system: pendingInvitation.bowType === "Compound" ? "cumulative" : "set",
+                        targetFace: pendingInvitation.targetFace,
+                        targetType: pendingInvitation.targetType || pendingInvitation.targetFace,
+                        system:
+                          pendingInvitation.system ||
+                          (pendingInvitation.bowType === "Compound" ? "cumulative" : "set"),
                         isCreator: false,
                         rival: {
                           uid: pendingInvitation.senderUid,
                           fullName: pendingInvitation.senderName,
-                          country: "CR",
-                          clubName: "Oponente en Línea",
+                          country: pendingInvitation.senderCountry || "CR",
+                          clubName: pendingInvitation.senderClubName || "Oponente en Línea",
                           clubLogo: "0",
-                          clubCountry: "CR",
+                          clubCountry: pendingInvitation.senderCountry || "CR",
                           rating: 9.0
                         }
                       };

@@ -11,6 +11,8 @@ interface CoachAthletesTabProps {
   athletes: UserProfile[];
   onViewAthlete: (athlete: UserProfile) => void;
   sessions: any[];
+  coachUid?: string;
+  activeClubId?: string;
   onCreateAthlete?: (newAthlete: UserProfile) => void;
   onOpenPlanImporter?: (preselectedAthleteId?: string) => void;
 }
@@ -19,6 +21,8 @@ export default function CoachAthletesTab({
   athletes, 
   onViewAthlete, 
   sessions,
+  coachUid,
+  activeClubId,
   onCreateAthlete,
   onOpenPlanImporter
 }: CoachAthletesTabProps) {
@@ -46,9 +50,18 @@ export default function CoachAthletesTab({
   const [phone, setPhone] = useState("");
   const [initialNote, setInitialNote] = useState("");
 
-  // Calculate active states
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+  // Calculate active states (strictly completed sessions for historical precision averages)
   const getAthleteStats = (uid: string) => {
     const athSess = sessions.filter(s => (s.userId === uid || s.userUid === uid) && !s.isDuel && !s.isDraft && s.deletedByArcher !== true);
+    const isLiveNow = sessions.some(
+      (s) =>
+        (s.userId === uid || s.userUid === uid) &&
+        !s.isDuel &&
+        s.isDraft &&
+        (s.updatedAt || s.timestamp || 0) >= Date.now() - SIX_HOURS_MS
+    );
     const count = athSess.length;
     const lastTime = count > 0 ? Math.max(...athSess.map(s => s.timestamp || 0)) : 0;
     const scored = athSess.filter((s) => hasRealScore(s));
@@ -56,7 +69,7 @@ export default function CoachAthletesTab({
       ? Math.round(scored.reduce((sum, s) => sum + getSessionScore(s), 0) / scored.length)
       : 0;
 
-    return { count, lastTime, averageScore };
+    return { count, lastTime, averageScore, isLiveNow };
   };
 
   const filteredAthletes = athletes.filter(ath => {
@@ -67,7 +80,7 @@ export default function CoachAthletesTab({
     return matchesSearch && matchesBow;
   });
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
       alert("Por favor ingresa el nombre completo del alumno.");
@@ -86,7 +99,7 @@ export default function CoachAthletesTab({
       country: "CR",
       city: "San José",
       gender,
-      clubId: null,
+      clubId: activeClubId || null,
       clubName: null,
       bowConfig: {
         type: bowType,
@@ -108,15 +121,50 @@ export default function CoachAthletesTab({
     };
 
     if (initialNote.trim()) {
-      import("@/lib/db/indexedDB").then(({ saveLocalSetting }) => {
-        saveLocalSetting(`coach_notes_${newProfile.uid}`, [
-          {
-            id: `NOTE-${Date.now()}`,
-            date: Date.now(),
-            content: initialNote.trim()
+      const nowTs = Date.now();
+      const initialNotesArray = [
+        {
+          id: `NOTE-${nowTs}`,
+          date: nowTs,
+          content: initialNote.trim()
+        }
+      ];
+      try {
+        const { saveLocalSetting, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+        await saveLocalSetting(`coach_notes_${newProfile.uid}`, initialNotesArray);
+
+        if (coachUid) {
+          const noteDocId = `NOTE-${coachUid}-${newProfile.uid}`;
+          const recordPayload = {
+            id: noteDocId,
+            coachId: coachUid,
+            clubId: activeClubId || `CLB-${coachUid}`,
+            type: "note" as const,
+            athleteUid: newProfile.uid,
+            notes: initialNotesArray,
+            updatedAt: nowTs
+          };
+          try {
+            if (typeof navigator === "undefined" || navigator.onLine) {
+              const { doc, setDoc } = await import("firebase/firestore");
+              const { db } = await import("@/lib/firebase");
+              await setDoc(doc(db, "coach_records", noteDocId), recordPayload, { merge: true });
+            }
+          } catch {
+            // fallback to sync queue below
           }
-        ]);
-      });
+          await addToSyncQueue({
+            id: generateResilientId("TXN"),
+            collection: "coach_records",
+            operation: "UPDATE",
+            payloadId: noteDocId,
+            payload: recordPayload,
+            timestamp: nowTs
+          });
+        }
+      } catch (noteErr) {
+        console.warn("Error saving initial coach note:", noteErr);
+      }
     }
 
     if (onCreateAthlete) {
@@ -230,7 +278,7 @@ export default function CoachAthletesTab({
         ) : (
           filteredAthletes.map((ath) => {
             const stats = getAthleteStats(ath.uid);
-            const isOnlineSim = stats.lastTime > (Date.now() - 3 * 24 * 60 * 60 * 1000); // active in last 3 days
+            const isOnlineSim = stats.isLiveNow || stats.lastTime > (Date.now() - 3 * 24 * 60 * 60 * 1000); // live or active in last 3 days
             
             return (
               <div
@@ -244,7 +292,11 @@ export default function CoachAthletesTab({
                       {ath.fullName.substring(0, 2).toUpperCase()}
                     </div>
                     {isOnlineSim && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-cyan-neon border-2 border-[#0B0D12]" />
+                      <span
+                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0B0D12] ${
+                          stats.isLiveNow ? "bg-emerald-400" : "bg-cyan-neon"
+                        }`}
+                      />
                     )}
                   </div>
 
@@ -258,8 +310,13 @@ export default function CoachAthletesTab({
                           (@{ath.nickname})
                         </span>
                       )}
+                      {stats.isLiveNow && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                          ● EN VIVO
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate">
+                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
                       {ath.bowConfig?.type === "Recurve" ? "Recurvo" : ath.bowConfig?.type === "Compound" ? "Compuesto" : (ath.bowConfig?.type || "Barebow")} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
                     </span>
                   </div>
@@ -282,7 +339,7 @@ export default function CoachAthletesTab({
                   )}
                   {stats.averageScore > 0 && (
                     <div className="flex flex-col text-right shrink-0">
-                      <span className="text-xs font-black text-yellow-gold whitespace-nowrap">{stats.averageScore} pts</span>
+                      <span className="text-xs font-black text-yellow-gold whitespace-nowrap tabular-nums">{stats.averageScore} pts</span>
                       <span className="text-[9.3px] text-white leading-none">Promedio</span>
                     </div>
                   )}
@@ -450,7 +507,7 @@ export default function CoachAthletesTab({
                       type="text"
                       value={brand}
                       onChange={(e) => setBrand(e.target.value)}
-                      placeholder="Hoyt / Win&Win / Mathews"
+                      placeholder="Ej. Marca deportiva"
                       className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
@@ -462,7 +519,7 @@ export default function CoachAthletesTab({
                       type="text"
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
-                      placeholder="Formula XD / TRX"
+                      placeholder="Ej. Modelo de competencia"
                       className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
@@ -507,7 +564,7 @@ export default function CoachAthletesTab({
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition shadow-glow-cyan cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition cursor-pointer"
                   >
                     Guardar Perfil
                   </button>

@@ -19,22 +19,28 @@ import {
   getLocalSetting,
   saveLocalSetting,
   getLocalSessions,
-  isFictitiousUser
+  isFictitiousUser,
+  isFictitiousSession
 } from "@/lib/db/indexedDB";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { exportCycleToCsv } from "@/lib/cycleImporter";
+import { isProActive } from "@/lib/billingService";
+import { getSessionArrows } from "@/lib/scoring/sessionMetrics";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
 
 interface CoachMacrocycleTabProps {
   user: UserProfile;
   onUpgrade: () => void;
   athletes?: UserProfile[];
+  sessions?: any[];
 }
 
-export default function CoachMacrocycleTab({ user, onUpgrade, athletes: externalAthletes }: CoachMacrocycleTabProps) {
-  const isPro = user.plan === "PRO";
+export default function CoachMacrocycleTab({ user, onUpgrade, athletes: externalAthletes, sessions: externalSessions }: CoachMacrocycleTabProps) {
+  const isPro = isProActive(user);
+  const canonicalClubId =
+    user.clubId && user.clubId !== "CLB-DEMO" ? user.clubId : `CLB-${user.uid}`;
 
   const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
   const [selectedMacro, setSelectedMacro] = useState<Macrocycle | null>(null);
@@ -172,7 +178,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
   useEffect(() => {
     async function loadData() {
       // Load roster of athletes
-      const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+      const activeClubId = canonicalClubId;
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       const athletes = externalAthletes && externalAthletes.length > 0
         ? externalAthletes
@@ -203,7 +209,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       }
       setMacrocycles(cleanList);
       const localSess = await getLocalSessions();
-      setAllSessions(localSess);
+      const mergedMap = new Map<string, any>();
+      for (const s of localSess || []) {
+        if (s?.id) mergedMap.set(s.id, s);
+      }
+      for (const s of externalSessions || []) {
+        if (s?.id) mergedMap.set(s.id, s);
+      }
+      setAllSessions(Array.from(mergedMap.values()));
     }
 
     if (isPro) {
@@ -211,7 +224,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     }
 
     const handleDbChange = (e: any) => {
-      const targetStores = ["simulated_users", "macrocycles_local"];
+      const targetStores = ["simulated_users", "macrocycles_local", "sessions_local"];
       if (targetStores.includes(e.detail?.store) && isPro) {
         loadData();
       }
@@ -221,7 +234,34 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, [isPro, user]);
+  }, [isPro, user, canonicalClubId, externalAthletes, externalSessions]);
+
+  const computeMacrocycleArrows = (mac: Macrocycle): number => {
+    const startMs = mac.startDate ? new Date(mac.startDate + "T00:00:00").getTime() : 0;
+    const endMs = mac.endDate ? new Date(mac.endDate + "T23:59:59").getTime() : Number.MAX_SAFE_INTEGER;
+    const hasSpecificAthletes =
+      mac.assignmentType !== "club" && mac.assignedAthleteIds && mac.assignedAthleteIds.length > 0;
+    const targetUids = new Set(
+      hasSpecificAthletes ? mac.assignedAthleteIds : roster.map((r) => r.uid)
+    );
+
+    return allSessions
+      .filter((s) => {
+        if (!s || s.isDraft || s.isDuel || s.deletedByArcher === true || isFictitiousSession(s)) {
+          return false;
+        }
+        if (s.timestamp < startMs || s.timestamp > endMs) return false;
+        const uid = s.userId || s.userUid;
+        if (hasSpecificAthletes) {
+          return Boolean(uid && targetUids.has(uid));
+        }
+        return Boolean(
+          (uid && targetUids.has(uid)) ||
+          (s.clubId && s.clubId === canonicalClubId && uid !== user.uid)
+        );
+      })
+      .reduce((sum, s) => sum + getSessionArrows(s), 0);
+  };
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -321,17 +361,18 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
     const id = editingId || generateResilientId("MAC");
     const nowStr = new Date().toISOString();
+    const assignedIds = assignmentType === "club" ? [] : assignedAthleteIds;
 
-    const macrocycleData: Macrocycle = {
+    const newMacro: Macrocycle = {
       id,
       name,
       coachId: user.uid,
-      clubId: user.clubId || "CLB-DEMO",
+      clubId: canonicalClubId,
       startDate,
       endDate,
       phases,
       assignmentType,
-      assignedAthleteIds: assignmentType === "club" ? [] : assignedAthleteIds,
+      assignedAthleteIds: assignedIds,
       groupName: assignmentType === "group" ? groupName : undefined,
       volumeGoal,
       currentVolume: editingId ? macrocycles.find((m) => m.id === editingId)?.currentVolume || 0 : 0,
@@ -340,7 +381,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       updatedAt: nowStr
     };
 
-    await saveLocalMacrocycle(id, macrocycleData);
+    await saveLocalMacrocycle(id, newMacro);
 
     // Queue sync transaction
     await addToSyncQueue({
@@ -348,9 +389,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       collection: "macrocycles",
       operation: editingId ? "UPDATE" : "INSERT",
       payloadId: id,
-      payload: macrocycleData,
+      payload: newMacro,
       timestamp: Date.now()
     });
+
+    // Auto-sync entire macrocycle onto Calendar so athletes immediately see tasks on their Calendar & Dashboard
+    await syncEntireMacrocycleToCalendar(newMacro, assignedIds, user.uid, user.fullName, canonicalClubId);
 
     // Reload
     const list = await getLocalMacrocycles();
@@ -358,7 +402,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     setShowCreateModal(false);
     
     if (selectedMacro?.id === id) {
-      setSelectedMacro(macrocycleData);
+      setSelectedMacro(newMacro);
     }
   };
 
@@ -394,6 +438,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     const duplicated: Macrocycle = {
       ...macro,
       id: duplicatedId,
+      clubId: canonicalClubId,
       name: `${macro.name} (Copia)`,
       createdAt: nowStr,
       updatedAt: nowStr,
@@ -480,7 +525,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                 </button>
                 <button
                   onClick={handleOpenCreate}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition shadow-glow-cyan"
+                  className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition"
                 >
                   <Plus size={12} />
                   <span>+ Ciclo</span>
@@ -496,7 +541,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               ) : (
                 macrocycles.map((mac) => {
                   const currentPhase = getCurrentPhaseType(mac);
-                  const progress = mac.volumeGoal > 0 ? Math.min(100, Math.round((mac.currentVolume / mac.volumeGoal) * 100)) : 0;
+                  const realVolume = computeMacrocycleArrows(mac);
+                  const progress = mac.volumeGoal > 0 ? Math.min(100, Math.round((realVolume / mac.volumeGoal) * 100)) : 0;
                   return (
                     <div
                       key={mac.id}
@@ -506,7 +552,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-1 max-w-[70%]">
                           <h4 className="text-white text-sm font-bold group-hover:text-cyan-neon transition-colors truncate">{mac.name}</h4>
-                          <span className="text-[10.5px] text-white flex items-center gap-1">
+                          <span className="text-[10.5px] text-white flex items-center gap-1 tabular-nums">
                             <Calendar size={10} />
                             {mac.startDate} al {mac.endDate}
                           </span>
@@ -529,15 +575,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between text-[10.5px]">
                           <span className="text-white">Meta de Volumen de Flechas:</span>
-                          <span className="text-white font-extrabold">{mac.currentVolume.toLocaleString()} / {mac.volumeGoal.toLocaleString()} ({progress}%)</span>
+                          <span className="text-white font-extrabold tabular-nums">{realVolume.toLocaleString()} / {mac.volumeGoal.toLocaleString()} ({progress}%)</span>
                         </div>
                         <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
                           <div 
                             className="h-full rounded-full transition-all duration-500" 
                             style={{ 
                               width: `${progress}%`,
-                              backgroundColor: currentPhase?.color || "#00BFFF",
-                              boxShadow: `0 0 10px ${currentPhase?.color || "#00BFFF"}80`
+                              backgroundColor: currentPhase?.color || "#00A8F3"
                             }} 
                           />
                         </div>
@@ -646,14 +691,39 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               </div>
             </div>
 
-            {/* Title / Dates details */}
-            <div>
-              <h2 className="text-[19.8px] font-black text-white leading-tight uppercase tracking-wide">{selectedMacro.name}</h2>
-              <p className="text-xs text-white flex items-center gap-1 mt-1">
-                <Calendar size={12} />
-                <span>Fechas: {selectedMacro.startDate} al {selectedMacro.endDate}</span>
-              </p>
-            </div>
+            {/* Title / Dates details + Real Team Volume Progress */}
+            {(() => {
+              const detailRealVolume = computeMacrocycleArrows(selectedMacro);
+              const detailPct =
+                selectedMacro.volumeGoal > 0
+                  ? Math.min(100, Math.round((detailRealVolume / selectedMacro.volumeGoal) * 100))
+                  : 0;
+              return (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h2 className="text-[19.8px] font-black text-white leading-tight uppercase tracking-wide">{selectedMacro.name}</h2>
+                    <p className="text-xs text-white flex items-center gap-1 mt-1 tabular-nums">
+                      <Calendar size={12} />
+                      <span>Fechas: {selectedMacro.startDate} al {selectedMacro.endDate}</span>
+                    </p>
+                  </div>
+                  <div className="bg-neutral-900/40 border border-white/10 rounded-2xl p-3.5 flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-white font-bold">Volumen Acumulado del Ciclo</span>
+                      <span className="text-cyan-neon font-black tabular-nums">
+                        {detailRealVolume.toLocaleString()} / {selectedMacro.volumeGoal.toLocaleString()} flechas ({detailPct}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 bg-cyan-neon"
+                        style={{ width: `${detailPct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Chronogram timeline visualization */}
             <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3.5">
@@ -690,7 +760,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       key={phase.id} 
                       className={`p-3.5 rounded-2xl border flex flex-col gap-2 relative overflow-hidden ${
                         isActive 
-                          ? "bg-neutral-950/80 border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.02)]" 
+                          ? "bg-neutral-950/80 border-white/20" 
                           : "bg-neutral-950/20 border-white/5"
                       }`}
                     >
@@ -708,13 +778,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                           {phase.name}
                         </span>
                         {isActive && (
-                          <span className="text-[9.3px] font-black text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-full border border-cyan-neon/20 animate-pulse">
-                            Etapa Activa
+                          <span className="text-[9.3px] font-black text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-full border border-cyan-neon/20">
+                            ● Etapa Activa
                           </span>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-[11.6px] bg-neutral-900/30 p-2 rounded-xl border border-white/[0.02]">
+                      <div className="grid grid-cols-2 gap-2 text-[11.6px] bg-neutral-900/30 p-2 rounded-xl border border-white/[0.02] tabular-nums">
                         <div>
                           <span className="text-white block uppercase font-bold text-[9.3px]">Sesiones/Semana</span>
                           <span className="text-white font-medium">{phase.weeklySessionGoal} sesiones</span>
@@ -737,58 +807,78 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
             </div>
 
             {/* Athlete progress table */}
-            <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3">
-              <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1">
-                <Users size={12} className="text-cyan-neon" />
-                <span>Progreso de Atletas Asignados</span>
-              </span>
+            {(() => {
+              const displayedAthletes =
+                selectedMacro.assignmentType !== "club" &&
+                selectedMacro.assignedAthleteIds &&
+                selectedMacro.assignedAthleteIds.length > 0
+                  ? roster.filter((a) => selectedMacro.assignedAthleteIds.includes(a.uid))
+                  : roster;
 
-              {roster.length === 0 ? (
-                <div className="text-center py-6 text-xs text-white">
-                  No hay arqueros asignados en el roster.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 mt-1">
-                  {roster.map((athlete) => {
-                    const startMs = selectedMacro.startDate ? new Date(selectedMacro.startDate + "T00:00:00").getTime() : 0;
-                    const endMs = selectedMacro.endDate ? new Date(selectedMacro.endDate + "T23:59:59").getTime() : Number.MAX_SAFE_INTEGER;
-                    const athleteProgress = allSessions
-                      .filter((s) => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && s.deletedByArcher !== true && s.timestamp >= startMs && s.timestamp <= endMs)
-                      .reduce((sum, s) => sum + (s.totalArrowsVolume || s.arrowsTotal || ((s.endsCount || 0) * (s.arrowsPerEnd || 0))), 0);
-                    const pct = selectedMacro.volumeGoal > 0 ? Math.min(100, Math.round((athleteProgress / selectedMacro.volumeGoal) * 100)) : 0;
-                    
-                    return (
-                      <div key={athlete.uid} className="flex justify-between items-center bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white">
-                            {athlete.fullName[0]}
-                          </div>
-                          <div>
-                            <span className="text-xs font-bold text-white block">{athlete.fullName}</span>
-                            <span className="text-[10.5px] text-white uppercase">{athlete.bowConfig?.type || ""}</span>
-                          </div>
-                        </div>
+              return (
+                <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 shadow-xl flex flex-col gap-3">
+                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1">
+                    <Users size={12} className="text-cyan-neon" />
+                    <span>Progreso de Atletas Asignados ({displayedAthletes.length})</span>
+                  </span>
 
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="text-xs font-black text-white">{athleteProgress.toLocaleString()} flechas</span>
-                            <span className="text-[10.5px] text-cyan-neon block font-bold mt-0.5">{pct}% de su meta</span>
+                  {displayedAthletes.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-white">
+                      No hay arqueros asignados a este plan.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 mt-1">
+                      {displayedAthletes.map((athlete) => {
+                        const startMs = selectedMacro.startDate ? new Date(selectedMacro.startDate + "T00:00:00").getTime() : 0;
+                        const endMs = selectedMacro.endDate ? new Date(selectedMacro.endDate + "T23:59:59").getTime() : Number.MAX_SAFE_INTEGER;
+                        const athleteProgress = allSessions
+                          .filter(
+                            (s) =>
+                              (s.userId === athlete.uid || s.userUid === athlete.uid) &&
+                              !s.isDraft &&
+                              !s.isDuel &&
+                              s.deletedByArcher !== true &&
+                              !isFictitiousSession(s) &&
+                              s.timestamp >= startMs &&
+                              s.timestamp <= endMs
+                          )
+                          .reduce((sum, s) => sum + getSessionArrows(s), 0);
+                        const pct = selectedMacro.volumeGoal > 0 ? Math.min(100, Math.round((athleteProgress / selectedMacro.volumeGoal) * 100)) : 0;
+                        
+                        return (
+                          <div key={athlete.uid} className="flex justify-between items-center bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white">
+                                {athlete.fullName[0]}
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-white block">{athlete.fullName}</span>
+                                <span className="text-[10.5px] text-white uppercase">{athlete.bowConfig?.type || ""}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="text-right tabular-nums">
+                                <span className="text-xs font-black text-white">{athleteProgress.toLocaleString()} flechas</span>
+                                <span className="text-[10.5px] text-cyan-neon block font-bold mt-0.5">{pct}% de su meta</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
+                                className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white active:scale-95 transition cursor-pointer"
+                                title={`Desvincular a ${athlete.fullName} de este plan`}
+                              >
+                                <UserMinus size={14} />
+                              </button>
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
-                            className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white active:scale-95 transition cursor-pointer"
-                            title={`Desvincular a ${athlete.fullName} de este plan`}
-                          >
-                            <UserMinus size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1179,7 +1269,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                   <button
                     type="button"
                     onClick={() => setStep(step + 1)}
-                    className="flex-1 py-2.5 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
+                    className="flex-1 py-2.5 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>Siguiente</span>
                     <ChevronRight size={14} />
@@ -1293,7 +1383,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                         }}
                         className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
                           syncTargetType === "selected"
-                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
@@ -1306,7 +1396,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                         onClick={() => setSyncTargetType("all")}
                         className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
                           syncTargetType === "all"
-                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon shadow-glow-cyan"
+                            ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >

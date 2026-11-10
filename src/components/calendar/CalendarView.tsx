@@ -19,7 +19,7 @@ import {
   isFictitiousSession
 } from "@/lib/db/indexedDB";
 import { getSessionArrows } from "@/lib/scoring/sessionMetrics";
-import { Macrocycle, MacrocyclePhase, PHASE_CONFIG } from "@/lib/db/macrocycleTypes";
+import { Macrocycle, MacrocyclePhase, PHASE_CONFIG, SyncedCalendarEvent } from "@/lib/db/macrocycleTypes";
 import { syncCycleToMonthCalendar, getRecommendedFocusPoints, saveDailyEntriesToCalendar, syncEntireMacrocycleToCalendar, unlinkAndPurgePlan, SyncCycleSummary } from "@/lib/cycleCalendarSync";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
 import { 
@@ -63,10 +63,17 @@ interface CalendarViewProps {
 
 export default function CalendarView({ user, onBack, onNavigate, coachViewMode = false }: CalendarViewProps) {
   const { language } = useLanguage();
-  const isCoach = coachViewMode || user.role === "coach";
+  const hasCoachRole =
+    user.role === "coach" ||
+    user.role === "team_admin_coach" ||
+    user.role === "team_admin" ||
+    user.role === "superadmin";
+  const isCoach = Boolean(coachViewMode || hasCoachRole);
+  const canonicalClubId =
+    user.clubId && user.clubId !== "CLB-DEMO" ? user.clubId : `CLB-${user.uid}`;
 
   const [sessions, setSessions] = useState<any[]>([]);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [events, setEvents] = useState<SyncedCalendarEvent[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [attendanceRate, setAttendanceRate] = useState(0);
   const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
@@ -198,7 +205,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   // Load Sessions, Events and Macrocycles on Mount & on db change
   useEffect(() => {
     async function loadData() {
-      const activeClubId = user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+      const activeClubId = canonicalClubId;
       let linkedAthleteUids = new Set<string>();
 
       if (isCoach) {
@@ -232,8 +239,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       });
       setSessions(filteredSessions);
       
-      const eventList = await getLocalEvents();
-      const cleanEvents: CalendarEvent[] = [];
+      const eventList = (await getLocalEvents()) as SyncedCalendarEvent[];
+      const cleanEvents: SyncedCalendarEvent[] = [];
       const badMacroIds = new Set<string>(["MAC-DEMO-1"]);
       for (const ev of eventList) {
         const itemsText = (ev.dailyItems || []).join(" ");
@@ -356,7 +363,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, [syncMacroId]);
+  }, [syncMacroId, canonicalClubId, isCoach, user]);
 
   const getPhaseOnDate = (dateStr: string) => {
     let filteredMacros = selectedMacrocycleId === "ALL" 
@@ -372,10 +379,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       );
     } else if (!isCoach) {
       filteredMacros = filteredMacros.filter((m) =>
-        m.assignmentType === "club" ||
-        !m.assignedAthleteIds ||
-        m.assignedAthleteIds.length === 0 ||
-        m.assignedAthleteIds.includes(user.uid)
+        (m.assignedAthleteIds && m.assignedAthleteIds.includes(user.uid)) ||
+        (Boolean(user.clubId) &&
+          m.clubId === user.clubId &&
+          (m.assignmentType === "club" || !m.assignedAthleteIds || m.assignedAthleteIds.length === 0))
       );
     }
 
@@ -431,7 +438,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setCurrentDate(new Date(year, month - 1, 1));
   };
 
-  // Filter events that belong to the user's club or were created by the user or are assigned to all club
+  // Filter events that belong to the user's club or were created by the user or are assigned directly
   const visibleEvents = events.filter((e) => {
     // If filtering by specific macrocycle:
     if (selectedMacrocycleId !== "ALL" && e.macrocycleId && e.macrocycleId !== selectedMacrocycleId) {
@@ -444,21 +451,29 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
           return e.assignedAthleteIds.includes(selectedAthleteFilter);
         }
-        return Boolean(user.clubId && e.clubId === user.clubId);
+        return Boolean(
+          e.clubId === canonicalClubId ||
+          (user.clubId && e.clubId === user.clubId) ||
+          e.createdByUid === user.uid
+        );
       }
 
-      if (user.clubId && e.clubId === user.clubId) return true;
+      if (e.clubId === canonicalClubId || (user.clubId && e.clubId === user.clubId)) return true;
       if (e.createdByUid === user.uid) return true;
       return false;
     }
 
-    // Archer (Student):
+    // Archer (Student): allow direct assignment regardless of legacy clubId mismatch, OR club-wide events
     if (e.createdByUid === user.uid) return true;
-    if (!user.clubId || e.clubId !== user.clubId) return false;
-    if (e.assignedAthleteIds && e.assignedAthleteIds.length > 0) {
-      return e.assignedAthleteIds.includes(user.uid);
+    if (e.assignedAthleteIds && e.assignedAthleteIds.includes(user.uid)) return true;
+    if (
+      user.clubId &&
+      e.clubId === user.clubId &&
+      (!e.assignedAthleteIds || e.assignedAthleteIds.length === 0)
+    ) {
+      return true;
     }
-    return true;
+    return false;
   });
 
   // Filter visible events to show in list (current month)
@@ -731,12 +746,65 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     setShowAssignmentModal(false);
   };
 
+  const toggleEventTaskCompletion = async (
+    ev: SyncedCalendarEvent,
+    itemIdx: number,
+    totalItemsCount: number
+  ) => {
+    const targetUid =
+      isCoach && selectedAthleteFilter !== "ALL" ? selectedAthleteFilter : user.uid;
+    const currentCompleted = !isCoach
+      ? ev.completedByAthlete?.[user.uid] ?? ev.completedItems ?? []
+      : ev.completedByAthlete?.[targetUid] ??
+        (targetUid === user.uid ? ev.completedItems ?? [] : []);
+
+    const nextCompleted = currentCompleted.includes(itemIdx)
+      ? currentCompleted.filter((i) => i !== itemIdx)
+      : [...currentCompleted, itemIdx];
+
+    const nextCompletedByAthlete: Record<string, number[]> = {
+      ...(ev.completedByAthlete || {}),
+      [targetUid]: nextCompleted
+    };
+
+    const updatedAt = Date.now();
+    const updatedEv: SyncedCalendarEvent = {
+      ...ev,
+      completedItems:
+        !isCoach || targetUid === user.uid ? nextCompleted : ev.completedItems || [],
+      completedByAthlete: nextCompletedByAthlete,
+      isCompleted: totalItemsCount > 0 && nextCompleted.length >= totalItemsCount,
+      updatedAt
+    };
+
+    await saveLocalEvent(updatedEv.id, updatedEv);
+    setEvents((prev) => prev.map((item) => (item.id === updatedEv.id ? updatedEv : item)));
+
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "calendar_events",
+      operation: "UPDATE",
+      payloadId: updatedEv.id,
+      payload: {
+        id: updatedEv.id,
+        completedItems: updatedEv.completedItems,
+        completedByAthlete: updatedEv.completedByAthlete,
+        updatedAt
+      },
+      timestamp: updatedAt
+    });
+
+    import("@/lib/db/syncManager")
+      .then(({ runSync }) => runSync())
+      .catch(() => {});
+  };
+
   const handleSaveDailyAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignDate) return;
 
     const cleanItems = assignLinesText
-      .split(/\r?\n|\s*\/\s*/)
+      .split(/\r?\n|\s*;\s*/)
       .map((s) => s.trim())
       .filter(Boolean);
 
@@ -796,7 +864,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       const eventId =
         existingEv?.id || `EVT-AGENDA-${dateIso}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-      const updatedAssignment: CalendarEvent = {
+      const updatedAssignment: SyncedCalendarEvent = {
         id: eventId,
         title: mainTitle,
         date: dateIso,
@@ -804,20 +872,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         createdByRole: isCoach ? "coach" : "archer",
         createdByName: user.fullName || (isCoach ? "Coach" : "Arquero"),
         createdByUid: user.uid,
-        clubId: user.clubId || undefined,
+        clubId: isCoach
+          ? canonicalClubId
+          : user.clubId && user.clubId !== "CLB-DEMO"
+          ? user.clubId
+          : undefined,
         type: "training",
         timestamp: Date.now(),
         macrocycleId: existingEv?.macrocycleId,
         phaseId: existingEv?.phaseId,
         phaseName: existingEv?.phaseName,
         phaseType: existingEv?.phaseType,
-        phaseColor: existingEv?.phaseColor || "#00E5FF",
+        phaseColor: existingEv?.phaseColor || "#00A8F3",
         targetArrows: assignTargetArrows,
         assignedAthleteIds: recipientIds,
         focusPoints: [],
         coachNotes: "",
         dailyItems: cleanItems,
         completedItems: existingEv?.completedItems || [],
+        completedByAthlete: existingEv?.completedByAthlete,
         isRestDay: isRest,
         isCompleted: false
       };
@@ -833,7 +906,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       });
     }
 
-    const refreshedEvents = await getLocalEvents();
+    const refreshedEvents = (await getLocalEvents()) as SyncedCalendarEvent[];
     setEvents(refreshedEvents);
     setShowAssignmentModal(false);
 
@@ -868,7 +941,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
     if (modalMode === "add") {
       const eventId = generateResilientId("EVT");
-      const newEvent: CalendarEvent = {
+      const newEvent: SyncedCalendarEvent = {
         id: eventId,
         title,
         date: eventDate,
@@ -877,7 +950,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         createdByRole: isCoach ? "coach" : "archer",
         createdByName: user.fullName,
         createdByUid: user.uid,
-        clubId: user.clubId || undefined,
+        clubId: isCoach
+          ? canonicalClubId
+          : user.clubId && user.clubId !== "CLB-DEMO"
+          ? user.clubId
+          : undefined,
         timestamp: Date.now()
       };
 
@@ -1326,7 +1403,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   dayAssign.dailyItems.forEach((it) => pushItem(it));
                 } else {
                   if (dayAssign.title) {
-                    dayAssign.title.split(/\s*\/\s*|\s*·\s*/).forEach((p) => pushItem(p));
+                    dayAssign.title.split(/\s*·\s*/).forEach((p) => pushItem(p));
                   }
                   if (dayAssign.focusPoints) {
                     dayAssign.focusPoints.forEach((fp) => pushItem(fp));
@@ -1337,22 +1414,31 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 }
               }
 
-              const completedSet = new Set<number>(dayAssign?.completedItems || []);
+              const activeAgendaUid =
+                isCoach && selectedAthleteFilter !== "ALL" ? selectedAthleteFilter : user.uid;
+              const completedItemsForView = !isCoach
+                ? dayAssign?.completedByAthlete?.[user.uid] ?? dayAssign?.completedItems ?? []
+                : dayAssign?.completedByAthlete?.[activeAgendaUid] ??
+                  (activeAgendaUid === user.uid ? dayAssign?.completedItems ?? [] : []);
+              const completedSet = new Set<number>(completedItemsForView);
 
               const handleToggleAgendaItem = async (itemIdx: number) => {
                 if (!dayAssign) return;
-                const nextCompleted = completedSet.has(itemIdx)
-                  ? (dayAssign.completedItems || []).filter((i) => i !== itemIdx)
-                  : [...(dayAssign.completedItems || []), itemIdx];
-
-                const updatedEv: CalendarEvent = {
-                  ...dayAssign,
-                  completedItems: nextCompleted,
-                  isCompleted: nextCompleted.length === itemsList.length
-                };
-                await saveLocalEvent(updatedEv.id, updatedEv);
-                setEvents((prev) => prev.map((ev) => (ev.id === updatedEv.id ? updatedEv : ev)));
+                await toggleEventTaskCompletion(dayAssign, itemIdx, itemsList.length);
               };
+
+              const assignedTargetsForSummary =
+                isCoach && dayAssign
+                  ? dayAssign.assignedAthleteIds && dayAssign.assignedAthleteIds.length > 0
+                    ? dayAssign.assignedAthleteIds.filter((id) => id !== user.uid)
+                    : roster.map((r) => r.uid)
+                  : [];
+              const completedAthletesCount =
+                isCoach && dayAssign && itemsList.length > 0
+                  ? assignedTargetsForSummary.filter(
+                      (uid) => (dayAssign.completedByAthlete?.[uid]?.length || 0) >= itemsList.length
+                    ).length
+                  : 0;
 
               return (
                 <div
@@ -1401,7 +1487,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                               }`}
                             >
                               <span
-                                className={`w-4 h-4 rounded-md border flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 ${
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5 tabular-nums ${
                                   done
                                     ? "bg-emerald-400 border-emerald-400 text-black"
                                     : "bg-cyan-neon/15 border-cyan-neon/40 text-cyan-neon"
@@ -1420,12 +1506,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           );
                         })}
 
-                        {dayAssign && dayAssign.targetArrows && dayAssign.targetArrows > 0 ? (
-                          <div className="flex items-center gap-2 text-[11px] text-cyan-neon font-black pl-1">
-                            <Target size={12} />
-                            <span>Meta: {dayAssign.targetArrows} flechas</span>
-                          </div>
-                        ) : null}
+                        <div className="flex items-center gap-3 flex-wrap pl-1">
+                          {dayAssign && dayAssign.targetArrows && dayAssign.targetArrows > 0 ? (
+                            <div className="flex items-center gap-1.5 text-[11px] text-cyan-neon font-black tabular-nums">
+                              <Target size={12} />
+                              <span>Meta: {dayAssign.targetArrows} flechas</span>
+                            </div>
+                          ) : null}
+                          {isCoach && assignedTargetsForSummary.length > 0 ? (
+                            <div className="flex items-center gap-1.5 text-[10.5px] text-emerald-400 font-black tabular-nums">
+                              <Users size={11} />
+                              <span>
+                                Cumplimiento: {completedAthletesCount}/{assignedTargetsForSummary.length} atletas
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ) : (
                       <div className="py-1.5 flex items-center text-xs text-white">
@@ -1872,7 +1968,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             });
                           }
                           if (coachAssignment.title) {
-                            coachAssignment.title.split(/\s*\/\s*|\s*·\s*/).forEach((part) => addUniqueItem(part));
+                            coachAssignment.title.split(/\s*·\s*/).forEach((part) => addUniqueItem(part));
                           }
                           if (coachAssignment.focusPoints && coachAssignment.focusPoints.length > 0) {
                             coachAssignment.focusPoints.forEach((fp) => addUniqueItem(fp));
@@ -1884,25 +1980,57 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                         if (rawList.length === 0) return null;
 
-                        const completedSet = new Set<number>(coachAssignment.completedItems || []);
+                        const activeModalUid =
+                          isCoach && selectedAthleteFilter !== "ALL"
+                            ? selectedAthleteFilter
+                            : user.uid;
+                        const completedForModal = !isCoach
+                          ? coachAssignment.completedByAthlete?.[user.uid] ??
+                            coachAssignment.completedItems ??
+                            []
+                          : coachAssignment.completedByAthlete?.[activeModalUid] ??
+                            (activeModalUid === user.uid
+                              ? coachAssignment.completedItems ?? []
+                              : []);
+                        const completedSet = new Set<number>(completedForModal);
                         const dayNumber = parseInt(selectedDay.split("-")[2], 10) || "";
 
                         const handleToggleChecklistItem = async (itemIdx: number) => {
-                          const nextCompleted = completedSet.has(itemIdx)
-                            ? (coachAssignment.completedItems || []).filter((i) => i !== itemIdx)
-                            : [...(coachAssignment.completedItems || []), itemIdx];
-
-                          const updatedEv: CalendarEvent = {
-                            ...coachAssignment,
-                            completedItems: nextCompleted,
-                            isCompleted: nextCompleted.length === rawList.length
-                          };
-                          await saveLocalEvent(updatedEv.id, updatedEv);
-                          setEvents((prev) => prev.map((ev) => (ev.id === updatedEv.id ? updatedEv : ev)));
+                          await toggleEventTaskCompletion(coachAssignment, itemIdx, rawList.length);
                         };
 
+                        const coachTrackingAthletes = isCoach
+                          ? (() => {
+                              const baseList =
+                                coachAssignment.assignedAthleteIds &&
+                                coachAssignment.assignedAthleteIds.length > 0
+                                  ? coachAssignment.assignedAthleteIds
+                                      .filter((id) => id !== user.uid)
+                                      .map(
+                                        (id) =>
+                                          roster.find((r) => r.uid === id) ||
+                                          ({ uid: id, fullName: id } as UserProfile)
+                                      )
+                                  : roster;
+                              const extraUids = Object.keys(
+                                coachAssignment.completedByAthlete || {}
+                              ).filter(
+                                (uid) =>
+                                  uid !== user.uid && !baseList.some((b) => b.uid === uid)
+                              );
+                              return [
+                                ...baseList,
+                                ...extraUids.map(
+                                  (uid) =>
+                                    roster.find((r) => r.uid === uid) ||
+                                    ({ uid, fullName: uid } as UserProfile)
+                                )
+                              ];
+                            })()
+                          : [];
+
                         return (
-                          <div className="flex flex-col gap-2 border-t border-white/[0.08] pt-3">
+                          <div className="flex flex-col gap-2.5 border-t border-white/[0.08] pt-3">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] text-cyan-neon uppercase font-black tracking-wider flex items-center gap-1.5">
                                 <CheckCircle2 size={13} className="text-cyan-neon shrink-0" />
@@ -1928,7 +2056,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                     }`}
                                   >
                                     <span
-                                      className={`w-5 h-5 rounded-lg border flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5 transition ${
+                                      className={`w-5 h-5 rounded-lg border flex items-center justify-center text-[11px] font-black shrink-0 mt-0.5 transition tabular-nums ${
                                         isDone
                                           ? "bg-emerald-400 border-emerald-400 text-black"
                                           : "bg-cyan-neon/15 border-cyan-neon/40 text-cyan-neon"
@@ -1943,6 +2071,70 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 );
                               })}
                             </div>
+
+                            {/* Vista Coach: Cumplimiento individual por Arquero sincronizado en la nube */}
+                            {isCoach && coachTrackingAthletes.length > 0 && (
+                              <div className="mt-1 bg-neutral-950/80 border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
+                                    <Users size={12} />
+                                    <span>Cumplimiento por Arquero</span>
+                                  </span>
+                                  <span className="text-[10px] text-white/75 font-bold tabular-nums">
+                                    {
+                                      coachTrackingAthletes.filter(
+                                        (a) =>
+                                          (coachAssignment.completedByAthlete?.[a.uid]?.length || 0) >=
+                                          rawList.length
+                                      ).length
+                                    }
+                                    /{coachTrackingAthletes.length} al 100%
+                                  </span>
+                                </div>
+                                <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                                  {coachTrackingAthletes.map((ath) => {
+                                    const athDoneCount = Math.min(
+                                      rawList.length,
+                                      (coachAssignment.completedByAthlete?.[ath.uid] || []).filter(
+                                        (idx) => idx >= 0 && idx < rawList.length
+                                      ).length
+                                    );
+                                    const isFullDone = athDoneCount >= rawList.length;
+                                    const isPartial = athDoneCount > 0 && !isFullDone;
+                                    return (
+                                      <div
+                                        key={ath.uid}
+                                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#0B0E14] border border-white/[0.06]"
+                                      >
+                                        <span className="text-xs font-bold text-white truncate">
+                                          {ath.fullName || ath.email || ath.uid}
+                                        </span>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="text-[11px] font-black text-white tabular-nums">
+                                            {athDoneCount}/{rawList.length}
+                                          </span>
+                                          <span
+                                            className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                              isFullDone
+                                                ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
+                                                : isPartial
+                                                ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
+                                                : "bg-white/5 border-white/10 text-white/70"
+                                            }`}
+                                          >
+                                            {isFullDone
+                                              ? "Completado"
+                                              : isPartial
+                                              ? "En curso"
+                                              : "Pendiente"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -2020,11 +2212,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       <div className="grid grid-cols-2 gap-2 text-[11.6px] bg-neutral-950/50 p-2 rounded-xl border border-white/5">
                         <div>
                           <span className="text-white block uppercase font-bold text-[9.3px]">Meta Semanal</span>
-                          <span className="text-white font-medium">{activePhaseInfo.phase.weeklySessionGoal} sesiones</span>
+                          <span className="text-white font-medium tabular-nums">{activePhaseInfo.phase.weeklySessionGoal} sesiones</span>
                         </div>
                         <div>
                           <span className="text-white block uppercase font-bold text-[9.3px]">Flechas Semanales</span>
-                          <span className="text-cyan-neon font-medium">{activePhaseInfo.phase.weeklyArrowGoal} flechas</span>
+                          <span className="text-cyan-neon font-medium tabular-nums">{activePhaseInfo.phase.weeklyArrowGoal} flechas</span>
                         </div>
                       </div>
 
@@ -2034,7 +2226,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                       <button
                         onClick={() => handleOpenCreateAssignment(selectedDay, activePhaseInfo)}
-                        className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
+                        className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Plus size={12} />
                         <span>Escribir Agenda para este Día</span>
@@ -2045,7 +2237,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       <p className="text-xs text-white">No hay actividades programadas en esta fecha.</p>
                       <button
                         onClick={() => handleOpenCreateAssignment(selectedDay, null)}
-                        className="py-2 px-4 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 shadow-glow-cyan cursor-pointer"
+                        className="py-2 px-4 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus size={13} />
                         <span>Escribir Agenda para este Día</span>
@@ -2379,7 +2571,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   )}
                   <button
                     type="submit"
-                    className="flex-1 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider shadow-glow-cyan cursor-pointer active:scale-98 transition"
+                    className="flex-1 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition"
                   >
                     Guardar Agenda
                   </button>
@@ -2446,7 +2638,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         onClick={() => setEventType(type.value as any)}
                         className={`py-2 rounded-xl border text-[11.6px] font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           eventType === type.value
-                            ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon shadow-glow-cyan"
+                            ? "border-cyan-neon bg-cyan-neon/10 text-cyan-neon"
                             : "border-white/5 bg-neutral-950 text-white hover:text-white"
                         }`}
                       >

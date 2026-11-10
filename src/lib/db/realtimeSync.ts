@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, doc, setDoc } from "firebase/firestore";
 import {
   adCampaignsStore,
@@ -83,6 +83,12 @@ export function startRealtimeSync(
   scope?: { role?: string | null; clubId?: string | null }
 ) {
   if (typeof window === "undefined") return;
+
+  // Offline Guest Guard: never attach Firestore listeners without an authenticated Firebase user
+  if (!currentUserUid || currentUserUid === "USR-GUEST-OFFLINE" || !auth.currentUser) {
+    stopRealtimeSync();
+    return;
+  }
 
   const role = scope?.role || "archer";
   const clubId = scope?.clubId || null;
@@ -377,8 +383,8 @@ export function startRealtimeSync(
         }
         if (!isOwnScope || !currentUserUid) return;
         const isOwnSession = value && (value.userId === currentUserUid || value.userUid === currentUserUid);
-        if (!isOwnSession || value.isDraft || value.isDuel) return;
-        // Own completed session missing in the cloud → upload it (NEVER delete user data)
+        if (!isOwnSession || value.isDraft) return;
+        // Own completed session (including duels) missing in the cloud → upload it (NEVER delete user data)
         if (!remoteIds.has(key) && !pendingSessionIds.has(key)) {
           localSessionsToRescue.push({ key, value });
         }

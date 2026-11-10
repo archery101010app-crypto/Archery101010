@@ -870,48 +870,56 @@ export async function logoutUser(): Promise<void> {
  * (Mandatory Google Play Store & Apple App Store Account Deletion compliance)
  */
 export async function deleteUserAccount(uid: string): Promise<void> {
-  // 1. Remove user from local simulated_users list
-  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-  const filteredUsers = usersList.filter((u) => u.uid !== uid).map(sanitizeUserProfile);
-  await saveLocalSetting("simulated_users", filteredUsers);
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
+  const isGuest = uid === "USR-GUEST-OFFLINE";
 
-  // 2. Delete all local sessions belonging specifically to this user
-  try {
-    const { deleteLocalSession, athleteStarsStore } = await import("./db/indexedDB");
-    const localSessions = await getLocalSessions();
-    for (const sess of localSessions) {
-      if (sess.userId === uid || sess.userUid === uid) {
-        await deleteLocalSession(sess.id);
-        await addToSyncQueue({
-          id: generateResilientId("TXN"),
-          collection: "sessions",
-          operation: "DELETE",
-          payloadId: sess.id,
-          payload: { id: sess.id },
-          timestamp: Date.now()
-        });
+  // 1. Pre-check recent sign-in BEFORE wiping Firestore or local data to avoid partial destructive deletes
+  if (isOnline && !isGuest) {
+    if (!auth.currentUser || auth.currentUser.uid !== uid) {
+      throw new Error(translateFirebaseAuthError({ code: "auth/requires-recent-login" }));
+    }
+    const lastSignInRaw = auth.currentUser.metadata?.lastSignInTime;
+    const lastSignInMs = lastSignInRaw ? Date.parse(lastSignInRaw) : 0;
+    // Firebase Auth requires sign-in within the last 5 minutes for deleteUser()
+    if (!lastSignInMs || isNaN(lastSignInMs) || Date.now() - lastSignInMs > 5 * 60 * 1000) {
+      throw new Error(translateFirebaseAuthError({ code: "auth/requires-recent-login" }));
+    }
+    try {
+      await withTimeout(auth.currentUser.getIdToken(true), 8000);
+    } catch (tokenErr: any) {
+      if (tokenErr?.code === "auth/requires-recent-login" || tokenErr?.code === "auth/user-token-expired") {
+        throw new Error(translateFirebaseAuthError({ code: "auth/requires-recent-login" }));
       }
     }
-    await athleteStarsStore.removeItem(uid);
-  } catch (err) {
-    console.warn("Error cleaning local sessions during account deletion:", err);
   }
 
-  // 3. Delete cloud sessions, stars, and user profile in Firestore if online
-  if (typeof navigator !== "undefined" && navigator.onLine) {
+  const DELETE_BATCH_TIMEOUT_MS = 15000;
+
+  // 2. Delete cloud sessions, stars, and user profile in parallel batches (Promise.allSettled) with a 15s timeout
+  if (isOnline && !isGuest) {
     try {
       const { deleteDoc } = await import("firebase/firestore");
-      // Delete all sessions of this user across any device in Firestore
-      const sessQuery = query(collection(db, "sessions"), where("userId", "==", uid));
-      const sessSnap = await withTimeout(getDocs(sessQuery), LOGIN_TIMEOUT_MS);
-      for (const sDoc of sessSnap.docs) {
-        await deleteDoc(doc(db, "sessions", sDoc.id)).catch(() => {});
-      }
-      // Delete athlete stars & user profile document
-      await deleteDoc(doc(db, "athlete_stars", uid)).catch(() => {});
-      await deleteDoc(doc(db, "users", uid)).catch(() => {});
+      await withTimeout(
+        (async () => {
+          const sessQuery = query(collection(db, "sessions"), where("userId", "==", uid));
+          const sessSnap = await getDocs(sessQuery).catch(() => null);
+          if (sessSnap && !sessSnap.empty) {
+            const docs = sessSnap.docs;
+            const CHUNK_SIZE = 25;
+            for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+              const chunk = docs.slice(i, i + CHUNK_SIZE);
+              await Promise.allSettled(chunk.map((sDoc) => deleteDoc(doc(db, "sessions", sDoc.id))));
+            }
+          }
+          await Promise.allSettled([
+            deleteDoc(doc(db, "athlete_stars", uid)),
+            deleteDoc(doc(db, "users", uid))
+          ]);
+        })(),
+        DELETE_BATCH_TIMEOUT_MS
+      );
     } catch (err) {
-      console.warn("Direct Firestore cleanup deferred to sync queue:", err);
+      console.warn("Direct Firestore cleanup timed out or deferred to sync queue:", err);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "users",
@@ -922,15 +930,18 @@ export async function deleteUserAccount(uid: string): Promise<void> {
       });
     }
 
-    // 4. Delete Firebase Authentication user record
+    // 3. Delete Firebase Authentication user record
     try {
       if (auth.currentUser && auth.currentUser.uid === uid) {
-        await deleteUser(auth.currentUser);
+        await withTimeout(deleteUser(auth.currentUser), DELETE_BATCH_TIMEOUT_MS);
       }
-    } catch (authDelErr) {
+    } catch (authDelErr: any) {
+      if (authDelErr?.code === "auth/requires-recent-login") {
+        throw new Error(translateFirebaseAuthError(authDelErr));
+      }
       console.warn("Firebase Auth user delete warning:", authDelErr);
     }
-  } else {
+  } else if (!isGuest) {
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "users",
@@ -939,6 +950,35 @@ export async function deleteUserAccount(uid: string): Promise<void> {
       payload: { uid },
       timestamp: Date.now()
     });
+  }
+
+  // 4. Remove user from local simulated_users list and delete local sessions & stars
+  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const filteredUsers = usersList.filter((u) => u.uid !== uid).map(sanitizeUserProfile);
+  await saveLocalSetting("simulated_users", filteredUsers);
+
+  try {
+    const { deleteLocalSession, athleteStarsStore } = await import("./db/indexedDB");
+    const localSessions = await getLocalSessions();
+    const ownLocalSessions = localSessions.filter((sess) => sess.userId === uid || sess.userUid === uid);
+    await Promise.allSettled(
+      ownLocalSessions.map(async (sess) => {
+        await deleteLocalSession(sess.id);
+        if (!isOnline && !isGuest) {
+          await addToSyncQueue({
+            id: generateResilientId("TXN"),
+            collection: "sessions",
+            operation: "DELETE",
+            payloadId: sess.id,
+            payload: { id: sess.id },
+            timestamp: Date.now()
+          });
+        }
+      })
+    );
+    await athleteStarsStore.removeItem(uid);
+  } catch (err) {
+    console.warn("Error cleaning local sessions during account deletion:", err);
   }
 
   // 5. Clear active session
@@ -1556,9 +1596,112 @@ export async function joinClubByInviteCode(
 
 /**
  * Unlinks from the current Coach without modifying the archer's optional clubName.
+ * If called by a Coach switching back to Athlete mode ("Volver a modo Atleta"),
+ * cleanly unlinks all their students first (in Firestore and locally) before resetting role to "archer".
  */
 export async function leaveCurrentClub(userUid: string): Promise<{ success: boolean; user?: UserProfile }> {
   const currentLogged = await getLoggedUser();
+  const now = Date.now();
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
+  const wasCoachOwner = Boolean(
+    currentLogged &&
+      !isLinkedToExternalCoach(currentLogged) &&
+      (currentLogged.role === "coach" ||
+        currentLogged.role === "team_admin" ||
+        currentLogged.role === "team_admin_coach" ||
+        currentLogged.isClubCreator)
+  );
+  const externalCoachUid = currentLogged ? getExternalCoachUid(currentLogged) : null;
+
+  if (wasCoachOwner && userUid && userUid !== "USR-GUEST-OFFLINE") {
+    const canonicalClubId = getCanonicalCoachClubId({ uid: userUid });
+    const ownedClubIds = new Set<string>(
+      [canonicalClubId, currentLogged?.clubId || "", `CLB-${userUid}`].filter(Boolean)
+    );
+    const coachInviteCode = (currentLogged?.clubInviteCode || "").trim().toUpperCase();
+
+    const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const studentUids = new Set<string>();
+
+    for (const u of localUsers) {
+      if (!u?.uid || u.uid === userUid) continue;
+      if (
+        u.coachId === userUid ||
+        (u.clubId && ownedClubIds.has(u.clubId)) ||
+        (coachInviteCode && (u.clubInviteCode || "").trim().toUpperCase() === coachInviteCode)
+      ) {
+        studentUids.add(u.uid);
+      }
+    }
+
+    // Unlink students in Firestore FIRST while the caller still holds Coach permissions in Firestore rules
+    if (isOnline && auth.currentUser && auth.currentUser.uid === userUid) {
+      try {
+        const { updateDoc } = await import("firebase/firestore");
+        await withTimeout(
+          (async () => {
+            const [byCoachSnap, byClubSnap] = await Promise.all([
+              getDocs(query(collection(db, "users"), where("coachId", "==", userUid))).catch(() => null),
+              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId))).catch(() => null)
+            ]);
+            byCoachSnap?.forEach((d) => {
+              const id = (d.data() as any)?.uid || d.id;
+              if (id && id !== userUid) studentUids.add(id);
+            });
+            byClubSnap?.forEach((d) => {
+              const id = (d.data() as any)?.uid || d.id;
+              if (id && id !== userUid) studentUids.add(id);
+            });
+
+            if (studentUids.size > 0) {
+              await Promise.allSettled(
+                Array.from(studentUids).map((studentUid) =>
+                  updateDoc(doc(db, "users", studentUid), {
+                    clubId: null,
+                    clubInviteCode: "",
+                    coachId: null,
+                    coachName: null,
+                    coachEmail: null,
+                    isClubCreator: false,
+                    role: "archer",
+                    updatedAt: now
+                  })
+                )
+              );
+            }
+          })(),
+          10000
+        );
+      } catch (err) {
+        console.warn("Could not unlink all students in cloud before switching to athlete mode:", err);
+      }
+    }
+
+    if (studentUids.size > 0) {
+      const updatedLocalUsers = localUsers.map((u) => {
+        if (u?.uid && studentUids.has(u.uid)) {
+          return sanitizeUserProfile({
+            ...u,
+            clubId: null,
+            clubInviteCode: "",
+            coachId: null,
+            coachName: null,
+            coachEmail: null,
+            isClubCreator: false,
+            role: u.role === "superadmin" ? "superadmin" : "archer",
+            updatedAt: now
+          });
+        }
+        return sanitizeUserProfile(u);
+      });
+      await saveLocalSetting("simulated_users", updatedLocalUsers);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "simulated_users" } }));
+        window.dispatchEvent(new CustomEvent("users-roster-updated"));
+      }
+    }
+  }
+
   const preservedRole: UserProfile["role"] =
     currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
       ? "superadmin"
@@ -1575,5 +1718,10 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
     coachEmail: null,
     clubInviteCode: ""
   });
+
+  if (externalCoachUid && externalCoachUid !== userUid) {
+    emitCoachLinkNotification({ uid: externalCoachUid }, updated, "athlete_unlinked").catch(() => {});
+  }
+
   return { success: true, user: updated };
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, MessageCircle, X, Camera, ImagePlus, Circle } from "lucide-react";
+import { Share2, MessageCircle, X, Camera, ImagePlus, Circle, Layers, RefreshCw } from "lucide-react";
 import {
   ShareTargetResult,
   renderTargetShotChartCanvas,
@@ -14,11 +14,12 @@ interface StravaShareModalProps {
   onClose: () => void;
 }
 
-type ActiveButtonTab = "black" | "upload" | "camera";
+type ActiveButtonTab = "black" | "transparent" | "upload" | "camera";
 
 export default function StravaShareModal({ shareResult, onClose }: StravaShareModalProps) {
   const [activeTab, setActiveTab] = useState<ActiveButtonTab>("black");
-  const [customPhotoUrl, setCustomPhotoUrl] = useState<string | null>(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [cameraPhotoUrl, setCameraPhotoUrl] = useState<string | null>(null);
   const [activeDataUrl, setActiveDataUrl] = useState<string>("");
   const [isRendering, setIsRendering] = useState<boolean>(false);
 
@@ -28,7 +29,8 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
   useEffect(() => {
     if (shareResult) {
       setActiveTab("black");
-      setCustomPhotoUrl(shareResult.params?.backgroundPhotoUrl || null);
+      setUploadedPhotoUrl(shareResult.params?.backgroundPhotoUrl || null);
+      setCameraPhotoUrl(null);
       setActiveDataUrl(shareResult.dataUrl);
     }
   }, [shareResult]);
@@ -39,7 +41,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
       const customEvent = event as CustomEvent<{ dataUrl?: string }>;
       const dataUrl = customEvent.detail?.dataUrl;
       if (dataUrl && typeof dataUrl === "string") {
-        setCustomPhotoUrl(dataUrl);
+        setCameraPhotoUrl(dataUrl);
         setActiveTab("camera");
       }
     };
@@ -52,6 +54,11 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     }
   }, []);
 
+  const currentPhotoUrl =
+    activeTab === "camera"
+      ? cameraPhotoUrl || uploadedPhotoUrl
+      : uploadedPhotoUrl || cameraPhotoUrl;
+
   useEffect(() => {
     if (!shareResult?.params) return;
     let cancelled = false;
@@ -59,11 +66,19 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     const regenerateCard = async () => {
       setIsRendering(true);
       try {
-        const isPhotoDesign = (activeTab === "upload" || activeTab === "camera") && Boolean(customPhotoUrl);
+        const isPhotoDesign =
+          (activeTab === "upload" || activeTab === "camera") && Boolean(currentPhotoUrl);
+        const resolvedThemeMode =
+          activeTab === "transparent"
+            ? "transparent"
+            : isPhotoDesign
+            ? "photo"
+            : "black";
+
         const canvas = await renderTargetShotChartCanvas({
           ...shareResult.params,
-          themeMode: isPhotoDesign ? "photo" : "black",
-          backgroundPhotoUrl: isPhotoDesign ? customPhotoUrl : null
+          themeMode: resolvedThemeMode,
+          backgroundPhotoUrl: isPhotoDesign ? currentPhotoUrl : null
         });
         if (!cancelled) {
           setActiveDataUrl(canvas.toDataURL("image/png"));
@@ -81,13 +96,21 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     return () => {
       cancelled = true;
     };
-  }, [activeTab, customPhotoUrl, shareResult]);
+  }, [activeTab, currentPhotoUrl, shareResult]);
 
   if (!shareResult) return null;
 
   const currentDataUrl = activeDataUrl || shareResult.dataUrl;
 
   const handleUploadPhotoClick = () => {
+    if (uploadedPhotoUrl) {
+      setActiveTab("upload");
+      return;
+    }
+    uploadInputRef.current?.click();
+  };
+
+  const handleChangeUploadedPhotoClick = () => {
     uploadInputRef.current?.click();
   };
 
@@ -112,7 +135,11 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setCustomPhotoUrl(reader.result);
+        if (sourceTab === "camera") {
+          setCameraPhotoUrl(reader.result);
+        } else {
+          setUploadedPhotoUrl(reader.result);
+        }
         setActiveTab(sourceTab);
       }
     };
@@ -120,19 +147,22 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     e.target.value = "";
   };
 
+  const getModeSuffix = () => {
+    if (activeTab === "transparent") return "-Transparente";
+    if (activeTab === "upload") return "-Foto";
+    if (activeTab === "camera") return "-Camara";
+    return "";
+  };
+
   const handleNativeShareAgain = async () => {
     const { fileName, captionText } = shareResult;
-    const modeSuffix =
-      activeTab === "upload" ? "-Foto" : activeTab === "camera" ? "-Camara" : "";
-    const outFileName = fileName.replace(/\.png$/i, `${modeSuffix}.png`);
+    const outFileName = fileName.replace(/\.png$/i, `${getModeSuffix()}.png`);
     await triggerNativeImageShare(currentDataUrl, outFileName, "ARCHERY 101010 THE APP", captionText);
   };
 
   const handleWhatsAppShare = async () => {
     const { fileName, captionText } = shareResult;
-    const modeSuffix =
-      activeTab === "upload" ? "-Foto" : activeTab === "camera" ? "-Camara" : "";
-    const outFileName = fileName.replace(/\.png$/i, `${modeSuffix}.png`);
+    const outFileName = fileName.replace(/\.png$/i, `${getModeSuffix()}.png`);
 
     if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
       window.ArcheryNativeShare.shareWhatsAppImage(currentDataUrl, outFileName, captionText);
@@ -207,54 +237,89 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
           </button>
         </div>
 
-        {/* 3-Mode Selector Bar: Fondo Negro | Sube Foto | Toma Foto */}
+        {/* 4-Mode Selector Bar: Fondo Negro | Fondo Transparente | Sube Foto | Toma Foto */}
         <div className="w-full max-w-sm flex flex-col gap-1.5 my-1.5 shrink-0">
-          <div className="grid grid-cols-3 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
+          <div className="grid grid-cols-2 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
             <button
               type="button"
               onClick={() => setActiveTab("black")}
-              className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
                 activeTab === "black"
                   ? "bg-white text-[#04060A] shadow-sm"
                   : "bg-transparent text-white/75 hover:text-white"
               }`}
             >
-              <Circle size={10} className={activeTab === "black" ? "fill-current" : ""} />
+              <Circle size={10} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
               <span>Fondo Negro</span>
             </button>
 
             <button
               type="button"
+              onClick={() => setActiveTab("transparent")}
+              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
+                activeTab === "transparent"
+                  ? "bg-white text-[#04060A] shadow-sm"
+                  : "bg-transparent text-white/75 hover:text-white"
+              }`}
+            >
+              <Layers size={11.5} strokeWidth={2.5} className="shrink-0" />
+              <span>Fondo Transparente</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleUploadPhotoClick}
-              className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
                 activeTab === "upload"
                   ? "bg-white text-[#04060A] shadow-sm"
                   : "bg-transparent text-white/75 hover:text-white"
               }`}
             >
-              <ImagePlus size={12.5} strokeWidth={2.5} />
+              <ImagePlus size={12} strokeWidth={2.5} className="shrink-0" />
               <span>Sube Foto</span>
             </button>
 
             <button
               type="button"
               onClick={handleTakeCameraPhotoClick}
-              className={`h-9 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
                 activeTab === "camera"
                   ? "bg-white text-[#04060A] shadow-sm"
                   : "bg-transparent text-white/75 hover:text-white"
               }`}
             >
-              <Camera size={12.5} strokeWidth={2.5} />
+              <Camera size={12} strokeWidth={2.5} className="shrink-0" />
               <span>Toma Foto</span>
             </button>
           </div>
+
+          {activeTab === "upload" && uploadedPhotoUrl && (
+            <button
+              type="button"
+              onClick={handleChangeUploadedPhotoClick}
+              className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RefreshCw size={11} strokeWidth={2.5} />
+              <span>Cambiar foto</span>
+            </button>
+          )}
         </div>
 
         {/* Center Preview Card (Vertical 9:16 Proportion) */}
         <motion.div
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
+          style={
+            activeTab === "transparent"
+              ? {
+                  backgroundImage:
+                    "linear-gradient(45deg, #11151D 25%, transparent 25%), linear-gradient(-45deg, #11151D 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #11151D 75%), linear-gradient(-45deg, transparent 75%, #11151D 75%)",
+                  backgroundSize: "18px 18px",
+                  backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0",
+                  backgroundColor: "#080A0F"
+                }
+              : undefined
+          }
           className="relative w-full max-w-[290px] sm:max-w-[315px] my-1.5 rounded-3xl overflow-hidden border border-white/15 bg-[#05070B] shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
         >
           <img

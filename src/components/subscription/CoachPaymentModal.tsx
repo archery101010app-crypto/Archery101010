@@ -5,7 +5,8 @@ import {
   X,
   Check,
   RotateCw,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
@@ -39,12 +40,13 @@ export default function CoachPaymentModal({
   if (!isOpen) return null;
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) || products[0];
+  const isAnnualSelected = selectedProduct.period === "annual";
 
   const handleActivate = async () => {
     setIsProcessing(true);
     setStatusMessage(null);
     try {
-      const res = await activateCoachLaunchPromo(user, selectedProduct.sku);
+      const res = await activateCoachLaunchPromo(user, selectedProduct.id);
       setStatusMessage({ text: "Coach Pro activado." });
       setTimeout(() => {
         onSuccess(res.updatedUser);
@@ -69,8 +71,11 @@ export default function CoachPaymentModal({
     setStatusMessage(null);
     try {
       const res = await restoreCoachStorePurchases(user);
-      setStatusMessage({ text: res.message });
-      if (res.updatedUser) {
+      setStatusMessage({
+        text: res.message,
+        isError: !res.success
+      });
+      if (res.success && res.updatedUser) {
         setTimeout(() => {
           onSuccess(res.updatedUser!);
         }, 600);
@@ -97,7 +102,7 @@ export default function CoachPaymentModal({
           className="fixed inset-0 bg-black/85 backdrop-blur-md"
         />
 
-        {/* Modal — Estética minimalista Apple Fitness+ / WHOOP */}
+        {/* Modal — Estética OLED y Titanio Mate */}
         <motion.div
           initial={{ scale: 0.97, y: 8, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
@@ -105,20 +110,26 @@ export default function CoachPaymentModal({
           transition={{ duration: 0.18 }}
           className="relative w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] rounded-3xl p-6 text-white flex flex-col gap-5 my-auto shadow-2xl"
         >
-          {/* Header */}
+          {/* Header Oficial de Marca ARCHERY 101010 */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-1">
               <div
                 translate="no"
-                className="notranslate flex items-center gap-1.5 select-none"
-                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                className="notranslate flex items-center gap-2 select-none"
               >
-                <span className="inline-flex tracking-tight font-extrabold text-[14px]">
-                  <span className="text-cyan-neon">10</span>
-                  <span className="text-red-rival">10</span>
-                  <span className="text-yellow-gold">10</span>
+                <img
+                  src="/images/brand_logo_header.png"
+                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                  alt="ARCHERY 101010"
+                  className="h-4 w-auto object-contain select-none"
+                  draggable={false}
+                />
+                <span
+                  className="text-white/90 tracking-[0.22em] font-extrabold text-[9.5px]"
+                  style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                >
+                  THE APP
                 </span>
-                <span className="text-white/90 tracking-[0.22em] font-extrabold text-[10px]">THE APP</span>
               </div>
 
               <div className="flex items-center gap-2 mt-0.5">
@@ -217,7 +228,11 @@ export default function CoachPaymentModal({
                   : "bg-cyan-neon/10 border-cyan-neon/25 text-cyan-neon"
               }`}
             >
-              <CheckCircle2 size={14} className="shrink-0" />
+              {statusMessage.isError ? (
+                <AlertCircle size={14} className="shrink-0" />
+              ) : (
+                <CheckCircle2 size={14} className="shrink-0" />
+              )}
               <span>{statusMessage.text}</span>
             </div>
           )}
@@ -235,8 +250,10 @@ export default function CoachPaymentModal({
             <span className="text-[11px] text-center text-white">
               {t("noCardRequired")}
             </span>
-            <span className="text-[11px] text-center text-white font-bold">
-              Acceso Coach PRO por 30 días · Renuévalo gratis cada mes, sin límite
+            <span className="text-[11px] text-center text-white font-bold tabular-nums">
+              {isAnnualSelected
+                ? "Acceso Coach PRO por 365 días · Temporada completa bonificada"
+                : "Acceso Coach PRO por 30 días · Renuévalo gratis cada mes"}
             </span>
           </div>
 
@@ -253,7 +270,7 @@ export default function CoachPaymentModal({
             </button>
 
             <span translate="no" className="notranslate tabular-nums text-[10.5px]">
-              Google Play · App Store
+              Tienda de Aplicaciones
             </span>
           </div>
         </motion.div>

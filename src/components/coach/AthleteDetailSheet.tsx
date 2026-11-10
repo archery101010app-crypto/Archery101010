@@ -32,6 +32,8 @@ interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
   onClose: () => void;
   sessions: any[];
+  coachUid?: string;
+  activeClubId?: string;
   onRestoreSession?: (sessionId: string) => void;
   onOpenPlanImporter?: (athleteId: string) => void;
   onUnlinkAthlete?: (athlete: UserProfile) => void;
@@ -39,7 +41,16 @@ interface AthleteDetailSheetProps {
 
 type SubTab = "PERFIL" | "SESIONES" | "VOLUMEN" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
-export default function AthleteDetailSheet({ athlete, onClose, sessions, onRestoreSession, onOpenPlanImporter, onUnlinkAthlete }: AthleteDetailSheetProps) {
+export default function AthleteDetailSheet({
+  athlete,
+  onClose,
+  sessions,
+  coachUid,
+  activeClubId,
+  onRestoreSession,
+  onOpenPlanImporter,
+  onUnlinkAthlete
+}: AthleteDetailSheetProps) {
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
@@ -54,8 +65,40 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
     const athleteUid = athlete.uid;
     async function loadCoachNotes() {
       const key = `coach_notes_${athleteUid}`;
-      const savedNotes = await getLocalSetting<any[]>(key, []);
-      setNotes(savedNotes);
+      const savedNotes = await getLocalSetting<Array<{ id: string; date: number; content: string }>>(key, []);
+      let resolvedNotes = Array.isArray(savedNotes) ? savedNotes : [];
+      setNotes(resolvedNotes);
+
+      if (coachUid && typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          const { doc, getDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const noteDocId = `NOTE-${coachUid}-${athleteUid}`;
+          const snap = await getDoc(doc(db, "coach_records", noteDocId));
+          if (snap.exists()) {
+            const data = snap.data();
+            const cloudNotesRaw = Array.isArray(data?.notes)
+              ? data.notes
+              : typeof data?.notes === "string" && data.notes.trim()
+              ? [{ id: noteDocId, date: data.updatedAt || Date.now(), content: data.notes.trim() }]
+              : [];
+            if (cloudNotesRaw.length > 0) {
+              const byId = new Map<string, { id: string; date: number; content: string }>();
+              for (const n of resolvedNotes) {
+                if (n && n.id) byId.set(n.id, n);
+              }
+              for (const cn of cloudNotesRaw) {
+                if (cn && cn.id && cn.content) byId.set(cn.id, cn);
+              }
+              resolvedNotes = Array.from(byId.values()).sort((a, b) => (b.date || 0) - (a.date || 0));
+              setNotes(resolvedNotes);
+              await saveLocalSetting(key, resolvedNotes);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not load cloud coach notes:", err);
+        }
+      }
     }
     async function loadAthleteStar() {
       try {
@@ -71,11 +114,21 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
     setActiveTab("PERFIL"); // reset to profile tab on open
     setExpandedSessionId(null);
     setShowUnlinkConfirm(false);
-  }, [athlete]);
+  }, [athlete, coachUid]);
 
   if (!athlete) return null;
 
-  // Filter athlete sessions (only shooting sessions, no duels/drafts)
+  // Live active draft check (last 6h) vs completed historical sessions (never let empty drafts skew averages/PBs)
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  const liveAthleteSession = sessions.find(
+    (s) =>
+      (s.userId === athlete.uid || s.userUid === athlete.uid) &&
+      !s.isDuel &&
+      s.isDraft &&
+      (s.updatedAt || s.timestamp || 0) >= Date.now() - SIX_HOURS_MS
+  );
+
+  // Filter athlete sessions (only completed shooting sessions, no duels/drafts)
   const athleteSessions = sessions.filter(s => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && !s.isDraft);
   // Sessions with real points (volume sessions never count as score)
   const scoredSessions = athleteSessions.filter((s) => hasRealScore(s));
@@ -84,9 +137,10 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
     e.preventDefault();
     if (!newNoteText.trim()) return;
 
+    const nowTs = Date.now();
     const newNote = {
-      id: `NOTE-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      date: Date.now(),
+      id: `NOTE-${nowTs}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      date: nowTs,
       content: newNoteText.trim()
     };
 
@@ -96,6 +150,46 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
 
     const key = `coach_notes_${athlete.uid}`;
     await saveLocalSetting(key, updatedNotes);
+
+    if (coachUid) {
+      const noteDocId = `NOTE-${coachUid}-${athlete.uid}`;
+      const resolvedClubId = activeClubId || athlete.clubId || `CLB-${coachUid}`;
+      const recordPayload = {
+        id: noteDocId,
+        coachId: coachUid,
+        clubId: resolvedClubId,
+        type: "note" as const,
+        athleteUid: athlete.uid,
+        notes: updatedNotes,
+        updatedAt: nowTs
+      };
+
+      try {
+        if (typeof navigator === "undefined" || navigator.onLine) {
+          const { doc, setDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          await setDoc(doc(db, "coach_records", noteDocId), recordPayload, { merge: true });
+        }
+      } catch (cloudErr) {
+        console.warn("Direct cloud note save deferred to sync queue:", cloudErr);
+      }
+
+      try {
+        const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+        const { runSync } = await import("@/lib/db/syncManager");
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "coach_records",
+          operation: "UPDATE",
+          payloadId: noteDocId,
+          payload: recordPayload,
+          timestamp: nowTs
+        });
+        runSync();
+      } catch (syncErr) {
+        console.warn("Note sync queue skipped:", syncErr);
+      }
+    }
   };
 
   // Rebuild PBs
@@ -147,7 +241,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
         {/* Athlete Overview Card */}
         <div className="px-5 pb-3.5 pt-1 flex flex-col gap-3 shrink-0 border-b border-white/[0.06]">
           <div className="flex items-center gap-3.5 pr-9">
-            <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon shadow-glow-cyan uppercase shrink-0">
+            <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon uppercase shrink-0">
               {athlete.fullName.substring(0, 2)}
             </div>
             <div className="flex flex-col flex-1 min-w-0">
@@ -158,6 +252,11 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 {athlete.nickname && (
                   <span className="text-[10.5px] text-cyan-neon font-bold truncate">
                     @{athlete.nickname}
+                  </span>
+                )}
+                {liveAthleteSession && (
+                  <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                    ● EN VIVO
                   </span>
                 )}
               </div>
@@ -219,7 +318,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.6px] font-black uppercase tracking-wider transition-all border shrink-0 cursor-pointer ${
                   active
-                    ? "bg-cyan-neon/15 border-cyan-neon/30 text-cyan-neon shadow-glow-cyan"
+                    ? "bg-cyan-neon/15 border-cyan-neon/30 text-cyan-neon"
                     : "bg-neutral-900/60 border-white/5 text-white hover:text-white"
                 }`}
               >
@@ -256,7 +355,7 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                         <span className="text-white text-xs font-black uppercase tracking-wide truncate">
                           {maxStar.starName}
                         </span>
-                        <span className="text-[9.3px] text-white mt-0.5 font-bold">
+                        <span className="text-[9.3px] text-white mt-0.5 font-bold tabular-nums">
                           Récord 720: {maxStar.highestScore} pts
                         </span>
                       </div>
@@ -286,15 +385,14 @@ export default function AthleteDetailSheet({ athlete, onClose, sessions, onResto
                         <div className="flex flex-col gap-1 mt-0.5">
                           <div className="flex justify-between text-[9.3px] text-white font-black uppercase">
                             <span>Siguiente Meta: {nextStar.name}</span>
-                            <span className="text-white">{highestScore} / {targetMin} pts</span>
+                            <span className="text-white tabular-nums">{highestScore} / {targetMin} pts</span>
                           </div>
                           <div className="w-full h-2 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
                             <div 
                               className="h-full rounded-full"
                               style={{ 
                                 width: `${percent}%`,
-                                backgroundColor: nextStar.color,
-                                boxShadow: `0 0 8px ${nextStar.color}`
+                                backgroundColor: nextStar.color
                               }}
                             />
                           </div>

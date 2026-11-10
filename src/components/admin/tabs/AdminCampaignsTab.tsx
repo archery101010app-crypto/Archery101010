@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Megaphone, Trash2, Edit2, Play, Pause, Copy, Calendar, Shield, Monitor, Sparkles, Image as ImageIcon, Eye, X, ArrowLeft, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Edit2, Play, Pause, Copy, Calendar, Sparkles, X, ArrowLeft, ArrowRight, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdCampaign, AdSlide } from "@/lib/db/adTypes";
 import { adCampaignsStore, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
@@ -36,7 +36,6 @@ export default function AdminCampaignsTab() {
 
   useEffect(() => {
     async function loadCampaigns() {
-      // Seed first if empty
       await seedDemoAdCampaigns();
       const keys = await adCampaignsStore.keys();
       const list: AdCampaign[] = [];
@@ -44,7 +43,7 @@ export default function AdminCampaignsTab() {
         const val = await adCampaignsStore.getItem<AdCampaign>(key);
         if (val) list.push(val);
       }
-      setCampaigns(list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+      setCampaigns(list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
     }
     loadCampaigns();
 
@@ -153,12 +152,19 @@ export default function AdminCampaignsTab() {
 
     const campaignId = editingCampaignId || generateResilientId("AD");
     const nowStr = new Date().toISOString();
+    const existing = editingCampaignId ? campaigns.find((c) => c.id === editingCampaignId) : undefined;
+    const prevImp = existing
+      ? Math.max(Number((existing as any).impressions) || 0, Number(existing.totalImpressions) || 0)
+      : 0;
+    const prevClk = existing
+      ? Math.max(Number((existing as any).clicks) || 0, Number(existing.totalClicks) || 0)
+      : 0;
 
-    const campaignData: AdCampaign = {
+    const campaignData: AdCampaign & { impressions?: number; clicks?: number } = {
       id: campaignId,
       name,
       type,
-      status: "active",
+      status: existing?.status || "active",
       slides: slides.map((s) => ({
         ...s,
         imageUrl: s.imageUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"
@@ -172,19 +178,19 @@ export default function AdminCampaignsTab() {
       targetScreens,
       targetRoles,
       targetPlans,
-      totalImpressions: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalImpressions || 0 : 0,
-      totalClicks: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.totalClicks || 0 : 0,
-      createdAt: editingCampaignId ? campaigns.find(c => c.id === editingCampaignId)?.createdAt || nowStr : nowStr,
+      impressions: prevImp,
+      clicks: prevClk,
+      totalImpressions: prevImp,
+      totalClicks: prevClk,
+      createdAt: existing?.createdAt || nowStr,
       updatedAt: nowStr,
       fontSize: type === "notification_bar" ? fontSize : undefined,
       pillStyle: type === "notification_bar" ? pillStyle : undefined,
       customHeight: type === "notification_bar" ? customHeight : undefined
     };
 
-    // Save locally
     await adCampaignsStore.setItem(campaignId, campaignData);
 
-    // Save to sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "ad_campaigns",
@@ -194,14 +200,13 @@ export default function AdminCampaignsTab() {
       timestamp: Date.now()
     });
 
-    // Refresh view
     const keys = await adCampaignsStore.keys();
     const list: AdCampaign[] = [];
     for (const key of keys) {
       const val = await adCampaignsStore.getItem<AdCampaign>(key);
       if (val) list.push(val);
     }
-    setCampaigns(list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    setCampaigns(list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
 
     setShowCreateModal(false);
   };
@@ -211,7 +216,6 @@ export default function AdminCampaignsTab() {
 
     await adCampaignsStore.removeItem(id);
 
-    // Sync queue
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "ad_campaigns",
@@ -234,7 +238,6 @@ export default function AdminCampaignsTab() {
 
     await adCampaignsStore.setItem(campaign.id, updated);
 
-    // Queue sync
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "ad_campaigns",
@@ -252,11 +255,13 @@ export default function AdminCampaignsTab() {
   const handleDuplicateCampaign = async (campaign: AdCampaign) => {
     const duplicatedId = generateResilientId("AD");
     const nowStr = new Date().toISOString();
-    const duplicated: AdCampaign = {
+    const duplicated: AdCampaign & { impressions?: number; clicks?: number } = {
       ...campaign,
       id: duplicatedId,
       name: `${campaign.name} (Copia)`,
       status: "paused",
+      impressions: 0,
+      clicks: 0,
       totalImpressions: 0,
       totalClicks: 0,
       createdAt: nowStr,
@@ -296,11 +301,12 @@ export default function AdminCampaignsTab() {
             }}
             className="py-2.5 px-4 bg-white hover:bg-neutral-200 text-black border border-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
           >
+            <RefreshCw size={14} />
             <span>Limpiar Impresiones</span>
           </button>
           <button
             onClick={handleOpenCreateModal}
-            className="py-2.5 px-4 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-1.5 shadow-glow-cyan cursor-pointer transition hover:scale-102"
+            className="py-2.5 px-4 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-1.5 cursor-pointer transition hover:scale-102"
           >
             <Plus size={14} />
             <span>Nueva Campaña</span>
@@ -310,137 +316,146 @@ export default function AdminCampaignsTab() {
 
       {/* Campaign List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-        {campaigns.map((camp) => (
-          <motion.div
-            key={camp.id}
-            className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition-all duration-300 shadow-xl relative"
-          >
-            {/* Status indicator */}
-            <div className="absolute top-4 right-4">
-              <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
-                camp.status === "active"
-                  ? "bg-green-500/10 text-green-400 border-green-500/20"
-                  : "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20"
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${camp.status === "active" ? "bg-green-400" : "bg-yellow-gold"}`} />
-                {camp.status === "active" ? "Activa" : "Pausada"}
-              </span>
-            </div>
+        {campaigns.map((camp) => {
+          const impCount = Math.max(
+            Number((camp as any).impressions) || 0,
+            Number(camp.totalImpressions) || 0
+          );
+          const clkCount = Math.max(
+            Number((camp as any).clicks) || 0,
+            Number(camp.totalClicks) || 0
+          );
 
-            <div>
-              {/* Type Badge */}
-              <span className="text-[9.3px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-md border border-cyan-neon/10">
-                {camp.type === "popup" ? "Popup Modal" : camp.type === "banner_widget" ? "Banner Widget" : "Barra Notificación"}
-              </span>
-
-              <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">{camp.name}</h3>
-              
-              {/* Dates */}
-              <div className="flex items-center gap-1 text-[11.6px] text-white mt-1">
-                <Calendar size={12} />
-                <span>{camp.startDate} al {camp.endDate}</span>
+          return (
+            <motion.div
+              key={camp.id}
+              className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition-all duration-300 shadow-xl relative"
+            >
+              {/* Status indicator */}
+              <div className="absolute top-4 right-4">
+                <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
+                  camp.status === "active"
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20"
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${camp.status === "active" ? "bg-green-400" : "bg-yellow-gold"}`} />
+                  {camp.status === "active" ? "Activa" : "Pausada"}
+                </span>
               </div>
 
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-2 bg-neutral-950/40 border border-white/5 rounded-xl p-2.5 mt-4">
-                <div>
-                  <span className="text-[9.3px] text-white uppercase font-bold block">Impresiones</span>
-                  <span className="text-xs font-black text-white">{camp.totalImpressions || 0}</span>
-                </div>
-                <div>
-                  <span className="text-[9.3px] text-white uppercase font-bold block">Clics</span>
-                  <span className="text-xs font-black text-white">{camp.totalClicks || 0}</span>
-                </div>
-                <div>
-                  <span className="text-[9.3px] text-white uppercase font-bold block">CTR</span>
-                  <span className="text-xs font-black text-cyan-neon">
-                    {camp.totalImpressions > 0 
-                      ? `${((camp.totalClicks / camp.totalImpressions) * 100).toFixed(1)}%`
-                      : "0.0%"}
-                  </span>
-                </div>
-              </div>
+              <div>
+                {/* Type Badge */}
+                <span className="text-[9.3px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-md border border-cyan-neon/10">
+                  {camp.type === "popup" ? "Popup Modal" : camp.type === "banner_widget" ? "Banner Widget" : "Barra Notificación"}
+                </span>
 
-              {/* Config Details */}
-              <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[11.6px]">
-                <div className="flex justify-between items-center text-white">
-                  <span>Frecuencia:</span>
-                  <span className="font-bold text-white">
-                    {camp.frequencyMinutes > 0 ? `${camp.frequencyMinutes} min` : "Al abrir app"}
-                  </span>
+                <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">{camp.name}</h3>
+                
+                {/* Dates */}
+                <div className="flex items-center gap-1 text-[11.6px] text-white mt-1 tabular-nums">
+                  <Calendar size={12} />
+                  <span>{camp.startDate} al {camp.endDate}</span>
                 </div>
-                <div className="flex justify-between items-center text-white">
-                  <span>Límite diario:</span>
-                  <span className="font-bold text-white">{camp.maxImpressionsPerDay} imp</span>
-                </div>
-                {camp.type === "popup" && (
-                  <div className="flex justify-between items-center text-white">
-                    <span>Mostrar al abrir:</span>
-                    <span className="font-bold text-white">{camp.showOnAppOpen ? "Sí" : "No"}</span>
+
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2 bg-neutral-950/40 border border-white/5 rounded-xl p-2.5 mt-4 tabular-nums">
+                  <div>
+                    <span className="text-[9.3px] text-white uppercase font-bold block">Impresiones</span>
+                    <span className="text-xs font-black text-white">{impCount}</span>
                   </div>
-                )}
-                {camp.type === "banner_widget" && (
-                  <div className="flex justify-between items-center text-white">
-                    <span>Transición:</span>
-                    <span className="font-bold text-white">{camp.slideIntervalSeconds || 5} s</span>
+                  <div>
+                    <span className="text-[9.3px] text-white uppercase font-bold block">Clics</span>
+                    <span className="text-xs font-black text-white">{clkCount}</span>
                   </div>
-                )}
-                <div className="flex justify-between items-start text-white">
-                  <span>Pantallas:</span>
-                  <span className="font-bold text-white text-[10.5px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
-                    {camp.targetScreens.join(", ")}
-                  </span>
+                  <div>
+                    <span className="text-[9.3px] text-white uppercase font-bold block">CTR</span>
+                    <span className="text-xs font-black text-cyan-neon">
+                      {impCount > 0 ? `${((clkCount / impCount) * 100).toFixed(1)}%` : "0.0%"}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center text-white">
-                  <span>Roles:</span>
-                  <span className="font-bold text-white uppercase text-[10.5px]">
-                    {camp.targetRoles.map(r => r === "archer" ? "Arq" : "Coach").join(", ")}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-white">
-                  <span>Planes:</span>
-                  <span className="font-bold text-white uppercase text-[10.5px]">
-                    {(camp.targetPlans || ["FREE"]).join(", ")}
-                  </span>
+
+                {/* Config Details */}
+                <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[11.6px]">
+                  <div className="flex justify-between items-center text-white">
+                    <span>Frecuencia:</span>
+                    <span className="font-bold text-white tabular-nums">
+                      {camp.frequencyMinutes > 0 ? `${camp.frequencyMinutes} min` : "Al abrir app"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white">
+                    <span>Límite diario:</span>
+                    <span className="font-bold text-white tabular-nums">{camp.maxImpressionsPerDay} imp</span>
+                  </div>
+                  {camp.type === "popup" && (
+                    <div className="flex justify-between items-center text-white">
+                      <span>Mostrar al abrir:</span>
+                      <span className="font-bold text-white">{camp.showOnAppOpen ? "Sí" : "No"}</span>
+                    </div>
+                  )}
+                  {camp.type === "banner_widget" && (
+                    <div className="flex justify-between items-center text-white">
+                      <span>Transición:</span>
+                      <span className="font-bold text-white tabular-nums">{camp.slideIntervalSeconds || 5} s</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-start text-white">
+                    <span>Pantallas:</span>
+                    <span className="font-bold text-white text-[10.5px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
+                      {camp.targetScreens.join(", ")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white">
+                    <span>Roles:</span>
+                    <span className="font-bold text-white uppercase text-[10.5px]">
+                      {camp.targetRoles.map((r) => (r === "archer" ? "Arq" : "Coach")).join(", ")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white">
+                    <span>Planes:</span>
+                    <span className="font-bold text-white uppercase text-[10.5px]">
+                      {(camp.targetPlans || ["FREE"]).join(", ")}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Actions Footer */}
-            <div className="flex justify-end gap-1.5 border-t border-white/5 pt-3.5 mt-4">
-              <button
-                onClick={() => handleToggleStatus(camp)}
-                className={`p-2 rounded-xl text-white hover:text-white transition cursor-pointer flex items-center justify-center border border-white/5 ${
-                  camp.status === "active" ? "bg-yellow-gold/10 hover:bg-yellow-gold/20" : "bg-green-500/10 hover:bg-green-500/20"
-                }`}
-                title={camp.status === "active" ? "Pausar Campaña" : "Reanudar Campaña"}
-              >
-                {camp.status === "active" ? <Pause size={12} /> : <Play size={12} fill="white" />}
-              </button>
-              <button
-                onClick={() => handleOpenEditModal(camp)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
-                title="Editar"
-              >
-                <Edit2 size={12} />
-              </button>
-              <button
-                onClick={() => handleDuplicateCampaign(camp)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
-                title="Duplicar"
-              >
-                <Copy size={12} />
-              </button>
-              <button
-                onClick={() => handleDeleteCampaign(camp.id)}
-                className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer"
-                title="Eliminar"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
+              {/* Actions Footer */}
+              <div className="flex justify-end gap-1.5 border-t border-white/5 pt-3.5 mt-4">
+                <button
+                  onClick={() => handleToggleStatus(camp)}
+                  className={`p-2 rounded-xl text-white hover:text-white transition cursor-pointer flex items-center justify-center border border-white/5 ${
+                    camp.status === "active" ? "bg-yellow-gold/10 hover:bg-yellow-gold/20" : "bg-green-500/10 hover:bg-green-500/20"
+                  }`}
+                  title={camp.status === "active" ? "Pausar Campaña" : "Reanudar Campaña"}
+                >
+                  {camp.status === "active" ? <Pause size={12} /> : <Play size={12} fill="white" />}
+                </button>
+                <button
+                  onClick={() => handleOpenEditModal(camp)}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
+                  title="Editar"
+                >
+                  <Edit2 size={12} />
+                </button>
+                <button
+                  onClick={() => handleDuplicateCampaign(camp)}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
+                  title="Duplicar"
+                >
+                  <Copy size={12} />
+                </button>
+                <button
+                  onClick={() => handleDeleteCampaign(camp.id)}
+                  className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer"
+                  title="Eliminar"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Creation/Editing Modal */}
@@ -460,7 +475,7 @@ export default function AdminCampaignsTab() {
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
                     {editingCampaignId ? "Editar Campaña" : "Crear Campaña"}
                   </h3>
-                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5">Paso {step} de 5</span>
+                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5 tabular-nums">Paso {step} de 5</span>
                 </div>
                 <button
                   onClick={() => setShowCreateModal(false)}
@@ -477,7 +492,7 @@ export default function AdminCampaignsTab() {
                     <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Nombre de la Campaña</label>
                     <input
                       type="text"
-                      placeholder="Ej. Campaña Invierno Hoyt 2026"
+                      placeholder="Ej. Campaña Temporada 101010 2026"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
@@ -497,7 +512,7 @@ export default function AdminCampaignsTab() {
                           onClick={() => setType(t.id as any)}
                           className={`border rounded-2xl p-4 cursor-pointer flex flex-col justify-between aspect-square text-center transition-all ${
                             type === t.id
-                              ? "bg-cyan-brand/20 border-cyan-neon shadow-[0_0_15px_rgba(0,191,255,0.1)]"
+                              ? "bg-cyan-brand/20 border-cyan-neon"
                               : "bg-neutral-900/40 border-white/10 hover:border-white/20"
                           }`}
                         >
@@ -552,7 +567,7 @@ export default function AdminCampaignsTab() {
                           </div>
                         )}
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[9.3px] text-white uppercase font-bold">Enlace de Destino (Destoy URL)</label>
+                          <label className="text-[9.3px] text-white uppercase font-bold">Enlace de Destino</label>
                           <input
                             type="text"
                             placeholder="https://..."
@@ -885,7 +900,7 @@ export default function AdminCampaignsTab() {
                           height: `${customHeight}px`,
                           fontSize: fontSize === "small" ? "8px" : fontSize === "large" ? "12px" : "10px",
                           ...(pillStyle === "gradient" 
-                            ? { backgroundImage: "linear-gradient(to right, #00BFFF, #FF007F)", color: "#fff" } 
+                            ? { backgroundColor: "#00BFFF", color: "#000" } 
                             : pillStyle === "glass"
                               ? { backgroundColor: "rgba(10, 10, 12, 0.75)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }
                               : { backgroundColor: slides[0]?.backgroundColor || "#00BFFF", color: "#000" })
@@ -925,7 +940,7 @@ export default function AdminCampaignsTab() {
                   <button
                     type="button"
                     onClick={() => setStep(step + 1)}
-                    className="flex-1 py-2.5 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase flex items-center justify-center gap-1 shadow-glow-cyan cursor-pointer"
+                    className="flex-1 py-2.5 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span>Siguiente</span>
                     <ArrowRight size={14} />
@@ -934,9 +949,9 @@ export default function AdminCampaignsTab() {
                   <button
                     type="button"
                     onClick={handleSaveCampaign}
-                    className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase shadow-[0_0_15px_rgba(34,197,94,0.3)] flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    
+                    <Sparkles size={14} />
                     <span>Guardar Campaña</span>
                   </button>
                 )}

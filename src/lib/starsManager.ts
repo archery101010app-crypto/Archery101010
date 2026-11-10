@@ -1,10 +1,10 @@
 "use client";
 
-import { 
-  athleteStarsStore, 
-  starHistoryStore, 
-  addToSyncQueue, 
-  generateResilientId 
+import {
+  athleteStarsStore,
+  starHistoryStore,
+  addToSyncQueue,
+  generateResilientId
 } from "@/lib/db/indexedDB";
 
 export interface StarDefinition {
@@ -39,10 +39,20 @@ export const COMPOUND_STARS: StarDefinition[] = [
   { level: 8, minScore: 700, name: "Estrella de Diamante", color: "#EC4899", iconColor: "text-pink-500", badgeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20", description: "Lograda en Compuesto 50m con 700+ puntos" }
 ];
 
+export interface BowStarStat {
+  highestScore: number;
+  highestStarLevel: number;
+  starName?: string;
+  starColor?: string;
+  achievedAt: number;
+}
+
 export interface AthleteStarDoc {
   userId: string;
   userName: string;
+  clubId?: string;
   bowType: "Recurve" | "Compound" | "Barebow";
+  bowStats?: Record<string, BowStarStat>;
   highestScore: number;
   highestStarLevel: number;
   starName: string;
@@ -54,6 +64,7 @@ export interface StarHistoryDoc {
   id: string;
   userId: string;
   userName: string;
+  clubId?: string;
   bowType: "Recurve" | "Compound" | "Barebow";
   score: number;
   starLevel: number;
@@ -66,6 +77,8 @@ export interface StarHistoryDoc {
 
 /**
  * Evaluates a completed practice session and awards a 101010 Star if eligible.
+ * Tracks per-bow achievements in bowStats[bowType] so archers shooting both Compound and Recurve
+ * unlock and retain stars independently for each bow type without overwriting!
  */
 export async function checkAndAwardStar(
   userId: string,
@@ -83,40 +96,92 @@ export async function checkAndAwardStar(
   const totalArrows = endsCount * arrowsPerEnd;
 
   if (totalArrows !== 72 || (!isRecurve70 && !isCompound50)) {
-    console.log(`[StarsManager] Session ${eventId} is not eligible. Total arrows: ${totalArrows}, bowType: ${bowType}, distance: ${distance}`);
     return null;
   }
 
+  const normalizedBow: "Recurve" | "Compound" = isRecurve70 ? "Recurve" : "Compound";
   const starTiers = isRecurve70 ? RECURVE_STARS : COMPOUND_STARS;
-  
+  const safeScore = Math.max(0, Math.min(720, Math.round(score)));
+
   // Find highest star achieved in this session
-  const achievedTiers = starTiers.filter(s => score >= s.minScore);
+  const achievedTiers = starTiers.filter((s) => safeScore >= s.minScore);
   if (achievedTiers.length === 0) {
-    console.log(`[StarsManager] Score ${score} does not reach the minimum star threshold of 500.`);
     return null;
   }
 
-  // Highest tier achieved in this session
   const sessionStar = achievedTiers[achievedTiers.length - 1];
 
   try {
-    // 2. Fetch athlete's current highest star
+    const now = Date.now();
+    const todayStr = new Date(now).toISOString().split("T")[0];
     const currentDoc = await athleteStarsStore.getItem<AthleteStarDoc>(userId);
-    const prevLevel = currentDoc ? currentDoc.highestStarLevel : 0;
 
-    if (sessionStar.level > prevLevel) {
-      // Awarding a higher star!
-      const now = Date.now();
-      const todayStr = new Date().toISOString().split("T")[0];
+    // Seed existing bowStats from legacy top-level fields if not yet populated
+    const existingBowStats: Record<string, BowStarStat> = { ...(currentDoc?.bowStats || {}) };
+    if (
+      currentDoc &&
+      currentDoc.bowType &&
+      !existingBowStats[currentDoc.bowType] &&
+      currentDoc.highestStarLevel > 0
+    ) {
+      existingBowStats[currentDoc.bowType] = {
+        highestScore: currentDoc.highestScore,
+        highestStarLevel: currentDoc.highestStarLevel,
+        starName: currentDoc.starName,
+        starColor: currentDoc.starColor,
+        achievedAt: currentDoc.updatedAt || now
+      };
+    }
+
+    const prevBowStat = existingBowStats[normalizedBow];
+    const prevBowLevel = prevBowStat?.highestStarLevel || 0;
+    const prevBowScore = prevBowStat?.highestScore || 0;
+
+    if (sessionStar.level > prevBowLevel) {
+      // Unlocked a new star for this bowType!
+      const nextBowStats: Record<string, BowStarStat> = {
+        ...existingBowStats,
+        [normalizedBow]: {
+          highestScore: Math.max(prevBowScore, safeScore),
+          highestStarLevel: sessionStar.level,
+          starName: sessionStar.name,
+          starColor: sessionStar.color,
+          achievedAt: now
+        }
+      };
+
+      // Top-level fields reflect the archer's overall highest star across all bows
+      let bestBow: "Recurve" | "Compound" | "Barebow" = normalizedBow;
+      let bestLevel = sessionStar.level;
+      let bestScore = Math.max(prevBowScore, safeScore);
+      let bestName = sessionStar.name;
+      let bestColor = sessionStar.color;
+
+      for (const [bKey, stat] of Object.entries(nextBowStats)) {
+        if (
+          stat.highestStarLevel > bestLevel ||
+          (stat.highestStarLevel === bestLevel && stat.highestScore > bestScore)
+        ) {
+          bestBow = bKey as "Recurve" | "Compound" | "Barebow";
+          bestLevel = stat.highestStarLevel;
+          bestScore = stat.highestScore;
+          const tiers = bKey === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
+          const tierDef = tiers.find((t) => t.level === stat.highestStarLevel);
+          bestName = stat.starName || tierDef?.name || bestName;
+          bestColor = stat.starColor || tierDef?.color || bestColor;
+        }
+      }
 
       const starDoc: AthleteStarDoc = {
         userId,
         userName,
-        bowType: bowType as any,
-        highestScore: score,
-        highestStarLevel: sessionStar.level,
-        starName: sessionStar.name,
-        starColor: sessionStar.color,
+        ...(currentDoc?.clubId ? { clubId: currentDoc.clubId } : {}),
+        bowType: bestBow,
+        bowStats: nextBowStats,
+        highestScore: bestScore,
+        highestStarLevel: bestLevel,
+        starName: bestName,
+        starColor: bestColor,
         updatedAt: now
       };
 
@@ -125,8 +190,9 @@ export async function checkAndAwardStar(
         id: historyId,
         userId,
         userName,
-        bowType: bowType as any,
-        score,
+        ...(currentDoc?.clubId ? { clubId: currentDoc.clubId } : {}),
+        bowType: normalizedBow,
+        score: safeScore,
         starLevel: sessionStar.level,
         starName: sessionStar.name,
         starColor: sessionStar.color,
@@ -135,15 +201,13 @@ export async function checkAndAwardStar(
         timestamp: now
       };
 
-      // Save locally
       await athleteStarsStore.setItem(userId, starDoc);
       await starHistoryStore.setItem(historyId, historyDoc);
 
-      // Queue for background synchronization to Firebase
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "athlete_stars",
-        operation: "INSERT", // will behave as upsert in setDoc
+        operation: "INSERT",
         payloadId: userId,
         payload: starDoc,
         timestamp: now
@@ -158,30 +222,39 @@ export async function checkAndAwardStar(
         timestamp: now
       });
 
-      // Dispatch custom event to notify root pages (e.g. triggers confetti overlay)
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("star-unlocked", {
             detail: {
               userId,
               userName,
-              score,
+              score: safeScore,
               star: sessionStar,
-              bowType,
+              bowType: normalizedBow,
               distance
             }
           })
         );
       }
 
-      console.log(`[StarsManager] NEW STAR UNLOCKED! Level: ${sessionStar.level} (${sessionStar.name}), score: ${score}`);
       return sessionStar;
-    } else if (sessionStar.level === prevLevel && currentDoc && score > currentDoc.highestScore) {
-      // Same star level, but higher score record
-      const now = Date.now();
+    } else if (sessionStar.level === prevBowLevel && currentDoc && safeScore > prevBowScore) {
+      // Same star level for this bowType, higher personal best score
+      const nextBowStats: Record<string, BowStarStat> = {
+        ...existingBowStats,
+        [normalizedBow]: {
+          highestScore: safeScore,
+          highestStarLevel: prevBowLevel,
+          starName: prevBowStat?.starName || sessionStar.name,
+          starColor: prevBowStat?.starColor || sessionStar.color,
+          achievedAt: prevBowStat?.achievedAt || now
+        }
+      };
+
       const updatedDoc: AthleteStarDoc = {
         ...currentDoc,
-        highestScore: score,
+        bowStats: nextBowStats,
+        highestScore: Math.max(currentDoc.highestScore || 0, safeScore),
         updatedAt: now
       };
 
@@ -195,8 +268,6 @@ export async function checkAndAwardStar(
         payload: updatedDoc,
         timestamp: now
       });
-
-      console.log(`[StarsManager] Updated highest score for star level ${sessionStar.level} to ${score}`);
     }
   } catch (error) {
     console.error("[StarsManager] Error checking/awarding star:", error);

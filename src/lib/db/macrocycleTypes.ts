@@ -1,3 +1,10 @@
+import type { CalendarEvent } from "./indexedDB";
+
+export type SyncedCalendarEvent = CalendarEvent & {
+  completedByAthlete?: Record<string, number[]>;
+  updatedAt?: number;
+};
+
 export interface MacrocyclePhase {
   id: string;
   name: string;

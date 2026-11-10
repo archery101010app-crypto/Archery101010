@@ -88,42 +88,68 @@ public class WearWatchListenerService extends WearableListenerService {
     private void persistSnapshotToWatchPrefs(String json) {
         try {
             JSONObject rootObj = new JSONObject(json);
+            if ("SET_SENSITIVITY".equals(rootObj.optString("type", ""))) {
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putInt("sensitivityLevel", Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", 1))));
+                if (rootObj.has("enabled")) {
+                    editor.putBoolean("autoDetectEnabled", rootObj.optBoolean("enabled", true));
+                }
+                editor.apply();
+                return;
+            }
+
             JSONObject obj = rootObj;
             if (rootObj.has("payload") && rootObj.optJSONObject("payload") != null) {
                 obj = rootObj.optJSONObject("payload");
             }
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             SharedPreferences.Editor editor = prefs.edit();
+
+            String savedSessionId = prefs.getString("currentSessionId", "");
+            String incomingSessionId = obj.optString("sessionId", "");
             boolean sessionActive = obj.optBoolean("sessionActive", rootObj.optBoolean("sessionActive", true));
-            if (!sessionActive) {
+            boolean isNewSession = !incomingSessionId.isEmpty() && !incomingSessionId.equals(savedSessionId);
+
+            if (!sessionActive || isNewSession) {
                 editor.putInt("arrowCount", 0);
                 editor.putInt("totalScore", 0);
                 editor.putInt("totalScoredArrows", 0);
                 editor.putInt("currentEnd", 1);
-            } else {
-                if (obj.has("arrowsCount")) {
-                    int arrows = Math.max(0, obj.optInt("arrowsCount", 0));
-                    editor.putInt("arrowCount", arrows);
-                    editor.putInt("totalScoredArrows", arrows);
+                editor.putInt("stepsCount", 0);
+                editor.putFloat("walkedMeters", 0f);
+                if (!sessionActive) {
+                    editor.putString("currentSessionId", "");
+                    editor.apply();
+                    return;
                 }
-                if (obj.has("totalScore")) {
-                    editor.putInt("totalScore", Math.max(0, obj.optInt("totalScore", 0)));
-                }
-                if (obj.has("currentEndIndex")) {
-                    editor.putInt("currentEnd", obj.optInt("currentEndIndex", 0) + 1);
-                }
-                if (obj.has("arrowsPerEnd")) {
-                    editor.putInt("syncedArrowsPerEnd", Math.max(1, obj.optInt("arrowsPerEnd", 6)));
-                }
-                if (obj.has("endsCount")) {
-                    editor.putInt("syncedEndsCount", Math.max(1, obj.optInt("endsCount", 12)));
-                }
-                if (obj.has("stepsCount")) {
-                    editor.putInt("stepsCount", Math.max(0, obj.optInt("stepsCount", 0)));
-                }
-                if (obj.has("distanceWalkedM")) {
-                    editor.putFloat("walkedMeters", Math.max(0f, (float) obj.optDouble("distanceWalkedM", 0.0)));
-                }
+            }
+
+            if (!incomingSessionId.isEmpty()) {
+                editor.putString("currentSessionId", incomingSessionId);
+            }
+            if (obj.has("arrowsCount")) {
+                int arrows = Math.max(0, obj.optInt("arrowsCount", 0));
+                editor.putInt("arrowCount", arrows);
+                editor.putInt("totalScoredArrows", arrows);
+            }
+            if (obj.has("totalScore")) {
+                editor.putInt("totalScore", Math.max(0, obj.optInt("totalScore", 0)));
+            }
+            if (obj.has("currentEndIndex")) {
+                editor.putInt("currentEnd", obj.optInt("currentEndIndex", 0) + 1);
+            }
+            if (obj.has("arrowsPerEnd")) {
+                editor.putInt("syncedArrowsPerEnd", Math.max(1, obj.optInt("arrowsPerEnd", 6)));
+            }
+            if (obj.has("endsCount")) {
+                editor.putInt("syncedEndsCount", Math.max(1, obj.optInt("endsCount", 12)));
+            }
+            if (obj.has("stepsCount")) {
+                editor.putInt("stepsCount", Math.max(0, obj.optInt("stepsCount", 0)));
+            }
+            if (obj.has("distanceWalkedM")) {
+                editor.putFloat("walkedMeters", Math.max(0f, (float) obj.optDouble("distanceWalkedM", 0.0)));
             }
             editor.apply();
         } catch (Exception ignored) {}

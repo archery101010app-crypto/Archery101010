@@ -46,22 +46,47 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
     loadStars();
   }, [athletes, sessions]);
 
+  const getLiveSafeArrows = (s: any): number => {
+    if (s?.isDraft) {
+      return Math.max(
+        Number(s.totalArrowsVolume) || 0,
+        countScoredArrows(s) + (Number(s.warmupArrows) || 0)
+      );
+    }
+    return getSessionArrows(s);
+  };
+
   // Only real shooting sessions (not duels)
   const athleteSessions = sessions.filter(s => !s.isDuel && s.deletedByArcher !== true);
 
   // Filtered by selected athlete and mode (SCORES vs VOLUME)
-  const filteredSessions = athleteSessions.filter(s => {
-    const matchesAthlete = selectedAthleteUid === "ALL" || s.userId === selectedAthleteUid || s.userUid === selectedAthleteUid;
-    if (subMode === "SCORES") {
-      return matchesAthlete && hasRealScore(s);
-    }
-    return matchesAthlete && getSessionArrows(s) > 0;
-  });
+  const filteredSessions = athleteSessions
+    .filter((s) => {
+      const matchesAthlete =
+        selectedAthleteUid === "ALL" ||
+        s.userId === selectedAthleteUid ||
+        s.userUid === selectedAthleteUid;
+      if (!matchesAthlete) return false;
+      if (s.isDraft) {
+        if (subMode === "SCORES") return !isVolumeSession(s);
+        return true;
+      }
+      if (subMode === "SCORES") {
+        return hasRealScore(s);
+      }
+      return getSessionArrows(s) > 0;
+    })
+    .sort((a, b) => {
+      if (Boolean(a.isDraft) !== Boolean(b.isDraft)) return a.isDraft ? -1 : 1;
+      return (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0);
+    });
 
-  // Calculate weekly ranking (Top 3 scores)
+  // Calculate weekly ranking (Top 3 scores — strictly completed non-draft sessions)
   const getWeeklyRanking = () => {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const weeklySess = athleteSessions.filter(s => s.timestamp >= oneWeekAgo && hasRealScore(s));
+    const weeklySess = athleteSessions.filter(
+      (s) => !s.isDraft && s.timestamp >= oneWeekAgo && hasRealScore(s)
+    );
     
     const maxScores: Record<string, { userName: string; score: number; format: string }> = {};
     weeklySess.forEach(s => {
@@ -123,9 +148,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                 className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/60 border border-white/[0.03]"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs ${
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs tabular-nums ${
                     idx === 0 
-                      ? "bg-yellow-gold text-black shadow-glow-yellow" 
+                      ? "bg-yellow-gold text-black" 
                       : idx === 1 
                       ? "bg-neutral-300 text-black" 
                       : "bg-amber-600 text-white"
@@ -138,7 +163,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                 </div>
 
-                <span className="text-xs font-black text-cyan-neon">{rank.score} pts</span>
+                <span className="text-xs font-black text-cyan-neon tabular-nums">{rank.score} pts</span>
               </div>
             ))}
           </div>
@@ -170,7 +195,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             onClick={() => setSubMode("SCORES")}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
               subMode === "SCORES"
-                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                ? "bg-cyan-neon text-black font-extrabold"
                 : "bg-neutral-950 border border-white/5 text-white hover:text-white"
             }`}
           >
@@ -180,7 +205,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             onClick={() => setSubMode("VOLUME")}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
               subMode === "VOLUME"
-                ? "bg-cyan-neon text-black font-extrabold shadow-glow-cyan"
+                ? "bg-cyan-neon text-black font-extrabold"
                 : "bg-neutral-950 border border-white/5 text-white hover:text-white"
             }`}
           >
@@ -192,14 +217,14 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       {/* Feed Ordenado de Resultados Recibidos */}
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center px-1">
-          <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
+          <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
             {subMode === "SCORES"
               ? `Puntajes Reportados (${filteredSessions.length})`
               : `Volumen por Sesión (${filteredSessions.length})`}
           </span>
-          <span className="text-[10.5px] text-white">
+          <span className="text-[10.5px] text-white tabular-nums">
             {subMode === "VOLUME"
-              ? `Total: ${filteredSessions.reduce((acc, s) => acc + getSessionArrows(s), 0)} flechas`
+              ? `Total: ${filteredSessions.reduce((acc, s) => acc + getLiveSafeArrows(s), 0)} flechas`
               : "Orden cronológico más reciente"}
           </span>
         </div>
@@ -218,27 +243,36 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             const sessAthlete = athletes.find(
               (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
             );
-            const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+            const dateStr = new Date(sess.updatedAt || sess.timestamp).toLocaleDateString(undefined, {
               weekday: "short",
               day: "numeric",
               month: "short"
             });
-            const totalArrows = getSessionArrows(sess);
+            const totalArrows = getLiveSafeArrows(sess);
 
             return (
               <div
                 key={sess.id}
-                className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center"
+                className={`bg-neutral-900/40 rounded-2xl border p-3.5 flex justify-between items-center ${
+                  sess.isDraft ? "border-emerald-500/35" : "border-white/5"
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-xs text-cyan-neon shrink-0">
                     {(sess.userName || "AT").substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-white text-xs font-bold leading-tight truncate">
-                      {sess.userName || "Alumno"}
-                    </span>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-white text-xs font-bold leading-tight truncate">
+                        {sess.userName || "Alumno"}
+                      </span>
+                      {sess.isDraft && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                          ● EN VIVO
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
                       {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, sessAthlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                     </span>
                   </div>
@@ -258,17 +292,20 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
               (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
             );
             const isExpanded = expandedSessionId === sess.id;
-            const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
+            const sessTs = sess.updatedAt || sess.timestamp;
+            const dateStr = new Date(sessTs).toLocaleDateString(undefined, {
               weekday: "short",
               day: "numeric",
               month: "short"
             });
-            const timeStr = new Date(sess.timestamp).toLocaleTimeString(undefined, {
+            const timeStr = new Date(sessTs).toLocaleTimeString(undefined, {
               hour: "2-digit",
               minute: "2-digit"
             });
 
-            const scoredArrows = countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
+            const scoredArrows = sess.isDraft
+              ? countScoredArrows(sess)
+              : countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
             const realScore = getSessionScore(sess);
             const avgPerArrow = scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
             const bowTypeEs = sess.bowType === "Recurve" ? "Recurvo" : sess.bowType === "Compound" ? "Compuesto" : (sess.bowType || "Arco");
@@ -276,14 +313,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             return (
               <div
                 key={sess.id}
-                className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:border-cyan-neon/20"
+                className={`bg-neutral-900/40 rounded-2xl border overflow-hidden transition-all duration-300 hover:border-cyan-neon/20 ${
+                  sess.isDraft ? "border-emerald-500/35" : "border-white/5"
+                }`}
               >
                 {/* Header card */}
                 <div
                   onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
                   className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/60 transition"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-xs text-cyan-neon shrink-0">
                       {(sess.userName || "AT").substring(0, 2).toUpperCase()}
                     </div>
@@ -293,18 +332,24 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         <span className="text-white text-xs font-bold leading-tight truncate">
                           {sess.userName || "Alumno"}
                         </span>
+                        {sess.isDraft && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                            ● EN VIVO
+                          </span>
+                        )}
                         <span className="text-[9.3px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon px-1.5 py-0.5 rounded-full font-black uppercase shrink-0">
-                          {sess.practiceType}
+                          {sess.practiceType || "Control"}
                         </span>
                       </div>
-                      <span className="text-[10.5px] text-white mt-0.5 truncate">
-                        {sess.format || "WA 720"} · {sess.distance}m · {bowTypeEs} · {getSessionActiveKcal(sess, sessAthlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)} · {dateStr} {timeStr}
+                      <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                        {sess.format || "WA 720"} · {sess.distance || 18}m · {bowTypeEs}
+                        {sess.isDraft ? ` · ${scoredArrows} fl. en curso` : ` · ${getSessionActiveKcal(sess, sessAthlete)} kcal · ${formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}`} · {dateStr} {timeStr}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2.5 shrink-0">
-                    <div className="flex flex-col text-right">
+                    <div className="flex flex-col text-right tabular-nums">
                       <div className="flex items-baseline gap-1 justify-end">
                         <span className="text-base font-black text-cyan-neon leading-tight">
                           {realScore}

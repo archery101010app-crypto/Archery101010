@@ -3,6 +3,7 @@ package com.archery101010.app;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -91,6 +92,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private static final String PREFS_NAME = "archery_101010_wear_prefs";
+    private static final int REQ_ACTIVITY_RECOGNITION = 1010;
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
@@ -126,6 +128,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private long lastMotionPeakMs = 0L;
     private double prevLin = 0.0;
     private double prevPrevLin = 0.0;
+
+    // Fallback linear-accel rhythmic cadence tracker (prevents isolated bow raises/draws from counting as steps)
+    private final long[] accelCandidateStepT = new long[4];
+    private int accelCandidateStepCount = 0;
+    private boolean accelRhythmicCadenceActive = false;
+    private long lastHardwareStepTimeMs = 0L;
 
     // Scoring state (synchronized with phone)
     private int currentEnd = 1;
@@ -189,6 +197,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         } catch (Exception ignored) {}
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        currentSessionId = prefs.getString("currentSessionId", "");
         arrowCount = prefs.getInt("arrowCount", 0);
         totalScore = prefs.getInt("totalScore", 0);
         totalScoredArrows = prefs.getInt("totalScoredArrows", 0);
@@ -211,8 +220,41 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         canvasView = new WearCanvasView(this);
         setContentView(canvasView);
 
+        requestActivityRecognitionIfNeeded();
         ensureSensorAndHeartbeatActive();
         initWearCommunication();
+    }
+
+    private void requestActivityRecognitionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                if (checkSelfPermission("android.permission.ACTIVITY_RECOGNITION") != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.ACTIVITY_RECOGNITION"}, REQ_ACTIVITY_RECOGNITION);
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_ACTIVITY_RECOGNITION
+                && grantResults != null
+                && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            try {
+                if (sensorManager == null) {
+                    sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+                }
+                if (sensorManager != null) {
+                    stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
+                    if (stepDetector != null) {
+                        sensorManager.unregisterListener(this, stepDetector);
+                        sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_FASTEST, 0);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     private void ensureSensorAndHeartbeatActive() {
@@ -364,14 +406,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (incomingArrows <= 0) {
                     lastFinishedSessionId = "";
                 }
-                if ((now - lastLocalActionTimeMs) >= 6000L) {
-                    arrowCount = 0;
-                    syncedArrowsCount = 0;
-                    totalScoredArrows = 0;
-                    totalScore = 0;
-                    currentEnd = 1;
-                    currentEndArrows.clear();
-                    saveState();
+                if ((now - lastLocalActionTimeMs) >= 4000L || incomingArrows <= 0) {
+                    resetWatchSessionCounters(true);
                     runOnUiThread(() -> {
                         if (canvasView != null) canvasView.invalidate();
                     });
@@ -390,7 +426,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
             }
             if (!incomingSessionId.isEmpty()) {
-                currentSessionId = incomingSessionId;
+                if (!incomingSessionId.equals(currentSessionId)) {
+                    // New session started on phone: reset all previous session counters & steps to zero
+                    resetWatchSessionCounters(false);
+                    currentSessionId = incomingSessionId;
+                }
             }
 
             boolean hasUnackedLocalAction =
@@ -577,8 +617,37 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         super.onDestroy();
     }
 
+    private void resetWatchSessionCounters(boolean clearSessionId) {
+        arrowCount = 0;
+        syncedArrowsCount = 0;
+        totalScoredArrows = 0;
+        totalScore = 0;
+        currentEnd = 1;
+        currentEndArrows.clear();
+        stepsCount = 0;
+        lastSyncedStepsCount = 0;
+        distanceWalkedM = 0f;
+        syncedWalkedMeters = 0f;
+        syncedActiveKcal = -1;
+        accelCandidateStepCount = 0;
+        accelRhythmicCadenceActive = false;
+        if (clearSessionId) {
+            currentSessionId = "";
+        }
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString("currentSessionId", currentSessionId);
+        editor.putInt("arrowCount", 0);
+        editor.putInt("totalScore", 0);
+        editor.putInt("totalScoredArrows", 0);
+        editor.putInt("currentEnd", 1);
+        editor.putInt("stepsCount", 0);
+        editor.putFloat("walkedMeters", 0f);
+        editor.apply();
+    }
+
     private void saveState() {
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString("currentSessionId", currentSessionId);
         editor.putInt("arrowCount", arrowCount);
         editor.putInt("totalScore", totalScore);
         editor.putInt("totalScoredArrows", totalScoredArrows);
@@ -616,12 +685,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             return syncedActiveKcal > 0 ? syncedActiveKcal : 0;
         }
         double kcalPerArrow = 0.56 + (Math.max(15, drawWeightLbs) * 0.0165);
-        double walkKcal = (walkedM / 1000.0) * 72.0 * 0.98;
+        double walkKcal = (walkedM / 1000.0) * 72.0 * 0.78;
         if (syncedActiveKcal >= 0) {
             int localArrowDelta = Math.max(0, arrowsShot - syncedArrowsCount);
             float localWalkDelta = Math.max(0f, walkedM - syncedWalkedMeters);
             int localDeltaKcal = (int) Math.round(
-                (localArrowDelta * kcalPerArrow) + ((localWalkDelta / 1000.0) * 72.0 * 0.98)
+                (localArrowDelta * kcalPerArrow) + ((localWalkDelta / 1000.0) * 72.0 * 0.78)
             );
             return syncedActiveKcal + localDeltaKcal;
         }
@@ -660,24 +729,79 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void recordDetectedStep(long now) {
-        recordDetectedStep(now, false);
+        recordDetectedSteps(now, 1, false);
     }
 
     private void recordDetectedStep(long now, boolean fromHardwarePedometer) {
+        recordDetectedSteps(now, 1, fromHardwarePedometer);
+    }
+
+    private void recordDetectedSteps(long now, int stepDelta, boolean fromHardwarePedometer) {
+        if (stepDelta <= 0) return;
         prevStepTimeMs = lastStepTimeMs;
         lastStepTimeMs = now;
-        // Only the hardware pedometer (immune to bow-arm motion) sets the walking lock.
-        // Accelerometer pseudo-steps also fire while drawing the bow, so they only count distance.
         if (fromHardwarePedometer) {
+            lastHardwareStepTimeMs = now;
             walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 2500L);
         }
-        stepsCount++;
-        distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
+        stepsCount += stepDelta;
+        distanceWalkedM = Math.max(distanceWalkedM + (stepDelta * 0.76f), stepsCount * 0.76f);
         saveState();
         if ((now - lastTelemetrySyncTimeMs) >= 2500L) {
             syncTelemetryToPhone();
         }
         if (canvasView != null) canvasView.invalidate();
+    }
+
+    /**
+     * Fallback accelerometer step detector: requires rhythmic walking cadence (3+ evenly spaced peaks)
+     * so isolated bow raises, draws, or releases NEVER increment stepsCount.
+     */
+    private void evaluateRhythmicAccelStep(long now) {
+        // Defer to hardware TYPE_STEP_DETECTOR whenever it is actively firing
+        if (lastHardwareStepTimeMs > 0L && (now - lastHardwareStepTimeMs) <= 6000L) {
+            return;
+        }
+        long prevCandidate = accelCandidateStepCount > 0
+            ? accelCandidateStepT[(accelCandidateStepCount - 1) % 4]
+            : 0L;
+        long dt = prevCandidate > 0L ? (now - prevCandidate) : 0L;
+        if (prevCandidate > 0L && dt < 340L) {
+            return;
+        }
+        if (prevCandidate > 0L && dt > 1450L) {
+            // Cadence broken: start a fresh candidate sequence without counting isolated motion
+            accelCandidateStepCount = 0;
+            accelRhythmicCadenceActive = false;
+        }
+
+        accelCandidateStepT[accelCandidateStepCount % 4] = now;
+        accelCandidateStepCount++;
+
+        if (accelRhythmicCadenceActive) {
+            recordDetectedSteps(now, 1, false);
+            return;
+        }
+
+        // Need 4 rhythmic peaks (3 consecutive intervals within [340ms, 1450ms] and ±30% of average)
+        if (accelCandidateStepCount >= 4) {
+            long t3 = accelCandidateStepT[(accelCandidateStepCount - 1) % 4];
+            long t2 = accelCandidateStepT[(accelCandidateStepCount - 2) % 4];
+            long t1 = accelCandidateStepT[(accelCandidateStepCount - 3) % 4];
+            long t0 = accelCandidateStepT[(accelCandidateStepCount - 4) % 4];
+            long g1 = t1 - t0;
+            long g2 = t2 - t1;
+            long g3 = t3 - t2;
+            boolean validRange = g1 >= 340L && g1 <= 1450L && g2 >= 340L && g2 <= 1450L && g3 >= 340L && g3 <= 1450L;
+            double avg = (g1 + g2 + g3) / 3.0;
+            boolean rhythmic = Math.abs(g1 - avg) <= avg * 0.30
+                && Math.abs(g2 - avg) <= avg * 0.30
+                && Math.abs(g3 - avg) <= avg * 0.30;
+            if (validRange && rhythmic) {
+                accelRhythmicCadenceActive = true;
+                recordDetectedSteps(now, 4, false);
+            }
+        }
     }
 
     /**
@@ -770,8 +894,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 saveState();
                 sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
-            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastStepTimeMs) > 380L && (now - lastShotTimestamp) > 900L) {
-                recordDetectedStep(now);
+            } else if (dynamicLinear >= 1.25 && dynamicLinear <= 11.5 && (now - lastShotTimestamp) > 1200L) {
+                evaluateRhythmicAccelStep(now);
             }
 
             // Record sample into time-based motion buffer
@@ -818,12 +942,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         private final RectF btnCenterMetrics = new RectF();
         private final RectF btnCounterChassis = new RectF();
         private final RectF btnToggleDetector = new RectF();
-        private final RectF[] scoreButtons = new RectF[6];
-        private final String[] scoreLabels = new String[]{"X", "10", "9", "8", "7", "M"};
+        private final RectF[] scoreButtons = new RectF[12];
+        private final String[] scoreLabels = new String[]{
+            "X", "10", "9", "8",
+            "7", "6", "5", "4",
+            "3", "2", "1", "M"
+        };
 
         public WearCanvasView(Context context) {
             super(context);
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 12; i++) {
                 scoreButtons[i] = new RectF();
             }
             setFocusable(true);
@@ -990,7 +1118,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     return;
                 }
             } else if (screenIndex == 1) {
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < 12; i++) {
                     if (scoreButtons[i].contains(x, y)) {
                         lastLocalActionTimeMs = System.currentTimeMillis();
                         if (currentEndArrows.size() >= syncedArrowsPerEnd) {
@@ -1056,18 +1184,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     lastFinishedTimestampMs = System.currentTimeMillis();
                     lastFinishedSessionId = currentSessionId;
                     sendToPhone("{\"type\":\"FINISH_SESSION_FROM_WATCH\"}");
-                    arrowCount = 0;
-                    totalScore = 0;
-                    totalScoredArrows = 0;
-                    currentEnd = 1;
-                    currentEndArrows.clear();
-                    stepsCount = 0;
-                    lastSyncedStepsCount = 0;
-                    distanceWalkedM = 0f;
-                    syncedActiveKcal = -1;
-                    syncedArrowsCount = 0;
-                    syncedWalkedMeters = 0f;
-                    saveState();
+                    resetWatchSessionCounters(true);
                     screenIndex = 0;
                     invalidate();
                 }
@@ -1376,7 +1493,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 1: PUNTUACIÓN DE TANDA (Mathematically centered: 39f..188f)
+         * SCREEN 1: PUNTUACIÓN DE TANDA — Full 12 Score Keys (4x3: X, 10..1, M) mathematically contained inside Round & Square displays
          */
         private void drawScorePadScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
             drawBrandHeaderAndPill(
@@ -1390,12 +1507,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             // Dynamic Current Arrow Slots (3 or 6 slots)
             int slotsCount = Math.max(1, Math.min(6, syncedArrowsPerEnd));
-            float gap = (slotsCount <= 3 ? 4.5f : 3.2f) * scale;
-            float totalSlotsW = 162f * scale * wMult;
+            float gap = (slotsCount <= 3 ? 4.0f : 2.8f) * scale;
+            float totalSlotsW = 152f * scale * wMult;
             float slotW = (totalSlotsW - (slotsCount - 1) * gap) / slotsCount;
-            float slotH = 19.5f * scale;
+            float slotH = 15.5f * scale;
             float startX = cx - totalSlotsW / 2f;
-            float slotY = 75f * scale;
+            float slotY = 71.5f * scale;
 
             for (int i = 0; i < slotsCount; i++) {
                 float sx = startX + i * (slotW + gap);
@@ -1405,74 +1522,86 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(isCurrentSlot ? Color.parseColor("#061320") : Color.parseColor("#07090E"));
-                canvas.drawRoundRect(rect, 4.5f * scale, 4.5f * scale, paint);
+                canvas.drawRoundRect(rect, 4f * scale, 4f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1.0f * scale);
                 paint.setColor(isCurrentSlot ? Color.parseColor("#00A8F3") : Color.parseColor("#1FFFFFFF"));
-                canvas.drawRoundRect(rect, 4.5f * scale, 4.5f * scale, paint);
+                canvas.drawRoundRect(rect, 4f * scale, 4f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize((slotsCount <= 3 ? 10.5f : 8.8f) * scale);
+                paint.setTextSize((slotsCount <= 3 ? 9.0f : 7.8f) * scale);
                 paint.setColor(Color.WHITE);
                 drawCenteredText(canvas, val, rect.centerX(), rect.centerY());
             }
 
-            // 6 Keypad Buttons (2 rows x 3 cols): X, 10, 9 / 8, 7, M
-            float keypadW = 162f * scale * wMult;
-            float kGap = 4.5f * scale;
-            float keyW = (keypadW - 2f * kGap) / 3f;
-            float keyH = 24f * scale;
+            // 12 Score Keypad Buttons (3 rows x 4 cols): X, 10, 9, 8 / 7, 6, 5, 4 / 3, 2, 1, M
+            float keypadW = 158f * scale * wMult;
+            float kGap = 3.0f * scale;
+            float keyW = (keypadW - 3f * kGap) / 4f;
+            float keyH = 20.0f * scale;
             float kStartX = cx - keypadW / 2f;
-            float kStartY = 101f * scale;
+            float kStartY = 90.5f * scale;
 
-            for (int i = 0; i < 6; i++) {
-                int row = i / 3;
-                int col = i % 3;
+            for (int i = 0; i < 12; i++) {
+                int row = i / 4;
+                int col = i % 4;
                 float kx = kStartX + col * (keyW + kGap);
                 float ky = kStartY + row * (keyH + kGap);
                 scoreButtons[i].set(kx, ky, kx + keyW, ky + keyH);
 
-                paint.setStyle(Paint.Style.FILL);
-                if (i < 3) {
-                    paint.setColor(Color.parseColor("#111007"));
-                } else if (i < 5) {
-                    paint.setColor(Color.parseColor("#160708"));
-                } else {
-                    paint.setColor(Color.parseColor("#0B0E14"));
+                // Official World Archery ring color accents on Matte OLED chassis
+                int fillHex;
+                int strokeHex;
+                int textHex;
+                if (i <= 2) { // X, 10, 9 (Gold)
+                    fillHex = Color.parseColor("#111007");
+                    strokeHex = Color.parseColor("#99FFE500");
+                    textHex = Color.parseColor("#FFE500");
+                } else if (i <= 4) { // 8, 7 (Red)
+                    fillHex = Color.parseColor("#160708");
+                    strokeHex = Color.parseColor("#99FF1E1E");
+                    textHex = Color.WHITE;
+                } else if (i <= 6) { // 6, 5 (Cyan/Blue)
+                    fillHex = Color.parseColor("#05111B");
+                    strokeHex = Color.parseColor("#9900A8F3");
+                    textHex = Color.WHITE;
+                } else if (i <= 8) { // 4, 3 (Black ring)
+                    fillHex = Color.parseColor("#0B0E14");
+                    strokeHex = Color.parseColor("#38FFFFFF");
+                    textHex = Color.WHITE;
+                } else if (i <= 10) { // 2, 1 (White ring)
+                    fillHex = Color.parseColor("#121620");
+                    strokeHex = Color.parseColor("#55FFFFFF");
+                    textHex = Color.WHITE;
+                } else { // M (Miss)
+                    fillHex = Color.parseColor("#090B10");
+                    strokeHex = Color.parseColor("#26FFFFFF");
+                    textHex = Color.parseColor("#8E96A4");
                 }
-                canvas.drawRoundRect(scoreButtons[i], 6f * scale, 6f * scale, paint);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(fillHex);
+                canvas.drawRoundRect(scoreButtons[i], 5f * scale, 5f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1.0f * scale);
-                if (i < 3) {
-                    paint.setColor(Color.parseColor("#99FFE500"));
-                } else if (i < 5) {
-                    paint.setColor(Color.parseColor("#99FF1E1E"));
-                } else {
-                    paint.setColor(Color.parseColor("#26FFFFFF"));
-                }
-                canvas.drawRoundRect(scoreButtons[i], 6f * scale, 6f * scale, paint);
+                paint.setColor(strokeHex);
+                canvas.drawRoundRect(scoreButtons[i], 5f * scale, 5f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize(10.5f * scale);
-                if (i < 3) {
-                    paint.setColor(Color.parseColor("#FFE500"));
-                } else if (i < 5) {
-                    paint.setColor(Color.WHITE);
-                } else {
-                    paint.setColor(Color.parseColor("#8E96A4"));
-                }
+                paint.setTextSize(9.2f * scale);
+                paint.setColor(textHex);
                 drawCenteredText(canvas, scoreLabels[i], scoreButtons[i].centerX(), scoreButtons[i].centerY());
             }
 
-            // Bottom row: BORRAR and SIG. TANDA →
-            float pairW = 154f * scale * wMult;
-            float btnW = (pairW - 5f * scale) / 2f;
-            float btnH = 21.5f * scale;
-            float btnY = 161.5f * scale;
+            // Bottom row: BORRAR and SIG. TANDA → (pairW = 144f sits cleanly within y=180 circular chord)
+            float pairW = 144f * scale * wMult;
+            float btnW = (pairW - 4.5f * scale) / 2f;
+            float btnH = 19.5f * scale;
+            float btnY = 160.5f * scale;
             btnLeftPrimary.set(cx - pairW / 2f, btnY, cx - pairW / 2f + btnW, btnY + btnH);
             btnRightSecondary.set(cx + pairW / 2f - btnW, btnY, cx + pairW / 2f, btnY + btnH);
 
@@ -1485,7 +1614,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(7.2f * scale);
+            paint.setTextSize(6.8f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             drawCenteredText(canvas, "BORRAR", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
@@ -1502,15 +1631,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 2: MÉTRICAS (KM / KCAL) (Mathematically centered: 39f..188f)
+         * SCREEN 2: MÉTRICAS (PODÓMETRO · PASOS / KCAL) (Mathematically centered: 39f..188f)
          */
         private void drawBiometricsScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "GPS ACTIVO · PASOS", true);
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "PODÓMETRO · PASOS", true);
 
             float cardW = 166f * scale * wMult;
             float cardH = 38.5f * scale;
 
-            // Card 1: DISTANCIA RECORRIDA (km · mi + GPS badge)
+            // Card 1: DISTANCIA RECORRIDA (mts · ft + PASOS badge)
             float card1Top = 77f * scale;
             rect.set(cx - cardW / 2f, card1Top, cx + cardW / 2f, card1Top + cardH);
             paint.setStyle(Paint.Style.FILL);
@@ -1533,8 +1662,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             canvas.drawText(getFormattedKmAndMi(), rect.left + 9.5f * scale, card1Top + 29.5f * scale, paint);
 
-            // GPS Badge inside Card 1
-            float badgeW = 28f * scale;
+            // PASOS Badge inside Card 1
+            float badgeW = 34f * scale;
             float badgeH = 14.5f * scale;
             RectF badgeRect = new RectF(rect.right - badgeW - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
             paint.setColor(Color.parseColor("#04101C"));
@@ -1544,9 +1673,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#8000A8F3"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(6.2f * scale);
+            paint.setTextSize(5.8f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "GPS", badgeRect.centerX(), badgeRect.centerY());
+            drawCenteredText(canvas, "PASOS", badgeRect.centerX(), badgeRect.centerY());
 
             // Card 2: GASTO ENERGÉTICO (kcal + ACTIVA badge)
             float card2Top = 121.5f * scale;

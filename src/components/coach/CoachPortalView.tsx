@@ -1,28 +1,33 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { UserProfile, updateProfile, isLinkedToExternalCoach, getCanonicalCoachClubId, CoachLinkNotification } from "@/lib/authService";
-import { 
-  getLocalSessions, 
-  getLocalSetting, 
-  saveLocalSetting, 
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  UserProfile,
+  isLinkedToExternalCoach,
+  getCanonicalCoachClubId,
+  CoachLinkNotification
+} from "@/lib/authService";
+import {
+  getLocalSessions,
+  getLocalSetting,
+  saveLocalSetting,
   saveLocalSession,
   purgeAllFictitiousData,
   isFictitiousUser,
   isFictitiousSession
 } from "@/lib/db/indexedDB";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Award, 
+import {
+  LayoutDashboard,
+  Users,
+  Award,
   Calendar,
   ShieldCheck,
-  Building2,
   Share2,
   RefreshCw,
   CheckCircle2,
-  X
+  X,
+  Swords
 } from "lucide-react";
 
 // Sub-components / Tabs
@@ -30,10 +35,12 @@ import CoachOverviewTab from "./tabs/CoachOverviewTab";
 import CoachAthletesTab from "./tabs/CoachAthletesTab";
 import CoachSessionsTab from "./tabs/CoachSessionsTab";
 import CoachMacrocycleTab from "./tabs/CoachMacrocycleTab";
+import CoachDuelsTab from "./tabs/CoachDuelsTab";
 import AthleteDetailSheet from "./AthleteDetailSheet";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
 import { Macrocycle } from "@/lib/db/macrocycleTypes";
-import { SyncCycleSummary } from "@/lib/cycleCalendarSync";
+import { SyncCycleSummary, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
+import { activateCoachLaunchPromo } from "@/lib/billingService";
 
 interface CoachPortalViewProps {
   user: UserProfile;
@@ -41,12 +48,43 @@ interface CoachPortalViewProps {
   onUserUpdate?: (updated: UserProfile) => void;
 }
 
-type Tab = "ATHLETES" | "SESSIONS" | "OVERVIEW" | "MACROCYCLES";
+type Tab = "ATHLETES" | "SESSIONS" | "OVERVIEW" | "MACROCYCLES" | "DUELS";
+
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+function isRecentLiveDraft(s: any): boolean {
+  if (!s?.isDraft) return false;
+  const ts = Number(s.updatedAt || s.timestamp || 0);
+  return ts >= Date.now() - SIX_HOURS_MS;
+}
+
+function filterAndSortClubSessions(
+  allSessions: any[],
+  linkedUids: Set<string>,
+  activeClubId: string
+): any[] {
+  return allSessions
+    .filter((s) => {
+      if (!s || isFictitiousSession(s, s.id)) return false;
+      const belongsToClub =
+        linkedUids.has(s.userId || s.userUid) || s.clubId === activeClubId;
+      if (!belongsToClub) return false;
+      if (s.isDraft && !isRecentLiveDraft(s)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aLive = isRecentLiveDraft(a);
+      const bLive = isRecentLiveDraft(b);
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      return (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0);
+    });
+}
 
 export default function CoachPortalView({ user, onNavigate, onUserUpdate }: CoachPortalViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>("ATHLETES");
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [activeDuels, setActiveDuels] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [selectedAthlete, setSelectedAthlete] = useState<UserProfile | null>(null);
   const [showPlanImporter, setShowPlanImporter] = useState(false);
@@ -58,43 +96,134 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     setShowPlanImporter(true);
   };
 
-  const handlePlanImportSuccess = ({ macrocycle, summary }: { macrocycle: Macrocycle; summary: SyncCycleSummary }) => {
+  const handlePlanImportSuccess = ({
+    macrocycle,
+    summary
+  }: {
+    macrocycle: Macrocycle;
+    summary: SyncCycleSummary;
+  }) => {
     const assignedIds = macrocycle.assignedAthleteIds || [];
-    const recipientText = assignedIds.length > 0
-      ? assignedIds.map((id) => athletes.find((a) => a.uid === id)?.fullName || id).join(", ")
-      : "Todos los alumnos del Club";
+    const recipientText =
+      assignedIds.length > 0
+        ? assignedIds.map((id) => athletes.find((a) => a.uid === id)?.fullName || id).join(", ")
+        : "Todos los alumnos del Club";
 
     alert(
       `¡Plan "${macrocycle.name}" cargado en formato literal!\n\n` +
-      `• Destinatario(s): ${recipientText}\n` +
-      `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-      `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-      `Ya está disponible en el calendario del alumno(s).`
+        `• Destinatario(s): ${recipientText}\n` +
+        `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+        `Ya está disponible en el calendario del alumno(s).`
     );
   };
 
   const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
   const activeClubId = getCanonicalCoachClubId(user);
 
-  const isAthleteLinkedToCoach = (u: UserProfile, unlinkedIds: string[]): boolean => {
-    if (!u || !u.uid || isFictitiousUser(u) || u.uid === user.uid) return false;
-    // Explicit coachId link always wins (even if athlete was previously unlinked and re-joined)
-    if (u.coachId === user.uid) return true;
-    if (u.coachId && u.coachId !== user.uid && user.role !== "superadmin") return false;
-    if (unlinkedIds.includes(u.uid)) return false;
-    if (user.role === "superadmin" && isLinkedToExternalCoach(u)) return true;
-    return (
-      u.clubId === activeClubId ||
-      u.clubId === canonicalCoachClubId ||
-      (!!user.clubId && !isLinkedToExternalCoach(user) && u.clubId === user.clubId) ||
-      (!!user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)
-    );
-  };
+  const isAthleteLinkedToCoach = useCallback(
+    (u: UserProfile, unlinkedIds: string[]): boolean => {
+      if (!u || !u.uid || isFictitiousUser(u) || u.uid === user.uid) return false;
+      // Explicit coachId link always wins (even if athlete was previously unlinked and re-joined)
+      if (u.coachId === user.uid) return true;
+      if (u.coachId && u.coachId !== user.uid && user.role !== "superadmin") return false;
+      if (unlinkedIds.includes(u.uid)) return false;
+      if (user.role === "superadmin" && isLinkedToExternalCoach(u)) return true;
+      return (
+        u.clubId === activeClubId ||
+        u.clubId === canonicalCoachClubId ||
+        (!!user.clubId && !isLinkedToExternalCoach(user) && u.clubId === user.clubId) ||
+        (!!user.clubInviteCode && u.clubInviteCode === user.clubInviteCode)
+      );
+    },
+    [user, activeClubId, canonicalCoachClubId]
+  );
 
-  // Load real linked roster and transfer real sessions from linked students (no demo/fictitious data)
+  // Garantiza que el código de 6 dígitos, el rol de Coach y el clubId EXISTAN en Firestore
+  // ANTES de ejecutar consultas dependientes o crear alumnos manuales.
+  const ensureClean6DigitCode = useCallback(async () => {
+    if (isLinkedToExternalCoach(user)) return;
+
+    const localCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
+    const hasValidLocalCode = /^\d{6}$/.test(localCode);
+    try {
+      const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+      const { doc, getDoc, setDoc } = await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase");
+
+      let cloudData: any = null;
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        try {
+          const snap = await getDoc(doc(db, "users", user.uid));
+          cloudData = snap.exists() ? snap.data() : null;
+        } catch {
+          cloudData = null;
+        }
+      }
+
+      // Si en la nube el usuario ya está vinculado como alumno a un Coach externo, no tocar su perfil
+      if (cloudData && isLinkedToExternalCoach(cloudData)) {
+        return;
+      }
+
+      const cloudCode = cloudData?.clubInviteCode ? String(cloudData.clubInviteCode).trim() : "";
+      const hasValidCloudCode = /^\d{6}$/.test(cloudCode);
+
+      const finalCode = hasValidLocalCode
+        ? localCode
+        : hasValidCloudCode
+        ? cloudCode
+        : generateClubInviteCode();
+      const finalClubId = activeClubId;
+      const cloudInSync =
+        !!cloudData &&
+        cloudData.clubInviteCode === finalCode &&
+        cloudData.clubId === finalClubId &&
+        cloudData.isClubCreator === true &&
+        cloudData.role !== "archer";
+      const localInSync =
+        user.clubInviteCode === finalCode &&
+        user.clubId === finalClubId &&
+        user.isClubCreator === true &&
+        user.role !== "archer";
+
+      if (cloudInSync && localInSync) return;
+
+      const updates: Partial<UserProfile> = {
+        clubInviteCode: finalCode,
+        clubId: finalClubId,
+        isClubCreator: true
+      };
+      if (user.role === "archer") {
+        updates.role = "coach";
+      }
+      const updated = await updateProfile(user.uid, updates);
+      try {
+        await setDoc(doc(db, "users", user.uid), updated, { merge: true });
+      } catch (cloudErr) {
+        console.warn("Código del Coach pendiente de subir a la nube:", cloudErr);
+      }
+      if (!localInSync && onUserUpdate) {
+        onUserUpdate(updated);
+      }
+    } catch (err) {
+      console.error("Error asegurando código de 6 dígitos:", err);
+    }
+  }, [user, activeClubId, onUserUpdate]);
+
+  // Load real linked roster, cloud attendance, live/completed sessions, and active duels
   useEffect(() => {
+    let isCancelled = false;
+    let unsubNotifs: () => void = () => {};
+    let unsubSessions: () => void = () => {};
+    let unsubDuels: () => void = () => {};
+
     async function loadCoachData() {
       await purgeAllFictitiousData();
+
+      // 0. Ensure Coach users/{uid} role & clubId are synced first so club-scoped Firestore rules pass
+      await ensureClean6DigitCode();
+      if (isCancelled) return;
 
       // 1. Get roster of real athletes linked to this coach/club
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
@@ -121,7 +250,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
           // Query 1: explicit coachId === user.uid
           try {
-            const snapCoachId = await getDocs(query(collection(db, "users"), where("coachId", "==", user.uid)));
+            const snapCoachId = await getDocs(
+              query(collection(db, "users"), where("coachId", "==", user.uid))
+            );
             snapCoachId.forEach(addRemoteDoc);
           } catch (e) {
             console.warn("Query users by coachId failed:", e);
@@ -129,7 +260,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
           // Query 2: clubId === activeClubId
           try {
-            const snapClub = await getDocs(query(collection(db, "users"), where("clubId", "==", activeClubId)));
+            const snapClub = await getDocs(
+              query(collection(db, "users"), where("clubId", "==", activeClubId))
+            );
             snapClub.forEach(addRemoteDoc);
           } catch (e) {
             console.warn("Query users by activeClubId failed:", e);
@@ -171,11 +304,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
           const remoteAthletes = Array.from(remoteAthletesMap.values());
           if (remoteAthletes.length > 0) {
-            // If an athlete re-linked in the cloud (coachId === user.uid or clubId === activeClubId),
-            // remove them from local unlinkedIds so they show up immediately.
             const relinkedUids = new Set(
               remoteAthletes
-                .filter((r) => r.coachId === user.uid || r.clubId === activeClubId || r.clubId === canonicalCoachClubId)
+                .filter(
+                  (r) =>
+                    r.coachId === user.uid ||
+                    r.clubId === activeClubId ||
+                    r.clubId === canonicalCoachClubId
+                )
                 .map((r) => r.uid)
             );
             if (relinkedUids.size > 0 && unlinkedIds.some((id) => relinkedUids.has(id))) {
@@ -197,17 +333,47 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         }
       }
 
+      if (isCancelled) return;
       setAthletes(clubArchers);
 
-      // 2. Load attendance for today
+      // 2. Load attendance for today (local + Firestore coach_records/ATT-<clubId>-<dateKey>)
       const dateKey = new Date().toISOString().split("T")[0];
-      const savedAttendance = await getLocalSetting<Record<string, boolean>>(`attendance_${activeClubId}_${dateKey}`, {});
-      setAttendance(savedAttendance);
+      const localAttKey = `attendance_${activeClubId}_${dateKey}`;
+      const savedAttendance = await getLocalSetting<Record<string, boolean>>(localAttKey, {});
+      if (!isCancelled) {
+        setAttendance(savedAttendance);
+      }
 
-      // 3. Transfer all real sessions from linked athletes in Firestore + local DB
-      if (typeof navigator !== "undefined" && navigator.onLine && clubArchers.length > 0) {
+      if (typeof navigator !== "undefined" && navigator.onLine) {
         try {
-          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const { doc, getDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const attDocId = `ATT-${activeClubId}-${dateKey}`;
+          const attSnap = await getDoc(doc(db, "coach_records", attDocId));
+          if (attSnap.exists()) {
+            const attData = attSnap.data();
+            if (Array.isArray(attData?.presentUids)) {
+              const cloudAttMap: Record<string, boolean> = {};
+              for (const uid of attData.presentUids) {
+                if (typeof uid === "string" && uid) cloudAttMap[uid] = true;
+              }
+              await saveLocalSetting(localAttKey, cloudAttMap);
+              if (!isCancelled) {
+                setAttendance(cloudAttMap);
+              }
+            }
+          }
+        } catch (attErr) {
+          console.warn("Could not fetch cloud attendance:", attErr);
+        }
+      }
+
+      // 3. Query sessions strictly by clubId (permitted by firestore.rules:isCoachOfClub)
+      if (typeof navigator !== "undefined" && navigator.onLine && activeClubId) {
+        try {
+          const { collection, query, where, getDocs, onSnapshot } = await import(
+            "firebase/firestore"
+          );
           const { db } = await import("@/lib/firebase");
 
           const qClubSess = query(collection(db, "sessions"), where("clubId", "==", activeClubId));
@@ -219,109 +385,90 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             }
           }
 
-          for (const ath of clubArchers) {
-            const qAthSess = query(collection(db, "sessions"), where("userId", "==", ath.uid));
-            const snapAthSess = await getDocs(qAthSess);
-            for (const d of snapAthSess.docs) {
-              const data = d.data();
-              if (data && !isFictitiousSession(data, d.id)) {
-                await saveLocalSession(d.id, { ...data, id: d.id });
+          // Live listener for active sessions (including isDraft: true live scoring)
+          unsubSessions();
+          unsubSessions = onSnapshot(
+            qClubSess,
+            async (snap) => {
+              let changed = false;
+              for (const change of snap.docChanges()) {
+                const data = change.doc.data();
+                if (data && !isFictitiousSession(data, change.doc.id)) {
+                  await saveLocalSession(change.doc.id, { ...data, id: change.doc.id });
+                  changed = true;
+                }
               }
-            }
-          }
+              if (changed && !isCancelled) {
+                const latestUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                const latestUnlinked = await getLocalSetting<string[]>(
+                  `unlinked_athletes_${activeClubId}`,
+                  []
+                );
+                const latestArchers = latestUsers.filter((u) =>
+                  isAthleteLinkedToCoach(u, latestUnlinked)
+                );
+                const latestUids = new Set(latestArchers.map((a) => a.uid));
+                const latestSessions = await getLocalSessions();
+                setSessions(filterAndSortClubSessions(latestSessions, latestUids, activeClubId));
+              }
+            },
+            () => {}
+          );
         } catch (err) {
-          console.warn("Could not fetch linked athlete sessions from Firestore:", err);
+          console.warn("Could not fetch club sessions from Firestore:", err);
         }
       }
 
       const allSessions = await getLocalSessions();
       const linkedUids = new Set(clubArchers.map((a) => a.uid));
-      const realLinkedSessions = allSessions.filter(
-        (s) =>
-          !isFictitiousSession(s, s.id) &&
-          !s.isDraft &&
-          linkedUids.has(s.userId || s.userUid)
-      );
-      setSessions(realLinkedSessions);
-    }
-    loadCoachData();
+      if (!isCancelled) {
+        setSessions(filterAndSortClubSessions(allSessions, linkedUids, activeClubId));
+      }
 
-    // Garantiza que el código de 6 dígitos y el clubId del Coach EXISTAN en Firestore
-    // (si no están en la nube, el alumno recibe "Código no encontrado").
-    // CRÍTICO: Si el usuario está vinculado como alumno a otro Coach, NUNCA sobrescribir su perfil.
-    async function ensureClean6DigitCode() {
-      if (isLinkedToExternalCoach(user)) return;
-
-      const localCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
-      const hasValidLocalCode = /^\d{6}$/.test(localCode);
-      try {
-        const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
-        const { doc, getDoc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-
-        let cloudData: any = null;
-        if (typeof navigator === "undefined" || navigator.onLine) {
-          try {
-            const snap = await getDoc(doc(db, "users", user.uid));
-            cloudData = snap.exists() ? snap.data() : null;
-          } catch {
-            cloudData = null;
-          }
-        }
-
-        // Si en la nube el usuario ya está vinculado como alumno a un Coach externo, no tocar su perfil
-        if (cloudData && isLinkedToExternalCoach(cloudData)) {
-          return;
-        }
-
-        const cloudCode = cloudData?.clubInviteCode ? String(cloudData.clubInviteCode).trim() : "";
-        const hasValidCloudCode = /^\d{6}$/.test(cloudCode);
-
-        const finalCode = hasValidLocalCode
-          ? localCode
-          : hasValidCloudCode
-          ? cloudCode
-          : generateClubInviteCode();
-        const finalClubId = activeClubId;
-        const cloudInSync =
-          !!cloudData &&
-          cloudData.clubInviteCode === finalCode &&
-          cloudData.clubId === finalClubId &&
-          cloudData.isClubCreator === true &&
-          cloudData.role !== "archer";
-        const localInSync =
-          user.clubInviteCode === finalCode &&
-          user.clubId === finalClubId &&
-          user.isClubCreator === true &&
-          user.role !== "archer";
-
-        if (cloudInSync && localInSync) return;
-
-        const updates: Partial<UserProfile> = {
-          clubInviteCode: finalCode,
-          clubId: finalClubId,
-          isClubCreator: true
-        };
-        if (user.role === "archer") {
-          updates.role = "coach";
-        }
-        const updated = await updateProfile(user.uid, updates);
+      // 4. Subscribe to live active_duels for club athletes
+      if (typeof navigator !== "undefined" && navigator.onLine) {
         try {
-          await setDoc(doc(db, "users", user.uid), updated, { merge: true });
-        } catch (cloudErr) {
-          console.warn("Código del Coach pendiente de subir a la nube:", cloudErr);
+          const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const qActiveDuels = query(
+            collection(db, "active_duels"),
+            where("status", "in", ["waiting", "active"])
+          );
+          unsubDuels();
+          unsubDuels = onSnapshot(
+            qActiveDuels,
+            (snap) => {
+              if (isCancelled) return;
+              const matches: any[] = [];
+              snap.forEach((d) => {
+                const data = d.data();
+                if (!data) return;
+                const involvesClub =
+                  linkedUids.has(data.creatorUid) ||
+                  linkedUids.has(data.playerUid) ||
+                  data.clubId === activeClubId ||
+                  data.creatorUid === user.uid ||
+                  data.playerUid === user.uid;
+                if (involvesClub) {
+                  matches.push({ ...data, id: d.id });
+                }
+              });
+              matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+              setActiveDuels(matches);
+            },
+            () => {}
+          );
+        } catch (duelErr) {
+          console.warn("Could not subscribe to active_duels:", duelErr);
         }
-        if (!localInSync && onUserUpdate) {
-          onUserUpdate(updated);
-        }
-      } catch (err) {
-        console.error("Error asegurando código de 6 dígitos:", err);
       }
     }
-    ensureClean6DigitCode();
+
+    loadCoachData();
 
     // Listen for realtime database changes (new athlete sessions or roster updates synced from cloud)
     const refreshFromLocalDb = async () => {
+      if (isCancelled) return;
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       const unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
       const clubArchers = allUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
@@ -329,13 +476,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
       const linkedUids = new Set(clubArchers.map((a) => a.uid));
       const freshSessions = await getLocalSessions();
-      const realLinkedSessions = freshSessions.filter(
-        (s) =>
-          !isFictitiousSession(s, s.id) &&
-          !s.isDraft &&
-          linkedUids.has(s.userId || s.userUid)
-      );
-      setSessions(realLinkedSessions);
+      setSessions(filterAndSortClubSessions(freshSessions, linkedUids, activeClubId));
     };
 
     const handleDbChange = async (e: any) => {
@@ -354,7 +495,6 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     };
 
     // Real-time listener for unread Coach Link Notifications inside the Coach Portal
-    let unsubNotifs: () => void = () => {};
     (async () => {
       try {
         if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -391,16 +531,20 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     window.addEventListener("local-db-change", handleDbChange);
     window.addEventListener("users-roster-updated", handleRosterUpdated);
     return () => {
+      isCancelled = true;
       unsubNotifs();
+      unsubSessions();
+      unsubDuels();
       window.removeEventListener("local-db-change", handleDbChange);
       window.removeEventListener("users-roster-updated", handleRosterUpdated);
     };
-  }, [user, activeClubId]);
+  }, [user, activeClubId, canonicalCoachClubId, ensureClean6DigitCode, isAthleteLinkedToCoach]);
 
   // Unlink athlete from club callback
   const handleUnlinkAthlete = async (athleteToUnlink: UserProfile) => {
     try {
       const targetUid = athleteToUnlink.uid;
+      const unlinkTs = Date.now();
 
       // 1. Track unlinked UID locally for this club so realtime sync doesn't re-add stale cache
       const unlinkedKey = `unlinked_athletes_${activeClubId}`;
@@ -409,82 +553,70 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         await saveLocalSetting(unlinkedKey, [...prevUnlinked, targetUid]);
       }
 
-      // 2. Update athlete in simulated_users (clear clubId & coachId without touching archer's optional clubName)
-      const unlinkTs = Date.now();
+      // 2. Purge/unlink assigned macrocycles & calendar events for this athlete
+      try {
+        await unlinkAndPurgePlan("*", targetUid);
+      } catch (planErr) {
+        console.warn("Error unlinking athlete plans:", planErr);
+      }
+
+      // 3. Clean club/coach fields locally in simulated_users
+      const unlinkFields = {
+        clubId: null,
+        clubName: "",
+        clubLogo: "",
+        clubInviteCode: "",
+        coachId: null,
+        coachName: "",
+        coachEmail: "",
+        updatedAt: unlinkTs
+      };
+
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-      let updatedAthleteRecord: UserProfile | null = null;
       const updatedUsers = allUsers.map((u) => {
         if (u.uid === targetUid) {
-          updatedAthleteRecord = {
+          return {
             ...u,
-            role: u.role === "superadmin" ? "superadmin" : "archer",
-            isClubCreator: false,
-            clubId: null,
-            coachId: null,
-            coachName: null,
-            coachEmail: null,
-            clubInviteCode: "",
-            updatedAt: unlinkTs
-          };
-          return updatedAthleteRecord;
+            ...unlinkFields
+          } as UserProfile;
         }
         return u;
       });
       await saveLocalSetting("simulated_users", updatedUsers);
 
-      // 3. Remove from active UI state and close detail sheet
+      // 4. Remove from active UI state and close detail sheet
       setAthletes((prev) => prev.filter((a) => a.uid !== targetUid));
       setSelectedAthlete(null);
 
-      // 4. Write directly to Firestore and queue cloud sync UPDATE
-      const payloadToSync: UserProfile = updatedAthleteRecord || {
-        ...athleteToUnlink,
-        role: athleteToUnlink.role === "superadmin" ? "superadmin" : "archer",
-        isClubCreator: false,
-        clubId: null,
-        coachId: null,
-        coachName: null,
-        coachEmail: null,
-        clubInviteCode: "",
-        updatedAt: unlinkTs
-      };
+      // 5. Update ONLY permitted unlink fields via updateDoc in Firestore (or fallback to sync queue)
+      let wroteDirectlyToCloud = false;
       try {
         if (typeof navigator === "undefined" || navigator.onLine) {
-          const { doc, setDoc } = await import("firebase/firestore");
+          const { doc, updateDoc } = await import("firebase/firestore");
           const { db } = await import("@/lib/firebase");
-          await setDoc(
-            doc(db, "users", targetUid),
-            {
-              role: athleteToUnlink.role === "superadmin" ? "superadmin" : "archer",
-              isClubCreator: false,
-              clubId: null,
-              coachId: null,
-              coachName: null,
-              coachEmail: null,
-              clubInviteCode: "",
-              updatedAt: unlinkTs
-            },
-            { merge: true }
-          );
+          await updateDoc(doc(db, "users", targetUid), unlinkFields);
+          wroteDirectlyToCloud = true;
         }
       } catch (cloudErr) {
-        console.warn("Direct cloud unlink write deferred to sync queue:", cloudErr);
+        console.warn("Direct cloud unlink updateDoc deferred to sync queue:", cloudErr);
       }
 
-      try {
-        const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
-        const { runSync } = await import("@/lib/db/syncManager");
-        await addToSyncQueue({
-          id: generateResilientId("TXN"),
-          collection: "users",
-          operation: "UPDATE",
-          payloadId: targetUid,
-          payload: payloadToSync,
-          timestamp: Date.now()
-        });
-        runSync();
-      } catch (syncErr) {
-        console.warn("Cloud sync skipped on unlink:", syncErr);
+      if (!wroteDirectlyToCloud) {
+        try {
+          const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+          const { runSync } = await import("@/lib/db/syncManager");
+          await addToSyncQueue({
+            id: generateResilientId("TXN"),
+            collection: "users",
+            operation: "UPDATE",
+            payloadId: targetUid,
+            payload: { uid: targetUid, ...unlinkFields },
+            timestamp: unlinkTs
+          });
+          runSync();
+        } catch (syncErr) {
+          console.warn("Cloud sync skipped on unlink:", syncErr);
+        }
       }
     } catch (err) {
       console.error("Error unlinking athlete:", err);
@@ -495,6 +627,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   // Create new athlete profile callback
   const handleCreateAthlete = async (newAthlete: UserProfile) => {
     try {
+      // Ensure Coach users/{uid} role & clubId are synced in Firestore BEFORE inserting athlete
+      await ensureClean6DigitCode();
+
       const athleteWithClub: UserProfile = {
         ...newAthlete,
         clubId: activeClubId,
@@ -511,7 +646,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       // 2. Update state
       setAthletes((prev) => [athleteWithClub, ...prev]);
 
-      // 3. Queue sync UPDATE for cloud sync
+      // 3. Queue sync INSERT for cloud sync
       try {
         const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
         const { runSync } = await import("@/lib/db/syncManager");
@@ -528,14 +663,16 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         console.warn("Cloud sync skipped:", syncErr);
       }
 
-      alert(`¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`);
+      alert(
+        `¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`
+      );
     } catch (err) {
       console.error("Error creating athlete:", err);
       alert("Error al guardar el perfil del alumno.");
     }
   };
 
-  // Toggle Attendance
+  // Toggle Attendance (Local + Firestore coach_records/ATT-<clubId>-<dateKey>)
   const handleToggleAttendance = async (uid: string) => {
     const nextAttendance = {
       ...attendance,
@@ -545,14 +682,57 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
     const dateKey = new Date().toISOString().split("T")[0];
     await saveLocalSetting(`attendance_${activeClubId}_${dateKey}`, nextAttendance);
+
+    const presentUids = Object.entries(nextAttendance)
+      .filter(([, isPresent]) => Boolean(isPresent))
+      .map(([athleteUid]) => athleteUid);
+
+    const nowTs = Date.now();
+    const attDocId = `ATT-${activeClubId}-${dateKey}`;
+    const attPayload = {
+      id: attDocId,
+      coachId: user.uid,
+      clubId: activeClubId,
+      type: "attendance" as const,
+      dateKey,
+      presentUids,
+      updatedAt: nowTs
+    };
+
+    try {
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        const { doc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        await setDoc(doc(db, "coach_records", attDocId), attPayload, { merge: true });
+      }
+    } catch (cloudErr) {
+      console.warn("Direct cloud attendance write deferred to sync queue:", cloudErr);
+    }
+
+    try {
+      const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+      const { runSync } = await import("@/lib/db/syncManager");
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "coach_records",
+        operation: "UPDATE",
+        payloadId: attDocId,
+        payload: attPayload,
+        timestamp: nowTs
+      });
+      runSync();
+    } catch (syncErr) {
+      console.warn("Attendance sync queue skipped:", syncErr);
+    }
   };
 
   const handleUpgradeToPro = async () => {
     try {
-      const { COACH_PRO_PERIOD_MS } = await import("@/lib/billingService");
-      const updated = await updateProfile(user.uid, { plan: "PRO", proExpiresAt: Date.now() + COACH_PRO_PERIOD_MS });
-      if (onUserUpdate) onUserUpdate(updated);
-      alert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
+      const res = await activateCoachLaunchPromo(user);
+      if (res.success && res.updatedUser) {
+        if (onUserUpdate) onUserUpdate(res.updatedUser);
+        alert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
+      }
     } catch (e) {
       console.error(e);
     }
@@ -560,9 +740,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
   const handleRestoreSession = async (sessionId: string) => {
     try {
-      const { getLocalSession, saveLocalSession, addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
+      const {
+        getLocalSession,
+        saveLocalSession,
+        addToSyncQueue,
+        generateResilientId
+      } = await import("@/lib/db/indexedDB");
       const { runSync } = await import("@/lib/db/syncManager");
-      
+
       const session = await getLocalSession(sessionId);
       if (session) {
         const restoredSession = {
@@ -570,9 +755,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           deletedByArcher: false,
           restoredByCoach: true
         };
-        
+
         await saveLocalSession(sessionId, restoredSession);
-        
+
         await addToSyncQueue({
           id: generateResilientId("TXN"),
           collection: "sessions",
@@ -581,12 +766,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           payload: restoredSession,
           timestamp: Date.now()
         });
-        
+
         const list = await getLocalSessions();
         const linkedUids = new Set(athletes.map((a) => a.uid));
-        setSessions(list.filter((s) => !isFictitiousSession(s, s.id) && !s.isDraft && linkedUids.has(s.userId || s.userUid)));
+        setSessions(filterAndSortClubSessions(list, linkedUids, activeClubId));
         runSync();
-        
+
         alert("Sesión restituida correctamente. Se ha notificado al arquero.");
       }
     } catch (err) {
@@ -594,11 +779,11 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     }
   };
 
-  // Get active session list for Overview
+  // Get active session list for Overview (live drafts first, then most recent)
   const getRecentActivities = () => {
     return sessions
-      .filter(s => athletes.some(a => a.uid === s.userId || a.uid === s.userUid))
-      .slice(0, 10);
+      .filter((s) => athletes.some((a) => a.uid === s.userId || a.uid === s.userUid) || s.clubId === activeClubId)
+      .slice(0, 12);
   };
 
   return (
@@ -634,11 +819,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         {/* Quick Coach Code (Máximo 6 dígitos) */}
         <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-black px-3 py-2 rounded-xl border border-white/[0.06]">
           <div className="flex flex-col">
-            <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">Código para Alumnos</span>
+            <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">
+              Código para Alumnos
+            </span>
             <div className="flex items-baseline gap-1">
               <span className="text-sm tabular-nums font-black text-cyan-neon tracking-widest select-all">
-                {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode) 
-                  ? user.clubInviteCode 
+                {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
+                  ? user.clubInviteCode
                   : "······"}
               </span>
               <span className="text-[8.1px] text-white font-bold uppercase tracking-wider">
@@ -649,16 +836,19 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
-                const codeToCopy = (user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode))
-                  ? user.clubInviteCode
-                  : "";
+                const codeToCopy =
+                  user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
+                    ? user.clubInviteCode
+                    : "";
                 if (!codeToCopy) {
                   alert("Tu código se está generando. Espera unos segundos e inténtalo de nuevo.");
                   return;
                 }
                 if (navigator.clipboard) {
                   navigator.clipboard.writeText(codeToCopy);
-                  alert(`Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`);
+                  alert(
+                    `Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`
+                  );
                 }
               }}
               className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
@@ -668,9 +858,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             </button>
             <button
               onClick={async () => {
-                if (confirm("¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?")) {
+                if (
+                  confirm(
+                    "¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?"
+                  )
+                ) {
                   try {
-                    const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
+                    const { generateClubInviteCode, updateProfile } = await import(
+                      "@/lib/authService"
+                    );
                     const freshCode = generateClubInviteCode();
                     const updated = await updateProfile(user.uid, {
                       clubInviteCode: freshCode,
@@ -737,7 +933,11 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       try {
                         const { doc, setDoc } = await import("firebase/firestore");
                         const { db } = await import("@/lib/firebase");
-                        await setDoc(doc(db, "coach_notifications", notif.id), { read: true }, { merge: true });
+                        await setDoc(
+                          doc(db, "coach_notifications", notif.id),
+                          { read: true },
+                          { merge: true }
+                        );
                       } catch {
                         // ignore
                       }
@@ -753,7 +953,11 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       try {
                         const { doc, setDoc } = await import("firebase/firestore");
                         const { db } = await import("@/lib/firebase");
-                        await setDoc(doc(db, "coach_notifications", notif.id), { read: true }, { merge: true });
+                        await setDoc(
+                          doc(db, "coach_notifications", notif.id),
+                          { read: true },
+                          { merge: true }
+                        );
                       } catch {
                         // ignore
                       }
@@ -770,13 +974,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         )}
       </AnimatePresence>
 
-      {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES */}
-      <div className="flex bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 justify-between shrink-0">
+      {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES | DUELOS */}
+      <div className="flex bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 justify-between shrink-0 gap-0.5">
         {[
           { id: "ATHLETES", label: "Alumnos", icon: Users },
           { id: "SESSIONS", label: "Resultados", icon: Award },
           { id: "OVERVIEW", label: "Director", icon: LayoutDashboard },
-          { id: "MACROCYCLES", label: "Planes", icon: Calendar }
+          { id: "MACROCYCLES", label: "Planes", icon: Calendar },
+          { id: "DUELS", label: "Duelos", icon: Swords }
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -784,14 +989,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                active 
-                  ? "bg-white/[0.05] border border-white/[0.08] text-cyan-neon" 
+              className={`flex-1 min-w-0 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                active
+                  ? "bg-white/[0.05] border border-white/[0.08] text-cyan-neon"
                   : "text-white hover:text-white border border-transparent"
               }`}
             >
               <Icon size={14} className={active ? "text-cyan-neon" : "text-white"} />
-              <span>{tab.label}</span>
+              <span className="truncate max-w-full">{tab.label}</span>
             </button>
           );
         })}
@@ -804,16 +1009,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             athletes={athletes}
             onViewAthlete={setSelectedAthlete}
             sessions={sessions}
+            coachUid={user.uid}
+            activeClubId={activeClubId}
             onCreateAthlete={handleCreateAthlete}
             onOpenPlanImporter={handleOpenPlanImporter}
           />
         )}
 
         {activeTab === "SESSIONS" && (
-          <CoachSessionsTab
-            athletes={athletes}
-            sessions={sessions}
-          />
+          <CoachSessionsTab athletes={athletes} sessions={sessions} />
         )}
 
         {activeTab === "OVERVIEW" && (
@@ -833,6 +1037,15 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             user={user}
             onUpgrade={handleUpgradeToPro}
             athletes={athletes}
+            sessions={sessions}
+          />
+        )}
+
+        {activeTab === "DUELS" && (
+          <CoachDuelsTab
+            athletes={athletes}
+            sessions={sessions}
+            activeDuels={activeDuels}
           />
         )}
       </div>
@@ -844,6 +1057,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             athlete={selectedAthlete}
             onClose={() => setSelectedAthlete(null)}
             sessions={sessions}
+            coachUid={user.uid}
+            activeClubId={activeClubId}
             onRestoreSession={handleRestoreSession}
             onUnlinkAthlete={handleUnlinkAthlete}
             onOpenPlanImporter={(athleteId) => {

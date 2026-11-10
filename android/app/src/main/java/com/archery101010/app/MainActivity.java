@@ -46,6 +46,7 @@ import androidx.core.content.FileProvider;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.BridgeWebViewClient;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -112,9 +113,12 @@ public class MainActivity extends BridgeActivity {
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
+    private ActivityResultLauncher<String> audioPermissionLauncher;
     private ActivityResultLauncher<Intent> cameraCaptureLauncher;
+    private PermissionRequest pendingWebAudioPermissionRequest = null;
     private File pendingCameraCaptureFile = null;
     private volatile String activeAppOrigin = "https://localhost";
+    private volatile boolean isWebWatchListenerReady = false;
     private Dialog spotifyLoginDialog = null;
 
     // Native Live Session GPS + Movement Tracker (active ONLY during an active training session)
@@ -279,8 +283,33 @@ public class MainActivity extends BridgeActivity {
             }
         );
 
+        audioPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(),
+            isGranted -> {
+                final PermissionRequest req = pendingWebAudioPermissionRequest;
+                pendingWebAudioPermissionRequest = null;
+                if (req == null) return;
+                runOnUiThread(() -> {
+                    try {
+                        if (Boolean.TRUE.equals(isGranted)) {
+                            req.grant(req.getResources());
+                        } else {
+                            req.deny();
+                        }
+                    } catch (Exception ignored) {}
+                });
+            }
+        );
+
         super.onCreate(savedInstanceState);
         activeInstanceRef = new WeakReference<>(this);
+
+        // Always keep Android APK/AAB pinned to https://localhost so IndexedDB never splits and offline launch works 100%
+        activeAppOrigin = "https://localhost";
+        getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
+            .edit()
+            .remove("prefer_remote_ota")
+            .apply();
 
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
@@ -298,36 +327,104 @@ public class MainActivity extends BridgeActivity {
                 settings.setUserAgentString(cleanUa);
             }
 
+            final ArcheryNativeShare nativeShareBridge = new ArcheryNativeShare();
             webView.addJavascriptInterface(new ArcheryNativeAuth(), "ArcheryNativeAuth");
-            webView.addJavascriptInterface(new ArcheryNativeShare(), "ArcheryNativeShare");
+            webView.addJavascriptInterface(nativeShareBridge, "ArcheryNativeShare");
             webView.addJavascriptInterface(new ArcheryWatchNativeBridge(), "ArcheryWatchNativeBridge");
             webView.addJavascriptInterface(new ArcheryLocationNativeBridge(), "ArcheryLocationNativeBridge");
             webView.addJavascriptInterface(new ArcherySpotifyBridge(), "ArcherySpotifyBridge");
             restoreAndPromoteSpotifyCookies();
             initWearableListener();
 
-            if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
-                activeAppOrigin = "https://archery101010-c0bb4.web.app";
-                webView.loadUrl("https://archery101010-c0bb4.web.app/");
-            }
+            // Subclass Capacitor's BridgeWebChromeClient so <input type="file"> (Excel/Photos) keeps working 100%
+            // while granting WebRTC RECORD_AUDIO requests cleanly via ActivityResultContracts.RequestPermission
+            webView.setWebChromeClient(new BridgeWebChromeClient(getBridge()) {
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    if (request == null) return;
+                    String[] resources = request.getResources();
+                    boolean wantsAudio = false;
+                    boolean wantsVideo = false;
+                    if (resources != null) {
+                        for (String res : resources) {
+                            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) {
+                                wantsAudio = true;
+                            } else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
+                                wantsVideo = true;
+                            }
+                        }
+                    }
+                    if (wantsAudio && !wantsVideo) {
+                        runOnUiThread(() -> {
+                            try {
+                                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
+                                        == PackageManager.PERMISSION_GRANTED) {
+                                    request.grant(resources);
+                                } else if (audioPermissionLauncher != null) {
+                                    pendingWebAudioPermissionRequest = request;
+                                    audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+                                } else {
+                                    super.onPermissionRequest(request);
+                                }
+                            } catch (Exception ignored) {}
+                        });
+                        return;
+                    }
+                    super.onPermissionRequest(request);
+                }
+            });
+
+            // Handle standard HTTP/HTTPS downloadable files and data: URIs from WebView
+            webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                if (url == null || url.isEmpty()) return;
+                if (url.startsWith("data:")) {
+                    int comma = url.indexOf(',');
+                    if (comma > 0) {
+                        String meta = url.substring(5, comma);
+                        String dataPart = url.substring(comma + 1);
+                        String resolvedMime = (mimetype != null && !mimetype.isEmpty()) ? mimetype : "application/octet-stream";
+                        int semi = meta.indexOf(';');
+                        if (semi > 0) {
+                            resolvedMime = meta.substring(0, semi);
+                        }
+                        if (meta.contains("base64")) {
+                            nativeShareBridge.saveOrShareFile(dataPart, "Archery101010-Export", resolvedMime, "Exportar archivo");
+                        }
+                    }
+                    return;
+                }
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    try {
+                        Intent dlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        dlIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(dlIntent);
+                    } catch (Exception ignored) {}
+                }
+            });
 
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
+                @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    if (url != null && url.startsWith("https://localhost")) {
+                        isWebWatchListenerReady = false;
+                    }
+                    super.onPageStarted(view, url, favicon);
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    flushPendingWatchCommandsToWebView();
+                }
+
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();
                     if (uri != null) {
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
                         String path = uri.getPath() != null ? uri.getPath() : "";
-                        if (request.isForMainFrame() && !path.startsWith("/__/auth/handler")) {
-                            if (host.equals("localhost")) {
-                                activeAppOrigin = "https://localhost";
-                            } else if (host.equals("archery101010-c0bb4.web.app")) {
-                                activeAppOrigin = "https://archery101010-c0bb4.web.app";
-                                getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
-                                    .edit()
-                                    .putBoolean("prefer_remote_ota", true)
-                                    .apply();
-                            }
+                        if (request.isForMainFrame() && host.equals("localhost")) {
+                            activeAppOrigin = "https://localhost";
                         }
                         if (host.equals("open.spotify.com") && path.startsWith("/embed/") &&
                             (request.getMethod() == null || "GET".equalsIgnoreCase(request.getMethod()))) {
@@ -339,9 +436,8 @@ public class MainActivity extends BridgeActivity {
                         String urlStr = uri.toString();
                         if (urlStr.startsWith("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") ||
                             urlStr.startsWith("https://archery101010-c0bb4.web.app/__/auth/handler")) {
-                            String targetOrigin = activeAppOrigin != null ? activeAppOrigin : "https://localhost";
                             String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><script>" +
-                                "window.location.replace('" + targetOrigin + "/' + window.location.search + window.location.hash);" +
+                                "window.location.replace('https://localhost/' + window.location.search + window.location.hash);" +
                                 "</script></head><body style=\"background:#050505\"></body></html>";
                             return new WebResourceResponse(
                                 "text/html",
@@ -359,16 +455,8 @@ public class MainActivity extends BridgeActivity {
                     if (uri != null) {
                         String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "";
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
-                        String path = uri.getPath() != null ? uri.getPath().toLowerCase() : "";
-                        if (path.endsWith(".apk") || path.endsWith(".aab") || path.equals("/download-apk")) {
-                            try {
-                                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                startActivity(intent);
-                                return true;
-                            } catch (Exception ignored) {}
-                        }
-                        if (scheme.equals("whatsapp") || host.equals("api.whatsapp.com") || host.equals("wa.me")) {
+                        String path = uri.getPath() != null ? uri.getPath() : "";
+                        if (scheme.equals("market") || scheme.equals("whatsapp") || host.equals("api.whatsapp.com") || host.equals("wa.me") || host.equals("play.google.com")) {
                             try {
                                 Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -386,7 +474,7 @@ public class MainActivity extends BridgeActivity {
                                 host.equals("open.spotify.com") ||
                                 host.endsWith(".spotify.com") ||
                                 host.equals("archery101010-c0bb4.firebaseapp.com") ||
-                                host.equals("archery101010-c0bb4.web.app")) {
+                                (host.equals("archery101010-c0bb4.web.app") && path.startsWith("/__/auth/handler"))) {
                                 return false;
                             }
                         }
@@ -566,6 +654,59 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void saveOrShareFile(final String base64Data, final String fileName, final String mimeType, final String title) {
+            runOnUiThread(() -> {
+                try {
+                    if (base64Data == null || base64Data.isEmpty()) return;
+                    String cleanBase64 = base64Data;
+                    int commaIdx = cleanBase64.indexOf(',');
+                    if (commaIdx != -1) {
+                        cleanBase64 = cleanBase64.substring(commaIdx + 1);
+                    }
+                    byte[] decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
+                    File exportsDir = new File(getCacheDir(), "exports");
+                    if (!exportsDir.exists()) {
+                        exportsDir.mkdirs();
+                    }
+                    String rawName = (fileName != null && !fileName.trim().isEmpty())
+                        ? fileName.trim()
+                        : ("Archery101010-" + System.currentTimeMillis());
+                    String safeFileName = rawName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                    if (safeFileName.isEmpty() || ".".equals(safeFileName) || "..".equals(safeFileName)) {
+                        safeFileName = "Archery101010-" + System.currentTimeMillis();
+                    }
+                    File outFile = new File(exportsDir, safeFileName);
+                    try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                        fos.write(decodedBytes);
+                        fos.flush();
+                    }
+                    Uri contentUri = FileProvider.getUriForFile(
+                        MainActivity.this,
+                        getPackageName() + ".fileprovider",
+                        outFile
+                    );
+                    String safeMime = (mimeType != null && !mimeType.trim().isEmpty())
+                        ? mimeType.trim()
+                        : "application/octet-stream";
+                    String safeTitle = (title != null && !title.trim().isEmpty())
+                        ? title.trim()
+                        : safeFileName;
+
+                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.setType(safeMime);
+                    shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+                    shareIntent.putExtra(Intent.EXTRA_SUBJECT, safeTitle);
+                    shareIntent.setClipData(ClipData.newRawUri(safeTitle, contentUri));
+                    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+                    Intent chooser = Intent.createChooser(shareIntent, safeTitle);
+                    chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(chooser);
+                } catch (Exception ignored) {}
+            });
+        }
+
+        @JavascriptInterface
         public void takeCameraPhoto() {
             runOnUiThread(() -> {
                 try {
@@ -712,7 +853,14 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void notifyWatchListenerReady() {
+            isWebWatchListenerReady = true;
+            flushPendingWatchCommandsToWebView();
+        }
+
+        @JavascriptInterface
         public void flushPendingWatchCommands() {
+            isWebWatchListenerReady = true;
             flushPendingWatchCommandsToWebView();
         }
 
@@ -1265,14 +1413,14 @@ public class MainActivity extends BridgeActivity {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 String safePayload = JSONObject.quote(payload);
                 String js =
-                    "(function() { if (typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" +
+                    "(function() { if (window.__archeryWatchListenerReady === true && typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" +
                     safePayload +
                     "); return 'DELIVERED'; } return 'PENDING'; })()";
                 getBridge().getWebView().evaluateJavascript(js, result -> {
                     if (result == null || !result.contains("DELIVERED")) {
                         if (!"REQUEST_STATE".equals(finalCmdType)) {
                             synchronized (pendingWatchCommands) {
-                                if (pendingWatchCommands.size() < 60) {
+                                if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(payload)) {
                                     pendingWatchCommands.add(payload);
                                 }
                             }
@@ -1281,7 +1429,7 @@ public class MainActivity extends BridgeActivity {
                 });
             } else if (!"REQUEST_STATE".equals(finalCmdType)) {
                 synchronized (pendingWatchCommands) {
-                    if (pendingWatchCommands.size() < 60) {
+                    if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(payload)) {
                         pendingWatchCommands.add(payload);
                     }
                 }
@@ -1302,13 +1450,17 @@ public class MainActivity extends BridgeActivity {
                 synchronized (pendingWatchCommands) {
                     for (int i = 0; i < arr.length(); i++) {
                         String cmd = arr.optString(i, "");
-                        if (cmd != null && !cmd.isEmpty() && pendingWatchCommands.size() < 60) {
+                        if (cmd != null && !cmd.isEmpty() && pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(cmd)) {
                             pendingWatchCommands.add(cmd);
                         }
                     }
                 }
             }
         } catch (Exception ignored) {}
+
+        if (!isWebWatchListenerReady) {
+            return;
+        }
 
         final List<String> toFlush;
         synchronized (pendingWatchCommands) {
@@ -1318,10 +1470,29 @@ public class MainActivity extends BridgeActivity {
         }
         runOnUiThread(() -> {
             if (getBridge() != null && getBridge().getWebView() != null) {
-                for (String cmdPayload : toFlush) {
+                for (final String cmdPayload : toFlush) {
                     String safePayload = JSONObject.quote(cmdPayload);
-                    String js = "if (typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" + safePayload + "); }";
-                    getBridge().getWebView().evaluateJavascript(js, null);
+                    String js =
+                        "(function() { if (window.__archeryWatchListenerReady === true && typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" +
+                        safePayload +
+                        "); return 'DELIVERED'; } return 'PENDING'; })()";
+                    getBridge().getWebView().evaluateJavascript(js, result -> {
+                        if (result == null || !result.contains("DELIVERED")) {
+                            synchronized (pendingWatchCommands) {
+                                if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(cmdPayload)) {
+                                    pendingWatchCommands.add(cmdPayload);
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                synchronized (pendingWatchCommands) {
+                    for (String cmdPayload : toFlush) {
+                        if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(cmdPayload)) {
+                            pendingWatchCommands.add(cmdPayload);
+                        }
+                    }
                 }
             }
         });

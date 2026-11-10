@@ -2,20 +2,21 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
-import { Macrocycle } from "@/lib/db/macrocycleTypes";
+import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
 import {
   saveLocalMacrocycle,
   generateResilientId,
   addToSyncQueue,
-  getLocalSetting,
-  getLocalEvents
+  getLocalSetting
 } from "@/lib/db/indexedDB";
 import {
   saveDailyEntriesToCalendar,
+  isTrainingDayForWeeklyGoal,
   SyncCycleSummary
 } from "@/lib/cycleCalendarSync";
 import {
   parseSpreadsheetData,
+  parseDelimitedTextToMatrix,
   parseExcelWorkbookBuffer,
   ParsedDailyEntry,
   downloadFormattedExcelTemplate,
@@ -79,16 +80,23 @@ export default function PlanImporterModal({
   athletes: propAthletes,
   preselectedAthleteIds
 }: PlanImporterModalProps) {
-  const isCoachUser = Boolean(
-    coachViewMode || user.role === "coach" || user.role === "team_admin_coach"
-  );
+  const hasCoachRole =
+    user.role === "coach" ||
+    user.role === "team_admin_coach" ||
+    user.role === "team_admin" ||
+    user.role === "superadmin";
+  const isCoachUser = Boolean(coachViewMode || hasCoachRole);
+  const canonicalClubId =
+    user.clubId && user.clubId !== "CLB-DEMO" ? user.clubId : `CLB-${user.uid}`;
 
   const [refMonth, setRefMonth] = useState<number>(new Date().getMonth() + 1);
   const [refYear, setRefYear] = useState<number>(new Date().getFullYear());
   const [importPlanName, setImportPlanName] = useState<string>("");
 
-  // Tabla de los días del mes (1..31)
+  // Tabla de los días del mes en vista previa (1..31) + días importados de otros meses
   const [dayRows, setDayRows] = useState<DayRowState[]>([]);
+  const [extraMonthEntries, setExtraMonthEntries] = useState<ParsedDailyEntry[]>([]);
+  const [importedStages, setImportedStages] = useState<MacrocyclePhase[]>([]);
 
   // Herramientas opcionales de pegado / archivo / Google Sheets
   const [showPasteBox, setShowPasteBox] = useState(false);
@@ -116,8 +124,7 @@ export default function PlanImporterModal({
     );
   };
 
-  // Construir filas 1..N del mes seleccionado y cargar eventos existentes si los hubiera
-  const buildMonthRows = async (year: number, month: number) => {
+  const createBlankMonthRows = (year: number, month: number): DayRowState[] => {
     const daysCount = new Date(year, month, 0).getDate();
     const rows: DayRowState[] = [];
 
@@ -135,7 +142,80 @@ export default function PlanImporterModal({
       });
     }
 
-    setDayRows(rows);
+    return rows;
+  };
+
+  const buildRowsWithEntries = (
+    year: number,
+    month: number,
+    entriesForMonth: ParsedDailyEntry[]
+  ): DayRowState[] => {
+    const next = createBlankMonthRows(year, month);
+    const ymPrefix = `${year}-${String(month).padStart(2, "0")}-`;
+    for (const entry of entriesForMonth) {
+      if (!entry.date.startsWith(ymPrefix)) continue;
+      const dayNum = parseInt(entry.date.split("-")[2], 10);
+      if (dayNum >= 1 && dayNum <= next.length) {
+        const targetIdx = dayNum - 1;
+        const cleanItems =
+          entry.dailyItems && entry.dailyItems.length > 0
+            ? entry.dailyItems
+            : [entry.title].filter(Boolean);
+        const joined = cleanItems.join("\n");
+        next[targetIdx].text = next[targetIdx].text
+          ? `${next[targetIdx].text}\n${joined}`
+          : joined;
+        if (entry.targetArrows > 0) {
+          const prevArrows = parseInt(next[targetIdx].arrows, 10) || 0;
+          next[targetIdx].arrows = String(prevArrows + entry.targetArrows);
+        }
+      }
+    }
+    return next;
+  };
+
+  const convertDayRowsToEntries = (rows: DayRowState[]): ParsedDailyEntry[] => {
+    return rows
+      .filter((r) => r.text.trim().length > 0 || Number(r.arrows) > 0)
+      .map((r) => {
+        const items = r.text
+          .split(/\r?\n|\s*;\s*/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const arrowGoal = Math.max(0, parseInt(r.arrows, 10) || 0);
+        const isRest =
+          items.length === 1 &&
+          /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(items[0]) &&
+          arrowGoal === 0;
+        const lowerJoined = items.join(" ").toLowerCase();
+        const evType: "training" | "competition" | "meeting" | "other" = isRest
+          ? "other"
+          : lowerJoined.includes("torneo") || lowerJoined.includes("competencia")
+          ? "competition"
+          : lowerJoined.includes("reunión") || lowerJoined.includes("reunion")
+          ? "meeting"
+          : "training";
+
+        return {
+          date: r.dateIso,
+          title: items[0] || (arrowGoal > 0 ? `${arrowGoal} flechas` : "Entrenamiento"),
+          targetArrows: arrowGoal,
+          type: evType,
+          isRestDay: isRest,
+          notes: items.length > 1 ? items.slice(1).join(" · ") : "",
+          focusPoints: [],
+          dailyItems: items,
+          customFields: items.map((it, idx) => ({
+            label: `Tarea ${idx + 1}`,
+            value: it
+          }))
+        };
+      });
+  };
+
+  // Construir filas 1..N del mes seleccionado
+  const buildMonthRows = async (year: number, month: number) => {
+    setDayRows(createBlankMonthRows(year, month));
   };
 
   useEffect(() => {
@@ -153,21 +233,21 @@ export default function PlanImporterModal({
     setShowSheetsUrlBox(false);
     setPasteBoxText("");
     setExcelSheets([]);
+    setExtraMonthEntries([]);
+    setImportedStages([]);
     buildMonthRows(y, m);
 
     async function loadRoster() {
       if (propAthletes && propAthletes.length > 0) {
         setClubAthletes(propAthletes);
       } else if (isCoachUser) {
-        const activeClubId =
-          user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
         const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
         const filtered = (allUsers || []).filter(
           (u) =>
-            (u.clubId === activeClubId ||
-              (user.clubId && u.clubId === user.clubId) ||
-              !u.clubId) &&
-            u.role === "archer"
+            (u.clubId === canonicalClubId ||
+              (user.clubId && u.clubId === user.clubId)) &&
+            u.role === "archer" &&
+            u.uid !== user.uid
         );
         setClubAthletes(filtered);
       }
@@ -181,15 +261,30 @@ export default function PlanImporterModal({
       }
     }
     loadRoster();
-  }, [isOpen, propAthletes, preselectedAthleteIds, isCoachUser, user.clubId, user.uid]);
+  }, [isOpen, propAthletes, preselectedAthleteIds, isCoachUser, canonicalClubId, user.clubId, user.uid]);
 
   if (!isOpen) return null;
 
   const handleMonthYearChange = (newYear: number, newMonth: number) => {
+    const currentYmPrefix = `${refYear}-${String(refMonth).padStart(2, "0")}-`;
+    const targetYmPrefix = `${newYear}-${String(newMonth).padStart(2, "0")}-`;
+
+    const currentMonthEntries = convertDayRowsToEntries(dayRows);
+    const allKnownEntries = [
+      ...extraMonthEntries.filter((e) => !e.date.startsWith(currentYmPrefix)),
+      ...currentMonthEntries
+    ];
+
+    const entriesForTarget = allKnownEntries.filter((e) => e.date.startsWith(targetYmPrefix));
+    const entriesForOtherMonths = allKnownEntries.filter((e) => !e.date.startsWith(targetYmPrefix));
+
     setRefYear(newYear);
     setRefMonth(newMonth);
-    setImportPlanName(`Agenda ${MONTH_NAMES[newMonth - 1]} ${newYear}`);
-    buildMonthRows(newYear, newMonth);
+    if (allKnownEntries.length === 0) {
+      setImportPlanName(`Agenda ${MONTH_NAMES[newMonth - 1]} ${newYear}`);
+    }
+    setDayRows(buildRowsWithEntries(newYear, newMonth, entriesForTarget));
+    setExtraMonthEntries(entriesForOtherMonths);
   };
 
   const updateDayRow = (dayNumber: number, field: "text" | "arrows", value: string) => {
@@ -215,10 +310,54 @@ export default function PlanImporterModal({
 
   const handleClearAllDays = () => {
     setDayRows((prev) => prev.map((r) => ({ ...r, text: "", arrows: "" })));
-    setStatusMessage("Se limpiaron todos los días de la tabla.");
+    setExtraMonthEntries([]);
+    setImportedStages([]);
+    setStatusMessage("Se limpiaron todos los días cargados.");
   };
 
-  // Procesar texto pegado de Excel / Google Sheets y volcarlo en la tabla Día 1..31
+  const applyEntriesAcrossMonths = (
+    entries: ParsedDailyEntry[],
+    stagesToStore: MacrocyclePhase[] = []
+  ) => {
+    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+    const firstDateParts = sorted[0].date.split("-");
+    const firstYear = parseInt(firstDateParts[0], 10) || refYear;
+    const firstMonth = parseInt(firstDateParts[1], 10) || refMonth;
+    const firstYmPrefix = `${firstYear}-${String(firstMonth).padStart(2, "0")}-`;
+
+    const activeEntries = sorted.filter((e) => e.date.startsWith(firstYmPrefix));
+    const otherEntries = sorted.filter((e) => !e.date.startsWith(firstYmPrefix));
+
+    setRefYear(firstYear);
+    setRefMonth(firstMonth);
+    setDayRows(buildRowsWithEntries(firstYear, firstMonth, activeEntries));
+    setExtraMonthEntries(otherEntries);
+    setImportedStages(stagesToStore);
+
+    const defaultPrefix = "Agenda ";
+    if (!importPlanName.trim() || importPlanName.startsWith(defaultPrefix)) {
+      if (otherEntries.length > 0) {
+        const lastDateParts = sorted[sorted.length - 1].date.split("-");
+        const lastMonthIdx = (parseInt(lastDateParts[1], 10) || firstMonth) - 1;
+        setImportPlanName(
+          `Plan ${MONTH_NAMES[firstMonth - 1]} - ${MONTH_NAMES[lastMonthIdx]} ${firstYear}`
+        );
+      } else {
+        setImportPlanName(`Agenda ${MONTH_NAMES[firstMonth - 1]} ${firstYear}`);
+      }
+    }
+
+    const extraNotice =
+      otherEntries.length > 0
+        ? ` (+ ${otherEntries.length} días adicionales de otros meses listos para guardar)`
+        : "";
+    setStatusMessage(
+      `¡Listo! Se cargaron ${activeEntries.length} días en ${MONTH_NAMES[firstMonth - 1]} ${firstYear}${extraNotice}.`
+    );
+    setShowPasteBox(false);
+  };
+
+  // Procesar texto pegado de Excel / Google Sheets / CSV y volcarlo en la tabla respetando multi-mes y etapas
   const applyRawSpreadsheetTextToMonthTable = (rawText: string) => {
     setImportError(null);
     setStatusMessage(null);
@@ -228,73 +367,125 @@ export default function PlanImporterModal({
       return;
     }
 
-    // 1. Intentar con el lector de fechas / números de día (1..31) o cuadrícula de 7 columnas
-    const parsed = parseSpreadsheetData(rawText, importPlanName || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`, {
-      referenceYear: refYear,
-      referenceMonth: refMonth
-    });
+    // 1. Intentar con el lector inteligente (día por día, cuadrícula de 7 columnas o rangos por etapas)
+    const parsed = parseSpreadsheetData(
+      rawText,
+      importPlanName || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`,
+      {
+        referenceYear: refYear,
+        referenceMonth: refMonth
+      }
+    );
 
     if (parsed.success && parsed.dailyEntries.length > 0) {
-      const targetYearMonth = `${refYear}-${String(refMonth).padStart(2, "0")}-`;
-      let matchedCount = 0;
+      applyEntriesAcrossMonths(parsed.dailyEntries, parsed.stages || []);
+      return;
+    }
 
-      setDayRows((prev) => {
-        const next = prev.map((r) => ({ ...r }));
-        for (const entry of parsed.dailyEntries) {
-          // Si coincide con el mes o extraemos el día (1..31)
-          const dayNum = parseInt(entry.date.split("-")[2], 10);
-          if (dayNum >= 1 && dayNum <= next.length) {
-            const targetIdx = dayNum - 1;
-            const cleanItems =
-              entry.dailyItems && entry.dailyItems.length > 0
-                ? entry.dailyItems
-                : [entry.title].filter(Boolean);
-            const joined = cleanItems.join("\n");
-            next[targetIdx].text = next[targetIdx].text
-              ? `${next[targetIdx].text}\n${joined}`
-              : joined;
-            if (entry.targetArrows > 0) {
-              next[targetIdx].arrows = String(entry.targetArrows);
-            }
-            matchedCount++;
+    // 1B. Soporte para CSV/Excel por Etapas (ej. Macrociclo exportado con Fecha Inicio y Fecha Fin)
+    if (parsed.success && parsed.mode === "stages" && parsed.stages.length > 0) {
+      const expandedMap = new Map<string, ParsedDailyEntry>();
+      let guardDays = 0;
+
+      for (const stage of parsed.stages) {
+        const startObj = new Date(stage.startDate + "T12:00:00");
+        const endObj = new Date(stage.endDate + "T12:00:00");
+        if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) continue;
+
+        const cur = new Date(startObj.getTime());
+        while (cur.getTime() <= endObj.getTime() && guardDays < 550) {
+          guardDays++;
+          const dow = cur.getDay();
+          const isTraining =
+            stage.weeklySessionGoal > 0
+              ? isTrainingDayForWeeklyGoal(dow, stage.weeklySessionGoal)
+              : true;
+
+          if (isTraining) {
+            const y = cur.getFullYear();
+            const m = String(cur.getMonth() + 1).padStart(2, "0");
+            const d = String(cur.getDate()).padStart(2, "0");
+            const dateStr = `${y}-${m}-${d}`;
+            const arrowsPerDay =
+              stage.weeklyArrowGoal > 0 && stage.weeklySessionGoal > 0
+                ? Math.round(stage.weeklyArrowGoal / Math.max(1, stage.weeklySessionGoal))
+                : 0;
+            const noteItems = stage.notes
+              ? stage.notes
+                  .split(/\r?\n|\s*;\s*/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [];
+            const dailyItems = [stage.name, ...noteItems].filter(Boolean);
+
+            expandedMap.set(dateStr, {
+              date: dateStr,
+              title: stage.name,
+              targetArrows: arrowsPerDay,
+              focusPoints: [],
+              notes: stage.notes || "",
+              dailyItems,
+              customFields: dailyItems.map((it, idx) => ({
+                label: idx === 0 ? "Etapa" : `Indicación ${idx}`,
+                value: it
+              })),
+              type: "training",
+              isRestDay: false,
+              stageName: stage.name
+            });
           }
-        }
-        return next;
-      });
 
-      if (matchedCount > 0) {
-        setStatusMessage(
-          `¡Listo! Se cargaron ${matchedCount} días en la tabla inferior. Revisa o edita cualquier día antes de guardar.`
-        );
-        setShowPasteBox(false);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+
+      const expandedEntries = Array.from(expandedMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
+      if (expandedEntries.length > 0) {
+        applyEntriesAcrossMonths(expandedEntries, parsed.stages);
         return;
       }
     }
 
-    // 2. Fallback directo y ultra simple: Cada renglón pegado corresponde a Día 1, Día 2, Día 3...
-    const lines = rawText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    // 2. Fallback directo para listas simples sin fechas explícitas (soporta TSV \t, CSV , y ;)
+    const matrixRows = parseDelimitedTextToMatrix(rawText);
+    const nonEmptyRows = matrixRows
+      .map((row) =>
+        row
+          .flatMap((c) => (row.length === 1 ? c.split(/\t|,|;/) : [c]))
+          .map((c) => c.replace(/\s*\|\|\|\s*/g, "\n").trim())
+          .filter(Boolean)
+      )
+      .filter((row) => row.length > 0);
 
-    if (lines.length === 0) {
+    if (nonEmptyRows.length === 0) {
       setImportError("No se encontraron renglones con texto.");
       return;
     }
 
+    // Si la primera fila es un encabezado ("Fecha", "Día", "Nombre de la Etapa", etc.), omitirla
+    const firstCellLower = (nonEmptyRows[0][0] || "").toLowerCase();
+    const dataOnlyRows =
+      nonEmptyRows.length > 1 &&
+      /^(fecha|d[ií]a|date|day|nombre de la etapa|etapa|actividad|sesi[oó]n|tarea)\b/i.test(
+        firstCellLower
+      )
+        ? nonEmptyRows.slice(1)
+        : nonEmptyRows;
+
     let filled = 0;
+    setExtraMonthEntries([]);
+    setImportedStages([]);
     setDayRows((prev) =>
       prev.map((row, idx) => {
-        if (idx >= lines.length) return row;
-        const cells = lines[idx]
-          .split(/\t/)
-          .map((c) => c.trim())
-          .filter(Boolean);
+        if (idx >= dataOnlyRows.length) return row;
+        const cells = [...dataOnlyRows[idx]];
         // Si la primera celda es solo el número de día (ej. "1", "2"), la quitamos del texto
         if (cells.length > 1 && /^\d{1,2}$/.test(cells[0])) {
           cells.shift();
         }
-        const textVal = cells.join(" / ");
+        const textVal = cells.join("\n");
         if (textVal) filled++;
         return {
           ...row,
@@ -381,15 +572,30 @@ export default function PlanImporterModal({
   };
 
   const filledDays = dayRows.filter((r) => r.text.trim().length > 0 || Number(r.arrows) > 0);
+  const currentYmPrefix = `${refYear}-${String(refMonth).padStart(2, "0")}-`;
+  const otherMonthsCount = extraMonthEntries.filter(
+    (e) => !e.date.startsWith(currentYmPrefix)
+  ).length;
+  const totalDaysToSave = filledDays.length + otherMonthsCount;
+
+  // Meses disponibles cuando hay un plan multi-mes cargado
+  const availableYearMonths = Array.from(
+    new Set([
+      ...(filledDays.length > 0 || otherMonthsCount > 0
+        ? [`${refYear}-${String(refMonth).padStart(2, "0")}`]
+        : []),
+      ...extraMonthEntries.map((e) => e.date.slice(0, 7))
+    ])
+  ).sort();
 
   const handleConfirmSave = async () => {
-    if (filledDays.length === 0) {
-      setImportError("Escribe o pega actividades en al menos un día del mes antes de guardar.");
+    if (totalDaysToSave === 0) {
+      setImportError("Escribe o pega actividades en al menos un día antes de guardar.");
       return;
     }
 
     if (isCoachUser && assignTarget === "selected" && selectedAthleteIds.length === 0) {
-      setImportError("Marca al menos un alumno en la lista o selecciona 'Todos mis Alumnos'.");
+      setImportError("Marca al menos un alumno en la lista o selecciona 'Todos los Alumnos'.");
       return;
     }
 
@@ -399,35 +605,13 @@ export default function PlanImporterModal({
     try {
       const macroId = generateResilientId("MAC");
       const nowIso = new Date().toISOString();
-      const activeClubId =
-        user.clubId || "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
+      const activeClubId = canonicalClubId;
 
-      const dailyEntries: ParsedDailyEntry[] = filledDays.map((r) => {
-        const items = r.text
-          .split(/\r?\n|\s*\/\s*|\s*;\s*/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const arrowGoal = Math.max(0, parseInt(r.arrows, 10) || 0);
-        const isRest =
-          items.length === 1 &&
-          /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(items[0]) &&
-          arrowGoal === 0;
-
-        return {
-          date: r.dateIso,
-          title: items[0] || (arrowGoal > 0 ? `${arrowGoal} flechas` : "Entrenamiento"),
-          targetArrows: arrowGoal,
-          type: "training",
-          isRestDay: isRest,
-          notes: items.length > 1 ? items.slice(1).join(" · ") : "",
-          focusPoints: [],
-          dailyItems: items,
-          customFields: items.map((it, idx) => ({
-            label: `Tarea ${idx + 1}`,
-            value: it
-          }))
-        };
-      });
+      const currentMonthEntries = convertDayRowsToEntries(dayRows);
+      const dailyEntries: ParsedDailyEntry[] = [
+        ...extraMonthEntries.filter((e) => !e.date.startsWith(currentYmPrefix)),
+        ...currentMonthEntries
+      ].sort((a, b) => a.date.localeCompare(b.date));
 
       const totalArrows = dailyEntries.reduce((acc, d) => acc + (d.targetArrows || 0), 0);
       const startDate = dailyEntries[0].date;
@@ -443,6 +627,37 @@ export default function PlanImporterModal({
         ? selectedAthleteIds
         : undefined;
 
+      // Construir etapas por mes (o conservar las etapas originales si provienen de un CSV por etapas)
+      let phasesForMacro: MacrocyclePhase[];
+      if (importedStages.length > 0) {
+        phasesForMacro = importedStages;
+      } else {
+        const groupedByMonth = new Map<string, ParsedDailyEntry[]>();
+        for (const entry of dailyEntries) {
+          const ym = entry.date.slice(0, 7);
+          if (!groupedByMonth.has(ym)) groupedByMonth.set(ym, []);
+          groupedByMonth.get(ym)!.push(entry);
+        }
+        phasesForMacro = [];
+        let cIdx = 0;
+        groupedByMonth.forEach((mEntries, ym) => {
+          const [yStr, mStr] = ym.split("-");
+          const mIdx = (parseInt(mStr, 10) || 1) - 1;
+          const mArrows = mEntries.reduce((s, e) => s + (e.targetArrows || 0), 0);
+          phasesForMacro.push({
+            id: `etapa-${Date.now()}-${cIdx}`,
+            name: `${MONTH_NAMES[mIdx] || mStr} ${yStr}`,
+            startDate: mEntries[0].date,
+            endDate: mEntries[mEntries.length - 1].date,
+            weeklySessionGoal: 5,
+            weeklyArrowGoal: Math.round(mArrows / 4) || 0,
+            notes: "",
+            color: ETAPA_COLORS[cIdx % ETAPA_COLORS.length].color
+          });
+          cIdx++;
+        });
+      }
+
       const newMacro: Macrocycle = {
         id: macroId,
         clubId: activeClubId,
@@ -450,18 +665,7 @@ export default function PlanImporterModal({
         name: importPlanName.trim() || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`,
         startDate,
         endDate,
-        phases: [
-          {
-            id: `etapa-${Date.now()}-0`,
-            name: `${MONTH_NAMES[refMonth - 1]} ${refYear}`,
-            startDate,
-            endDate,
-            weeklySessionGoal: 5,
-            weeklyArrowGoal: Math.round(totalArrows / 4) || 0,
-            notes: "",
-            color: "#00E5FF"
-          }
-        ],
+        phases: phasesForMacro,
         assignmentType: isPersonalOnly
           ? "individual"
           : isForSpecificAthletes
@@ -856,19 +1060,59 @@ export default function PlanImporterModal({
 
           {/* TABLA DE 2 COLUMNAS: DÍA 1 AL DÍA 31 DEL MES */}
           <div className="bg-[#0A0C10] border border-white/10 rounded-2xl overflow-hidden">
-            <div className="px-3.5 py-2.5 bg-white/[0.03] border-b border-white/10 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon">
-                Agenda Día por Día — {MONTH_NAMES[refMonth - 1]} {refYear} ({filledDays.length} días con plan)
-              </span>
-              {filledDays.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearAllDays}
-                  className="text-[10.5px] bg-white hover:bg-neutral-200 text-black font-black px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition"
-                >
-                  <Trash2 size={11} />
-                  <span>Limpiar todo</span>
-                </button>
+            <div className="px-3.5 py-2.5 bg-white/[0.03] border-b border-white/10 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon">
+                    Agenda Día por Día — {MONTH_NAMES[refMonth - 1]} {refYear} ({filledDays.length} días en este mes)
+                  </span>
+                  {otherMonthsCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[10.5px] font-black tabular-nums">
+                      + {otherMonthsCount} días adicionales de otros meses listos para guardar
+                    </span>
+                  )}
+                </div>
+                {totalDaysToSave > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllDays}
+                    className="text-[10.5px] bg-white hover:bg-neutral-200 text-black font-black px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition"
+                  >
+                    <Trash2 size={11} />
+                    <span>Limpiar todo</span>
+                  </button>
+                )}
+              </div>
+
+              {availableYearMonths.length > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                    Meses importados:
+                  </span>
+                  {availableYearMonths.map((ym) => {
+                    const [yStr, mStr] = ym.split("-");
+                    const yNum = parseInt(yStr, 10);
+                    const mNum = parseInt(mStr, 10);
+                    const isActiveYm = yNum === refYear && mNum === refMonth;
+                    const countInYm = isActiveYm
+                      ? filledDays.length
+                      : extraMonthEntries.filter((e) => e.date.startsWith(`${ym}-`)).length;
+                    return (
+                      <button
+                        key={ym}
+                        type="button"
+                        onClick={() => handleMonthYearChange(yNum, mNum)}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition cursor-pointer tabular-nums ${
+                          isActiveYm
+                            ? "bg-cyan-neon text-black"
+                            : "bg-white/5 hover:bg-white/10 text-white border border-white/10"
+                        }`}
+                      >
+                        {MONTH_NAMES[mNum - 1]?.slice(0, 3)} {yNum} ({countInYm})
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -911,7 +1155,7 @@ export default function PlanImporterModal({
                         value={row.text}
                         onChange={(e) => updateDayRow(row.day, "text", e.target.value)}
                         rows={row.text.includes("\n") ? Math.min(4, row.text.split("\n").length) : 1}
-                        placeholder="Escribe qué toca este día (usa '/' o Enter para enlistar varias tareas)..."
+                        placeholder="Escribe qué toca este día (usa ';' o Enter para enlistar varias tareas)..."
                         className="w-full bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-3 py-2 text-xs text-white outline-none resize-y leading-relaxed placeholder:text-white/35"
                       />
                     </div>
@@ -957,9 +1201,9 @@ export default function PlanImporterModal({
 
           <button
             type="button"
-            disabled={filledDays.length === 0 || isSubmitting}
+            disabled={totalDaysToSave === 0 || isSubmitting}
             onClick={handleConfirmSave}
-            className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] cursor-pointer"
+            className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer tabular-nums"
           >
             {isSubmitting ? (
               <>
@@ -970,7 +1214,7 @@ export default function PlanImporterModal({
               <>
                 <CheckCircle2 size={15} />
                 <span>
-                  Guardar {filledDays.length} {filledDays.length === 1 ? "Día" : "Días"} en el Calendario
+                  Guardar {totalDaysToSave} {totalDaysToSave === 1 ? "Día" : "Días"} en el Calendario
                 </span>
               </>
             )}

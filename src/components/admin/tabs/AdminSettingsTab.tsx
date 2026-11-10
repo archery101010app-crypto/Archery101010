@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Settings, Save, ShieldAlert, Key, MessageSquare, ToggleLeft, ToggleRight, Sparkles, CheckCircle2, Database, Download } from "lucide-react";
+import { Settings, Save, Key, MessageSquare, ToggleLeft, ToggleRight, CheckCircle2, Database, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   settingsStore,
@@ -12,6 +12,7 @@ import {
   athleteStarsStore,
   starHistoryStore
 } from "@/lib/db/indexedDB";
+import { downloadOrShareFile } from "@/lib/fileDownload";
 
 export default function AdminSettingsTab() {
   const [paypalClientId, setPaypalClientId] = useState("");
@@ -31,7 +32,7 @@ export default function AdminSettingsTab() {
     setIsBackingUp(true);
     try {
       const backupPayload: Record<string, any> = {
-        app: "Archery 101010: The App",
+        app: "ARCHERY 101010: THE APP",
         exportedAt: new Date().toISOString(),
         timestamp: Date.now(),
         collections: {}
@@ -103,16 +104,13 @@ export default function AdminSettingsTab() {
       }
 
       const jsonStr = JSON.stringify(backupPayload, null, 2);
-      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
       const today = new Date().toISOString().split("T")[0];
-      link.setAttribute("href", url);
-      link.setAttribute("download", `archery101010_respaldo_maestro_${today}.json`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await downloadOrShareFile({
+        filename: `archery101010_respaldo_maestro_${today}.json`,
+        mimeType: "application/json;charset=utf-8",
+        data: jsonStr,
+        shareTitle: "Respaldo Maestro ARCHERY 101010"
+      });
     } catch (err) {
       console.error("Failed to generate master backup:", err);
       alert("Error al generar el respaldo maestro.");
@@ -166,16 +164,16 @@ export default function AdminSettingsTab() {
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-5 mt-2">
-        {/* Section: PayPal Keys */}
+        {/* Section: Payment Gateway Keys */}
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-4">
           <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2 flex items-center gap-1.5">
             <Key size={14} className="text-yellow-gold" />
-            <span>Pasarela de Pago (PayPal API)</span>
+            <span>Pasarela de Pago (API Comercial)</span>
           </h3>
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">PayPal Client ID</label>
+              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Client ID de Pasarela</label>
               <input
                 type="password"
                 value={paypalClientId}
@@ -184,7 +182,7 @@ export default function AdminSettingsTab() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">PayPal Secret Key</label>
+              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Secret Key de Pasarela</label>
               <input
                 type="password"
                 value={paypalSecret}
@@ -204,7 +202,7 @@ export default function AdminSettingsTab() {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">WhatsApp de Soporte</label>
+              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Teléfono / Mensajería de Soporte</label>
               <input
                 type="tel"
                 value={supportWhatsapp}
@@ -253,11 +251,11 @@ export default function AdminSettingsTab() {
               </button>
             </div>
 
-            {/* Spotify Flag */}
+            {/* Ambient Music Flag */}
             <div className="flex items-center justify-between border-t border-white/5 pt-3">
               <div>
-                <span className="text-xs font-bold text-white block">Música de Competencia (Spotify)</span>
-                <span className="text-[10.5px] text-white block">Mostrar widget de música ambiental en reloj de tiro.</span>
+                <span className="text-xs font-bold text-white block">Música de Competencia</span>
+                <span className="text-[10.5px] text-white block">Mostrar reproductor de audio ambiental en sesiones de tiro.</span>
               </div>
               <button
                 type="button"
@@ -331,7 +329,7 @@ export default function AdminSettingsTab() {
 
           <button
             type="submit"
-            className="w-full sm:w-auto py-3 px-6 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 shadow-glow-cyan cursor-pointer transition hover:scale-102"
+            className="w-full sm:w-auto py-3 px-6 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition hover:scale-102"
           >
             <Save size={14} />
             <span>Guardar Ajustes</span>

@@ -315,20 +315,21 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-4 sm:gap-5 py-3 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY 101010 / THE APP (+12% Size) */}
-      <div 
-        className="w-full flex flex-col justify-center items-center pt-1 pb-2 sm:pb-4 select-none gap-1"
-        style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-      >
-        <h1 className="flex items-baseline justify-center gap-x-1.5 sm:gap-x-3.5 text-[25.8px] sm:text-[40.3px] md:text-[51.5px] leading-tight text-center whitespace-nowrap">
-          <span className="text-white tracking-normal sm:tracking-wider font-extrabold">ARCHERY</span>
-          <span className="inline-flex tracking-tight font-extrabold">
-            <span className="text-cyan-neon">10</span>
-            <span className="text-red-rival">10</span>
-            <span className="text-yellow-gold">10</span>
-          </span>
+      {/* Titular Oficial: ARCHERY 101010 / THE APP (Activo Oficial 4K Retina) */}
+      <div className="w-full flex flex-col justify-center items-center pt-1 pb-2 sm:pb-4 select-none gap-1.5">
+        <h1 className="flex items-center justify-center m-0">
+          <img
+            src="/images/brand_logo_header.png"
+            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+            alt="ARCHERY 101010"
+            className="h-7 sm:h-10 md:h-12 w-auto object-contain select-none"
+            draggable={false}
+          />
         </h1>
-        <span className="text-[14.8px] sm:text-[17.7px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1 whitespace-nowrap">
+        <span
+          className="text-[14.8px] sm:text-[17.7px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1 whitespace-nowrap"
+          style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+        >
           THE APP
         </span>
       </div>
@@ -669,9 +670,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 <div className="flex flex-col gap-2.5">
                   {(() => {
                     const list = activeStarTab === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
-                    const unlockedLevel = athleteStar && athleteStar.bowType === activeStarTab
-                      ? athleteStar.highestStarLevel
-                      : 0;
+                    const bowStat = athleteStar?.bowStats?.[activeStarTab];
+                    const unlockedLevel = bowStat
+                      ? bowStat.highestStarLevel
+                      : athleteStar && athleteStar.bowType === activeStarTab
+                        ? athleteStar.highestStarLevel
+                        : 0;
 
                     return list.map((star) => {
                       const isUnlocked = unlockedLevel >= star.level;
@@ -786,43 +790,44 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     <span className="text-xs font-black text-white tabular-nums">{selectedDetailStar.star.minScore} / 720 pts</span>
                   </div>
                   <div className="flex flex-col pt-1">
-                    <div className="flex justify-between items-center text-[11.6px] text-white font-bold mb-1">
-                      <span>Progreso de Puntuación</span>
-                      <span className="text-white font-extrabold tabular-nums">
-                        {athleteStar && athleteStar.bowType === selectedDetailStar.bowType
-                          ? `${athleteStar.highestScore} pts`
-                          : "Sin Récord"
-                        }
-                      </span>
-                    </div>
-                    {/* Progress bar towards this star */}
                     {(() => {
-                      const userBest = athleteStar && athleteStar.bowType === selectedDetailStar.bowType
-                        ? athleteStar.highestScore
-                        : 0;
+                      const detailBowStat = athleteStar?.bowStats?.[selectedDetailStar.bowType];
+                      const userBest = detailBowStat
+                        ? detailBowStat.highestScore
+                        : athleteStar && athleteStar.bowType === selectedDetailStar.bowType
+                          ? athleteStar.highestScore
+                          : 0;
                       const percentage = Math.min(100, Math.round((userBest / selectedDetailStar.star.minScore) * 100));
                       const pointsNeeded = selectedDetailStar.star.minScore - userBest;
 
                       return (
-                        <div className="flex flex-col gap-1">
-                          <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
-                            <div 
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ 
-                                width: `${percentage}%`,
-                                backgroundColor: selectedDetailStar.star.color
-                              }}
-                            />
+                        <>
+                          <div className="flex justify-between items-center text-[11.6px] text-white font-bold mb-1">
+                            <span>Progreso de Puntuación</span>
+                            <span className="text-white font-extrabold tabular-nums">
+                              {userBest > 0 ? `${userBest} pts` : "Sin Récord"}
+                            </span>
                           </div>
-                          <span className="text-[10.5px] font-bold text-white mt-0.5">
-                            {selectedDetailStar.isUnlocked 
-                              ? "Estrella obtenida y superada" 
-                              : pointsNeeded > 0 
-                                ? `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`
-                                : "Estrella lograda"
-                            }
-                          </span>
-                        </div>
+                          <div className="flex flex-col gap-1">
+                            <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
+                              <div 
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${percentage}%`,
+                                  backgroundColor: selectedDetailStar.star.color
+                                }}
+                              />
+                            </div>
+                            <span className="text-[10.5px] font-bold text-white mt-0.5">
+                              {selectedDetailStar.isUnlocked 
+                                ? "Estrella obtenida y superada" 
+                                : pointsNeeded > 0 
+                                  ? `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`
+                                  : "Estrella lograda"
+                              }
+                            </span>
+                          </div>
+                        </>
                       );
                     })()}
                   </div>

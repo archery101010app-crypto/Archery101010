@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { UserProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume2, Phone, AlertTriangle, RefreshCw, Share2 } from "lucide-react";
-import { saveLocalSession, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
+import { saveLocalSession, generateResilientId, addToSyncQueue, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -104,6 +104,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [isRivalWalkieActive, setIsRivalWalkieActive] = useState<boolean>(false);
   const [isIncomingCall, setIsIncomingCall] = useState<boolean>(false);
   const [walkieText, setWalkieText] = useState<string | null>(null);
+  const [connectionBanner, setConnectionBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!connectionBanner) return;
+    const t = setTimeout(() => setConnectionBanner(null), 3500);
+    return () => clearTimeout(t);
+  }, [connectionBanner]);
 
   const currentEndRef = useRef<number>(0);
   const callStateRef = useRef<"IDLE" | "DIALING" | "RINGING" | "ACTIVE">("IDLE");
@@ -126,7 +133,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     userPhoto,
     impacts,
     mode,
-    userShootOffShot
+    userShootOffShot,
+    userShootOffDistCm
   });
 
   useEffect(() => {
@@ -140,9 +148,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       userPhoto,
       impacts,
       mode,
-      userShootOffShot
+      userShootOffShot,
+      userShootOffDistCm
     };
-  }, [userTiros, currentEnd, currentArrow, validationPhase, isUserReady, isUserPresent, userPhoto, impacts, mode, userShootOffShot]);
+  }, [userTiros, currentEnd, currentArrow, validationPhase, isUserReady, isUserPresent, userPhoto, impacts, mode, userShootOffShot, userShootOffDistCm]);
 
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const audioAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -264,7 +273,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     config
   ]);
 
-  // Compress image to Base64 (JPEG 60% quality, max 300px)
+  // Compress image to Base64 (guaranteed <= 120KB JPEG so Firestore fallback thumbnail always fits)
   const compressImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -274,7 +283,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const maxDim = 300;
+          const maxDim = 320;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -292,7 +301,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           canvas.height = height;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
-          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.6);
+          let quality = 0.6;
+          let compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+          while (compressedBase64.length > 120000 && quality > 0.25) {
+            quality = Number((quality - 0.12).toFixed(2));
+            compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+          }
           resolve(compressedBase64);
         };
         img.onerror = (err) => reject(err);
@@ -343,13 +357,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             setRivalPhoto(msg.userPhoto);
           }
           if (msg.isUserReady !== undefined) {
-            setIsRivalReady(msg.isUserReady);
+            setIsRivalReady(Boolean(msg.isUserReady));
           }
           if (msg.isUserPresent !== undefined) {
-            setIsRivalPresent(msg.isUserPresent);
+            setIsRivalPresent(Boolean(msg.isUserPresent));
           }
           if (msg.userShootOffShot !== undefined) {
             setRivalShootOffShot(msg.userShootOffShot);
+          }
+          if (typeof msg.shootOffDistCm === "number") {
+            setRivalShootOffDistCm(msg.shootOffDistCm);
           }
           
           const ourCurrentEnd = currentEndRef.current;
@@ -363,19 +380,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           break;
         }
         case "presence-state":
-          setIsRivalPresent(msg.present);
+          setIsRivalPresent(Boolean(msg.present));
           break;
         case "ready-state":
-          setIsRivalReady(msg.ready);
-          if (msg.ready) {
-            setIsUserReady(true);
-          }
+          setIsRivalReady(Boolean(msg.ready));
           break;
         case "ready":
-          setIsRivalReady(msg.ready);
-          if (msg.ready) {
-            setIsUserReady(true);
-          }
+          setIsRivalReady(Boolean(msg.ready));
           break;
         case "shot": {
           setRivalTiros((prev) => {
@@ -635,7 +646,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       userPhoto: state.userPhoto,
       impacts: state.impacts.filter(imp => imp.endIdx <= state.currentEnd),
       mode: state.mode,
-      userShootOffShot: state.userShootOffShot !== null ? state.userShootOffShot : undefined
+      userShootOffShot: state.userShootOffShot !== null ? state.userShootOffShot : undefined,
+      shootOffDistCm: state.userShootOffDistCm !== null ? state.userShootOffDistCm : undefined
     });
   };
 
@@ -874,6 +886,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const [disconnectSeconds, setDisconnectSeconds] = useState<number>(0);
+  const disconnectSecondsRef = useRef<number>(0);
   const isReconnectingRef = useRef<boolean>(false);
   const [hasConnectedOnce, setHasConnectedOnce] = useState<boolean>(false);
   const hasConnectedOnceRef = useRef<boolean>(false);
@@ -888,35 +901,63 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // Auto-increment disconnect seconds
   useEffect(() => {
     if (isFriendDuel && !isRivalConnected && !duelFinished && hasConnectedOnceRef.current) {
+      disconnectSecondsRef.current = 0;
       setDisconnectSeconds(0);
       const timer = setInterval(() => {
-        setDisconnectSeconds((prev) => prev + 1);
+        setDisconnectSeconds((prev) => {
+          const next = prev + 1;
+          disconnectSecondsRef.current = next;
+          return next;
+        });
       }, 1000);
       return () => clearInterval(timer);
     } else {
+      disconnectSecondsRef.current = 0;
       setDisconnectSeconds(0);
     }
   }, [isRivalConnected, isFriendDuel, duelFinished]);
 
-  // Auto-reconnect sequence
+  // Auto-reconnect sequence (glare-free: only isCreator resets signaling; !isCreator waits for incoming offer unless disconnected >20s)
   const triggerAutoReconnect = async () => {
     if (isReconnectingRef.current) return;
     isReconnectingRef.current = true;
     console.log("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle...");
     try {
-      closeWebRTC();
       const docRef = doc(db, "active_duels", config.id);
       const isCreator = isCreatorRoleRef.current;
-      await updateDoc(docRef, {
-        [isCreator ? "creatorConnected" : "playerConnected"]: true,
-        [isCreator ? "creatorConnectedAt" : "playerConnectedAt"]: Date.now(),
-        webrtcOffer: null,
-        webrtcAnswer: null,
-        creatorCandidates: [],
-        playerCandidates: [],
-        updatedAt: Date.now()
-      });
-      console.log("[WebRTC Auto-Reconnect] Firestore signaling fields reset. Renegotiating...");
+      if (isCreator) {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          creatorConnected: true,
+          creatorConnectedAt: Date.now(),
+          webrtcOffer: null,
+          webrtcAnswer: null,
+          creatorCandidates: [],
+          playerCandidates: [],
+          updatedAt: Date.now()
+        });
+        console.log("[WebRTC Auto-Reconnect] Creator reset signaling fields. Renegotiating...");
+      } else if (disconnectSecondsRef.current > 20) {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          playerConnected: true,
+          playerConnectedAt: Date.now(),
+          webrtcOffer: null,
+          webrtcAnswer: null,
+          creatorCandidates: [],
+          playerCandidates: [],
+          updatedAt: Date.now()
+        });
+        console.log("[WebRTC Auto-Reconnect] Player (>20s disconnected) reset signaling fields.");
+      } else {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          playerConnected: true,
+          playerConnectedAt: Date.now(),
+          updatedAt: Date.now()
+        });
+        console.log("[WebRTC Auto-Reconnect] Player waiting for incoming creator webrtcOffer...");
+      }
     } catch (err) {
       console.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
     } finally {
@@ -1166,22 +1207,23 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setIsRivalConnected(connected);
         }
 
-        // Fallback for ready states before WebRTC is active
-        if (!isP2PActiveRef.current) {
-          if (isCreator) {
-            if (data.playerReady !== undefined) {
-              setIsRivalReady(data.playerReady === true);
-            }
-          } else {
-            if (data.creatorReady !== undefined) {
-              setIsRivalReady(data.creatorReady === true);
-            }
-          }
+        // Reliable Firestore fallback for ready states & target verification photo
+        const remoteReady = isCreator ? data.playerReady : data.creatorReady;
+        if (remoteReady === true) {
+          setIsRivalPresent(true);
+          setIsRivalReady(true);
+        } else if (!isP2PActiveRef.current && remoteReady !== undefined) {
+          setIsRivalReady(false);
         }
 
-        // Alert and vibrate on connection established
+        const remotePhoto = isCreator ? data.playerPhoto : data.creatorPhoto;
+        if (typeof remotePhoto === "string" && remotePhoto.length > 0) {
+          setRivalPhoto(remotePhoto);
+        }
+
+        // Non-blocking UI banner and vibrate on connection established
         if (connected && !lastConnectedState) {
-          alert("¡Oponente conectado a la arena!");
+          setConnectionBanner("Oponente conectado a la arena");
           if (navigator.vibrate) {
             navigator.vibrate([30, 50, 30]);
           }
@@ -1507,14 +1549,43 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   // Calculate coordinates for keyboard values to plot them on target
-  const getCoordinatesForScore = (val: string) => {
-    if (val === "X") return { x: 50, y: 50 };
+  const getCoordinatesForScore = (val: string, randomizeWithinRing = false) => {
     const sorted = [...presetRings].sort((a, b) => a.r - b.r);
+    if (val === "X") {
+      if (!randomizeWithinRing) return { x: 50, y: 50 };
+      const xRing = sorted.find((r) => r.v === "X");
+      const tenRing = sorted.find((r) => r.v === "10");
+      const outerR = xRing ? xRing.r : tenRing ? tenRing.r * 0.5 : 2.4;
+      const radius = (0.08 + Math.random() * 0.84) * outerR;
+      const angle = Math.random() * Math.PI * 2;
+      return {
+        x: Math.max(1, Math.min(99, 50 + Math.cos(angle) * radius)),
+        y: Math.max(1, Math.min(99, 50 + Math.sin(angle) * radius))
+      };
+    }
     const idx = sorted.findIndex((r) => r.v === val);
     if (idx !== -1) {
       const innerR = idx > 0 ? sorted[idx - 1].r : 0;
-      const midR = (innerR + sorted[idx].r) / 2;
+      const outerR = sorted[idx].r;
+      if (randomizeWithinRing) {
+        const radius = innerR + (0.08 + Math.random() * 0.84) * Math.max(0.4, outerR - innerR);
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          x: Math.max(1, Math.min(99, 50 + Math.cos(angle) * radius)),
+          y: Math.max(1, Math.min(99, 50 + Math.sin(angle) * radius))
+        };
+      }
+      const midR = (innerR + outerR) / 2;
       return { x: 50, y: Math.min(99, 50 + midR) };
+    }
+    if (randomizeWithinRing) {
+      const maxRingR = sorted.length > 0 ? sorted[sorted.length - 1].r : 48;
+      const radius = maxRingR + 0.5 + Math.random() * 1.5;
+      const angle = Math.random() * Math.PI * 2;
+      return {
+        x: Math.max(1, Math.min(99, 50 + Math.cos(angle) * radius)),
+        y: Math.max(1, Math.min(99, 50 + Math.sin(angle) * radius))
+      };
     }
     return { x: 50, y: 99 }; // Miss (M)
   };
@@ -1686,7 +1757,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         dianaPresetKey
       );
       const svgDist = Math.hypot(x - 50, y - 50);
-      const distCm = Number(((svgDist / 48) * targetSpec.visibleRadiusCm).toFixed(2));
+      const distCm = Number(((svgDist / 48) * targetSpec.visibleRadiusCm).toFixed(4));
       setUserShootOffShot(numericValue);
       setUserShootOffDistCm(distCm);
       if (isFriendDuel) {
@@ -1738,7 +1809,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (isShootOff && userShootOffShot !== null) return;
     if (!isShootOff && userTiros[currentEnd].length >= 3) return;
 
-    const coords = getCoordinatesForScore(value);
+    const coords = getCoordinatesForScore(value, isShootOff);
     registerShot(coords.x, coords.y, value);
   };
 
@@ -1876,7 +1947,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       );
       const ringW = targetSpec.ringWidthCm;
       const ringIdxFromCenter = Math.max(0, 10 - score);
-      const simulatedDistCm = Number(((ringIdxFromCenter + 0.15 + Math.random() * 0.7) * ringW).toFixed(2));
+      const simulatedDistCm = Number(((ringIdxFromCenter + 0.12 + Math.random() * 0.76) * ringW).toFixed(4));
       setRivalShootOffShot(score);
       setRivalShootOffDistCm(simulatedDistCm);
       setRivalThinking(false);
@@ -1899,7 +1970,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         } else if (
           userShootOffDistCm !== null &&
           rivalShootOffDistCm !== null &&
-          Math.abs(userShootOffDistCm - rivalShootOffDistCm) >= 0.05
+          Math.abs(userShootOffDistCm - rivalShootOffDistCm) > 0.0001
         ) {
           if (userShootOffDistCm < rivalShootOffDistCm) {
             setWinner("USER");
@@ -2111,14 +2182,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     const userTotalScore = userTiros.flat().reduce((sum: number, b) => sum + getValNumeric(b), 0) + (userShootOffShot || 0);
     const duelId = config.id || generateResilientId("DUE");
 
-    const newSession = {
+    const nowTs = Date.now();
+    const newSession = sanitizeForFirestore({
       id: duelId,
       uid: duelId,
       userId: user.uid,
       userUid: user.uid,
       userName: user.fullName || user.nickname || "Arquero",
       clubId: user.clubId || null,
-      timestamp: Date.now(),
+      timestamp: nowTs,
+      updatedAt: nowTs,
       practiceType: "Control",
       bowType: config.bowType,
       format: "Duelo 1v1",
@@ -2142,7 +2215,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       opponentClubName: config.rival.clubName,
       opponentClubLogo: config.rival.clubLogo,
       outcome: winner === "USER" ? "win" : winner === "RIVAL" ? "loss" : "tie"
-    };
+    });
 
     try {
       await saveLocalSession(duelId, newSession);
@@ -2153,7 +2226,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         operation: "INSERT",
         payloadId: duelId,
         payload: newSession,
-        timestamp: Date.now()
+        timestamp: nowTs
       });
       onDuelSaved();
     } catch (e) {
@@ -2206,6 +2279,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         {/* Countdown timer placeholder */}
         <div className="w-9 flex justify-end" />
       </div>
+
+      {connectionBanner && (
+        <div className="bg-[#0D1017] border border-cyan-neon/30 rounded-2xl px-3.5 py-2 flex items-center justify-center gap-2 z-10">
+          <span className="w-2 h-2 rounded-full bg-cyan-neon animate-pulse shrink-0" />
+          <span className="text-[11.5px] font-black uppercase tracking-wider text-cyan-neon">
+            {connectionBanner}
+          </span>
+        </div>
+      )}
 
       {/* Duelist panels and live scoreboard */}
       <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3.5 z-10 relative overflow-hidden">
@@ -2433,7 +2515,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             : data.creatorConnected === true;
                           if (connected) {
                             setIsRivalConnected(true);
-                            alert("¡Oponente conectado!");
+                            setConnectionBanner("Oponente conectado a la arena");
                           } else {
                             alert("El oponente aún no ha ingresado al duelo.");
                           }
@@ -2509,7 +2591,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <button
                   onClick={() => {
                     setIsUserReady(true);
-                    setIsRivalReady(true);
                     if (navigator.vibrate) {
                       navigator.vibrate(30);
                     }
@@ -2518,9 +2599,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       updateOurReadyState(true);
                     }
                   }}
-                  disabled={!isRivalPresent}
+                  disabled={!isRivalPresent && !(isFriendDuel && isRivalConnected && !isP2PActive)}
                   className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center whitespace-nowrap transition-all duration-200 ${
-                    isRivalPresent
+                    isRivalPresent || (isFriendDuel && isRivalConnected && !isP2PActive)
                       ? "bg-cyan-neon hover:bg-[#19c8ff] text-black active:scale-98 cursor-pointer"
                       : "bg-[#0D1017] border border-white/5 text-white cursor-not-allowed opacity-50"
                   }`}
@@ -3214,6 +3295,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
                             if (isFriendDuel) {
                               sendDataMessage({ type: "photo", photo: base64, mode });
+                              if (config.id && base64.length <= 125000) {
+                                const docRef = doc(db, "active_duels", config.id);
+                                updateDoc(docRef, {
+                                  [isCreatorRoleRef.current ? "creatorPhoto" : "playerPhoto"]: base64,
+                                  updatedAt: Date.now()
+                                }).catch((fsErr) =>
+                                  console.warn("Could not write fallback verification photo to Firestore:", fsErr)
+                                );
+                              }
                             } else {
                               simulateRivalUpload();
                             }

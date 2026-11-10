@@ -58,6 +58,36 @@ export function isTrainingDayForWeeklyGoal(dayOfWeek: number, weeklyGoal: number
 }
 
 /**
+ * Computes a deterministic short alphanumeric hash from sorted athlete UIDs
+ * so syncing Group A and Group B on the same macrocycle never overwrites each other's EVT-MAC-* documents.
+ */
+function computeDeterministicGroupHash(athleteIds: string[]): string {
+  const canonical = [...athleteIds].sort().join("|");
+  let hash = 2166136261;
+  for (let i = 0; i < canonical.length; i++) {
+    hash ^= canonical.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36).toUpperCase();
+}
+
+function buildAssignmentEventSuffix(assignedAthleteIds: string[]): string {
+  if (!assignedAthleteIds || assignedAthleteIds.length === 0) return "";
+  if (assignedAthleteIds.length === 1) return `-${assignedAthleteIds[0]}`;
+  return `-GRP-${computeDeterministicGroupHash(assignedAthleteIds)}`;
+}
+
+function resolveCanonicalClubId(
+  primaryClubId?: string | null,
+  secondaryClubId?: string | null,
+  fallbackUid?: string
+): string | undefined {
+  if (primaryClubId && primaryClubId !== "CLB-DEMO") return primaryClubId;
+  if (secondaryClubId && secondaryClubId !== "CLB-DEMO") return secondaryClubId;
+  return fallbackUid ? `CLB-${fallbackUid}` : undefined;
+}
+
+/**
  * Synchronizes a macrocycle / mesocycle for a specific month with the app's calendar.
  * Generates daily coach assignments with arrow targets, technical focus, and notes.
  */
@@ -84,17 +114,18 @@ export async function syncCycleToMonthCalendar(
   let restDaysCount = 0;
   let totalArrowsAssigned = 0;
 
-  const explicitTargets = options?.targetAthleteIds && options.targetAthleteIds.length > 0
+  const explicitTargets = options?.targetAthleteIds !== undefined
     ? options.targetAthleteIds
     : options?.targetAthleteId
     ? [options.targetAthleteId]
     : null;
 
-  const assignedAthleteIds = explicitTargets
+  const assignedAthleteIds = explicitTargets !== null
     ? explicitTargets
     : (macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []));
 
-  const athleteSuffix = assignedAthleteIds.length === 1 ? assignedAthleteIds[0] : "";
+  const eventSuffix = buildAssignmentEventSuffix(assignedAthleteIds);
+  const canonicalClubId = resolveCanonicalClubId(coach.clubId, macrocycle.clubId, coach.uid);
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -125,14 +156,15 @@ export async function syncCycleToMonthCalendar(
 
     const focusPoints: string[] = [];
 
-    // Deterministic ID per macrocycle, target athlete and date prevents duplicate cards on multiple syncs
-    const eventId = athleteSuffix 
-      ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${dateStr}` 
-      : `EVT-MAC-${macrocycle.id}-${dateStr}`;
+    // Deterministic ID per macrocycle, target athlete/group and date prevents duplicate cards or group overwrites
+    const eventId = `EVT-MAC-${macrocycle.id}${eventSuffix}-${dateStr}`;
 
     const title = phase.name || macrocycle.name;
     const description = options?.customNotes || phase.notes || "";
     const coachNotes = options?.customNotes || phase.notes || "";
+    const dailyItems = coachNotes
+      ? [title, ...coachNotes.split(/\r?\n|\s*;\s*/).map((s) => s.trim()).filter(Boolean)]
+      : [title];
 
     const eventData: CalendarEvent = {
       id: eventId,
@@ -142,7 +174,7 @@ export async function syncCycleToMonthCalendar(
       createdByRole: "coach",
       createdByName: coach.fullName || "Coach Director",
       createdByUid: coach.uid,
-      clubId: coach.clubId || macrocycle.clubId,
+      clubId: canonicalClubId,
       type: isTraining ? "training" : "other",
       timestamp: Date.now(),
       // Cycle metadata
@@ -155,6 +187,8 @@ export async function syncCycleToMonthCalendar(
       assignedAthleteIds,
       focusPoints,
       coachNotes,
+      dailyItems,
+      completedItems: [],
       isRestDay: !isTraining,
       isCompleted: false
     };
@@ -214,17 +248,23 @@ export async function saveDailyEntriesToCalendar(
   let totalArrowsAssigned = 0;
 
   const assignedList = macrocycle.assignmentType === "club" ? [] : (macrocycle.assignedAthleteIds || []);
-  const athleteSuffix = assignedList.length === 1 ? assignedList[0] : "";
+  const eventSuffix = buildAssignmentEventSuffix(assignedList);
+  const isCoach =
+    author.role === "coach" ||
+    author.role === "team_admin_coach" ||
+    author.role === "team_admin" ||
+    author.role === "superadmin" ||
+    macrocycle.coachId === author.uid;
+  const canonicalClubId = isCoach
+    ? resolveCanonicalClubId(author.clubId, macrocycle.clubId, author.uid)
+    : (author.clubId && author.clubId !== "CLB-DEMO" ? author.clubId : macrocycle.clubId || undefined);
 
   for (const entry of dailyEntries) {
     const phase = macrocycle.phases?.find(
       (p) => entry.date >= p.startDate && entry.date <= p.endDate
     ) || macrocycle.phases?.[0];
 
-    const eventId = athleteSuffix 
-      ? `EVT-MAC-${macrocycle.id}-${athleteSuffix}-${entry.date}` 
-      : `EVT-MAC-${macrocycle.id}-${entry.date}`;
-    const isCoach = author.role === "coach" || author.role === "team_admin_coach" || macrocycle.coachId === author.uid;
+    const eventId = `EVT-MAC-${macrocycle.id}${eventSuffix}-${entry.date}`;
 
     const eventData: CalendarEvent = {
       id: eventId,
@@ -234,14 +274,14 @@ export async function saveDailyEntriesToCalendar(
       createdByRole: isCoach ? "coach" : "archer",
       createdByName: author.fullName || (isCoach ? "Coach Director" : "Arquero"),
       createdByUid: author.uid,
-      clubId: author.clubId || macrocycle.clubId,
+      clubId: canonicalClubId,
       type: entry.type,
       timestamp: Date.now(),
       macrocycleId: macrocycle.id,
       phaseId: phase?.id,
       phaseName: phase?.name || entry.stageName || macrocycle.name,
       phaseType: phase?.type,
-      phaseColor: phase?.color || "#00E5FF",
+      phaseColor: phase?.color || "#00A8F3",
       targetArrows: entry.targetArrows,
       assignedAthleteIds: assignedList,
       focusPoints: entry.focusPoints,
@@ -295,11 +335,39 @@ export async function saveDailyEntriesToCalendar(
 
 /**
  * Synchronizes ALL months covered by a stage-based Macrocycle in a single operation.
+ * Supports both (macrocycle, authorProfile) and (macrocycle, assignedIds, coachUid, coachFullName, clubId).
  */
 export async function syncEntireMacrocycleToCalendar(
   macrocycle: Macrocycle,
   author: UserProfile
+): Promise<SyncCycleSummary>;
+export async function syncEntireMacrocycleToCalendar(
+  macrocycle: Macrocycle,
+  assignedIds: string[],
+  coachUid: string,
+  coachFullName?: string,
+  clubId?: string | null
+): Promise<SyncCycleSummary>;
+export async function syncEntireMacrocycleToCalendar(
+  macrocycle: Macrocycle,
+  authorOrAssignedIds: UserProfile | string[],
+  coachUid?: string,
+  coachFullName?: string,
+  clubId?: string | null
 ): Promise<SyncCycleSummary> {
+  const isArrayOverload = Array.isArray(authorOrAssignedIds);
+  const resolvedAuthor: UserProfile = isArrayOverload
+    ? ({
+        uid: coachUid || macrocycle.coachId,
+        fullName: coachFullName || "Coach Director",
+        email: "",
+        role: "coach",
+        clubId: resolveCanonicalClubId(clubId, macrocycle.clubId, coachUid || macrocycle.coachId)
+      } as UserProfile)
+    : authorOrAssignedIds;
+
+  const targetAthleteIds = isArrayOverload ? authorOrAssignedIds : undefined;
+
   const start = new Date(macrocycle.startDate + "T12:00:00");
   const end = new Date(macrocycle.endDate + "T12:00:00");
 
@@ -316,7 +384,13 @@ export async function syncEntireMacrocycleToCalendar(
   // Safety cap of 18 months max
   let guard = 0;
   while ((curYear < endYear || (curYear === endYear && curMonth <= endMonth)) && guard < 18) {
-    const res = await syncCycleToMonthCalendar(macrocycle, curYear, curMonth, author);
+    const res = await syncCycleToMonthCalendar(
+      macrocycle,
+      curYear,
+      curMonth,
+      resolvedAuthor,
+      targetAthleteIds !== undefined ? { targetAthleteIds } : undefined
+    );
     syncedDaysCount += res.syncedDaysCount;
     trainingDaysCount += res.trainingDaysCount;
     restDaysCount += res.restDaysCount;
@@ -343,7 +417,7 @@ export async function syncEntireMacrocycleToCalendar(
 
 /**
  * Unlinks and deletes a plan and all its calendar events from IndexedDB and sync queue.
- * - If targetAthleteId is provided: unlinks only that athlete from the macrocycle (and their individual events).
+ * - If targetAthleteId is provided: unlinks only that athlete from the macrocycle (or all macrocycles when macrocycleId === "*") and their events.
  * - If targetAthleteId is omitted: completely deletes the macrocycle and ALL associated calendar events.
  */
 export async function unlinkAndPurgePlan(
@@ -365,27 +439,39 @@ export async function unlinkAndPurgePlan(
   let planDeleted = false;
 
   const macrocycles = await getLocalMacrocycles();
-  const targetMacro = macrocycles.find((m: Macrocycle) => m.id === macrocycleId);
-
   const events = await getLocalEvents();
 
   if (targetAthleteId) {
-    // Unlink single athlete
-    if (targetMacro) {
+    const candidateMacros = macrocycleId === "*"
+      ? macrocycles.filter((m: Macrocycle) => (m.assignedAthleteIds || []).includes(targetAthleteId))
+      : macrocycles.filter((m: Macrocycle) => m.id === macrocycleId);
+
+    for (const targetMacro of candidateMacros) {
       const updatedAthleteIds = (targetMacro.assignedAthleteIds || []).filter(
         (id: string) => id !== targetAthleteId
       );
       targetMacro.assignedAthleteIds = updatedAthleteIds;
-      if (targetMacro.assignmentType === "individual" && updatedAthleteIds.length === 0) {
-        await deleteLocalMacrocycle(macrocycleId);
+      if (
+        (targetMacro.assignmentType === "individual" || targetMacro.assignmentType === "group") &&
+        updatedAthleteIds.length === 0
+      ) {
+        await deleteLocalMacrocycle(targetMacro.id);
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "macrocycles",
+          operation: "DELETE",
+          payloadId: targetMacro.id,
+          payload: { id: targetMacro.id },
+          timestamp: Date.now()
+        });
         planDeleted = true;
       } else {
-        await saveLocalMacrocycle(macrocycleId, targetMacro);
+        await saveLocalMacrocycle(targetMacro.id, targetMacro);
         await addToSyncQueue({
           id: generateResilientId("TXN"),
           collection: "macrocycles",
           operation: "UPDATE",
-          payloadId: macrocycleId,
+          payloadId: targetMacro.id,
           payload: targetMacro,
           timestamp: Date.now()
         });
@@ -394,7 +480,7 @@ export async function unlinkAndPurgePlan(
 
     // Delete or update events for this athlete
     for (const ev of events) {
-      if (ev.macrocycleId === macrocycleId) {
+      if (macrocycleId === "*" || ev.macrocycleId === macrocycleId) {
         if (ev.assignedAthleteIds && ev.assignedAthleteIds.includes(targetAthleteId)) {
           const remainingAthletes = ev.assignedAthleteIds.filter((id: string) => id !== targetAthleteId);
           if (remainingAthletes.length === 0) {
@@ -404,27 +490,42 @@ export async function unlinkAndPurgePlan(
               collection: "calendar_events",
               operation: "DELETE",
               payloadId: ev.id,
-              payload: {},
+              payload: { id: ev.id },
               timestamp: Date.now()
             });
             deletedEventsCount++;
           } else {
             ev.assignedAthleteIds = remainingAthletes;
+            const evAny = ev as CalendarEvent & { completedByAthlete?: Record<string, number[]> };
+            if (evAny.completedByAthlete && targetAthleteId in evAny.completedByAthlete) {
+              const nextMap = { ...evAny.completedByAthlete };
+              delete nextMap[targetAthleteId];
+              evAny.completedByAthlete = nextMap;
+            }
             await saveLocalEvent(ev.id, ev);
+            await addToSyncQueue({
+              id: generateResilientId("TXN"),
+              collection: "calendar_events",
+              operation: "UPDATE",
+              payloadId: ev.id,
+              payload: ev,
+              timestamp: Date.now()
+            });
           }
         }
       }
     }
   } else {
     // Complete unlink and deletion of the plan
-    if (targetMacro) {
+    const targetMacro = macrocycles.find((m: Macrocycle) => m.id === macrocycleId);
+    if (targetMacro || macrocycleId) {
       await deleteLocalMacrocycle(macrocycleId);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "macrocycles",
         operation: "DELETE",
         payloadId: macrocycleId,
-        payload: {},
+        payload: { id: macrocycleId },
         timestamp: Date.now()
       });
       planDeleted = true;
@@ -439,7 +540,7 @@ export async function unlinkAndPurgePlan(
           collection: "calendar_events",
           operation: "DELETE",
           payloadId: ev.id,
-          payload: {},
+          payload: { id: ev.id },
           timestamp: Date.now()
         });
         deletedEventsCount++;
