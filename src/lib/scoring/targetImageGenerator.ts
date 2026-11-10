@@ -445,8 +445,8 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 
   // 5. Official Brand Lockup ("ARCHERY 101010" + centered below "THE APP") positioned at y=1343
   const [brandFullImg, wmImg] = await Promise.all([
-    loadImageAsset("/images/brand_logo_full.png"),
-    loadImageAsset("/images/101010-the-app-watermark.png")
+    loadImageAsset("/images/brand_logo_full.png?v=281"),
+    loadImageAsset("/images/101010-the-app-watermark.png?v=281")
   ]);
 
   const brandTopY = 1343;

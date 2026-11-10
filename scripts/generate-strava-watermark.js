@@ -16,24 +16,36 @@ function buildGoodTimesGlyphs(rawLogo3) {
   // E: x 726..838 (w 113)
   const glyphE = rawLogo3.clone().crop({ x: 726, y: y0, w: 113, h });
 
-  // P: derived from R (x 244..397, w 154) by removing the lower-right leg below the bowl
-  const glyphP = rawLogo3.clone().crop({ x: 244, y: y0, w: 150, h });
+  // P: authentic Good Times P with full-thickness bottom bowl bar (y=71..94) and symmetric right curve
+  const rawR = rawLogo3.clone().crop({ x: 244, y: y0, w: 150, h });
+  const glyphP = rawR.clone();
   glyphP.scan(0, 0, glyphP.width, glyphP.height, (x, y, idx) => {
-    if (y > 79 && x > 32) {
+    if (x >= 36 && y >= 48 && y <= 95) {
+      const srcY = 95 - y;
+      const srcIdx = (srcY * glyphP.width + x) * 4;
+      glyphP.bitmap.data[idx] = rawR.bitmap.data[srcIdx];
+      glyphP.bitmap.data[idx + 1] = rawR.bitmap.data[srcIdx + 1];
+      glyphP.bitmap.data[idx + 2] = rawR.bitmap.data[srcIdx + 2];
+      glyphP.bitmap.data[idx + 3] = rawR.bitmap.data[srcIdx + 3];
+    } else if (x === 35 && y >= 71 && y <= 94) {
+      const srcY = 95 - y;
+      const srcIdx = (srcY * glyphP.width + 36) * 4;
+      const edgeScale = rawR.bitmap.data[srcIdx + 3] / 255;
+      glyphP.bitmap.data[idx + 3] = Math.round(rawR.bitmap.data[idx + 3] * edgeScale);
+    } else if (y > 95 && x > 26) {
       glyphP.bitmap.data[idx + 3] = 0;
     }
   });
 
-  // T: built using the exact stroke weight of H's vertical stem (24px) and E's top bar (21px)
+  // T: built using the exact stroke weight of H's vertical stem (24px) and E's top bar (y=1..23, 23px)
   const wT = 132;
   const glyphT = new Jimp({ width: wT, height: h, color: 0x00000000 });
   const stemW = 24;
-  const barH = 21;
   const stemX = Math.round((wT - stemW) / 2);
 
   glyphT.scan(0, 0, wT, h, (x, y, idx) => {
-    const inTopBar = y >= 0 && y < barH;
-    const inStem = x >= stemX && x < stemX + stemW;
+    const inTopBar = y >= 1 && y <= 23;
+    const inStem = y >= 1 && y <= 130 && x >= stemX && x < stemX + stemW;
     if (inTopBar || inStem) {
       glyphT.bitmap.data[idx] = 255;
       glyphT.bitmap.data[idx + 1] = 255;

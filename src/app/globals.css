@@ -1,11 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
-/* Good Times display font for the 101010 logotype (Loaded from CDN) */
+/* Good Times display font for the 101010 logotype (Local Offline-First + CDN Fallback) */
 @font-face {
   font-family: 'Good Times';
-  src: url('https://db.onlinewebfonts.com/t/0e3916f8c62ff379d3574590423038bc.woff2') format('woff2');
-  font-weight: 400;
+  src: url('/fonts/good-times.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/0e3916f8c62ff379d3574590423038bc.woff2') format('woff2');
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }

@@ -14,10 +14,23 @@ function buildGoodTimesGlyphsForSlogan(rawLogo) {
   const glyphE = rawLogo.clone().crop({ x: 726, y: y0, w: 113, h });
   const glyphY = rawLogo.clone().crop({ x: 1021, y: y0, w: 152, h });
 
-  // P: derived from R by clearing the diagonal leg below the bowl
-  const glyphP = rawLogo.clone().crop({ x: 244, y: y0, w: 150, h });
+  // P: authentic Good Times P with full-thickness bottom bowl bar (y=71..94) and symmetric right curve
+  const rawRForP = rawLogo.clone().crop({ x: 244, y: y0, w: 150, h });
+  const glyphP = rawRForP.clone();
   glyphP.scan(0, 0, glyphP.width, glyphP.height, (x, y, idx) => {
-    if (y > 79 && x > 32) {
+    if (x >= 36 && y >= 48 && y <= 95) {
+      const srcY = 95 - y;
+      const srcIdx = (srcY * glyphP.width + x) * 4;
+      glyphP.bitmap.data[idx] = rawRForP.bitmap.data[srcIdx];
+      glyphP.bitmap.data[idx + 1] = rawRForP.bitmap.data[srcIdx + 1];
+      glyphP.bitmap.data[idx + 2] = rawRForP.bitmap.data[srcIdx + 2];
+      glyphP.bitmap.data[idx + 3] = rawRForP.bitmap.data[srcIdx + 3];
+    } else if (x === 35 && y >= 71 && y <= 94) {
+      const srcY = 95 - y;
+      const srcIdx = (srcY * glyphP.width + 36) * 4;
+      const edgeScale = rawRForP.bitmap.data[srcIdx + 3] / 255;
+      glyphP.bitmap.data[idx + 3] = Math.round(rawRForP.bitmap.data[idx + 3] * edgeScale);
+    } else if (y > 95 && x > 26) {
       glyphP.bitmap.data[idx + 3] = 0;
     }
   });
