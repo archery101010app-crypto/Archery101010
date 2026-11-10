@@ -42,4 +42,6 @@ yarn-error.log*
 next-env.d.ts
 
 play-service-account.json
+*.der
+/garmin-ciq/tools/
 /releases/
