@@ -675,28 +675,28 @@ export default function HistoryView({
                           {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
                         </span>
                       </div>
-                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <div className="flex items-baseline gap-1.5 mt-0.5 tabular-nums">
                         {isVolumeSession(session) ? (
                           <>
-                            <span className="text-xl font-black text-cyan-neon">{getSessionArrows(session)}</span>
+                            <span className="text-xl font-black text-cyan-neon tabular-nums">{getSessionArrows(session)}</span>
                             <span className="text-[11.6px] text-white font-bold">flechas</span>
                           </>
                         ) : (
                           <>
-                            <span className="text-xl font-black text-white">{getSessionScore(session)}</span>
-                            <span className="text-[11.6px] text-white">/ {getSessionMaxScore(session)} pts</span>
+                            <span className="text-xl font-black text-white tabular-nums">{getSessionScore(session)}</span>
+                            <span className="text-[11.6px] text-white tabular-nums">/ {getSessionMaxScore(session)} pts</span>
                             {getSessionMaxScore(session) > 0 && (
-                              <span className="text-[12.8px] text-yellow-gold font-bold ml-1">
+                              <span className="text-[12.8px] text-yellow-gold font-bold ml-1 tabular-nums">
                                 {Math.round((getSessionScore(session) / getSessionMaxScore(session)) * 100)}%
                               </span>
                             )}
                           </>
                         )}
                       </div>
-                      <span className="text-[11.6px] text-white truncate">
+                      <span className="text-[11.6px] text-white tabular-nums truncate">
                         {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
                       </span>
-                      <span className="text-[10.5px] font-bold text-white truncate">
+                      <span className="text-[10.5px] font-bold text-white tabular-nums truncate">
                         {getSessionActiveKcal(session, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(session), false)}
                       </span>
                     </div>
@@ -734,11 +734,11 @@ export default function HistoryView({
           </div>
 
           {/* Volume by Bow & Practice Type */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             
             {/* Widget: Arco Volumen */}
-            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
-              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase">Por Tipo de Arco</span>
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0">
+              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase truncate">Por Tipo de Arco</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
@@ -748,10 +748,10 @@ export default function HistoryView({
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
-                    <div key={item.name} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[11.6px] font-bold text-white">
-                        <span>{item.name}</span>
-                        <span className="text-yellow-gold">{item.val} ({percent}%)</span>
+                    <div key={item.name} className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 text-[11px] sm:text-[11.6px] font-bold text-white min-w-0">
+                        <span className="min-w-0 truncate">{item.name}</span>
+                        <span className="text-yellow-gold tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>
                       <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
                         <div
@@ -766,8 +766,8 @@ export default function HistoryView({
             </div>
 
             {/* Widget: Práctica Volumen */}
-            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex flex-col gap-3">
-              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase">Por Práctica</span>
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0">
+              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase truncate">Por Práctica</span>
               
               <div className="flex flex-col gap-2.5">
                 {[
@@ -777,10 +777,10 @@ export default function HistoryView({
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
-                    <div key={item.name} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[11.6px] font-bold text-white">
-                        <span>{item.name}</span>
-                        <span className="text-cyan-neon">{item.val} ({percent}%)</span>
+                    <div key={item.name} className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 text-[11px] sm:text-[11.6px] font-bold text-white min-w-0">
+                        <span className="min-w-0 truncate">{item.name}</span>
+                        <span className="text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>
                       <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
                         <div
@@ -824,8 +824,8 @@ export default function HistoryView({
                           )}
                           <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
                         </div>
-                        <span className="text-[10.5px] text-white">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
-                        <span className="text-[10px] font-bold text-white">
+                        <span className="text-[10.5px] text-white tabular-nums">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
+                        <span className="text-[10px] font-bold text-white tabular-nums">
                           {getSessionActiveKcal(s, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(s), false)}
                         </span>
                       </div>
@@ -904,7 +904,7 @@ export default function HistoryView({
               <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div className="flex flex-col">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Volumen de Flechas</span>
-                  <span className="text-3xl font-black text-cyan-neon">
+                  <span className="text-3xl font-black text-cyan-neon tabular-nums">
                     {getSessionArrows(selectedSession)} <span className="text-xs text-white">flechas</span>
                   </span>
                 </div>
@@ -917,14 +917,14 @@ export default function HistoryView({
               <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div className="flex flex-col">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
-                  <span className="text-3xl font-black text-white">
+                  <span className="text-3xl font-black text-white tabular-nums">
                     {getSessionScore(selectedSession)} <span className="text-xs text-white">/ {getSessionMaxScore(selectedSession)}</span>
                   </span>
-                  <span className="text-[10.5px] text-white font-bold mt-0.5">{getSessionArrows(selectedSession)} flechas</span>
+                  <span className="text-[10.5px] text-white font-bold mt-0.5 tabular-nums">{getSessionArrows(selectedSession)} flechas</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Precisión</span>
-                  <p className="text-2xl font-black text-yellow-gold leading-tight">
+                  <p className="text-2xl font-black text-yellow-gold leading-tight tabular-nums">
                     {getSessionMaxScore(selectedSession) > 0 ? Math.round((getSessionScore(selectedSession) / getSessionMaxScore(selectedSession)) * 100) : 0}%
                   </p>
                 </div>
@@ -933,31 +933,31 @@ export default function HistoryView({
 
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
+              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
                 <span className="text-[9.3px] text-white uppercase block">Distancia</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.distance}m</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.distance}m</span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
+              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
                 <span className="text-[9.3px] text-white uppercase block">Arco</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.bowType === "Recurve" ? "Recurvo" : selectedSession.bowType === "Compound" ? "Compuesto" : selectedSession.bowType}
                 </span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
+              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
                 <span className="text-[9.3px] text-white uppercase block">Tipo</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
                   {selectedSession.practiceType === "Control" ? t("practiceControl") : selectedSession.practiceType}
                 </span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center">
+              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
                 <span className="text-[9.3px] text-white uppercase block">Rondas</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block">{selectedSession.endsCount} Ends</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.endsCount} Ends</span>
               </div>
             </div>
 
             {/* Biometric Summary: Kcal + Distancia Recorrida */}
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl">
+              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
                 <span className="text-[10px] text-white uppercase font-black tracking-wider block">
                   KCAL
                 </span>
@@ -965,11 +965,11 @@ export default function HistoryView({
                   {getSessionActiveKcal(selectedSession, user)} kcal
                 </span>
               </div>
-              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl">
-                <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
+                <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
                   DISTANCIA RECORRIDA
                 </span>
-                <span className="text-base font-black text-white mt-0.5 block tabular-nums">
+                <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
                   {formatKmAndMiles(getSessionDistanceWalkedM(selectedSession), false)}
                 </span>
               </div>
@@ -981,17 +981,17 @@ export default function HistoryView({
                 <span className="text-[10.5px] text-white uppercase font-bold">Rendimiento por Bloques</span>
                 <div className="flex justify-between text-white">
                   <span>Bloque 1 (Primera Mitad):</span>
-                  <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b1Score} pts</span>
+                  <span className="font-extrabold text-cyan-neon tabular-nums">{selectedSession.blockStats.b1Score} pts</span>
                 </div>
                 {selectedSession.blockStats.completedB2 ? (
                   <>
                     <div className="flex justify-between text-white">
                       <span>Bloque 2 (Segunda Mitad):</span>
-                      <span className="font-extrabold text-cyan-neon">{selectedSession.blockStats.b2Score} pts</span>
+                      <span className="font-extrabold text-cyan-neon tabular-nums">{selectedSession.blockStats.b2Score} pts</span>
                     </div>
                     <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-0.5">
                       <span>Consistencia:</span>
-                      <span className={`font-black uppercase text-[11.6px] ${selectedSession.blockStats.diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
+                      <span className={`font-black uppercase text-[11.6px] tabular-nums ${selectedSession.blockStats.diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
                         {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? "(Fatiga)" : "(Excelente)"}
                       </span>
                     </div>
@@ -1014,13 +1014,13 @@ export default function HistoryView({
               <div className="flex flex-col gap-2">
                 {selectedSession.ends?.map((e: any, idx: number) => (
                   <div key={idx} className="flex flex-col border-b border-gray-border/20 pb-2 last:border-b-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-white font-black tabular-nums shrink-0">{String(idx + 1).padStart(2, "0")}</span>
+                      <div className="flex items-center justify-center gap-1 flex-wrap flex-1 min-w-0">
                         {e.arrows.map((a: string, arrowIdx: number) => (
                           <div
                             key={arrowIdx}
-                            className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs border ${getArrowColorClass(
+                            className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs border tabular-nums shrink-0 ${getArrowColorClass(
                               a
                             )}`}
                           >
@@ -1028,7 +1028,7 @@ export default function HistoryView({
                           </div>
                         ))}
                       </div>
-                      <span className="text-xs font-extrabold text-white min-w-[28px] text-right">
+                      <span className="text-xs font-extrabold text-white min-w-[28px] text-right tabular-nums shrink-0">
                         {e.arrows.reduce((acc: number, val: string) => acc + (val === "X" || val === "10" ? 10 : val === "M" || val === "" ? 0 : Number(val)), 0)}
                       </span>
                     </div>
@@ -1121,11 +1121,11 @@ export default function HistoryView({
                         <div className="w-full grid grid-cols-2 gap-2 mt-2 text-center">
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
                             <span className="text-[9.3px] text-white uppercase font-bold block">Agrupación Real</span>
-                            <span className="text-xs font-black text-cyan-neon">{disp.groupRadiusCm} cm</span>
+                            <span className="text-xs font-black text-cyan-neon tabular-nums">{disp.groupRadiusCm} cm</span>
                           </div>
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
                             <span className="text-[9.3px] text-white uppercase font-bold block">Centro (+) vs X</span>
-                            <span className="text-xs font-black text-white">
+                            <span className="text-xs font-black text-white tabular-nums">
                               {Math.hypot(disp.offsetCmX, disp.offsetCmY).toFixed(1)} cm
                             </span>
                           </div>

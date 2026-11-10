@@ -6,6 +6,7 @@ import { Search, UserPlus, ChevronRight, X, User, Target, Phone, Mail, Filter, C
 import { motion, AnimatePresence } from "framer-motion";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { getSessionScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
+import { showOledAlert } from "@/lib/oledDialog";
 
 interface CoachAthletesTabProps {
   athletes: UserProfile[];
@@ -83,7 +84,7 @@ export default function CoachAthletesTab({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
-      alert("Por favor ingresa el nombre completo del alumno.");
+      await showOledAlert("Por favor ingresa el nombre completo del alumno.");
       return;
     }
 
@@ -245,7 +246,7 @@ export default function CoachAthletesTab({
           <button
             type="button"
             onClick={() => onOpenPlanImporter()}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm"
+            className="w-full py-2.5 px-3 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-[11px] leading-snug uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm text-center"
           >
             <FileSpreadsheet size={15} className="shrink-0" />
             <span>Cargar Plan Excel / Sheets (1 o Varios Alumnos)</span>
@@ -255,8 +256,8 @@ export default function CoachAthletesTab({
 
       {/* Roster list */}
       <div className="flex flex-col gap-2.5">
-        <div className="flex justify-between items-center px-1">
-          <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
+        <div className="flex justify-between items-center gap-2 flex-wrap px-1">
+          <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
             Alumnos Registrados ({filteredAthletes.length})
           </span>
           <span className="text-[10.5px] text-cyan-neon font-bold">
@@ -284,9 +285,9 @@ export default function CoachAthletesTab({
               <div
                 key={ath.uid}
                 onClick={() => onViewAthlete(ath)}
-                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 hover:border-cyan-neon/20 hover:bg-neutral-900/60 transition cursor-pointer flex justify-between items-center gap-2 group"
+                className="bg-neutral-900/40 p-3 sm:p-3.5 rounded-2xl border border-white/5 hover:border-cyan-neon/20 hover:bg-neutral-900/60 transition cursor-pointer flex justify-between items-center gap-2 group"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/10 flex items-center justify-center font-black text-xs text-white">
                       {ath.fullName.substring(0, 2).toUpperCase()}
@@ -301,8 +302,8 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-white text-xs font-bold leading-tight group-hover:text-cyan-neon transition-colors truncate">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      <span className="text-white text-xs font-bold leading-tight group-hover:text-cyan-neon transition-colors truncate max-w-full">
                         {ath.fullName}
                       </span>
                       {ath.nickname && (
@@ -322,7 +323,7 @@ export default function CoachAthletesTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   {onOpenPlanImporter && (
                     <button
                       type="button"
@@ -330,11 +331,12 @@ export default function CoachAthletesTab({
                         e.stopPropagation();
                         onOpenPlanImporter(ath.uid);
                       }}
-                      className="px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95"
+                      className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[9.5px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
                       title={`Cargar plan Excel/Sheets a ${ath.fullName}`}
                     >
-                      <FileSpreadsheet size={12} />
-                      <span>Cargar Plan</span>
+                      <FileSpreadsheet size={12} className="shrink-0" />
+                      <span className="sm:hidden">Plan</span>
+                      <span className="hidden sm:inline">Cargar Plan</span>
                     </button>
                   )}
                   {stats.averageScore > 0 && (
@@ -359,7 +361,7 @@ export default function CoachAthletesTab({
               initial={{ scale: 0.95, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              className="bg-neutral-950 border border-white/10 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col shadow-[0_15px_40px_rgba(0,0,0,0.8)] overflow-hidden"
+              className="bg-neutral-950 border border-white/10 rounded-3xl w-full max-w-md max-h-[90dvh] flex flex-col shadow-[0_15px_40px_rgba(0,0,0,0.8)] overflow-hidden"
             >
               {/* Modal Header */}
               <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-neutral-900/50">
@@ -403,8 +405,8 @@ export default function CoachAthletesTab({
 
                 {/* Nickname & Género */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Apodo / Alias
                     </label>
                     <input
@@ -412,18 +414,18 @@ export default function CoachAthletesTab({
                       value={nickname}
                       onChange={(e) => setNickname(e.target.value)}
                       placeholder=""
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Género
                     </label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value as "M" | "F")}
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
                     >
                       <option value="M">Masculino</option>
                       <option value="F">Femenino</option>
@@ -433,14 +435,14 @@ export default function CoachAthletesTab({
 
                 {/* Tipo de Arco & Libras */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Tipo de Arco
                     </label>
                     <select
                       value={bowType}
                       onChange={(e) => setBowType(e.target.value as any)}
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
                     >
                       <option value="Recurve">Recurvo</option>
                       <option value="Compound">Compuesto</option>
@@ -448,8 +450,8 @@ export default function CoachAthletesTab({
                     </select>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Potencia (Libras #)
                     </label>
                     <input
@@ -459,21 +461,21 @@ export default function CoachAthletesTab({
                       value={poundage}
                       onChange={(e) => setPoundage(e.target.value)}
                       placeholder="Ej. 38"
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition tabular-nums"
                     />
                   </div>
                 </div>
 
                 {/* Distancia Principal & Correo */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Distancia Reglamentaria
                     </label>
                     <select
                       value={defaultDistance}
                       onChange={(e) => setDefaultDistance(Number(e.target.value))}
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer tabular-nums"
                     >
                       <option value={18}>18 Metros (Sala)</option>
                       <option value={30}>30 Metros</option>
@@ -483,8 +485,8 @@ export default function CoachAthletesTab({
                     </select>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Teléfono / WhatsApp
                     </label>
                     <input
@@ -492,15 +494,15 @@ export default function CoachAthletesTab({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+506 8888 8888"
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition tabular-nums"
                     />
                   </div>
                 </div>
 
                 {/* Marca & Modelo */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Marca de Arco (opcional)
                     </label>
                     <input
@@ -508,11 +510,11 @@ export default function CoachAthletesTab({
                       value={brand}
                       onChange={(e) => setBrand(e.target.value)}
                       placeholder="Ej. Marca deportiva"
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11.6px] text-white font-black uppercase tracking-wider">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
                       Modelo (opcional)
                     </label>
                     <input
@@ -520,7 +522,7 @@ export default function CoachAthletesTab({
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
                       placeholder="Ej. Modelo de competencia"
-                      className="bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
+                      className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition"
                     />
                   </div>
                 </div>

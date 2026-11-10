@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { UserProfile } from "@/lib/authService";
 import { Trophy, Swords } from "lucide-react";
 
@@ -11,6 +11,8 @@ interface CoachDuelsTabProps {
 }
 
 export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: CoachDuelsTabProps) {
+  const [filterMode, setFilterMode] = useState<"ALL" | "LIVE" | "FINISHED">("ALL");
+
   const completedDuels = (sessions || []).filter(
     (s) => s.isDuel && !s.isDraft && s.deletedByArcher !== true
   );
@@ -81,150 +83,191 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
     return bow;
   };
 
+  const showLiveSection = filterMode === "LIVE" || (filterMode === "ALL" && liveArenaMatches.length > 0);
+  const showFinishedSection = filterMode === "ALL" || filterMode === "FINISHED";
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Compact Filter Pills: Todos | En Vivo | Finalizados */}
+      <div className="grid grid-cols-3 gap-1.5 bg-[#0A0B0E] p-1 rounded-2xl border border-white/[0.08]">
+        {[
+          { id: "ALL", label: "Todos", count: liveArenaMatches.length + completedDuels.length },
+          { id: "LIVE", label: "En Vivo", count: liveArenaMatches.length },
+          { id: "FINISHED", label: "Finalizados", count: completedDuels.length }
+        ].map((pill) => {
+          const active = filterMode === pill.id;
+          return (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => setFilterMode(pill.id as "ALL" | "LIVE" | "FINISHED")}
+              className={`py-2 px-1.5 rounded-xl text-[10px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer tabular-nums whitespace-nowrap ${
+                active
+                  ? "bg-cyan-neon text-black"
+                  : "text-white hover:bg-white/[0.05]"
+              }`}
+            >
+              <span>{pill.label}</span>
+              <span className={`text-[9.5px] ${active ? "text-black/80" : "text-cyan-neon"}`}>
+                ({pill.count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Arena en Vivo (active_duels en tiempo real) */}
-      {liveArenaMatches.length > 0 && (
+      {showLiveSection && (
         <div className="bg-[#0B0E14] p-4 rounded-3xl border border-emerald-500/30 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <Swords size={14} className="text-emerald-400" />
-              <span>Arena de Duelos en Vivo</span>
+            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 min-w-0">
+              <Swords size={14} className="text-emerald-400 shrink-0" />
+              <span className="truncate">Arena de Duelos en Vivo</span>
             </h4>
-            <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider tabular-nums">
+            <span className="shrink-0 whitespace-nowrap text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider tabular-nums">
               ● {liveArenaMatches.length} EN CURSO
             </span>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {liveArenaMatches.map((match) => {
-              const isWaiting = match.status === "waiting";
-              const currentSetNum =
-                typeof match.currentSetIndex === "number" ? match.currentSetIndex + 1 : null;
-              return (
-                <div
-                  key={match.id}
-                  className="bg-[#06080C] border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-2"
-                >
-                  <div className="flex flex-col min-w-0 gap-0.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-white text-xs font-black truncate">
-                        {match.creatorName || "Arquero"}
-                      </span>
-                      <span className="text-[10px] text-white/60 font-bold uppercase">vs</span>
-                      <span className="text-cyan-neon text-xs font-black truncate">
-                        {match.playerName || "Esperando rival..."}
+          {liveArenaMatches.length === 0 ? (
+            <p className="text-xs text-white text-center py-4 bg-neutral-950/50 border border-white/5 rounded-2xl">
+              No hay duelos en vivo en este momento.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {liveArenaMatches.map((match) => {
+                const isWaiting = match.status === "waiting";
+                const currentSetNum =
+                  typeof match.currentSetIndex === "number" ? match.currentSetIndex + 1 : null;
+                return (
+                  <div
+                    key={match.id}
+                    className="bg-[#06080C] border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-white text-xs font-black min-w-0 truncate">
+                          {match.creatorName || "Arquero"}
+                        </span>
+                        <span className="text-[10px] text-white/60 font-bold uppercase shrink-0">vs</span>
+                        <span className="text-cyan-neon text-xs font-black min-w-0 truncate">
+                          {match.playerName || "Esperando rival..."}
+                        </span>
+                      </div>
+                      <span className="text-[10.5px] text-white/80 tabular-nums truncate">
+                        {formatBowEs(match.bowType)}
+                        {match.distance ? ` · ${match.distance}m` : ""}
+                        {currentSetNum ? ` · Set ${currentSetNum}` : ""}
                       </span>
                     </div>
-                    <span className="text-[10.5px] text-white/80 tabular-nums">
-                      {formatBowEs(match.bowType)}
-                      {match.distance ? ` · ${match.distance}m` : ""}
-                      {currentSetNum ? ` · Set ${currentSetNum}` : ""}
+
+                    <span
+                      className={`shrink-0 whitespace-nowrap text-[9.5px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                        isWaiting
+                          ? "bg-yellow-gold/15 border-yellow-gold/35 text-yellow-gold"
+                          : "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
+                      }`}
+                    >
+                      {isWaiting ? "ESPERANDO" : "● EN VIVO"}
                     </span>
                   </div>
-
-                  <span
-                    className={`shrink-0 text-[9.5px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                      isWaiting
-                        ? "bg-yellow-gold/15 border-yellow-gold/35 text-yellow-gold"
-                        : "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
-                    }`}
-                  >
-                    {isWaiting ? "ESPERANDO" : "● EN VIVO"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tabla de Clasificación de Duelos (Standings) */}
-      <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/10 flex flex-col gap-3">
-        <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-          <Trophy size={14} className="text-cyan-neon" />
-          Tabla de Rendimiento en Duelos
-        </h4>
+      {showFinishedSection && (
+        <>
+          {/* Tabla de Clasificación de Duelos (Standings) */}
+          <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/10 flex flex-col gap-3">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              <Trophy size={14} className="text-cyan-neon shrink-0" />
+              <span>Tabla de Rendimiento en Duelos</span>
+            </h4>
 
-        <div className="flex flex-col gap-2 mt-1">
-          {standings.length === 0 ? (
-            <p className="text-xs text-white/75 text-center py-4">
-              Aún no hay atletas vinculados en la tabla de duelos.
-            </p>
-          ) : (
-            standings.map((st, idx) => {
-              const winRate = st.total > 0 ? Math.round((st.wins / st.total) * 100) : 0;
-              return (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/40 border border-white/[0.04]"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[11.6px] text-white font-bold w-5 shrink-0 tabular-nums">#{idx + 1}</span>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-white text-xs font-bold leading-none truncate">{st.userName || "Arquero"}</span>
-                      <span className="text-[9.5px] text-white mt-1 tabular-nums">
-                        {st.wins}V - {st.losses}D - {st.ties}E · Total: {st.total}
+            <div className="flex flex-col gap-2 mt-1">
+              {standings.length === 0 ? (
+                <p className="text-xs text-white/75 text-center py-4">
+                  Aún no hay atletas vinculados en la tabla de duelos.
+                </p>
+              ) : (
+                standings.map((st, idx) => {
+                  const winRate = st.total > 0 ? Math.round((st.wins / st.total) * 100) : 0;
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/40 border border-white/[0.04]"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-[11.6px] text-white font-bold w-5 shrink-0 tabular-nums">#{idx + 1}</span>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-white text-xs font-bold leading-none truncate">{st.userName || "Arquero"}</span>
+                          <span className="text-[9.5px] text-white mt-1 tabular-nums">
+                            {st.wins}V - {st.losses}D - {st.ties}E · Total: {st.total}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end shrink-0 pl-2">
+                        <span className="text-xs font-black text-cyan-neon tabular-nums">{winRate}%</span>
+                        <span className="text-[9.3px] text-white uppercase">Efectividad</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Historial general de duelos */}
+          <div className="flex flex-col gap-2.5">
+            <span className="text-[11.6px] text-white font-black uppercase tracking-wider">Historial de la Arena</span>
+
+            {completedDuels.length === 0 ? (
+              <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/20 border border-white/5 rounded-2xl">
+                No se han registrado duelos finalizados en la arena aún.
+              </p>
+            ) : (
+              completedDuels.map((duel) => {
+                const duelDate = new Date(duel.timestamp);
+                const dateStr = isNaN(duelDate.getTime())
+                  ? "—"
+                  : duelDate.toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short"
+                    });
+                return (
+                  <div
+                    key={duel.uid || duel.id}
+                    className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 flex justify-between items-center gap-2"
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <span className="text-white text-xs font-bold leading-tight truncate">
+                        {duel.userName || "Arquero"}
+                      </span>
+                      <span className="text-[10.5px] text-white truncate tabular-nums">
+                        vs <span className="text-cyan-neon font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
                       </span>
                     </div>
+
+                    <span className={`shrink-0 whitespace-nowrap text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                      duel.outcome === "win"
+                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25"
+                        : duel.outcome === "loss"
+                        ? "bg-white text-black border border-white"
+                        : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/25"
+                    }`}>
+                      {duel.outcome === "win" ? "Victoria" : duel.outcome === "loss" ? "Derrota" : "Empate"}
+                    </span>
                   </div>
-
-                  <div className="flex flex-col items-end shrink-0 pl-2">
-                    <span className="text-xs font-black text-cyan-neon tabular-nums">{winRate}%</span>
-                    <span className="text-[9.3px] text-white uppercase">Efectividad</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Historial general de duelos */}
-      <div className="flex flex-col gap-2.5">
-        <span className="text-[11.6px] text-white font-black uppercase tracking-wider">Historial de la Arena</span>
-
-        {completedDuels.length === 0 ? (
-          <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/20 border border-white/5 rounded-2xl">
-            No se han registrado duelos finalizados en la arena aún.
-          </p>
-        ) : (
-          completedDuels.map((duel) => {
-            const duelDate = new Date(duel.timestamp);
-            const dateStr = isNaN(duelDate.getTime())
-              ? "—"
-              : duelDate.toLocaleDateString(undefined, {
-                  day: "numeric",
-                  month: "short"
-                });
-            return (
-              <div
-                key={duel.uid || duel.id}
-                className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 flex justify-between items-center gap-2"
-              >
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-white text-xs font-bold leading-tight truncate">
-                    {duel.userName || "Arquero"}
-                  </span>
-                  <span className="text-[10.5px] text-white truncate tabular-nums">
-                    vs <span className="text-cyan-neon font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
-                  </span>
-                </div>
-
-                <span className={`shrink-0 text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                  duel.outcome === "win"
-                    ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25"
-                    : duel.outcome === "loss"
-                    ? "bg-white text-black border border-white"
-                    : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/25"
-                }`}>
-                  {duel.outcome === "win" ? "Victoria" : duel.outcome === "loss" ? "Derrota" : "Empate"}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSessions, deleteLocalSession, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
+import { showOledConfirm } from "@/lib/oledDialog";
 import { ArrowLeft, Target, ChevronDown, Trash2, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -121,7 +122,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   };
 
   const handleDiscardDraft = async () => {
-    if (draftSession && confirm("¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.")) {
+    if (
+      draftSession &&
+      (await showOledConfirm(
+        "¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.",
+        { confirmLabel: "Descartar", cancelLabel: "Cancelar" }
+      ))
+    ) {
       await deleteLocalSession(draftSession.id);
       try {
         const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
@@ -215,7 +222,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setPracticeType(type)}
-                className={`h-12 px-2 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1.5 sm:px-2 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -237,19 +244,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
             {t("sessionFormat")}
           </label>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {[
               { id: "Libre", label: "Libre" },
               { id: "WA 720", label: "WA 720" },
               { id: "WA 360", label: "WA 360" },
               { id: "WA 300", label: "WA 300" },
               { id: "Vegas 300", label: "Vegas 300" }
-            ].map((fmt) => (
+            ].map((fmt, idx) => (
               <button
                 key={fmt.id}
                 type="button"
                 onClick={() => handleFormatChange(fmt.id)}
-                className={`h-11 px-1.5 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-2 sm:px-1.5 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate tabular-nums transition-all duration-200 cursor-pointer ${
+                  idx === 4 ? "col-span-2 sm:col-span-1" : ""
+                } ${
                   format === fmt.id
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -279,7 +288,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-12 px-2 rounded-xl border text-[16.7px] font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1.5 sm:px-2 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -313,7 +322,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     }
                   }
                 }}
-                className={`h-12 rounded-xl border text-[16.7px] font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
+                className={`h-12 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"

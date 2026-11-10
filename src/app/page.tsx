@@ -9,6 +9,8 @@ import FloatingNav from "@/components/ui/FloatingNav";
 import Header from "@/components/ui/Header";
 import IntroScreen from "@/components/ui/IntroScreen";
 import AppUpdateBanner from "@/components/ui/AppUpdateBanner";
+import OledDialogHost from "@/components/ui/OledDialogHost";
+import { showOledAlert } from "@/lib/oledDialog";
 import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
 import SessionConfigView from "@/components/scoring/SessionConfigView";
 import ScoringView from "@/components/scoring/ScoringView";
@@ -580,11 +582,11 @@ export default function Home() {
             setDuelConfig(matchConfig);
             setCurrentScreen("MATCHPLAY_ARENA");
           } else {
-            alert(`El código de desafío "${code}" no existe o es inválido.`);
+            await showOledAlert(`El código de desafío "${code}" no existe o es inválido.`);
           }
         } catch (err) {
           console.error("Error joining duel from URL parameter:", err);
-          alert("No se pudo conectar al desafío automáticamente. Intenta ingresar el código manual.");
+          await showOledAlert("No se pudo conectar al desafío automáticamente. Intenta ingresar el código manual.");
         }
       };
 
@@ -896,7 +898,7 @@ export default function Home() {
               }
             } catch {}
             console.warn("[Auth Guard] Firebase session missing or mismatched. Forcing re-login.");
-            alert("Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.");
+            await showOledAlert("Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.");
             try {
               const { logoutUser } = await import("@/lib/firebase").then(() => import("@/lib/authService"));
               await logoutUser();
@@ -969,7 +971,7 @@ export default function Home() {
         
         for (const session of restored) {
           // Notify the user
-          alert(`Tu coach ha restituido tu entrenamiento de ${session.format} (${session.distance}m) del ${new Date(session.timestamp).toLocaleDateString()}.`);
+          await showOledAlert(`Tu coach ha restituido tu entrenamiento de ${session.format} (${session.distance}m) del ${new Date(session.timestamp).toLocaleDateString()}.`);
           
           // Clear restoredByCoach flag so the alert doesn't show again
           const updatedSession = { ...session, restoredByCoach: false };
@@ -1298,6 +1300,7 @@ export default function Home() {
   if (!user) {
     return (
       <>
+        <OledDialogHost />
         <AppUpdateBanner />
         {authScreen === "LOGIN" ? (
           <LoginView
@@ -1317,21 +1320,24 @@ export default function Home() {
   // Redirect to full screen SuperAdmin panel
   if (currentScreen === "ADMIN") {
     return (
-      <SuperAdminView 
-        user={user} 
-        onBack={() => setCurrentScreen("PROFILE")} 
-      />
+      <>
+        <OledDialogHost />
+        <SuperAdminView 
+          user={user} 
+          onBack={() => setCurrentScreen("PROFILE")} 
+        />
+      </>
     );
   }
 
   // Calculate dynamic main padding top based on active ads (flush 52px top header, no double safe-area inset)
   const hasBanner = activeBanner !== null;
-  const paddingTopStyle = hasBanner ? "7.25rem" : "3.65rem";
+  const paddingTopStyle = hasBanner ? "8.5rem" : "3.65rem";
 
   const handleToggleCoachViewMode = async (val: boolean) => {
     if (val) {
       if (isLinkedToExternalCoach(user)) {
-        alert(
+        await showOledAlert(
           "Estás vinculado como alumno a tu entrenador. Para activar un Portal de Coach propio debes desvincularte primero desde tu Perfil."
         );
         return;
@@ -1361,6 +1367,7 @@ export default function Home() {
   // Authenticated application flow
   return (
     <div className="flex-1 flex flex-col min-h-full w-full max-w-full overflow-x-hidden">
+      <OledDialogHost />
       {/* Top Header common to all screens */}
       <Header user={user} coachViewMode={coachViewMode} onToggleCoachViewMode={handleToggleCoachViewMode} />
 
@@ -1815,8 +1822,7 @@ export default function Home() {
                   NUEVO ALUMNO VINCULADO
                 </span>
                 <h3
-                  className="text-white text-[19px] font-normal uppercase tracking-[0.05em] text-center leading-[1.35] break-words max-w-full"
-                  style={{ fontFamily: "'Good Times', 'Outfit', sans-serif" }}
+                  className="font-sans text-white text-[19px] font-extrabold uppercase tracking-[0.05em] text-center leading-[1.35] break-words max-w-full"
                 >
                   {pendingCoachLinkNotif.athleteName || "Arquero Vinculado"}
                 </h3>

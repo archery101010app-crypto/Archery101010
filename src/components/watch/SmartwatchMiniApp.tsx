@@ -628,7 +628,7 @@ export default function SmartwatchMiniApp({
           alt="ARCHERY 101010"
           className={`${
             compact ? "h-[8px]" : isSquare ? "h-[10px]" : "h-[9.2px]"
-          } w-auto object-contain select-none pointer-events-none brightness-125 contrast-125 [image-rendering:-webkit-optimize-contrast]`}
+          } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
           draggable={false}
         />
         <button
@@ -1174,9 +1174,9 @@ export default function SmartwatchMiniApp({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[10050] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-3 select-none"
+        className="fixed inset-0 z-[10050] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-3 select-none overflow-hidden overscroll-contain"
       >
-        <div className="w-full max-w-[384px] bg-[#06080C] border border-white/10 rounded-[26px] pt-[14px] pb-[14px] px-[14px] flex flex-col items-center gap-[10px] relative overflow-hidden">
+        <div className="w-full max-w-[384px] max-h-[95dvh] overflow-y-auto overscroll-contain overflow-x-hidden bg-[#06080C] border border-white/10 rounded-[26px] pt-[14px] pb-[14px] px-[14px] flex flex-col items-center gap-[10px] relative">
           {/* Top 101010 tricolor line */}
           <div
             className="absolute top-0 left-12 right-12 h-[2px]"

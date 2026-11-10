@@ -23,6 +23,7 @@ import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
 import { COUNTRIES, COUNTRIES_MAP } from "@/lib/countries";
 import { downloadOrShareFile } from "@/lib/fileDownload";
+import { showOledAlert } from "@/lib/oledDialog";
 
 export default function AdminUsersTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -174,7 +175,7 @@ export default function AdminUsersTab() {
   // Export users to CSV / Excel using mobile-resilient download/share helper
   const handleExportCSV = async () => {
     if (users.length === 0) {
-      alert("No hay usuarios para exportar.");
+      await showOledAlert("No hay usuarios para exportar.");
       return;
     }
 
@@ -412,7 +413,7 @@ export default function AdminUsersTab() {
       {/* Header section with Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex items-center gap-2">
+          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex flex-wrap items-center gap-2">
             <span>Arqueros Inscritos</span>
             <span className="text-[15.8px] bg-cyan-neon/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-0.5 rounded-full font-black tabular-nums">
               {totalCount} Total
@@ -424,7 +425,7 @@ export default function AdminUsersTab() {
         </div>
 
         {/* Action Buttons: Export & Refresh */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={refreshUsersFromFirestore}
             disabled={isRefreshing}
@@ -437,7 +438,7 @@ export default function AdminUsersTab() {
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
             title="Descargar tabla en formato Excel / CSV"
           >
             <FileSpreadsheet size={14} />
@@ -514,14 +515,14 @@ export default function AdminUsersTab() {
         </div>
 
         {/* Filters bar */}
-        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto max-w-full">
           {/* Roles Filter */}
-          <div className="flex bg-neutral-900/50 border border-white/10 rounded-xl p-0.5 overflow-hidden">
+          <div className="flex max-w-full overflow-x-auto scrollbar-none bg-neutral-900/50 border border-white/10 rounded-xl p-0.5">
             {["ALL", "ARCHER", "COACH", "ADMIN"].map((filter) => (
               <button
                 key={filter}
                 onClick={() => setRoleFilter(filter)}
-                className={`px-3 py-1 rounded-lg text-[11.6px] font-bold uppercase transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   roleFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -533,12 +534,12 @@ export default function AdminUsersTab() {
           </div>
 
           {/* Plan Filter */}
-          <div className="flex bg-neutral-900/50 border border-white/10 rounded-xl p-0.5 overflow-hidden">
+          <div className="flex max-w-full overflow-x-auto scrollbar-none bg-neutral-900/50 border border-white/10 rounded-xl p-0.5">
             {["ALL", "FREE", "PRO"].map((filter) => (
               <button
                 key={filter}
                 onClick={() => setPlanFilter(filter)}
-                className={`px-3 py-1 rounded-lg text-[11.6px] font-bold uppercase transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   planFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -550,7 +551,7 @@ export default function AdminUsersTab() {
           </div>
 
           {/* Bow Filter */}
-          <div className="flex bg-neutral-900/50 border border-white/10 rounded-xl p-0.5 overflow-hidden">
+          <div className="flex max-w-full overflow-x-auto scrollbar-none bg-neutral-900/50 border border-white/10 rounded-xl p-0.5">
             {[
               { id: "ALL", label: "Arcos" },
               { id: "Recurve", label: "Recurvo" },
@@ -560,7 +561,7 @@ export default function AdminUsersTab() {
               <button
                 key={b.id}
                 onClick={() => setBowFilter(b.id)}
-                className={`px-2.5 py-1 rounded-lg text-[11.6px] font-bold uppercase transition cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   bowFilter === b.id
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20"
                     : "text-white hover:text-white"

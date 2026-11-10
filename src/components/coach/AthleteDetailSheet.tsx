@@ -18,7 +18,8 @@ import {
   Target,
   FileSpreadsheet,
   UserMinus,
-  AlertTriangle
+  AlertTriangle,
+  Star
 } from "lucide-react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
@@ -225,7 +226,7 @@ export default function AthleteDetailSheet({
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 220 }}
-        className="w-full max-w-md mx-auto bg-neutral-950 border-t border-white/10 rounded-t-[32px] h-[92vh] flex flex-col z-10 overflow-hidden relative shadow-2xl"
+        className="w-full max-w-md sm:max-w-lg mx-auto bg-neutral-950 border-t border-white/10 rounded-t-[32px] h-[92dvh] flex flex-col z-10 overflow-hidden relative shadow-2xl"
       >
         {/* Header indicator */}
         <div className="w-12 h-1 bg-white/20 rounded-full mx-auto my-3 shrink-0" />
@@ -294,14 +295,14 @@ export default function AthleteDetailSheet({
         </div>
 
         {/* Tabs navigation list */}
-        <div className="flex overflow-x-auto gap-2 px-5 py-2.5 shrink-0 border-b border-white/[0.03] no-scrollbar">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]">
           {[
             { id: "PERFIL", label: "Perfil", icon: User },
-            { id: "SESIONES", label: "Puntuaciones", icon: History },
+            { id: "SESIONES", label: "Puntajes", icon: History },
             { id: "VOLUMEN", label: "Volumen", icon: Target },
             { id: "RECORDS", label: "Récords", icon: Award },
             { id: "TENDENCIAS", label: "Tendencias", icon: LineChart },
-            { id: "NOTAS", label: "Notas Coach", icon: MessageSquare }
+            { id: "NOTAS", label: "Notas", icon: MessageSquare }
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -316,14 +317,14 @@ export default function AthleteDetailSheet({
                     setExpandedSessionId(firstScored ? firstScored.id : null);
                   }
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.6px] font-black uppercase tracking-wider transition-all border shrink-0 cursor-pointer ${
+                className={`min-w-0 flex items-center sm:flex-col justify-center gap-1 sm:gap-1 px-2 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[9.5px] font-black uppercase tracking-tight transition-all border cursor-pointer ${
                   active
-                    ? "bg-cyan-neon/15 border-cyan-neon/30 text-cyan-neon"
+                    ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
                     : "bg-neutral-900/60 border-white/5 text-white hover:text-white"
                 }`}
               >
-                <Icon size={12} />
-                <span>{tab.label}</span>
+                <Icon size={12} className="shrink-0" />
+                <span className="whitespace-nowrap leading-none">{tab.label}</span>
               </button>
             );
           })}
@@ -350,8 +351,9 @@ export default function AthleteDetailSheet({
                           backgroundColor: `${maxStar.starColor}15`
                         }}
                       >
-                        </div>
-                      <div className="flex flex-col overflow-hidden">
+                        <Star size={18} className="fill-current" />
+                      </div>
+                      <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                         <span className="text-white text-xs font-black uppercase tracking-wide truncate">
                           {maxStar.starName}
                         </span>
@@ -422,19 +424,19 @@ export default function AthleteDetailSheet({
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white block">Libraje (lbs)</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}</span>
+                    <span className="text-white text-xs font-bold tabular-nums">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}</span>
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white block">Apertura</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.drawLength ? `${athlete.bowConfig.drawLength}"` : "—"}</span>
+                    <span className="text-white text-xs font-bold tabular-nums">{athlete.bowConfig?.drawLength ? `${athlete.bowConfig.drawLength}"` : "—"}</span>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-[10.5px] text-white block">Marca</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.brand || "—"}</span>
+                    <span className="text-white text-xs font-bold truncate block">{athlete.bowConfig?.brand || "—"}</span>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-[10.5px] text-white block">Modelo</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.model || "—"}</span>
+                    <span className="text-white text-xs font-bold truncate block">{athlete.bowConfig?.model || "—"}</span>
                   </div>
                 </div>
               </div>
@@ -445,11 +447,11 @@ export default function AthleteDetailSheet({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="text-[10.5px] text-white block">Estatura</span>
-                      <span className="text-white text-xs font-bold">{athlete.physicalData?.height || "—"} cm</span>
+                      <span className="text-white text-xs font-bold tabular-nums">{athlete.physicalData?.height || "—"} cm</span>
                     </div>
                     <div>
                       <span className="text-[10.5px] text-white block">Peso</span>
-                      <span className="text-white text-xs font-bold">{athlete.physicalData?.weight || "—"} kg</span>
+                      <span className="text-white text-xs font-bold tabular-nums">{athlete.physicalData?.weight || "—"} kg</span>
                     </div>
                   </div>
                 </div>
@@ -457,14 +459,14 @@ export default function AthleteDetailSheet({
 
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-2">
                 <span className="text-[11.6px] text-white font-black tracking-wider uppercase">Información de Contacto</span>
-                <div>
+                <div className="min-w-0">
                   <span className="text-[10.5px] text-white block">Correo Electrónico</span>
-                  <span className="text-white text-xs font-medium">{athlete.email}</span>
+                  <span className="text-white text-xs font-medium break-all">{athlete.email}</span>
                 </div>
                 {athlete.whatsappNumber && (
                   <div className="mt-1">
                     <span className="text-[10.5px] text-white block">WhatsApp</span>
-                    <span className="text-white text-xs font-medium">{athlete.whatsappNumber}</span>
+                    <span className="text-white text-xs font-medium tabular-nums">{athlete.whatsappNumber}</span>
                   </div>
                 )}
               </div>
@@ -519,18 +521,18 @@ export default function AthleteDetailSheet({
                       >
                         <div
                           onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                          className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/60 transition"
+                          className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/60 transition"
                         >
-                          <div className="flex flex-col">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase">{sess.practiceType} · {sess.format}</span>
-                            <span className="text-[10.5px] text-white mt-0.5">{dateStr} · {sess.distance}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}</span>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[12.8px] text-white font-extrabold uppercase truncate">{sess.practiceType} · {sess.format}</span>
+                            <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">{dateStr} · {sess.distance}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex flex-col text-right">
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="flex flex-col text-right tabular-nums">
                               <span className="text-sm font-black text-cyan-neon">{getSessionScore(sess)}</span>
                               <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
                             </div>
-                            {isExpanded ? <ChevronUp size={14} className="text-white" /> : <ChevronDown size={14} className="text-white" />}
+                            {isExpanded ? <ChevronUp size={14} className="text-white shrink-0" /> : <ChevronDown size={14} className="text-white shrink-0" />}
                           </div>
                         </div>
 
@@ -633,7 +635,7 @@ export default function AthleteDetailSheet({
                                         </div>
                                         <div className="flex items-center justify-between text-[11.6px]">
                                           <span className="text-white">Centro del grupo (+):</span>
-                                          <span className="font-bold text-yellow-gold">
+                                          <span className="font-bold text-yellow-gold tabular-nums">
                                             {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
                                           </span>
                                         </div>
@@ -665,11 +667,11 @@ export default function AthleteDetailSheet({
                                     <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
-                                        <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
-                                          <div className="flex gap-1">
+                                        <div key={idx} className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
+                                          <span className="text-white font-black tabular-nums shrink-0">{String(idx + 1).padStart(2, "0")}</span>
+                                          <div className="flex gap-1 flex-wrap justify-end">
                                             {end.arrows.map((arr: string, aIdx: number) => (
-                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white">
+                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0">
                                                 {arr || "—"}
                                               </span>
                                             ))}
@@ -717,17 +719,17 @@ export default function AthleteDetailSheet({
                       >
                         <div
                           onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                          className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/30 transition"
+                          className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/30 transition"
                         >
-                          <div className="flex flex-col">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5">
-                              <span>{sess.practiceType} · {sess.format}</span>
-                              <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5">ELIMINADA</span>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate">{sess.practiceType} · {sess.format}</span>
+                              <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5 shrink-0">ELIMINADA</span>
                             </span>
-                            <span className="text-[10.5px] text-white mt-0.5">{dateStr} · {sess.distance}m</span>
+                            <span className="text-[10.5px] text-white mt-0.5 tabular-nums">{dateStr} · {sess.distance}m</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex flex-col text-right">
+                          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <div className="flex flex-col text-right tabular-nums">
                               <span className="text-sm font-black text-white">{getSessionScore(sess)}</span>
                               <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
                             </div>
@@ -737,12 +739,12 @@ export default function AthleteDetailSheet({
                                   e.stopPropagation();
                                   onRestoreSession(sess.id);
                                 }}
-                                className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                                className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition shrink-0"
                               >
                                 Restituir
                               </button>
                             )}
-                            {isExpanded ? <ChevronUp size={14} className="text-white" /> : <ChevronDown size={14} className="text-white" />}
+                            {isExpanded ? <ChevronUp size={14} className="text-white shrink-0" /> : <ChevronDown size={14} className="text-white shrink-0" />}
                           </div>
                         </div>
 
@@ -845,7 +847,7 @@ export default function AthleteDetailSheet({
                                         </div>
                                         <div className="flex items-center justify-between text-[11.6px]">
                                           <span className="text-white">Centro del grupo (+):</span>
-                                          <span className="font-bold text-yellow-gold">
+                                          <span className="font-bold text-yellow-gold tabular-nums">
                                             {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
                                           </span>
                                         </div>
@@ -877,11 +879,11 @@ export default function AthleteDetailSheet({
                                     <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
                                     <div className="flex flex-col gap-1">
                                       {sess.ends.map((end: any, idx: number) => (
-                                        <div key={idx} className="flex justify-between items-center text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-black tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
-                                          <div className="flex gap-1">
+                                        <div key={idx} className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
+                                          <span className="text-white font-black tabular-nums shrink-0">{String(idx + 1).padStart(2, "0")}</span>
+                                          <div className="flex gap-1 flex-wrap justify-end">
                                             {end.arrows.map((arr: string, aIdx: number) => (
-                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white">
+                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0">
                                                 {arr || "—"}
                                               </span>
                                             ))}
@@ -932,7 +934,7 @@ export default function AthleteDetailSheet({
                 </div>
 
                 <div className="flex flex-col gap-2.5">
-                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">
+                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1 tabular-nums">
                     Flechas Tiradas por Sesión ({volumeList.length})
                   </span>
                   {volumeList.length === 0 ? (
@@ -951,17 +953,17 @@ export default function AthleteDetailSheet({
                       return (
                         <div
                           key={sess.id}
-                          className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center"
+                          className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center gap-2"
                         >
-                          <div className="flex flex-col">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase">
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
                               {dateStr}
                             </span>
-                            <span className="text-[10.5px] text-white mt-0.5">
+                            <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
                               {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                             </span>
                           </div>
-                          <div className="flex flex-col text-right">
+                          <div className="flex flex-col text-right shrink-0">
                             <span className="text-base font-black text-cyan-neon tabular-nums">
                               {arrowsCount}
                             </span>
@@ -985,15 +987,15 @@ export default function AthleteDetailSheet({
                 <p className="text-[12.8px] text-white text-center py-6">Aún no hay mejores marcas registradas.</p>
               ) : (
                 Object.entries(pbs).map(([format, record]) => (
-                  <div key={format} className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
-                    <div className="flex flex-col">
+                  <div key={format} className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-2">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-[11.6px] text-white uppercase font-black tracking-wider">Ronda WA</span>
-                      <span className="text-white text-base font-extrabold">{format}</span>
-                      <span className="text-[10.5px] text-yellow-gold mt-1">
+                      <span className="text-white text-base font-extrabold truncate">{format}</span>
+                      <span className="text-[10.5px] text-yellow-gold mt-1 tabular-nums">
                         Establecido el {new Date(record.date).toLocaleDateString()}
                       </span>
                     </div>
-                    <div className="flex flex-col items-end">
+                    <div className="flex flex-col items-end shrink-0 tabular-nums">
                       <span className="text-2xl font-black text-cyan-neon">{record.score}</span>
                       <span className="text-[9.3px] text-white">sobre {record.maxScore}</span>
                     </div>
@@ -1017,7 +1019,7 @@ export default function AthleteDetailSheet({
                   <div className="flex flex-col gap-3">
                     <div className="w-full h-32 relative">
                       {/* Simple SVG Chart */}
-                      <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+                      <svg viewBox="0 0 100 40" className="w-full h-full">
                         <path
                           d={`M 5,35 ${scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
                             const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
@@ -1034,12 +1036,13 @@ export default function AthleteDetailSheet({
                         {scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
                           const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
                           const x = 5 + idx * step;
+                          const labelX = Math.max(8, Math.min(92, x));
                           const pct = getSessionMaxScore(s) > 0 ? getSessionScore(s) / getSessionMaxScore(s) : 0;
                           const y = 38 - pct * 30;
                           return (
                             <g key={idx}>
                               <circle cx={x} cy={y} r="1.5" className="fill-cyan-neon stroke-black stroke-[0.4px]" />
-                              <text x={x} y={y - 2.5} fontSize="3" fontWeight="bold" fill="white" textAnchor="middle">
+                              <text x={labelX} y={y - 2.5} fontSize="3" fontWeight="bold" fill="white" textAnchor="middle" className="tabular-nums">
                                 {getSessionScore(s)}
                               </text>
                             </g>
@@ -1047,7 +1050,7 @@ export default function AthleteDetailSheet({
                         })}
                       </svg>
                     </div>
-                    <span className="text-[9.3px] text-white uppercase font-black text-center mt-1">
+                    <span className="text-[9.3px] text-white uppercase font-black text-center mt-1 tabular-nums">
                       Últimos 6 entrenamientos · Escala de puntuación
                     </span>
                   </div>
@@ -1058,7 +1061,7 @@ export default function AthleteDetailSheet({
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
                   <span className="text-[9.3px] text-white uppercase block">Puntaje Promedio</span>
-                  <span className="text-base font-black text-white">
+                  <span className="text-base font-black text-white tabular-nums">
                     {scoredSessions.length > 0
                       ? Math.round(scoredSessions.reduce((acc, s) => acc + getSessionScore(s), 0) / scoredSessions.length)
                       : "—"}
@@ -1066,7 +1069,7 @@ export default function AthleteDetailSheet({
                 </div>
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
                   <span className="text-[9.3px] text-white uppercase block">Puntaje Máximo</span>
-                  <span className="text-base font-black text-yellow-gold">
+                  <span className="text-base font-black text-yellow-gold tabular-nums">
                     {scoredSessions.length > 0
                       ? Math.max(...scoredSessions.map(s => getSessionScore(s)))
                       : "—"}
@@ -1086,7 +1089,7 @@ export default function AthleteDetailSheet({
                   value={newNoteText}
                   onChange={(e) => setNewNoteText(e.target.value)}
                   placeholder="Añadir una observación de técnica..."
-                  className="flex-1 bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white focus:ring-1 focus:ring-cyan-neon/30"
+                  className="flex-1 min-w-0 bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white focus:ring-1 focus:ring-cyan-neon/30"
                 />
                 <button
                   type="submit"
@@ -1116,10 +1119,10 @@ export default function AthleteDetailSheet({
                         key={note.id}
                         className="bg-neutral-900/50 p-3 rounded-xl border border-white/5 flex flex-col gap-1.5"
                       >
-                        <p className="text-white text-xs font-medium leading-relaxed">
+                        <p className="text-white text-xs font-medium leading-relaxed break-words">
                           {note.content}
                         </p>
-                        <span className="text-[9.3px] text-white self-end font-bold uppercase">
+                        <span className="text-[9.3px] text-white self-end font-bold uppercase tabular-nums">
                           {noteDate}
                         </span>
                       </div>

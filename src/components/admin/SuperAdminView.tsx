@@ -49,17 +49,17 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
       
       {/* MOBILE HEADER & TABS (< 768px) */}
       <div className="md:hidden flex flex-col w-full bg-[#0E0E12] border-b border-white/10 sticky top-0 z-40">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="px-4 py-3 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button 
               onClick={onBack}
               className="p-1.5 rounded-xl bg-white/5 text-white hover:text-white"
             >
               <ArrowLeft size={16} />
             </button>
-            <h1 className="text-[15.8px] font-black uppercase tracking-widest text-cyan-neon">Super Admin</h1>
+            <h1 className="text-[15.8px] font-black uppercase tracking-widest text-cyan-neon whitespace-nowrap">Super Admin</h1>
           </div>
-          <span className="text-[11.6px] font-bold text-white">{user.email}</span>
+          <span className="text-[11.6px] font-bold text-white min-w-0 truncate">{user.email}</span>
         </div>
 
         {/* Scrollable Horizontal Tab Bar */}
@@ -151,7 +151,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 w-full overflow-y-auto max-h-[calc(100vh-100px)] md:max-h-screen">
+      <div className="flex-1 w-full overflow-y-auto max-h-[calc(100dvh-100px)] md:max-h-[100dvh]">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

@@ -49,35 +49,28 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between z-40 max-w-full">
+    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-2.5 sm:px-6 flex items-center justify-between gap-1.5 z-40 max-w-full">
       {/* Brand logo compact */}
-      <div translate="no" className="notranslate flex items-center gap-2 select-none min-w-0">
-        <div className="flex items-baseline gap-1">
-          <div 
-            className="flex text-[23.8px] tracking-tighter font-extrabold brand-logo-101010" 
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-          >
-            <span className="text-cyan-neon">10</span>
-            <span className="text-red-rival">10</span>
-            <span className="text-yellow-gold">10</span>
-          </div>
-          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider pl-0.5 tabular-nums">
-            v{APP_VERSION}
-          </span>
-        </div>
-        <span className="text-white text-[11.9px] font-black tracking-[0.3em] uppercase hidden sm:inline pl-2 border-l border-white/10">
-          ARCHERY
+      <div translate="no" className="notranslate flex items-center gap-1.5 select-none min-w-0">
+        <img
+          src="/images/brand_logo_header.png"
+          srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+          alt="ARCHERY 101010"
+          className="h-[11px] sm:h-[14px] w-auto object-contain shrink-0"
+        />
+        <span className="text-cyan-neon text-[10px] sm:text-[12px] font-black tracking-tight tabular-nums shrink-0 leading-none">
+          v{APP_VERSION}
         </span>
       </div>
 
       {/* View Switcher, Theme Selector & Sync Wifi Button */}
-      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Coach View Switcher Toggle (hidden when user is linked as an athlete to a Coach) */}
         {user && onToggleCoachViewMode && !linkedToCoach && (
-          <div className="flex bg-[#090B0E] p-1 rounded-full border border-white/[0.08] items-center">
+          <div className="flex bg-[#090B0E] p-0.5 sm:p-1 rounded-full border border-white/[0.08] items-center">
             <button
               onClick={() => onToggleCoachViewMode(false)}
-              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12px] font-bold uppercase tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2 min-[380px]:px-2.5 sm:px-3 rounded-full text-[10.5px] min-[380px]:text-[11.5px] sm:text-[12px] font-bold uppercase tracking-tight sm:tracking-wide flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -87,14 +80,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
             <button
               onClick={() => onToggleCoachViewMode(true)}
-              className={`h-7 px-2.5 sm:px-3 rounded-full text-[12px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
+              className={`h-7 px-2 min-[380px]:px-2.5 sm:px-3 rounded-full text-[10.5px] min-[380px]:text-[11.5px] sm:text-[12px] font-bold uppercase tracking-tight sm:tracking-wide flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
               }`}
             >
               <span>{t("roleCoach")}</span>
-              <span translate="no" className="notranslate text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
+              <span translate="no" className="notranslate text-[8px] sm:text-[8.8px] bg-yellow-gold text-black font-black px-1 py-0.5 rounded uppercase leading-none">
                 PRO
               </span>
             </button>
@@ -107,7 +100,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={handleToggleTheme}
-          className="flex items-center justify-center p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200"
+          className="flex items-center justify-center p-1.5 sm:p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200"
           title={theme === "dark" ? "Fondo Claro" : "Fondo Oscuro"}
         >
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

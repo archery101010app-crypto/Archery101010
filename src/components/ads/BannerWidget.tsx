@@ -83,7 +83,7 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -50, opacity: 0 }}
-      className="fixed top-16 left-0 right-0 z-30 h-20 w-full px-0 md:px-4 flex justify-center pointer-events-none"
+      className="fixed top-13 left-0 right-0 z-30 h-20 w-full px-0 md:px-4 flex justify-center pointer-events-none"
     >
       <div
         className="w-full max-w-5xl h-full bg-[#0E0E12] border-b md:border border-white/10 md:rounded-2xl overflow-hidden relative shadow-[0_4px_20px_rgba(0,0,0,0.4)] flex items-center pointer-events-auto cursor-pointer"

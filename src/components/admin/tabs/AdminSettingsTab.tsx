@@ -13,6 +13,7 @@ import {
   starHistoryStore
 } from "@/lib/db/indexedDB";
 import { downloadOrShareFile } from "@/lib/fileDownload";
+import { showOledAlert } from "@/lib/oledDialog";
 
 export default function AdminSettingsTab() {
   const [paypalClientId, setPaypalClientId] = useState("");
@@ -113,7 +114,7 @@ export default function AdminSettingsTab() {
       });
     } catch (err) {
       console.error("Failed to generate master backup:", err);
-      alert("Error al generar el respaldo maestro.");
+      await showOledAlert("Error al generar el respaldo maestro.");
     } finally {
       setIsBackingUp(false);
     }

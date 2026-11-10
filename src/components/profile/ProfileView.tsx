@@ -20,6 +20,7 @@ import ClubLogoIcon from "../ui/ClubLogoIcon";
 import LanguageSelector from "../ui/LanguageSelector";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { triggerHaptic } from "@/lib/haptics";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -443,7 +444,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
   };
 
   const handleLeaveClub = async () => {
-    if (!confirm("¿Estás seguro de que deseas desvincularte de tu entrenador?")) return;
+    if (!(await showOledConfirm("¿Estás seguro de que deseas desvincularte de tu entrenador?"))) return;
     try {
       const res = await leaveCurrentClub(user.uid);
       if (res.success && res.user) {
@@ -535,14 +536,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         whatsappNumber: clubWhatsApp
       });
       onProfileUpdated(updated);
-      alert("WhatsApp de Coach guardado correctamente");
+      await showOledAlert("WhatsApp de Coach guardado correctamente");
     } catch (e) {
       console.error(e);
     }
   };
 
   const handleLogoutClick = async () => {
-    const confirmLogout = window.confirm("¿Seguro que deseas cerrar sesión? Cualquier sesión activa, duelo o proceso que tengas abierto se cerrará.");
+    const confirmLogout = await showOledConfirm(
+      "¿Seguro que deseas cerrar sesión? Cualquier sesión activa, duelo o proceso que tengas abierto se cerrará.",
+      { confirmLabel: "Cerrar Sesión", cancelLabel: "Cancelar" }
+    );
     if (!confirmLogout) return;
     if (typeof window !== "undefined") {
       (window as any).__archeryManualLogout = true;
@@ -558,7 +562,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       onLogout();
     } catch (e: any) {
       console.error("Error deleting user account:", e);
-      alert(
+      await showOledAlert(
         e?.message ||
           "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta."
       );
@@ -577,15 +581,15 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         const { configurePushOrInAppNotifications } = await import("@/lib/pushNotifications");
         const outcome = await configurePushOrInAppNotifications(user.uid);
         if (outcome.enabled) {
-          alert(outcome.message);
+          await showOledAlert(outcome.message);
         } else {
-          alert(outcome.message);
+          await showOledAlert(outcome.message);
           setVal(false);
           await saveLocalSetting(key, false);
         }
       } catch (err) {
         console.error("Error activating push notifications:", err);
-        alert("Alertas internas de la app activadas en este dispositivo.");
+        await showOledAlert("Alertas internas de la app activadas en este dispositivo.");
       }
     }
   };
@@ -689,22 +693,22 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 min-w-0">
                 <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Nacimiento</label>
                 <input
                   type="date"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none uppercase [color-scheme:dark] transition"
+                  className="h-11 min-w-0 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-xs sm:text-sm px-2.5 rounded-xl outline-none uppercase [color-scheme:dark] tabular-nums transition"
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 min-w-0">
                 <label className="text-[13.3px] text-white uppercase font-black tracking-widest">Ciudad</label>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
+                  className="h-11 min-w-0 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
                   placeholder={t("city")}
                 />
               </div>
@@ -790,7 +794,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
               <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Nacimiento:</span>
-              <span className="text-white text-[13.8px] font-bold">{user.birthDate}</span>
+              <span className="text-white text-[13.8px] tabular-nums font-bold">{user.birthDate}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
               <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Ciudad:</span>
@@ -887,7 +891,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 >
                   {/* Bow Header */}
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <h5 className="text-white text-[13.8px] font-black uppercase tracking-wider">
+                    <h5 className="text-white text-[13.8px] font-black uppercase tracking-wider tabular-nums">
                       Arco #{bowNumber}
                     </h5>
 
@@ -918,7 +922,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`h-10 flex items-center justify-center rounded-xl text-[14.7px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                            className={`h-10 px-1.5 flex items-center justify-center rounded-xl text-[11px] sm:text-[14px] font-black uppercase tracking-normal whitespace-nowrap truncate transition border cursor-pointer ${
                               isSelected
                                 ? "bg-cyan-neon text-black border-cyan-neon"
                                 : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
@@ -972,7 +976,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.poundage || ""}
                           onChange={(e) => handleUpdateBow(idx, { poundage: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 38"
-                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-12 rounded-xl outline-none transition placeholder:text-white"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-12 rounded-xl outline-none tabular-nums transition placeholder:text-white"
                         />
                         <span className="absolute right-3 text-[14.7px] text-cyan-neon font-black pointer-events-none uppercase">
                           lbs
@@ -990,7 +994,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                           value={bow.drawLength || ""}
                           onChange={(e) => handleUpdateBow(idx, { drawLength: e.target.value ? Number(e.target.value) : ("" as any) })}
                           placeholder="Ej. 28.5"
-                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-10 rounded-xl outline-none transition placeholder:text-white"
+                          className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] pl-3.5 pr-10 rounded-xl outline-none tabular-nums transition placeholder:text-white"
                         />
                         <span className="absolute right-3.5 text-[16.1px] text-cyan-neon font-black pointer-events-none">
                           &quot;
@@ -1080,7 +1084,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   className="bg-neutral-950/70 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-md"
                 >
                   <div className="border-b border-white/5 pb-2 flex items-center justify-between">
-                    <span className="text-white text-[13.8px] font-black uppercase tracking-wider">
+                    <span className="text-white text-[13.8px] font-black uppercase tracking-wider tabular-nums">
                       Arco #{bowNumber} {isPrimary && <span className="text-white font-bold text-[13.3px]">(Principal)</span>}
                     </span>
                     <span className="text-[13.3px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon">
@@ -1089,28 +1093,28 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
-                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                    <div className="min-h-[48px] bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 py-2 flex flex-col justify-center min-w-0">
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Marca</span>
                       <span className="text-white text-[13.8px] font-bold truncate">
                         {bow.brand || "Sin especificar"}
                       </span>
                     </div>
-                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                    <div className="min-h-[48px] bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 py-2 flex flex-col justify-center min-w-0">
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Modelo</span>
                       <span className="text-white text-[13.8px] font-bold truncate">
                         {bow.model || "Sin especificar"}
                       </span>
                     </div>
-                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
-                      <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Potencia / Apertura</span>
-                      <span className="text-white text-[13.8px] font-bold">
+                    <div className="min-h-[48px] h-auto py-2 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center min-w-0">
+                      <span className="text-[12.1px] text-white uppercase font-black tracking-wider leading-tight">Potencia / Apertura</span>
+                      <span className="text-white text-[13.8px] font-bold tabular-nums">
                         {bow.poundage ? `${bow.poundage} lbs` : "-"}
                         {bow.drawLength ? ` • ${bow.drawLength}"` : ""}
                       </span>
                     </div>
-                    <div className="h-12 bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 flex flex-col justify-center">
+                    <div className="min-h-[48px] bg-neutral-900/60 border border-white/5 rounded-xl px-3.5 py-2 flex flex-col justify-center min-w-0">
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">Orientación</span>
-                      <span className="text-cyan-neon text-[13.8px] font-black uppercase">
+                      <span className="text-cyan-neon text-[13.8px] font-black uppercase truncate">
                         {(bow.hand || "RH") === "RH" ? "Diestro (RH)" : "Zurdo (LH)"}
                       </span>
                     </div>
@@ -1197,11 +1201,11 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                   </a>
                 )}
               </div>
-              <div className="flex items-center justify-between text-[13.8px]">
-                <span className="text-white font-bold">
+              <div className="flex items-center justify-between gap-2 min-w-0 text-[13.8px]">
+                <span className="text-white font-bold truncate min-w-0">
                   {coachProfile?.fullName || user.coachName || "Entrenador Asignado"}
                 </span>
-                <span className="text-[13.3px] text-white">
+                <span className="text-[13.3px] text-white truncate min-w-0">
                   {coachProfile?.email || user.coachEmail || "En línea"}
                 </span>
               </div>
@@ -1228,20 +1232,20 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               Pídele a tu entrenador su código de 6 dígitos para vincularte como su alumno. Al vincularte, tu entrenador podrá ver tus planillas de tiro, puntuaciones y darte retroalimentación al instante.
             </p>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 min-w-0">
               <input
                 type="text"
                 maxLength={6}
                 value={athleteInviteCode}
                 onChange={(e) => setAthleteInviteCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
                 placeholder="Código de 6 dígitos"
-                className="flex-1 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-[13.8px] text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
+                className="flex-1 min-w-0 bg-neutral-950 border border-white/10 rounded-2xl px-3.5 py-2.5 text-[13.8px] text-white uppercase tabular-nums tracking-wider placeholder:text-white outline-none focus:border-cyan-neon transition-colors"
               />
               <button
                 type="button"
                 onClick={handleJoinClub}
                 disabled={!athleteInviteCode.trim() || isJoiningClub}
-                className="px-4 py-2.5 bg-cyan-neon text-black font-black text-[13.8px] uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                className="shrink-0 px-4 py-2.5 bg-cyan-neon text-black font-black text-[13.8px] uppercase tracking-wider rounded-2xl shadow-glow-cyan hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               >
                 {isJoiningClub ? "Vinculando..." : "Vincular"}
               </button>
@@ -1253,13 +1257,13 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* SECTION 5: Coach settings (código de 6 dígitos, WhatsApp y alumnos vinculados, solo cuando NO está vinculado como alumno a otro coach) */}
       {isCoachProfile && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider">Configuración de Coach</h4>
+          <div className="flex justify-between items-center gap-2 min-w-0">
+            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider truncate">Configuración de Coach</h4>
             {user.role !== "superadmin" && (
               <button
                 type="button"
                 onClick={async () => {
-                  if (confirm("¿Deseas desactivar el modo Coach en tu cuenta y volver a perfil exclusivo de Atleta?")) {
+                  if (await showOledConfirm("¿Deseas desactivar el modo Coach en tu cuenta y volver a perfil exclusivo de Atleta?")) {
                     const res = await leaveCurrentClub(user.uid);
                     if (res.success && res.user) {
                       setCoachProfile(null);
@@ -1269,7 +1273,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     }
                   }
                 }}
-                className="text-[12.1px] text-white hover:text-white underline font-bold cursor-pointer"
+                className="text-[12.1px] text-white hover:text-white underline font-bold cursor-pointer shrink-0"
               >
                 Volver a modo Atleta
               </button>
@@ -1280,8 +1284,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             {/* Invite code (6 dígitos) */}
             <div className="flex flex-col gap-1">
               <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">Código para Alumnos (6 dígitos)</span>
-              <div className="flex items-center gap-2">
-                <span className="flex-1 text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex-1 min-w-0 text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all truncate">
                   {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                     ? user.clubInviteCode
                     : "······"}
@@ -1289,7 +1293,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                 <button
                   type="button"
                   onClick={async () => {
-                    if (confirm("¿Deseas generar un código de 6 dígitos para tus alumnos?")) {
+                    if (await showOledConfirm("¿Deseas generar un código de 6 dígitos para tus alumnos?")) {
                       const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
                       const freshCode = generateClubInviteCode();
                       const canonicalClubId = getCanonicalCoachClubId(user);
@@ -1300,10 +1304,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                       });
                       onProfileUpdated(updated);
                       window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updated } }));
-                      alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
+                      await showOledAlert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
                     }
                   }}
-                  className="px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold transition cursor-pointer active:scale-95"
+                  className="shrink-0 px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold transition cursor-pointer active:scale-95"
                   title="Generar nuevo código de 6 dígitos"
                 >
                   Nuevo
@@ -1314,17 +1318,17 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             {/* Coach personal WhatsApp */}
             <div className="flex flex-col gap-1">
               <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">WhatsApp del Coach</span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0">
                 <input
                   type="text"
                   value={clubWhatsApp}
                   onChange={(e) => setClubWhatsApp(e.target.value)}
-                  className="flex-1 bg-neutral-950 border border-gray-border text-white text-[13.8px] p-2.5 rounded-xl outline-none"
+                  className="flex-1 min-w-0 bg-neutral-950 border border-gray-border text-white text-[13.8px] p-2.5 rounded-xl outline-none tabular-nums"
                   placeholder="Ej. +50688888888"
                 />
                 <button
                   onClick={handleSaveClubWhatsApp}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-[13.8px] cursor-pointer active:scale-95 transition"
+                  className="shrink-0 px-4 py-2.5 rounded-xl bg-cyan-neon/15 border border-cyan-neon/20 text-cyan-neon font-black text-[13.8px] cursor-pointer active:scale-95 transition"
                 >
                   Ok
                 </button>
@@ -1333,8 +1337,8 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
             {/* Linked students roster directly in Coach Profile */}
             <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <span className="text-[12.1px] text-white font-bold uppercase tracking-wider tabular-nums truncate">
                   Mis Alumnos Vinculados ({coachStudents.length})
                 </span>
                 {(onOpenCoachPortal || onNavigate) && (

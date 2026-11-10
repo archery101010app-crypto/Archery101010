@@ -16,6 +16,7 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getLocalSetting } from "@/lib/db/indexedDB";
 import LanguageSelector from "@/components/ui/LanguageSelector";
+import { showOledAlert } from "@/lib/oledDialog";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -235,7 +236,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
     if (!deferredPrompt) {
       // Fallback for browsers that don't support beforeinstallprompt but are Android/Chrome
-      alert("Para instalar, ve al menú del navegador (tres puntos) y selecciona 'Instalar aplicación' o 'Añadir a pantalla de inicio'.");
+      await showOledAlert("Para instalar, ve al menú del navegador (tres puntos) y selecciona 'Instalar aplicación' o 'Añadir a pantalla de inicio'.");
       return;
     }
     
@@ -293,22 +294,22 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       {/* Brand logo section: ARCHERY 101010 / THE APP (Branding Oficial Permanente) */}
       <div 
         translate="no"
-        className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
+        className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-2"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <motion.h1 
+        <motion.div 
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-wrap items-baseline justify-center gap-x-2 sm:gap-x-4 text-[29px] sm:text-[42.5px] md:text-[54px] leading-tight text-center"
+          className="w-full flex justify-center"
         >
-          <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
-          <span className="inline-flex tracking-tight font-extrabold">
-            <span className="text-cyan-neon">10</span>
-            <span className="text-red-rival">10</span>
-            <span className="text-yellow-gold">10</span>
-          </span>
-        </motion.h1>
+          <img
+            src="/images/brand_logo_header.png"
+            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+            alt="ARCHERY 101010"
+            className="h-6 sm:h-8 md:h-9 w-auto object-contain mx-auto max-w-full"
+          />
+        </motion.div>
         <motion.span 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}

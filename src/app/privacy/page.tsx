@@ -17,26 +17,24 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen py-10 px-4 sm:px-6 max-w-4xl mx-auto flex flex-col gap-8 text-white">
       {/* Top Navigation */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
         <Link
           href="/"
           className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white transition active:scale-95 text-xs font-bold"
         >
           <ArrowLeft size={16} />
-          <span>Volver a Archery 101010</span>
+          <span>Volver a ARCHERY 101010</span>
         </Link>
 
         {/* Brand Logo */}
-        <div className="flex items-baseline gap-1 select-none">
-          <div 
-            className="flex text-[19.8px] tracking-tighter font-extrabold brand-logo-101010" 
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-          >
-            <span className="text-cyan-neon">10</span>
-            <span className="text-red-rival">10</span>
-            <span className="text-yellow-gold">10</span>
-          </div>
-          <span className="text-white text-[11.9px] font-black tracking-[0.25em] uppercase pl-1.5 border-l border-white/10">
+        <div className="flex items-center gap-2 select-none">
+          <img
+            src="/images/brand_logo_header.png"
+            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+            alt="ARCHERY 101010"
+            className="h-[11px] sm:h-3.5 w-auto object-contain shrink-0"
+          />
+          <span className="text-white text-[11px] sm:text-[11.9px] font-black tracking-[0.25em] uppercase pl-2 border-l border-white/10">
             PRIVACY
           </span>
         </div>
@@ -135,7 +133,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         {/* SECCIÓN 3: Permiso de Micrófono y Comunicaciones en Vivo */}
-        <div className="bg-neutral-950 border border-cyan-neon/30 rounded-3xl p-6 flex flex-col gap-3 shadow-[0_0_30px_rgba(0,229,255,0.05)]">
+        <div className="bg-neutral-950 border border-cyan-neon/30 rounded-3xl p-6 flex flex-col gap-3">
           <div className="flex items-center gap-2 text-white font-bold text-base">
             <Mic size={18} className="text-cyan-neon" />
             <h2>3. Uso Exclusivo del Micrófono (Comunicaciones en Vivo)</h2>
@@ -225,7 +223,7 @@ export default function PrivacyPolicyPage() {
             <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
               <strong className="text-white">1. Eliminación Inmediata desde la App</strong>
               <p className="text-white leading-relaxed">
-                Abre <strong>Archery 10 10 10</strong>, dirígete a la pestaña <strong>Perfil</strong> y pulsa el botón <strong>&quot;Eliminar mi cuenta y datos&quot;</strong> al final de la pantalla. Al confirmar, tu perfil, configuraciones de arco, sesiones de tiro, historial de duelos y récords se eliminan de inmediato del dispositivo y de Google Cloud Firestore.
+                Abre <strong>ARCHERY 101010</strong>, dirígete a la pestaña <strong>Perfil</strong> y pulsa el botón <strong>&quot;Eliminar mi cuenta y datos&quot;</strong> al final de la pantalla. Al confirmar, tu perfil, configuraciones de arco, sesiones de tiro, historial de duelos y récords se eliminan de inmediato del dispositivo y de Google Cloud Firestore.
               </p>
             </div>
             <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-1.5">
@@ -262,16 +260,14 @@ export default function PrivacyPolicyPage() {
 
       {/* Footer Contact & Legal Disclaimer */}
       <div className="border-t border-white/10 pt-6 pb-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white">
-        <div className="flex items-center gap-2">
-          <div 
-            className="flex text-[15.4px] tracking-tighter font-extrabold brand-logo-101010" 
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-          >
-            <span className="text-cyan-neon">10</span>
-            <span className="text-red-rival">10</span>
-            <span className="text-yellow-gold">10</span>
-          </div>
-          <span>© 2026 Archery 101010. Todos los derechos reservados.</span>
+        <div className="flex items-center gap-2.5 flex-wrap justify-center sm:justify-start">
+          <img
+            src="/images/brand_logo_header.png"
+            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+            alt="ARCHERY 101010"
+            className="h-3 w-auto object-contain shrink-0"
+          />
+          <span>© 2026 ARCHERY 101010. Todos los derechos reservados.</span>
         </div>
 
         <Link

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
-import { Award, Share2, Filter, ChevronDown, ChevronUp, User, Target, Calendar, Clock } from "lucide-react";
+import { Award, Share2, Filter, ChevronDown, ChevronUp, User, Target, Calendar, Clock, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DIANA_PRESETS, getDianaPresetKey } from "../../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
@@ -127,16 +127,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       {/* Podio Semanal */}
       {ranking.length > 0 && (
         <div className="bg-[#0D0F12] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <Award size={14} className="text-yellow-gold" />
-              Podio de Puntuaciones de la Semana
+          <div className="flex justify-between items-center gap-2">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 min-w-0 flex-1">
+              <Award size={14} className="text-yellow-gold shrink-0" />
+              <span className="leading-snug">Podio de Puntuaciones de la Semana</span>
             </h4>
             <button
               onClick={handleShareWhatsApp}
-              className="p-2 rounded-xl bg-neutral-950 border border-white/5 text-white hover:text-white cursor-pointer transition flex items-center gap-1 text-[10.5px] font-black uppercase tracking-wider"
+              className="p-2 rounded-xl bg-neutral-950 border border-white/5 text-white hover:text-white cursor-pointer transition flex items-center gap-1 text-[10.5px] font-black uppercase tracking-wider shrink-0"
             >
-              <Share2 size={10} />
+              <Share2 size={10} className="shrink-0" />
               <span>Compartir</span>
             </button>
           </div>
@@ -145,10 +145,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             {ranking.map((rank, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/60 border border-white/[0.03]"
+                className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-neutral-950/60 border border-white/[0.03]"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs tabular-nums ${
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs tabular-nums shrink-0 ${
                     idx === 0 
                       ? "bg-yellow-gold text-black" 
                       : idx === 1 
@@ -157,13 +157,13 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   }`}>
                     {idx + 1}
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-white text-xs font-bold">{rank.userName}</span>
-                    <span className="text-[9.3px] text-white uppercase">{rank.format}</span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-white text-xs font-bold truncate">{rank.userName}</span>
+                    <span className="text-[9.3px] text-white uppercase truncate">{rank.format}</span>
                   </div>
                 </div>
 
-                <span className="text-xs font-black text-cyan-neon tabular-nums">{rank.score} pts</span>
+                <span className="text-xs font-black text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">{rank.score} pts</span>
               </div>
             ))}
           </div>
@@ -173,12 +173,12 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       {/* Control Filters: Selector de Alumno y Sub-pestañas Puntuaciones | Volumen */}
       <div className="bg-neutral-900/50 p-3 rounded-2xl border border-white/5 flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
         {/* Selector de Alumno Específico */}
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <User size={13} className="text-cyan-neon shrink-0" />
           <select
             value={selectedAthleteUid}
             onChange={(e) => setSelectedAthleteUid(e.target.value)}
-            className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 cursor-pointer"
+            className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 min-w-0 truncate cursor-pointer"
           >
             <option value="ALL">Todos los Alumnos ({athletes.length})</option>
             {athletes.map((a) => (
@@ -190,10 +190,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         </div>
 
         {/* Selector Puntuaciones | Volumen */}
-        <div className="flex gap-1.5 shrink-0">
+        <div className="grid grid-cols-2 sm:flex gap-1.5 shrink-0">
           <button
             onClick={() => setSubMode("SCORES")}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
               subMode === "SCORES"
                 ? "bg-cyan-neon text-black font-extrabold"
                 : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -203,7 +203,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           </button>
           <button
             onClick={() => setSubMode("VOLUME")}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
               subMode === "VOLUME"
                 ? "bg-cyan-neon text-black font-extrabold"
                 : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -216,7 +216,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
       {/* Feed Ordenado de Resultados Recibidos */}
       <div className="flex flex-col gap-2.5">
-        <div className="flex justify-between items-center px-1">
+        <div className="flex justify-between items-center gap-2 flex-wrap px-1">
           <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
             {subMode === "SCORES"
               ? `Puntajes Reportados (${filteredSessions.length})`
@@ -253,15 +253,15 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             return (
               <div
                 key={sess.id}
-                className={`bg-neutral-900/40 rounded-2xl border p-3.5 flex justify-between items-center ${
+                className={`bg-neutral-900/40 rounded-2xl border p-3.5 flex justify-between items-center gap-2 ${
                   sess.isDraft ? "border-emerald-500/35" : "border-white/5"
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-xs text-cyan-neon shrink-0">
                     {(sess.userName || "AT").substring(0, 2).toUpperCase()}
                   </div>
-                  <div className="flex flex-col min-w-0">
+                  <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-white text-xs font-bold leading-tight truncate">
                         {sess.userName || "Alumno"}
@@ -320,9 +320,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                 {/* Header card */}
                 <div
                   onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                  className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-neutral-900/60 transition"
+                  className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/60 transition"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-xs text-cyan-neon shrink-0">
                       {(sess.userName || "AT").substring(0, 2).toUpperCase()}
                     </div>
@@ -363,9 +363,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       </span>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp size={15} className="text-cyan-neon" />
+                      <ChevronUp size={15} className="text-cyan-neon shrink-0" />
                     ) : (
-                      <ChevronDown size={15} className="text-white" />
+                      <ChevronDown size={15} className="text-white shrink-0" />
                     )}
                   </div>
                 </div>
@@ -461,17 +461,17 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           if (!analysis) return null;
                           return (
                             <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between gap-2">
                                 <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
                                   Análisis de Grupo y Mira
                                 </span>
-                                <span className="text-[11.6px] tabular-nums font-black text-white">
+                                <span className="text-[11.6px] tabular-nums font-black text-white shrink-0">
                                   Ø {analysis.spreadCm.toFixed(1)} cm
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between text-[11.6px]">
+                              <div className="flex items-center justify-between gap-2 text-[11.6px]">
                                 <span className="text-white">Centro del grupo (+):</span>
-                                <span className="font-bold text-yellow-gold">
+                                <span className="font-bold text-yellow-gold tabular-nums text-right">
                                   {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
                                 </span>
                               </div>
@@ -501,7 +501,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {/* Desglose de Series (Ends) */}
                       {sess.ends && Array.isArray(sess.ends) && sess.ends.length > 0 && (
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                          <span className="text-[10.5px] text-white font-black uppercase tracking-wider tabular-nums">
                             Puntajes por Serie ({sess.ends.length} tandas)
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -525,7 +525,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                     {endArrows.map((arrowVal, aIdx) => (
                                       <span
                                         key={aIdx}
-                                        className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10.5px] shrink-0 ${
+                                        className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10.5px] tabular-nums shrink-0 ${
                                           arrowVal === "X" || arrowVal === "10" || arrowVal === "9"
                                             ? "bg-yellow-gold text-black border border-yellow-gold"
                                             : arrowVal === "8" || arrowVal === "7"
@@ -539,7 +539,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                       </span>
                                     ))}
                                   </div>
-                                  <span className="text-white font-extrabold text-right text-[11.6px] shrink-0 whitespace-nowrap">
+                                  <span className="text-white font-extrabold text-right text-[11.6px] tabular-nums shrink-0 whitespace-nowrap">
                                     {endScore} pts
                                   </span>
                                 </div>
@@ -585,15 +585,15 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             {starRanking.map((rank, idx) => (
               <div 
                 key={rank.userId}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-[#0E0E12]/80 border border-white/5"
+                className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#0E0E12]/80 border border-white/5"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-black text-white w-4 text-center">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <span className="text-xs font-black text-white w-5 text-center tabular-nums shrink-0">
                     #{idx + 1}
                   </span>
                   
                   <div 
-                    className="w-7 h-7 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
+                    className="w-9 h-9 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
                     style={{ 
                       borderColor: rank.starColor,
                       color: rank.starColor,
@@ -601,7 +601,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     }}
                     title={rank.starName}
                   >
-                    </div>
+                    <Star size={16} className="fill-current" />
+                  </div>
 
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-extrabold truncate">{rank.userName}</span>
@@ -611,8 +612,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-xs font-black text-cyan-neon block">
+                <div className="text-right shrink-0 tabular-nums">
+                  <span className="text-xs font-black text-cyan-neon block whitespace-nowrap">
                     {rank.highestScore} <span className="text-[9.3px] text-white">/ 720</span>
                   </span>
                 </div>

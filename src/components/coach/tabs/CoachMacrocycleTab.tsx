@@ -28,6 +28,7 @@ import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { exportCycleToCsv } from "@/lib/cycleImporter";
 import { isProActive } from "@/lib/billingService";
 import { getSessionArrows } from "@/lib/scoring/sessionMetrics";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
 
 interface CoachMacrocycleTabProps {
@@ -116,7 +117,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       ? assignedIds.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
       : "Todos los alumnos del Club";
 
-    alert(
+    await showOledAlert(
       `¡Plan "${macrocycle.name}" Importado y Publicado en el Calendario!\n\n` +
       `• Asignado a: ${athleteNames}\n` +
       `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
@@ -144,7 +145,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
   const handleExecuteSync = async () => {
     if (!macroToSync) return;
     if (syncTargetType === "selected" && syncSelectedAthleteIds.length === 0) {
-      alert("Por favor marca al menos un alumno en la lista.");
+      await showOledAlert("Por favor marca al menos un alumno en la lista.");
       return;
     }
     setIsSyncing(true);
@@ -159,7 +160,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
         ? targetAthletes.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
         : "Todos los alumnos del Club";
 
-      alert(
+      await showOledAlert(
         `¡Calendario Sincronizado con Éxito!\n\n` +
         `• Plan: ${summary.macrocycleName}\n` +
         `• Destinatario(s): ${targetText}\n` +
@@ -170,7 +171,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       );
     } catch (err) {
       console.error("Error syncing cycle to calendar:", err);
-      alert("Hubo un error al sincronizar con el calendario.");
+      await showOledAlert("Hubo un error al sincronizar con el calendario.");
     } finally {
       setIsSyncing(false);
     }
@@ -425,18 +426,26 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
   const handleDelete = async (id: string) => {
     const target = macrocycles.find((m) => m.id === id);
     const planName = target?.name || "este plan";
-    if (!confirm(`¿Seguro que deseas desvincular y eliminar el plan "${planName}"?\n\nEsta acción borrará el plan y retirará todas sus asignaciones y tareas programadas en el calendario.`)) return;
+    const confirmed = await showOledConfirm(
+      `¿Seguro que deseas desvincular y eliminar el plan "${planName}"?\n\nEsta acción borrará el plan y retirará todas sus asignaciones y tareas programadas en el calendario.`,
+      { confirmLabel: "Desvincular y Eliminar" }
+    );
+    if (!confirmed) return;
     
     await unlinkAndPurgePlan(id);
 
     const updated = await getLocalMacrocycles();
     setMacrocycles(updated);
     if (selectedMacro?.id === id) setSelectedMacro(null);
-    alert(`El plan "${planName}" ha sido desvinculado y eliminado por completo.`);
+    await showOledAlert(`El plan "${planName}" ha sido desvinculado y eliminado por completo.`);
   };
 
   const handleUnlinkAthlete = async (macro: Macrocycle, athlete: UserProfile) => {
-    if (!confirm(`¿Deseas desvincular a ${athlete.fullName} del plan "${macro.name}"?\n\nSe retirarán todas las tareas y metas de este plan del calendario del alumno.`)) return;
+    const confirmed = await showOledConfirm(
+      `¿Deseas desvincular a ${athlete.fullName} del plan "${macro.name}"?\n\nSe retirarán todas las tareas y metas de este plan del calendario del alumno.`,
+      { confirmLabel: "Desvincular" }
+    );
+    if (!confirmed) return;
 
     await unlinkAndPurgePlan(macro.id, athlete.uid);
 
@@ -445,7 +454,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     const refreshedSelected = updated.find((m) => m.id === macro.id) || null;
     setSelectedMacro(refreshedSelected);
 
-    alert(`${athlete.fullName} ha sido desvinculado(a) del plan exitosamente.`);
+    await showOledAlert(`${athlete.fullName} ha sido desvinculado(a) del plan exitosamente.`);
   };
 
   const handleDuplicate = async (macro: Macrocycle) => {
@@ -570,12 +579,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       onClick={() => setSelectedMacro(mac)}
                       className="bg-neutral-900/40 p-5 rounded-3xl border border-white/10 hover:border-white/20 transition duration-200 cursor-pointer flex flex-col gap-4 shadow-xl relative overflow-hidden group"
                     >
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col gap-1 max-w-[70%]">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
                           <h4 className="text-white text-sm font-bold group-hover:text-cyan-neon transition-colors truncate">{mac.name}</h4>
                           <span className="text-[10.5px] text-white flex items-center gap-1 tabular-nums">
-                            <Calendar size={10} />
-                            {mac.startDate} al {mac.endDate}
+                            <Calendar size={10} className="shrink-0" />
+                            <span className="truncate">{mac.startDate} al {mac.endDate}</span>
                           </span>
                         </div>
                         {currentPhase && (
@@ -585,7 +594,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                               backgroundColor: `${currentPhase.color}15`, 
                               borderColor: `${currentPhase.color}30` 
                             }}
-                            className="text-[9.3px] font-black uppercase px-2.5 py-1 rounded-full border"
+                            className="text-[9.3px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 max-w-[45%] truncate"
                           >
                             Etapa: {currentPhase.name}
                           </span>
@@ -594,9 +603,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
                       {/* Progress bar */}
                       <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between text-[10.5px]">
+                        <div className="flex justify-between items-center gap-2 text-[10.5px]">
                           <span className="text-white">Meta de Volumen de Flechas:</span>
-                          <span className="text-white font-extrabold tabular-nums">{realVolume.toLocaleString()} / {mac.volumeGoal.toLocaleString()} ({progress}%)</span>
+                          <span className="text-white font-extrabold tabular-nums shrink-0">{realVolume.toLocaleString()} / {mac.volumeGoal.toLocaleString()} ({progress}%)</span>
                         </div>
                         <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-white/5">
                           <div 
@@ -611,11 +620,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
                       {/* Assignment Badge */}
                       <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[10.5px] text-white gap-2">
-                        <span className="flex items-center gap-1 font-bold truncate">
+                        <span className="flex items-center gap-1 font-bold min-w-0 flex-1 truncate">
                           {mac.assignmentType === "club" || (!mac.assignedAthleteIds || mac.assignedAthleteIds.length === 0) ? (
                             <>
                               <Layout size={10} className="shrink-0 text-cyan-neon" />
-                              <span>Todo el Club</span>
+                              <span className="truncate">Todo el Club</span>
                             </>
                           ) : (
                             <>
@@ -632,21 +641,21 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             </>
                           )}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenSyncModal(mac);
                             }}
-                            className="px-2 py-1 rounded-xl bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30 text-[10.5px] font-black uppercase flex items-center gap-1 cursor-pointer transition shadow-sm"
+                            className="px-2 py-1 rounded-xl bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold border border-yellow-gold/30 text-[10.5px] font-black uppercase flex items-center gap-1 cursor-pointer transition shadow-sm shrink-0 whitespace-nowrap"
                             title="Sincronizar calendario del mes"
                           >
-                            <RefreshCw size={10} />
+                            <RefreshCw size={10} className="shrink-0" />
                             <span>Sincronizar</span>
                           </button>
-                          <span className="flex items-center text-cyan-neon font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform">
-                            Ver Detalles <ChevronRight size={12} />
+                          <span className="flex items-center text-cyan-neon font-black uppercase tracking-wider group-hover:translate-x-1 transition-transform shrink-0 whitespace-nowrap">
+                            Ver Detalles <ChevronRight size={12} className="shrink-0" />
                           </span>
                         </div>
                       </div>
@@ -877,26 +886,26 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                         const pct = selectedMacro.volumeGoal > 0 ? Math.min(100, Math.round((athleteProgress / selectedMacro.volumeGoal) * 100)) : 0;
                         
                         return (
-                          <div key={athlete.uid} className="flex justify-between items-center bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white">
+                          <div key={athlete.uid} className="flex justify-between items-center gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white shrink-0">
                                 {athlete.fullName[0]}
                               </div>
-                              <div>
-                                <span className="text-xs font-bold text-white block">{athlete.fullName}</span>
-                                <span className="text-[10.5px] text-white uppercase">{athlete.bowConfig?.type || ""}</span>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-xs font-bold text-white block truncate">{athlete.fullName}</span>
+                                <span className="text-[10.5px] text-white uppercase block truncate">{athlete.bowConfig?.type || ""}</span>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                               <div className="text-right tabular-nums">
-                                <span className="text-xs font-black text-white">{athleteProgress.toLocaleString()} flechas</span>
-                                <span className="text-[10.5px] text-cyan-neon block font-bold mt-0.5">{pct}% de su meta</span>
+                                <span className="text-xs font-black text-white whitespace-nowrap">{athleteProgress.toLocaleString()} flechas</span>
+                                <span className="text-[10.5px] text-cyan-neon block font-bold mt-0.5 whitespace-nowrap">{pct}% de su meta</span>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => handleUnlinkAthlete(selectedMacro, athlete)}
-                                className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white active:scale-95 transition cursor-pointer"
+                                className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white active:scale-95 transition cursor-pointer shrink-0"
                                 title={`Desvincular a ${athlete.fullName} de este plan`}
                               >
                                 <UserMinus size={14} />
@@ -923,7 +932,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-lg shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-4 sm:p-6 w-full max-w-lg shadow-2xl z-10 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto overscroll-contain"
             >
               {/* Header */}
               <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
@@ -931,7 +940,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
                     {editingId ? "Editar Ciclo" : "Ciclo"}
                   </h3>
-                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5">Paso {step} de 4</span>
+                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5 tabular-nums">Paso {step} de 4</span>
                 </div>
                 <button
                   onClick={() => setShowCreateModal(false)}
@@ -951,27 +960,27 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       placeholder="Ej. Plan de Temporada"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                      className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon min-w-0 w-full"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
                       <input
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs tabular-nums outline-none focus:border-cyan-neon min-w-0 w-full"
                       />
                     </div>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
                       <input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs tabular-nums outline-none focus:border-cyan-neon min-w-0 w-full"
                       />
                     </div>
                   </div>
@@ -982,7 +991,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       type="number"
                       value={volumeGoal}
                       onChange={(e) => setVolumeGoal(Number(e.target.value))}
-                      className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon"
+                      className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs tabular-nums outline-none focus:border-cyan-neon min-w-0 w-full"
                     />
                   </div>
                 </div>
@@ -991,12 +1000,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               {/* STEP 2: ETAPAS timeline builder */}
               {step === 2 && (
                 <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-2">
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Etapas del Cronograma</span>
                     <button
                       type="button"
                       onClick={handleAddPhase}
-                      className="text-[10.5px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                      className="text-[10.5px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold cursor-pointer shrink-0"
                     >
                       + Agregar Etapa
                     </button>
@@ -1018,7 +1027,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       <div key={phase.id} className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3.5 flex flex-col gap-3 relative">
                         {/* Etapa Header with controls */}
                         <div className="flex justify-between items-center mb-0.5">
-                          <span className="text-[10.5px] font-black text-white uppercase">Etapa #{idx + 1}</span>
+                          <span className="text-[10.5px] font-black text-white uppercase tabular-nums">Etapa #{idx + 1}</span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
@@ -1059,7 +1068,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             placeholder="Ej. Acondicionamiento, Volumen, Torneo, Puesta a Punto..."
                             value={phase.name}
                             onChange={(e) => handleUpdatePhaseField(phase.id, "name", e.target.value)}
-                            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                            className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon min-w-0 w-full"
                           />
                         </div>
 
@@ -1085,26 +1094,26 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
                         {/* Dates and Targets */}
                         <div className="grid grid-cols-2 gap-2 mt-0.5">
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-0.5 min-w-0">
                             <label className="text-[9.3px] text-white uppercase font-bold">Fecha Inicio</label>
                             <input
                               type="date"
                               value={phase.startDate}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "startDate", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1 text-white text-[11.6px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] tabular-nums outline-none min-w-0 w-full"
                             />
                           </div>
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-0.5 min-w-0">
                             <label className="text-[9.3px] text-white uppercase font-bold">Fecha Fin</label>
                             <input
                               type="date"
                               value={phase.endDate}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "endDate", e.target.value)}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1 text-white text-[11.6px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] tabular-nums outline-none min-w-0 w-full"
                             />
                           </div>
 
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-0.5 min-w-0">
                             <label className="text-[9.3px] text-white uppercase font-bold">Sesiones / Semana</label>
                             <input
                               type="number"
@@ -1112,16 +1121,16 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                               max={7}
                               value={phase.weeklySessionGoal}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "weeklySessionGoal", Number(e.target.value))}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-[11.6px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] tabular-nums outline-none min-w-0 w-full"
                             />
                           </div>
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-0.5 min-w-0">
                             <label className="text-[9.3px] text-white uppercase font-bold">Flechas / Semana</label>
                             <input
                               type="number"
                               value={phase.weeklyArrowGoal}
                               onChange={(e) => handleUpdatePhaseField(phase.id, "weeklyArrowGoal", Number(e.target.value))}
-                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-[11.6px] outline-none"
+                              className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] tabular-nums outline-none min-w-0 w-full"
                             />
                           </div>
                         </div>
@@ -1131,9 +1140,9 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                           <textarea
                             value={phase.notes}
                             onChange={(e) => handleUpdatePhaseField(phase.id, "notes", e.target.value)}
-                            rows={1.5}
+                            rows={2}
                             placeholder="Indicaciones para los arqueros en esta etapa..."
-                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none resize-none"
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none resize-none min-w-0 w-full"
                           />
                         </div>
                       </div>
@@ -1147,7 +1156,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-2">
                     <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Tipo de Asignación</label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       {[
                         { id: "club", label: "Todo el Club", icon: Layout },
                         { id: "group", label: "Grupo", icon: Users },
@@ -1159,14 +1168,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                           <div
                             key={card.id}
                             onClick={() => setAssignmentType(card.id as any)}
-                            className={`border rounded-2xl p-4 cursor-pointer flex flex-col items-center justify-center text-center aspect-square transition ${
+                            className={`border rounded-2xl py-3 px-2 min-w-0 cursor-pointer flex flex-col items-center justify-center text-center transition ${
                               isSel
                                 ? "bg-cyan-brand/20 border-cyan-neon text-white"
                                 : "bg-neutral-900/40 border-white/10 hover:border-white/20 text-white"
                             }`}
                           >
-                            <CardIcon size={20} className={isSel ? "text-cyan-neon" : "text-white"} />
-                            <span className="text-[10.5px] font-black uppercase tracking-wider block mt-2.5 leading-tight">{card.label}</span>
+                            <CardIcon size={20} className={isSel ? "text-cyan-neon shrink-0" : "text-white shrink-0"} />
+                            <span className="text-[10px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider block mt-2 leading-tight">{card.label}</span>
                           </div>
                         );
                       })}
@@ -1181,7 +1190,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                         placeholder="Ej. Roster Cadete, Grupo A, etc."
                         value={groupName}
                         onChange={(e) => setGroupName(e.target.value)}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none min-w-0 w-full"
                       />
                     </div>
                   )}
@@ -1189,7 +1198,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                   {/* Checklist of simulated users/athletes */}
                   {assignmentType !== "club" && (
                     <div className="flex flex-col gap-2 animate-fadeIn mt-1 max-h-[30vh] overflow-y-auto pr-1">
-                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Seleccionar Atletas ({assignedAthleteIds.length})</label>
+                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest tabular-nums">Seleccionar Atletas ({assignedAthleteIds.length})</label>
                       <div className="flex flex-col gap-1.5">
                         {roster.map((athlete) => {
                           const isSel = assignedAthleteIds.includes(athlete.uid);
@@ -1197,23 +1206,23 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             <div
                               key={athlete.uid}
                               onClick={() => handleToggleAthleteSelection(athlete.uid)}
-                              className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition ${
+                              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border cursor-pointer transition ${
                                 isSel
                                   ? "bg-cyan-brand/10 border-cyan-neon text-white"
                                   : "bg-neutral-950/60 border-white/5 text-white"
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[11.6px] text-white">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[11.6px] text-white shrink-0">
                                   {athlete.fullName[0]}
                                 </div>
-                                <span className="text-xs font-bold">{athlete.fullName}</span>
+                                <span className="text-xs font-bold truncate">{athlete.fullName}</span>
                               </div>
                               <input
                                 type="checkbox"
                                 checked={isSel}
                                 readOnly
-                                className="w-3.5 h-3.5 accent-cyan-neon"
+                                className="w-3.5 h-3.5 accent-cyan-neon shrink-0"
                               />
                             </div>
                           );
@@ -1237,17 +1246,17 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="text-[10.5px] text-white uppercase font-bold">Fechas</span>
-                        <span className="text-white font-medium">{startDate} al {endDate}</span>
+                        <span className="text-[10.5px] text-white uppercase font-bold block">Fechas</span>
+                        <span className="text-white font-medium tabular-nums">{startDate} al {endDate}</span>
                       </div>
                       <div>
-                        <span className="text-[10.5px] text-white uppercase font-bold">Meta de Flechas</span>
-                        <span className="text-cyan-neon font-black">{volumeGoal.toLocaleString()} flechas</span>
+                        <span className="text-[10.5px] text-white uppercase font-bold block">Meta de Flechas</span>
+                        <span className="text-cyan-neon font-black tabular-nums">{volumeGoal.toLocaleString()} flechas</span>
                       </div>
                     </div>
 
                     <div className="flex flex-col border-t border-white/5 pt-2.5">
-                      <span className="text-[10.5px] text-white uppercase font-bold">Etapas Configuradas ({phases.length})</span>
+                      <span className="text-[10.5px] text-white uppercase font-bold tabular-nums">Etapas Configuradas ({phases.length})</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {phases.map((p) => (
                           <span 
@@ -1263,7 +1272,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
                     <div className="flex flex-col border-t border-white/5 pt-2.5">
                       <span className="text-[10.5px] text-white uppercase font-bold">Asignación</span>
-                      <span className="text-white font-medium mt-0.5">
+                      <span className="text-white font-medium mt-0.5 tabular-nums">
                         {assignmentType === "club"
                           ? "Todo el Club"
                           : assignmentType === "group"
@@ -1335,25 +1344,25 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left"
+                className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-4 sm:p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left max-h-[90dvh] overflow-y-auto overscroll-contain"
               >
-                <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-sm">
+                <div className="flex justify-between items-center gap-2 border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-yellow-gold/15 border border-yellow-gold/30 text-yellow-gold flex items-center justify-center shadow-sm shrink-0">
                       <RefreshCw size={15} />
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-black text-white uppercase tracking-wider">
                         Sincronizar Calendario
                       </h3>
-                      <span className="text-[10.5px] text-white block">
+                      <span className="text-[10.5px] text-white block truncate">
                         Plan: <strong className="text-white">{macroToSync.name}</strong>
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowSyncModal(false)}
-                    className="p-1 rounded-full text-white hover:text-white"
+                    className="p-1 rounded-full text-white hover:text-white shrink-0"
                   >
                     <X size={16} />
                   </button>
@@ -1365,12 +1374,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                   </p>
 
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-bold">Mes a Sincronizar</label>
                       <select
                         value={syncMonth}
                         onChange={(e) => setSyncMonth(Number(e.target.value))}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon min-w-0 w-full"
                       >
                         {monthNames.map((m, idx) => (
                           <option key={idx} value={idx}>{m}</option>
@@ -1378,25 +1387,25 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                       </select>
                     </div>
 
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-bold">Año</label>
                       <input
                         type="number"
                         value={syncYear}
                         onChange={(e) => setSyncYear(Number(e.target.value))}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs tabular-nums outline-none focus:border-cyan-neon min-w-0 w-full"
                       />
                     </div>
                   </div>
 
                   {/* Selector de Destinatario: Todos los alumnos o 1/varios alumnos */}
                   <div className="flex flex-col gap-2 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
-                        <Users size={12} className="text-cyan-neon" />
+                        <Users size={12} className="text-cyan-neon shrink-0" />
                         <span>Sincronizar con:</span>
                       </span>
-                      <span className="text-[10.5px] text-cyan-neon tabular-nums font-bold">
+                      <span className="text-[10.5px] text-cyan-neon tabular-nums font-bold shrink-0">
                         {syncTargetType === "all"
                           ? "Todo el Club"
                           : `${syncSelectedAthleteIds.length} ${syncSelectedAthleteIds.length === 1 ? "Alumno" : "Alumnos"}`}
@@ -1412,37 +1421,37 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             setSyncSelectedAthleteIds([roster[0].uid]);
                           }
                         }}
-                        className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
                           syncTargetType === "selected"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
-                        <User size={12} />
-                        <span>Escoger 1 o Varios</span>
+                        <User size={12} className="shrink-0" />
+                        <span className="truncate">Escoger 1 o Varios</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setSyncTargetType("all")}
-                        className={`py-1.5 px-2 rounded-xl text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
                           syncTargetType === "all"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
-                        <Users size={12} />
-                        <span>Todos los Alumnos</span>
+                        <Users size={12} className="shrink-0" />
+                        <span className="truncate">Todos los Alumnos</span>
                       </button>
                     </div>
 
                     {syncTargetType === "selected" && (
                       <div className="flex flex-col gap-1.5 pt-1 animate-fadeIn">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <label className="text-[10.5px] text-white uppercase font-bold">
                             Marca 1 o varios alumnos:
                           </label>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             <button
                               type="button"
                               onClick={() => setSyncSelectedAthleteIds(roster.map((r) => r.uid))}
@@ -1475,13 +1484,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                                       : [...prev, ath.uid]
                                   );
                                 }}
-                                className={`flex items-center justify-between px-2.5 py-2 rounded-xl border text-left transition cursor-pointer ${
+                                className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-left transition cursor-pointer ${
                                   isChecked
                                     ? "bg-cyan-neon/15 border-cyan-neon/50 text-white"
                                     : "bg-neutral-950/80 border-white/10 text-white hover:border-white/25"
                                 }`}
                               >
-                                <span className="text-xs font-bold truncate">
+                                <span className="text-xs font-bold truncate min-w-0 flex-1">
                                   {ath.fullName || ath.email} · {ath.bowConfig?.type || "Arquero"}
                                 </span>
                                 <div
@@ -1509,7 +1518,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                         <span
                           key={p.id}
                           style={{ color: p.color, borderColor: `${p.color}30`, backgroundColor: `${p.color}15` }}
-                          className="text-[10.5px] font-bold px-2 py-0.5 border rounded-full uppercase"
+                          className="text-[10.5px] font-bold px-2 py-0.5 border rounded-full uppercase tabular-nums"
                         >
                           {p.name} ({p.weeklyArrowGoal} flechas/sem)
                         </span>
@@ -1521,10 +1530,10 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                     type="button"
                     disabled={isSyncing}
                     onClick={handleExecuteSync}
-                    className="w-full mt-2 py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40"
+                    className="w-full mt-2 py-3 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40 min-w-0"
                   >
-                    <RefreshCw size={14} />
-                    <span>
+                    <RefreshCw size={14} className="shrink-0" />
+                    <span className="truncate">
                       {isSyncing 
                         ? "Sincronizando..." 
                         : syncTargetType === "selected"

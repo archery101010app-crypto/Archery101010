@@ -73,11 +73,11 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
   };
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden overscroll-contain">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md bg-[#0A0B0E] border border-white/10 p-6 rounded-3xl flex flex-col gap-4 relative overflow-hidden"
+        className="w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-[#0A0B0E] border border-white/10 p-5 sm:p-6 rounded-3xl flex flex-col gap-4 relative"
       >
         {/* Botón X de Salida / Retorno */}
         {(onClose || onReturnToLogin) && (
@@ -146,7 +146,7 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("birthDate")} *
               </label>
@@ -154,10 +154,10 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
+                className="min-w-0 w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200 uppercase [color-scheme:dark] tabular-nums"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("city")} *
               </label>

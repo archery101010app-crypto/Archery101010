@@ -327,7 +327,7 @@ export default function AdminDashboardTab() {
       value: users.length.toString(),
       subtitle: `${coachesCount} Coaches • ${uniqueClubsCount} Clubes activos`,
       icon: Users,
-      colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-[0_0_15px_rgba(0,191,255,0.1)]",
+      colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"
     },
     {
@@ -335,7 +335,7 @@ export default function AdminDashboardTab() {
       value: `${recentActiveUsers.length} (${weeklyRetentionPct}%)`,
       subtitle: `Activos 48h • Retención 7d: ${weeklyRetentionPct}%`,
       icon: UserCheck,
-      colorClass: "text-green-500 bg-green-500/10 border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]",
+      colorClass: "text-green-500 bg-green-500/10 border-green-500/20",
       textColor: "text-green-400"
     },
     {
@@ -343,7 +343,7 @@ export default function AdminDashboardTab() {
       value: proUsers.length.toString(),
       subtitle: `${proUsers.length} de ${users.length} usuarios con plan PRO`,
       icon: CreditCard,
-      colorClass: "text-yellow-gold bg-yellow-gold/10 border-yellow-gold/20 shadow-[0_0_15px_rgba(255,229,0,0.1)]",
+      colorClass: "text-yellow-gold bg-yellow-gold/10 border-yellow-gold/20",
       textColor: "text-yellow-400"
     },
     {
@@ -351,7 +351,7 @@ export default function AdminDashboardTab() {
       value: totalGlobalArrows.toLocaleString(),
       subtitle: `${sessions.length} sesiones • ~${avgArrowsPerArcher.toLocaleString()} fl./arquero`,
       icon: Target,
-      colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]",
+      colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"
     }
   ];
@@ -392,29 +392,29 @@ export default function AdminDashboardTab() {
       </div>
 
       {/* KPI Bento Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full">
         {kpis.map((kpi, idx) => {
           const Icon = kpi.icon;
           return (
             <motion.div
               key={idx}
               variants={item}
-              className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden group hover:border-white/20 transition-all duration-300 shadow-xl"
+              className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between relative overflow-hidden group hover:border-white/20 transition-all duration-300 shadow-xl min-w-0"
             >
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
               
-              <div className="flex justify-between items-start mb-4">
-                <span className="text-[11.6px] md:text-xs font-bold text-white uppercase tracking-widest">{kpi.title}</span>
-                <div className={`p-2 rounded-xl border flex items-center justify-center ${kpi.colorClass}`}>
-                  <Icon size={18} />
+              <div className="flex justify-between items-start gap-2 mb-3 sm:mb-4 min-w-0">
+                <span className="text-[10.5px] sm:text-xs font-bold text-white uppercase tracking-wider sm:tracking-widest leading-snug min-w-0 break-words">{kpi.title}</span>
+                <div className={`p-1.5 sm:p-2 rounded-xl border flex items-center justify-center shrink-0 ${kpi.colorClass}`}>
+                  <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </div>
               </div>
 
               <div>
-                <h3 className={`text-2xl md:text-3xl font-black tracking-tight ${kpi.textColor}`}>
+                <h3 className={`text-xl sm:text-2xl md:text-3xl font-black tracking-tight tabular-nums ${kpi.textColor}`}>
                   {kpi.value}
                 </h3>
-                <span className="text-[10.5px] md:text-xs text-white font-medium block mt-1">{kpi.subtitle}</span>
+                <span className="text-[10.5px] md:text-xs text-white font-medium block mt-1 tabular-nums">{kpi.subtitle}</span>
               </div>
             </motion.div>
           );
@@ -423,12 +423,12 @@ export default function AdminDashboardTab() {
 
       {/* Demographic & Commercial Intelligence Section */}
       <div className="flex flex-col gap-3 mt-1">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-sm font-black text-cyan-neon uppercase tracking-wider flex items-center gap-2">
             <PieChart size={16} />
             <span>Estadística Demográfica e Inteligencia Comercial</span>
           </h3>
-          <span className="text-[11px] font-bold text-white">
+          <span className="text-[11px] font-bold text-white tabular-nums">
             Datos en vivo ({users.length} suscriptores)
           </span>
         </div>
@@ -441,7 +441,7 @@ export default function AdminDashboardTab() {
           >
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <span className="text-xs font-black text-white uppercase tracking-wider">Edad y Categoría WA</span>
-              <span className="text-xs font-black text-yellow-gold bg-yellow-gold/10 border border-yellow-gold/20 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-black text-yellow-gold bg-yellow-gold/10 border border-yellow-gold/20 px-2 py-0.5 rounded-full tabular-nums">
                 Prom: {avgAge > 0 ? `${avgAge} años` : "N/D"}
               </span>
             </div>
@@ -686,17 +686,17 @@ export default function AdminDashboardTab() {
               <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Almacenamiento Local (IndexedDB)</span>
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-white font-medium">Sesiones Guardadas</span>
-                <span className="text-xs text-white font-bold">{sessions.length}</span>
+                <span className="text-xs text-white font-bold tabular-nums">{sessions.length}</span>
               </div>
               <div className="flex justify-between items-center mt-1.5">
                 <span className="text-xs text-white font-medium">Cola de Sincronización</span>
-                <span className={`text-xs font-bold ${syncQueueCount > 0 ? "text-yellow-gold" : "text-green-400"}`}>
+                <span className={`text-xs font-bold tabular-nums ${syncQueueCount > 0 ? "text-yellow-gold" : "text-green-400"}`}>
                   {syncQueueCount} {syncQueueCount === 1 ? "Item" : "Items"}
                 </span>
               </div>
               <div className="flex justify-between items-center mt-1.5">
                 <span className="text-xs text-white font-medium">Campañas de Anuncios</span>
-                <span className="text-xs text-white font-bold">{campaignsCount}</span>
+                <span className="text-xs text-white font-bold tabular-nums">{campaignsCount}</span>
               </div>
             </div>
           </div>

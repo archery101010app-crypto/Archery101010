@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AdCampaign, AdSlide } from "@/lib/db/adTypes";
 import { adCampaignsStore, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 import { seedDemoAdCampaigns } from "@/lib/adManager";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 
 export default function AdminCampaignsTab() {
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
@@ -212,7 +213,7 @@ export default function AdminCampaignsTab() {
   };
 
   const handleDeleteCampaign = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta campaña?")) return;
+    if (!(await showOledConfirm("¿Estás seguro de que deseas eliminar esta campaña?"))) return;
 
     await adCampaignsStore.removeItem(id);
 
@@ -293,10 +294,10 @@ export default function AdminCampaignsTab() {
         <div className="flex flex-wrap gap-2.5">
           <button
             onClick={async () => {
-              if (confirm("¿Estás seguro de que deseas reiniciar el historial de visualizaciones de anuncios en este dispositivo? Esto limpiará el registro local de límites diarios y frecuencias para que vuelvas a ver los popups y notificaciones de inmediato.")) {
+              if (await showOledConfirm("¿Estás seguro de que deseas reiniciar el historial de visualizaciones de anuncios en este dispositivo? Esto limpiará el registro local de límites diarios y frecuencias para que vuelvas a ver los popups y notificaciones de inmediato.")) {
                 const { adImpressionsStore } = await import("@/lib/db/indexedDB");
                 await adImpressionsStore.clear();
-                alert("¡Historial de visualizaciones e impresiones de anuncios limpiado con éxito!");
+                await showOledAlert("¡Historial de visualizaciones e impresiones de anuncios limpiado con éxito!");
               }
             }}
             className="py-2.5 px-4 bg-white hover:bg-neutral-200 text-black border border-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
@@ -501,7 +502,7 @@ export default function AdminCampaignsTab() {
 
                   <div className="flex flex-col gap-2.5">
                     <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Formato de Anuncio</label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       {[
                         { id: "popup", label: "Popup Modal", desc: "Pantalla completa al abrir la app" },
                         { id: "banner_widget", label: "Banner Widget", desc: "Debajo del Header, dinámico" },
@@ -510,13 +511,13 @@ export default function AdminCampaignsTab() {
                         <div
                           key={t.id}
                           onClick={() => setType(t.id as any)}
-                          className={`border rounded-2xl p-4 cursor-pointer flex flex-col justify-between aspect-square text-center transition-all ${
+                          className={`border rounded-2xl py-3 px-2 cursor-pointer flex flex-col justify-between text-center transition-all min-w-0 ${
                             type === t.id
                               ? "bg-cyan-brand/20 border-cyan-neon"
                               : "bg-neutral-900/40 border-white/10 hover:border-white/20"
                           }`}
                         >
-                          <span className="text-[11.6px] font-black text-white block truncate uppercase">{t.label}</span>
+                          <span className="text-[10.5px] sm:text-[11.6px] font-black text-white block leading-tight uppercase break-words">{t.label}</span>
                           <span className="text-[9.3px] text-white font-medium block leading-tight mt-2">{t.desc}</span>
                         </div>
                       ))}
@@ -632,22 +633,22 @@ export default function AdminCampaignsTab() {
               {step === 3 && (
                 <div className="flex flex-col gap-3 py-2">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
                       <input
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon"
                       />
                     </div>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
                       <input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon"
                       />
                     </div>
                   </div>
@@ -900,7 +901,7 @@ export default function AdminCampaignsTab() {
                           height: `${customHeight}px`,
                           fontSize: fontSize === "small" ? "8px" : fontSize === "large" ? "12px" : "10px",
                           ...(pillStyle === "gradient" 
-                            ? { backgroundColor: "#00BFFF", color: "#000" } 
+                            ? { backgroundImage: "linear-gradient(135deg, #06080C 0%, #12151C 100%)", border: "1px solid rgba(0, 168, 243, 0.45)", color: "#FFFFFF" } 
                             : pillStyle === "glass"
                               ? { backgroundColor: "rgba(10, 10, 12, 0.75)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }
                               : { backgroundColor: slides[0]?.backgroundColor || "#00BFFF", color: "#000" })

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check, Target } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
@@ -189,7 +190,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   }, [user?.uid]);
 
   const handleDeleteDraft = async (id: string) => {
-    if (!window.confirm("¿Seguro que deseas eliminar este duelo activo permanentemente?")) {
+    if (
+      !(await showOledConfirm("¿Seguro que deseas eliminar este duelo activo permanentemente?", {
+        confirmLabel: "Eliminar",
+        cancelLabel: "Cancelar"
+      }))
+    ) {
       return;
     }
     try {
@@ -366,7 +372,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
     } catch (err) {
       console.error("Error creating real-time challenge:", err);
-      alert("Error al enviar el reto. Intenta de nuevo.");
+      await showOledAlert("Error al enviar el reto. Intenta de nuevo.");
     }
   };
 
@@ -601,11 +607,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         };
         onStartDuel(matchConfig);
       } else {
-        alert("El código de duelo no existe o es inválido.");
+        await showOledAlert("El código de duelo no existe o es inválido.");
       }
     } catch (err) {
       console.error("Error joining duel in Firestore:", err);
-      alert("No se pudo conectar al duelo. Verifica tu conexión a internet.");
+      await showOledAlert("No se pudo conectar al duelo. Verifica tu conexión a internet.");
     }
   };
 
@@ -708,7 +714,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         >
           <span>En Curso</span>
           {drafts.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none">
+            <span className="px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none tabular-nums">
               {drafts.length}
             </span>
           )}
@@ -728,13 +734,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       {/* Tab Contents */}
       {activeTab === "SEARCH" && (
         <div className="flex flex-col gap-4 z-10">
-          {/* 1. Direct Match Creator Card (Always visible, single-line header guaranteed) */}
+          {/* 1. Direct Match Creator Card */}
           <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 flex flex-col gap-3.5">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-1">
               <span className="text-xs font-black uppercase tracking-wider text-white whitespace-nowrap">
                 Nueva Eliminatoria
               </span>
-              <span className="text-[11.6px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-lg whitespace-nowrap shrink-0">
+              <span className="text-[11px] sm:text-[11.6px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-lg whitespace-nowrap shrink-0 tabular-nums">
                 {customBow === "Compound" ? "15 Flechas · Acumulado" : "Sistema de Sets · 6 Pts"}
               </span>
             </div>
@@ -745,24 +751,24 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 <button
                   type="button"
                   onClick={() => setDuelMode("FRIEND")}
-                  className={`h-9 px-2 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                  className={`h-9 px-2 rounded-lg text-[10.5px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap min-w-0 ${
                     duelMode === "FRIEND"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
                   }`}
                 >
-                  Contra Amigo Online
+                  <span className="truncate">Contra Amigo Online</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setDuelMode("BOT")}
-                  className={`h-9 px-2 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                  className={`h-9 px-2 rounded-lg text-[10.5px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap min-w-0 ${
                     duelMode === "BOT"
                       ? "bg-yellow-gold text-black"
                       : "text-white hover:text-white"
                   }`}
                 >
-                  Contra Bot Olímpico
+                  <span className="truncate">Contra Bot Olímpico</span>
                 </button>
               </div>
 
@@ -778,7 +784,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         key={b}
                         type="button"
                         onClick={() => setCustomBow(b)}
-                        className={`h-9 rounded-xl text-[11.6px] font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap ${
+                        className={`h-9 px-1 rounded-xl text-[11px] sm:text-[11.6px] font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap truncate ${
                           customBow === b
                             ? "bg-white/[0.12] border-cyan-neon text-white"
                             : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
@@ -854,15 +860,17 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
               <button
                 type="submit"
-                className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition flex items-center justify-center whitespace-nowrap ${
+                className={`w-full h-11 px-3 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition flex items-center justify-center whitespace-nowrap ${
                   duelMode === "FRIEND"
                     ? "bg-cyan-neon hover:bg-[#19c8ff] text-black"
                     : "bg-yellow-gold hover:brightness-105 text-black"
                 }`}
               >
-                {duelMode === "FRIEND"
-                  ? "Crear Sala Online y Enviar Reto"
-                  : "Iniciar Eliminatoria vs Bot"}
+                <span className="truncate">
+                  {duelMode === "FRIEND"
+                    ? "Crear Sala Online y Enviar Reto"
+                    : "Iniciar Eliminatoria vs Bot"}
+                </span>
               </button>
             </form>
           </div>
@@ -877,13 +885,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.
               </span>
             </div>
-            <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center w-full">
+            <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center w-full min-w-0">
               <input
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="Ej. INV-R70-X9A"
-                className="flex-1 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
+                className="flex-1 min-w-0 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
               />
               <button
                 type="submit"
@@ -932,7 +940,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <div className="flex flex-col gap-5 flex-1 pb-6">
             {/* Real Online Archers */}
             <div className="flex flex-col gap-2.5">
-              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 Arqueros Conectados en Línea ({filteredRivals.length})
               </h4>
@@ -989,7 +997,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                 <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
                                 <span className="truncate">{riv.clubName}</span>
                                 <span>·</span>
-                                <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
+                                <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
                               </div>
                             </div>
                           </div>
@@ -1050,7 +1058,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
                             <span className="truncate">{riv.clubName}</span>
                             <span>·</span>
-                            <span className="shrink-0">{riv.bowConfig.defaultDistance}m</span>
+                            <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
                           </div>
                         </div>
                       </div>
@@ -1077,7 +1085,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
       {activeTab === "DRAFTS" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
             <Users size={13} className="text-cyan-neon" />
             Eliminatorias en Curso ({drafts.length})
           </h4>
@@ -1101,7 +1109,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         {dr.bowConfig?.type === "Recurve" ? "Recurvo" : dr.bowConfig?.type === "Compound" ? "Compuesto" : (dr.bowConfig?.type || "Barebow")}
                       </span>
                     </div>
-                    <span className="text-[11.6px] text-white truncate">
+                    <span className="text-[11.6px] text-white truncate tabular-nums">
                       {dr.opponentClubName} · Set {dr.currentEnd + 1} · {dr.distance} m
                     </span>
                   </div>
@@ -1146,7 +1154,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
       {activeTab === "HISTORY" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
             <Trophy size={13} className="text-yellow-gold" />
             Historial de Eliminatorias ({history.length})
           </h4>
@@ -1172,7 +1180,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           {h.bowConfig?.type === "Recurve" ? "Recurvo" : h.bowConfig?.type === "Compound" ? "Compuesto" : (h.bowConfig?.type || "Barebow")}
                         </span>
                       </div>
-                      <span className="text-[11.6px] text-white">
+                      <span className="text-[11.6px] text-white tabular-nums">
                         Puntos: {h.score} pts · {h.distance} m · {formatMatchDate(h.timestamp)}
                       </span>
                     </div>
@@ -1234,7 +1242,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   <span className="text-white text-lg tabular-nums font-black tracking-widest uppercase">
                     {generatedInvite.code}
                   </span>
-                  <span className="text-[11.6px] text-cyan-neon font-bold">
+                  <span className="text-[11.6px] text-cyan-neon font-bold tabular-nums">
                     {generatedInvite.bowType === "Recurve" ? "Recurvo" : generatedInvite.bowType === "Compound" ? "Compuesto" : "Barebow"} · {generatedInvite.distance} m
                   </span>
                 </div>
@@ -1261,9 +1269,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     Enviar por WhatsApp
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       navigator.clipboard.writeText(generatedInvite.code);
-                      alert("¡Código de sala copiado al portapapeles!");
+                      await showOledAlert("¡Código de sala copiado al portapapeles!");
                     }}
                     className="h-10 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1] font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap px-2"
                   >

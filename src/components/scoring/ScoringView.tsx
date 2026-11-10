@@ -30,6 +30,7 @@ import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { playRealisticMechanicalClockClick } from "@/lib/soundUtils";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 
 interface ScoringViewProps {
   user: UserProfile;
@@ -1340,7 +1341,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const handleFinishFirstBlockOnly = async () => {
-    if (!confirm("¿Deseas finalizar el entrenamiento aquí guardando únicamente el 1er Bloque (primera mitad de flechas)?")) {
+    if (
+      !(await showOledConfirm(
+        "¿Deseas finalizar el entrenamiento aquí guardando únicamente el 1er Bloque (primera mitad de flechas)?"
+      ))
+    ) {
       return;
     }
     triggerSaveFlow("partial");
@@ -1776,7 +1781,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const activeEndIdx = currentEndIdxRef.current;
     const activeArrowIdx = currentArrowIdxRef.current;
     if (config.practiceType !== "Volumen" && activeEndIdx >= config.endsCount) {
-      alert("Has alcanzado el límite de ends programados. Puedes finalizar el entrenamiento o agregar más ends.");
+      void showOledAlert("Has alcanzado el límite de ends programados. Puedes finalizar el entrenamiento o agregar más ends.");
       return;
     }
     
@@ -1930,8 +1935,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     return unsub;
   }, []);
 
-  const handleTallyReset = () => {
-    if (!confirm("¿Deseas reiniciar el contador de flechas a cero?")) return;
+  const handleTallyReset = async () => {
+    if (!(await showOledConfirm("¿Deseas reiniciar el contador de flechas a cero?"))) return;
     
     playTallyClickSound();
     tallyCountRef.current = 0;
@@ -2024,38 +2029,38 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </span>
         </div>
       ) : (
-        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex flex-col gap-2">
-          <div className="flex justify-between items-center gap-2">
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="text-[10.5px] text-white font-bold tracking-widest uppercase shrink-0">
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3 sm:px-3.5 py-2.5 flex flex-col gap-2">
+          <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1.5 min-w-0">
+            <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0">
+              <span className="text-[10px] sm:text-[10.5px] text-white font-bold tracking-wider sm:tracking-widest uppercase shrink-0">
                 Puntos
               </span>
-              <span className="text-2xl font-black text-white leading-none tabular-nums">
-                {calculateTotalScore()} <span className="text-xs text-white font-bold">/ {config.maxScore}</span>
+              <span className="text-[19px] sm:text-[23.1px] font-black text-white leading-none tabular-nums truncate">
+                {calculateTotalScore()} <span className="text-[11px] sm:text-xs text-white font-bold">/ {config.maxScore}</span>
               </span>
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
                 <button
                   onClick={handleFinishFirstBlockOnly}
-                  className="text-[10px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-2 py-0.5 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap"
+                  className="text-[9.5px] sm:text-[10px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-1.5 sm:px-2 py-0.5 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap shrink-0"
                 >
                   1er Bloque
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               {ends.some((e) => e.arrows.some((a) => a !== "")) && (
                 <button
                   type="button"
                   onClick={() => setIsFinishing(true)}
-                  className="text-[10px] font-black uppercase text-black bg-cyan-neon hover:bg-[#19c8ff] px-2.5 py-1 rounded-full transition cursor-pointer whitespace-nowrap shadow-sm"
+                  className="text-[9.5px] sm:text-[10px] font-black uppercase text-black bg-cyan-neon hover:bg-[#19c8ff] px-2 sm:px-2.5 py-1 rounded-full transition cursor-pointer whitespace-nowrap shadow-sm"
                 >
                   Finalizar
                 </button>
               )}
-              <span className="text-[10.5px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
+              <span className="text-[10px] sm:text-[10.5px] text-cyan-neon font-black tracking-wide sm:tracking-wider uppercase bg-cyan-neon/10 px-2 sm:px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
                 End {currentEndIdx + 1}/{config.endsCount}
               </span>
-              <span className="text-[11px] text-white font-bold tabular-nums whitespace-nowrap">
+              <span className="text-[10.5px] sm:text-[11px] text-white font-bold tabular-nums whitespace-nowrap">
                 Fl. {currentArrowIdx + 1}/{config.arrowsPerEnd}
               </span>
             </div>
@@ -2063,8 +2068,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
           {mode === "TARGET" && (
             <div className="flex justify-between items-center gap-1.5 pt-2 border-t border-white/[0.07]">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <div className="flex gap-1">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <div className="flex flex-wrap gap-1 gap-y-1.5">
                   {ends[currentEndIdx]?.arrows.map((a, arrowIdx) => {
                     const isCellEditing = currentArrowIdx === arrowIdx;
                     return (
@@ -2074,7 +2079,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                           setCurrentArrowIdx(arrowIdx);
                           setEditingArrowSlot(arrowIdx);
                         }}
-                        className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 transition-all cursor-pointer shrink-0 ${getArrowColorClass(
+                        className={`${config.arrowsPerEnd > 3 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-8 h-8"} rounded-xl flex items-center justify-center font-black text-xs border-2 tabular-nums transition-all cursor-pointer shrink-0 ${getArrowColorClass(
                           a
                         )} ${
                           isCellEditing
@@ -2096,8 +2101,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         </div>
       )}
 
-      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App (+20% size, centered & harmonious) */}
-      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-2 relative overflow-hidden">
+      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App */}
+      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3 sm:px-3.5 py-2.5 sm:py-3 flex items-center justify-between gap-2 relative overflow-hidden">
         <div
           className="absolute top-0 left-12 right-12 h-[2px]"
           style={{
@@ -2105,29 +2110,30 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               "linear-gradient(90deg, transparent, #00A8F3 25%, #FF0000 50%, #FFF200 75%, transparent)"
           }}
         />
-        <div className="flex items-center justify-around gap-2 min-w-0 flex-1">
-          <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-2 border-r border-white/10">
-            <span className="text-[11.4px] font-black uppercase tracking-wider text-white flex items-center justify-center gap-1.5 leading-tight">
+        <div className="flex items-center justify-around gap-1.5 sm:gap-2 min-w-0 flex-1">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-1.5 sm:pr-2 border-r border-white/10">
+            <span className="text-[10px] sm:text-[11.4px] font-black uppercase tracking-wide sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   gpsActive
-                    ? "bg-[#00A8F3] shadow-[0_0_6px_#00A8F3]"
-                    : "bg-[#FFF200] shadow-[0_0_6px_#FFF200]"
+                    ? "bg-[#00A8F3]"
+                    : "bg-[#FFF200]"
                 }`}
               />
-              <span>DISTANCIA RECORRIDA</span>
+              <span className="sm:hidden">DISTANCIA</span>
+              <span className="hidden sm:inline">DISTANCIA RECORRIDA</span>
             </span>
-            <span className="text-[14.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-1 leading-tight truncate">
+            <span className="text-[13.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
               {formatKmAndMiles(distanceWalkedM, false)}
             </span>
           </div>
 
-          <div className="flex flex-col items-center justify-center text-center min-w-0 px-2">
-            <span className="text-[11.4px] font-black uppercase tracking-wider text-white leading-tight">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 px-1.5 sm:px-2">
+            <span className="text-[10px] sm:text-[11.4px] font-black uppercase tracking-wide sm:tracking-wider text-white leading-tight whitespace-nowrap">
               KCAL
             </span>
-            <span className="text-[14.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-1 leading-tight whitespace-nowrap">
-              {activeKcal} <span className="text-[13.2px] font-black text-white">kcal</span>
+            <span className="text-[13.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
+              {activeKcal} <span className="text-[12px] sm:text-[13.2px] font-black text-white">kcal</span>
             </span>
           </div>
         </div>
@@ -2135,9 +2141,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <button
           type="button"
           onClick={() => setIsWatchModalOpen(true)}
-          className="px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[12.6px] uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 cursor-pointer active:scale-95 transition shadow-[0_0_12px_rgba(255,242,0,0.25)]"
+          className="px-3 sm:px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[11.5px] sm:text-[12.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer active:scale-95 transition"
         >
-          <Watch size={16} className="shrink-0" />
+          <Watch size={15} className="shrink-0" />
           <span>Smartwatch</span>
         </button>
       </div>
@@ -2146,7 +2152,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       <div className="flex-1 flex flex-col justify-center min-h-[300px] py-1">
         {config.practiceType === "Volumen" ? (
           <div className="flex-1 w-full flex flex-col items-center justify-center gap-5 py-3">
-            {/* Tally Counter Casing Container (+20% size, centered) */}
+            {/* Tally Counter Casing Container (responsive containment for 360px phones) */}
             <div className="relative flex flex-col items-center justify-center select-none mx-auto">
               {/* Metal hanger loop at the top */}
               <div
@@ -2163,9 +2169,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               </div>
 
               {/* Reset Knob on the side (top right position) */}
-              <div className="absolute right-[-38px] top-[58px] z-10 flex items-center">
+              <div className="absolute right-[-32px] sm:right-[-38px] top-[52px] sm:top-[58px] z-10 flex items-center">
                 <div
-                  className="w-[14px] h-[24px] bg-zinc-500 border-y border-l border-zinc-400 rounded-l shadow"
+                  className="w-[10px] sm:w-[14px] h-[24px] bg-zinc-500 border-y border-l border-zinc-400 rounded-l shadow"
                   style={{
                     background: "linear-gradient(180deg, #d4d4d8 0%, #71717a 50%, #3f3f46 100%)",
                     borderColor: "#a1a1aa"
@@ -2174,7 +2180,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={handleTallyReset}
-                  className="w-[38px] h-[38px] rounded-full bg-gradient-to-r from-zinc-300 via-white to-zinc-500 border-2 border-zinc-400 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
+                  className="w-[36px] sm:w-[38px] h-[36px] sm:h-[38px] rounded-full bg-gradient-to-r from-zinc-300 via-white to-zinc-500 border-2 border-zinc-400 flex items-center justify-center cursor-pointer shadow-md active:rotate-180 hover:brightness-110 active:scale-95 transition-transform duration-300"
                   style={{
                     background: "radial-gradient(circle at 35% 35%, #ffffff 0%, #d4d4d8 45%, #71717a 100%)",
                     borderColor: "#a1a1aa",
@@ -2191,11 +2197,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </button>
               </div>
 
-              {/* Main counter circular 3D chrome case (+20%: 240px -> 288px) */}
+              {/* Main counter circular 3D chrome case */}
               <button
                 type="button"
                 onClick={handleTallyIncrement}
-                className="w-[288px] h-[288px] rounded-full border-[9.5px] border-zinc-300 flex flex-col items-center justify-center gap-2.5 relative z-10 cursor-pointer hover:brightness-105 active:scale-[0.97] active:translate-y-0.5 transition group"
+                className="w-[248px] h-[248px] sm:w-[288px] sm:h-[288px] rounded-full border-[9.5px] border-zinc-300 flex flex-col items-center justify-center gap-2 sm:gap-2.5 relative z-10 cursor-pointer hover:brightness-105 active:scale-[0.97] active:translate-y-0.5 transition group"
                 style={{
                   background: "radial-gradient(circle at 35% 28%, #fafafa 0%, #e4e4e7 28%, #a1a1aa 68%, #52525b 100%)",
                   borderColor: "#d4d4d8",
@@ -2212,7 +2218,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                 {/* Lever/Button at the top center of the case */}
                 <div
-                  className="absolute top-[14px] w-[115px] h-[24px] rounded border border-zinc-400 group-active:translate-y-1 transition"
+                  className="absolute top-[12px] sm:top-[14px] w-[104px] sm:w-[115px] h-[22px] sm:h-[24px] rounded border border-zinc-400 group-active:translate-y-1 transition"
                   style={{
                     background: "linear-gradient(180deg, #ffffff 0%, #d4d4d8 50%, #71717a 100%)",
                     borderColor: "#a1a1aa",
@@ -2222,7 +2228,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                 {/* Display Window */}
                 <div
-                  className="w-[192px] bg-zinc-950 border-4 border-zinc-700 p-4 rounded-2xl mt-5 flex flex-col items-center gap-2 relative overflow-hidden"
+                  className="w-[176px] sm:w-[192px] bg-zinc-950 border-4 border-zinc-700 p-3 sm:p-4 rounded-2xl mt-5 flex flex-col items-center gap-1.5 sm:gap-2 relative overflow-hidden"
                   style={{
                     backgroundColor: "#09090b",
                     borderColor: "#3f3f46",
@@ -2233,7 +2239,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
                   
                   {/* Label */}
-                  <span className="text-[9.6px] text-cyan-neon font-black tracking-widest uppercase">
+                  <span className="text-[9.2px] sm:text-[9.6px] text-cyan-neon font-black tracking-widest uppercase">
                     FLECHAS LANZADAS
                   </span>
 
@@ -2242,7 +2248,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
                       <div
                         key={idx}
-                        className="w-[33.6px] h-[48px] border border-zinc-800 rounded flex items-center justify-center font-black text-[28.8px] text-white font-mono relative"
+                        className="w-[31px] sm:w-[33.6px] h-[44px] sm:h-[48px] border border-zinc-800 rounded flex items-center justify-center font-black text-[26px] sm:text-[28.8px] text-white font-sans tabular-nums relative"
                         style={{
                           background: "linear-gradient(180deg, #18181b 0%, #09090b 50%, #18181b 100%)",
                           borderColor: "#27272a",
@@ -2259,7 +2265,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                 {/* Engraved bottom callout */}
                 <div
-                  className="text-[12px] font-black tracking-wider uppercase mt-2.5 transition"
+                  className="text-[11px] sm:text-[12px] font-black tracking-wider uppercase mt-1.5 sm:mt-2.5 transition"
                   style={{
                     color: "#18181b",
                     textShadow: "0 1px 0 rgba(255,255,255,0.65)"
@@ -2273,11 +2279,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             {/* Quick action buttons */}
             <div className="flex gap-3 mt-1">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (tallyCount > 0) {
-                    if (confirm("¿Deseas restar una flecha?")) {
+                    if (await showOledConfirm("¿Deseas restar una flecha?")) {
                       playTallyClickSound();
                       const nextCount = tallyCount - 1;
+                      tallyCountRef.current = nextCount;
                       setTallyCount(nextCount);
 
                       const updatedEnds = [...ends];
@@ -2297,9 +2304,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                         targetArrows[prevArrowIdx] = "";
                         targetEnd.arrows = targetArrows;
                         updatedEnds[prevEndIdx] = targetEnd;
+                        endsRef.current = updatedEnds;
                         setEnds(updatedEnds);
                       }
 
+                      currentArrowIdxRef.current = prevArrowIdx;
+                      currentEndIdxRef.current = prevEndIdx;
                       setCurrentArrowIdx(prevArrowIdx);
                       setCurrentEndIdx(prevEndIdx);
                     }
@@ -2565,13 +2575,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           </div>
         ) : (
           // KEYBOARD MODE (tactile grid cells & 4x4 keypad)
-          <div className="flex-1 flex flex-col gap-3 justify-between">
+          <div className="flex-1 min-w-0 flex flex-col gap-3 justify-between">
             {/* Table view Grid row (with max-height and auto-scroll container ref) */}
             <div
               ref={tableContainerRef}
-              className="w-full overflow-y-auto border border-gray-border/40 rounded-xl bg-neutral-950/40 max-h-[160px]"
+              className="w-full overflow-x-auto overflow-y-auto border border-gray-border/40 rounded-2xl bg-neutral-950/40 max-h-[160px]"
             >
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse tabular-nums">
                 <thead>
                   <tr className="bg-neutral-900 text-white font-bold uppercase text-[10.5px] tracking-wider border-b border-gray-border/40">
                     <th className="py-2 px-3 text-center">End</th>
@@ -2618,7 +2628,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                                     setEditingArrowSlot(arrowIdx);
                                   }
                                 }}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer ${textFontClass} ${getArrowColorClass(
+                                className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer tabular-nums ${textFontClass} ${getArrowColorClass(
                                   a
                                 )} ${
                                   isCellEditing
@@ -2631,10 +2641,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                             );
                           })}
                         </td>
-                        <td className="py-2 px-3 text-center font-extrabold text-white">
+                        <td className="py-2 px-3 text-center font-extrabold text-white tabular-nums">
                           {calculateEndTotal(idx)}
                         </td>
-                        <td className="py-2 px-3 text-center font-extrabold text-white">
+                        <td className="py-2 px-3 text-center font-extrabold text-white tabular-nums">
                           {calculateRunningTotal(idx)}
                         </td>
                       </tr>
@@ -2818,13 +2828,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
+            className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-hidden overscroll-contain"
           >
             <motion.div
               initial={{ scale: 0.9, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 15 }}
-              className="w-full max-w-sm bg-neutral-900 border border-gray-border p-6 rounded-3xl flex flex-col gap-5 shadow-2xl text-left"
+              className="w-full max-w-sm max-h-[90dvh] overflow-y-auto overscroll-contain bg-neutral-900 border border-gray-border p-5 sm:p-6 rounded-3xl flex flex-col gap-5 shadow-2xl text-left"
             >
               <div>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
@@ -2840,13 +2850,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-bold">Total Flechas</span>
-                    <p className="text-2xl font-black text-cyan-neon mt-0.5">
+                    <p className="text-2xl font-black text-cyan-neon mt-0.5 tabular-nums">
                       {tallyCount}
                     </p>
                   </div>
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-bold">Distancia</span>
-                    <p className="text-2xl font-black text-yellow-gold mt-0.5">
+                    <p className="text-2xl font-black text-yellow-gold mt-0.5 tabular-nums">
                       {config.distance}m
                     </p>
                   </div>
@@ -2855,7 +2865,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
                     <span className="text-[10.5px] text-white uppercase font-bold">Puntaje Total</span>
-                    <p className="text-2xl font-black text-cyan-neon mt-0.5">
+                    <p className="text-2xl font-black text-cyan-neon mt-0.5 tabular-nums">
                       {calculateTotalScore()}
                     </p>
                   </div>
@@ -2904,13 +2914,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <span className="text-[10.5px] text-white uppercase font-bold">Rendimiento por Bloques</span>
                   <div className="flex justify-between text-white">
                     <span>Bloque 1 (Mitad 1):</span>
-                    <span className="font-extrabold text-cyan-neon">
+                    <span className="font-extrabold text-cyan-neon tabular-nums">
                       {ends.slice(0, Math.floor(config.endsCount / 2)).reduce((sum, e) => sum + e.arrows.reduce((s, a) => s + getScoreValue(a), 0), 0)} pts
                     </span>
                   </div>
                   <div className="flex justify-between text-white">
                     <span>Bloque 2 (Mitad 2):</span>
-                    <span className="font-extrabold text-cyan-neon">
+                    <span className="font-extrabold text-cyan-neon tabular-nums">
                       {ends.slice(Math.floor(config.endsCount / 2)).reduce((sum, e) => sum + e.arrows.reduce((s, a) => s + getScoreValue(a), 0), 0)} pts
                     </span>
                   </div>
@@ -2921,7 +2931,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     return (
                       <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-0.5">
                         <span>Consistencia:</span>
-                        <span className={`font-black uppercase text-[11.6px] ${diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
+                        <span className={`font-black uppercase text-[11.6px] tabular-nums ${diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
                           {diff > 0 ? `+${diff}` : diff} pts {diff < 0 ? "(Fatiga)" : "(Excelente)"}
                         </span>
                       </div>
@@ -2948,7 +2958,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
               {/* Direct Volume Confirmation inside Finish Modal (1-click Save) */}
               <div className="bg-neutral-950/70 p-3 rounded-2xl border border-white/10 flex items-center justify-between gap-2">
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                   <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
                     Volumen Total de Flechas
                   </span>
@@ -2956,11 +2966,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     Para tu historial de volumen
                   </span>
                 </div>
-                <div className="flex items-center bg-black border border-white/10 rounded-xl px-1.5 py-1">
+                <div className="flex items-center bg-black border border-white/10 rounded-xl px-1.5 py-1 shrink-0 tabular-nums">
                   <button
                     type="button"
                     onClick={() => setConfirmedVolume(Math.max(0, confirmedVolume - 3))}
-                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95"
+                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95 tabular-nums"
                   >
                     -3
                   </button>
@@ -2968,12 +2978,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     type="number"
                     value={confirmedVolume}
                     onChange={(e) => setConfirmedVolume(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-14 text-center font-black text-white text-base bg-transparent outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-14 text-center font-black text-white text-base bg-transparent outline-none border-none tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     type="button"
                     onClick={() => setConfirmedVolume(confirmedVolume + 3)}
-                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95"
+                    className="px-2 py-0.5 text-cyan-neon font-black text-sm cursor-pointer active:scale-95 tabular-nums"
                   >
                     +3
                   </button>
@@ -3110,11 +3120,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 }
               </p>
 
-              <div className="flex items-center justify-center bg-neutral-950 border border-neutral-800 rounded-2xl py-3 px-4 mt-2">
+              <div className="flex items-center justify-center bg-neutral-950 border border-neutral-800 rounded-2xl py-3 px-4 mt-2 tabular-nums">
                 <button
                   type="button"
                   onClick={() => setConfirmedVolume(Math.max(0, confirmedVolume - 3))}
-                  className="px-3.5 py-1.5 text-cyan-neon font-black text-lg cursor-pointer active:scale-95 hover:bg-neutral-900 rounded-lg"
+                  className="px-3.5 py-1.5 text-cyan-neon font-black text-lg cursor-pointer active:scale-95 hover:bg-neutral-900 rounded-lg tabular-nums"
                 >
                   -3
                 </button>
@@ -3122,12 +3132,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   type="number"
                   value={confirmedVolume}
                   onChange={(e) => setConfirmedVolume(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-20 text-center font-black text-white text-2xl bg-transparent outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-20 text-center font-black text-white text-2xl bg-transparent outline-none border-none tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
                   type="button"
                   onClick={() => setConfirmedVolume(confirmedVolume + 3)}
-                  className="px-3.5 py-1.5 text-cyan-neon font-black text-lg cursor-pointer active:scale-95 hover:bg-neutral-900 rounded-lg"
+                  className="px-3.5 py-1.5 text-cyan-neon font-black text-lg cursor-pointer active:scale-95 hover:bg-neutral-900 rounded-lg tabular-nums"
                 >
                   +3
                 </button>
@@ -3157,12 +3167,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       {/* MODAL: Análisis Inteligente de Dispersión y Ajuste de Mira */}
       <AnimatePresence>
         {showDispersionDrawer && (
-          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden overscroll-contain">
             <motion.div
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              className="bg-[#0D1017] border border-white/10 rounded-3xl p-5 w-full max-w-sm flex flex-col gap-4 text-left shadow-2xl"
+              className="bg-[#0D1017] border border-white/10 rounded-3xl p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto overscroll-contain flex flex-col gap-4 text-left shadow-2xl"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
@@ -3174,7 +3184,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate">
                       Centro y Ajuste de Mira
                     </h3>
-                    <p className="text-[11.6px] text-white truncate">
+                    <p className="text-[11.6px] text-white truncate tabular-nums">
                       {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} · {config.distance || 70}m · Dianas WA
                     </p>
                   </div>
@@ -3193,7 +3203,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={() => setDispersionScope("END")}
-                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer tabular-nums ${
                     dispersionScope === "END"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
@@ -3204,7 +3214,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <button
                   type="button"
                   onClick={() => setDispersionScope("GLOBAL")}
-                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer ${
+                  className={`h-9 rounded-lg font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer tabular-nums ${
                     dispersionScope === "GLOBAL"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
@@ -3218,12 +3228,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {activeAnalysis && activeAnalysis.count > 0 ? (
                 <div className="flex flex-col gap-3">
                   {/* Compass / Direction Card */}
-                  <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between gap-2">
-                    <div>
+                  <div className="bg-neutral-950/70 border border-white/5 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
                       <span className="text-[10.5px] font-black uppercase text-white tracking-wider">
                         Desviación del Grupo
                       </span>
-                      <div className="text-xl font-black text-white mt-0.5 flex items-center gap-2">
+                      <div className="text-xl font-black text-white mt-0.5 flex flex-wrap items-center gap-1.5 tabular-nums">
                         <span>{activeAnalysis.clockDirection}</span>
                         <span className="text-xs font-bold text-cyan-neon tabular-nums">
                           ({activeAnalysis.distanceFromCenterCm.toFixed(1)} cm del centro)
@@ -3278,11 +3288,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                   {/* Target Face & Dispersion spread compact 2-column row */}
                   <div className="grid grid-cols-2 gap-2.5">
-                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5 min-w-0">
                       <span className="text-[10.5px] font-black uppercase text-white tracking-wider">Diana Oficial</span>
                       <span className="tabular-nums font-bold text-xs text-white truncate">{activeAnalysis.targetName}</span>
                     </div>
-                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5">
+                    <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5 min-w-0">
                       <span className="text-[10.5px] font-black uppercase text-white tracking-wider">Diámetro Grupo</span>
                       <span className="tabular-nums font-black text-xs text-cyan-neon">Ø {activeAnalysis.spreadCm.toFixed(1)} cm</span>
                     </div>
@@ -3326,7 +3336,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             pointerEvents: "none",
             zIndex: 99999
           }}
-          className="rounded-full border-2 border-cyan-neon bg-black shadow-[0_0_15px_rgba(0,229,255,0.4)] overflow-hidden flex items-center justify-center"
+          className="rounded-full border-2 border-cyan-neon bg-black shadow-2xl overflow-hidden flex items-center justify-center"
         >
           <svg
             viewBox={`${lupaState.x - 12} ${lupaState.y - 12} 24 24`}

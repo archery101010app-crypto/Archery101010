@@ -194,170 +194,172 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200000] bg-black/94 backdrop-blur-md flex flex-col items-center justify-between p-3.5 sm:p-4 overflow-y-auto"
+        className="fixed inset-0 z-[200000] bg-black/94 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-hidden overscroll-contain"
       >
-        {/* Gallery File Picker (Sube Foto) */}
-        <input
-          ref={uploadInputRef}
-          type="file"
-          accept="image/*"
-          onChange={(e) => handlePhotoFileChange(e, "upload")}
-          className="hidden"
-        />
-
-        {/* Direct Camera Capture Fallback for Mobile Browsers (Toma Foto) */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => handlePhotoFileChange(e, "camera")}
-          className="hidden"
-        />
-
-        {/* Top Bar: Official ARCHERY 101010 Brand Header */}
-        <div className="w-full max-w-sm flex items-center justify-between py-1 shrink-0">
-          <div className="flex flex-col gap-1">
-            <img
-              src="/images/brand_logo_header.png"
-              srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-              alt="ARCHERY 101010"
-              className="h-5 w-auto object-contain select-none"
-            />
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/85">
-              Telemetría Oficial · Lista para Compartir
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition shrink-0"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* 4-Mode Selector Bar: Fondo Negro | Fondo Transparente | Sube Foto | Toma Foto */}
-        <div className="w-full max-w-sm flex flex-col gap-1.5 my-1.5 shrink-0">
-          <div className="grid grid-cols-2 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
-            <button
-              type="button"
-              onClick={() => setActiveTab("black")}
-              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
-                activeTab === "black"
-                  ? "bg-white text-[#04060A] shadow-sm"
-                  : "bg-transparent text-white/75 hover:text-white"
-              }`}
-            >
-              <Circle size={10} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
-              <span>Fondo Negro</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("transparent")}
-              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
-                activeTab === "transparent"
-                  ? "bg-white text-[#04060A] shadow-sm"
-                  : "bg-transparent text-white/75 hover:text-white"
-              }`}
-            >
-              <Layers size={11.5} strokeWidth={2.5} className="shrink-0" />
-              <span>Fondo Transparente</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleUploadPhotoClick}
-              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
-                activeTab === "upload"
-                  ? "bg-white text-[#04060A] shadow-sm"
-                  : "bg-transparent text-white/75 hover:text-white"
-              }`}
-            >
-              <ImagePlus size={12} strokeWidth={2.5} className="shrink-0" />
-              <span>Sube Foto</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleTakeCameraPhotoClick}
-              className={`h-9 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap truncate ${
-                activeTab === "camera"
-                  ? "bg-white text-[#04060A] shadow-sm"
-                  : "bg-transparent text-white/75 hover:text-white"
-              }`}
-            >
-              <Camera size={12} strokeWidth={2.5} className="shrink-0" />
-              <span>Toma Foto</span>
-            </button>
-          </div>
-
-          {activeTab === "upload" && uploadedPhotoUrl && (
-            <button
-              type="button"
-              onClick={handleChangeUploadedPhotoClick}
-              className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <RefreshCw size={11} strokeWidth={2.5} />
-              <span>Cambiar foto</span>
-            </button>
-          )}
-        </div>
-
-        {/* Center Preview Card (Vertical 9:16 Proportion) */}
-        <motion.div
-          initial={{ scale: 0.96, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={
-            activeTab === "transparent"
-              ? {
-                  backgroundImage:
-                    "linear-gradient(45deg, #11151D 25%, transparent 25%), linear-gradient(-45deg, #11151D 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #11151D 75%), linear-gradient(-45deg, transparent 75%, #11151D 75%)",
-                  backgroundSize: "18px 18px",
-                  backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0",
-                  backgroundColor: "#080A0F"
-                }
-              : undefined
-          }
-          className="relative w-full max-w-[290px] sm:max-w-[315px] my-1.5 rounded-3xl overflow-hidden border border-white/15 bg-[#05070B] shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
-        >
-          <img
-            src={currentDataUrl}
-            alt="ARCHERY 101010 THE APP Telemetría"
-            className={`w-full h-auto block select-none transition-opacity duration-150 ${
-              isRendering ? "opacity-60" : "opacity-100"
-            }`}
+        <div className="w-full max-w-sm max-h-[92dvh] overflow-y-auto overscroll-contain flex flex-col items-center justify-between gap-1.5">
+          {/* Gallery File Picker (Sube Foto) */}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handlePhotoFileChange(e, "upload")}
+            className="hidden"
           />
-        </motion.div>
 
-        {/* Action Buttons */}
-        <div className="w-full max-w-sm flex flex-col gap-2 pt-1 pb-1 shrink-0">
-          <button
-            type="button"
-            onClick={handleNativeShareAgain}
-            className="w-full h-11 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition shadow-[0_8px_24px_rgba(255,255,255,0.12)]"
-          >
-            <Share2 size={16} strokeWidth={2.4} />
-            <span>Compartir Imagen (Redes Sociales)</span>
-          </button>
+          {/* Direct Camera Capture Fallback for Mobile Browsers (Toma Foto) */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => handlePhotoFileChange(e, "camera")}
+            className="hidden"
+          />
 
-          <button
-            type="button"
-            onClick={handleWhatsAppShare}
-            className="w-full h-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
-          >
-            <MessageCircle size={16} className="text-emerald-400" strokeWidth={2.4} />
-            <span>Enviar Foto + Planilla</span>
-          </button>
+          {/* Top Bar: Official ARCHERY 101010 Brand Header */}
+          <div className="w-full flex items-center justify-between py-1 shrink-0">
+            <div className="flex flex-col gap-1 min-w-0">
+              <img
+                src="/images/brand_logo_header.png"
+                srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                alt="ARCHERY 101010"
+                className="h-5 w-auto object-contain select-none self-start"
+              />
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/85 truncate">
+                Telemetría Oficial · Lista para Compartir
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition shrink-0"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full h-9 rounded-xl bg-transparent hover:bg-white/[0.05] text-white/75 hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer transition"
+          {/* 4-Mode Selector Bar: Fondo Negro | Fondo Transparente | Sube Foto | Toma Foto */}
+          <div className="w-full flex flex-col gap-1.5 my-1 shrink-0">
+            <div className="grid grid-cols-2 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
+              <button
+                type="button"
+                onClick={() => setActiveTab("black")}
+                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                  activeTab === "black"
+                    ? "bg-white text-[#04060A] shadow-sm"
+                    : "bg-transparent text-white/75 hover:text-white"
+                }`}
+              >
+                <Circle size={10} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
+                <span className="truncate">Fondo Negro</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("transparent")}
+                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                  activeTab === "transparent"
+                    ? "bg-white text-[#04060A] shadow-sm"
+                    : "bg-transparent text-white/75 hover:text-white"
+                }`}
+              >
+                <Layers size={11.5} strokeWidth={2.5} className="shrink-0" />
+                <span className="truncate">Fondo Transparente</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUploadPhotoClick}
+                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                  activeTab === "upload"
+                    ? "bg-white text-[#04060A] shadow-sm"
+                    : "bg-transparent text-white/75 hover:text-white"
+                }`}
+              >
+                <ImagePlus size={12} strokeWidth={2.5} className="shrink-0" />
+                <span className="truncate">Sube Foto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTakeCameraPhotoClick}
+                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                  activeTab === "camera"
+                    ? "bg-white text-[#04060A] shadow-sm"
+                    : "bg-transparent text-white/75 hover:text-white"
+                }`}
+              >
+                <Camera size={12} strokeWidth={2.5} className="shrink-0" />
+                <span className="truncate">Toma Foto</span>
+              </button>
+            </div>
+
+            {activeTab === "upload" && uploadedPhotoUrl && (
+              <button
+                type="button"
+                onClick={handleChangeUploadedPhotoClick}
+                className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RefreshCw size={11} strokeWidth={2.5} />
+                <span className="truncate">Cambiar foto</span>
+              </button>
+            )}
+          </div>
+
+          {/* Center Preview Card (Vertical 9:16 Proportion) */}
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={
+              activeTab === "transparent"
+                ? {
+                    backgroundImage:
+                      "linear-gradient(45deg, #11151D 25%, transparent 25%), linear-gradient(-45deg, #11151D 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #11151D 75%), linear-gradient(-45deg, transparent 75%, #11151D 75%)",
+                    backgroundSize: "18px 18px",
+                    backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0",
+                    backgroundColor: "#080A0F"
+                  }
+                : undefined
+            }
+            className="relative w-fit max-w-[290px] sm:max-w-[315px] mx-auto my-1 rounded-3xl overflow-hidden border border-white/15 bg-[#05070B] shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
           >
-            Cerrar Vista Previa
-          </button>
+            <img
+              src={currentDataUrl}
+              alt="ARCHERY 101010 THE APP Telemetría"
+              className={`max-h-[42dvh] w-auto mx-auto object-contain block select-none transition-opacity duration-150 ${
+                isRendering ? "opacity-60" : "opacity-100"
+              }`}
+            />
+          </motion.div>
+
+          {/* Action Buttons */}
+          <div className="w-full flex flex-col gap-2 pt-1 pb-1 shrink-0">
+            <button
+              type="button"
+              onClick={handleNativeShareAgain}
+              className="w-full h-11 px-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
+            >
+              <Share2 size={16} strokeWidth={2.4} className="shrink-0" />
+              <span className="truncate">Compartir Imagen (Redes Sociales)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleWhatsAppShare}
+              className="w-full h-11 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
+            >
+              <MessageCircle size={16} className="text-emerald-400 shrink-0" strokeWidth={2.4} />
+              <span className="truncate">Enviar Foto + Planilla</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full h-9 rounded-xl bg-transparent hover:bg-white/[0.05] text-white/75 hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer transition"
+            >
+              Cerrar Vista Previa
+            </button>
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>

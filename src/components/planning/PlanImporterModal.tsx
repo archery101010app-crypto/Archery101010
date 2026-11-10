@@ -719,7 +719,7 @@ export default function PlanImporterModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-2xl bg-[#111318] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh]"
+        className="w-full max-w-2xl bg-[#111318] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[94dvh]"
       >
         {/* Encabezado Estilo Google Calendar */}
         <div className="p-4 sm:p-5 border-b border-white/[0.06] flex items-center justify-between bg-[#0A0C10]">
@@ -750,41 +750,41 @@ export default function PlanImporterModal({
           {/* Paso 1 (Solo para Coach): ¿A quién se le carga en su Calendario? */}
           {isCoachUser && (
             <div className="bg-[#0D1017] border border-cyan-neon/25 rounded-2xl p-3.5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex flex-col gap-2">
                 <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
-                  <Users size={14} />
+                  <Users size={14} className="shrink-0" />
                   <span>¿En el calendario de quién se guardará?</span>
                 </span>
 
-                <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10 flex-wrap">
+                <div className="grid grid-cols-3 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-white/10">
                   <button
                     type="button"
                     onClick={() => setAssignTarget("selected")}
-                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "selected"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
                     }`}
                   >
-                    <User size={11} />
+                    <User size={11} className="hidden sm:inline shrink-0" />
                     <span>Escoger 1 o Varios</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setAssignTarget("all")}
-                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "all"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
                     }`}
                   >
-                    <Users size={11} />
+                    <Users size={11} className="hidden sm:inline shrink-0" />
                     <span>Todos los Alumnos</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setAssignTarget("personal")}
-                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "personal"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
@@ -872,9 +872,9 @@ export default function PlanImporterModal({
 
           {/* Paso 2: Selector de Mes/Año + Botones Rápidos para Pegar de Excel/Sheets */}
           <div className="bg-[#0D1017] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-white font-black uppercase tracking-wider">
+                <span className="text-[11px] text-white font-black uppercase tracking-wider shrink-0">
                   Mes:
                 </span>
                 <select
@@ -882,7 +882,7 @@ export default function PlanImporterModal({
                   onChange={(e) =>
                     handleMonthYearChange(refYear, Number(e.target.value))
                   }
-                  className="bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs font-black outline-none focus:border-cyan-neon cursor-pointer"
+                  className="flex-1 sm:flex-initial bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs font-black outline-none focus:border-cyan-neon cursor-pointer"
                 >
                   {MONTH_NAMES.map((mName, idx) => (
                     <option key={mName} value={idx + 1}>
@@ -905,49 +905,50 @@ export default function PlanImporterModal({
                 />
               </div>
 
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.ods,.csv,.tsv,.txt"
+                onChange={(e) => handleFileChange(e.target.files?.[0])}
+                className="hidden"
+              />
+
               {/* Botones rápidos opcionales para traer de Excel / Sheets */}
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handlePasteFromClipboard}
-                  className="px-2.5 py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] sm:text-[11px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <ClipboardPaste size={13} />
+                  <ClipboardPaste size={13} className="shrink-0" />
                   <span>Pegar de Excel / Sheets</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <UploadCloud size={13} className="text-cyan-neon" />
+                  <UploadCloud size={13} className="text-cyan-neon shrink-0" />
                   <span>Subir .xlsx</span>
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.ods,.csv,.tsv,.txt"
-                  onChange={(e) => handleFileChange(e.target.files?.[0])}
-                  className="hidden"
-                />
 
                 <button
                   type="button"
                   onClick={() => setShowSheetsUrlBox((v) => !v)}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <Link2 size={13} className="text-emerald-400" />
+                  <Link2 size={13} className="text-emerald-400 shrink-0" />
                   <span>Link Sheets</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                   title="Descargar hoja vacía con los días del mes"
                 >
-                  <Download size={12} />
+                  <Download size={12} className="shrink-0" />
                   <span>Plantilla Vacía</span>
                 </button>
               </div>
@@ -1123,7 +1124,7 @@ export default function PlanImporterModal({
                 return (
                   <div
                     key={row.day}
-                    className={`flex items-start gap-2.5 p-2.5 transition ${
+                    className={`flex flex-col sm:flex-row sm:items-start gap-2 p-3 transition ${
                       hasContent
                         ? "bg-cyan-neon/[0.04]"
                         : isSunday
@@ -1131,26 +1132,51 @@ export default function PlanImporterModal({
                         : "bg-transparent"
                     }`}
                   >
-                    {/* Columna 1: Fecha / Número de Día */}
-                    <div
-                      className={`w-16 shrink-0 rounded-xl px-2 py-2 text-center border ${
-                        hasContent
-                          ? "bg-cyan-neon/15 border-cyan-neon/40 text-white"
-                          : isSunday
-                          ? "bg-white/[0.03] border-white/10 text-amber-300"
-                          : "bg-neutral-950 border-white/10 text-white"
-                      }`}
-                    >
-                      <div className="text-[10px] font-black uppercase tracking-wider opacity-80">
-                        {row.weekdayShort}
+                    {/* Fila superior en móvil (<640px): Badge Día X a la izquierda + Flechas y Copiar a la derecha; en sm: columnas 1 y 3 */}
+                    <div className="flex items-center justify-between gap-2 sm:contents">
+                      <div
+                        className={`sm:order-1 sm:w-16 shrink-0 rounded-xl px-2.5 py-1.5 sm:px-2 sm:py-2 flex sm:block items-center gap-1.5 text-center border ${
+                          hasContent
+                            ? "bg-cyan-neon/15 border-cyan-neon/40 text-white"
+                            : isSunday
+                            ? "bg-white/[0.03] border-white/10 text-amber-300"
+                            : "bg-neutral-950 border-white/10 text-white"
+                        }`}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-wider opacity-80">
+                          {row.weekdayShort}
+                        </div>
+                        <div className="text-xs sm:text-sm font-black tabular-nums leading-tight">
+                          Día {row.day}
+                        </div>
                       </div>
-                      <div className="text-sm font-black tabular-nums leading-tight">
-                        Día {row.day}
+
+                      {/* Flechas opcionales + Botón repetir / copiar */}
+                      <div className="sm:order-3 flex items-center gap-1.5 shrink-0">
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.arrows}
+                          onChange={(e) => updateDayRow(row.day, "arrows", e.target.value)}
+                          placeholder="Flechas"
+                          title="Meta de flechas (opcional)"
+                          className="w-20 sm:w-16 bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-2 py-1.5 sm:py-2 text-xs text-cyan-neon font-bold text-center tabular-nums outline-none placeholder:text-white/30"
+                        />
+                        {hasContent && (
+                          <button
+                            type="button"
+                            onClick={() => handleRepeatWeekdayInMonth(row)}
+                            title={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
+                            className="p-2 rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer shrink-0"
+                          >
+                            <Copy size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Columna 2: Lo que corresponde ese día */}
-                    <div className="flex-1 min-w-0">
+                    {/* Textarea de entrenamiento: 100% full-width debajo en móvil, columna central flexible en sm: */}
+                    <div className="w-full sm:flex-1 sm:min-w-0 sm:order-2">
                       <textarea
                         value={row.text}
                         onChange={(e) => updateDayRow(row.day, "text", e.target.value)}
@@ -1158,29 +1184,6 @@ export default function PlanImporterModal({
                         placeholder="Escribe qué toca este día (usa ';' o Enter para enlistar varias tareas)..."
                         className="w-full bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-3 py-2 text-xs text-white outline-none resize-y leading-relaxed placeholder:text-white/35"
                       />
-                    </div>
-
-                    {/* Flechas opcionales + Botón repetir en todos los mismos días de la semana */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <input
-                        type="number"
-                        min={0}
-                        value={row.arrows}
-                        onChange={(e) => updateDayRow(row.day, "arrows", e.target.value)}
-                        placeholder="Flechas"
-                        title="Meta de flechas (opcional)"
-                        className="w-16 bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-2 py-2 text-xs text-cyan-neon font-bold text-center tabular-nums outline-none placeholder:text-white/30"
-                      />
-                      {hasContent && (
-                        <button
-                          type="button"
-                          onClick={() => handleRepeatWeekdayInMonth(row)}
-                          title={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
-                          className="p-2 rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer"
-                        >
-                          <Copy size={13} />
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -1190,11 +1193,11 @@ export default function PlanImporterModal({
         </div>
 
         {/* Footer de confirmación */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-[#0A0C10] flex items-center justify-between gap-3">
+        <div className="px-3.5 py-3.5 sm:p-5 border-t border-white/[0.06] bg-[#0A0C10] flex items-center justify-between gap-2 sm:gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer"
+            className="px-3.5 py-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer shrink-0 whitespace-nowrap"
           >
             Cancelar
           </button>
@@ -1203,16 +1206,16 @@ export default function PlanImporterModal({
             type="button"
             disabled={totalDaysToSave === 0 || isSubmitting}
             onClick={handleConfirmSave}
-            className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer tabular-nums"
+            className="flex-1 sm:flex-initial min-w-0 px-3.5 sm:px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wider whitespace-nowrap transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer tabular-nums"
           >
             {isSubmitting ? (
               <>
-                <RefreshCw size={15} className="animate-spin" />
+                <RefreshCw size={14} className="animate-spin shrink-0" />
                 <span>Guardando en Calendario...</span>
               </>
             ) : (
               <>
-                <CheckCircle2 size={15} />
+                <CheckCircle2 size={14} className="shrink-0" />
                 <span>
                   Guardar {totalDaysToSave} {totalDaysToSave === 1 ? "Día" : "Días"} en el Calendario
                 </span>

@@ -86,9 +86,11 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
   if (pillStyle === "glass") {
     classNameVal += "bg-neutral-950/75 backdrop-blur-md border-white/10 text-white hover:bg-neutral-900/80";
   } else if (pillStyle === "gradient") {
-    // Beautiful premium gradient using brand colors
-    styleObj.backgroundImage = "linear-gradient(135deg, #00BFFF 0%, #FF007F 100%)"; // Cyan to Red Rival
-    classNameVal += "border-white/20 text-white hover:brightness-110";
+    // Matte OLED titanium surface + crisp 1px cyan border
+    styleObj.backgroundImage = "linear-gradient(135deg, #06080C 0%, #12151C 100%)";
+    styleObj.borderColor = "rgba(0, 168, 243, 0.45)";
+    styleObj.color = "#FFFFFF";
+    classNameVal += "text-white hover:brightness-110";
   } else {
     // Solid style
     styleObj.backgroundColor = currentSlide.backgroundColor || defaultBg;

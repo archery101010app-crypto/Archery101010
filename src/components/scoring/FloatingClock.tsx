@@ -318,41 +318,40 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
             id="clock_fs"
             className="fixed inset-0 z-[9999] flex flex-col justify-between p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] overflow-y-auto transition-all duration-300 bg-black"
           >
-            {/* Ambient Official Light Border & Top Glow when Active */}
+            {/* Ambient Official Light Border when Active */}
             {(isActive || phase === "stop") && (
               <div
                 className={`pointer-events-none fixed inset-0 transition-all duration-300 border-[6px] ${
                   lightState === "RED"
-                    ? "border-red-600 shadow-[inset_0_0_90px_rgba(220,38,38,0.35)]"
+                    ? "border-red-600"
                     : lightState === "YELLOW"
-                    ? "border-yellow-gold shadow-[inset_0_0_90px_rgba(255,229,0,0.30)]"
-                    : "border-green-success shadow-[inset_0_0_90px_rgba(0,200,83,0.30)]"
+                    ? "border-yellow-gold"
+                    : "border-green-success"
                 }`}
               />
             )}
 
             {/* Top Toolbar */}
-            <div className="flex justify-between items-center w-full relative z-10">
-              <div 
-                className="flex items-center gap-1.5 select-none"
-                style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
-              >
-                <span className="text-white text-[15.8px] sm:text-[15.4px] font-black tracking-wider uppercase">
-                  ARCHERY
-                </span>
-                <div className="flex items-center tracking-tight font-extrabold text-[15.8px] sm:text-[15.4px]">
-                  <span className="text-cyan-neon">10</span>
-                  <span className="text-red-rival">10</span>
-                  <span className="text-yellow-gold">10</span>
-                </div>
-                <span className="text-white text-[14.5px] sm:text-[15.8px] font-black tracking-widest uppercase pl-0.5">
+            <div className="flex justify-between items-center w-full relative z-10 gap-2">
+              <div className="flex items-center gap-2 select-none min-w-0">
+                <img
+                  src="/images/brand_logo_header.png"
+                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                  alt="ARCHERY 101010"
+                  className="h-3.5 sm:h-4 w-auto object-contain shrink-0"
+                  draggable={false}
+                />
+                <span
+                  className="text-white text-[13px] sm:text-[15px] font-black tracking-widest uppercase pl-0.5"
+                  style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+                >
                   TIMER
                 </span>
               </div>
               <button
                 onClick={() => setIsOverlayOpen(false)}
                 aria-label="Minimizar reloj"
-                className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 active:scale-95 transition"
+                className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 active:scale-95 transition shrink-0"
               >
                 <Minimize2 size={20} />
               </button>
@@ -360,15 +359,15 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
             {/* Run Panel (Ticking State or Finished Stop State) */}
             {isActive || phase === "stop" ? (
-              <div className="flex-1 flex flex-col justify-center items-center gap-5 relative z-10 my-2">
+              <div className="flex-1 flex flex-col justify-center items-center gap-5 relative z-10 my-2 w-full">
                 {/* OFFICIAL WORLD ARCHERY 3-LIGHT SEMAPHORE (RED / YELLOW / GREEN) */}
-                <div className="flex items-center gap-4 bg-neutral-950/95 border border-white/15 px-6 py-3 rounded-full shadow-2xl">
+                <div className="flex items-center gap-4 bg-[#0D1017] border border-white/15 px-6 py-3 rounded-full">
                   {/* RED LAMP */}
                   <div className="flex items-center gap-2">
                     <div
                       className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
                         lightState === "RED"
-                          ? "bg-red-600 border-red-300 shadow-[0_0_25px_#ef4444,0_0_50px_#dc2626] scale-110"
+                          ? "bg-red-600 border-red-300 scale-110"
                           : "bg-red-950/30 border-red-900/30 opacity-30"
                       }`}
                     />
@@ -378,7 +377,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <div
                       className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
                         lightState === "YELLOW"
-                          ? "bg-yellow-gold border-yellow-200 shadow-[0_0_25px_#FFE500,0_0_50px_#FFE500] scale-110"
+                          ? "bg-yellow-gold border-yellow-200 scale-110"
                           : "bg-yellow-950/30 border-yellow-900/30 opacity-30"
                       }`}
                     />
@@ -388,7 +387,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     <div
                       className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${
                         lightState === "GREEN"
-                          ? "bg-green-success border-emerald-200 shadow-[0_0_25px_#00C853,0_0_50px_#00C853] scale-110"
+                          ? "bg-green-success border-emerald-200 scale-110"
                           : "bg-emerald-950/30 border-emerald-900/30 opacity-30"
                       }`}
                     />
@@ -396,9 +395,9 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 </div>
 
                 {/* Official Phase & Signal Banner */}
-                <div className="text-center flex flex-col items-center gap-1">
+                <div className="text-center flex flex-col items-center gap-1 w-full max-w-md px-1">
                   <span
-                    className={`px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wider border inline-flex items-center justify-center gap-2 whitespace-nowrap ${
+                    className={`max-w-full px-3 py-1.5 rounded-full text-[10.5px] sm:text-xs font-extrabold uppercase tracking-wide sm:tracking-wider border inline-flex items-center justify-center gap-1.5 text-center leading-snug ${
                       lightState === "RED"
                         ? "bg-white border-white text-black"
                         : lightState === "YELLOW"
@@ -415,7 +414,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                           : "bg-green-success"
                       }`}
                     />
-                    <span>
+                    <span className="tabular-nums">
                       {phase === "prep"
                         ? "LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)"
                         : phase === "stop"
@@ -436,7 +435,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
                 {/* Display giant clock digits */}
                 <div
-                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none tabular-nums tabular-nums transition-colors duration-200 ${
+                  className={`text-[min(34vw,26vh)] font-black leading-none tracking-tighter select-none font-sans tabular-nums transition-colors duration-200 ${
                     lightState === "RED"
                       ? "text-red-500"
                       : lightState === "YELLOW"
@@ -462,54 +461,54 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 </div>
 
                 {/* Ticking Controls */}
-                <div className="flex items-center gap-2.5 mt-2 flex-wrap justify-center">
+                <div className="grid grid-cols-2 sm:flex w-full max-w-md sm:max-w-none items-center gap-2 sm:gap-2.5 mt-2 sm:flex-wrap justify-center">
                   {phase !== "stop" ? (
                     <button
                       onClick={handlePauseToggle}
-                      className="h-11 px-5 rounded-xl bg-yellow-gold text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
+                      className="h-11 px-3 sm:px-5 rounded-xl bg-yellow-gold text-black font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
                     >
-                      {isPaused ? <Play size={15} /> : <Pause size={15} />}
-                      <span>{isPaused ? t("resume") : t("pause")}</span>
+                      {isPaused ? <Play size={15} className="shrink-0" /> : <Pause size={15} className="shrink-0" />}
+                      <span className="truncate">{isPaused ? t("resume") : t("pause")}</span>
                     </button>
                   ) : (
                     <button
                       onClick={handleStart}
-                      className="h-11 px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition"
+                      className="h-11 px-2.5 sm:px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-[10.5px] sm:text-xs uppercase tracking-wide sm:tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition"
                     >
-                      <Play size={15} />
-                      <span>Nueva Ronda (2 Pitidos)</span>
+                      <Play size={14} className="shrink-0" />
+                      <span className="truncate">Nueva Ronda (2 Pitidos)</span>
                     </button>
                   )}
                   <button
                     onClick={handleResetPhase}
-                    className="h-11 px-5 rounded-xl bg-green-success text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
+                    className="h-11 px-3 sm:px-5 rounded-xl bg-green-success text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
                   >
-                    <RotateCw size={15} />
-                    <span>{t("resetPhase")}</span>
+                    <RotateCw size={15} className="shrink-0" />
+                    <span className="truncate">{t("resetPhase")}</span>
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="h-11 px-5 rounded-xl bg-white/15 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-white/25 active:scale-95 transition"
+                    className="h-11 px-3 sm:px-5 rounded-xl bg-white/15 text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-white/25 active:scale-95 transition"
                   >
-                    <Minimize2 size={15} />
-                    <span>{t("minimize")}</span>
+                    <Minimize2 size={15} className="shrink-0" />
+                    <span className="truncate">{t("minimize")}</span>
                   </button>
                   <button
                     onClick={handleStop}
-                    className="h-11 px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition"
+                    className="h-11 px-3 sm:px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition"
                   >
-                    <Square size={15} />
-                    <span>Configurar</span>
+                    <Square size={15} className="shrink-0" />
+                    <span className="truncate">Configurar</span>
                   </button>
                 </div>
 
                 {/* Emergency Stop / Alto al Fuego (WA Rule 13.4 - 5 rapid horn blasts) */}
                 <button
                   onClick={handleEmergencyStop}
-                  className="h-11 px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
+                  className="h-11 w-full max-w-md sm:w-auto px-5 sm:px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
                   title="Detención inmediata de tiro según reglamento World Archery"
                 >
-                  <AlertTriangle size={16} />
+                  <AlertTriangle size={16} className="shrink-0" />
                   <span>Alto al Fuego (5 Pitidos)</span>
                 </button>
               </div>

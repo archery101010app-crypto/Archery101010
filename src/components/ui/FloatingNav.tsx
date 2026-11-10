@@ -62,7 +62,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#07090E]/98 backdrop-blur-xl border-t border-white/[0.09] shadow-[0_-10px_28px_rgba(0,0,0,0.9)]">
-      <div className="w-full max-w-[430px] mx-auto px-1.5 sm:px-3 py-1.5 flex items-center justify-around">
+      <div className="w-full max-w-[430px] mx-auto px-0.5 sm:px-3 py-1.5 flex items-center justify-around gap-0.5">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
@@ -104,7 +104,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[11.5px] font-bold tracking-tight mt-1 leading-none transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                className={`text-[9.5px] sm:text-[11.5px] font-bold tracking-tight leading-tight mt-1 transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

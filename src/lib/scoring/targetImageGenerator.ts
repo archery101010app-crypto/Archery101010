@@ -213,7 +213,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     } catch {}
   }
 
-  const appFont = "Inter, Outfit, system-ui, -apple-system, sans-serif";
+  const appFont = "Outfit, Inter, system-ui, -apple-system, sans-serif";
 
   const totalArrowsCount =
     ends.length > 0
@@ -544,7 +544,7 @@ function drawCenteredStatBox(
   fillStyle: string,
   strokeStyle: string
 ) {
-  const appFont = "Inter, Outfit, system-ui, -apple-system, sans-serif";
+  const appFont = "Outfit, Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = fillStyle;
   ctx.strokeStyle = strokeStyle;
   ctx.lineWidth = 1.5;

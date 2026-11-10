@@ -318,22 +318,22 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("birthDate")} *</label>
                   <input
                     type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-4 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
+                    className="min-w-0 w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-xs sm:text-sm px-2.5 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("country")} *</label>
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-sm px-3 py-3 rounded-xl outline-none transition-all duration-200"
+                    className="min-w-0 w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-xs sm:text-sm px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
                   >
                     {COUNTRIES.map((c) => (
                       <option key={c.code} value={c.code} className="bg-black text-white">

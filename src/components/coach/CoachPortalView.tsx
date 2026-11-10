@@ -41,6 +41,7 @@ import PlanImporterModal from "@/components/planning/PlanImporterModal";
 import { Macrocycle } from "@/lib/db/macrocycleTypes";
 import { SyncCycleSummary, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
 import { activateCoachLaunchPromo } from "@/lib/billingService";
+import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 
 interface CoachPortalViewProps {
   user: UserProfile;
@@ -96,7 +97,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     setShowPlanImporter(true);
   };
 
-  const handlePlanImportSuccess = ({
+  const handlePlanImportSuccess = async ({
     macrocycle,
     summary
   }: {
@@ -109,7 +110,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         ? assignedIds.map((id) => athletes.find((a) => a.uid === id)?.fullName || id).join(", ")
         : "Todos los alumnos del Club";
 
-    alert(
+    await showOledAlert(
       `¡Plan "${macrocycle.name}" cargado en formato literal!\n\n` +
         `• Destinatario(s): ${recipientText}\n` +
         `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
@@ -620,7 +621,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       }
     } catch (err) {
       console.error("Error unlinking athlete:", err);
-      alert("No se pudo desvincular al alumno. Inténtalo de nuevo.");
+      await showOledAlert("No se pudo desvincular al alumno. Inténtalo de nuevo.");
     }
   };
 
@@ -663,12 +664,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         console.warn("Cloud sync skipped:", syncErr);
       }
 
-      alert(
+      await showOledAlert(
         `¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`
       );
     } catch (err) {
       console.error("Error creating athlete:", err);
-      alert("Error al guardar el perfil del alumno.");
+      await showOledAlert("Error al guardar el perfil del alumno.");
     }
   };
 
@@ -731,7 +732,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       const res = await activateCoachLaunchPromo(user);
       if (res.success && res.updatedUser) {
         if (onUserUpdate) onUserUpdate(res.updatedUser);
-        alert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
+        await showOledAlert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
       }
     } catch (e) {
       console.error(e);
@@ -772,19 +773,18 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         setSessions(filterAndSortClubSessions(list, linkedUids, activeClubId));
         runSync();
 
-        alert("Sesión restituida correctamente. Se ha notificado al arquero.");
+        await showOledAlert("Sesión restituida correctamente. Se ha notificado al arquero.");
       }
     } catch (err) {
       console.error("Error restoring session:", err);
     }
   };
 
-  // Get active session list for Overview (live drafts first, then most recent)
-  const getRecentActivities = () => {
-    return sessions
-      .filter((s) => athletes.some((a) => a.uid === s.userId || a.uid === s.userUid) || s.clubId === activeClubId)
-      .slice(0, 12);
-  };
+  // Get full club sessions and recent activity slice for Overview
+  const clubSessions = sessions.filter(
+    (s) => athletes.some((a) => a.uid === s.userId || a.uid === s.userUid) || s.clubId === activeClubId
+  );
+  const getRecentActivities = () => clubSessions.slice(0, 12);
 
   return (
     <div className="flex flex-col gap-4 min-h-[500px]">
@@ -808,9 +808,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 <span>PRO</span>
               </button>
             </div>
-            <p className="text-[11.6px] text-white mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>Portal de Entrenador</span>
-              <span>·</span>
+            <p className="text-[11px] sm:text-[11.6px] text-white mt-0.5 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 leading-snug">
+              <span className="whitespace-nowrap">Portal de Entrenador</span>
+              <span className="hidden sm:inline">·</span>
               <span>Receptor y Director de Estadísticas</span>
             </p>
           </div>
@@ -835,18 +835,18 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => {
+              onClick={async () => {
                 const codeToCopy =
                   user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                     ? user.clubInviteCode
                     : "";
                 if (!codeToCopy) {
-                  alert("Tu código se está generando. Espera unos segundos e inténtalo de nuevo.");
+                  await showOledAlert("Tu código se está generando. Espera unos segundos e inténtalo de nuevo.");
                   return;
                 }
                 if (navigator.clipboard) {
                   navigator.clipboard.writeText(codeToCopy);
-                  alert(
+                  await showOledAlert(
                     `Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`
                   );
                 }
@@ -858,11 +858,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             </button>
             <button
               onClick={async () => {
-                if (
-                  confirm(
-                    "¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?"
-                  )
-                ) {
+                const confirmed = await showOledConfirm(
+                  "¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?"
+                );
+                if (confirmed) {
                   try {
                     const { generateClubInviteCode, updateProfile } = await import(
                       "@/lib/authService"
@@ -874,7 +873,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       isClubCreator: true
                     });
                     if (onUserUpdate) onUserUpdate(updated);
-                    alert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
+                    await showOledAlert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
                   } catch (err) {
                     console.error("Error al regenerar código:", err);
                   }
@@ -898,78 +897,79 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             exit={{ opacity: 0, y: -8 }}
             className="flex flex-col gap-2"
           >
-            {linkNotifications.map((notif) => (
-              <div
-                key={notif.id}
-                className="bg-[#0B0E14] border border-cyan-neon/35 rounded-2xl p-4 flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon shrink-0">
-                    <CheckCircle2 size={20} />
-                  </div>
-                  <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                    <span className="text-[12.6px] font-black uppercase tracking-wider text-white">
-                      ¡Nuevo Alumno Vinculado!
-                    </span>
-                    <span
-                      className="text-[13.5px] font-normal uppercase tracking-[0.04em] text-white truncate"
-                      style={{ fontFamily: "'Good Times', 'Outfit', sans-serif" }}
+            {linkNotifications.map((notif) => {
+              const dismissNotif = async () => {
+                setLinkNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+                try {
+                  const { doc, setDoc } = await import("firebase/firestore");
+                  const { db } = await import("@/lib/firebase");
+                  await setDoc(
+                    doc(db, "coach_notifications", notif.id),
+                    { read: true },
+                    { merge: true }
+                  );
+                } catch {
+                  // ignore
+                }
+              };
+
+              return (
+                <div
+                  key={notif.id}
+                  className="bg-[#0B0E14] border border-cyan-neon/35 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start sm:items-center justify-between gap-2.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon shrink-0">
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                        <span className="text-xs sm:text-[12.6px] font-black uppercase tracking-wider text-white leading-snug">
+                          ¡Nuevo Alumno Vinculado!
+                        </span>
+                        <span className="text-[13.5px] font-bold uppercase tracking-wide text-white truncate">
+                          {notif.athleteName || "Arquero"}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={dismissNotif}
+                      className="sm:hidden p-1.5 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition shrink-0"
+                      title="Descartar aviso"
                     >
-                      {notif.athleteName || "Arquero"}
-                    </span>
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const targetAth = athletes.find((a) => a.uid === notif.athleteUid);
+                        if (targetAth) {
+                          setSelectedAthlete(targetAth);
+                        } else {
+                          setActiveTab("ATHLETES");
+                        }
+                        await dismissNotif();
+                      }}
+                      className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs sm:text-[12.6px] uppercase tracking-wider cursor-pointer transition text-center"
+                    >
+                      Ver Ficha
+                    </button>
+                    <button
+                      type="button"
+                      onClick={dismissNotif}
+                      className="hidden sm:flex p-2 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition items-center justify-center"
+                      title="Descartar aviso"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const targetAth = athletes.find((a) => a.uid === notif.athleteUid);
-                      if (targetAth) {
-                        setSelectedAthlete(targetAth);
-                      } else {
-                        setActiveTab("ATHLETES");
-                      }
-                      setLinkNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-                      try {
-                        const { doc, setDoc } = await import("firebase/firestore");
-                        const { db } = await import("@/lib/firebase");
-                        await setDoc(
-                          doc(db, "coach_notifications", notif.id),
-                          { read: true },
-                          { merge: true }
-                        );
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[12.6px] uppercase tracking-wider cursor-pointer transition"
-                  >
-                    Ver Ficha
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setLinkNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-                      try {
-                        const { doc, setDoc } = await import("firebase/firestore");
-                        const { db } = await import("@/lib/firebase");
-                        await setDoc(
-                          doc(db, "coach_notifications", notif.id),
-                          { read: true },
-                          { merge: true }
-                        );
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="p-2 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition"
-                    title="Descartar aviso"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -989,7 +989,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 py-2 px-0.5 rounded-xl text-[9.5px] sm:text-[11px] font-black uppercase tracking-tight sm:tracking-wider transition-all duration-200 cursor-pointer ${
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2 rounded-xl text-[8.8px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
                   ? "bg-white/[0.06] border border-white/[0.1] text-cyan-neon"
                   : "text-white/85 hover:text-white border border-transparent"
@@ -1027,6 +1027,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             attendance={attendance}
             onToggleAttendance={handleToggleAttendance}
             recentActivities={getRecentActivities()}
+            allSessions={clubSessions}
             onViewAthlete={setSelectedAthlete}
             onNavigate={onNavigate}
           />
