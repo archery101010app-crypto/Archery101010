@@ -325,15 +325,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       const macroList = await getLocalMacrocycles();
       const cleanMacroList: Macrocycle[] = [];
       for (const mac of macroList) {
-        const isIndoorDemo = badMacroIds.has(mac.id) ||
-          mac.id === "MAC-DEMO-1" || 
-          (mac.name || "").toLowerCase().includes("indoor 2026") ||
-          (mac.name || "").toLowerCase().includes("preparación indoor") ||
-          (mac.name || "").toLowerCase().includes("preparacion indoor") ||
-          (mac.name || "").toLowerCase().includes("offline mode active") ||
-          (mac.name || "").toLowerCase().includes("connect to the internet");
+        const lowerName = (mac.name || "").trim().toLowerCase();
+        const hasTestUid = (mac.assignedAthleteIds || []).some((id: string) =>
+          id.startsWith("qNEkEf15NKZABcadQ0l")
+        );
+        const isTestSheetsPlan =
+          (lowerName === "plan google sheets" &&
+            (mac.startDate === "2026-10-01" || (mac.volumeGoal || 0) === 0 || hasTestUid)) ||
+          hasTestUid;
+        const isIndoorDemo =
+          badMacroIds.has(mac.id) ||
+          mac.id === "MAC-DEMO-1" ||
+          isTestSheetsPlan ||
+          lowerName.includes("indoor 2026") ||
+          lowerName.includes("preparación indoor") ||
+          lowerName.includes("preparacion indoor") ||
+          lowerName.includes("offline mode active") ||
+          lowerName.includes("connect to the internet");
         if (isIndoorDemo) {
-          await deleteLocalMacrocycle(mac.id);
+          await unlinkAndPurgePlan(mac.id);
         } else {
           const belongsToScope =
             mac.coachId === user.uid ||

@@ -187,24 +187,40 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       // Only real linked athletes (no demo/fictitious roster)
       setRoster(athletes.filter((a) => !isFictitiousUser(a)));
 
-      // Load macrocycles (filtrando y eliminando cualquier residuo de demo o plantilla ejemplo)
+      // Load macrocycles (filtrando por el Coach actual y eliminando cualquier residuo de prueba/demo)
       const list = await getLocalMacrocycles();
       const cleanList: Macrocycle[] = [];
       for (const macro of list) {
         const phasesDump = JSON.stringify(macro.phases || []).toLowerCase();
-        const isIndoorDemo = macro.id === "MAC-DEMO-1" || 
-          (macro.name || "").toLowerCase().includes("indoor 2026") ||
-          (macro.name || "").toLowerCase().includes("preparación indoor") ||
-          (macro.name || "").toLowerCase().includes("preparacion indoor") ||
-          (macro.name || "").toLowerCase().includes("offline mode active") ||
-          (macro.name || "").toLowerCase().includes("connect to the internet") ||
+        const lowerName = (macro.name || "").trim().toLowerCase();
+        const hasTestUid = (macro.assignedAthleteIds || []).some((id: string) =>
+          id.startsWith("qNEkEf15NKZABcadQ0l")
+        );
+        const isTestSheetsPlan =
+          (lowerName === "plan google sheets" &&
+            (macro.startDate === "2026-10-01" || (macro.volumeGoal || 0) === 0 || hasTestUid)) ||
+          hasTestUid;
+        const isIndoorDemo =
+          macro.id === "MAC-DEMO-1" ||
+          isTestSheetsPlan ||
+          lowerName.includes("indoor 2026") ||
+          lowerName.includes("preparación indoor") ||
+          lowerName.includes("preparacion indoor") ||
+          lowerName.includes("offline mode active") ||
+          lowerName.includes("connect to the internet") ||
           phasesDump.includes("15 min calentamiento con liga") ||
           phasesDump.includes("core y estabilidad") ||
           phasesDump.includes("volumen técnico 70m");
         if (isIndoorDemo) {
-          await deleteLocalMacrocycle(macro.id);
+          await unlinkAndPurgePlan(macro.id);
         } else {
-          cleanList.push(macro);
+          const belongsToCoach =
+            macro.coachId === user.uid ||
+            (activeClubId && macro.clubId === activeClubId) ||
+            (user.clubId && macro.clubId === user.clubId);
+          if (belongsToCoach) {
+            cleanList.push(macro);
+          }
         }
       }
       setMacrocycles(cleanList);
@@ -512,23 +528,28 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
             exit={{ opacity: 0 }}
             className="flex flex-col gap-4"
           >
-            <div className="flex justify-between items-center">
-              <span className="text-[11.6px] text-white font-black uppercase tracking-wider">Ciclos Activos</span>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2.5 bg-neutral-900/40 border border-white/10 rounded-3xl p-3.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] text-white font-black uppercase tracking-wider">Ciclos Activos</span>
+                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider tabular-nums">
+                  {macrocycles.length} {macrocycles.length === 1 ? "plan" : "planes"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={handleOpenImportModal}
-                  className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-emerald-400 font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition hover:border-emerald-500/30 shadow-sm"
+                  className="w-full py-2.5 px-3 rounded-2xl bg-neutral-950 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
                   title="Importar plan copiado de Excel o Google Sheets"
                 >
-                  <FileSpreadsheet size={12} className="text-emerald-400" />
-                  <span>Importar Excel / Sheets</span>
+                  <FileSpreadsheet size={13} className="text-emerald-400 shrink-0" />
+                  <span className="truncate">Importar Excel / Sheets</span>
                 </button>
                 <button
                   onClick={handleOpenCreate}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon text-black font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-cyan-brand transition"
+                  className="w-full py-2.5 px-3 rounded-2xl bg-cyan-neon text-black font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer hover:bg-cyan-brand transition shadow-sm"
                 >
-                  <Plus size={12} />
-                  <span>+ Ciclo</span>
+                  <Plus size={13} className="shrink-0" />
+                  <span className="truncate">Nuevo Ciclo</span>
                 </button>
               </div>
             </div>
@@ -536,7 +557,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
             <div className="flex flex-col gap-3">
               {macrocycles.length === 0 ? (
                 <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white text-xs">
-                  Aún no has planificado ningún ciclo. Presiona "+ Ciclo" para iniciar.
+                  Aún no has planificado ningún ciclo. Presiona "Nuevo Ciclo" o "Importar Excel / Sheets" para iniciar.
                 </div>
               ) : (
                 macrocycles.map((mac) => {
@@ -601,7 +622,11 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                               <Users size={10} className="shrink-0 text-cyan-neon" />
                               <span className="truncate">
                                 {mac.assignedAthleteIds
-                                  .map((id) => roster.find((r) => r.uid === id)?.fullName || id)
+                                  .map((id) => {
+                                    const found = roster.find((r) => r.uid === id)?.fullName;
+                                    if (found) return found;
+                                    return id.length > 16 ? "Alumno vinculado" : id;
+                                  })
                                   .join(", ")}
                               </span>
                             </>
