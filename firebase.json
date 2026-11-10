@@ -73,7 +73,7 @@
         ]
       },
       {
-        "source": "/Archery101010-WearOS-v2.84.aab",
+        "source": "/Archery101010-WearOS-v2.85.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -81,7 +81,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-WearOS-v2.84.aab\""
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.85.aab\""
           }
         ]
       },
@@ -393,12 +393,12 @@
     "redirects": [
       {
         "source": "/wear-aab",
-        "destination": "/Archery101010-WearOS-v2.84.aab",
+        "destination": "/Archery101010-WearOS-v2.85.aab",
         "type": 302
       },
       {
         "source": "/phone-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.84.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.85.aab",
         "type": 302
       },
       {

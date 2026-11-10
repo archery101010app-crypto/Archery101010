@@ -114,6 +114,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int preShotHistoryIdx = 0;
     private int preShotHistoryCount = 0;
 
+    // Time-based motion ring buffer (~5s at SENSOR_DELAY_GAME) for anchor-stillness + walking-cadence analysis
+    private static final int MOTION_BUF = 512;
+    private final long[] motionT = new long[MOTION_BUF];
+    private final double[] motionLin = new double[MOTION_BUF];
+    private int motionIdx = 0;
+    private int motionCount = 0;
+    // Recent motion peaks (arm swing / steps) used to recognise walking cadence
+    private final long[] motionPeakT = new long[8];
+    private int motionPeakIdx = 0;
+    private long lastMotionPeakMs = 0L;
+    private double prevLin = 0.0;
+    private double prevPrevLin = 0.0;
+
     // Scoring state (synchronized with phone)
     private int currentEnd = 1;
     private int syncedArrowsPerEnd = 6;
@@ -207,7 +220,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             try {
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
                 if (stepDetector != null) {
-                    sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_NORMAL);
+                    // maxReportLatency = 0 → step events are delivered immediately (no batching delay before the walking lock)
+                    sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_FASTEST, 0);
                 }
                 isSensorRegistered = true;
             } catch (Exception ignored) {}
@@ -324,6 +338,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             if (incomingAckSeq > lastAckedCmdSeq) {
                 lastAckedCmdSeq = incomingAckSeq;
+            }
+
+            // Sensitivity chosen on the phone (BAJA / MEDIA / ALTA) must drive the watch detector too
+            if ("SET_SENSITIVITY".equals(rootObj.optString("type", ""))) {
+                sensitivityLevel = Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", sensitivityLevel)));
+                if (rootObj.has("enabled")) autoDetectEnabled = rootObj.optBoolean("enabled", autoDetectEnabled);
+                saveState();
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                return;
+            }
+            if (obj.has("sensitivityLevel")) {
+                sensitivityLevel = Math.max(0, Math.min(2, obj.optInt("sensitivityLevel", sensitivityLevel)));
             }
 
             long now = System.currentTimeMillis();
@@ -634,13 +660,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void recordDetectedStep(long now) {
+        recordDetectedStep(now, false);
+    }
+
+    private void recordDetectedStep(long now, boolean fromHardwarePedometer) {
         prevStepTimeMs = lastStepTimeMs;
         lastStepTimeMs = now;
-        if ((now - prevStepTimeMs) <= 4200L) {
-            // 2+ consecutive steps = archer is walking; lock auto-shot for 3.8s after last step
-            walkingLockUntilMs = now + 3800L;
-        } else {
-            walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 2200L);
+        // Only the hardware pedometer (immune to bow-arm motion) sets the walking lock.
+        // Accelerometer pseudo-steps also fire while drawing the bow, so they only count distance.
+        if (fromHardwarePedometer) {
+            walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 2500L);
         }
         stepsCount++;
         distanceWalkedM = Math.max(distanceWalkedM + 0.76f, stepsCount * 0.76f);
@@ -651,12 +680,61 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (canvasView != null) canvasView.invalidate();
     }
 
+    /**
+     * True only if EVERY sample in [now - windowMs - 90ms, now - 90ms] stayed below quietMax
+     * and the window is well covered by samples. An archer at full draw / anchor is almost
+     * motionless for 1-3 s before the release; walking never is.
+     */
+    private boolean isAnchorStillFor(long now, long windowMs, double quietMax) {
+        long end = now - 90L;
+        long start = end - windowMs;
+        int n = 0;
+        long oldest = Long.MAX_VALUE;
+        for (int i = 0; i < motionCount; i++) {
+            int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+            long t = motionT[idx];
+            if (t < start) break;
+            if (t > end) continue;
+            if (motionLin[idx] > quietMax) return false;
+            n++;
+            oldest = t;
+        }
+        // Need coverage of at least 85% of the window and a minimum sample count (no "empty buffer = steady")
+        return n >= 12 && oldest != Long.MAX_VALUE && (end - oldest) >= (long) (windowMs * 0.85);
+    }
+
+    /** Registers a motion peak; a truly rhythmic gait (4 peaks, gaps within ±25%) locks the detector briefly. */
+    private void trackMotionPeak(long now, double lin) {
+        // Local maximum above arm-swing level, separated from the previous peak
+        if (prevLin >= 2.5 && prevLin > prevPrevLin && prevLin >= lin && (now - lastMotionPeakMs) >= 280L) {
+            lastMotionPeakMs = now;
+            motionPeakT[motionPeakIdx] = now;
+            motionPeakIdx = (motionPeakIdx + 1) % motionPeakT.length;
+            long t0 = motionPeakT[(motionPeakIdx - 1 + 8) % 8];
+            long t1 = motionPeakT[(motionPeakIdx - 2 + 8) % 8];
+            long t2 = motionPeakT[(motionPeakIdx - 3 + 8) % 8];
+            long t3 = motionPeakT[(motionPeakIdx - 4 + 8) % 8];
+            if (t3 > 0 && (now - t3) <= 4200L) {
+                long g1 = t0 - t1, g2 = t1 - t2, g3 = t2 - t3;
+                boolean inRange = g1 >= 280L && g1 <= 1400L && g2 >= 280L && g2 <= 1400L && g3 >= 280L && g3 <= 1400L;
+                double avg = (g1 + g2 + g3) / 3.0;
+                boolean rhythmic = Math.abs(g1 - avg) <= avg * 0.25 && Math.abs(g2 - avg) <= avg * 0.25 && Math.abs(g3 - avg) <= avg * 0.25;
+                if (inRange && rhythmic) {
+                    walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 1500L);
+                }
+            }
+        }
+        prevPrevLin = prevLin;
+        prevLin = lin;
+    }
+
     @Override
     public void onSensorChanged(SensorEvent event) {
         long now = System.currentTimeMillis();
         if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
-            if ((now - lastStepTimeMs) > 300L && (now - lastShotTimestamp) > 1200L) {
-                recordDetectedStep(now);
+            // Never ignore steps after a shot: dropping them released the walking lock and caused chains of false arrows
+            if ((now - lastStepTimeMs) > 300L) {
+                recordDetectedStep(now, true);
             }
             return;
         }
@@ -669,18 +747,21 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             smoothedAccelMag = 0.96 * smoothedAccelMag + 0.04 * mag;
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
 
-            // Sensitivity thresholds: 0 = BAJA, 1 = MEDIA (default), 2 = ALTA
-            double shotThreshold = (sensitivityLevel == 0) ? 20.5 : ((sensitivityLevel == 2) ? 14.2 : 16.8);
-            double quietLimit = (sensitivityLevel == 0) ? 2.1 : ((sensitivityLevel == 2) ? 3.2 : 2.6);
-            long shotCooldownMs = (sensitivityLevel == 0) ? 3800L : ((sensitivityLevel == 2) ? 2600L : 3200L);
+            // Sensitivity: 0 = BAJA, 1 = MEDIA (default), 2 = ALTA
+            double shotThreshold = (sensitivityLevel == 0) ? 22.0 : ((sensitivityLevel == 2) ? 15.0 : 18.0);
+            double quietMax = (sensitivityLevel == 0) ? 1.6 : ((sensitivityLevel == 2) ? 2.6 : 2.0);
+            long stillWindowMs = (sensitivityLevel == 0) ? 1500L : ((sensitivityLevel == 2) ? 900L : 1200L);
+            long shotCooldownMs = (sensitivityLevel == 0) ? 4500L : ((sensitivityLevel == 2) ? 3000L : 3800L);
 
-            boolean isWalkingBlocked = (now < walkingLockUntilMs) || ((now - lastStepTimeMs) < 2200L);
+            trackMotionPeak(now, linearMag);
+
+            boolean isWalkingBlocked = now < walkingLockUntilMs;
 
             if (autoDetectEnabled
                     && !isWalkingBlocked
                     && linearMag >= shotThreshold
                     && (now - lastShotTimestamp) > shotCooldownMs
-                    && isPreShotAnchorSteady(quietLimit)) {
+                    && isAnchorStillFor(now, stillWindowMs, quietMax)) {
                 lastShotTimestamp = now;
                 lastLocalActionTimeMs = now;
                 preShotHistoryCount = 0;
@@ -689,11 +770,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 saveState();
                 sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
                 if (canvasView != null) canvasView.invalidate();
-            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastStepTimeMs) > 380L && (now - lastShotTimestamp) > 1400L) {
+            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastStepTimeMs) > 380L && (now - lastShotTimestamp) > 900L) {
                 recordDetectedStep(now);
             }
 
-            // Record sample into pre-shot stillness ring buffer
+            // Record sample into time-based motion buffer
+            motionT[motionIdx] = now;
+            motionLin[motionIdx] = linearMag;
+            motionIdx = (motionIdx + 1) % MOTION_BUF;
+            if (motionCount < MOTION_BUF) motionCount++;
+
+            // Legacy short ring buffer (kept for compatibility)
             preShotLinearHistory[preShotHistoryIdx] = Math.min(linearMag, 12.0);
             preShotHistoryIdx = (preShotHistoryIdx + 1) % 16;
             if (preShotHistoryCount < 16) {

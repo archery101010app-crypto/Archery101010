@@ -36,6 +36,7 @@ export type WatchCommandMessage =
       totalScore?: number;
     }
   | { type: "UNDO_ARROW"; totalScore?: number }
+  | { type: "SET_SENSITIVITY"; sensitivityLevel: 0 | 1 | 2 }
   | {
       type: "SCORE_INPUT";
       payload?: { value: string; totalScore?: number };

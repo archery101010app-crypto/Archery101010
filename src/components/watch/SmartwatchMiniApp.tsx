@@ -145,25 +145,26 @@ export default function SmartwatchMiniApp({
     [onIncrementArrow, triggerHaptic]
   );
 
-  // Automatic Wrist Release Detector using DeviceMotionEvent with Pre-Shot Anchor Stillness Filter
+  // Automatic Wrist Release Detector (DeviceMotion) — same algorithm as the native Wear OS app:
+  //  1) strict anchor stillness: EVERY sample in the window before the release must be quiet (max, not average)
+  //  2) walking-cadence lock: 3+ rhythmic motion peaks (0.28–1.4 s apart) block detection for 3.5 s
+  //  3) never runs on the phone while a real watch is connected (the phone is not on the wrist)
   const lastShotRef = useRef<number>(0);
-  const preShotQuietEmaRef = useRef<number>(1.2);
+  const motionBufRef = useRef<Array<{ t: number; v: number }>>([]);
+  const peakTimesRef = useRef<number[]>([]);
+  const walkLockUntilRef = useRef<number>(0);
+  const prevLinRef = useRef<[number, number]>([0, 0]);
+  const realWatchConnected = watchConnStatus.bridgeReady && watchConnStatus.connectedNodesCount > 0;
   useEffect(() => {
     if (!isOpen || !activeState.autoDetectEnabled) return;
+    if (!standaloneWatchScreen && realWatchConnected) return;
     if (typeof window === "undefined" || !("DeviceMotionEvent" in window)) return;
 
-    const thresholdMap = {
-      ALTA: 17.5,
-      MEDIA: 21.5,
-      BAJA: 26.0
-    };
-    const quietLimitMap = {
-      ALTA: 3.4,
-      MEDIA: 2.7,
-      BAJA: 2.1
-    };
-    const threshold = thresholdMap[sensitivity];
-    const quietLimit = quietLimitMap[sensitivity];
+    const cfg = {
+      ALTA: { threshold: 15.0, quietMax: 2.6, stillMs: 900, cooldown: 3000 },
+      MEDIA: { threshold: 18.0, quietMax: 2.0, stillMs: 1200, cooldown: 3800 },
+      BAJA: { threshold: 22.0, quietMax: 1.6, stillMs: 1500, cooldown: 4500 }
+    }[sensitivity];
 
     const handleMotion = (event: DeviceMotionEvent) => {
       const acc = event.accelerationIncludingGravity || event.acceleration;
@@ -171,28 +172,82 @@ export default function SmartwatchMiniApp({
       const ax = acc.x || 0;
       const ay = acc.y || 0;
       const az = acc.z || 0;
-      const mag = Math.sqrt(ax * ax + ay * ay + az * az);
-      const dynamicSpike = Math.abs(mag - 9.81);
-
-      setWristImpulseLevel(Math.min(100, Math.round((dynamicSpike / threshold) * 100)));
-
+      const lin = Math.abs(Math.sqrt(ax * ax + ay * ay + az * az) - 9.81);
       const now = Date.now();
+
+      setWristImpulseLevel(Math.min(100, Math.round((lin / cfg.threshold) * 100)));
+
+      // Walking cadence detection (local peaks above arm-swing level)
+      const [p1, p2] = prevLinRef.current;
+      const peaks = peakTimesRef.current;
+      if (p1 >= 2.5 && p1 > p2 && p1 >= lin && (peaks.length === 0 || now - peaks[peaks.length - 1] >= 280)) {
+        peaks.push(now);
+        while (peaks.length && now - peaks[0] > 3500) peaks.shift();
+        const gaps: number[] = [];
+        for (let i = 1; i < peaks.length; i++) gaps.push(peaks[i] - peaks[i - 1]);
+        const last = gaps.slice(-3);
+        if (last.length === 3 && last.every((g) => g >= 280 && g <= 1400)) {
+          const avg = (last[0] + last[1] + last[2]) / 3;
+          // Only a truly rhythmic gait (gaps within ±25%) counts as walking — a bow draw is not periodic
+          if (last.every((g) => Math.abs(g - avg) <= avg * 0.25)) {
+            walkLockUntilRef.current = Math.max(walkLockUntilRef.current, now + 1500);
+          }
+        }
+      }
+      prevLinRef.current = [lin, p1];
+
+      // Strict stillness check over [now - stillMs - 90, now - 90]
+      const buf = motionBufRef.current;
+      const end = now - 90;
+      const start = end - cfg.stillMs;
+      let n = 0;
+      let oldest = Infinity;
+      let still = true;
+      for (let i = buf.length - 1; i >= 0; i--) {
+        const s = buf[i];
+        if (s.t < start) break;
+        if (s.t > end) continue;
+        if (s.v > cfg.quietMax) {
+          still = false;
+          break;
+        }
+        n++;
+        oldest = s.t;
+      }
+      still = still && n >= 12 && end - oldest >= cfg.stillMs * 0.85;
+
       if (
-        dynamicSpike >= threshold &&
-        now - lastShotRef.current > 3200 &&
-        preShotQuietEmaRef.current <= quietLimit
+        lin >= cfg.threshold &&
+        now >= walkLockUntilRef.current &&
+        now - lastShotRef.current > cfg.cooldown &&
+        still
       ) {
         lastShotRef.current = now;
         handleArrowDelta(1, "watch_auto");
       }
-      if (dynamicSpike < 9.0) {
-        preShotQuietEmaRef.current = 0.82 * preShotQuietEmaRef.current + 0.18 * dynamicSpike;
-      }
+
+      buf.push({ t: now, v: lin });
+      while (buf.length && now - buf[0].t > 5000) buf.shift();
     };
 
     window.addEventListener("devicemotion", handleMotion, { passive: true });
     return () => window.removeEventListener("devicemotion", handleMotion);
-  }, [isOpen, activeState.autoDetectEnabled, sensitivity, handleArrowDelta]);
+  }, [isOpen, activeState.autoDetectEnabled, sensitivity, handleArrowDelta, standaloneWatchScreen, realWatchConnected]);
+
+  // Persist sensitivity and push it to the real Wear OS watch so BAJA / MEDIA / ALTA works there too
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("archery_101010_auto_sensitivity");
+      if (saved === "ALTA" || saved === "MEDIA" || saved === "BAJA") setSensitivity(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("archery_101010_auto_sensitivity", sensitivity);
+    } catch {}
+    const level: 0 | 1 | 2 = sensitivity === "BAJA" ? 0 : sensitivity === "ALTA" ? 2 : 1;
+    sendWatchCommand({ type: "SET_SENSITIVITY", sensitivityLevel: level });
+  }, [sensitivity]);
 
   const handleToggleAuto = () => {
     triggerHaptic(30);
