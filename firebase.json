@@ -310,6 +310,84 @@
             "value": "no-store, no-cache, must-revalidate"
           }
         ]
+      },
+      {
+        "source": "/garmin-store/garmin-hero-1440x720.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-hero-1440x720.jpg\""
+          }
+        ]
+      },
+      {
+        "source": "/garmin-store/garmin-cover-500x500.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-cover-500x500.jpg\""
+          }
+        ]
+      },
+      {
+        "source": "/garmin-store/garmin-screen-1-contador.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-screen-1-contador.jpg\""
+          }
+        ]
+      },
+      {
+        "source": "/garmin-store/garmin-screen-2-puntos.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-screen-2-puntos.jpg\""
+          }
+        ]
+      },
+      {
+        "source": "/garmin-store/garmin-screen-3-metricas.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-screen-3-metricas.jpg\""
+          }
+        ]
+      },
+      {
+        "source": "/garmin-store/garmin-screen-4-resumen.jpg",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/jpeg"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-screen-4-resumen.jpg\""
+          }
+        ]
       }
     ],
     "redirects": [
