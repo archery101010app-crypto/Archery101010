@@ -304,13 +304,6 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         activeInstanceRef = new WeakReference<>(this);
 
-        // Always keep Android APK/AAB pinned to https://localhost so IndexedDB never splits and offline launch works 100%
-        activeAppOrigin = "https://localhost";
-        getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
-            .edit()
-            .remove("prefer_remote_ota")
-            .apply();
-
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
             WebView webView = getBridge().getWebView();
@@ -335,6 +328,11 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcherySpotifyBridge(), "ArcherySpotifyBridge");
             restoreAndPromoteSpotifyCookies();
             initWearableListener();
+
+            if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
+                activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                webView.loadUrl("https://archery101010-c0bb4.web.app/");
+            }
 
             // Subclass Capacitor's BridgeWebChromeClient so <input type="file"> (Excel/Photos) keeps working 100%
             // while granting WebRTC RECORD_AUDIO requests cleanly via ActivityResultContracts.RequestPermission
@@ -405,7 +403,7 @@ public class MainActivity extends BridgeActivity {
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
                 @Override
                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                    if (url != null && url.startsWith("https://localhost")) {
+                    if (url != null && (url.startsWith("https://localhost") || url.startsWith("https://archery101010-c0bb4.web.app"))) {
                         isWebWatchListenerReady = false;
                     }
                     super.onPageStarted(view, url, favicon);
@@ -418,13 +416,34 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                    if (request != null && request.isForMainFrame() && request.getUrl() != null) {
+                        String host = request.getUrl().getHost();
+                        if (host != null && host.contains("archery101010-c0bb4.web.app")) {
+                            activeAppOrigin = "https://localhost";
+                            view.loadUrl("https://localhost/");
+                            return;
+                        }
+                    }
+                    super.onReceivedError(view, request, error);
+                }
+
+                @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     Uri uri = request.getUrl();
                     if (uri != null) {
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
                         String path = uri.getPath() != null ? uri.getPath() : "";
-                        if (request.isForMainFrame() && host.equals("localhost")) {
-                            activeAppOrigin = "https://localhost";
+                        if (request.isForMainFrame() && !path.startsWith("/__/auth/handler")) {
+                            if (host.equals("localhost")) {
+                                activeAppOrigin = "https://localhost";
+                            } else if (host.equals("archery101010-c0bb4.web.app")) {
+                                activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                                getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
+                                    .edit()
+                                    .putBoolean("prefer_remote_ota", true)
+                                    .apply();
+                            }
                         }
                         if (host.equals("open.spotify.com") && path.startsWith("/embed/") &&
                             (request.getMethod() == null || "GET".equalsIgnoreCase(request.getMethod()))) {
@@ -436,8 +455,9 @@ public class MainActivity extends BridgeActivity {
                         String urlStr = uri.toString();
                         if (urlStr.startsWith("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") ||
                             urlStr.startsWith("https://archery101010-c0bb4.web.app/__/auth/handler")) {
+                            String targetOrigin = activeAppOrigin != null ? activeAppOrigin : "https://localhost";
                             String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><script>" +
-                                "window.location.replace('https://localhost/' + window.location.search + window.location.hash);" +
+                                "window.location.replace('" + targetOrigin + "/' + window.location.search + window.location.hash);" +
                                 "</script></head><body style=\"background:#050505\"></body></html>";
                             return new WebResourceResponse(
                                 "text/html",
