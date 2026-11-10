@@ -60,6 +60,8 @@ export interface WatchConnectionStatus {
   nativeVersion?: string;
   connectedNodesCount: number;
   connectedNodes: Array<{ id: string; displayName: string; isNearby?: boolean }>;
+  /** Paired watches that already have the Wear OS app installed (undefined on older native builds). */
+  watchAppInstalledCount?: number;
   lastMessageAt: number;
   lastPongAt: number;
   hasCachedState: boolean;
@@ -453,6 +455,8 @@ function parseWatchStatusPayload(raw: any): WatchConnectionStatus {
       connectedNodesCount:
         typeof obj.connectedNodesCount === "number" ? obj.connectedNodesCount : nodes.length,
       connectedNodes: nodes,
+      watchAppInstalledCount:
+        typeof obj.watchAppInstalledCount === "number" ? obj.watchAppInstalledCount : undefined,
       lastMessageAt: Number(obj.lastMessageAt) || 0,
       lastPongAt: Number(obj.lastPongAt) || 0,
       hasCachedState: Boolean(obj.hasCachedState)
@@ -490,6 +494,22 @@ export function requestNativeWatchStatus(): WatchConnectionStatus {
     }
   } catch {}
   return parseWatchStatusPayload(null);
+}
+
+/**
+ * Opens the Google Play listing of the Wear OS app directly on the paired watch.
+ * Returns false when the native bridge does not support it (web / older builds).
+ */
+export function installAppOnWatch(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const bridge = (window as any).ArcheryWatchNativeBridge;
+    if (bridge?.installAppOnWatch) {
+      bridge.installAppOnWatch();
+      return true;
+    }
+  } catch {}
+  return false;
 }
 
 export function pingNativeWatch(): void {

@@ -53,6 +53,9 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
+import androidx.wear.remote.interactions.RemoteActivityHelper;
+import com.google.android.gms.wearable.CapabilityClient;
+import com.google.android.gms.wearable.CapabilityInfo;
 import com.google.android.gms.wearable.DataClient;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
@@ -81,6 +84,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -134,6 +138,9 @@ public class MainActivity extends BridgeActivity {
     private final List<String> pendingWatchCommands = new ArrayList<>();
     private final Set<String> processedWatchCmdIds = new LinkedHashSet<>();
     private volatile JSONArray cachedConnectedNodesJson = new JSONArray();
+    // Node IDs of paired watches that already advertise the Wear OS app capability (archery101010_watch_app)
+    private volatile Set<String> cachedWatchNodesWithApp = new LinkedHashSet<>();
+    private static final String WEAR_APP_CAPABILITY = "archery101010_watch_app";
 
     private final LocationListener nativeLocationListener = new LocationListener() {
         @Override
@@ -704,6 +711,16 @@ public class MainActivity extends BridgeActivity {
         public void flushPendingWatchCommands() {
             flushPendingWatchCommandsToWebView();
         }
+
+        /**
+         * Opens the Google Play listing of the Wear OS app directly ON the paired watch
+         * (for every connected watch that does not have the app yet). Falls back to the
+         * phone Play Store listing when no watch is reachable.
+         */
+        @JavascriptInterface
+        public void installAppOnWatch() {
+            openWearAppInstallOnWatches();
+        }
     }
 
     public class ArcheryLocationNativeBridge {
@@ -1022,6 +1039,8 @@ public class MainActivity extends BridgeActivity {
             status.put("nativeVersion", appVer);
             status.put("connectedNodesCount", cachedConnectedNodesJson.length());
             status.put("connectedNodes", cachedConnectedNodesJson);
+            status.put("watchAppInstalledCount", cachedWatchNodesWithApp.size());
+            status.put("watchNodesWithApp", new JSONArray(cachedWatchNodesWithApp));
             status.put("lastMessageAt", lastWatchMessageTimeMs);
             status.put("lastPongAt", lastWatchPongTimeMs);
             status.put("hasCachedState", lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty());
@@ -1062,6 +1081,81 @@ public class MainActivity extends BridgeActivity {
                 emitWatchConnectionStatusToWebView();
             });
         } catch (Exception ignored) {}
+        refreshWatchAppCapability();
+    }
+
+    /** Detects which paired watches already have the ARCHERY 101010 Wear OS app installed. */
+    private void refreshWatchAppCapability() {
+        try {
+            Wearable.getCapabilityClient(this)
+                .getCapability(WEAR_APP_CAPABILITY, CapabilityClient.FILTER_ALL)
+                .addOnSuccessListener(info -> {
+                    Set<String> ids = new LinkedHashSet<>();
+                    if (info != null && info.getNodes() != null) {
+                        for (Node n : info.getNodes()) ids.add(n.getId());
+                    }
+                    cachedWatchNodesWithApp = ids;
+                    emitWatchConnectionStatusToWebView();
+                });
+        } catch (Exception ignored) {}
+    }
+
+    /** Launches the Play Store page of the Wear OS app on every connected watch missing it. */
+    private void openWearAppInstallOnWatches() {
+        final String pkg = getPackageName();
+        try {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                Wearable.getCapabilityClient(this)
+                    .getCapability(WEAR_APP_CAPABILITY, CapabilityClient.FILTER_ALL)
+                    .addOnCompleteListener(capTask -> {
+                        Set<String> withApp = new LinkedHashSet<>();
+                        try {
+                            CapabilityInfo info = capTask.isSuccessful() ? capTask.getResult() : null;
+                            if (info != null) for (Node n : info.getNodes()) withApp.add(n.getId());
+                        } catch (Exception ignored) {}
+                        cachedWatchNodesWithApp = withApp;
+
+                        int launched = 0;
+                        if (nodes != null) {
+                            RemoteActivityHelper helper = new RemoteActivityHelper(this, Executors.newSingleThreadExecutor());
+                            Intent playIntent = new Intent(Intent.ACTION_VIEW)
+                                .addCategory(Intent.CATEGORY_BROWSABLE)
+                                .setData(Uri.parse("market://details?id=" + pkg));
+                            for (Node node : nodes) {
+                                if (withApp.contains(node.getId())) continue;
+                                try {
+                                    helper.startRemoteActivity(playIntent, node.getId());
+                                    launched++;
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                        final int launchedFinal = launched;
+                        final boolean anyNode = nodes != null && !nodes.isEmpty();
+                        runOnUiThread(() -> {
+                            if (launchedFinal > 0) {
+                                android.widget.Toast.makeText(this, "Revisa tu reloj: se abrió Google Play para instalar ARCHERY 101010", android.widget.Toast.LENGTH_LONG).show();
+                            } else if (anyNode) {
+                                android.widget.Toast.makeText(this, "La app ya está instalada en tu reloj", android.widget.Toast.LENGTH_LONG).show();
+                            } else {
+                                openPhonePlayStoreListing(pkg);
+                            }
+                        });
+                        emitWatchConnectionStatusToWebView();
+                    });
+            }).addOnFailureListener(err -> runOnUiThread(() -> openPhonePlayStoreListing(pkg)));
+        } catch (Exception e) {
+            runOnUiThread(() -> openPhonePlayStoreListing(pkg));
+        }
+    }
+
+    private void openPhonePlayStoreListing(String pkg) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception ignored) {}
+        }
     }
 
     private void broadcastToWearNodes(final String path, final byte[] data) {

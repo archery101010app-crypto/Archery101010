@@ -7,8 +7,8 @@ android {
         applicationId "com.archery101010.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 48300
-        versionName "2.83"
+        versionCode 48400
+        versionName "2.84"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -49,6 +49,8 @@ dependencies {
     implementation project(':capacitor-android')
     implementation "com.google.android.gms:play-services-auth:21.2.0"
     implementation "com.google.android.gms:play-services-wearable:19.0.0"
+    // Opens the Play Store listing directly on the paired Wear OS watch ("Instalar en reloj")
+    implementation "androidx.wear:wear-remote-interactions:1.1.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

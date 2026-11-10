@@ -13,6 +13,7 @@ import {
   subscribeWatchMessages,
   subscribeWatchConnectionStatus,
   pingNativeWatch,
+  installAppOnWatch,
   calculateActiveKcal
 } from "@/lib/scoring/biometricsEngine";
 
@@ -592,6 +593,11 @@ export default function SmartwatchMiniApp({
   }
 
   const isWatchConnected = watchConnStatus.connectedNodesCount > 0;
+  // Show install CTA on native Android when no paired watch reports the Wear OS app yet
+  const showInstallOnWatch =
+    watchConnStatus.bridgeReady &&
+    typeof watchConnStatus.watchAppInstalledCount === "number" &&
+    watchConnStatus.watchAppInstalledCount === 0;
 
   // Modal overlay inside the main app (WHOOP / Apple / Nike Matte OLED Design)
   return (
@@ -668,6 +674,19 @@ export default function SmartwatchMiniApp({
               )}
             </div>
           </div>
+
+          {showInstallOnWatch && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(25);
+                installAppOnWatch();
+              }}
+              className="w-full bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full py-[8px] text-[9.5px] font-extrabold tracking-[0.08em] uppercase tabular-nums cursor-pointer active:scale-95 transition"
+            >
+              {isWatchConnected ? "● Instalar en mi reloj" : "● Reloj no detectado · Abrir tienda"}
+            </button>
+          )}
 
           {/* Minimal Mode Switch (Redondo / Cuadrado) */}
           <div className="w-full grid grid-cols-2 gap-[4px] bg-[#030407] border border-white/[0.08] rounded-[12px] p-[3px]">
