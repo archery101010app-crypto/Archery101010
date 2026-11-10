@@ -1018,43 +1018,44 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   };
 
   return (
-    <div className="flex flex-col gap-4 py-4 min-h-full">
-      {/* Top Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button
-            onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <h2 className="text-white text-[17.6px] sm:text-[19.8px] font-black uppercase tracking-wide truncate leading-tight">
-                {language === "es" ? "Calendario" : "Calendar"}
-              </h2>
-              {isCoach && (
-                <span className="text-[9.3px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
-                  Coach
-                </span>
-              )}
+    <div className="flex flex-col gap-3 py-3 min-h-full">
+      {/* Top Header: Title on top + Full-width 2-column action bar below */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={onBack}
+              className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-white text-[18px] sm:text-[20px] font-black uppercase tracking-wide leading-tight">
+                  {language === "es" ? "Calendario" : "Calendar"}
+                </h2>
+                {isCoach && (
+                  <span className="text-[9.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
+                    Coach
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-white/70 font-semibold uppercase tracking-wider leading-tight mt-0.5">
+                {language === "es" ? "Planificación y Tareas" : "Planning & Tasks"}
+              </p>
             </div>
-            <p className="text-[11.6px] text-white uppercase tracking-wider truncate">
-              {language === "es" ? "Planificación y Tareas" : "Planning & Tasks"}
-            </p>
           </div>
         </div>
 
-        {/* Action buttons: Planificar Mes (Tabla 1-31 / Excel) + Agregar Agenda Hoy */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Action buttons below title: symmetric 2-column layout */}
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleOpenImportModal}
-            className="h-9 px-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
+            className="h-10 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
             title="Planificar todo el mes (Tabla Día 1 al 31 o pegar de Excel / Sheets)"
           >
-            <FileSpreadsheet size={13} />
-            <span className="hidden sm:inline">Planificar Mes / Excel</span>
-            <span className="sm:hidden">Plan Mes</span>
+            <FileSpreadsheet size={14} className="shrink-0" />
+            <span>{language === "es" ? "Plan de Mes" : "Month Plan"}</span>
           </button>
 
           <button
@@ -1064,32 +1065,32 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 null
               )
             }
-            className="h-9 px-2.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition shrink-0"
+            className="h-10 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
             title="Escribir agenda para un día"
           >
-            <Plus size={15} />
-            <span>Agenda</span>
+            <Plus size={15} className="shrink-0" />
+            <span>{language === "es" ? "Nueva Agenda" : "New Agenda"}</span>
           </button>
         </div>
       </div>
 
       {/* Compact Month Selector + View Switcher Bar */}
-      <div className="flex items-center justify-between gap-2 bg-[#0D1017] px-3 py-2.5 rounded-2xl border border-white/[0.08]">
-        <div className="flex items-center gap-1 min-w-0">
+      <div className="flex items-center justify-between gap-1.5 bg-[#0D1017] px-2.5 py-2 rounded-2xl border border-white/[0.08]">
+        <div className="flex items-center gap-0.5 min-w-0 flex-1">
           <button
             onClick={prevMonth}
-            className="w-8 h-8 rounded-xl text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
+            className="w-7 h-7 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={17} />
           </button>
-          <span className="text-white font-extrabold text-sm sm:text-base capitalize truncate px-1">
+          <span className="text-white font-extrabold text-[13.5px] sm:text-[15px] capitalize whitespace-nowrap truncate px-1">
             {monthName}
           </span>
           <button
             onClick={nextMonth}
-            className="w-8 h-8 rounded-xl text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
+            className="w-7 h-7 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={17} />
           </button>
         </div>
 
@@ -1097,7 +1098,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <button
             type="button"
             onClick={() => setCalendarViewMode("month")}
-            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "month"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
@@ -1109,7 +1110,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <button
             type="button"
             onClick={() => setCalendarViewMode("agenda")}
-            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "agenda"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
@@ -1123,17 +1124,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       {/* Macrocycle Filter & Unlink Plan Action */}
       {(macrocycles.length > 0 || (isCoach && roster.length > 0)) && (
-        <div className="flex items-center justify-between gap-2.5 px-1 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+        <div className="flex flex-col gap-2 bg-[#0D1017]/80 p-2.5 rounded-2xl border border-white/[0.06]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {macrocycles.length > 0 && (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs text-white uppercase font-black tracking-widest shrink-0">
+                <span className="text-[11px] text-white/80 uppercase font-black tracking-wider shrink-0 w-16">
                   {language === "es" ? "Plan:" : "Plan:"}
                 </span>
                 <select
                   value={selectedMacrocycleId}
                   onChange={(e) => setSelectedMacrocycleId(e.target.value)}
-                  className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon max-w-[160px] sm:max-w-[200px] truncate cursor-pointer"
+                  className="flex-1 min-w-0 bg-[#07090E] border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon truncate cursor-pointer"
                 >
                   <option value="ALL">
                     {language === "es" ? "Todos los Planes" : "All Plans"}
@@ -1149,14 +1150,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
             {isCoach && roster.length > 0 && (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs text-cyan-neon uppercase font-black tracking-widest shrink-0 flex items-center gap-1">
-                  <User size={12} />
+                <span className="text-[11px] text-cyan-neon uppercase font-black tracking-wider shrink-0 w-16 flex items-center gap-1">
+                  <User size={11} />
                   <span>Alumno:</span>
                 </span>
                 <select
                   value={selectedAthleteFilter}
                   onChange={(e) => setSelectedAthleteFilter(e.target.value)}
-                  className="bg-neutral-900 border border-cyan-neon/30 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon max-w-[160px] sm:max-w-[190px] truncate cursor-pointer"
+                  className="flex-1 min-w-0 bg-[#07090E] border border-cyan-neon/30 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon truncate cursor-pointer"
                 >
                   <option value="ALL">Todos los Alumnos</option>
                   {roster.map((ath) => (
@@ -1176,15 +1177,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               : macrocycles[0];
             if (!currentPlan) return null;
             return (
-              <button
-                type="button"
-                onClick={() => handleRequestUnlink(currentPlan)}
-                className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm ml-auto"
-                title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
-              >
-                <Unlink size={11} />
-                <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
-              </button>
+              <div className="flex justify-end pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleRequestUnlink(currentPlan)}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition shadow-sm"
+                  title={language === "es" ? "Desvincular este plan y borrar sus tareas del calendario" : "Unlink this plan"}
+                >
+                  <Unlink size={11} />
+                  <span>{language === "es" ? "Desvincular Plan" : "Unlink Plan"}</span>
+                </button>
+              </div>
             );
           })()}
         </div>
