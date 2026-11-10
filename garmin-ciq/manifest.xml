@@ -1,14 +1,14 @@
 <?xml version="1.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
-    <iq:application entry="Archery101010WatchApp" id="a1010100-1010-4101-8101-010101010101" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.2.0" name="@Strings.AppName" type="watch-app" version="2.81.0">
+    <iq:application entry="Archery101010WatchApp" id="a1010100-1010-4101-8101-010101010101" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.2.0" name="@Strings.AppName" type="watch-app" version="2.82.0">
         <iq:products>
-            <!-- Epix Gen 2 & Epix Pro Gen 2 (All Sizes: 42mm, 47mm, 51mm) -->
+            <!-- Epix Gen 2 & Epix Pro Gen 2 (All Sizes: 42mm, 47mm, 51mm + Quatix 7 Pro) -->
             <iq:product id="epix2"/>
             <iq:product id="epix2pro42mm"/>
             <iq:product id="epix2pro47mm"/>
             <iq:product id="epix2pro51mm"/>
 
-            <!-- Fenix 7 & Fenix 7 Pro Series (All Sizes: S 42mm, Standard 47mm, X 51mm) -->
+            <!-- Fenix 7 & Fenix 7 Pro Series (All Sizes: S 42mm, Standard 47mm, X 51mm + Tactix 7 / Quatix 7 / Enduro 2) -->
             <iq:product id="fenix7s"/>
             <iq:product id="fenix7"/>
             <iq:product id="fenix7x"/>
@@ -16,33 +16,26 @@
             <iq:product id="fenix7pro"/>
             <iq:product id="fenix7xpro"/>
 
-            <!-- Fenix 8 AMOLED, Fenix 8 Solar, Fenix E & Enduro (All Sizes: 43mm, 47mm, 51mm) -->
+            <!-- Fenix 8 AMOLED, Fenix 8 Solar, Fenix E, Enduro 3 & MARQ Gen 2 (All Sizes: 43mm, 47mm, 51mm) -->
             <iq:product id="fenix843mm"/>
             <iq:product id="fenix847mm"/>
-            <iq:product id="fenix851mm"/>
             <iq:product id="fenix8solar47mm"/>
             <iq:product id="fenix8solar51mm"/>
             <iq:product id="fenixe"/>
-            <iq:product id="enduro2"/>
             <iq:product id="enduro3"/>
-
-            <!-- Tactical, Marine & Luxury Epix/Fenix Chassis -->
-            <iq:product id="tactix7"/>
-            <iq:product id="quatix7"/>
-            <iq:product id="quatix7pro"/>
             <iq:product id="marq2"/>
 
             <!-- Forerunner Series (All Sizes: S & Standard) -->
-            <iq:product id="forerunner165"/>
-            <iq:product id="forerunner165m"/>
-            <iq:product id="forerunner255s"/>
-            <iq:product id="forerunner255sm"/>
-            <iq:product id="forerunner255"/>
-            <iq:product id="forerunner255m"/>
-            <iq:product id="forerunner265s"/>
-            <iq:product id="forerunner265"/>
-            <iq:product id="forerunner955"/>
-            <iq:product id="forerunner965"/>
+            <iq:product id="fr165"/>
+            <iq:product id="fr165m"/>
+            <iq:product id="fr255s"/>
+            <iq:product id="fr255sm"/>
+            <iq:product id="fr255"/>
+            <iq:product id="fr255m"/>
+            <iq:product id="fr265s"/>
+            <iq:product id="fr265"/>
+            <iq:product id="fr955"/>
+            <iq:product id="fr965"/>
 
             <!-- Venu & Vivoactive Series (All Sizes: S, Standard & Plus) -->
             <iq:product id="venu2s"/>
