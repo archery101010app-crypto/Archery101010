@@ -746,10 +746,10 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         </motion.div>
       )}
 
-      {/* 2. Persistent Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
+      {/* 2. Persistent Clean Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
       {(hasLoadedIframe || isOpen || isMiniBarActive) && (
         <div
-          className={`fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-200 ${
+          className={`fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-3.5 transition-all duration-200 ${
             isOpen
               ? "opacity-100 pointer-events-auto visible"
               : "opacity-0 pointer-events-none invisible"
@@ -757,320 +757,88 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
           aria-hidden={!isOpen}
         >
           <div
-            className={`w-full max-w-[410px] max-h-[90vh] h-[800px] bg-[#0B0E14] border border-white/[0.08] rounded-[28px] flex flex-col overflow-hidden relative shadow-2xl transition-transform duration-200 ${
+            className={`w-full max-w-[400px] max-h-[88vh] bg-[#06080C] border border-white/[0.10] rounded-[26px] p-4 flex flex-col gap-3.5 overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
           >
-            {/* Header */}
-            <div className="p-4 flex items-center justify-between border-b border-white/[0.07] bg-[#111620] shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black">
-                  <Music size={16} />
-                </div>
-                <div>
-                  <h3 className="text-white text-sm font-black uppercase tracking-wider leading-none">
-                    Spotify
-                  </h3>
-                  <span className="text-[10.5px] text-[#1DB954] font-bold tracking-widest uppercase">
-                    {remoteActive
-                      ? `Conectado · ${remoteState.track || "Spotify"}`
-                      : connectedAccount && !getNativeSpotify()
-                      ? `Conectado · ${connectedAccount.displayName}`
-                      : "Audio continuo en tus rondas"}
+            {/* Top 101010 tricolor line */}
+            <div
+              className="absolute top-0 left-12 right-12 h-[2px]"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, #00A8F3 25%, #FF1E1E 50%, #FFE500 75%, transparent)"
+              }}
+            />
+
+            {/* 1. Clean Single-Line Header */}
+            <div className="flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <img
+                  src="/images/brand_logo_header.png"
+                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                  alt="ARCHERY 101010"
+                  className="h-[13px] w-auto object-contain shrink-0 select-none pointer-events-none"
+                  draggable={false}
+                />
+                <div className="inline-flex items-center gap-[5px] bg-[#071910] border border-[#1DB954]/45 rounded-full px-[9px] py-[3px] shrink-0">
+                  <span className="w-[5px] h-[5px] rounded-full bg-[#1DB954]" />
+                  <span className="text-[9.5px] font-extrabold text-[#1DB954] tracking-[0.08em] uppercase leading-none">
+                    MÚSICA
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    setIsMiniBarActive(true);
-                    setIsOpen(false);
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-[#161C28] border border-white/[0.08] text-white hover:text-white text-[11.6px] font-bold flex items-center gap-1 cursor-pointer transition"
-                  title="Minimizar manteniendo la música"
-                >
-                  <Minimize2 size={12} />
-                  <span>Minimizar</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setIsMiniBarActive(true);
-                    setIsOpen(false);
-                  }}
-                  className="p-2 rounded-xl bg-[#161C28] border border-white/[0.08] text-white hover:text-white cursor-pointer transition"
-                  title="Cerrar ventana"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMiniBarActive(true);
+                  setIsOpen(false);
+                }}
+                className="w-[28px] h-[28px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
+                title="Cerrar ventana"
+                aria-label="Cerrar"
+              >
+                <X size={14} />
+              </button>
             </div>
 
-            {/* Scrollable Content */}
+            {/* Scrollable Clean Body */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 pb-8 scrollbar-none"
+              className="flex-1 overflow-y-auto flex flex-col gap-3.5 scrollbar-none"
             >
-              {/* 0. Conexión Automática de Spotify (1 Solo Toque · Cero Formularios) */}
-              <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
-                {remoteActive ? (
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0">
-                          <Check size={15} />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-black text-white truncate">
-                            {remoteState.track || "Spotify Conectado"}
-                          </span>
-                          <span className="text-[11.2px] text-white/70 truncate">
-                            {remoteState.artist || "Elige una playlist abajo"}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
-                        ● LIVE
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => getNativeSpotify()?.spotifyPrevious()}
-                        className="py-2 rounded-xl bg-[#0B0E14] border border-white/[0.08] text-white text-[11px] font-black uppercase cursor-pointer active:scale-95 transition"
-                      >
-                        ◀◀
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleTogglePlayPause}
-                        className="py-2 rounded-xl bg-[#1DB954] text-black flex items-center justify-center cursor-pointer active:scale-95 transition"
-                      >
-                        {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => getNativeSpotify()?.spotifyNext()}
-                        className="py-2 rounded-xl bg-[#0B0E14] border border-white/[0.08] text-white text-[11px] font-black uppercase cursor-pointer active:scale-95 transition"
-                      >
-                        ▶▶
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => getNativeSpotify()?.spotifyPlay(`spotify:${activeType}:${activePlaylistId}`)}
-                      className="w-full py-2 rounded-xl bg-[#0B0E14] border border-[#1DB954]/40 text-[#1DB954] text-[11px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition"
-                    >
-                      Reproducir playlist seleccionada
-                    </button>
-                  </div>
-                ) : connectedAccount && hasNativeSessionCookie && !getNativeSpotify() ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954] shrink-0 font-black text-xs uppercase">
-                        <Check size={15} />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-white truncate">
-                            Spotify Conectado
-                          </span>
-                          <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 shrink-0">
-                            AUDIO 100% COMPLETO
-                          </span>
-                        </div>
-                        <span className="text-[11.2px] text-white/80 truncate">
-                          Reproducción completa sin límite de 30s activa
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={handleRefreshOAuthPlaylists}
-                        className="p-2 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-[#1DB954] cursor-pointer transition"
-                        title="Actualizar reproductor"
-                      >
-                        <RefreshCw size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDisconnectAccount}
-                        className="p-2 rounded-lg bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
-                        title="Desvincular cuenta"
-                      >
-                        <LogOut size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck size={14} className="text-[#1DB954]" />
-                        <span className="text-xs font-black uppercase tracking-wider text-white">
-                          Canciones Completas
-                        </span>
-                      </div>
-                      <span className="text-[9.3px] font-black uppercase px-1.5 py-0.5 rounded bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30">
-                        1 SOLO TOQUE
-                      </span>
-                    </div>
-
-                    <p className="text-[11.6px] text-white leading-snug">
-                      Elige tu playlist abajo y toca el botón: se abre en <strong className="text-white">tu app de Spotify</strong> y la música sigue sonando mientras registras tus flechas.
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={handleOpenInNativeSpotify}
-                      className="w-full py-2.5 px-3 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black font-black text-[12.8px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
-                    >
-                      <Play size={14} fill="currentColor" />
-                      <span>Escuchar completo en Spotify</span>
-                    </button>
-                  </div>
-                )}
-
-                {accountFeedback && (
-                  <div className="text-[11.6px] font-bold text-[#1DB954] bg-[#1DB954]/10 border border-[#1DB954]/30 rounded-xl px-2.5 py-1.5">
-                    {accountFeedback}
-                  </div>
-                )}
-              </div>
-
-              {/* 1. Main Spotify Web Player Widget */}
-              <div className="bg-[#121722] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between px-0.5 gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${isPlaying ? "bg-[#1DB954]" : "bg-white/30"}`} />
-                    <span className="text-[12.8px] text-white font-bold truncate">
-                      {activePlaylistObj ? activePlaylistObj.name : "Playlist Activa"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setIframeReloadKey((prev) => prev + 1)}
-                      className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white hover:text-white cursor-pointer transition"
-                      title="Recargar reproductor tras iniciar sesión"
-                    >
-                      <RefreshCw size={11} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsCompactPlayer((prev) => !prev)}
-                      className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[10.5px] font-bold text-white flex items-center gap-1 shrink-0 cursor-pointer transition"
-                    >
-                      <ListMusic size={11} className="text-[#1DB954]" />
-                      <span>{isCompactPlayer ? "Ver Canciones" : "Vista Compacta"}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Embedded Iframe Player - Persistent & Full Tracklist Enabled */}
-                <div
-                  className={`w-full rounded-xl overflow-hidden bg-[#0B0E14] transition-all duration-200 ${
-                    isCompactPlayer ? "h-[152px]" : "h-[352px]"
-                  }`}
-                >
+              {/* 2. Player Box + Single Clear CTA Button */}
+              <div className="bg-[#0B0E14] border border-white/[0.08] rounded-[18px] p-3 flex flex-col gap-2.5 shrink-0">
+                <div className="w-full h-[152px] rounded-[14px] overflow-hidden bg-[#06080C]">
                   <iframe
                     key={`${activeType}-${activePlaylistId}-${iframeReloadKey}`}
                     ref={iframeRef}
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
-                    height={isCompactPlayer ? "152" : "352"}
+                    height="152"
                     frameBorder="0"
                     allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                     loading="eager"
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-1 gap-2">
-                  <p className="text-[11.6px] text-white leading-snug flex-1">
-                    Toca <strong className="text-white">Minimizar</strong> para seguir escuchando en la app o ábrelo en tu app de Spotify.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenInNativeSpotify}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1DB954] hover:bg-[#1ED760] text-black text-[11.6px] font-black uppercase tracking-wider transition cursor-pointer shrink-0"
-                    title="Abrir directamente en la aplicación de Spotify"
-                  >
-                    <span>App Spotify</span>
-                    <ExternalLink size={11} />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenInNativeSpotify}
+                  className="w-full py-[11px] px-3.5 rounded-[12px] bg-[#1DB954] hover:bg-[#1ED760] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
+                >
+                  <Play size={13} fill="currentColor" />
+                  <span>Abrir canciones completas en Spotify</span>
+                </button>
               </div>
 
-              {/* 2. Vincular Mi Música de Spotify */}
-              <div className="bg-[#121722] border border-white/[0.08] p-3.5 rounded-2xl flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                    <Plus size={14} className="text-[#1DB954]" />
-                    Agregar Playlist, Álbum o Canción
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={handlePasteFromClipboard}
-                    className="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[10.5px] font-bold text-[#1DB954] flex items-center gap-1 cursor-pointer transition"
-                  >
-                    <ClipboardPaste size={11} />
-                    <span>Pegar enlace</span>
-                  </button>
-                </div>
-
-                <form onSubmit={handleAddPlaylist} className="flex flex-col gap-2">
-                  <input
-                    type="text"
-                    value={userPlaylistUrl}
-                    onChange={(e) => {
-                      setUserPlaylistUrl(e.target.value);
-                      if (linkError) setLinkError(null);
-                    }}
-                    placeholder="Pega aquí el enlace de Spotify (Playlist, Álbum o Canción)"
-                    className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
-                  />
-                  <input
-                    type="text"
-                    value={customPlaylistName}
-                    onChange={(e) => setCustomPlaylistName(e.target.value)}
-                    placeholder="Nombre opcional (se detecta automático si lo dejas vacío)"
-                    maxLength={45}
-                    className="w-full bg-[#0B0E14] border border-white/[0.08] focus:border-[#1DB954] text-white text-xs p-2.5 rounded-xl outline-none transition duration-150 caret-[#1DB954]"
-                  />
-                  {linkError && (
-                    <p className="text-[11.6px] bg-white text-black font-bold leading-snug p-2.5 rounded-xl">
-                      {linkError}
-                    </p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={isSavingLink}
-                    className="w-full py-2.5 rounded-xl bg-[#1DB954] text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:brightness-105 transition flex justify-center items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {saveSuccess ? (
-                      <>
-                        <Check size={14} />
-                        <span>Música Cargada en el Reproductor</span>
-                      </>
-                    ) : isSavingLink ? (
-                      <span>Cargando música...</span>
-                    ) : (
-                      <span>Cargar y Guardar en Mi Lista</span>
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              {/* 3. Mis Playlists y Playlists de Tiro */}
+              {/* 3. Clean Playlist Selector */}
               <div className="flex flex-col gap-2">
-                <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 pl-1">
-                  <Globe size={13} className="text-[#1DB954]" />
-                  Tus Listas y Playlists de Tiro
-                </h4>
+                <span className="text-[10px] font-extrabold tracking-[0.12em] text-[#94A3B8] uppercase pl-0.5">
+                  ELIGE TU PLAYLIST
+                </span>
 
-                <div className="flex flex-col gap-2">
-                  {/* Custom user added playlists first so they are immediately visible */}
+                <div className="flex flex-col gap-[7px]">
                   {customPlaylists.map((list) => {
                     const isActive = activePlaylistId === list.id;
                     const typeLabel = ENTITY_TYPE_LABELS[list.type || "playlist"] || "Playlist";
@@ -1078,20 +846,17 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                       <div
                         key={list.id}
                         onClick={() => handleSelectPlaylist(list)}
-                        className={`p-3 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center justify-between group ${
+                        className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#1DB954]/10 border-[#1DB954]/50"
-                            : "bg-[#121722] border-white/[0.06] hover:border-white/15"
+                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
+                            : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
-                        <div className="flex flex-col gap-0.5 min-w-0 flex-1 pr-2">
-                          <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors flex items-center gap-1.5 truncate">
-                            <span className="truncate">{list.name}</span>
-                            <span className="text-[9.3px] bg-[#0B0E14] text-yellow-gold border border-yellow-gold/25 px-1.5 py-0.5 rounded font-extrabold uppercase shrink-0">
-                              MÍA
-                            </span>
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <span className="text-[12.5px] font-extrabold text-white truncate">
+                            {list.name}
                           </span>
-                          <span className="text-[11.6px] text-white">
+                          <span className="text-[10.5px] font-semibold text-[#94A3B8] truncate">
                             {list.description || `${typeLabel} guardada`}
                           </span>
                         </div>
@@ -1100,14 +865,20 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomPlaylist(e, list.id)}
-                            className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white hover:text-red-400 transition"
+                            className="w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border border-white/[0.10] text-white/70 hover:text-red-400 transition"
                             title="Eliminar de mi lista"
                           >
                             <Trash2 size={11} />
                           </button>
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white">
+                          <div
+                            className={`w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border ${
+                              isActive
+                                ? "border-[#1DB954]/55 text-[#1DB954]"
+                                : "border-white/[0.10] text-white"
+                            }`}
+                          >
                             {isActive ? (
-                              <Check size={12} className="text-[#1DB954]" />
+                              <Check size={12} />
                             ) : (
                               <Play size={10} className="fill-current pl-0.5" />
                             )}
@@ -1117,36 +888,36 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                     );
                   })}
 
-                  {/* Official Archery Playlists */}
                   {SHARED_PLAYLISTS.map((list) => {
                     const isActive = activePlaylistId === list.id;
                     return (
                       <div
                         key={list.id}
                         onClick={() => handleSelectPlaylist(list)}
-                        className={`p-3 rounded-2xl border transition-all duration-150 cursor-pointer flex items-center justify-between group ${
+                        className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#1DB954]/10 border-[#1DB954]/50"
-                            : "bg-[#121722] border-white/[0.06] hover:border-white/15"
+                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
+                            : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
-                        <div className="flex flex-col gap-0.5 w-[82%]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-white group-hover:text-[#1DB954] transition-colors">
-                              {list.name}
-                            </span>
-                            <span className="text-[9.3px] bg-[#0B0E14] text-white border border-white/[0.06] px-1.5 py-0.5 rounded font-extrabold uppercase">
-                              {list.creator}
-                            </span>
-                          </div>
-                          <p className="text-[11.6px] text-white leading-snug">
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <span className="text-[12.5px] font-extrabold text-white truncate">
+                            {list.name}
+                          </span>
+                          <span className="text-[10.5px] font-semibold text-[#94A3B8] truncate">
                             {list.description}
-                          </p>
+                          </span>
                         </div>
 
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0B0E14] border border-white/[0.08] text-white shrink-0">
+                        <div
+                          className={`w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border shrink-0 ${
+                            isActive
+                              ? "border-[#1DB954]/55 text-[#1DB954]"
+                              : "border-white/[0.10] text-white"
+                          }`}
+                        >
                           {isActive ? (
-                            <Check size={12} className="text-[#1DB954]" />
+                            <Check size={12} />
                           ) : (
                             <Play size={10} className="fill-current pl-0.5" />
                           )}
@@ -1156,11 +927,34 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   })}
                 </div>
               </div>
-            </div>
 
-            {/* Bottom Indicator */}
-            <div className="h-4 bg-[#0B0E14] flex justify-center items-center pb-1 shrink-0">
-              <div className="w-20 h-1 bg-white/10 rounded-full" />
+              {/* 4. Single-Line Add Link Bar */}
+              <form onSubmit={handleAddPlaylist} className="flex flex-col gap-1.5 pt-0.5">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={userPlaylistUrl}
+                    onChange={(e) => {
+                      setUserPlaylistUrl(e.target.value);
+                      if (linkError) setLinkError(null);
+                    }}
+                    placeholder="Pega aquí un enlace de Spotify…"
+                    className="flex-1 min-w-0 bg-[#0B0E14] border border-white/[0.09] focus:border-[#1DB954] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#1DB954]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingLink}
+                    className="bg-[#12151C] border border-[#1DB954]/45 hover:border-[#1DB954] text-[#1DB954] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
+                  >
+                    {saveSuccess ? "✓ Listo" : isSavingLink ? "..." : "+ Agregar"}
+                  </button>
+                </div>
+                {linkError && (
+                  <p className="text-[11px] text-red-400 font-bold leading-snug px-1">
+                    {linkError}
+                  </p>
+                )}
+              </form>
             </div>
           </div>
         </div>
