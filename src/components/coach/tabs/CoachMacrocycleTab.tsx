@@ -638,57 +638,61 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-4"
           >
-            {/* Header controls */}
-            <div className="flex justify-between items-center border-b border-white/5 pb-3">
+            {/* Row 1: Top bar — Volver a Planes + Icon tools (Export, Edit, Duplicate) */}
+            <div className="flex items-center justify-between gap-2">
               <button
                 onClick={() => setSelectedMacro(null)}
-                className="flex items-center gap-1.5 text-xs text-white hover:text-white transition cursor-pointer"
+                className="h-9 px-3 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:bg-white/[0.05] text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
               >
                 <ArrowLeft size={14} />
                 <span>Volver a Planes</span>
               </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenSyncModal(selectedMacro)}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 text-cyan-neon border border-cyan-neon/25 text-[11.6px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition"
-                  title="Sincronizar con el Calendario de la App"
-                >
-                  <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                  <span>Sincronizar Calendario</span>
-                </button>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => exportCycleToCsv(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-emerald-400 transition cursor-pointer border border-white/5"
+                  className="w-9 h-9 rounded-xl bg-[#0D1017] hover:bg-white/10 text-white hover:text-emerald-400 transition cursor-pointer border border-white/[0.08] flex items-center justify-center active:scale-95"
                   title="Exportar a Excel / Google Sheets (CSV)"
                 >
-                  <Download size={13} />
+                  <Download size={14} />
                 </button>
                 <button
                   onClick={() => handleOpenEdit(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer border border-white/5"
+                  className="w-9 h-9 rounded-xl bg-[#0D1017] hover:bg-white/10 text-white transition cursor-pointer border border-white/[0.08] flex items-center justify-center active:scale-95"
                   title="Editar Plan"
                 >
-                  <Edit2 size={13} />
+                  <Edit2 size={14} />
                 </button>
                 <button
                   onClick={() => handleDuplicate(selectedMacro)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer border border-white/5"
+                  className="w-9 h-9 rounded-xl bg-[#0D1017] hover:bg-white/10 text-white transition cursor-pointer border border-white/[0.08] flex items-center justify-center active:scale-95"
                   title="Duplicar"
                 >
-                  <Copy size={13} />
-                </button>
-                <button
-                  onClick={() => handleDelete(selectedMacro.id)}
-                  className="px-2.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer flex items-center gap-1.5 text-xs font-black uppercase tracking-wider"
-                  title="Desvincular y eliminar este plan"
-                >
-                  <Unlink size={13} />
-                  <span>Desvincular Plan</span>
+                  <Copy size={14} />
                 </button>
               </div>
+            </div>
+
+            {/* Row 2: Centered 2-column action buttons (Sincronizar + Desvincular Plan) */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleOpenSyncModal(selectedMacro)}
+                className="h-10 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 text-cyan-neon border border-cyan-neon/35 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap active:scale-95"
+                title="Sincronizar con el Calendario de la App"
+              >
+                <RefreshCw size={13} className={`shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+                <span>Sincronizar</span>
+              </button>
+              <button
+                onClick={() => handleDelete(selectedMacro.id)}
+                className="h-10 px-3 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider whitespace-nowrap active:scale-95 shadow-sm"
+                title="Desvincular y eliminar este plan"
+              >
+                <Unlink size={13} className="shrink-0" />
+                <span>Desvincular Plan</span>
+              </button>
             </div>
 
             {/* Title / Dates details + Real Team Volume Progress */}
@@ -699,11 +703,13 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                   ? Math.min(100, Math.round((detailRealVolume / selectedMacro.volumeGoal) * 100))
                   : 0;
               return (
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <h2 className="text-[19.8px] font-black text-white leading-tight uppercase tracking-wide">{selectedMacro.name}</h2>
-                    <p className="text-xs text-white flex items-center gap-1 mt-1 tabular-nums">
-                      <Calendar size={12} />
+                <div className="flex flex-col gap-3 pt-1 border-t border-white/[0.06]">
+                  <div className="flex flex-col items-center text-center gap-1 py-1">
+                    <h2 className="text-[19px] sm:text-[21px] font-black text-white leading-tight uppercase tracking-wide">
+                      {selectedMacro.name}
+                    </h2>
+                    <p className="text-xs text-white/80 flex items-center justify-center gap-1.5 tabular-nums font-semibold">
+                      <Calendar size={12} className="text-cyan-neon shrink-0" />
                       <span>Fechas: {selectedMacro.startDate} al {selectedMacro.endDate}</span>
                     </p>
                   </div>

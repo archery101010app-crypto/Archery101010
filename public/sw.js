@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.91";
+const CACHE_NAME = "archery-101010-cache-v2.92";
 const ASSETS_TO_CACHE = [
   "/",
   "/favicon.ico"

@@ -975,7 +975,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       </AnimatePresence>
 
       {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES | DUELOS */}
-      <div className="flex bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 justify-between shrink-0 gap-0.5">
+      <div className="grid grid-cols-5 bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 shrink-0 gap-1">
         {[
           { id: "ATHLETES", label: "Alumnos", icon: Users },
           { id: "SESSIONS", label: "Resultados", icon: Award },
@@ -989,14 +989,14 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`flex-1 min-w-0 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 py-2 px-0.5 rounded-xl text-[9.5px] sm:text-[11px] font-black uppercase tracking-tight sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
-                  ? "bg-white/[0.05] border border-white/[0.08] text-cyan-neon"
-                  : "text-white hover:text-white border border-transparent"
+                  ? "bg-white/[0.06] border border-white/[0.1] text-cyan-neon"
+                  : "text-white/85 hover:text-white border border-transparent"
               }`}
             >
               <Icon size={14} className={active ? "text-cyan-neon" : "text-white"} />
-              <span className="truncate max-w-full">{tab.label}</span>
+              <span className="whitespace-nowrap leading-none">{tab.label}</span>
             </button>
           );
         })}
