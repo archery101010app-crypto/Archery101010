@@ -471,62 +471,78 @@ export default function HistoryView({
   const volStats = calculateVolumeStats();
 
   return (
-    <div className="flex flex-col gap-4 py-4 min-h-full">
-      {/* Header with Navigation Tabs */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button
-            onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center cursor-pointer shrink-0 transition"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div className="min-w-0">
-            <h2 className="text-white text-[17.6px] sm:text-[19.8px] font-black uppercase tracking-wide truncate leading-tight">
-              {t("historyTitle")}
-            </h2>
-            <p className="text-[11.6px] text-white uppercase tracking-wider truncate">Historial</p>
+    <div className="flex flex-col gap-3.5 py-3 min-h-full">
+      {/* Header with Title on top and Centered Puntuaciones / Volumen below */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={onBack}
+              className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center cursor-pointer shrink-0 active:scale-95 transition"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-white text-[18px] sm:text-[20px] font-black uppercase tracking-wide leading-tight">
+                  {isCoachResultsView ? "Resultados" : "Historial"}
+                </h2>
+                {isCoachResultsView && (
+                  <span className="text-[9.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
+                    Coach
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-white/70 font-semibold uppercase tracking-wider leading-tight mt-0.5 truncate">
+                {isCoachResultsView ? "Sesiones y Volumen del Equipo" : t("historyTitle")}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Tab Selector & Filter Toggle */}
-        <div className="flex items-center gap-1.5 shrink-0">
           {activeTab === "SESSIONS" && (
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
-              className={`h-9 px-2.5 rounded-xl border text-[11.6px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition ${
+              className={`h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95 transition ${
                 showFilters || dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL"
                   ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
-                  : "bg-[#0D1017] border-white/[0.08] text-white hover:text-white"
+                  : "bg-[#0D1017] border-white/[0.08] text-white hover:bg-white/[0.05]"
               }`}
               title="Filtrar sesiones"
             >
               <Filter size={13} />
-              <span className="hidden xs:inline">Filtrar</span>
+              <span>Filtrar</span>
               {(dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL") && (
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon" />
               )}
             </button>
           )}
-          <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] shrink-0">
-            <button
-              onClick={() => setActiveTab("SESSIONS")}
-              className={`h-7 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-                activeTab === "SESSIONS" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-              }`}
-            >
-              Puntuaciones
-            </button>
-            <button
-              onClick={() => setActiveTab("VOLUME")}
-              className={`h-7 px-3 rounded-lg text-[11.6px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
-                activeTab === "VOLUME" ? "bg-cyan-neon text-black" : "text-white hover:text-white"
-              }`}
-            >
-              Volumen
-            </button>
-          </div>
+        </div>
+
+        {/* Full-width centered 2-column switcher: Puntuaciones / Volumen */}
+        <div className="grid grid-cols-2 gap-1.5 bg-[#0D1017] p-1.5 rounded-2xl border border-white/[0.08]">
+          <button
+            type="button"
+            onClick={() => setActiveTab("SESSIONS")}
+            className={`h-9 px-3 rounded-xl text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+              activeTab === "SESSIONS"
+                ? "bg-cyan-neon text-black shadow-sm"
+                : "text-white/80 hover:text-white hover:bg-white/[0.04]"
+            }`}
+          >
+            Puntuaciones
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("VOLUME")}
+            className={`h-9 px-3 rounded-xl text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+              activeTab === "VOLUME"
+                ? "bg-cyan-neon text-black shadow-sm"
+                : "text-white/80 hover:text-white hover:bg-white/[0.04]"
+            }`}
+          >
+            Volumen
+          </button>
         </div>
       </div>
 
@@ -628,8 +644,13 @@ export default function HistoryView({
           {/* Session list items */}
           <div className="flex-1 flex flex-col gap-2.5">
             {filteredSessions.length === 0 ? (
-              <div className="text-center py-10 text-white text-xs">
-                No se encontraron sesiones registradas.
+              <div className="bg-[#0D1017]/70 border border-white/[0.06] rounded-3xl py-12 px-6 flex flex-col items-center justify-center text-center gap-1.5 my-2">
+                <span className="text-white font-bold text-sm">
+                  No se encontraron sesiones registradas
+                </span>
+                <span className="text-white/60 text-xs max-w-[260px]">
+                  Tus sesiones de entrenamiento y controles aparecerán aquí automáticamente.
+                </span>
               </div>
             ) : (
               filteredSessions.map((session) => {
@@ -699,15 +720,15 @@ export default function HistoryView({
         <div className="flex-1 flex flex-col gap-4">
           
           {/* Card Volume Giant */}
-          <div className="bg-[#0D1017] p-5 rounded-3xl border border-white/[0.08] flex flex-col gap-1.5 relative overflow-hidden shadow-sm">
-            <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
+          <div className="bg-[#0D1017] p-5 rounded-3xl border border-white/[0.08] flex flex-col items-center text-center gap-1.5 relative overflow-hidden shadow-sm">
+            <span className="text-[11px] text-cyan-neon font-black tracking-widest uppercase">
               Volumen Acumulado
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-extrabold text-white">{volStats.total}</span>
-              <span className="text-xs text-white font-bold">flechas registradas</span>
+            <div className="flex items-baseline justify-center gap-2">
+              <span className="text-4xl font-extrabold text-white tabular-nums">{volStats.total}</span>
+              <span className="text-xs text-white/80 font-bold uppercase tracking-wider">flechas registradas</span>
             </div>
-            <p className="text-[11.6px] text-white leading-relaxed">
+            <p className="text-[11.5px] text-white/70 leading-relaxed max-w-[320px]">
               Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.
             </p>
           </div>
