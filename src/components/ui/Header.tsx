@@ -49,18 +49,22 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-2.5 sm:px-4 flex items-center justify-between gap-1.5 z-40 max-w-full">
-      {/* Brand logo compact */}
-      <div translate="no" className="notranslate flex items-center gap-1.5 select-none min-w-0">
-        <img
-          src="/images/brand_logo_header.png"
-          srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-          alt="ARCHERY 101010"
-          className="h-[10px] min-[390px]:h-[11.5px] sm:h-[14px] w-auto object-contain shrink-0"
-        />
-        <span className="text-cyan-neon text-[11.5px] sm:text-[13px] font-black tracking-tight tabular-nums shrink-0 leading-none">
-          v{APP_VERSION}
-        </span>
+    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between z-40 max-w-full">
+      {/* Brand logo compact: ONLY 101010 */}
+      <div translate="no" className="notranslate flex items-center gap-2 select-none min-w-0">
+        <div className="flex items-baseline gap-1">
+          <div 
+            className="flex text-[23.8px] tracking-tighter font-extrabold brand-logo-101010" 
+            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          >
+            <span className="text-cyan-neon">10</span>
+            <span className="text-red-rival">10</span>
+            <span className="text-yellow-gold">10</span>
+          </div>
+          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider pl-0.5 tabular-nums">
+            v{APP_VERSION}
+          </span>
+        </div>
       </div>
 
       {/* View Switcher, Theme Selector & Sync Wifi Button */}

@@ -294,22 +294,22 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       {/* Brand logo section: ARCHERY 101010 / THE APP (Branding Oficial Permanente) */}
       <div 
         translate="no"
-        className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-2"
+        className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <motion.div 
+        <motion.h1 
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="w-full flex justify-center"
+          className="flex flex-wrap items-baseline justify-center gap-x-2 sm:gap-x-4 text-[29px] sm:text-[42.5px] md:text-[54px] leading-tight text-center"
         >
-          <img
-            src="/images/brand_logo_header.png"
-            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-            alt="ARCHERY 101010"
-            className="h-6 sm:h-8 md:h-9 w-auto object-contain mx-auto max-w-full"
-          />
-        </motion.div>
+          <span className="text-white tracking-wider font-extrabold">ARCHERY</span>
+          <span className="inline-flex tracking-tight font-extrabold">
+            <span className="text-cyan-neon">10</span>
+            <span className="text-red-rival">10</span>
+            <span className="text-yellow-gold">10</span>
+          </span>
+        </motion.h1>
         <motion.span 
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
