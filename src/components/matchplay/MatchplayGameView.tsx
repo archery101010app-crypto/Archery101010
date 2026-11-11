@@ -83,8 +83,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const [isRivalReady, setIsRivalReady] = useState<boolean>(false);
   const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
 
-  // Friend duel connection/readiness simulator
-  const isFriendDuel = !config.rival.uid.startsWith("RIV-BOT-");
+  // Friend duel connection/readiness simulator (RIV-BOT-* and legacy RIV-1..5 are bots; all real UIDs & RIV-FRIEND-* are real online friends)
+  const isBotRival = /^RIV-(BOT-|\d+$)/i.test(config?.rival?.uid || "");
+  const isFriendDuel = !isBotRival;
   const [isRivalConnected, setIsRivalConnected] = useState<boolean>(!isFriendDuel);
 
   const [isCreatorRole, setIsCreatorRole] = useState<boolean>(config.isCreator === true || config.rival.uid === "RIV-FRIEND-PLAYER");

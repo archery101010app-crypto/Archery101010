@@ -315,13 +315,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       animate="animate"
       className="flex flex-col gap-4 sm:gap-5 py-3 w-full max-w-full overflow-x-hidden"
     >
-      {/* Titular Oficial: ARCHERY 101010 / THE APP (+12% Size) */}
+      {/* Titular Oficial: ARCHERY 101010 / THE APP (+15% Size) */}
       <div 
         translate="no"
         className="notranslate w-full flex flex-col justify-center items-center pt-1 pb-2 sm:pb-4 select-none gap-1"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
-        <h1 className="flex items-baseline justify-center gap-x-1.5 sm:gap-x-3.5 text-[25.8px] sm:text-[40.3px] md:text-[51.5px] leading-tight text-center whitespace-nowrap">
+        <h1 className="flex items-baseline justify-center gap-x-1.5 sm:gap-x-3.5 text-[min(29.7px,7.8vw)] sm:text-[46.3px] md:text-[59.2px] leading-tight text-center whitespace-nowrap">
           <span className="text-white tracking-normal sm:tracking-wider font-extrabold">ARCHERY</span>
           <span className="inline-flex tracking-tight font-extrabold">
             <span className="text-cyan-neon">10</span>
@@ -329,7 +329,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             <span className="text-yellow-gold">10</span>
           </span>
         </h1>
-        <span className="text-[14.8px] sm:text-[17.7px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1 whitespace-nowrap">
+        <span className="text-[17px] sm:text-[20.4px] text-white font-bold tracking-[0.38em] uppercase text-center pl-1 whitespace-nowrap">
           THE APP
         </span>
       </div>

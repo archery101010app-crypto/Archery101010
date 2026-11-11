@@ -22,17 +22,23 @@ const isMockUser = (uid: string, email: string = "", fullName: string = "") => {
   const u = (uid || "").toLowerCase();
   const e = (email || "").toLowerCase();
   const n = (fullName || "").toLowerCase();
-  return u.startsWith("riv-") || 
-         u.startsWith("usr-d-") || 
-         u.includes("demo") || 
-         e.includes("demo") || 
-         n.includes("demo");
+  return (
+    !u ||
+    u.startsWith("riv-") ||
+    u.startsWith("usr-") ||
+    u.includes("demo") ||
+    u.includes("bot") ||
+    e.includes("demo") ||
+    e.endsWith("@101010.local") ||
+    n.includes("demo") ||
+    n.startsWith("bot ")
+  );
 };
 
-// Active mock rivals for elimination duels
+// Active simulated bots for Olympic / WA elimination practice
 const RIVAL_LIST = [
   {
-    uid: "RIV-1",
+    uid: "RIV-BOT-1",
     fullName: "Daniela Solano",
     nickname: "dani_solano",
     country: "CR",
@@ -44,7 +50,7 @@ const RIVAL_LIST = [
     status: "online"
   },
   {
-    uid: "RIV-2",
+    uid: "RIV-BOT-2",
     fullName: "Carlos Ruiz",
     nickname: "carlos_mx",
     country: "MX",
@@ -56,7 +62,7 @@ const RIVAL_LIST = [
     status: "online"
   },
   {
-    uid: "RIV-3",
+    uid: "RIV-BOT-3",
     fullName: "Laura Archer",
     nickname: "laura_spain",
     country: "ES",
@@ -68,7 +74,7 @@ const RIVAL_LIST = [
     status: "online"
   },
   {
-    uid: "RIV-4",
+    uid: "RIV-BOT-4",
     fullName: "Sebastián Castro",
     nickname: "sebas_barebow",
     country: "CR",
@@ -80,7 +86,7 @@ const RIVAL_LIST = [
     status: "busy"
   },
   {
-    uid: "RIV-5",
+    uid: "RIV-BOT-5",
     fullName: "Mateo Pérez",
     nickname: "mateo_flechas",
     country: "CO",
@@ -232,31 +238,68 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     loadDuels();
   }, [user, activeTab]);
 
-  // Load real users and listen to database changes
+  // Load 100% real authenticated users (local cache + live Firestore presence)
   useEffect(() => {
-    async function loadRealUsers() {
+    let isMounted = true;
+    let unsubCloud: (() => void) | null = null;
+    let latestCloudUsers: UserProfile[] = [];
+
+    const mergeAndPublish = async () => {
       try {
-        const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        // Exclude the current user
-        const others = list.filter((u) => u.uid !== user.uid);
-        setRealUsers(others);
+        const localList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        const byUid = new Map<string, UserProfile>();
+        for (const u of localList) {
+          if (u?.uid && u.uid !== user.uid && !isMockUser(u.uid, u.email, u.fullName)) {
+            byUid.set(u.uid, u);
+          }
+        }
+        for (const cu of latestCloudUsers) {
+          if (cu?.uid && cu.uid !== user.uid && !isMockUser(cu.uid, cu.email, cu.fullName)) {
+            byUid.set(cu.uid, { ...(byUid.get(cu.uid) || {}), ...cu });
+          }
+        }
+        if (isMounted) {
+          setRealUsers(Array.from(byUid.values()));
+        }
       } catch (err) {
         console.error("Error loading real users for duels:", err);
       }
+    };
+
+    mergeAndPublish();
+
+    if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
+      import("firebase/firestore")
+        .then(async ({ collection, query, where, onSnapshot }) => {
+          const { db, auth } = await import("@/lib/firebase");
+          if (!isMounted || !auth.currentUser) return;
+          const tenMinAgo = Date.now() - 10 * 60 * 1000;
+          const onlineQuery = query(collection(db, "users"), where("lastActiveAt", ">=", tenMinAgo));
+          unsubCloud = onSnapshot(
+            onlineQuery,
+            (snap) => {
+              latestCloudUsers = snap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }));
+              mergeAndPublish();
+            },
+            (err) => {
+              console.warn("[Lobby] Live online users listener error:", err);
+            }
+          );
+        })
+        .catch((err) => console.warn("[Lobby] Could not init live online users listener:", err));
     }
-    
-    loadRealUsers();
-    
-    // Listen to changes in the database
+
     const handleDbChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.store === "simulated_users") {
-        loadRealUsers();
+        mergeAndPublish();
       }
     };
-    
+
     window.addEventListener("local-db-change", handleDbChange);
     return () => {
+      isMounted = false;
+      if (unsubCloud) unsubCloud();
       window.removeEventListener("local-db-change", handleDbChange);
     };
   }, [user]);
@@ -875,32 +918,34 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             </form>
           </div>
 
-          {/* 2. Quick Join by Room Code Card */}
-          <div className="bg-[#0D1017] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-black uppercase tracking-wider text-white">
-                Unirse con Código de Invitación
-              </span>
-              <span className="text-[12.8px] text-white">
-                Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.
-              </span>
+          {/* 2. Quick Join by Room Code Card (Only in Contra Amigo Online mode) */}
+          {duelMode === "FRIEND" && (
+            <div className="bg-[#0D1017] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-black uppercase tracking-wider text-white">
+                  Unirse con Código de Invitación
+                </span>
+                <span className="text-[12.8px] text-white">
+                  Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.
+                </span>
+              </div>
+              <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center w-full min-w-0">
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  placeholder="Ej. INV-R70-X9A"
+                  className="flex-1 min-w-0 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
+                />
+                <button
+                  type="submit"
+                  className="h-10 px-4 rounded-xl bg-white/[0.1] hover:bg-cyan-neon hover:text-black border border-white/[0.12] text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer transition active:scale-95 shrink-0 whitespace-nowrap"
+                >
+                  Entrar a Sala
+                </button>
+              </form>
             </div>
-            <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center w-full min-w-0">
-              <input
-                type="text"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
-                placeholder="Ej. INV-R70-X9A"
-                className="flex-1 min-w-0 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
-              />
-              <button
-                type="submit"
-                className="h-10 px-4 rounded-xl bg-white/[0.1] hover:bg-cyan-neon hover:text-black border border-white/[0.12] text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer transition active:scale-95 shrink-0 whitespace-nowrap"
-              >
-                Entrar a Sala
-              </button>
-            </form>
-          </div>
+          )}
 
           {/* Search and Filters */}
           <div className="flex flex-col gap-2 pt-1">
@@ -912,7 +957,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filtrar rivales por nombre o club..."
+                placeholder={
+                  duelMode === "FRIEND"
+                    ? "Filtrar arqueros en línea por nombre o club..."
+                    : "Filtrar bots olímpicos por nombre o club..."
+                }
                 className="w-full h-10 bg-[#0D1017] border border-white/[0.08] text-white text-xs pl-9 pr-4 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
               />
             </div>
@@ -936,149 +985,151 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             </div>
           </div>
 
-          {/* Rivals List */}
+          {/* Rivals List: 100% Real Users in FRIEND mode | Simulated Bots ONLY in BOT mode */}
           <div className="flex flex-col gap-5 flex-1 pb-6">
-            {/* Real Online Archers */}
-            <div className="flex flex-col gap-2.5">
-              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                Arqueros Conectados en Línea ({filteredRivals.length})
-              </h4>
+            {duelMode === "FRIEND" ? (
+              /* Real Online Archers ONLY (Zero Bots) */
+              <div className="flex flex-col gap-2.5">
+                <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  Arqueros Conectados en Línea ({filteredRivals.length})
+                </h4>
 
-              <motion.div
-                variants={containerVariants}
-                initial="initial"
-                animate="animate"
-                className="flex flex-col gap-2.5"
-              >
-                <AnimatePresence>
-                  {filteredRivals.length === 0 ? (
-                    <motion.div
-                      variants={cardVariants}
-                      className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
-                    >
-                      <Users size={16} className="text-white" />
-                      <p className="text-[12.8px] text-white font-semibold">
-                        No hay otros arqueros en el lobby público en este instante.
-                      </p>
-                      <p className="text-[11.6px] text-white">
-                        Usa &ldquo;Crear Sala Online 1v1&rdquo; arriba para enviar un enlace directo por WhatsApp a tu amigo.
-                      </p>
-                    </motion.div>
-                  ) : (
-                    filteredRivals.map((riv) => {
-                      const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
-                      return (
-                        <motion.div
-                          key={riv.uid}
-                          variants={cardVariants}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 flex justify-between items-center hover:border-cyan-neon/40 transition-all duration-150"
-                        >
-                          <div className="flex items-center gap-3 w-[70%]">
-                            <div className="relative shrink-0">
-                              <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.1] flex items-center justify-center text-white font-black text-xs">
-                                {riv.fullName.substring(0, 2).toUpperCase()}
+                <motion.div
+                  variants={containerVariants}
+                  initial="initial"
+                  animate="animate"
+                  className="flex flex-col gap-2.5"
+                >
+                  <AnimatePresence>
+                    {filteredRivals.length === 0 ? (
+                      <motion.div
+                        variants={cardVariants}
+                        className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1"
+                      >
+                        <Users size={16} className="text-white" />
+                        <p className="text-[12.8px] text-white font-semibold">
+                          No hay otros arqueros reales conectados en el lobby público en este instante.
+                        </p>
+                        <p className="text-[11.6px] text-white">
+                          Usa &ldquo;Crear Sala Online y Enviar Reto&rdquo; arriba para enviar un enlace directo por WhatsApp a tu amigo.
+                        </p>
+                      </motion.div>
+                    ) : (
+                      filteredRivals.map((riv) => {
+                        const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
+                        return (
+                          <motion.div
+                            key={riv.uid}
+                            variants={cardVariants}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 flex justify-between items-center hover:border-cyan-neon/40 transition-all duration-150"
+                          >
+                            <div className="flex items-center gap-3 w-[70%]">
+                              <div className="relative shrink-0">
+                                <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.1] flex items-center justify-center text-white font-black text-xs">
+                                  {riv.fullName.substring(0, 2).toUpperCase()}
+                                </div>
+                                <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                               </div>
-                              <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
+                              
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                                  {riv.nickname && (
+                                    <span className="text-cyan-neon tabular-nums text-[10.5px] font-bold">@{riv.nickname}</span>
+                                  )}
+                                  <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
+                                    {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
+                                  <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{riv.clubName}</span>
+                                  <span>·</span>
+                                  <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
+                                </div>
+                              </div>
                             </div>
-                            
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
-                                {riv.nickname && (
-                                  <span className="text-cyan-neon tabular-nums text-[10.5px] font-bold">@{riv.nickname}</span>
-                                )}
-                                <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
-                                  {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
-                                <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{riv.clubName}</span>
-                                <span>·</span>
-                                <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
-                              </div>
+
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className="text-[10.5px] text-emerald-400 font-black tracking-tight">En línea</span>
+                              <button
+                                onClick={() => handleChallengeRealUser(riv)}
+                                className="px-3.5 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
+                              >
+                                Retar 1v1
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </div>
+            ) : (
+              /* Simulated Practice Bots ONLY when Contra Bot Olímpico is selected */
+              <div className="flex flex-col gap-2.5">
+                <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                  Simuladores de Eliminatoria (Bots WA)
+                </h4>
+
+                <motion.div
+                  variants={containerVariants}
+                  initial="initial"
+                  animate="animate"
+                  className="flex flex-col gap-2"
+                >
+                  {practiceBots.map((riv) => {
+                    const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
+                    return (
+                      <motion.div
+                        key={riv.uid}
+                        variants={cardVariants}
+                        className="bg-[#0D1017]/80 border border-white/[0.06] rounded-2xl p-3 flex justify-between items-center hover:border-white/15 transition-all duration-150"
+                      >
+                        <div className="flex items-center gap-3 w-[70%]">
+                          <div className="relative shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white font-bold text-xs">
+                              {riv.fullName.substring(0, 2).toUpperCase()}
+                            </div>
+                            <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
+                          </div>
+                          
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                              <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white font-bold uppercase shrink-0">
+                                {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
+                              <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
+                              <span className="truncate">{riv.clubName}</span>
+                              <span>·</span>
+                              <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
                             </div>
                           </div>
-
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span className="text-[10.5px] text-emerald-400 font-black tracking-tight">En línea</span>
-                            <button
-                              onClick={() => handleChallengeRealUser(riv)}
-                              className="px-3.5 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
-                            >
-                              Retar 1v1
-                            </button>
-                          </div>
-                        </motion.div>
-                      );
-                    })
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            </div>
-
-            {/* Simulated Practice Bots */}
-            <div className="flex flex-col gap-2.5 mt-1">
-              <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                Simuladores de Eliminatoria (Bots WA)
-              </h4>
-
-              <motion.div
-                variants={containerVariants}
-                initial="initial"
-                animate="animate"
-                className="flex flex-col gap-2"
-              >
-                {practiceBots.map((riv) => {
-                  const flag = COUNTRIES.find((c) => c.code === riv.country)?.flag || "🇨🇷 CRC";
-                  return (
-                    <motion.div
-                      key={riv.uid}
-                      variants={cardVariants}
-                      className="bg-[#0D1017]/80 border border-white/[0.06] rounded-2xl p-3 flex justify-between items-center hover:border-white/15 transition-all duration-150"
-                    >
-                      <div className="flex items-center gap-3 w-[70%]">
-                        <div className="relative shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white font-bold text-xs">
-                            {riv.fullName.substring(0, 2).toUpperCase()}
-                          </div>
-                          <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                         </div>
-                        
-                        <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
-                            <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white font-bold uppercase shrink-0">
-                              {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
-                            <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
-                            <span className="truncate">{riv.clubName}</span>
-                            <span>·</span>
-                            <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-[10.5px] text-yellow-gold font-bold tracking-tight tabular-nums">
-                          Prom. {riv.rating}
-                        </span>
-                        <button
-                          onClick={() => handleStartSimulatedDuel(riv)}
-                          className="px-3 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
-                        >
-                          Competir
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[10.5px] text-yellow-gold font-bold tracking-tight tabular-nums">
+                            Prom. {riv.rating}
+                          </span>
+                          <button
+                            onClick={() => handleStartSimulatedDuel(riv)}
+                            className="px-3 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
+                          >
+                            Competir
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              </div>
+            )}
           </div>
         </div>
       )}
