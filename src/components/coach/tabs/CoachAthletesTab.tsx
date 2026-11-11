@@ -185,88 +185,90 @@ export default function CoachAthletesTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Top Action Bar: Search, Filters and Create Button */}
+      {/* Grouped Coach Controls: Row 1 Actions | Row 2 Search + Bow Filter */}
       <div className="flex flex-col gap-2.5 w-full max-w-full">
-        {/* Row 1: Search Input (Full width, easy to tap on mobile) */}
-        <div className="w-full bg-neutral-900/60 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
-          <Search size={15} className="text-white shrink-0" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre o alias..."
-            className="bg-transparent border-none text-white text-xs outline-none flex-1 min-w-0 placeholder:text-white"
-          />
-          {searchTerm && (
+        {/* Row 1: Primary & Secondary Actions grouped side-by-side */}
+        <div className={`grid ${onOpenPlanImporter ? "grid-cols-2" : "grid-cols-1"} gap-2.5 w-full`}>
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="h-11 px-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer whitespace-nowrap"
+          >
+            <UserPlus size={15} className="stroke-[2.5] shrink-0" />
+            <span>Nuevo Alumno</span>
+          </button>
+
+          {onOpenPlanImporter && (
             <button
-              onClick={() => setSearchTerm("")}
-              className="text-white hover:text-white text-xs p-0.5 cursor-pointer"
-              title="Limpiar búsqueda"
+              type="button"
+              onClick={() => onOpenPlanImporter()}
+              className="h-11 px-3 rounded-xl bg-[#0D1017] hover:bg-[#131823] border border-white/[0.12] hover:border-cyan-neon/40 text-white font-black text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer whitespace-nowrap"
             >
-              <X size={13} />
+              <FileSpreadsheet size={15} className="text-cyan-neon shrink-0" />
+              <span>Cargar Plan</span>
             </button>
           )}
         </div>
 
-        {/* Row 2: Bow Filter Box & Create Athlete Button (100% visible, no cut-off) */}
-        <div className="flex items-center gap-2 w-full justify-between min-w-0">
-          {/* Bow Selector Dropdown Box */}
-          <div className="relative flex-1 min-w-0">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-cyan-neon">
-              <Filter size={13} />
+        {/* Row 2: Unified Search + Bow Filter on a single clean line */}
+        <div className="flex items-center gap-2 w-full min-w-0">
+          <div className="flex-1 min-w-0 h-10 bg-[#0D1017] border border-white/[0.09] focus-within:border-cyan-neon rounded-xl px-3 flex items-center gap-2 transition">
+            <Search size={14} className="text-white shrink-0" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar alumno..."
+              className="bg-transparent border-none text-white text-xs outline-none flex-1 min-w-0 placeholder:text-white"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="text-white text-xs p-0.5 cursor-pointer shrink-0"
+                title="Limpiar búsqueda"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <div className="relative w-[132px] sm:w-[156px] shrink-0">
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-cyan-neon">
+              <Filter size={12} />
             </div>
             <select
               value={bowFilter}
               onChange={(e) => setBowFilter(e.target.value)}
-              className="w-full bg-neutral-900/80 border border-white/10 hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs pl-8 pr-7 py-2.5 rounded-xl outline-none transition cursor-pointer appearance-none truncate font-medium"
+              aria-label="Filtrar por tipo de arco"
+              className="w-full h-10 bg-[#0D1017] border border-white/[0.09] hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs font-bold pl-7 pr-6 rounded-xl outline-none transition cursor-pointer appearance-none truncate"
             >
-              <option value="ALL">Todos los Arcos</option>
-              <option value="Recurve">Arco Recurvo</option>
-              <option value="Compound">Arco Compuesto</option>
-              <option value="Barebow">Arco Barebow</option>
-              <option value="Traditional">Arco Tradicional</option>
+              <option value="ALL">Todos</option>
+              <option value="Recurve">Recurvo</option>
+              <option value="Compound">Compuesto</option>
+              <option value="Barebow">Barebow</option>
+              <option value="Traditional">Tradicional</option>
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white">
-              <ChevronDown size={14} />
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white">
+              <ChevronDown size={13} />
             </div>
           </div>
-
-          {/* Primary CTA: Create Athlete Profile */}
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer shrink-0"
-          >
-            <UserPlus size={14} className="stroke-[2.5]" />
-            <span>Crear Alumno</span>
-          </button>
         </div>
-
-        {/* Row 3: Quick Plan Importer CTA (Assign to 1 or several athletes) */}
-        {onOpenPlanImporter && (
-          <button
-            type="button"
-            onClick={() => onOpenPlanImporter()}
-            className="w-full py-2.5 px-3 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-[12.6px] leading-snug uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm text-center"
-          >
-            <FileSpreadsheet size={15} className="shrink-0" />
-            <span>Cargar Plan Excel / Sheets (1 o Varios Alumnos)</span>
-          </button>
-        )}
       </div>
 
-      {/* Roster list */}
-      <div className="flex flex-col gap-2.5">
-        <div className="flex justify-between items-center gap-2 flex-wrap px-1">
-          <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
-            Alumnos Registrados ({filteredAthletes.length})
+      {/* Roster list with generous breathing room */}
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-center gap-2 px-1 pt-0.5">
+          <span className="text-[12px] text-white font-black uppercase tracking-wider tabular-nums">
+            Alumnos ({filteredAthletes.length})
           </span>
-          <span className="text-[10.5px] text-cyan-neon font-bold">
-            Toca a un alumno para ver sus puntuaciones
+          <span className="text-[11.5px] text-cyan-neon font-bold whitespace-nowrap">
+            Toca para ver ficha
           </span>
         </div>
 
         {filteredAthletes.length === 0 ? (
-          <div className="text-center py-10 bg-neutral-900/20 border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2">
+          <div className="text-center py-10 bg-[#0D1017] border border-white/[0.07] rounded-2xl flex flex-col items-center justify-center gap-2">
             <User size={28} className="text-white" />
             <p className="text-xs text-white font-bold">No hay alumnos que coincidan con la búsqueda.</p>
             <button
@@ -279,51 +281,53 @@ export default function CoachAthletesTab({
         ) : (
           filteredAthletes.map((ath) => {
             const stats = getAthleteStats(ath.uid);
-            const isOnlineSim = stats.isLiveNow || stats.lastTime > (Date.now() - 3 * 24 * 60 * 60 * 1000); // live or active in last 3 days
-            
+            const isOnlineSim = stats.isLiveNow || stats.lastTime > (Date.now() - 3 * 24 * 60 * 60 * 1000);
+            const bowLabel =
+              ath.bowConfig?.type === "Recurve"
+                ? "Recurvo"
+                : ath.bowConfig?.type === "Compound"
+                ? "Compuesto"
+                : ath.bowConfig?.type || "Barebow";
+
             return (
               <div
                 key={ath.uid}
                 onClick={() => onViewAthlete(ath)}
-                className="bg-neutral-900/40 p-3 sm:p-3.5 rounded-2xl border border-white/5 hover:border-cyan-neon/20 hover:bg-neutral-900/60 transition cursor-pointer flex justify-between items-center gap-2 group"
+                className="bg-[#0D1017] px-3.5 py-3.5 rounded-2xl border border-white/[0.08] hover:border-cyan-neon/30 hover:bg-[#111520] transition cursor-pointer flex justify-between items-center gap-2.5 group"
               >
-                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/10 flex items-center justify-center font-black text-xs text-white">
+                    <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/[0.12] flex items-center justify-center font-black text-xs text-white">
                       {ath.fullName.substring(0, 2).toUpperCase()}
                     </div>
                     {isOnlineSim && (
                       <span
-                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0B0D12] ${
+                        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0D1017] ${
                           stats.isLiveNow ? "bg-emerald-400" : "bg-cyan-neon"
                         }`}
                       />
                     )}
                   </div>
 
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                      <span className="text-white text-xs font-bold leading-tight group-hover:text-cyan-neon transition-colors truncate max-w-full">
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-white text-[13.5px] font-extrabold leading-snug group-hover:text-cyan-neon transition-colors truncate">
                         {ath.fullName}
                       </span>
-                      {ath.nickname && (
-                        <span className="text-[10.5px] text-white font-medium truncate">
-                          (@{ath.nickname})
-                        </span>
-                      )}
                       {stats.isLiveNow && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
+                        <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0 whitespace-nowrap">
                           ● EN VIVO
                         </span>
                       )}
                     </div>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                      {ath.bowConfig?.type === "Recurve" ? "Recurvo" : ath.bowConfig?.type === "Compound" ? "Compuesto" : (ath.bowConfig?.type || "Barebow")} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
+                    <span className="text-[11.5px] text-white truncate tabular-nums">
+                      {bowLabel} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} · {ath.bowConfig?.defaultDistance || 70}m · {stats.count} {stats.count === 1 ? "control" : "controles"}
+                      {stats.averageScore > 0 ? ` · Prom. ${stats.averageScore}` : ""}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   {onOpenPlanImporter && (
                     <button
                       type="button"
@@ -331,21 +335,14 @@ export default function CoachAthletesTab({
                         e.stopPropagation();
                         onOpenPlanImporter(ath.uid);
                       }}
-                      className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+                      className="h-8 px-2.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
                       title={`Cargar plan Excel/Sheets a ${ath.fullName}`}
                     >
                       <FileSpreadsheet size={12} className="shrink-0" />
-                      <span className="sm:hidden">Plan</span>
-                      <span className="hidden sm:inline">Cargar Plan</span>
+                      <span>Plan</span>
                     </button>
                   )}
-                  {stats.averageScore > 0 && (
-                    <div className="flex flex-col text-right shrink-0">
-                      <span className="text-xs font-black text-yellow-gold whitespace-nowrap tabular-nums">{stats.averageScore} pts</span>
-                      <span className="text-[9.3px] text-white leading-none">Promedio</span>
-                    </div>
-                  )}
-                  <ChevronRight size={14} className="text-white group-hover:text-cyan-neon transition-colors shrink-0" />
+                  <ChevronRight size={15} className="text-white group-hover:text-cyan-neon transition-colors shrink-0" />
                 </div>
               </div>
             );

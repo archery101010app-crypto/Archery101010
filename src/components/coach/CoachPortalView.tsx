@@ -787,53 +787,41 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   const getRecentActivities = () => clubSessions.slice(0, 12);
 
   return (
-    <div className="flex flex-col gap-4 min-h-[500px]">
-      {/* Director Identity Banner */}
-      <div className="bg-[#0D0F12] p-4 rounded-2xl border border-white/[0.08] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-12 h-12 rounded-xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center font-black text-cyan-neon text-lg shrink-0">
-            {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
-          </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-white text-[17.6px] font-black uppercase tracking-wide truncate max-w-full">
-                Coach {user.fullName || "Director"}
-              </h2>
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("open-coach-payment"))}
-                className="text-[9.5px] bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/25 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition"
-              >
-                <ShieldCheck size={10} />
-                <span>PRO</span>
-              </button>
+    <div className="flex flex-col gap-3.5 min-h-[500px] pt-0.5">
+      {/* Compact Director Identity & Invite Code Card */}
+      <div className="bg-[#0D1017] p-3.5 rounded-2xl border border-white/[0.09] flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2.5 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center font-black text-cyan-neon text-sm shrink-0">
+              {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
             </div>
-            <p className="text-[12.6px] sm:text-[13.2px] text-white mt-0.5 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 leading-snug">
-              <span className="whitespace-nowrap">Portal de Entrenador</span>
-              <span className="hidden sm:inline">·</span>
-              <span>Receptor y Director de Estadísticas</span>
-            </p>
+            <h2 className="text-white text-[16px] sm:text-[17.5px] font-black uppercase tracking-wide truncate min-w-0">
+              Coach {user.fullName || "Director"}
+            </h2>
           </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-coach-payment"))}
+            className="text-[10px] bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2.5 py-1 rounded-full border border-yellow-gold/30 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition"
+          >
+            <ShieldCheck size={11} />
+            <span>PRO</span>
+          </button>
         </div>
 
-        {/* Quick Coach Code (Máximo 6 dígitos) */}
-        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end bg-black px-3 py-2 rounded-xl border border-white/[0.06]">
-          <div className="flex flex-col">
-            <span className="text-[9.3px] text-white uppercase font-bold tracking-wider">
-              Código para Alumnos
+        {/* Slim Integrated Student Code Strip */}
+        <div className="flex items-center justify-between gap-2 bg-[#06080C] px-3 py-2 rounded-xl border border-white/[0.07]">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] text-white uppercase font-bold tracking-wider whitespace-nowrap">
+              Código Alumnos
             </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-sm tabular-nums font-black text-cyan-neon tracking-widest select-all">
-                {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
-                  ? user.clubInviteCode
-                  : "······"}
-              </span>
-              <span className="text-[8.1px] text-white font-bold uppercase tracking-wider">
-                (6 dígitos)
-              </span>
-            </div>
+            <span className="text-[15px] tabular-nums font-black text-cyan-neon tracking-widest select-all whitespace-nowrap">
+              {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
+                ? user.clubInviteCode
+                : "······"}
+            </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={async () => {
                 const codeToCopy =
@@ -851,10 +839,11 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   );
                 }
               }}
-              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-cyan-neon hover:text-white transition cursor-pointer"
+              className="h-8 px-2.5 bg-[#121620] hover:bg-white/[0.08] border border-white/10 rounded-lg text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
               title="Copiar código para alumnos"
             >
-              <Share2 size={13} />
+              <Share2 size={12} />
+              <span>Copiar</span>
             </button>
             <button
               onClick={async () => {
@@ -879,7 +868,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   }
                 }
               }}
-              className="p-1.5 bg-neutral-900 border border-white/10 rounded-lg text-white hover:text-yellow-gold transition cursor-pointer"
+              className="w-8 h-8 bg-[#121620] hover:bg-white/[0.08] border border-white/10 rounded-lg text-white hover:text-yellow-gold flex items-center justify-center transition cursor-pointer shrink-0"
               title="Borrar y generar nuevo código de 6 dígitos"
             >
               <RefreshCw size={13} />
@@ -974,12 +963,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         )}
       </AnimatePresence>
 
-      {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES | DUELOS */}
-      <div className="grid grid-cols-5 bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 shrink-0 gap-0.5">
+      {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | RESUMEN | PLANES | DUELOS */}
+      <div className="grid grid-cols-5 bg-[#0A0C10] border border-white/[0.09] rounded-2xl p-1 shrink-0 gap-1">
         {[
           { id: "ATHLETES", label: "Alumnos", icon: Users },
           { id: "SESSIONS", label: "Resultados", icon: Award },
-          { id: "OVERVIEW", label: "Director", icon: LayoutDashboard },
+          { id: "OVERVIEW", label: "Resumen", icon: LayoutDashboard },
           { id: "MACROCYCLES", label: "Planes", icon: Calendar },
           { id: "DUELS", label: "Duelos", icon: Swords }
         ].map((tab) => {
@@ -989,13 +978,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2 rounded-xl text-[10.2px] sm:text-[11.8px] font-black uppercase tracking-[-0.03em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 rounded-xl text-[10.4px] sm:text-[11.8px] font-black uppercase tracking-[-0.02em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
-                  ? "bg-white/[0.06] border border-white/[0.1] text-cyan-neon"
-                  : "text-white/85 hover:text-white border border-transparent"
+                  ? "bg-cyan-neon/12 border border-cyan-neon/35 text-cyan-neon"
+                  : "text-white hover:bg-white/[0.04] border border-transparent"
               }`}
             >
-              <Icon size={14} className={active ? "text-cyan-neon" : "text-white"} />
+              <Icon size={15} className={active ? "text-cyan-neon" : "text-white"} />
               <span className="whitespace-nowrap leading-none">{tab.label}</span>
             </button>
           );
