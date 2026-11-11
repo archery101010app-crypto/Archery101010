@@ -1089,7 +1089,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       </div>
 
       {/* Compact Month Selector + View Switcher Bar */}
-      <div className="flex items-center justify-between gap-1 bg-[#0D1017] px-2 sm:px-2.5 py-1.5 rounded-2xl border border-white/[0.08]">
+      <div className="flex items-center justify-between gap-1 bg-[#0D1017] px-1.5 sm:px-2.5 py-1.5 rounded-2xl border border-white/[0.08]">
         <div className="flex items-center gap-0 min-w-0 flex-1">
           <button
             onClick={prevMonth}
@@ -1097,7 +1097,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           >
             <ChevronLeft size={16} />
           </button>
-          <span className="text-white font-extrabold text-[13px] sm:text-[15px] capitalize whitespace-nowrap px-0.5 tabular-nums">
+          <span className="text-white font-extrabold text-[15px] sm:text-[16.5px] tracking-tight capitalize whitespace-nowrap px-0.5 tabular-nums">
             {monthName}
           </span>
           <button
@@ -1112,7 +1112,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <button
             type="button"
             onClick={() => setCalendarViewMode("month")}
-            className={`px-2.5 py-1.5 rounded-lg text-[10.5px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "month"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
@@ -1124,7 +1124,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <button
             type="button"
             onClick={() => setCalendarViewMode("agenda")}
-            className={`px-2.5 py-1.5 rounded-lg text-[10.5px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
+            className={`px-2 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "agenda"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
@@ -1142,7 +1142,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {macrocycles.length > 0 && (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-[68px] shrink-0 text-[10.5px] text-white font-black uppercase tracking-wider">
+                <span className="w-[78px] shrink-0 text-[12px] text-white font-black uppercase tracking-wide">
                   {language === "es" ? "Plan:" : "Plan:"}
                 </span>
                 <select
@@ -1164,7 +1164,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
             {isCoach && roster.length > 0 && (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-[68px] shrink-0 text-[10.5px] text-cyan-neon font-black uppercase tracking-wider flex items-center gap-1">
+                <span className="w-[78px] shrink-0 text-[12px] text-cyan-neon font-black uppercase tracking-wide flex items-center gap-1">
                   <User size={11} className="shrink-0" />
                   <span>Alumno:</span>
                 </span>
@@ -1270,7 +1270,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     }
                   }}
                   style={customStyle}
-                  className={`min-h-[44px] sm:aspect-square rounded-xl p-1 sm:p-1.5 flex flex-col items-center justify-center gap-0.5 relative font-bold tabular-nums transition-all border overflow-hidden ${
+                  className={`min-h-[48px] sm:aspect-square rounded-xl p-1 sm:p-1.5 flex flex-col items-center justify-center gap-0.5 relative font-bold tabular-nums transition-all border overflow-hidden ${
                     !cell.isCurrentMonth
                       ? "text-white border-transparent pointer-events-none"
                       : cell.hasSession && !activePhaseInfo && !coachAssignment
@@ -1287,7 +1287,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     />
                   )}
 
-                  <span className={`text-[13px] sm:text-[14.5px] leading-none text-center tabular-nums ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
+                  <span className={`text-[15px] sm:text-[16px] leading-none text-center tabular-nums ${isToday ? "text-cyan-neon font-black" : "font-extrabold text-white"}`}>
                     {cell.day}
                   </span>
 

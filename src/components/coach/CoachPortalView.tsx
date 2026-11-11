@@ -808,7 +808,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 <span>PRO</span>
               </button>
             </div>
-            <p className="text-[11px] sm:text-[11.6px] text-white mt-0.5 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 leading-snug">
+            <p className="text-[12.6px] sm:text-[13.2px] text-white mt-0.5 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 leading-snug">
               <span className="whitespace-nowrap">Portal de Entrenador</span>
               <span className="hidden sm:inline">·</span>
               <span>Receptor y Director de Estadísticas</span>
@@ -975,7 +975,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       </AnimatePresence>
 
       {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | DIRECTOR | PLANES | DUELOS */}
-      <div className="grid grid-cols-5 bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 shrink-0 gap-1">
+      <div className="grid grid-cols-5 bg-[#0A0B0E] border border-white/[0.08] rounded-2xl p-1 shrink-0 gap-0.5">
         {[
           { id: "ATHLETES", label: "Alumnos", icon: Users },
           { id: "SESSIONS", label: "Resultados", icon: Award },
@@ -989,7 +989,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2 rounded-xl text-[8.8px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider transition-all duration-200 cursor-pointer ${
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2 rounded-xl text-[10.2px] sm:text-[11.8px] font-black uppercase tracking-[-0.03em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
                   ? "bg-white/[0.06] border border-white/[0.1] text-cyan-neon"
                   : "text-white/85 hover:text-white border border-transparent"

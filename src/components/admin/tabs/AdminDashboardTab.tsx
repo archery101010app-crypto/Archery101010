@@ -404,14 +404,14 @@ export default function AdminDashboardTab() {
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
               
               <div className="flex justify-between items-start gap-2 mb-3 sm:mb-4 min-w-0">
-                <span className="text-[10.5px] sm:text-xs font-bold text-white uppercase tracking-wider sm:tracking-widest leading-snug min-w-0 break-words">{kpi.title}</span>
+                <span className="text-[12px] sm:text-[13.5px] font-bold text-white uppercase tracking-wider sm:tracking-widest leading-snug min-w-0 break-words">{kpi.title}</span>
                 <div className={`p-1.5 sm:p-2 rounded-xl border flex items-center justify-center shrink-0 ${kpi.colorClass}`}>
                   <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </div>
               </div>
 
               <div>
-                <h3 className={`text-xl sm:text-2xl md:text-3xl font-black tracking-tight tabular-nums ${kpi.textColor}`}>
+                <h3 className={`text-[23px] sm:text-2xl md:text-3xl font-black tracking-tight tabular-nums ${kpi.textColor}`}>
                   {kpi.value}
                 </h3>
                 <span className="text-[10.5px] md:text-xs text-white font-medium block mt-1 tabular-nums">{kpi.subtitle}</span>

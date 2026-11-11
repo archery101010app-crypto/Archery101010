@@ -522,7 +522,7 @@ export default function AdminUsersTab() {
               <button
                 key={filter}
                 onClick={() => setRoleFilter(filter)}
-                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[12.6px] sm:text-[13.2px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   roleFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -539,7 +539,7 @@ export default function AdminUsersTab() {
               <button
                 key={filter}
                 onClick={() => setPlanFilter(filter)}
-                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[12.6px] sm:text-[13.2px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   planFilter === filter
                     ? "bg-white/10 text-white"
                     : "text-white hover:text-white"
@@ -561,7 +561,7 @@ export default function AdminUsersTab() {
               <button
                 key={b.id}
                 onClick={() => setBowFilter(b.id)}
-                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-[11.6px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[12.6px] sm:text-[13.2px] font-bold uppercase whitespace-nowrap shrink-0 transition cursor-pointer ${
                   bowFilter === b.id
                     ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/20"
                     : "text-white hover:text-white"

@@ -222,7 +222,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setPracticeType(type)}
-                className={`h-12 px-1.5 sm:px-2 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -256,7 +256,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={fmt.id}
                 type="button"
                 onClick={() => handleFormatChange(fmt.id)}
-                className={`h-11 px-2 sm:px-1.5 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate tabular-nums transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate tabular-nums transition-all duration-200 cursor-pointer ${
                   idx === 4 ? "col-span-2 sm:col-span-1" : ""
                 } ${
                   format === fmt.id
@@ -288,7 +288,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-12 px-1.5 sm:px-2 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -322,7 +322,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     }
                   }
                 }}
-                className={`h-12 rounded-xl border text-[13px] sm:text-[16.7px] tracking-tight font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
+                className={`h-12 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
                   distance === d
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"

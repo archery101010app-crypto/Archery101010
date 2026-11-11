@@ -338,7 +338,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="flex items-center justify-between px-1 gap-2 sm:gap-3">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-white text-[20px] sm:text-[23.8px] font-bold tracking-tight truncate">
+            <h2 className="text-white text-[23px] sm:text-[26.4px] font-bold tracking-tight truncate">
               {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
             </h2>
             {customClubName && (
@@ -380,7 +380,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <button
             type="button"
             onClick={() => onNavigate("CALENDAR")}
-            className="h-9 px-2.5 sm:px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[12.6px] sm:text-[13.9px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[140px] sm:max-w-[175px]"
+            className="h-9 px-2.5 sm:px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[14.2px] sm:text-[15px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[155px] sm:max-w-[185px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
             <span className="truncate">{todayMission.title}</span>
@@ -540,19 +540,19 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
 
           {/* Row 3: Symmetrical 2-Column Footer (Real Duel Record + Clean CTA Button) */}
           <div className="grid grid-cols-2 gap-2 sm:gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
-            <div className="min-h-[44px] bg-[#080A0F] border border-white/[0.08] rounded-xl px-1.5 sm:px-2 flex items-center justify-center gap-1 overflow-hidden tabular-nums">
-              <div className="flex items-baseline gap-1 min-w-0">
-                <span className="text-[10.5px] sm:text-[12.2px] font-black uppercase tracking-tighter sm:tracking-tight text-cyan-neon">
+            <div className="min-h-[44px] py-1 bg-[#080A0F] border border-white/[0.08] rounded-xl px-1.5 sm:px-2 flex flex-wrap items-center justify-center gap-1 gap-y-0.5 overflow-hidden tabular-nums">
+              <div className="flex items-baseline gap-0.5 sm:gap-1 min-w-0">
+                <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-tighter text-cyan-neon">
                   {language === "es" ? "VICTORIAS" : "WINS"}
                 </span>
-                <span className="text-[14.5px] sm:text-[16.7px] font-black text-white tabular-nums">{duelStats.wins}</span>
+                <span className="text-[16.7px] sm:text-[18px] font-black text-white tabular-nums">{duelStats.wins}</span>
               </div>
-              <span className="text-white font-bold text-xs">·</span>
-              <div className="flex items-baseline gap-1 min-w-0">
-                <span className="text-[10.5px] sm:text-[12.2px] font-black uppercase tracking-tighter sm:tracking-tight text-yellow-gold">
+              <span className="text-white font-bold text-[10px] sm:text-xs leading-none">·</span>
+              <div className="flex items-baseline gap-0.5 sm:gap-1 min-w-0">
+                <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-tighter text-yellow-gold">
                   {language === "es" ? "DUELOS" : "DUELS"}
                 </span>
-                <span className="text-[14.5px] sm:text-[16.7px] font-black text-white tabular-nums">{duelStats.total}</span>
+                <span className="text-[16.7px] sm:text-[18px] font-black text-white tabular-nums">{duelStats.total}</span>
               </div>
             </div>
 

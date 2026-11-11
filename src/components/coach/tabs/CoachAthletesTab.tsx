@@ -246,7 +246,7 @@ export default function CoachAthletesTab({
           <button
             type="button"
             onClick={() => onOpenPlanImporter()}
-            className="w-full py-2.5 px-3 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-[11px] leading-snug uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm text-center"
+            className="w-full py-2.5 px-3 rounded-xl bg-[#0D1017] hover:bg-neutral-900 border border-cyan-neon/35 text-cyan-neon font-black text-[12.6px] leading-snug uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.99] transition cursor-pointer shadow-sm text-center"
           >
             <FileSpreadsheet size={15} className="shrink-0" />
             <span>Cargar Plan Excel / Sheets (1 o Varios Alumnos)</span>
@@ -331,7 +331,7 @@ export default function CoachAthletesTab({
                         e.stopPropagation();
                         onOpenPlanImporter(ath.uid);
                       }}
-                      className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[9.5px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+                      className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
                       title={`Cargar plan Excel/Sheets a ${ath.fullName}`}
                     >
                       <FileSpreadsheet size={12} className="shrink-0" />
@@ -406,7 +406,7 @@ export default function CoachAthletesTab({
                 {/* Nickname & Género */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Apodo / Alias
                     </label>
                     <input
@@ -419,7 +419,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Género
                     </label>
                     <select
@@ -436,7 +436,7 @@ export default function CoachAthletesTab({
                 {/* Tipo de Arco & Libras */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Tipo de Arco
                     </label>
                     <select
@@ -451,7 +451,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Potencia (Libras #)
                     </label>
                     <input
@@ -469,7 +469,7 @@ export default function CoachAthletesTab({
                 {/* Distancia Principal & Correo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Distancia Reglamentaria
                     </label>
                     <select
@@ -486,7 +486,7 @@ export default function CoachAthletesTab({
                   </div>
 
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Teléfono / WhatsApp
                     </label>
                     <input
@@ -502,7 +502,7 @@ export default function CoachAthletesTab({
                 {/* Marca & Modelo */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Marca de Arco (opcional)
                     </label>
                     <input
@@ -514,7 +514,7 @@ export default function CoachAthletesTab({
                     />
                   </div>
                   <div className="flex flex-col gap-1 min-w-0">
-                    <label className="min-h-[28px] flex items-end text-[11px] leading-tight text-white font-black uppercase tracking-wider">
+                    <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
                       Modelo (opcional)
                     </label>
                     <input

@@ -749,7 +749,7 @@ export default function HistoryView({
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
                     <div key={item.name} className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 text-[11px] sm:text-[11.6px] font-bold text-white min-w-0">
+                      <div className="flex items-center justify-between gap-1 text-[12.6px] sm:text-[13.2px] tracking-tight font-bold text-white min-w-0">
                         <span className="min-w-0 truncate">{item.name}</span>
                         <span className="text-yellow-gold tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>
@@ -778,7 +778,7 @@ export default function HistoryView({
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
                     <div key={item.name} className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 text-[11px] sm:text-[11.6px] font-bold text-white min-w-0">
+                      <div className="flex items-center justify-between gap-1 text-[12.6px] sm:text-[13.2px] tracking-tight font-bold text-white min-w-0">
                         <span className="min-w-0 truncate">{item.name}</span>
                         <span className="text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>

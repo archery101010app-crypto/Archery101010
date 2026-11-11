@@ -2031,36 +2031,36 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       ) : (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3 sm:px-3.5 py-2.5 flex flex-col gap-2">
           <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1.5 min-w-0">
-            <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0">
-              <span className="text-[10px] sm:text-[10.5px] text-white font-bold tracking-wider sm:tracking-widest uppercase shrink-0">
+            <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2 min-w-0">
+              <span className="text-[11.5px] sm:text-[12px] text-white font-bold tracking-wider sm:tracking-widest uppercase shrink-0">
                 Puntos
               </span>
-              <span className="text-[19px] sm:text-[23.1px] font-black text-white leading-none tabular-nums truncate">
-                {calculateTotalScore()} <span className="text-[11px] sm:text-xs text-white font-bold">/ {config.maxScore}</span>
+              <span className="text-[22px] sm:text-[25px] font-black text-white leading-none tabular-nums truncate">
+                {calculateTotalScore()} <span className="text-[12.6px] sm:text-[14px] text-white font-bold">/ {config.maxScore}</span>
               </span>
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
                 <button
                   onClick={handleFinishFirstBlockOnly}
-                  className="text-[9.5px] sm:text-[10px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-1.5 sm:px-2 py-0.5 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap shrink-0"
+                  className="text-[11px] sm:text-[11.5px] font-black uppercase text-yellow-gold border border-yellow-gold/30 bg-yellow-gold/5 px-1.5 sm:px-2 py-0.5 rounded-lg hover:bg-yellow-gold/15 transition cursor-pointer whitespace-nowrap shrink-0"
                 >
                   1er Bloque
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 max-w-full">
               {ends.some((e) => e.arrows.some((a) => a !== "")) && (
                 <button
                   type="button"
                   onClick={() => setIsFinishing(true)}
-                  className="text-[9.5px] sm:text-[10px] font-black uppercase text-black bg-cyan-neon hover:bg-[#19c8ff] px-2 sm:px-2.5 py-1 rounded-full transition cursor-pointer whitespace-nowrap shadow-sm"
+                  className="text-[11px] sm:text-[11.5px] font-black uppercase text-black bg-cyan-neon hover:bg-[#19c8ff] px-2 sm:px-2.5 py-1 rounded-full transition cursor-pointer whitespace-nowrap shadow-sm"
                 >
                   Finalizar
                 </button>
               )}
-              <span className="text-[10px] sm:text-[10.5px] text-cyan-neon font-black tracking-wide sm:tracking-wider uppercase bg-cyan-neon/10 px-2 sm:px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
+              <span className="text-[11.5px] sm:text-[12px] text-cyan-neon font-black tracking-wide sm:tracking-wider uppercase bg-cyan-neon/10 px-2 sm:px-2.5 py-0.5 rounded-full border border-cyan-neon/25 tabular-nums whitespace-nowrap">
                 End {currentEndIdx + 1}/{config.endsCount}
               </span>
-              <span className="text-[10.5px] sm:text-[11px] text-white font-bold tabular-nums whitespace-nowrap">
+              <span className="text-[12px] sm:text-[12.6px] text-white font-bold tabular-nums whitespace-nowrap">
                 Fl. {currentArrowIdx + 1}/{config.arrowsPerEnd}
               </span>
             </div>
@@ -2112,7 +2112,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         />
         <div className="flex items-center justify-around gap-1.5 sm:gap-2 min-w-0 flex-1">
           <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-1.5 sm:pr-2 border-r border-white/10">
-            <span className="text-[10px] sm:text-[11.4px] font-black uppercase tracking-wide sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
+            <span className="text-[11.5px] sm:text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   gpsActive
@@ -2123,17 +2123,17 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <span className="sm:hidden">DISTANCIA</span>
               <span className="hidden sm:inline">DISTANCIA RECORRIDA</span>
             </span>
-            <span className="text-[13.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
+            <span className="text-[15.5px] sm:text-[17.5px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
               {formatKmAndMiles(distanceWalkedM, false)}
             </span>
           </div>
 
-          <div className="flex flex-col items-center justify-center text-center min-w-0 px-1.5 sm:px-2">
-            <span className="text-[10px] sm:text-[11.4px] font-black uppercase tracking-wide sm:tracking-wider text-white leading-tight whitespace-nowrap">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2">
+            <span className="text-[11.5px] sm:text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider text-white leading-tight whitespace-nowrap">
               KCAL
             </span>
-            <span className="text-[13.5px] sm:text-[16.8px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
-              {activeKcal} <span className="text-[12px] sm:text-[13.2px] font-black text-white">kcal</span>
+            <span className="text-[15.5px] sm:text-[17.5px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
+              {activeKcal} <span className="text-[13.8px] sm:text-[14.5px] font-black text-white">kcal</span>
             </span>
           </div>
         </div>
@@ -2141,7 +2141,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <button
           type="button"
           onClick={() => setIsWatchModalOpen(true)}
-          className="px-3 sm:px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[11.5px] sm:text-[12.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer active:scale-95 transition"
+          className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[13px] sm:text-[14px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer active:scale-95 transition"
         >
           <Watch size={15} className="shrink-0" />
           <span>Smartwatch</span>
@@ -2201,7 +2201,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <button
                 type="button"
                 onClick={handleTallyIncrement}
-                className="w-[248px] h-[248px] sm:w-[288px] sm:h-[288px] rounded-full border-[9.5px] border-zinc-300 flex flex-col items-center justify-center gap-2 sm:gap-2.5 relative z-10 cursor-pointer hover:brightness-105 active:scale-[0.97] active:translate-y-0.5 transition group"
+                className="w-[260px] h-[260px] sm:w-[288px] sm:h-[288px] rounded-full border-[9.5px] border-zinc-300 flex flex-col items-center justify-center gap-2 sm:gap-2.5 relative z-10 cursor-pointer hover:brightness-105 active:scale-[0.97] active:translate-y-0.5 transition group"
                 style={{
                   background: "radial-gradient(circle at 35% 28%, #fafafa 0%, #e4e4e7 28%, #a1a1aa 68%, #52525b 100%)",
                   borderColor: "#d4d4d8",
@@ -2228,7 +2228,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                 {/* Display Window */}
                 <div
-                  className="w-[176px] sm:w-[192px] bg-zinc-950 border-4 border-zinc-700 p-3 sm:p-4 rounded-2xl mt-5 flex flex-col items-center gap-1.5 sm:gap-2 relative overflow-hidden"
+                  className="w-[188px] sm:w-[206px] bg-zinc-950 border-4 border-zinc-700 p-2.5 sm:p-3.5 rounded-2xl mt-5 flex flex-col items-center gap-1.5 sm:gap-2 relative overflow-hidden"
                   style={{
                     backgroundColor: "#09090b",
                     borderColor: "#3f3f46",
@@ -2239,7 +2239,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
                   
                   {/* Label */}
-                  <span className="text-[9.2px] sm:text-[9.6px] text-cyan-neon font-black tracking-widest uppercase">
+                  <span className="text-[10.6px] sm:text-[11px] text-cyan-neon font-black tracking-wider uppercase whitespace-nowrap">
                     FLECHAS LANZADAS
                   </span>
 
@@ -2248,7 +2248,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     {String(tallyCount).padStart(4, "0").split("").map((digit, idx) => (
                       <div
                         key={idx}
-                        className="w-[31px] sm:w-[33.6px] h-[44px] sm:h-[48px] border border-zinc-800 rounded flex items-center justify-center font-black text-[26px] sm:text-[28.8px] text-white font-sans tabular-nums relative"
+                        className="w-[34px] sm:w-[36px] h-[48px] sm:h-[52px] border border-zinc-800 rounded flex items-center justify-center font-black text-[29.5px] sm:text-[32px] text-white font-sans tabular-nums relative"
                         style={{
                           background: "linear-gradient(180deg, #18181b 0%, #09090b 50%, #18181b 100%)",
                           borderColor: "#27272a",
@@ -2265,7 +2265,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
                 {/* Engraved bottom callout */}
                 <div
-                  className="text-[11px] sm:text-[12px] font-black tracking-wider uppercase mt-1.5 sm:mt-2.5 transition"
+                  className="text-[12.6px] sm:text-[13.8px] font-black tracking-wide sm:tracking-wider uppercase mt-1.5 sm:mt-2 transition whitespace-nowrap"
                   style={{
                     color: "#18181b",
                     textShadow: "0 1px 0 rgba(255,255,255,0.65)"

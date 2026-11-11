@@ -760,7 +760,7 @@ export default function PlanImporterModal({
                   <button
                     type="button"
                     onClick={() => setAssignTarget("selected")}
-                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`px-1 py-2 rounded-lg text-[11.5px] sm:text-[12.5px] leading-tight text-center font-black uppercase tracking-[-0.02em] sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "selected"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
@@ -772,7 +772,7 @@ export default function PlanImporterModal({
                   <button
                     type="button"
                     onClick={() => setAssignTarget("all")}
-                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`px-1 py-2 rounded-lg text-[11.5px] sm:text-[12.5px] leading-tight text-center font-black uppercase tracking-[-0.02em] sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "all"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
@@ -784,7 +784,7 @@ export default function PlanImporterModal({
                   <button
                     type="button"
                     onClick={() => setAssignTarget("personal")}
-                    className={`px-1.5 py-2 rounded-lg text-[10px] sm:text-[11px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`px-1 py-2 rounded-lg text-[11.5px] sm:text-[12.5px] leading-tight text-center font-black uppercase tracking-[-0.02em] sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer ${
                       assignTarget === "personal"
                         ? "bg-cyan-neon text-black shadow-sm"
                         : "text-white hover:bg-white/5"
@@ -918,7 +918,7 @@ export default function PlanImporterModal({
                 <button
                   type="button"
                   onClick={handlePasteFromClipboard}
-                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] sm:text-[11px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[12px] sm:text-[12.6px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <ClipboardPaste size={13} className="shrink-0" />
                   <span>Pegar de Excel / Sheets</span>
@@ -927,7 +927,7 @@ export default function PlanImporterModal({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <UploadCloud size={13} className="text-cyan-neon shrink-0" />
                   <span>Subir .xlsx</span>
@@ -936,7 +936,7 @@ export default function PlanImporterModal({
                 <button
                   type="button"
                   onClick={() => setShowSheetsUrlBox((v) => !v)}
-                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <Link2 size={13} className="text-emerald-400 shrink-0" />
                   <span>Link Sheets</span>
@@ -945,7 +945,7 @@ export default function PlanImporterModal({
                 <button
                   type="button"
                   onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
-                  className="px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[10.5px] sm:text-[11px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                   title="Descargar hoja vacía con los días del mes"
                 >
                   <Download size={12} className="shrink-0" />
@@ -1143,7 +1143,7 @@ export default function PlanImporterModal({
                             : "bg-neutral-950 border-white/10 text-white"
                         }`}
                       >
-                        <div className="text-[10px] font-black uppercase tracking-wider opacity-80">
+                        <div className="text-[11.5px] font-black uppercase tracking-wider opacity-80">
                           {row.weekdayShort}
                         </div>
                         <div className="text-xs sm:text-sm font-black tabular-nums leading-tight">
@@ -1197,7 +1197,7 @@ export default function PlanImporterModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer shrink-0 whitespace-nowrap"
+            className="px-3 py-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer shrink-0 whitespace-nowrap"
           >
             Cancelar
           </button>
@@ -1206,7 +1206,7 @@ export default function PlanImporterModal({
             type="button"
             disabled={totalDaysToSave === 0 || isSubmitting}
             onClick={handleConfirmSave}
-            className="flex-1 sm:flex-initial min-w-0 px-3.5 sm:px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wider whitespace-nowrap transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer tabular-nums"
+            className="flex-1 sm:flex-initial min-w-0 px-3 sm:px-6 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[12.6px] sm:text-[13.8px] leading-tight text-center uppercase tracking-tight sm:tracking-wider sm:whitespace-nowrap transition disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer tabular-nums"
           >
             {isSubmitting ? (
               <>

@@ -736,11 +736,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         <div className="flex flex-col gap-4 z-10">
           {/* 1. Direct Match Creator Card */}
           <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 flex flex-col gap-3.5">
-            <div className="flex items-center justify-between flex-wrap gap-1">
+            <div className="flex items-center justify-between flex-wrap gap-1.5">
               <span className="text-xs font-black uppercase tracking-wider text-white whitespace-nowrap">
                 Nueva Eliminatoria
               </span>
-              <span className="text-[11px] sm:text-[11.6px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-lg whitespace-nowrap shrink-0 tabular-nums">
+              <span className="text-[12.6px] sm:text-[13.2px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-lg whitespace-nowrap shrink-0 tabular-nums">
                 {customBow === "Compound" ? "15 Flechas · Acumulado" : "Sistema de Sets · 6 Pts"}
               </span>
             </div>
@@ -751,24 +751,24 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 <button
                   type="button"
                   onClick={() => setDuelMode("FRIEND")}
-                  className={`h-9 px-2 rounded-lg text-[10.5px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap min-w-0 ${
+                  className={`min-h-[40px] h-10 px-1.5 rounded-lg text-[12px] sm:text-[13.5px] font-black uppercase tracking-tight text-center leading-tight transition-all cursor-pointer flex items-center justify-center sm:whitespace-nowrap min-w-0 ${
                     duelMode === "FRIEND"
                       ? "bg-cyan-neon text-black"
                       : "text-white hover:text-white"
                   }`}
                 >
-                  <span className="truncate">Contra Amigo Online</span>
+                  <span className="min-w-0">Contra Amigo Online</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setDuelMode("BOT")}
-                  className={`h-9 px-2 rounded-lg text-[10.5px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap min-w-0 ${
+                  className={`min-h-[40px] h-10 px-1.5 rounded-lg text-[12px] sm:text-[13.5px] font-black uppercase tracking-tight text-center leading-tight transition-all cursor-pointer flex items-center justify-center sm:whitespace-nowrap min-w-0 ${
                     duelMode === "BOT"
                       ? "bg-yellow-gold text-black"
                       : "text-white hover:text-white"
                   }`}
                 >
-                  <span className="truncate">Contra Bot Olímpico</span>
+                  <span className="min-w-0">Contra Bot Olímpico</span>
                 </button>
               </div>
 
@@ -784,7 +784,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         key={b}
                         type="button"
                         onClick={() => setCustomBow(b)}
-                        className={`h-9 px-1 rounded-xl text-[11px] sm:text-[11.6px] font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap truncate ${
+                        className={`h-9 px-1 rounded-xl text-[12.6px] sm:text-[13.2px] tracking-tight font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap truncate ${
                           customBow === b
                             ? "bg-white/[0.12] border-cyan-neon text-white"
                             : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"

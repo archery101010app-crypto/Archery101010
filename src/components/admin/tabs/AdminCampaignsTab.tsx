@@ -517,7 +517,7 @@ export default function AdminCampaignsTab() {
                               : "bg-neutral-900/40 border-white/10 hover:border-white/20"
                           }`}
                         >
-                          <span className="text-[10.5px] sm:text-[11.6px] font-black text-white block leading-tight uppercase break-words">{t.label}</span>
+                          <span className="text-[12px] sm:text-[13px] font-black text-white block leading-tight uppercase break-words">{t.label}</span>
                           <span className="text-[9.3px] text-white font-medium block leading-tight mt-2">{t.desc}</span>
                         </div>
                       ))}

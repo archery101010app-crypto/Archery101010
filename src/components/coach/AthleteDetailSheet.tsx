@@ -317,7 +317,7 @@ export default function AthleteDetailSheet({
                     setExpandedSessionId(firstScored ? firstScored.id : null);
                   }
                 }}
-                className={`min-w-0 flex items-center sm:flex-col justify-center gap-1 sm:gap-1 px-2 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[9.5px] font-black uppercase tracking-tight transition-all border cursor-pointer ${
+                className={`min-w-0 flex items-center sm:flex-col justify-center gap-1 sm:gap-1 px-1.5 py-2 sm:py-1.5 rounded-xl text-[11.6px] sm:text-[11px] font-black uppercase tracking-tight transition-all border cursor-pointer ${
                   active
                     ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
                     : "bg-neutral-900/60 border-white/5 text-white hover:text-white"

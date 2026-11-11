@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
             alt="ARCHERY 101010"
             className="h-[11px] sm:h-3.5 w-auto object-contain shrink-0"
           />
-          <span className="text-white text-[11px] sm:text-[11.9px] font-black tracking-[0.25em] uppercase pl-2 border-l border-white/10">
+          <span className="text-white text-[12.6px] sm:text-[13.5px] font-black tracking-[0.25em] uppercase pl-2 border-l border-white/10">
             PRIVACY
           </span>
         </div>

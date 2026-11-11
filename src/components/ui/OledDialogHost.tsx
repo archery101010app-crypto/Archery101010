@@ -57,12 +57,12 @@ export default function OledDialogHost() {
                 alt="ARCHERY 101010"
                 className="h-3.5 w-auto object-contain"
               />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full bg-[#12151C] border border-white/10">
+              <span className="text-[11.5px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full bg-[#12151C] border border-white/10">
                 {dialog.kind === "confirm" ? "Confirmación" : "Aviso"}
               </span>
             </div>
 
-            <div className="text-white text-sm font-semibold leading-relaxed whitespace-pre-line break-words tabular-nums">
+            <div className="text-white text-[15.5px] font-semibold leading-relaxed whitespace-pre-line break-words tabular-nums">
               {dialog.message}
             </div>
 

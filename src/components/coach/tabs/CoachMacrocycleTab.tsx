@@ -539,26 +539,26 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
           >
             <div className="flex flex-col gap-2.5 bg-neutral-900/40 border border-white/10 rounded-3xl p-3.5">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] text-white font-black uppercase tracking-wider">Ciclos Activos</span>
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider tabular-nums">
+                <span className="text-[12.6px] text-white font-black uppercase tracking-wider">Ciclos Activos</span>
+                <span className="text-[11.5px] text-neutral-400 font-bold uppercase tracking-wider tabular-nums">
                   {macrocycles.length} {macrocycles.length === 1 ? "plan" : "planes"}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={handleOpenImportModal}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-neutral-950 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
+                  className="w-full py-2.5 px-2 rounded-2xl bg-neutral-950 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-black text-[12px] leading-tight text-center uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
                   title="Importar plan copiado de Excel o Google Sheets"
                 >
                   <FileSpreadsheet size={13} className="text-emerald-400 shrink-0" />
-                  <span className="truncate">Importar Excel / Sheets</span>
+                  <span>Importar Excel / Sheets</span>
                 </button>
                 <button
                   onClick={handleOpenCreate}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-cyan-neon text-black font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer hover:bg-cyan-brand transition shadow-sm"
+                  className="w-full py-2.5 px-2 rounded-2xl bg-cyan-neon text-black font-black text-[12px] leading-tight text-center uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 cursor-pointer hover:bg-cyan-brand transition shadow-sm"
                 >
                   <Plus size={13} className="shrink-0" />
-                  <span className="truncate">Nuevo Ciclo</span>
+                  <span>Nuevo Ciclo</span>
                 </button>
               </div>
             </div>
@@ -713,7 +713,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleOpenSyncModal(selectedMacro)}
-                className="h-10 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 text-cyan-neon border border-cyan-neon/35 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap active:scale-95"
+                className="h-10 px-2.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 text-cyan-neon border border-cyan-neon/35 text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition whitespace-nowrap active:scale-95"
                 title="Sincronizar con el Calendario de la App"
               >
                 <RefreshCw size={13} className={`shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
@@ -721,7 +721,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               </button>
               <button
                 onClick={() => handleDelete(selectedMacro.id)}
-                className="h-10 px-3 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider whitespace-nowrap active:scale-95 shadow-sm"
+                className="h-10 px-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer flex items-center justify-center gap-1.5 text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider whitespace-nowrap active:scale-95 shadow-sm"
                 title="Desvincular y eliminar este plan"
               >
                 <Unlink size={13} className="shrink-0" />
@@ -739,7 +739,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               return (
                 <div className="flex flex-col gap-3 pt-1 border-t border-white/[0.06]">
                   <div className="flex flex-col items-center text-center gap-1 py-1">
-                    <h2 className="text-[19px] sm:text-[21px] font-black text-white leading-tight uppercase tracking-wide">
+                    <h2 className="text-[21.5px] sm:text-[23px] font-black text-white leading-tight uppercase tracking-wide">
                       {selectedMacro.name}
                     </h2>
                     <p className="text-xs text-white/80 flex items-center justify-center gap-1.5 tabular-nums font-semibold">
@@ -1168,14 +1168,14 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                           <div
                             key={card.id}
                             onClick={() => setAssignmentType(card.id as any)}
-                            className={`border rounded-2xl py-3 px-2 min-w-0 cursor-pointer flex flex-col items-center justify-center text-center transition ${
+                            className={`border rounded-2xl py-3 px-1.5 sm:px-2 min-w-0 cursor-pointer flex flex-col items-center justify-center text-center transition ${
                               isSel
                                 ? "bg-cyan-brand/20 border-cyan-neon text-white"
                                 : "bg-neutral-900/40 border-white/10 hover:border-white/20 text-white"
                             }`}
                           >
                             <CardIcon size={20} className={isSel ? "text-cyan-neon shrink-0" : "text-white shrink-0"} />
-                            <span className="text-[10px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider block mt-2 leading-tight">{card.label}</span>
+                            <span className="text-[11.5px] sm:text-[12px] font-black uppercase tracking-tight sm:tracking-wider block mt-2 leading-tight">{card.label}</span>
                           </div>
                         );
                       })}
@@ -1421,27 +1421,27 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
                             setSyncSelectedAthleteIds([roster[0].uid]);
                           }
                         }}
-                        className={`py-1.5 px-2 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
+                        className={`py-2 px-2 rounded-xl text-[12px] sm:text-[13px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
                           syncTargetType === "selected"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
                         <User size={12} className="shrink-0" />
-                        <span className="truncate">Escoger 1 o Varios</span>
+                        <span>Escoger 1 o Varios</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setSyncTargetType("all")}
-                        className={`py-1.5 px-2 rounded-xl text-[10.5px] sm:text-[11.6px] font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
+                        className={`py-2 px-2 rounded-xl text-[12px] sm:text-[13px] leading-tight text-center font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 transition border cursor-pointer ${
                           syncTargetType === "all"
                             ? "bg-cyan-neon/15 border-cyan-neon text-cyan-neon"
                             : "bg-neutral-950/60 border-white/10 text-white hover:text-white"
                         }`}
                       >
                         <Users size={12} className="shrink-0" />
-                        <span className="truncate">Todos los Alumnos</span>
+                        <span>Todos los Alumnos</span>
                       </button>
                     </div>
 

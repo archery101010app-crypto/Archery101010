@@ -913,7 +913,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
                       Tipo de Arco
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                       {(["Recurve", "Compound", "Barebow"] as const).map((typeOption) => {
                         const isSelected = bow.type === typeOption;
                         const label = typeOption === "Recurve" ? "Recurvo" : typeOption === "Compound" ? "Compuesto" : "Barebow";
@@ -922,7 +922,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`h-10 px-1.5 flex items-center justify-center rounded-xl text-[11px] sm:text-[14px] font-black uppercase tracking-normal whitespace-nowrap truncate transition border cursor-pointer ${
+                            className={`h-10 px-1 flex items-center justify-center rounded-xl text-[12.6px] sm:text-[15px] font-black uppercase tracking-tighter sm:tracking-tight whitespace-nowrap truncate transition border cursor-pointer ${
                               isSelected
                                 ? "bg-cyan-neon text-black border-cyan-neon"
                                 : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"

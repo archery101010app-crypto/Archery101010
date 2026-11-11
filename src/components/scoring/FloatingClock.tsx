@@ -342,7 +342,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   draggable={false}
                 />
                 <span
-                  className="text-white text-[13px] sm:text-[15px] font-black tracking-widest uppercase pl-0.5"
+                  className="text-white text-[15px] sm:text-[16.5px] font-black tracking-widest uppercase pl-0.5"
                   style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
                 >
                   TIMER
@@ -397,7 +397,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 {/* Official Phase & Signal Banner */}
                 <div className="text-center flex flex-col items-center gap-1 w-full max-w-md px-1">
                   <span
-                    className={`max-w-full px-3 py-1.5 rounded-full text-[10.5px] sm:text-xs font-extrabold uppercase tracking-wide sm:tracking-wider border inline-flex items-center justify-center gap-1.5 text-center leading-snug ${
+                    className={`max-w-full px-3 py-1.5 rounded-full text-[12px] sm:text-[13.8px] font-extrabold uppercase tracking-tight sm:tracking-wider border inline-flex items-center justify-center gap-1.5 text-center leading-snug ${
                       lightState === "RED"
                         ? "bg-white border-white text-black"
                         : lightState === "YELLOW"
@@ -465,47 +465,47 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   {phase !== "stop" ? (
                     <button
                       onClick={handlePauseToggle}
-                      className="h-11 px-3 sm:px-5 rounded-xl bg-yellow-gold text-black font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
+                      className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-yellow-gold text-black font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition min-w-0"
                     >
                       {isPaused ? <Play size={15} className="shrink-0" /> : <Pause size={15} className="shrink-0" />}
-                      <span className="truncate">{isPaused ? t("resume") : t("pause")}</span>
+                      <span className="min-w-0">{isPaused ? t("resume") : t("pause")}</span>
                     </button>
                   ) : (
                     <button
                       onClick={handleStart}
-                      className="h-11 px-2.5 sm:px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-[10.5px] sm:text-xs uppercase tracking-wide sm:tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition"
+                      className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition min-w-0"
                     >
                       <Play size={14} className="shrink-0" />
-                      <span className="truncate">Nueva Ronda (2 Pitidos)</span>
+                      <span className="min-w-0">Nueva Ronda (2 Pitidos)</span>
                     </button>
                   )}
                   <button
                     onClick={handleResetPhase}
-                    className="h-11 px-3 sm:px-5 rounded-xl bg-green-success text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition"
+                    className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-green-success text-white font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:brightness-105 active:scale-95 transition min-w-0"
                   >
                     <RotateCw size={15} className="shrink-0" />
-                    <span className="truncate">{t("resetPhase")}</span>
+                    <span className="min-w-0">{t("resetPhase")}</span>
                   </button>
                   <button
                     onClick={() => setIsOverlayOpen(false)}
-                    className="h-11 px-3 sm:px-5 rounded-xl bg-white/15 text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-white/25 active:scale-95 transition"
+                    className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-white/15 text-white font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:bg-white/25 active:scale-95 transition min-w-0"
                   >
                     <Minimize2 size={15} className="shrink-0" />
-                    <span className="truncate">{t("minimize")}</span>
+                    <span className="min-w-0">{t("minimize")}</span>
                   </button>
                   <button
                     onClick={handleStop}
-                    className="h-11 px-3 sm:px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition"
+                    className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition min-w-0"
                   >
                     <Square size={15} className="shrink-0" />
-                    <span className="truncate">Configurar</span>
+                    <span className="min-w-0">Configurar</span>
                   </button>
                 </div>
 
                 {/* Emergency Stop / Alto al Fuego (WA Rule 13.4 - 5 rapid horn blasts) */}
                 <button
                   onClick={handleEmergencyStop}
-                  className="h-11 w-full max-w-md sm:w-auto px-5 sm:px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
+                  className="min-h-[46px] h-11.5 w-full max-w-md sm:w-auto px-4 sm:px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-[12.5px] sm:text-[13.8px] uppercase tracking-wider sm:tracking-widest flex items-center justify-center gap-2 text-center leading-tight whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
                   title="Detención inmediata de tiro según reglamento World Archery"
                 >
                   <AlertTriangle size={16} className="shrink-0" />

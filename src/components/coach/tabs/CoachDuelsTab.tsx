@@ -101,14 +101,14 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
               key={pill.id}
               type="button"
               onClick={() => setFilterMode(pill.id as "ALL" | "LIVE" | "FINISHED")}
-              className={`py-2 px-1.5 rounded-xl text-[10px] sm:text-[10.5px] font-black uppercase tracking-tight sm:tracking-wider transition flex items-center justify-center gap-1 cursor-pointer tabular-nums whitespace-nowrap ${
+              className={`py-2 px-1 sm:px-1.5 rounded-xl text-[11.5px] sm:text-[12px] font-black uppercase tracking-[-0.02em] sm:tracking-wider transition flex items-center justify-center gap-0.5 sm:gap-1 cursor-pointer tabular-nums whitespace-nowrap ${
                 active
                   ? "bg-cyan-neon text-black"
                   : "text-white hover:bg-white/[0.05]"
               }`}
             >
               <span>{pill.label}</span>
-              <span className={`text-[9.5px] ${active ? "text-black/80" : "text-cyan-neon"}`}>
+              <span className={`text-[11px] ${active ? "text-black/80" : "text-cyan-neon"}`}>
                 ({pill.count})
               </span>
             </button>
@@ -162,7 +162,7 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                     </div>
 
                     <span
-                      className={`shrink-0 whitespace-nowrap text-[9.5px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                      className={`shrink-0 whitespace-nowrap text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
                         isWaiting
                           ? "bg-yellow-gold/15 border-yellow-gold/35 text-yellow-gold"
                           : "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
@@ -252,7 +252,7 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                       </span>
                     </div>
 
-                    <span className={`shrink-0 whitespace-nowrap text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                    <span className={`shrink-0 whitespace-nowrap text-[11.8px] font-black uppercase px-2.5 py-0.5 rounded-full ${
                       duel.outcome === "win"
                         ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25"
                         : duel.outcome === "loss"

@@ -23,9 +23,9 @@
   --color-gray-dim: #FFFFFF;
 
   /* Typography scale: -12% across body/general text while headers & Good Times stay preserved */
-  --text-xs: 0.75rem;
+  --text-xs: 0.8625rem;
   --text-xs--line-height: 1.35;
-  --text-sm: 0.847rem;
+  --text-sm: 0.9rem;
   --text-sm--line-height: 1.4;
   --text-base: 0.968rem;
   --text-base--line-height: 1.45;

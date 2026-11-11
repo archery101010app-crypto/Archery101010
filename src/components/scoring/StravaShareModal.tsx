@@ -225,7 +225,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 alt="ARCHERY 101010"
                 className="h-5 w-auto object-contain select-none self-start"
               />
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/85 truncate">
+              <span className="text-[11.5px] font-extrabold uppercase tracking-wider sm:tracking-[0.14em] text-white/85 truncate">
                 Telemetría Oficial · Lista para Compartir
               </span>
             </div>
@@ -244,7 +244,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               <button
                 type="button"
                 onClick={() => setActiveTab("black")}
-                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                className={`h-9 px-1.5 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap min-w-0 ${
                   activeTab === "black"
                     ? "bg-white text-[#04060A] shadow-sm"
                     : "bg-transparent text-white/75 hover:text-white"
@@ -257,7 +257,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               <button
                 type="button"
                 onClick={() => setActiveTab("transparent")}
-                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                className={`h-9 px-1.5 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap min-w-0 ${
                   activeTab === "transparent"
                     ? "bg-white text-[#04060A] shadow-sm"
                     : "bg-transparent text-white/75 hover:text-white"
@@ -270,7 +270,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               <button
                 type="button"
                 onClick={handleUploadPhotoClick}
-                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                className={`h-9 px-1.5 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap min-w-0 ${
                   activeTab === "upload"
                     ? "bg-white text-[#04060A] shadow-sm"
                     : "bg-transparent text-white/75 hover:text-white"
@@ -283,7 +283,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               <button
                 type="button"
                 onClick={handleTakeCameraPhotoClick}
-                className={`h-9 px-2 rounded-xl text-[9.5px] sm:text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap min-w-0 ${
+                className={`h-9 px-1.5 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap min-w-0 ${
                   activeTab === "camera"
                     ? "bg-white text-[#04060A] shadow-sm"
                     : "bg-transparent text-white/75 hover:text-white"
@@ -298,7 +298,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               <button
                 type="button"
                 onClick={handleChangeUploadedPhotoClick}
-                className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
+                className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[11.5px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
               >
                 <RefreshCw size={11} strokeWidth={2.5} />
                 <span className="truncate">Cambiar foto</span>

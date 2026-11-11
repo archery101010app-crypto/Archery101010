@@ -83,28 +83,28 @@ export default function CoachOverviewTab({
       {/* Bento Grid de Métricas */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-neutral-900/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9.5px] sm:text-[10.5px] text-white font-black uppercase tracking-normal tabular-nums leading-tight">Atletas</span>
+          <span className="text-[11px] sm:text-[12px] text-white font-black uppercase tracking-tight tabular-nums leading-tight">Atletas</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-white truncate tabular-nums">{athletes.length}</span>
-            <span className="text-[9px] sm:text-[9.3px] text-white truncate">Registrados</span>
+            <span className="text-[10.5px] sm:text-[11px] text-white truncate">Registrados</span>
           </div>
         </div>
         <div className="bg-neutral-900/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9.5px] sm:text-[10.5px] text-white font-black uppercase tracking-normal tabular-nums leading-tight">Volumen</span>
+          <span className="text-[11px] sm:text-[12px] text-white font-black uppercase tracking-tight tabular-nums leading-tight">Volumen</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-cyan-neon truncate tabular-nums">
               {activityPool
                 .filter((act) => !act?.isDuel && !act?.deletedByArcher)
                 .reduce((acc, act) => acc + getSafeActivityArrows(act), 0)}
             </span>
-            <span className="text-[9px] sm:text-[9.3px] text-white truncate">Flechas tiradas</span>
+            <span className="text-[10.5px] sm:text-[11px] text-white truncate">Flechas tiradas</span>
           </div>
         </div>
         <div className="bg-neutral-900/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/5 flex flex-col justify-between h-24 min-w-0">
-          <span className="text-[9.5px] sm:text-[10.5px] text-white font-black uppercase tracking-normal tabular-nums leading-tight">Asistencia</span>
+          <span className="text-[11px] sm:text-[12px] text-white font-black uppercase tracking-tight tabular-nums leading-tight">Asistencia</span>
           <div className="flex flex-col min-w-0">
             <span className="text-2xl font-black text-yellow-gold truncate tabular-nums">{presentCount}</span>
-            <span className="text-[9px] sm:text-[9.3px] text-white truncate">Presentes hoy</span>
+            <span className="text-[10.5px] sm:text-[11px] text-white truncate">Presentes hoy</span>
           </div>
         </div>
       </div>
