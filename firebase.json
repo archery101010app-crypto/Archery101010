@@ -329,6 +329,23 @@
         ]
       },
       {
+        "source": "/garmin-store/garmin-hero-1440x720.png",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"garmin-hero-1440x720.png\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/garmin-store/garmin-hero-1440x720.jpg",
         "headers": [
           {
@@ -338,6 +355,10 @@
           {
             "key": "Content-Disposition",
             "value": "attachment; filename=\"garmin-hero-1440x720.jpg\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
           }
         ]
       },
