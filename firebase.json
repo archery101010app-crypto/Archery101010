@@ -392,6 +392,11 @@
     ],
     "redirects": [
       {
+        "source": "/garmin-iq",
+        "destination": "/Archery101010.iq",
+        "type": 302
+      },
+      {
         "source": "/wear-aab",
         "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.100.aab",
         "type": 302
