@@ -392,86 +392,250 @@ export default function SmartwatchMiniApp({
     Date.now() - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
   const isWatchConnected = hasNativeWatchAppConnected || hasCloudWatchLinked;
 
-  // Automatic Wrist Release Detector (DeviceMotion)
+  // 7-Gate Biomechanical Wrist Release Detector (DeviceMotion — Standalone /watch only)
   const lastShotRef = useRef<number>(0);
-  const motionBufRef = useRef<Array<{ t: number; v: number }>>([]);
+  const motionBufRef = useRef<
+    Array<{ t: number; ax: number; ay: number; az: number; mag: number; lin: number; gyro: number }>
+  >([]);
   const peakTimesRef = useRef<number[]>([]);
   const walkLockUntilRef = useRef<number>(0);
-  const prevLinRef = useRef<[number, number]>([0, 0]);
+  const prevDynRef = useRef<[number, number]>([0, 0]);
+  const smoothedMagRef = useRef<number>(9.81);
+  const pendingShotRef = useRef<{
+    active: boolean;
+    startMs: number;
+    followN: number;
+    sumLin: number;
+    sumAx: number;
+    sumGyro: number;
+    gyroN: number;
+  }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
 
   useEffect(() => {
-    if (!isOpen || !activeState.autoDetectEnabled) return;
-    if (!isStandalone && isWatchConnected) return;
+    // Only run wrist IMU shot detection when running standalone on a watch (/watch), never on the phone preview modal
+    if (!isOpen || !isStandalone || !activeState.autoDetectEnabled) return;
     if (!iosMotionGranted) return;
     if (typeof window === "undefined" || !("DeviceMotionEvent" in window)) return;
 
     const cfg = {
-      ALTA: { threshold: 15.0, quietMax: 2.6, stillMs: 900, cooldown: 3000 },
-      MEDIA: { threshold: 18.0, quietMax: 2.0, stillMs: 1200, cooldown: 3800 },
-      BAJA: { threshold: 22.0, quietMax: 1.6, stillMs: 1500, cooldown: 4500 }
+      ALTA: {
+        threshold: 15.2,
+        minJerk: 9.2,
+        quietMean: 0.80,
+        quietPeak: 1.55,
+        preRampMean: 0.76,
+        axisSpan: 2.20,
+        gyroMean: 0.40,
+        gyroPeak: 0.95,
+        stillMs: 1050,
+        cooldown: 5000
+      },
+      MEDIA: {
+        threshold: 18.8,
+        minJerk: 11.2,
+        quietMean: 0.65,
+        quietPeak: 1.30,
+        preRampMean: 0.62,
+        axisSpan: 1.85,
+        gyroMean: 0.32,
+        gyroPeak: 0.78,
+        stillMs: 1300,
+        cooldown: 6000
+      },
+      BAJA: {
+        threshold: 23.0,
+        minJerk: 13.5,
+        quietMean: 0.52,
+        quietPeak: 1.10,
+        preRampMean: 0.50,
+        axisSpan: 1.55,
+        gyroMean: 0.25,
+        gyroPeak: 0.65,
+        stillMs: 1550,
+        cooldown: 7000
+      }
     }[sensitivity];
 
     const handleMotion = (event: DeviceMotionEvent) => {
-      const acc = event.accelerationIncludingGravity || event.acceleration;
+      const acc = event.accelerationIncludingGravity;
       if (!acc) return;
       const ax = acc.x || 0;
       const ay = acc.y || 0;
       const az = acc.z || 0;
-      const lin = Math.abs(Math.sqrt(ax * ax + ay * ay + az * az) - 9.81);
+      const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+      const dyn = mag - smoothedMagRef.current;
+      smoothedMagRef.current = 0.96 * smoothedMagRef.current + 0.04 * mag;
+      const lin = Math.abs(mag - 9.81);
       const now = Date.now();
+
+      let gyroRad = -1;
+      if (event.rotationRate) {
+        const degToRad = Math.PI / 180;
+        const wx = (event.rotationRate.alpha || 0) * degToRad;
+        const wy = (event.rotationRate.beta || 0) * degToRad;
+        const wz = (event.rotationRate.gamma || 0) * degToRad;
+        gyroRad = Math.sqrt(wx * wx + wy * wy + wz * wz);
+      }
 
       setWristImpulseLevel(Math.min(100, Math.round((lin / cfg.threshold) * 100)));
 
-      // Walking cadence detection (local peaks above arm-swing level)
-      const [p1, p2] = prevLinRef.current;
+      // Sensitive walking / bow-carry cadence lock (peaks >= 1.08 m/s²)
+      const sig = Math.max(lin, Math.abs(dyn));
+      const [p1, p2] = prevDynRef.current;
       const peaks = peakTimesRef.current;
-      if (p1 >= 2.5 && p1 > p2 && p1 >= lin && (peaks.length === 0 || now - peaks[peaks.length - 1] >= 280)) {
+      if (p1 >= 1.08 && p1 > p2 && p1 >= sig && (peaks.length === 0 || now - peaks[peaks.length - 1] >= 290)) {
         peaks.push(now);
-        while (peaks.length && now - peaks[0] > 3500) peaks.shift();
+        while (peaks.length && now - peaks[0] > 4500) peaks.shift();
         const gaps: number[] = [];
         for (let i = 1; i < peaks.length; i++) gaps.push(peaks[i] - peaks[i - 1]);
-        const last = gaps.slice(-3);
-        if (last.length === 3 && last.every((g) => g >= 280 && g <= 1400)) {
-          const avg = (last[0] + last[1] + last[2]) / 3;
-          if (last.every((g) => Math.abs(g - avg) <= avg * 0.25)) {
-            walkLockUntilRef.current = Math.max(walkLockUntilRef.current, now + 1500);
+        const last2 = gaps.slice(-2);
+        if (last2.length === 2 && last2.every((g) => g >= 290 && g <= 1450)) {
+          const avg2 = (last2[0] + last2[1]) / 2;
+          if (last2.every((g) => Math.abs(g - avg2) <= avg2 * 0.34)) {
+            walkLockUntilRef.current = Math.max(walkLockUntilRef.current, now + 6000);
+            pendingShotRef.current.active = false;
+          }
+        }
+        const last3 = gaps.slice(-3);
+        if (last3.length === 3 && last3.every((g) => g >= 290 && g <= 1450)) {
+          const avg3 = (last3[0] + last3[1] + last3[2]) / 3;
+          if (last3.every((g) => Math.abs(g - avg3) <= avg3 * 0.32)) {
+            walkLockUntilRef.current = Math.max(walkLockUntilRef.current, now + 8500);
+            pendingShotRef.current.active = false;
           }
         }
       }
-      prevLinRef.current = [lin, p1];
+      prevDynRef.current = [sig, p1];
 
-      // Strict stillness check over [now - stillMs - 90, now - 90]
       const buf = motionBufRef.current;
-      const end = now - 90;
-      const start = end - cfg.stillMs;
-      let n = 0;
-      let oldest = Infinity;
-      let still = true;
-      for (let i = buf.length - 1; i >= 0; i--) {
-        const s = buf[i];
-        if (s.t < start) break;
-        if (s.t > end) continue;
-        if (s.v > cfg.quietMax) {
-          still = false;
-          break;
+      const isWalkingBlocked = now < walkLockUntilRef.current;
+      const pending = pendingShotRef.current;
+
+      // Gate 7: 220ms post-release follow-through confirmation
+      if (pending.active) {
+        if (isWalkingBlocked) {
+          pending.active = false;
+        } else {
+          const elapsed = now - pending.startMs;
+          if (elapsed >= 95 && elapsed <= 235) {
+            pending.followN += 1;
+            pending.sumLin += lin;
+            pending.sumAx += ax;
+            if (gyroRad >= 0) {
+              pending.sumGyro += gyroRad;
+              pending.gyroN += 1;
+            }
+          }
+          if (elapsed >= 220) {
+            pending.active = false;
+            let validFollow = pending.followN >= 2;
+            if (validFollow) {
+              const meanFollowLin = pending.sumLin / pending.followN;
+              const meanFollowAx = Math.abs(pending.sumAx / pending.followN);
+              const meanFollowGyro = pending.gyroN >= 2 ? pending.sumGyro / pending.gyroN : 0;
+              if (meanFollowLin > 7.8 || meanFollowAx > 8.0 || meanFollowGyro > 4.2) {
+                validFollow = false;
+              }
+            }
+            if (validFollow && now - lastShotRef.current > cfg.cooldown) {
+              lastShotRef.current = now;
+              handleArrowDelta(1, "watch_auto");
+            }
+          }
         }
-        n++;
-        oldest = s.t;
-      }
-      still = still && n >= 12 && end - oldest >= cfg.stillMs * 0.85;
+      } else if (!isWalkingBlocked && lin >= cfg.threshold && now - lastShotRef.current > cfg.cooldown) {
+        // Gate 6: Sharp release jerk check
+        let maxJump = 0;
+        for (let k = 1; k <= 3 && buf.length - k >= 0; k++) {
+          maxJump = Math.max(maxJump, Math.abs(mag - buf[buf.length - k].mag));
+        }
 
-      if (
-        lin >= cfg.threshold &&
-        now >= walkLockUntilRef.current &&
-        now - lastShotRef.current > cfg.cooldown &&
-        still
-      ) {
-        lastShotRef.current = now;
-        handleArrowDelta(1, "watch_auto");
+        if (maxJump >= cfg.minJerk) {
+          // Gates 3-5: 3D Horizontal Aiming Posture + Isometric Stillness + 3D Axis Lock + Gyro Stillness
+          const end = now - 45;
+          const start = end - cfg.stillMs;
+          const recentStart = end - 220;
+          let n = 0;
+          let recentN = 0;
+          let gyroN = 0;
+          let oldest = Infinity;
+          let sumLin = 0;
+          let recentSumLin = 0;
+          let sumAx = 0, sumAy = 0, sumAz = 0;
+          let minAx = Infinity, maxAx = -Infinity;
+          let minAy = Infinity, maxAy = -Infinity;
+          let minAz = Infinity, maxAz = -Infinity;
+          let sumGyro = 0;
+          let still = true;
+
+          for (let i = buf.length - 1; i >= 0; i--) {
+            const s = buf[i];
+            if (s.t < start) break;
+            if (s.t > end) continue;
+            if (s.lin > cfg.quietPeak || (s.gyro >= 0 && s.gyro > cfg.gyroPeak)) {
+              still = false;
+              break;
+            }
+            sumLin += s.lin;
+            if (s.t >= recentStart) {
+              recentSumLin += s.lin;
+              recentN++;
+            }
+            sumAx += s.ax;
+            sumAy += s.ay;
+            sumAz += s.az;
+            if (s.ax < minAx) minAx = s.ax;
+            if (s.ax > maxAx) maxAx = s.ax;
+            if (s.ay < minAy) minAy = s.ay;
+            if (s.ay > maxAy) maxAy = s.ay;
+            if (s.az < minAz) minAz = s.az;
+            if (s.az > maxAz) maxAz = s.az;
+            if (s.gyro >= 0) {
+              sumGyro += s.gyro;
+              gyroN++;
+            }
+            n++;
+            oldest = s.t;
+          }
+
+          if (still && n >= 14 && end - oldest >= cfg.stillMs * 0.85) {
+            const meanLin = sumLin / n;
+            const meanAx = sumAx / n;
+            const meanAy = sumAy / n;
+            const meanAz = sumAz / n;
+            const gNorm = Math.sqrt(meanAx * meanAx + meanAy * meanAy + meanAz * meanAz);
+            const forearmVert = gNorm > 0 ? Math.abs(meanAx) / gNorm : 1;
+            const perpG = Math.sqrt(meanAy * meanAy + meanAz * meanAz);
+
+            const validAnchor =
+              meanLin <= cfg.quietMean &&
+              (recentN < 3 || recentSumLin / recentN <= cfg.preRampMean) &&
+              gNorm >= 8.2 &&
+              gNorm <= 11.4 &&
+              forearmVert <= 0.68 &&
+              perpG >= 6.8 &&
+              maxAx - minAx <= cfg.axisSpan &&
+              maxAy - minAy <= cfg.axisSpan &&
+              maxAz - minAz <= cfg.axisSpan &&
+              (gyroN < 6 || sumGyro / gyroN <= cfg.gyroMean);
+
+            if (validAnchor) {
+              pendingShotRef.current = {
+                active: true,
+                startMs: now,
+                followN: 0,
+                sumLin: 0,
+                sumAx: 0,
+                sumGyro: 0,
+                gyroN: 0
+              };
+            }
+          }
+        }
       }
 
-      buf.push({ t: now, v: lin });
-      while (buf.length && now - buf[0].t > 5000) buf.shift();
+      buf.push({ t: now, ax, ay, az, mag, lin, gyro: gyroRad });
+      while (buf.length && now - buf[0].t > 5500) buf.shift();
     };
 
     window.addEventListener("devicemotion", handleMotion, { passive: true });
@@ -482,7 +646,6 @@ export default function SmartwatchMiniApp({
     sensitivity,
     handleArrowDelta,
     isStandalone,
-    isWatchConnected,
     iosMotionGranted
   ]);
 
@@ -665,8 +828,7 @@ export default function SmartwatchMiniApp({
           return (
             <div
               key={i}
-              onClick={() => handleArrowDelta(1, "watch_manual")}
-              className={`h-[44px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden cursor-pointer select-none border ${
+              className={`h-[44px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden select-none border ${
                 isUnits ? "border-[#FFE500] bg-[#101008]" : "border-white/[0.11]"
               }`}
             >

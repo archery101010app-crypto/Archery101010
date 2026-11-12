@@ -96,6 +96,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
+    private Sensor gyroscope;
     private Sensor stepDetector;
     private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
@@ -109,25 +110,42 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private long lastShotTimestamp = 0L;
     private long lastStepTimeMs = 0L;
     private long prevStepTimeMs = 0L;
+    private int recentStepBoutCount = 0;
     private long walkingLockUntilMs = 0L;
     private long lastTelemetrySyncTimeMs = 0L;
     private double smoothedAccelMag = SensorManager.GRAVITY_EARTH;
-    private final double[] preShotLinearHistory = new double[16];
-    private int preShotHistoryIdx = 0;
-    private int preShotHistoryCount = 0;
 
-    // Time-based motion ring buffer (~5s at SENSOR_DELAY_GAME) for anchor-stillness + walking-cadence analysis
+    // Latest hardware gyroscope angular rate (rad/s) time-aligned into the 3D motion buffer
+    private float latestGyroRadS = -1f;
+    private long lastGyroSampleMs = 0L;
+
+    // 7-Gate 3D Biomechanical Ring Buffer (~10s at SENSOR_DELAY_GAME)
     private static final int MOTION_BUF = 512;
     private final long[] motionT = new long[MOTION_BUF];
+    private final float[] motionAx = new float[MOTION_BUF];
+    private final float[] motionAy = new float[MOTION_BUF];
+    private final float[] motionAz = new float[MOTION_BUF];
+    private final double[] motionMag = new double[MOTION_BUF];
     private final double[] motionLin = new double[MOTION_BUF];
+    private final float[] motionGyro = new float[MOTION_BUF];
     private int motionIdx = 0;
     private int motionCount = 0;
-    // Recent motion peaks (arm swing / steps) used to recognise walking cadence
+
+    // Post-release 220ms follow-through verification state (eliminates target arrow yanks & arm flings)
+    private boolean pendingShotActive = false;
+    private long pendingShotStartMs = 0L;
+    private int pendingFollowSamples = 0;
+    private double pendingFollowSumLin = 0.0;
+    private double pendingFollowSumAx = 0.0;
+    private double pendingFollowSumGyro = 0.0;
+    private int pendingFollowGyroSamples = 0;
+
+    // Sensitive arm-swing / bow-carry walking cadence peaks
     private final long[] motionPeakT = new long[8];
     private int motionPeakIdx = 0;
     private long lastMotionPeakMs = 0L;
-    private double prevLin = 0.0;
-    private double prevPrevLin = 0.0;
+    private double prevDyn = 0.0;
+    private double prevPrevDyn = 0.0;
 
     // Fallback linear-accel rhythmic cadence tracker (prevents isolated bow raises/draws from counting as steps)
     private final long[] accelCandidateStepT = new long[4];
@@ -213,6 +231,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
             stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
@@ -261,6 +280,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (sensorManager != null && accelerometer != null && !isSensorRegistered) {
             try {
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                if (gyroscope != null) {
+                    sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+                }
                 if (stepDetector != null) {
                     // maxReportLatency = 0 → step events are delivered immediately (no batching delay before the walking lock)
                     sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_FASTEST, 0);
@@ -631,6 +653,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         syncedActiveKcal = -1;
         accelCandidateStepCount = 0;
         accelRhythmicCadenceActive = false;
+        pendingShotActive = false;
+        recentStepBoutCount = 0;
         if (clearSessionId) {
             currentSessionId = "";
         }
@@ -711,23 +735,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return getFormattedKm() + " mts · " + getFormattedMi() + " ft";
     }
 
-    private boolean isPreShotAnchorSteady(double maxQuietAvg) {
-        if (preShotHistoryCount < 8) {
-            return true;
-        }
-        // Inspect the oldest 10 samples (approx 120ms-320ms BEFORE the release peak)
-        int samplesToCheck = Math.min(10, preShotHistoryCount - 3);
-        if (samplesToCheck <= 0) return true;
-        double sum = 0.0;
-        int oldestIdx = (preShotHistoryIdx - preShotHistoryCount + 16) % 16;
-        for (int i = 0; i < samplesToCheck; i++) {
-            int idx = (oldestIdx + i) % 16;
-            sum += preShotLinearHistory[idx];
-        }
-        double avg = sum / samplesToCheck;
-        return avg <= maxQuietAvg;
-    }
-
     private void recordDetectedStep(long now) {
         recordDetectedSteps(now, 1, false);
     }
@@ -738,11 +745,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private void recordDetectedSteps(long now, int stepDelta, boolean fromHardwarePedometer) {
         if (stepDelta <= 0) return;
+        if ((now - lastStepTimeMs) > 9000L) {
+            recentStepBoutCount = 0;
+        }
+        recentStepBoutCount += stepDelta;
         prevStepTimeMs = lastStepTimeMs;
         lastStepTimeMs = now;
+        pendingShotActive = false;
+
+        // Single step locks 4.8s; sustained walk to/from target (4+ steps) locks 9.0s
+        long lockDurationMs = (recentStepBoutCount >= 4) ? 9000L : 4800L;
+        walkingLockUntilMs = Math.max(walkingLockUntilMs, now + lockDurationMs);
         if (fromHardwarePedometer) {
             lastHardwareStepTimeMs = now;
-            walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 2500L);
         }
         stepsCount += stepDelta;
         distanceWalkedM = Math.max(distanceWalkedM + (stepDelta * 0.76f), stepsCount * 0.76f);
@@ -805,64 +820,198 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     /**
-     * True only if EVERY sample in [now - windowMs - 90ms, now - 90ms] stayed below quietMax
-     * and the window is well covered by samples. An archer at full draw / anchor is almost
-     * motionless for 1-3 s before the release; walking never is.
+     * 7-Gate Biomechanical Aiming Anchor Verification:
+     *  1. Tight isometric linear quietness over [now - windowMs - 45ms, now - 45ms]
+     *  2. Final-220ms pre-yank tension guard (rejects force ramp before pulling stuck arrows from foam)
+     *  3. 3D Horizontal Forearm Posture (|meanAx| / g <= 0.68 & perpGravity >= 6.8 m/s² — rejects walking arms-down & quiver reach)
+     *  4. 3D Per-Axis Stability (max-min <= axisSpanMax — rejects wrist twisting / arrow-puller wrapping)
+     *  5. Hardware Gyroscope angular-velocity stillness (mean <= gyroMeanMax, max <= gyroPeakMax)
      */
-    private boolean isAnchorStillFor(long now, long windowMs, double quietMax) {
-        long end = now - 90L;
+    private boolean isTrueArcheryAnchor(
+            long now,
+            long windowMs,
+            double quietMeanMax,
+            double quietPeakMax,
+            double preRampMeanMax,
+            double axisSpanMax,
+            double gyroMeanMax,
+            double gyroPeakMax
+    ) {
+        long end = now - 45L;
         long start = end - windowMs;
+        long recentStart = end - 220L;
         int n = 0;
+        int recentN = 0;
+        int gyroN = 0;
         long oldest = Long.MAX_VALUE;
+
+        double sumLin = 0.0;
+        double recentSumLin = 0.0;
+        double sumAx = 0.0, sumAy = 0.0, sumAz = 0.0;
+        float minAx = Float.MAX_VALUE, maxAx = -Float.MAX_VALUE;
+        float minAy = Float.MAX_VALUE, maxAy = -Float.MAX_VALUE;
+        float minAz = Float.MAX_VALUE, maxAz = -Float.MAX_VALUE;
+        double sumGyro = 0.0;
+
         for (int i = 0; i < motionCount; i++) {
             int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
             long t = motionT[idx];
             if (t < start) break;
             if (t > end) continue;
-            if (motionLin[idx] > quietMax) return false;
+
+            double lin = motionLin[idx];
+            if (lin > quietPeakMax) return false;
+
+            float gRad = motionGyro[idx];
+            if (gRad >= 0f) {
+                if (gRad > gyroPeakMax) return false;
+                sumGyro += gRad;
+                gyroN++;
+            }
+
+            float sx = motionAx[idx];
+            float sy = motionAy[idx];
+            float sz = motionAz[idx];
+            sumAx += sx;
+            sumAy += sy;
+            sumAz += sz;
+            if (sx < minAx) minAx = sx;
+            if (sx > maxAx) maxAx = sx;
+            if (sy < minAy) minAy = sy;
+            if (sy > maxAy) maxAy = sy;
+            if (sz < minAz) minAz = sz;
+            if (sz > maxAz) maxAz = sz;
+
+            sumLin += lin;
+            if (t >= recentStart) {
+                recentSumLin += lin;
+                recentN++;
+            }
             n++;
             oldest = t;
         }
-        // Need coverage of at least 85% of the window and a minimum sample count (no "empty buffer = steady")
-        return n >= 12 && oldest != Long.MAX_VALUE && (end - oldest) >= (long) (windowMs * 0.85);
+
+        if (n < 16 || oldest == Long.MAX_VALUE || (end - oldest) < (long) (windowMs * 0.85)) {
+            return false;
+        }
+        if ((sumLin / n) > quietMeanMax) {
+            return false;
+        }
+        if (recentN >= 3 && (recentSumLin / recentN) > preRampMeanMax) {
+            return false;
+        }
+
+        // 3D Forearm Aiming Orientation: bow arm or draw arm is elevated near horizontal, never hanging down
+        double meanAx = sumAx / n;
+        double meanAy = sumAy / n;
+        double meanAz = sumAz / n;
+        double gNorm = Math.sqrt(meanAx * meanAx + meanAy * meanAy + meanAz * meanAz);
+        if (gNorm < 8.2 || gNorm > 11.4) {
+            return false;
+        }
+        double forearmVerticalRatio = Math.abs(meanAx) / gNorm;
+        double perpGravity = Math.sqrt(meanAy * meanAy + meanAz * meanAz);
+        if (forearmVerticalRatio > 0.68 || perpGravity < 6.8) {
+            return false;
+        }
+
+        // 3D Wrist-Angle Stability: no twisting an arrow puller or rotating wrist toward quiver
+        if ((maxAx - minAx) > axisSpanMax
+                || (maxAy - minAy) > axisSpanMax
+                || (maxAz - minAz) > axisSpanMax) {
+            return false;
+        }
+
+        // Hardware Gyroscope Rotational Stillness
+        if (gyroN >= 8 && (sumGyro / gyroN) > gyroMeanMax) {
+            return false;
+        }
+
+        return true;
     }
 
-    /** Registers a motion peak; a truly rhythmic gait (4 peaks, gaps within ±25%) locks the detector briefly. */
-    private void trackMotionPeak(long now, double lin) {
-        // Local maximum above arm-swing level, separated from the previous peak
-        if (prevLin >= 2.5 && prevLin > prevPrevLin && prevLin >= lin && (now - lastMotionPeakMs) >= 280L) {
+    /** Requires a crisp mechanical shock rise (jump >= minJerk within ~60ms), rejecting slow swings/tugs. */
+    private boolean hasSharpReleaseJerk(double currentMag, double minJerk) {
+        if (motionCount < 3) return false;
+        double maxJump = 0.0;
+        for (int k = 1; k <= 3 && k <= motionCount; k++) {
+            int prevIdx = (motionIdx - k + MOTION_BUF) % MOTION_BUF;
+            double jump = Math.abs(currentMag - motionMag[prevIdx]);
+            if (jump > maxJump) {
+                maxJump = jump;
+            }
+        }
+        return maxJump >= minJerk;
+    }
+
+    /**
+     * Sensitive gait & bow-carry movement cadence detector:
+     * Detects footsteps even when carrying a heavy stabilized bow (peaks down to 1.05 m/s²)
+     * and locks auto-shot detection for 6.0-8.5s without needing ACTIVITY_RECOGNITION permission.
+     */
+    private void trackMotionPeak(long now, double dynSignal) {
+        if (prevDyn >= 1.08 && prevDyn > prevPrevDyn && prevDyn >= dynSignal && (now - lastMotionPeakMs) >= 290L) {
             lastMotionPeakMs = now;
             motionPeakT[motionPeakIdx] = now;
             motionPeakIdx = (motionPeakIdx + 1) % motionPeakT.length;
+
             long t0 = motionPeakT[(motionPeakIdx - 1 + 8) % 8];
             long t1 = motionPeakT[(motionPeakIdx - 2 + 8) % 8];
             long t2 = motionPeakT[(motionPeakIdx - 3 + 8) % 8];
             long t3 = motionPeakT[(motionPeakIdx - 4 + 8) % 8];
-            if (t3 > 0 && (now - t3) <= 4200L) {
+
+            // 3 consecutive peaks (2 step intervals) -> immediate 6.0s walking lock
+            if (t2 > 0 && (now - t2) <= 3000L) {
+                long g1 = t0 - t1;
+                long g2 = t1 - t2;
+                if (g1 >= 290L && g1 <= 1450L && g2 >= 290L && g2 <= 1450L) {
+                    double avg2 = (g1 + g2) / 2.0;
+                    if (Math.abs(g1 - avg2) <= avg2 * 0.34 && Math.abs(g2 - avg2) <= avg2 * 0.34) {
+                        walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 6000L);
+                        pendingShotActive = false;
+                    }
+                }
+            }
+            // 4 consecutive peaks (3 step intervals) -> 8.5s target-trip lock
+            if (t3 > 0 && (now - t3) <= 4400L) {
                 long g1 = t0 - t1, g2 = t1 - t2, g3 = t2 - t3;
-                boolean inRange = g1 >= 280L && g1 <= 1400L && g2 >= 280L && g2 <= 1400L && g3 >= 280L && g3 <= 1400L;
-                double avg = (g1 + g2 + g3) / 3.0;
-                boolean rhythmic = Math.abs(g1 - avg) <= avg * 0.25 && Math.abs(g2 - avg) <= avg * 0.25 && Math.abs(g3 - avg) <= avg * 0.25;
+                boolean inRange = g1 >= 290L && g1 <= 1450L && g2 >= 290L && g2 <= 1450L && g3 >= 290L && g3 <= 1450L;
+                double avg3 = (g1 + g2 + g3) / 3.0;
+                boolean rhythmic = Math.abs(g1 - avg3) <= avg3 * 0.32
+                        && Math.abs(g2 - avg3) <= avg3 * 0.32
+                        && Math.abs(g3 - avg3) <= avg3 * 0.32;
                 if (inRange && rhythmic) {
-                    walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 1500L);
+                    walkingLockUntilMs = Math.max(walkingLockUntilMs, now + 8500L);
+                    pendingShotActive = false;
                 }
             }
         }
-        prevPrevLin = prevLin;
-        prevLin = lin;
+        prevPrevDyn = prevDyn;
+        prevDyn = dynSignal;
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
         long now = System.currentTimeMillis();
-        if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
-            // Never ignore steps after a shot: dropping them released the walking lock and caused chains of false arrows
-            if ((now - lastStepTimeMs) > 300L) {
+        int sensorType = event.sensor.getType();
+
+        if (sensorType == Sensor.TYPE_GYROSCOPE) {
+            float wx = event.values[0];
+            float wy = event.values[1];
+            float wz = event.values[2];
+            latestGyroRadS = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
+            lastGyroSampleMs = now;
+            return;
+        }
+
+        if (sensorType == Sensor.TYPE_STEP_DETECTOR) {
+            if ((now - lastStepTimeMs) > 280L) {
                 recordDetectedStep(now, true);
             }
             return;
         }
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+
+        if (sensorType == Sensor.TYPE_ACCELEROMETER) {
             float ax = event.values[0];
             float ay = event.values[1];
             float az = event.values[2];
@@ -870,46 +1019,100 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double dynamicLinear = mag - smoothedAccelMag;
             smoothedAccelMag = 0.96 * smoothedAccelMag + 0.04 * mag;
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
+            float activeGyro = ((now - lastGyroSampleMs) <= 140L) ? latestGyroRadS : -1f;
 
-            // Sensitivity: 0 = BAJA, 1 = MEDIA (default), 2 = ALTA
-            double shotThreshold = (sensitivityLevel == 0) ? 22.0 : ((sensitivityLevel == 2) ? 15.0 : 18.0);
-            double quietMax = (sensitivityLevel == 0) ? 1.6 : ((sensitivityLevel == 2) ? 2.6 : 2.0);
-            long stillWindowMs = (sensitivityLevel == 0) ? 1500L : ((sensitivityLevel == 2) ? 900L : 1200L);
-            long shotCooldownMs = (sensitivityLevel == 0) ? 4500L : ((sensitivityLevel == 2) ? 3000L : 3800L);
+            // Sensitivity: 0 = BAJA (Ultra strict), 1 = MEDIA (Olympic/Compound default), 2 = ALTA (Light bows)
+            double shotThreshold = (sensitivityLevel == 0) ? 23.0 : ((sensitivityLevel == 2) ? 15.2 : 18.8);
+            double minJerk = (sensitivityLevel == 0) ? 13.5 : ((sensitivityLevel == 2) ? 9.2 : 11.2);
+            double quietMeanMax = (sensitivityLevel == 0) ? 0.52 : ((sensitivityLevel == 2) ? 0.80 : 0.65);
+            double quietPeakMax = (sensitivityLevel == 0) ? 1.10 : ((sensitivityLevel == 2) ? 1.55 : 1.30);
+            double preRampMeanMax = (sensitivityLevel == 0) ? 0.50 : ((sensitivityLevel == 2) ? 0.76 : 0.62);
+            double axisSpanMax = (sensitivityLevel == 0) ? 1.55 : ((sensitivityLevel == 2) ? 2.20 : 1.85);
+            double gyroMeanMax = (sensitivityLevel == 0) ? 0.25 : ((sensitivityLevel == 2) ? 0.40 : 0.32);
+            double gyroPeakMax = (sensitivityLevel == 0) ? 0.65 : ((sensitivityLevel == 2) ? 0.95 : 0.78);
+            long stillWindowMs = (sensitivityLevel == 0) ? 1550L : ((sensitivityLevel == 2) ? 1050L : 1300L);
+            long shotCooldownMs = (sensitivityLevel == 0) ? 7000L : ((sensitivityLevel == 2) ? 5000L : 6000L);
 
-            trackMotionPeak(now, linearMag);
+            trackMotionPeak(now, Math.max(linearMag, Math.abs(dynamicLinear)));
 
             boolean isWalkingBlocked = now < walkingLockUntilMs;
 
-            if (autoDetectEnabled
+            // Gate 7: Evaluate 220ms post-release follow-through window if a shot candidate is pending
+            if (pendingShotActive) {
+                if (!autoDetectEnabled || isWalkingBlocked) {
+                    pendingShotActive = false;
+                } else {
+                    long elapsed = now - pendingShotStartMs;
+                    if (elapsed >= 95L && elapsed <= 235L) {
+                        pendingFollowSamples++;
+                        pendingFollowSumLin += linearMag;
+                        pendingFollowSumAx += ax;
+                        if (activeGyro >= 0f) {
+                            pendingFollowSumGyro += activeGyro;
+                            pendingFollowGyroSamples++;
+                        }
+                    }
+                    if (elapsed >= 220L) {
+                        pendingShotActive = false;
+                        boolean validFollowThrough = pendingFollowSamples >= 2;
+                        if (validFollowThrough) {
+                            double followMeanLin = pendingFollowSumLin / pendingFollowSamples;
+                            double followMeanAx = Math.abs(pendingFollowSumAx / pendingFollowSamples);
+                            double followMeanGyro = pendingFollowGyroSamples >= 2
+                                ? (pendingFollowSumGyro / pendingFollowGyroSamples)
+                                : 0.0;
+                            // Bow release settles rapidly in horizontal follow-through; target arrow yanks sustain gross motion or drop arm
+                            if (followMeanLin > 7.8 || followMeanAx > 8.0 || followMeanGyro > 4.2) {
+                                validFollowThrough = false;
+                            }
+                        }
+                        if (validFollowThrough && (now - lastShotTimestamp) > shotCooldownMs) {
+                            lastShotTimestamp = now;
+                            lastLocalActionTimeMs = now;
+                            arrowCount++;
+                            triggerHaptic(55);
+                            saveState();
+                            sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
+                            if (canvasView != null) canvasView.invalidate();
+                        }
+                    }
+                }
+            } else if (autoDetectEnabled
                     && !isWalkingBlocked
                     && linearMag >= shotThreshold
                     && (now - lastShotTimestamp) > shotCooldownMs
-                    && isAnchorStillFor(now, stillWindowMs, quietMax)) {
-                lastShotTimestamp = now;
-                lastLocalActionTimeMs = now;
-                preShotHistoryCount = 0;
-                arrowCount++;
-                triggerHaptic(55);
-                saveState();
-                sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
-                if (canvasView != null) canvasView.invalidate();
-            } else if (dynamicLinear >= 1.25 && dynamicLinear <= 11.5 && (now - lastShotTimestamp) > 1200L) {
+                    && hasSharpReleaseJerk(mag, minJerk)
+                    && isTrueArcheryAnchor(
+                            now,
+                            stillWindowMs,
+                            quietMeanMax,
+                            quietPeakMax,
+                            preRampMeanMax,
+                            axisSpanMax,
+                            gyroMeanMax,
+                            gyroPeakMax
+                    )) {
+                pendingShotActive = true;
+                pendingShotStartMs = now;
+                pendingFollowSamples = 0;
+                pendingFollowSumLin = 0.0;
+                pendingFollowSumAx = 0.0;
+                pendingFollowSumGyro = 0.0;
+                pendingFollowGyroSamples = 0;
+            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastShotTimestamp) > 1500L) {
                 evaluateRhythmicAccelStep(now);
             }
 
-            // Record sample into time-based motion buffer
+            // Record synchronized 3D + gyro sample into motion ring buffer
             motionT[motionIdx] = now;
+            motionAx[motionIdx] = ax;
+            motionAy[motionIdx] = ay;
+            motionAz[motionIdx] = az;
+            motionMag[motionIdx] = mag;
             motionLin[motionIdx] = linearMag;
+            motionGyro[motionIdx] = activeGyro;
             motionIdx = (motionIdx + 1) % MOTION_BUF;
             if (motionCount < MOTION_BUF) motionCount++;
-
-            // Legacy short ring buffer (kept for compatibility)
-            preShotLinearHistory[preShotHistoryIdx] = Math.min(linearMag, 12.0);
-            preShotHistoryIdx = (preShotHistoryIdx + 1) % 16;
-            if (preShotHistoryCount < 16) {
-                preShotHistoryCount++;
-            }
         }
     }
 
@@ -1100,8 +1303,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
 
             if (screenIndex == 0) {
-                // +1 Button (Right) or tapping the 0000 counter chassis
-                if (btnLeftPrimary.contains(x, y) || btnCounterChassis.contains(x, y)) {
+                // Deliberate +1 Button ONLY (prevents accidental sleeve/quiver/shaft screen touches on 0000 chassis)
+                if (btnLeftPrimary.contains(x, y)) {
                     incrementArrowManually();
                     return;
                 }

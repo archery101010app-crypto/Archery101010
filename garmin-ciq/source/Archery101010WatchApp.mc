@@ -104,14 +104,37 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastShotMs = 0;
     private var mLastStepMs = 0;
     private var mPrevStepMs = 0;
+    private var mStepBoutCount = 0;
     private var mBaselineSteps = null;
     private var mLastObservedSteps = null;
     private var mWalkingLockUntilMs = 0;
     private var mHighFreqAccelActive = false;
     private var mSmoothedMagMg = 1000.0;
-    private var mPreShotRingMg as Lang.Array<Lang.Float> = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0];
-    private var mPreShotRingIdx = 0;
-    private var mPreShotRingCount = 0;
+
+    // 3D Biomechanical Ring Buffer (40 samples = 1.6s at 25Hz)
+    private var mRingSize = 40;
+    private var mRingAx as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
+    private var mRingAy as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
+    private var mRingAz as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
+    private var mRingMag as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
+    private var mRingDelta as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
+    private var mRingIdx = 0;
+    private var mRingCount = 0;
+
+    // Post-release 220ms follow-through verification state
+    private var mPendingShotActive = false;
+    private var mPendingShotStartMs = 0;
+    private var mPendingFollowN = 0;
+    private var mPendingFollowSumDelta = 0.0;
+    private var mPendingFollowSumAx = 0.0;
+
+    // Sensitive gait cadence detector
+    private var mPrevSigMg = 0.0;
+    private var mPrevPrevSigMg = 0.0;
+    private var mLastPeakMs = 0;
+    private var mPeakT0 = 0;
+    private var mPeakT1 = 0;
+    private var mPeakT2 = 0;
     private var mCmdSeq = 0;
     private var mLastLocalActionMs = 0;
     private var mLastCloudPollMs = 0;
@@ -300,54 +323,190 @@ class Archery101010WatchView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
-    function isPreShotAnchorSteady(maxQuietMaxMg as Lang.Float) as Lang.Boolean {
-        if (mPreShotRingCount < 8) {
-            return true;
+    (:typecheck(false))
+    function isTrueArcheryAnchorMg(
+        reqSamples as Lang.Number,
+        quietMeanMg as Lang.Float,
+        quietPeakMg as Lang.Float,
+        preRampMg as Lang.Float,
+        axisSpanMg as Lang.Float
+    ) as Lang.Boolean {
+        // Leave last 1 sample (~40ms) right before shock rise; inspect preceding reqSamples (1.05s - 1.50s)
+        if (mRingCount < (reqSamples + 1)) {
+            return false;
         }
-        var checkCount = 10;
-        var oldestIdx = (mPreShotRingIdx - mPreShotRingCount + 16) % 16;
-        for (var i = 0; i < checkCount; i++) {
-            var idx = (oldestIdx + i) % 16;
-            if (mPreShotRingMg[idx] > maxQuietMaxMg) {
+        var sumDelta = 0.0;
+        var recentSum = 0.0;
+        var recentN = 0;
+        var sumAx = 0.0;
+        var sumAy = 0.0;
+        var sumAz = 0.0;
+        var minAx = 99999.0; var maxAx = -99999.0;
+        var minAy = 99999.0; var maxAy = -99999.0;
+        var minAz = 99999.0; var maxAz = -99999.0;
+
+        for (var k = 1; k <= reqSamples; k++) {
+            var idx = (mRingIdx - 1 - k + mRingSize) % mRingSize;
+            var d = mRingDelta[idx];
+            if (d == null || d > quietPeakMg) {
                 return false;
             }
+            var sx = mRingAx[idx];
+            var sy = mRingAy[idx];
+            var sz = mRingAz[idx];
+            sumDelta = sumDelta + d;
+            if (k <= 5) {
+                recentSum = recentSum + d;
+                recentN = recentN + 1;
+            }
+            sumAx = sumAx + sx;
+            sumAy = sumAy + sy;
+            sumAz = sumAz + sz;
+            if (sx < minAx) { minAx = sx; }
+            if (sx > maxAx) { maxAx = sx; }
+            if (sy < minAy) { minAy = sy; }
+            if (sy > maxAy) { maxAy = sy; }
+            if (sz < minAz) { minAz = sz; }
+            if (sz > maxAz) { maxAz = sz; }
+        }
+
+        if ((sumDelta / reqSamples) > quietMeanMg) {
+            return false;
+        }
+        if (recentN >= 3 && (recentSum / recentN) > preRampMg) {
+            return false;
+        }
+
+        // 3D Forearm Horizontal Aiming Posture (rejects walking arms-down & quiver reach)
+        var meanAx = sumAx / reqSamples;
+        var meanAy = sumAy / reqSamples;
+        var meanAz = sumAz / reqSamples;
+        var gNorm = Math.sqrt(meanAx * meanAx + meanAy * meanAy + meanAz * meanAz).toFloat();
+        if (gNorm < 835.0 || gNorm > 1165.0) {
+            return false;
+        }
+        var forearmVert = (meanAx.abs().toFloat()) / gNorm;
+        var perpG = Math.sqrt(meanAy * meanAy + meanAz * meanAz).toFloat();
+        if (forearmVert > 0.68 || perpG < 690.0) {
+            return false;
+        }
+
+        // 3D Wrist-Angle Stability (rejects twisting arrow puller or rotating wrist)
+        if ((maxAx - minAx) > axisSpanMg || (maxAy - minAy) > axisSpanMg || (maxAz - minAz) > axisSpanMg) {
+            return false;
         }
         return true;
     }
 
-    function processAccelSampleMg(ax as Lang.Float, ay as Lang.Float, az as Lang.Float, now as Lang.Number) as Void {
-        var magMg = Math.sqrt(ax * ax + ay * ay + az * az).toFloat();
-        var dynamicMg = magMg - mSmoothedMagMg;
-        mSmoothedMagMg = (0.94 * mSmoothedMagMg) + (0.06 * magMg);
-        var deltaMg = (magMg - 1000.0).abs().toFloat();
-
-        if (autoDetectEnabled) {
-            var thresholdMg = (sensitivityLevel == 0) ? 2450.0 : ((sensitivityLevel == 2) ? 1800.0 : 2100.0);
-            var quietLimitMg = (sensitivityLevel == 0) ? 240.0 : ((sensitivityLevel == 2) ? 380.0 : 300.0);
-            var cooldownMs = (sensitivityLevel == 0) ? 3800 : ((sensitivityLevel == 2) ? 2600 : 3200);
-            var isWalkingBlocked = (now < mWalkingLockUntilMs) || ((now - mLastStepMs) < 2200);
-
-            if (!isWalkingBlocked
-                && deltaMg >= thresholdMg
-                && (now - mLastShotMs) > cooldownMs
-                && isPreShotAnchorSteady(quietLimitMg)) {
-                mLastShotMs = now;
-                mPreShotRingCount = 0;
-                incrementArrow(1, true);
-            } else if (dynamicMg >= 165.0 && dynamicMg <= 1150.0 && (now - mLastStepMs) > 380 && (now - mLastShotMs) > 1400) {
-                mPrevStepMs = mLastStepMs;
-                mLastStepMs = now;
-                if ((now - mPrevStepMs) <= 4200) {
-                    mWalkingLockUntilMs = now + 3800;
+    (:typecheck(false))
+    function hasSharpJerkMg(currentMagMg as Lang.Float, minJerkMg as Lang.Float) as Lang.Boolean {
+        if (mRingCount < 3) {
+            return false;
+        }
+        var maxJump = 0.0;
+        for (var k = 1; k <= 2; k++) {
+            var idx = (mRingIdx - k + mRingSize) % mRingSize;
+            var prevMag = mRingMag[idx];
+            if (prevMag != null) {
+                var jump = (currentMagMg - prevMag).abs().toFloat();
+                if (jump > maxJump) {
+                    maxJump = jump;
                 }
             }
         }
+        return maxJump >= minJerkMg;
+    }
 
-        var cappedMg = (deltaMg > 1400.0) ? 1400.0 : deltaMg;
-        mPreShotRingMg[mPreShotRingIdx] = cappedMg;
-        mPreShotRingIdx = (mPreShotRingIdx + 1) % 16;
-        if (mPreShotRingCount < 16) {
-            mPreShotRingCount = mPreShotRingCount + 1;
+    (:typecheck(false))
+    function processAccelSampleMg(ax as Lang.Float, ay as Lang.Float, az as Lang.Float, now as Lang.Number) as Void {
+        var magMg = Math.sqrt(ax * ax + ay * ay + az * az).toFloat();
+        var dynamicMg = magMg - mSmoothedMagMg;
+        mSmoothedMagMg = (0.95 * mSmoothedMagMg) + (0.05 * magMg);
+        var deltaMg = (magMg - 1000.0).abs().toFloat();
+        var absDynMg = dynamicMg.abs().toFloat();
+        var sigMg = (deltaMg > absDynMg) ? deltaMg : absDynMg;
+
+        // Sensitive walking / bow-carry cadence lock (>= 112 mg peaks)
+        if (mPrevSigMg >= 112.0 && mPrevSigMg > mPrevPrevSigMg && mPrevSigMg >= sigMg && (now - mLastPeakMs) >= 290) {
+            mLastPeakMs = now;
+            mPeakT2 = mPeakT1;
+            mPeakT1 = mPeakT0;
+            mPeakT0 = now;
+            if (mPeakT2 > 0 && (now - mPeakT2) <= 3000) {
+                var g1 = mPeakT0 - mPeakT1;
+                var g2 = mPeakT1 - mPeakT2;
+                if (g1 >= 290 && g1 <= 1450 && g2 >= 290 && g2 <= 1450) {
+                    var avg2 = (g1 + g2) / 2.0;
+                    if ((g1 - avg2).abs() <= (avg2 * 0.34) && (g2 - avg2).abs() <= (avg2 * 0.34)) {
+                        if ((now + 6500) > mWalkingLockUntilMs) {
+                            mWalkingLockUntilMs = now + 6500;
+                        }
+                        mPendingShotActive = false;
+                    }
+                }
+            }
+        }
+        mPrevPrevSigMg = mPrevSigMg;
+        mPrevSigMg = sigMg;
+
+        if (autoDetectEnabled) {
+            var thresholdMg = (sensitivityLevel == 0) ? 2350.0 : ((sensitivityLevel == 2) ? 1550.0 : 1920.0);
+            var minJerkMg = (sensitivityLevel == 0) ? 1380.0 : ((sensitivityLevel == 2) ? 940.0 : 1140.0);
+            var quietMeanMg = (sensitivityLevel == 0) ? 54.0 : ((sensitivityLevel == 2) ? 82.0 : 66.0);
+            var quietPeakMg = (sensitivityLevel == 0) ? 112.0 : ((sensitivityLevel == 2) ? 158.0 : 132.0);
+            var preRampMg = (sensitivityLevel == 0) ? 52.0 : ((sensitivityLevel == 2) ? 78.0 : 64.0);
+            var axisSpanMg = (sensitivityLevel == 0) ? 158.0 : ((sensitivityLevel == 2) ? 224.0 : 188.0);
+            var reqSamples = (sensitivityLevel == 0) ? 36 : ((sensitivityLevel == 2) ? 25 : 31);
+            var cooldownMs = (sensitivityLevel == 0) ? 7000 : ((sensitivityLevel == 2) ? 5000 : 6000);
+            var isWalkingBlocked = (now < mWalkingLockUntilMs) || ((now - mLastStepMs) < 4800);
+
+            if (mPendingShotActive) {
+                if (isWalkingBlocked) {
+                    mPendingShotActive = false;
+                } else {
+                    var elapsed = now - mPendingShotStartMs;
+                    if (elapsed >= 80 && elapsed <= 250) {
+                        mPendingFollowN = mPendingFollowN + 1;
+                        mPendingFollowSumDelta = mPendingFollowSumDelta + deltaMg;
+                        mPendingFollowSumAx = mPendingFollowSumAx + ax;
+                    }
+                    if (elapsed >= 220) {
+                        mPendingShotActive = false;
+                        var validFollow = (mPendingFollowN >= 2);
+                        if (validFollow) {
+                            var meanFollowDelta = mPendingFollowSumDelta / mPendingFollowN;
+                            var meanFollowAx = (mPendingFollowSumAx / mPendingFollowN).abs();
+                            if (meanFollowDelta > 795.0 || meanFollowAx > 815.0) {
+                                validFollow = false;
+                            }
+                        }
+                        if (validFollow && (now - mLastShotMs) > cooldownMs) {
+                            mLastShotMs = now;
+                            incrementArrow(1, true);
+                        }
+                    }
+                }
+            } else if (!isWalkingBlocked
+                && deltaMg >= thresholdMg
+                && (now - mLastShotMs) > cooldownMs
+                && hasSharpJerkMg(magMg, minJerkMg)
+                && isTrueArcheryAnchorMg(reqSamples, quietMeanMg, quietPeakMg, preRampMg, axisSpanMg)) {
+                mPendingShotActive = true;
+                mPendingShotStartMs = now;
+                mPendingFollowN = 0;
+                mPendingFollowSumDelta = 0.0;
+                mPendingFollowSumAx = 0.0;
+            }
+        }
+
+        mRingAx[mRingIdx] = ax;
+        mRingAy[mRingIdx] = ay;
+        mRingAz[mRingIdx] = az;
+        mRingMag[mRingIdx] = magMg;
+        mRingDelta[mRingIdx] = deltaMg;
+        mRingIdx = (mRingIdx + 1) % mRingSize;
+        if (mRingCount < mRingSize) {
+            mRingCount = mRingCount + 1;
         }
     }
 
@@ -363,10 +522,12 @@ class Archery101010WatchView extends WatchUi.View {
         if (xs == null || ys == null || zs == null) {
             return;
         }
-        var now = System.getTimer();
+        var batchEndMs = System.getTimer();
         var n = xs.size();
+        var dtMs = (n > 1) ? (1000 / n) : 40;
         for (var i = 0; i < n; i++) {
-            processAccelSampleMg(xs[i].toFloat(), ys[i].toFloat(), zs[i].toFloat(), now);
+            var sampleMs = batchEndMs - ((n - 1 - i) * dtMs);
+            processAccelSampleMg(xs[i].toFloat(), ys[i].toFloat(), zs[i].toFloat(), sampleMs);
         }
     }
 
@@ -401,9 +562,18 @@ class Archery101010WatchView extends WatchUi.View {
                     mBaselineSteps = curMonSteps;
                 }
                 if (mLastObservedSteps != null && curMonSteps > mLastObservedSteps) {
+                    var stepInc = curMonSteps - mLastObservedSteps;
+                    if ((now - mLastStepMs) > 9000) {
+                        mStepBoutCount = 0;
+                    }
+                    mStepBoutCount = mStepBoutCount + stepInc;
                     mLastObservedSteps = curMonSteps;
                     mLastStepMs = now;
-                    mWalkingLockUntilMs = now + 3800;
+                    mPendingShotActive = false;
+                    var lockMs = (mStepBoutCount >= 4) ? 9000 : 4800;
+                    if ((now + lockMs) > mWalkingLockUntilMs) {
+                        mWalkingLockUntilMs = now + lockMs;
+                    }
                     var deltaSteps = curMonSteps - mBaselineSteps;
                     if (deltaSteps > stepsCount) {
                         stepsCount = deltaSteps;
@@ -1319,6 +1489,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         }
 
         if (mView.screenIdx == 0) {
+            // Deliberate -1 / +1 buttons ONLY (prevents accidental wrist/sleeve/arrow touches on 0000 chassis)
             if (ty >= (146.0 * s) && ty <= (186.0 * s)) {
                 if (tx < (cx - (36.0 * s))) {
                     if (mView.arrowsCount > 0) {
@@ -1329,10 +1500,6 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                     mView.incrementArrow(1, false);
                     return true;
                 }
-            }
-            if (ty >= (76.0 * s) && ty <= (140.0 * s)) {
-                mView.incrementArrow(1, false);
-                return true;
             }
         } else if (mView.screenIdx == 1) {
             var padW = 164.0 * s;

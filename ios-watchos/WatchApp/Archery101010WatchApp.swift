@@ -49,11 +49,36 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private var lastShotTimeMs: Int64 = 0
     private var lastStepTimeMs: Int64 = 0
     private var prevStepTimeMs: Int64 = 0
+    private var recentStepBoutCount: Int = 0
     private var walkingLockUntilMs: Int64 = 0
     private var smoothedMagG: Double = 1.0
-    private var preShotLinearHistory: [Double] = Array(repeating: 0.10, count: 16)
-    private var preShotHistoryIdx: Int = 0
-    private var preShotHistoryCount: Int = 0
+
+    // 7-Gate 3D + Gyro Biomechanical Ring Buffer (40Hz)
+    private struct MotionSample {
+        let t: Int64
+        let ax: Double
+        let ay: Double
+        let az: Double
+        let magG: Double
+        let linG: Double
+        let gyroRad: Double
+    }
+    private var motionBuf: [MotionSample] = []
+    private var latestGyroRad: Double = -1.0
+    private var lastGyroMs: Int64 = 0
+    private var prevSigG: Double = 0.0
+    private var prevPrevSigG: Double = 0.0
+    private var peakTimesMs: [Int64] = []
+
+    // Post-release 220ms follow-through verification
+    private var pendingShotActive: Bool = false
+    private var pendingShotStartMs: Int64 = 0
+    private var pendingFollowN: Int = 0
+    private var pendingFollowSumLinG: Double = 0.0
+    private var pendingFollowSumAxG: Double = 0.0
+    private var pendingFollowSumGyro: Double = 0.0
+    private var pendingFollowGyroN: Int = 0
+
     private var accelCandidateStepT: [Int64] = []
     private var accelRhythmicCadenceActive: Bool = false
     private var lastSyncedStepsCount: Int = 0
@@ -114,29 +139,80 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         }
     }
 
-    private func isPreShotAnchorSteady(maxQuietAvgG: Double) -> Bool {
-        if preShotHistoryCount < 8 {
-            return true
+    private func isTrueArcheryAnchor(
+        nowMs: Int64,
+        windowMs: Int64,
+        quietMeanG: Double,
+        quietPeakG: Double,
+        preRampG: Double,
+        axisSpanG: Double,
+        gyroMeanMax: Double,
+        gyroPeakMax: Double
+    ) -> Bool {
+        let end = nowMs - 45
+        let start = end - windowMs
+        let recentStart = end - 220
+        var n = 0
+        var recentN = 0
+        var gyroN = 0
+        var oldest: Int64 = Int64.max
+        var sumLin = 0.0
+        var recentSumLin = 0.0
+        var sumAx = 0.0, sumAy = 0.0, sumAz = 0.0
+        var minAx = Double.greatestFiniteMagnitude, maxAx = -Double.greatestFiniteMagnitude
+        var minAy = Double.greatestFiniteMagnitude, maxAy = -Double.greatestFiniteMagnitude
+        var minAz = Double.greatestFiniteMagnitude, maxAz = -Double.greatestFiniteMagnitude
+        var sumGyro = 0.0
+
+        for s in motionBuf.reversed() {
+            if s.t < start { break }
+            if s.t > end { continue }
+            if s.linG > quietPeakG { return false }
+            if s.gyroRad >= 0 && s.gyroRad > gyroPeakMax { return false }
+            sumLin += s.linG
+            if s.t >= recentStart {
+                recentSumLin += s.linG
+                recentN += 1
+            }
+            sumAx += s.ax; sumAy += s.ay; sumAz += s.az
+            if s.ax < minAx { minAx = s.ax }; if s.ax > maxAx { maxAx = s.ax }
+            if s.ay < minAy { minAy = s.ay }; if s.ay > maxAy { maxAy = s.ay }
+            if s.az < minAz { minAz = s.az }; if s.az > maxAz { maxAz = s.az }
+            if s.gyroRad >= 0 {
+                sumGyro += s.gyroRad
+                gyroN += 1
+            }
+            n += 1
+            oldest = s.t
         }
-        let samplesToCheck = min(10, preShotHistoryCount - 3)
-        if samplesToCheck <= 0 { return true }
-        var sum = 0.0
-        let oldestIdx = (preShotHistoryIdx - preShotHistoryCount + 16) % 16
-        for i in 0..<samplesToCheck {
-            let idx = (oldestIdx + i) % 16
-            sum += preShotLinearHistory[idx]
-        }
-        return (sum / Double(samplesToCheck)) <= maxQuietAvgG
+
+        guard n >= 16, oldest != Int64.max, Double(end - oldest) >= Double(windowMs) * 0.85 else { return false }
+        guard (sumLin / Double(n)) <= quietMeanG else { return false }
+        if recentN >= 3 && (recentSumLin / Double(recentN)) > preRampG { return false }
+
+        let meanAx = sumAx / Double(n)
+        let meanAy = sumAy / Double(n)
+        let meanAz = sumAz / Double(n)
+        let gNorm = sqrt(meanAx * meanAx + meanAy * meanAy + meanAz * meanAz)
+        guard gNorm >= 0.84 && gNorm <= 1.16 else { return false }
+        let forearmVert = abs(meanAx) / gNorm
+        let perpG = sqrt(meanAy * meanAy + meanAz * meanAz)
+        guard forearmVert <= 0.68 && perpG >= 0.69 else { return false }
+        guard (maxAx - minAx) <= axisSpanG && (maxAy - minAy) <= axisSpanG && (maxAz - minAz) <= axisSpanG else { return false }
+        if gyroN >= 8 && (sumGyro / Double(gyroN)) > gyroMeanMax { return false }
+        return true
     }
 
-    private func recordDetectedStep(nowMs: Int64) {
+    private func recordDetectedStep(nowMs: Int64, stepDelta: Int = 1) {
+        if (nowMs - lastStepTimeMs) > 9000 {
+            recentStepBoutCount = 0
+        }
+        recentStepBoutCount += max(1, stepDelta)
         prevStepTimeMs = lastStepTimeMs
         lastStepTimeMs = nowMs
-        if (nowMs - prevStepTimeMs) <= 4200 {
-            walkingLockUntilMs = nowMs + 3800
-        } else {
-            walkingLockUntilMs = max(walkingLockUntilMs, nowMs + 2200)
-        }
+        pendingShotActive = false
+        let lockDuration: Int64 = (recentStepBoutCount >= 4) ? 9000 : 4800
+        walkingLockUntilMs = max(walkingLockUntilMs, nowMs + lockDuration)
         isWalkingPaused = true
     }
 
@@ -227,6 +303,15 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private func startSensors() {
         restartPedometerFromNow()
 
+        if motionManager.isGyroAvailable {
+            motionManager.gyroUpdateInterval = 0.025
+            motionManager.startGyroUpdates(to: .main) { [weak self] data, _ in
+                guard let self = self, let rot = data?.rotationRate else { return }
+                self.latestGyroRad = sqrt(rot.x * rot.x + rot.y * rot.y + rot.z * rot.z)
+                self.lastGyroMs = Int64(Date().timeIntervalSince1970 * 1000)
+            }
+        }
+
         if motionManager.isAccelerometerAvailable {
             motionManager.accelerometerUpdateInterval = 0.025 // 40 Hz
             motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
@@ -236,6 +321,32 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                 self.smoothedMagG = (0.95 * self.smoothedMagG) + (0.05 * magG)
                 let linearG = abs(magG - 1.0)
                 let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+                let activeGyro = ((nowMs - self.lastGyroMs) <= 140) ? self.latestGyroRad : -1.0
+
+                // Sensitive gait / bow-carry cadence lock
+                let sigG = max(linearG, abs(dynamicG))
+                if self.prevSigG >= 0.11 && self.prevSigG > self.prevPrevSigG && self.prevSigG >= sigG
+                    && (self.peakTimesMs.last == nil || (nowMs - self.peakTimesMs.last!) >= 290) {
+                    self.peakTimesMs.append(nowMs)
+                    while let first = self.peakTimesMs.first, (nowMs - first) > 4500 {
+                        self.peakTimesMs.removeFirst()
+                    }
+                    if self.peakTimesMs.count >= 3 {
+                        let c = self.peakTimesMs.count
+                        let g1 = Double(self.peakTimesMs[c - 1] - self.peakTimesMs[c - 2])
+                        let g2 = Double(self.peakTimesMs[c - 2] - self.peakTimesMs[c - 3])
+                        if g1 >= 290 && g1 <= 1450 && g2 >= 290 && g2 <= 1450 {
+                            let avg2 = (g1 + g2) / 2.0
+                            if abs(g1 - avg2) <= avg2 * 0.34 && abs(g2 - avg2) <= avg2 * 0.34 {
+                                self.walkingLockUntilMs = max(self.walkingLockUntilMs, nowMs + 6500)
+                                self.pendingShotActive = false
+                                self.isWalkingPaused = true
+                            }
+                        }
+                    }
+                }
+                self.prevPrevSigG = self.prevSigG
+                self.prevSigG = sigG
 
                 if self.isWalkingPaused && nowMs >= self.walkingLockUntilMs {
                     self.isWalkingPaused = false
@@ -249,33 +360,98 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     && (nowMs - self.lastShotTimeMs) > 1500 {
                     let addedSteps = self.evaluateFallbackRhythmicStep(nowMs: nowMs)
                     if addedSteps > 0 {
-                        self.recordDetectedStep(nowMs: nowMs)
+                        self.recordDetectedStep(nowMs: nowMs, stepDelta: addedSteps)
                         self.stepsCount += addedSteps
                         self.distanceWalkedM = max(self.distanceWalkedM, Double(self.stepsCount) * 0.76)
                         self.maybeSyncTelemetryToPhone()
                     }
                 }
 
-                guard self.autoDetectEnabled else { return }
+                let thresholdG = (self.sensitivityLevel == 0) ? 2.35 : ((self.sensitivityLevel == 2) ? 1.55 : 1.92)
+                let minJerkG = (self.sensitivityLevel == 0) ? 1.38 : ((self.sensitivityLevel == 2) ? 0.94 : 1.14)
+                let quietMeanG = (self.sensitivityLevel == 0) ? 0.053 : ((self.sensitivityLevel == 2) ? 0.082 : 0.066)
+                let quietPeakG = (self.sensitivityLevel == 0) ? 0.112 : ((self.sensitivityLevel == 2) ? 0.158 : 0.132)
+                let preRampG = (self.sensitivityLevel == 0) ? 0.051 : ((self.sensitivityLevel == 2) ? 0.078 : 0.063)
+                let axisSpanG = (self.sensitivityLevel == 0) ? 0.158 : ((self.sensitivityLevel == 2) ? 0.224 : 0.188)
+                let gyroMeanMax = (self.sensitivityLevel == 0) ? 0.25 : ((self.sensitivityLevel == 2) ? 0.40 : 0.32)
+                let gyroPeakMax = (self.sensitivityLevel == 0) ? 0.65 : ((self.sensitivityLevel == 2) ? 0.95 : 0.78)
+                let stillWindowMs: Int64 = (self.sensitivityLevel == 0) ? 1550 : ((self.sensitivityLevel == 2) ? 1050 : 1300)
+                let cooldownMs: Int64 = (self.sensitivityLevel == 0) ? 7000 : ((self.sensitivityLevel == 2) ? 5000 : 6000)
+                let isWalkingBlocked = (nowMs < self.walkingLockUntilMs) || ((nowMs - self.lastStepTimeMs) < 4800)
 
-                let thresholdG = (self.sensitivityLevel == 0) ? 2.10 : ((self.sensitivityLevel == 2) ? 1.45 : 1.72)
-                let quietLimitG = (self.sensitivityLevel == 0) ? 0.21 : ((self.sensitivityLevel == 2) ? 0.33 : 0.26)
-                let cooldownMs: Int64 = (self.sensitivityLevel == 0) ? 3800 : ((self.sensitivityLevel == 2) ? 2600 : 3200)
-                let isWalkingBlocked = (nowMs < self.walkingLockUntilMs) || ((nowMs - self.lastStepTimeMs) < 2200)
-
-                if !isWalkingBlocked
+                if self.pendingShotActive {
+                    if !self.autoDetectEnabled || isWalkingBlocked {
+                        self.pendingShotActive = false
+                    } else {
+                        let elapsed = nowMs - self.pendingShotStartMs
+                        if elapsed >= 95 && elapsed <= 235 {
+                            self.pendingFollowN += 1
+                            self.pendingFollowSumLinG += linearG
+                            self.pendingFollowSumAxG += acc.x
+                            if activeGyro >= 0 {
+                                self.pendingFollowSumGyro += activeGyro
+                                self.pendingFollowGyroN += 1
+                            }
+                        }
+                        if elapsed >= 220 {
+                            self.pendingShotActive = false
+                            var validFollow = self.pendingFollowN >= 2
+                            if validFollow {
+                                let meanFollowLin = self.pendingFollowSumLinG / Double(self.pendingFollowN)
+                                let meanFollowAx = abs(self.pendingFollowSumAxG / Double(self.pendingFollowN))
+                                let meanFollowGyro = self.pendingFollowGyroN >= 2
+                                    ? (self.pendingFollowSumGyro / Double(self.pendingFollowGyroN))
+                                    : 0.0
+                                if meanFollowLin > 0.80 || meanFollowAx > 0.82 || meanFollowGyro > 4.2 {
+                                    validFollow = false
+                                }
+                            }
+                            if validFollow && (nowMs - self.lastShotTimeMs) > cooldownMs {
+                                self.lastShotTimeMs = nowMs
+                                self.incrementArrow(delta: 1, source: "watch_auto")
+                            }
+                        }
+                    }
+                } else if self.autoDetectEnabled
+                    && !isWalkingBlocked
                     && linearG >= thresholdG
-                    && (nowMs - self.lastShotTimeMs) > cooldownMs
-                    && self.isPreShotAnchorSteady(maxQuietAvgG: quietLimitG) {
-                    self.lastShotTimeMs = nowMs
-                    self.preShotHistoryCount = 0
-                    self.incrementArrow(delta: 1, source: "watch_auto")
+                    && (nowMs - self.lastShotTimeMs) > cooldownMs {
+                    var maxJump = 0.0
+                    let cnt = self.motionBuf.count
+                    for k in 1...3 where cnt - k >= 0 {
+                        maxJump = max(maxJump, abs(magG - self.motionBuf[cnt - k].magG))
+                    }
+                    if maxJump >= minJerkG && self.isTrueArcheryAnchor(
+                        nowMs: nowMs,
+                        windowMs: stillWindowMs,
+                        quietMeanG: quietMeanG,
+                        quietPeakG: quietPeakG,
+                        preRampG: preRampG,
+                        axisSpanG: axisSpanG,
+                        gyroMeanMax: gyroMeanMax,
+                        gyroPeakMax: gyroPeakMax
+                    ) {
+                        self.pendingShotActive = true
+                        self.pendingShotStartMs = nowMs
+                        self.pendingFollowN = 0
+                        self.pendingFollowSumLinG = 0.0
+                        self.pendingFollowSumAxG = 0.0
+                        self.pendingFollowSumGyro = 0.0
+                        self.pendingFollowGyroN = 0
+                    }
                 }
 
-                self.preShotLinearHistory[self.preShotHistoryIdx] = min(linearG, 1.2)
-                self.preShotHistoryIdx = (self.preShotHistoryIdx + 1) % 16
-                if self.preShotHistoryCount < 16 {
-                    self.preShotHistoryCount += 1
+                self.motionBuf.append(MotionSample(
+                    t: nowMs,
+                    ax: acc.x,
+                    ay: acc.y,
+                    az: acc.z,
+                    magG: magG,
+                    linG: linearG,
+                    gyroRad: activeGyro
+                ))
+                if self.motionBuf.count > 240 {
+                    self.motionBuf.removeFirst(self.motionBuf.count - 240)
                 }
             }
         }
@@ -595,7 +771,6 @@ struct CounterWatchScreen: View {
             .padding(5)
             .background(Color(red: 7/255, green: 9/255, blue: 14/255))
             .cornerRadius(10)
-            .onTapGesture { vm.incrementArrow(delta: 1) }
 
             HStack {
                 Button(action: { vm.incrementArrow(delta: -1) }) {

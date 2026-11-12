@@ -211,23 +211,7 @@ public class WearDataLayerService extends WearableListenerService {
                 int delta = cmdObj.optInt("delta", 1);
                 state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) + delta));
                 state.put("sessionActive", true);
-                String practiceType = state.optString("practiceType", "Práctica");
-                if (!"Volumen".equalsIgnoreCase(practiceType) && delta > 0) {
-                    for (int i = 0; i < delta; i++) {
-                        if (curEndArrows.length() >= arrowsPerEnd) {
-                            if (curEndIdx < endsCount - 1) {
-                                curEndIdx++;
-                                curEndArrows = new JSONArray();
-                            } else {
-                                break;
-                            }
-                        }
-                        curEndArrows.put("10");
-                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + 10));
-                    }
-                    state.put("currentEndIndex", curEndIdx);
-                    state.put("currentEndArrows", curEndArrows);
-                }
+                // Physical watch counter never injects fake "10" scores into scorecard ends (scores come strictly from SCORE_INPUT)
             } else if ("DECREMENT_ARROW".equals(cmdType) || "UNDO_ARROW".equals(cmdType)) {
                 state.put("arrowsCount", Math.max(0, state.optInt("arrowsCount", 0) - 1));
                 JSONObject payloadObj = cmdObj.optJSONObject("payload");
