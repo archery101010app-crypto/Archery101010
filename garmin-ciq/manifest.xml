@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
-    <iq:application entry="Archery101010WatchApp" id="a1010100-1010-4101-8101-010101010101" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.2.0" name="@Strings.AppName" type="watch-app" version="2.101.0">
+    <iq:application entry="Archery101010WatchApp" id="a1010100-1010-4101-8101-010101010101" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.1.0" name="@Strings.AppName" type="watch-app" version="2.102.0">
         <iq:products>
             <!-- Epix Gen 2 & Epix Pro Gen 2 (All Sizes: 42mm, 47mm, 51mm + Quatix 7 Pro) -->
             <iq:product id="epix2"/>
@@ -25,17 +25,32 @@
             <iq:product id="enduro3"/>
             <iq:product id="marq2"/>
 
-            <!-- Forerunner Series (All Sizes: S & Standard) -->
+            <!-- Forerunner Complete Series (55, 70, 165, 170, 245, 255, 265, 570, 645, 745, 935, 945, 955, 965, 970) -->
+            <iq:product id="fr55"/>
+            <iq:product id="fr70"/>
             <iq:product id="fr165"/>
             <iq:product id="fr165m"/>
+            <iq:product id="fr170"/>
+            <iq:product id="fr170m"/>
+            <iq:product id="fr245"/>
+            <iq:product id="fr245m"/>
             <iq:product id="fr255s"/>
             <iq:product id="fr255sm"/>
             <iq:product id="fr255"/>
             <iq:product id="fr255m"/>
             <iq:product id="fr265s"/>
             <iq:product id="fr265"/>
+            <iq:product id="fr57042mm"/>
+            <iq:product id="fr57047mm"/>
+            <iq:product id="fr645"/>
+            <iq:product id="fr645m"/>
+            <iq:product id="fr745"/>
+            <iq:product id="fr935"/>
+            <iq:product id="fr945"/>
+            <iq:product id="fr945lte"/>
             <iq:product id="fr955"/>
             <iq:product id="fr965"/>
+            <iq:product id="fr970"/>
 
             <!-- Venu & Vivoactive Series (All Sizes: S, Standard & Plus) -->
             <iq:product id="venu2s"/>
