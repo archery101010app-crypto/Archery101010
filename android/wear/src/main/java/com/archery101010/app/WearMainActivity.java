@@ -3,7 +3,6 @@ package com.archery101010.app;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -92,12 +91,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private static final String PREFS_NAME = "archery_101010_wear_prefs";
-    private static final int REQ_ACTIVITY_RECOGNITION = 1010;
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
     private Sensor gyroscope;
-    private Sensor stepDetector;
     private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
@@ -147,11 +144,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private double prevDyn = 0.0;
     private double prevPrevDyn = 0.0;
 
-    // Fallback linear-accel rhythmic cadence tracker (prevents isolated bow raises/draws from counting as steps)
+    // Zero-permission linear-accel rhythmic cadence tracker (prevents isolated bow raises/draws from counting as steps)
     private final long[] accelCandidateStepT = new long[4];
     private int accelCandidateStepCount = 0;
     private boolean accelRhythmicCadenceActive = false;
-    private long lastHardwareStepTimeMs = 0L;
+    private double prevDynLinear = 0.0;
+    private double prevPrevDynLinear = 0.0;
 
     // Scoring state (synchronized with phone)
     private int currentEnd = 1;
@@ -232,48 +230,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (sensorManager != null) {
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
             gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-            stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
         canvasView = new WearCanvasView(this);
         setContentView(canvasView);
 
-        requestActivityRecognitionIfNeeded();
         ensureSensorAndHeartbeatActive();
         initWearCommunication();
-    }
-
-    private void requestActivityRecognitionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 29) {
-            try {
-                if (checkSelfPermission("android.permission.ACTIVITY_RECOGNITION") != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{"android.permission.ACTIVITY_RECOGNITION"}, REQ_ACTIVITY_RECOGNITION);
-                }
-            } catch (Exception ignored) {}
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_ACTIVITY_RECOGNITION
-                && grantResults != null
-                && grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            try {
-                if (sensorManager == null) {
-                    sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-                }
-                if (sensorManager != null) {
-                    stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
-                    if (stepDetector != null) {
-                        sensorManager.unregisterListener(this, stepDetector);
-                        sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_FASTEST, 0);
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
     }
 
     private void ensureSensorAndHeartbeatActive() {
@@ -282,10 +246,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
                 if (gyroscope != null) {
                     sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
-                }
-                if (stepDetector != null) {
-                    // maxReportLatency = 0 → step events are delivered immediately (no batching delay before the walking lock)
-                    sensorManager.registerListener(this, stepDetector, SensorManager.SENSOR_DELAY_FASTEST, 0);
                 }
                 isSensorRegistered = true;
             } catch (Exception ignored) {}
@@ -735,15 +695,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return getFormattedKm() + " mts · " + getFormattedMi() + " ft";
     }
 
-    private void recordDetectedStep(long now) {
-        recordDetectedSteps(now, 1, false);
-    }
-
-    private void recordDetectedStep(long now, boolean fromHardwarePedometer) {
-        recordDetectedSteps(now, 1, fromHardwarePedometer);
-    }
-
-    private void recordDetectedSteps(long now, int stepDelta, boolean fromHardwarePedometer) {
+    private void recordDetectedSteps(long now, int stepDelta) {
         if (stepDelta <= 0) return;
         if ((now - lastStepTimeMs) > 9000L) {
             recentStepBoutCount = 0;
@@ -756,9 +708,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         // Single step locks 4.8s; sustained walk to/from target (4+ steps) locks 9.0s
         long lockDurationMs = (recentStepBoutCount >= 4) ? 9000L : 4800L;
         walkingLockUntilMs = Math.max(walkingLockUntilMs, now + lockDurationMs);
-        if (fromHardwarePedometer) {
-            lastHardwareStepTimeMs = now;
-        }
         stepsCount += stepDelta;
         distanceWalkedM = Math.max(distanceWalkedM + (stepDelta * 0.76f), stepsCount * 0.76f);
         saveState();
@@ -769,14 +718,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     /**
-     * Fallback accelerometer step detector: requires rhythmic walking cadence (3+ evenly spaced peaks)
-     * so isolated bow raises, draws, or releases NEVER increment stepsCount.
+     * Zero-permission accelerometer step detector: requires rhythmic walking cadence (4+ evenly spaced peaks)
+     * so isolated bow raises, draws, or releases NEVER increment stepsCount and no ACTIVITY_RECOGNITION permission is needed.
      */
     private void evaluateRhythmicAccelStep(long now) {
-        // Defer to hardware TYPE_STEP_DETECTOR whenever it is actively firing
-        if (lastHardwareStepTimeMs > 0L && (now - lastHardwareStepTimeMs) <= 6000L) {
-            return;
-        }
         long prevCandidate = accelCandidateStepCount > 0
             ? accelCandidateStepT[(accelCandidateStepCount - 1) % 4]
             : 0L;
@@ -794,7 +739,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         accelCandidateStepCount++;
 
         if (accelRhythmicCadenceActive) {
-            recordDetectedSteps(now, 1, false);
+            recordDetectedSteps(now, 1);
             return;
         }
 
@@ -814,7 +759,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 && Math.abs(g3 - avg) <= avg * 0.30;
             if (validRange && rhythmic) {
                 accelRhythmicCadenceActive = true;
-                recordDetectedSteps(now, 4, false);
+                recordDetectedSteps(now, 4);
             }
         }
     }
@@ -1004,13 +949,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             return;
         }
 
-        if (sensorType == Sensor.TYPE_STEP_DETECTOR) {
-            if ((now - lastStepTimeMs) > 280L) {
-                recordDetectedStep(now, true);
-            }
-            return;
-        }
-
         if (sensorType == Sensor.TYPE_ACCELEROMETER) {
             float ax = event.values[0];
             float ay = event.values[1];
@@ -1099,9 +1037,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 pendingFollowSumAx = 0.0;
                 pendingFollowSumGyro = 0.0;
                 pendingFollowGyroSamples = 0;
-            } else if (dynamicLinear >= 1.20 && dynamicLinear <= 11.5 && (now - lastShotTimestamp) > 1500L) {
+            } else if (prevDynLinear >= 1.05
+                    && prevDynLinear > prevPrevDynLinear
+                    && prevDynLinear >= dynamicLinear
+                    && prevDynLinear <= 11.5
+                    && (now - lastShotTimestamp) > 1500L) {
                 evaluateRhythmicAccelStep(now);
             }
+            prevPrevDynLinear = prevDynLinear;
+            prevDynLinear = dynamicLinear;
 
             // Record synchronized 3D + gyro sample into motion ring buffer
             motionT[motionIdx] = now;
