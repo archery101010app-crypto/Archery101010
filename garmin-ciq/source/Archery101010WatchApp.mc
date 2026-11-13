@@ -141,8 +141,16 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastTelemetryPushSteps = 0;
     private var mSensorTimer = null;
 
+    // Official Good Times + Geometric 101010 BrandLogo & Bundled Outfit Athletic Fonts
+    private var mBrandLogo = null;
+    private var mFontMicro = null;
+    private var mFontLabel = null;
+    private var mFontValue = null;
+    private var mFontHero = null;
+
     function initialize() {
         View.initialize();
+        loadBrandResources();
         loadStateFromStorage();
         initStepBaseline();
         registerHighFreqAccelerometer();
@@ -152,6 +160,26 @@ class Archery101010WatchView extends WatchUi.View {
 
         if (hasPairingCode && pairingCode.length() == 6) {
             pollFirestoreCloud();
+        }
+    }
+
+    (:typecheck(false))
+    function loadBrandResources() as Void {
+        try {
+            mBrandLogo = WatchUi.loadResource(Rez.Drawables.BrandLogo);
+        } catch (ex) {
+            mBrandLogo = null;
+        }
+        try {
+            mFontMicro = WatchUi.loadResource(Rez.Fonts.OutfitMicro);
+            mFontLabel = WatchUi.loadResource(Rez.Fonts.OutfitLabel);
+            mFontValue = WatchUi.loadResource(Rez.Fonts.OutfitValue);
+            mFontHero = WatchUi.loadResource(Rez.Fonts.OutfitHero);
+        } catch (ex) {
+            mFontMicro = Graphics.FONT_XTINY;
+            mFontLabel = Graphics.FONT_XTINY;
+            mFontValue = Graphics.FONT_SMALL;
+            mFontHero = Graphics.FONT_NUMBER_MEDIUM;
         }
     }
 
@@ -1063,38 +1091,90 @@ class Archery101010WatchView extends WatchUi.View {
         }
     }
 
-    function drawArchery101010Header(dc as Graphics.Dc, w as Lang.Number, s as Lang.Float, statusLabel as Lang.String, compact as Lang.Boolean) as Void {
+    (:typecheck(false))
+    function pickFittingFont(dc as Graphics.Dc, txt as Lang.String, maxW as Lang.Number, f1, f2, f3) {
+        if (f1 != null && dc.getTextWidthInPixels(txt, f1) <= maxW) {
+            return f1;
+        }
+        if (f2 != null && dc.getTextWidthInPixels(txt, f2) <= maxW) {
+            return f2;
+        }
+        return (f3 != null) ? f3 : Graphics.FONT_XTINY;
+    }
+
+    (:typecheck(false))
+    function drawCrispBox(
+        dc as Graphics.Dc,
+        x as Lang.Number,
+        y as Lang.Number,
+        bw as Lang.Number,
+        bh as Lang.Number,
+        rad as Lang.Number,
+        fillCol as Lang.Number,
+        borderCol as Lang.Number,
+        strokePx as Lang.Number
+    ) as Void {
+        dc.setColor(fillCol, Graphics.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x, y, bw, bh, rad);
+        if (dc has :setPenWidth) {
+            dc.setPenWidth(strokePx);
+        }
+        dc.setColor(borderCol, Graphics.COLOR_TRANSPARENT);
+        dc.drawRoundedRectangle(x, y, bw, bh, rad);
+        if (dc has :setPenWidth) {
+            dc.setPenWidth(1);
+        }
+    }
+
+    (:typecheck(false))
+    function drawArchery101010Header(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, s as Lang.Float, statusLabel as Lang.String, compact as Lang.Boolean) as Void {
         var cx = w / 2;
-        var topY = ((compact ? 20.0 : 24.0) * s).toNumber();
-        var pillY = ((compact ? 34.0 : 44.0) * s).toNumber();
+        var strokePx = (w >= 340) ? 2 : 1;
+        var fMicro = (mFontMicro != null) ? mFontMicro : Graphics.FONT_XTINY;
 
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx - (26.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "ARCHERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + (17.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + (32.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx + (47.0 * s).toNumber(), topY, Graphics.FONT_XTINY, "10", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // 1. Official Good Times + Geometric 101010 Bitmap Logo (mathematically inside top circular chord)
+        var logoTopY = ((compact ? 19.0 : 22.0) * s).toNumber();
+        var logoBottomY = logoTopY + (12.0 * s).toNumber();
+        if (mBrandLogo != null) {
+            var lw = mBrandLogo.getWidth();
+            var lh = mBrandLogo.getHeight();
+            dc.drawBitmap(cx - (lw / 2), logoTopY, mBrandLogo);
+            logoBottomY = logoTopY + lh;
+        } else {
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, logoTopY + (6.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
 
-        var isYellow = (statusLabel.find("CAMINANDO") != null) || (statusLabel.find("PASOS") != null) || (statusLabel.find("EDITAR") != null);
-        var isMuted = (statusLabel.find("SIN NUBE") != null) || (statusLabel.find("SIN VINCULAR") != null);
-        var pillW = ((compact ? 128.0 : 138.0) * s).toNumber();
-        var pillH = ((compact ? 15.0 : 18.0) * s).toNumber();
+        // 2. Auto-Fitted Status Pill (never overflows or touches border on any resolution)
+        var pillY = logoBottomY + ((compact ? 4.0 : 6.0) * s).toNumber();
+        var fontH = dc.getFontHeight(fMicro);
+        var minPillH = ((compact ? 15.0 : 17.0) * s).toNumber();
+        var pillH = fontH + (1.0 * s).toNumber();
+        if (pillH < minPillH) {
+            pillH = minPillH;
+        }
+
+        var textW = dc.getTextWidthInPixels(statusLabel, fMicro);
+        var minPillW = ((compact ? 96.0 : 112.0) * s).toNumber();
+        var maxPillW = ((compact ? 156.0 : 168.0) * s).toNumber();
+        var pillW = textW + (20.0 * s).toNumber();
+        if (pillW < minPillW) { pillW = minPillW; }
+        if (pillW > maxPillW) { pillW = maxPillW; }
         var pillX = cx - (pillW / 2);
 
-        dc.setColor(isYellow ? 0x101006 : (isMuted ? 0x0A0D13 : 0x040B12), Graphics.COLOR_TRANSPARENT);
-        dc.fillRoundedRectangle(pillX, pillY, pillW, pillH, pillH / 2);
-        dc.setColor(isYellow ? 0xFFE500 : (isMuted ? 0x475569 : 0x00A8F3), Graphics.COLOR_TRANSPARENT);
-        dc.drawRoundedRectangle(pillX, pillY, pillW, pillH, pillH / 2);
+        var isYellow = (statusLabel.find("CAMINANDO") != null) || (statusLabel.find("EDITAR") != null);
+        var isMuted = (statusLabel.find("LOCAL") != null) || (statusLabel.find("SIN VINCULAR") != null);
+        var fillCol = isYellow ? 0x121106 : (isMuted ? 0x0A0D13 : 0x050D17);
+        var borderCol = isYellow ? 0xFFE500 : (isMuted ? 0x475569 : 0x00A8F3);
 
+        drawCrispBox(dc, pillX, pillY, pillW, pillH, pillH / 2, fillCol, borderCol, strokePx);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, pillY + (pillH / 2), Graphics.FONT_XTINY, statusLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, pillY + (pillH / 2), fMicro, statusLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     function drawPagerDots(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, s as Lang.Float) as Void {
         var cx = w / 2;
-        var dotY = h - (14.0 * s).toNumber();
+        var dotY = h - (15.0 * s).toNumber();
         var activeW = (11.0 * s).toNumber();
         var inactiveW = (4.0 * s).toNumber();
         var dotH = (4.0 * s).toNumber();
@@ -1113,6 +1193,7 @@ class Archery101010WatchView extends WatchUi.View {
     public var lastScreenWidth = 240;
     public var lastScreenHeight = 240;
 
+    (:typecheck(false))
     function onUpdate(dc as Graphics.Dc) as Void {
         recalculateMetrics();
         var w = dc.getWidth();
@@ -1122,7 +1203,13 @@ class Archery101010WatchView extends WatchUi.View {
         var minDim = (w < h) ? w : h;
         var s = minDim / 240.0;
         var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
         var isConnectedNow = (isCloudSynced || isBleConnected);
+
+        var fMicro = (mFontMicro != null) ? mFontMicro : Graphics.FONT_XTINY;
+        var fLabel = (mFontLabel != null) ? mFontLabel : Graphics.FONT_XTINY;
+        var fValue = (mFontValue != null) ? mFontValue : Graphics.FONT_SMALL;
+        var fHero = (mFontHero != null) ? mFontHero : Graphics.FONT_NUMBER_MEDIUM;
 
         // Matte OLED Black Background
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
@@ -1138,7 +1225,7 @@ class Archery101010WatchView extends WatchUi.View {
             var pillTxt = !autoDetectEnabled
                 ? ("MANUAL" + connSuffix)
                 : ((System.getTimer() < mWalkingLockUntilMs) ? "PAUSA · CAMINANDO" : ("AUTO · " + sensTxt + connSuffix));
-            drawArchery101010Header(dc, w, s, pillTxt, false);
+            drawArchery101010Header(dc, w, h, s, pillTxt, false);
 
             var d3 = (arrowsCount / 1000) % 10;
             var d2 = (arrowsCount / 100) % 10;
@@ -1146,74 +1233,68 @@ class Archery101010WatchView extends WatchUi.View {
             var d0 = arrowsCount % 10;
             var digits = [d3, d2, d1, d0] as Lang.Array<Lang.Number>;
 
-            var boxW = (36.0 * s).toNumber();
-            var boxH = (52.0 * s).toNumber();
+            var boxW = (37.0 * s).toNumber();
+            var boxH = (56.0 * s).toNumber();
             var gap = (5.0 * s).toNumber();
             var totalW = (boxW * 4) + (gap * 3);
             var startX = cx - (totalW / 2);
-            var startY = (82.0 * s).toNumber();
+            var startY = (66.0 * s).toNumber();
 
             for (var i = 0; i < 4; i++) {
                 var rx = startX + i * (boxW + gap);
-                dc.setColor(i == 3 ? 0x101008 : 0x0B0E15, Graphics.COLOR_TRANSPARENT);
-                dc.fillRoundedRectangle(rx, startY, boxW, boxH, (7.0 * s).toNumber());
-                dc.setColor(i == 3 ? 0xFFE500 : 0x2A2F3A, Graphics.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(rx, startY, boxW, boxH, (7.0 * s).toNumber());
+                var cellFill = (i == 3) ? 0x121107 : 0x0B0E15;
+                var cellBorder = (i == 3) ? 0xFFE500 : 0x3E4756;
+                drawCrispBox(dc, rx, startY, boxW, boxH, (7.0 * s).toNumber(), cellFill, cellBorder, strokePx);
 
-                dc.setColor(i == 3 ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(rx + (boxW / 2), startY + (boxH / 2), Graphics.FONT_NUMBER_MEDIUM, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.setColor((i == 3) ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Bottom row: [-1] | mts & kcal | [+1]
-            var rowY = (154.0 * s).toNumber();
-            var btnW = (32.0 * s).toNumber();
-            var btnH = (24.0 * s).toNumber();
-            var rowW = (164.0 * s).toNumber();
+            // Dedicated Tactile Row: [-1]  |  T1 · 18M  |  [+1]  (Zero collision with telemetry)
+            var rowY = (131.0 * s).toNumber();
+            var btnW = (42.0 * s).toNumber();
+            var btnH = (28.0 * s).toNumber();
+            var rowW = (162.0 * s).toNumber();
 
             var minusX = cx - (rowW / 2);
-            dc.setColor(0x180709, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(minusX, rowY, btnW, btnH, btnH / 2);
-            dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(minusX, rowY, btnW, btnH, btnH / 2);
+            drawCrispBox(dc, minusX, rowY, btnW, btnH, btnH / 2, 0x180709, 0xFF1E1E, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), Graphics.FONT_XTINY, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), fLabel, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             var plusX = cx + (rowW / 2) - btnW;
-            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(plusX, rowY, btnW, btnH, btnH / 2);
-            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(plusX, rowY, btnW, btnH, btnH / 2);
+            drawCrispBox(dc, plusX, rowY, btnW, btnH, btnH / 2, 0x061523, 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), Graphics.FONT_XTINY, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fLabel, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
+            var endDistLabel = "T" + currentEnd.toString() + " · " + distanceM.toString() + "M";
+            dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, rowY + (btnH / 2), fMicro, endDistLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            // Dedicated Bottom Telemetry Line (100% separated vertically below buttons)
+            var telemStr = mts.toString() + " mts · " + activeKcal.toString() + " kcal";
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, rowY + (6.0 * s).toNumber(), Graphics.FONT_XTINY, mts.toString() + " mts · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, rowY + (20.0 * s).toNumber(), Graphics.FONT_XTINY, "TANDA " + currentEnd.toString() + " · " + distanceM.toString() + " M", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, (176.0 * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 1) {
-            drawArchery101010Header(dc, w, s, "T" + currentEnd.toString() + "/" + endsCount.toString() + " · " + totalScore.toString() + " PTS", true);
+            drawArchery101010Header(dc, w, h, s, "T" + currentEnd.toString() + "/" + endsCount.toString() + " · " + totalScore.toString() + " PTS", true);
 
-            // Current End Arrow Slots (up to 6 compact pills)
+            // Current End Arrow Slots (up to 6 compact cells)
             var slotCount = (arrowsPerEnd < 6) ? arrowsPerEnd : 6;
             if (slotCount < 1) { slotCount = 6; }
-            var slotW = (21.0 * s).toNumber();
-            var slotH = (14.0 * s).toNumber();
-            var slotGap = (3.0 * s).toNumber();
+            var slotW = (22.0 * s).toNumber();
+            var slotH = (15.0 * s).toNumber();
+            var slotGap = (4.0 * s).toNumber();
             var slotsTotalW = (slotCount * slotW) + ((slotCount - 1) * slotGap);
             var slotsStartX = cx - (slotsTotalW / 2);
-            var slotsY = (53.0 * s).toNumber();
+            var slotsY = (56.0 * s).toNumber();
 
             for (var si = 0; si < slotCount; si++) {
                 var sx = slotsStartX + si * (slotW + slotGap);
                 var hasVal = (si < currentEndArrows.size());
-                var sVal = hasVal ? currentEndArrows[si] : "·";
-                dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
-                dc.fillRoundedRectangle(sx, slotsY, slotW, slotH, (3.0 * s).toNumber());
-                dc.setColor(hasVal ? 0xFFE500 : 0x262B36, Graphics.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(sx, slotsY, slotW, slotH, (3.0 * s).toNumber());
+                var sVal = hasVal ? currentEndArrows[si] : "-";
+                drawCrispBox(dc, sx, slotsY, slotW, slotH, (4.0 * s).toNumber(), 0x07090E, hasVal ? 0xFFE500 : 0x334155, 1);
                 dc.setColor(hasVal ? Graphics.COLOR_WHITE : 0x64748B, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(sx + (slotW / 2), slotsY + (slotH / 2), Graphics.FONT_XTINY, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.drawText(sx + (slotW / 2), slotsY + (slotH / 2), fMicro, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
             // 12 Tactile Score Keys (4x3: X, 10..1, M) mathematically contained inside circular bezel
@@ -1222,7 +1303,7 @@ class Archery101010WatchView extends WatchUi.View {
             var keyW = (padW - (3 * kGap)) / 4;
             var keyH = (22.0 * s).toNumber();
             var kStartX = cx - (padW / 2);
-            var kStartY = (71.0 * s).toNumber();
+            var kStartY = (76.0 * s).toNumber();
 
             for (var k = 0; k < 12; k++) {
                 var r = k / 4;
@@ -1232,167 +1313,145 @@ class Archery101010WatchView extends WatchUi.View {
                 var isSel = (k == selectedScoreIdx);
 
                 var bgCol = (k < 3) ? 0x121107 : ((k < 5) ? 0x160708 : ((k < 7) ? 0x061320 : 0x0B0E15));
-                var borderCol = isSel ? 0x00A8F3 : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569)));
-                var txtCol = (k < 3) ? 0xFFE500 : ((k == 11) ? 0x94A3B8 : Graphics.COLOR_WHITE);
+                var borderCol = isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569)));
+                var txtCol = (k < 3) ? 0xFFE500 : ((k == 11) ? 0xCBD5E1 : Graphics.COLOR_WHITE);
 
-                dc.setColor(bgCol, Graphics.COLOR_TRANSPARENT);
-                dc.fillRoundedRectangle(kx, ky, keyW, keyH, (5.0 * s).toNumber());
-                dc.setColor(borderCol, Graphics.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(kx, ky, keyW, keyH, (5.0 * s).toNumber());
-
+                drawCrispBox(dc, kx, ky, keyW, keyH, (5.0 * s).toNumber(), bgCol, borderCol, strokePx);
                 dc.setColor(txtCol, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), Graphics.FONT_XTINY, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), fLabel, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Bottom Actions: BORRAR | SIG. TANDA
-            var actWTotal = (150.0 * s).toNumber();
+            // Bottom Actions: [ BORRAR ]   [ SIG. TANDA ]  with clear separation & full containment
+            var actGap = (7.0 * s).toNumber();
+            var actWTotal = (165.0 * s).toNumber();
             var actStartX = cx - (actWTotal / 2);
-            var actY = (149.0 * s).toNumber();
-            var actW = (actWTotal - kGap) / 2;
-            var actH = (20.0 * s).toNumber();
+            var actY = (156.0 * s).toNumber();
+            var actW = (actWTotal - actGap) / 2;
+            var actH = (23.0 * s).toNumber();
 
-            dc.setColor(0x0B0E15, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(actStartX, actY, actW, actH, actH / 2);
-            dc.setColor(0x475569, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(actStartX, actY, actW, actH, actH / 2);
-            dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(actStartX + (actW / 2), actY + (actH / 2), Graphics.FONT_XTINY, "BORRAR", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var nextX = actStartX + actW + kGap;
-            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(nextX, actY, actW, actH, actH / 2);
-            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(nextX, actY, actW, actH, actH / 2);
+            drawCrispBox(dc, actStartX, actY, actW, actH, actH / 2, 0x0B0E15, 0x475569, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(nextX + (actW / 2), actY + (actH / 2), Graphics.FONT_XTINY, "SIG. TANDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, "BORRAR", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var nextX = actStartX + actW + actGap;
+            drawCrispBox(dc, nextX, actY, actW, actH, actH / 2, 0x061523, 0x00A8F3, strokePx);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, "SIG. TANDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 2) {
-            drawArchery101010Header(dc, w, s, "PODÓMETRO · PASOS", false);
+            drawArchery101010Header(dc, w, h, s, "MÉTRICAS EN VIVO", false);
 
             var cardW = (164.0 * s).toNumber();
-            var cardH = (40.0 * s).toNumber();
+            var cardH = (44.0 * s).toNumber();
             var cardX = cx - (cardW / 2);
-            var card1Y = (76.0 * s).toNumber();
-            var card2Y = (122.0 * s).toNumber();
+            var card1Y = (68.0 * s).toNumber();
+            var card2Y = (119.0 * s).toNumber();
+            var innerMaxW = cardW - (14.0 * s).toNumber();
 
-            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(cardX, card1Y, cardW, cardH, (9.0 * s).toNumber());
-            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(cardX, card1Y, cardW, cardH, (9.0 * s).toNumber());
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (11.0 * s).toNumber(), Graphics.FONT_XTINY, "DISTANCIA · " + stepsCount.toString() + " PASOS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            drawCrispBox(dc, cardX, card1Y, cardW, cardH, (9.0 * s).toNumber(), 0x07090E, 0x00A8F3, strokePx);
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card1Y + (13.0 * s).toNumber(), fMicro, "DISTANCIA · " + stepsCount.toString() + " PASOS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            var distFont = pickFittingFont(dc, mtsFtStr, innerMaxW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (27.0 * s).toNumber(), Graphics.FONT_SMALL, mtsFtStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, card1Y + (30.0 * s).toNumber(), distFont, mtsFtStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(cardX, card2Y, cardW, cardH, (9.0 * s).toNumber());
-            dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(cardX, card2Y, cardW, cardH, (9.0 * s).toNumber());
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card2Y + (11.0 * s).toNumber(), Graphics.FONT_XTINY, "GASTO ENERGÉTICO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            drawCrispBox(dc, cardX, card2Y, cardW, cardH, (9.0 * s).toNumber(), 0x07090E, 0xFF1E1E, strokePx);
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, card2Y + (13.0 * s).toNumber(), fMicro, "GASTO ENERGÉTICO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            var kcalStr = activeKcal.toString() + " kcal";
+            var kcalFont = pickFittingFont(dc, kcalStr, innerMaxW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card2Y + (27.0 * s).toNumber(), Graphics.FONT_SMALL, activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, card2Y + (30.0 * s).toNumber(), kcalFont, kcalStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            dc.setColor(0x8E96A4, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, (176.0 * s).toNumber(), Graphics.FONT_XTINY, arrowsCount.toString() + " FL · " + bowPoundageLbs.toString() + " LBS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, (177.0 * s).toNumber(), fMicro, arrowsCount.toString() + " FL · " + bowPoundageLbs.toString() + " LBS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 3) {
-            var sumStatus = isConnectedNow ? "CONECTADO EN VIVO" : "SIN NUBE · LOCAL";
-            drawArchery101010Header(dc, w, s, sumStatus, false);
+            var sumStatus = isConnectedNow ? "CONECTADO · NUBE" : "MODO LOCAL";
+            drawArchery101010Header(dc, w, h, s, sumStatus, false);
 
             var sumW = (164.0 * s).toNumber();
             var sumX = cx - (sumW / 2);
-            var sumY = (78.0 * s).toNumber();
-            var sumH = (68.0 * s).toNumber();
+            var sumY = (70.0 * s).toNumber();
+            var sumH = (72.0 * s).toNumber();
+            var sumInnerW = sumW - (14.0 * s).toNumber();
 
-            dc.setColor(0x07090E, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(sumX, sumY, sumW, sumH, (10.0 * s).toNumber());
-            dc.setColor(isConnectedNow ? 0x00A8F3 : 0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(sumX, sumY, sumW, sumH, (10.0 * s).toNumber());
+            drawCrispBox(dc, sumX, sumY, sumW, sumH, (10.0 * s).toNumber(), 0x07090E, isConnectedNow ? 0x00A8F3 : 0xFFE500, strokePx);
 
+            var line1 = arrowsCount.toString() + " FL · " + totalScore.toString() + " PTS";
+            var line1Font = pickFittingFont(dc, line1, sumInnerW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, sumY + (22.0 * s).toNumber(), Graphics.FONT_SMALL, arrowsCount.toString() + " FL · " + totalScore.toString() + " PTS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, sumY + (22.0 * s).toNumber(), line1Font, line1, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            dc.setColor(0x1E293B, Graphics.COLOR_TRANSPARENT);
+            dc.drawLine(sumX + (12.0 * s).toNumber(), sumY + (39.0 * s).toNumber(), sumX + sumW - (12.0 * s).toNumber(), sumY + (39.0 * s).toNumber());
+
+            var line2 = mts.toString() + " mts · " + activeKcal.toString() + " kcal";
+            var line2Font = pickFittingFont(dc, line2, sumInnerW, fLabel, fMicro, fMicro);
             dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, sumY + (48.0 * s).toNumber(), Graphics.FONT_XTINY, mtsFtStr + " · " + activeKcal.toString() + " kcal", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, sumY + (55.0 * s).toNumber(), line2Font, line2, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var ctaW = (152.0 * s).toNumber();
-            var ctaH = (24.0 * s).toNumber();
+            var ctaW = (150.0 * s).toNumber();
+            var ctaH = (26.0 * s).toNumber();
             var ctaX = cx - (ctaW / 2);
-            var ctaY = (156.0 * s).toNumber();
-            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(ctaX, ctaY, ctaW, ctaH, ctaH / 2);
-            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(ctaX, ctaY, ctaW, ctaH, ctaH / 2);
+            var ctaY = (152.0 * s).toNumber();
+            drawCrispBox(dc, ctaX, ctaY, ctaW, ctaH, ctaH / 2, 0x061523, 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, ctaY + (ctaH / 2), Graphics.FONT_XTINY, "FINALIZAR SESIÓN", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, ctaY + (ctaH / 2), fMicro, "FINALIZAR SESIÓN", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else {
             // SCREEN 4: 6-DIGIT CLOUD PAIRING CODE PICKER
             var pairHeader = isEditingCode
                 ? ("EDITAR DÍGITO " + (editDigitPos + 1).toString() + "/6")
                 : (isCloudSynced ? "NUBE CONECTADA" : (hasPairingCode ? "CÓDIGO GUARDADO" : "SIN VINCULAR"));
-            drawArchery101010Header(dc, w, s, pairHeader, false);
+            drawArchery101010Header(dc, w, h, s, pairHeader, false);
 
             var dBoxW = (23.0 * s).toNumber();
-            var dBoxH = (36.0 * s).toNumber();
+            var dBoxH = (38.0 * s).toNumber();
             var dGap = (4.0 * s).toNumber();
             var dTotalW = (dBoxW * 6) + (dGap * 5);
             var dStartX = cx - (dTotalW / 2);
-            var dStartY = (78.0 * s).toNumber();
+            var dStartY = (69.0 * s).toNumber();
 
             for (var di = 0; di < 6; di++) {
                 var dx = dStartX + di * (dBoxW + dGap);
                 var isCurDigit = (di == editDigitPos);
-                dc.setColor(isCurDigit ? 0x081523 : 0x0B0E15, Graphics.COLOR_TRANSPARENT);
-                dc.fillRoundedRectangle(dx, dStartY, dBoxW, dBoxH, (5.0 * s).toNumber());
-                dc.setColor(isCurDigit ? 0x00A8F3 : 0xFFE500, Graphics.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(dx, dStartY, dBoxW, dBoxH, (5.0 * s).toNumber());
+                drawCrispBox(dc, dx, dStartY, dBoxW, dBoxH, (5.0 * s).toNumber(), isCurDigit ? 0x081523 : 0x0B0E15, isCurDigit ? 0x00A8F3 : 0xFFE500, strokePx);
                 dc.setColor(isCurDigit ? Graphics.COLOR_WHITE : 0xFFE500, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(dx + (dBoxW / 2), dStartY + (dBoxH / 2), Graphics.FONT_SMALL, pairingDigits[di].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.drawText(dx + (dBoxW / 2), dStartY + (dBoxH / 2), fValue, pairingDigits[di].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
             // Touch & Button Row: [-] | [DÍGITO >] | [+]
-            var ctrlY = (122.0 * s).toNumber();
-            var ctrlH = (22.0 * s).toNumber();
-            var ctrlW = (154.0 * s).toNumber();
+            var ctrlY = (116.0 * s).toNumber();
+            var ctrlH = (25.0 * s).toNumber();
+            var ctrlW = (156.0 * s).toNumber();
             var cStartX = cx - (ctrlW / 2);
-            var smallW = (38.0 * s).toNumber();
-            var midW = ctrlW - (2 * smallW) - (2 * dGap);
+            var smallW = (36.0 * s).toNumber();
+            var btnGap = (6.0 * s).toNumber();
+            var midW = ctrlW - (2 * smallW) - (2 * btnGap);
 
-            dc.setColor(0x180709, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(cStartX, ctrlY, smallW, ctrlH, ctrlH / 2);
-            dc.setColor(0xFF1E1E, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(cStartX, ctrlY, smallW, ctrlH, ctrlH / 2);
+            drawCrispBox(dc, cStartX, ctrlY, smallW, ctrlH, ctrlH / 2, 0x180709, 0xFF1E1E, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cStartX + (smallW / 2), ctrlY + (ctrlH / 2), Graphics.FONT_XTINY, "-", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cStartX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "-", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var midX = cStartX + smallW + dGap;
-            dc.setColor(0x0B0E15, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(midX, ctrlY, midW, ctrlH, ctrlH / 2);
-            dc.setColor(0x475569, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(midX, ctrlY, midW, ctrlH, ctrlH / 2);
-            dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), Graphics.FONT_XTINY, "DÍGITO >", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var plusBtnX = midX + midW + dGap;
-            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2);
-            dc.setColor(0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2);
+            var midX = cStartX + smallW + btnGap;
+            drawCrispBox(dc, midX, ctrlY, midW, ctrlH, ctrlH / 2, 0x0B0E15, 0x475569, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(plusBtnX + (smallW / 2), ctrlY + (ctrlH / 2), Graphics.FONT_XTINY, "+", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), fMicro, "DÍGITO >", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var plusBtnX = midX + midW + btnGap;
+            drawCrispBox(dc, plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2, 0x061523, 0x00A8F3, strokePx);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(plusBtnX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "+", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             // Save & Sync CTA
-            var saveW = (142.0 * s).toNumber();
-            var saveH = (22.0 * s).toNumber();
+            var saveW = (146.0 * s).toNumber();
+            var saveH = (25.0 * s).toNumber();
             var saveX = cx - (saveW / 2);
-            var saveY = (150.0 * s).toNumber();
-            dc.setColor(0x061523, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(saveX, saveY, saveW, saveH, saveH / 2);
-            dc.setColor(isCloudSynced ? 0xFFE500 : 0x00A8F3, Graphics.COLOR_TRANSPARENT);
-            dc.drawRoundedRectangle(saveX, saveY, saveW, saveH, saveH / 2);
+            var saveY = (149.0 * s).toNumber();
+            drawCrispBox(dc, saveX, saveY, saveW, saveH, saveH / 2, 0x061523, isCloudSynced ? 0xFFE500 : 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, saveY + (saveH / 2), Graphics.FONT_XTINY, isCloudSynced ? "SINCRONIZAR AHORA" : "VINCULAR CÓDIGO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, saveY + (saveH / 2), fMicro, isCloudSynced ? "SINCRONIZAR" : "VINCULAR CÓDIGO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
         drawPagerDots(dc, w, h, s);
@@ -1483,20 +1542,20 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         }
 
         // Top pill tap on Screen 0 cycles sensitivity
-        if (mView.screenIdx == 0 && ty <= (68.0 * s)) {
+        if (mView.screenIdx == 0 && ty <= (62.0 * s)) {
             mView.cycleSensitivityMode();
             return true;
         }
 
         if (mView.screenIdx == 0) {
             // Deliberate -1 / +1 buttons ONLY (prevents accidental wrist/sleeve/arrow touches on 0000 chassis)
-            if (ty >= (146.0 * s) && ty <= (186.0 * s)) {
-                if (tx < (cx - (36.0 * s))) {
+            if (ty >= (126.0 * s) && ty <= (165.0 * s)) {
+                if (tx < (cx - (34.0 * s))) {
                     if (mView.arrowsCount > 0) {
                         mView.incrementArrow(-1, false);
                     }
                     return true;
-                } else if (tx > (cx + (36.0 * s))) {
+                } else if (tx > (cx + (34.0 * s))) {
                     mView.incrementArrow(1, false);
                     return true;
                 }
@@ -1507,7 +1566,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             var keyW = (padW - (3.0 * kGap)) / 4.0;
             var keyH = 22.0 * s;
             var kStartX = cx - (padW / 2.0);
-            var kStartY = 71.0 * s;
+            var kStartY = 75.0 * s;
 
             for (var k = 0; k < 12; k++) {
                 var r = k / 4;
@@ -1522,7 +1581,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             }
 
             // Bottom BORRAR | SIG. TANDA touch buttons
-            if (ty >= (145.0 * s) && ty <= (176.0 * s)) {
+            if (ty >= (152.0 * s) && ty <= (184.0 * s)) {
                 if (tx < cx) {
                     mView.undoLastScore();
                 } else {
@@ -1534,18 +1593,18 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             mView.syncWithPhoneApp("SYNC_TELEMETRY_FROM_WATCH", null);
             return true;
         } else if (mView.screenIdx == 3) {
-            if (ty >= (150.0 * s) && ty <= (186.0 * s)) {
+            if (ty >= (148.0 * s) && ty <= (186.0 * s)) {
                 mView.finishSessionAndReset();
                 return true;
             }
         } else if (mView.screenIdx == 4) {
             // Digit boxes tap: select or increment digit
             var dBoxW = 23.0 * s;
-            var dBoxH = 36.0 * s;
+            var dBoxH = 38.0 * s;
             var dGap = 4.0 * s;
             var dTotalW = (dBoxW * 6.0) + (dGap * 5.0);
             var dStartX = cx - (dTotalW / 2.0);
-            var dStartY = 78.0 * s;
+            var dStartY = 69.0 * s;
 
             if (ty >= dStartY && ty <= (dStartY + dBoxH)) {
                 for (var di = 0; di < 6; di++) {
@@ -1563,10 +1622,10 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             }
 
             // [-] | [DÍGITO >] | [+] row
-            if (ty >= (120.0 * s) && ty <= (146.0 * s)) {
-                if (tx < (cx - (32.0 * s))) {
+            if (ty >= (113.0 * s) && ty <= (144.0 * s)) {
+                if (tx < (cx - (34.0 * s))) {
                     mView.adjustSelectedCodeDigit(-1);
-                } else if (tx > (cx + (32.0 * s))) {
+                } else if (tx > (cx + (34.0 * s))) {
                     mView.adjustSelectedCodeDigit(1);
                 } else {
                     mView.editDigitPos = (mView.editDigitPos + 1) % 6;
@@ -1576,7 +1635,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             }
 
             // VINCULAR CÓDIGO button
-            if (ty >= (148.0 * s) && ty <= (178.0 * s)) {
+            if (ty >= (146.0 * s) && ty <= (182.0 * s)) {
                 mView.commitPairingDigits();
                 return true;
             }

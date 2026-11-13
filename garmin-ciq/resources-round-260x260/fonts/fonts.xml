@@ -1,0 +1,6 @@
+<fonts>
+    <font id="OutfitMicro" filename="outfit_micro.fnt" antialias="true" />
+    <font id="OutfitLabel" filename="outfit_label.fnt" antialias="true" />
+    <font id="OutfitValue" filename="outfit_value.fnt" antialias="true" />
+    <font id="OutfitHero" filename="outfit_hero.fnt" antialias="true" />
+</fonts>

@@ -1,1 +1,4 @@
 project.manifest = manifest.xml
+instinct2.resourcePath = $(instinct2.resourcePath);resources-mono
+instinct2s.resourcePath = $(instinct2s.resourcePath);resources-mono
+instinct2x.resourcePath = $(instinct2x.resourcePath);resources-mono

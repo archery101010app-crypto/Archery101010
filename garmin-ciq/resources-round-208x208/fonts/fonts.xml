@@ -1,0 +1,6 @@
+<fonts>
+    <font id="OutfitMicro" filename="outfit_micro.fnt" />
+    <font id="OutfitLabel" filename="outfit_label.fnt" />
+    <font id="OutfitValue" filename="outfit_value.fnt" />
+    <font id="OutfitHero" filename="outfit_hero.fnt" />
+</fonts>

@@ -295,6 +295,23 @@
         ]
       },
       {
+        "source": "/Archery101010-v2.105.iq",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-v2.105.iq\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/Archery101010-v2.103.iq",
         "headers": [
           {
