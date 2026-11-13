@@ -485,6 +485,27 @@ public class MainActivity extends BridgeActivity {
                             } catch (Exception ignored) {}
                         }
                         if (!host.isEmpty()) {
+                            String lowerPath = path.toLowerCase();
+                            boolean isDirectDownloadAsset =
+                                lowerPath.endsWith(".apk") ||
+                                lowerPath.endsWith(".aab") ||
+                                lowerPath.endsWith(".iq") ||
+                                lowerPath.endsWith(".pdf") ||
+                                lowerPath.endsWith(".csv") ||
+                                lowerPath.equals("/wear-aab") ||
+                                lowerPath.equals("/wear-apk") ||
+                                lowerPath.equals("/phone-aab") ||
+                                lowerPath.equals("/garmin-iq") ||
+                                lowerPath.equals("/download-apk") ||
+                                lowerPath.equals("/download-aab");
+                            if (host.equals("archery101010-c0bb4.web.app") && isDirectDownloadAsset) {
+                                try {
+                                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    startActivity(intent);
+                                    return true;
+                                } catch (Exception ignored) {}
+                            }
                             if (host.equals("accounts.google.com") ||
                                 host.endsWith(".google.com") ||
                                 host.endsWith(".googleusercontent.com") ||
@@ -494,7 +515,7 @@ public class MainActivity extends BridgeActivity {
                                 host.equals("open.spotify.com") ||
                                 host.endsWith(".spotify.com") ||
                                 host.equals("archery101010-c0bb4.firebaseapp.com") ||
-                                (host.equals("archery101010-c0bb4.web.app") && path.startsWith("/__/auth/handler"))) {
+                                host.equals("archery101010-c0bb4.web.app")) {
                                 return false;
                             }
                         }
@@ -579,6 +600,23 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception e) {
                     sendAccountError(-1, e.getMessage());
                 }
+            });
+        }
+        @JavascriptInterface
+        public void reloadInAppOta() {
+            runOnUiThread(() -> {
+                try {
+                    getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("prefer_remote_ota", true)
+                        .apply();
+                    activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                    if (getBridge() != null && getBridge().getWebView() != null) {
+                        WebView wv = getBridge().getWebView();
+                        wv.clearCache(true);
+                        wv.loadUrl("https://archery101010-c0bb4.web.app/");
+                    }
+                } catch (Exception ignored) {}
             });
         }
     }

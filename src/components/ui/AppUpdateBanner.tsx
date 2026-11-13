@@ -13,6 +13,9 @@ interface RemoteVersionInfo {
 }
 
 const REMOTE_WEB_ORIGIN = "https://archery101010-c0bb4.web.app";
+const ATTEMPTED_VER_SESSION_KEY = "archery_attempted_update_ver";
+const ATTEMPTED_VER_LOCAL_KEY = "archery_attempted_update_meta";
+const COOLDOWN_MS = 10 * 60 * 1000; // 10 min anti-loop guard per version
 
 function isNewerVersion(remoteVer: string, localVer: string): boolean {
   const rParts = remoteVer.split(".").map((n) => parseInt(n, 10) || 0);
@@ -27,6 +30,35 @@ function isNewerVersion(remoteVer: string, localVer: string): boolean {
   return false;
 }
 
+function wasRecentlyAttempted(ver: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (sessionStorage.getItem(ATTEMPTED_VER_SESSION_KEY) === ver) {
+      return true;
+    }
+    const raw = localStorage.getItem(ATTEMPTED_VER_LOCAL_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { ver?: string; ts?: number };
+      if (parsed.ver === ver && typeof parsed.ts === "number" && Date.now() - parsed.ts < COOLDOWN_MS) {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+  return false;
+}
+
+function markVersionAttempted(ver: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(ATTEMPTED_VER_SESSION_KEY, ver);
+    localStorage.setItem(ATTEMPTED_VER_LOCAL_KEY, JSON.stringify({ ver, ts: Date.now() }));
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
 export default function AppUpdateBanner() {
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -35,23 +67,60 @@ export default function AppUpdateBanner() {
   useEffect(() => {
     let mounted = true;
 
+    // Clean leftover ?v=...&t=... update query parameters silently without triggering navigation
+    if (typeof window !== "undefined") {
+      try {
+        const curUrl = new URL(window.location.href);
+        if (curUrl.searchParams.has("v") || curUrl.searchParams.has("t")) {
+          curUrl.searchParams.delete("v");
+          curUrl.searchParams.delete("t");
+          const nextRelative =
+            curUrl.pathname + (curUrl.search ? curUrl.search : "") + (curUrl.hash ? curUrl.hash : "");
+          window.history.replaceState(null, "", nextRelative || "/");
+        }
+      } catch {
+        // Ignore URL cleanup errors
+      }
+    }
+
     async function checkRemoteVersion() {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.onLine) return;
       if (
-        typeof window !== "undefined" &&
-        (window.location.hash.includes("id_token") || window.location.search.includes("id_token"))
+        window.location.hash.includes("id_token") ||
+        window.location.search.includes("id_token")
       ) {
         return;
       }
+
+      // Inside an older native Android APK running bundled https://localhost without reloadInAppOta,
+      // never prompt a web redirect that Capacitor would open in external Chrome.
+      const isBundledLocalhost =
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      const winAny = window as unknown as {
+        ArcheryNativeAuth?: { reloadInAppOta?: () => void };
+      };
+      const isNativeShell = Boolean(winAny.ArcheryNativeAuth);
+      const canReloadNatively = typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function";
+      if (isBundledLocalhost && isNativeShell && !canReloadNatively) {
+        return;
+      }
+
       try {
-        const res = await fetch(
-          `${REMOTE_WEB_ORIGIN}/version.json?t=${Date.now()}`,
-          { cache: "no-store" }
-        );
+        const versionEndpoint = isBundledLocalhost
+          ? `${REMOTE_WEB_ORIGIN}/version.json?t=${Date.now()}`
+          : `/version.json?t=${Date.now()}`;
+        const res = await fetch(versionEndpoint, { cache: "no-store" });
         if (!res.ok) return;
         const data: RemoteVersionInfo = await res.json();
-        if (mounted && data?.version && isNewerVersion(data.version, APP_VERSION)) {
+        if (
+          mounted &&
+          data?.version &&
+          isNewerVersion(data.version, APP_VERSION) &&
+          !wasRecentlyAttempted(data.version)
+        ) {
           setRemoteInfo(data);
+        } else if (mounted) {
+          setRemoteInfo(null);
         }
       } catch {
         // Silent fallback when offline or unreachable
@@ -78,8 +147,22 @@ export default function AppUpdateBanner() {
 
   if (!remoteInfo || dismissed) return null;
 
+  const handleDismiss = () => {
+    markVersionAttempted(remoteInfo.version);
+    setDismissed(true);
+  };
+
   const handleUpdateNow = async () => {
     setIsUpdating(true);
+    const targetVer = remoteInfo?.version || APP_VERSION;
+    markVersionAttempted(targetVer);
+
+    const winAny = window as unknown as {
+      __archeryBypassBeforeUnload?: boolean;
+      ArcheryNativeAuth?: { reloadInAppOta?: () => void };
+    };
+    winAny.__archeryBypassBeforeUnload = true;
+
     try {
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -89,23 +172,19 @@ export default function AppUpdateBanner() {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
+      // Bust HTTP cache for current HTML document in background before in-place reload
+      await fetch(window.location.pathname || "/", { cache: "reload" }).catch(() => {});
     } catch {
-      // ignore cache cleanup error
+      // Ignore cache cleanup error
     }
 
-    const targetVer = remoteInfo?.version || APP_VERSION;
-    const isLocalhostOrigin =
-      typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-
-    if (isLocalhostOrigin) {
-      window.location.replace(`${REMOTE_WEB_ORIGIN}/?v=${encodeURIComponent(targetVer)}&t=${Date.now()}`);
-    } else {
-      const url = new URL(window.location.href);
-      url.searchParams.set("v", targetVer);
-      url.searchParams.set("t", String(Date.now()));
-      window.location.replace(url.toString());
+    if (typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function") {
+      winAny.ArcheryNativeAuth.reloadInAppOta();
+      return;
     }
+
+    // In-place reload stays 100% inside the Android WebView / PWA without triggering external browser jumps
+    window.location.reload();
   };
 
   return (
@@ -137,7 +216,7 @@ export default function AppUpdateBanner() {
           </button>
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             className="p-1.5 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
             title="Cerrar aviso"
           >

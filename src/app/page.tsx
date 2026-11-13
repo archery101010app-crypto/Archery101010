@@ -86,7 +86,6 @@ export default function Home() {
   const [showCoachPaymentModal, setShowCoachPaymentModal] = useState<boolean>(false);
 
   const mainRef = React.useRef<HTMLElement | null>(null);
-  const bypassBeforeUnloadRef = React.useRef(false);
   const currentScreenRef = React.useRef<Screen>(currentScreen);
 
   useEffect(() => {
@@ -1126,23 +1125,8 @@ export default function Home() {
     loadTheme();
   }, [user?.uid]);
 
-  // Prevent accidental reload whenever a user session is active
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (bypassBeforeUnloadRef.current) return;
-      e.preventDefault();
-      e.returnValue = "¿Seguro que deseas salir o recargar la página?";
-      return "¿Seguro que deseas salir o recargar la página?";
-    };
-
-    if (user !== null) {
-      window.addEventListener("beforeunload", handleBeforeUnload);
-    }
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [user?.uid]);
+  // Offline-first storage (IndexedDB + Firestore sync) persists changes immediately;
+  // never block reloads or in-app updates with browser beforeunload confirmation dialogs.
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     if (typeof window !== "undefined") {
