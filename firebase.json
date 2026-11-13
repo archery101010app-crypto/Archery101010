@@ -113,6 +113,23 @@
         ]
       },
       {
+        "source": "/Guia_Modelos_Gemini_Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Guia_Modelos_Gemini_Movil.pdf\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/Guia_Actualizaciones_Archery101010_Movil.pdf",
         "headers": [
           {
