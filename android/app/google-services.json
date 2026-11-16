@@ -22,6 +22,22 @@
           }
         },
         {
+          "client_id": "757910399585-43mqabn32g60u9ol14breqoourv1ekj2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.archery101010.app",
+            "certificate_hash": "b610e09119e686f0aab71458f248b98118f72f6c"
+          }
+        },
+        {
+          "client_id": "757910399585-lmgfu5k7sqof59mbg8tfq8km1uqrtoat.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.archery101010.app",
+            "certificate_hash": "b6ab2dc9411133ca874e6affaf520bbd2e728626"
+          }
+        },
+        {
           "client_id": "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { CreditCard, ToggleLeft, ToggleRight, Clock } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { CreditCard, ToggleLeft, ToggleRight, Clock, RefreshCw } from "lucide-react";
 import { UserProfile, updateProfile } from "@/lib/authService";
-import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
+import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 
 interface SubscriptionLog {
   id: string;
@@ -11,7 +11,9 @@ interface SubscriptionLog {
   userName: string;
   previousPlan: "FREE" | "PRO";
   newPlan: "FREE" | "PRO";
+  sku?: string;
   expiresAt?: number;
+  createdAt?: number;
   timestamp: string;
   reason: string;
 }
@@ -19,17 +21,81 @@ interface SubscriptionLog {
 export default function AdminSubscriptionsTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [logs, setLogs] = useState<SubscriptionLog[]>([]);
+  const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
+
+  const loadData = useCallback(async () => {
+    const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+    const savedLogs = await getLocalSetting<SubscriptionLog[]>("sub_audit_logs", []);
+    const cleanLocalLogs = savedLogs.filter((l) => l.id !== "LOG-1" && l.id !== "LOG-2");
+
+    setUsers(localUsers);
+    setLogs(cleanLocalLogs);
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    setSyncingCloud(true);
+    try {
+      const { collection, getDocs } = await import("firebase/firestore");
+      const { db, auth } = await import("@/lib/firebase");
+      if (!auth.currentUser) return;
+
+      const [usersSnap, logsSnap] = await Promise.all([
+        getDocs(collection(db, "users")).catch(() => null),
+        getDocs(collection(db, "subscription_audit_logs")).catch(() => null)
+      ]);
+
+      if (usersSnap && !usersSnap.empty) {
+        const mergedUsersMap = new Map<string, UserProfile>();
+        for (const u of localUsers) {
+          if (u?.uid && u.uid !== "USR-GUEST-OFFLINE") {
+            mergedUsersMap.set(u.uid, u);
+          }
+        }
+        usersSnap.forEach((d) => {
+          const data = d.data() as UserProfile;
+          const uid = data?.uid || d.id;
+          if (!uid || uid === "USR-GUEST-OFFLINE") return;
+          const prev = mergedUsersMap.get(uid);
+          const remoteTs = Number(data?.updatedAt || data?.createdAt || 0);
+          const localTs = Number(prev?.updatedAt || prev?.createdAt || 0);
+          if (!prev || remoteTs >= localTs) {
+            mergedUsersMap.set(uid, { ...prev, ...data, uid });
+          }
+        });
+        const mergedUsers = Array.from(mergedUsersMap.values()).sort(
+          (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+        );
+        setUsers(mergedUsers);
+        await saveLocalSetting("simulated_users", mergedUsers);
+      }
+
+      if (logsSnap) {
+        const mergedLogsMap = new Map<string, SubscriptionLog>();
+        for (const l of cleanLocalLogs) {
+          if (l?.id) mergedLogsMap.set(l.id, l);
+        }
+        logsSnap.forEach((d) => {
+          const data = d.data() as SubscriptionLog;
+          const id = data?.id || d.id;
+          if (!id || id === "LOG-1" || id === "LOG-2") return;
+          mergedLogsMap.set(id, { ...data, id });
+        });
+        const mergedLogs = Array.from(mergedLogsMap.values()).sort((a, b) => {
+          const ta = Number(a.createdAt || Date.parse(a.timestamp || "") || 0);
+          const tb = Number(b.createdAt || Date.parse(b.timestamp || "") || 0);
+          return tb - ta;
+        });
+        setLogs(mergedLogs);
+        await saveLocalSetting("sub_audit_logs", mergedLogs);
+      }
+    } catch (err) {
+      console.warn("Could not fetch cloud subscriptions in AdminSubscriptionsTab:", err);
+    } finally {
+      setSyncingCloud(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadData() {
-      const list = await getLocalSetting<UserProfile[]>("simulated_users", []);
-      setUsers(list);
-
-      // Load real audit logs from IndexedDB
-      const savedLogs = await getLocalSetting<SubscriptionLog[]>("sub_audit_logs", []);
-      const cleanLogs = savedLogs.filter((l) => l.id !== "LOG-1" && l.id !== "LOG-2");
-      setLogs(cleanLogs);
-    }
     loadData();
 
     const handleRosterUpdate = () => {
@@ -37,7 +103,7 @@ export default function AdminSubscriptionsTab() {
     };
     window.addEventListener("users-roster-updated", handleRosterUpdate);
     return () => window.removeEventListener("users-roster-updated", handleRosterUpdate);
-  }, []);
+  }, [loadData]);
 
   const handleTogglePlan = async (targetUid: string) => {
     const user = users.find((u) => u.uid === targetUid);
@@ -67,6 +133,7 @@ export default function AdminSubscriptionsTab() {
       previousPlan,
       newPlan: nextPlan,
       expiresAt: nextExpiresAt,
+      createdAt: now,
       timestamp: new Date(now).toISOString().split("T")[0],
       reason: "Override manual por SuperAdmin"
     };
@@ -74,6 +141,15 @@ export default function AdminSubscriptionsTab() {
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
     await saveLocalSetting("sub_audit_logs", updatedLogs);
+
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "subscription_audit_logs",
+      operation: "INSERT",
+      payloadId: newLog.id,
+      payload: newLog,
+      timestamp: now
+    }).catch(() => {});
 
     // 3. Persist directly to Firestore users/{targetUid} + subscription_audit_logs
     try {
@@ -98,10 +174,7 @@ export default function AdminSubscriptionsTab() {
           );
         });
 
-        await setDoc(doc(db, "subscription_audit_logs", newLog.id), {
-          ...newLog,
-          createdAt: now
-        }).catch(() => {});
+        await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog).catch(() => {});
       }
     } catch (err) {
       console.warn("Could not sync SuperAdmin plan override directly to cloud:", err);
@@ -111,9 +184,20 @@ export default function AdminSubscriptionsTab() {
   return (
     <div className="flex flex-col gap-6 w-full p-4 md:p-6">
       {/* Header */}
-      <div>
-        <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
-        <p className="text-xs text-white">Gestiona accesos premium y overrides de planes.</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
+          <p className="text-xs text-white">Gestiona accesos premium y overrides de planes sincronizados en la nube.</p>
+        </div>
+        <button
+          type="button"
+          onClick={loadData}
+          disabled={syncingCloud}
+          className="px-3 py-2 rounded-xl bg-[#0D1017] border border-white/10 hover:border-cyan-neon/40 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          <RefreshCw size={13} className={syncingCloud ? "animate-spin text-cyan-neon" : "text-cyan-neon"} />
+          <span>Actualizar</span>
+        </button>
       </div>
 
       {/* Grid: 2 sections (List + History Log) */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
+import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 import { UserProfile, updateProfile, generateClubInviteCode, isLinkedToExternalCoach } from "@/lib/authService";
 
 export interface StoreProduct {
@@ -146,13 +146,25 @@ export async function activateCoachLaunchPromo(
       reason: `Activación Bonificada de Lanzamiento (${isAnnual ? "Anual 365d" : "Mensual 30d"})`
     };
 
-    // Confirm the coach code and audit log reach the cloud
+    // Queue subscription audit log for offline-first resilience
+    if (user.uid !== "USR-GUEST-OFFLINE") {
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "subscription_audit_logs",
+        operation: "INSERT",
+        payloadId: newLog.id,
+        payload: newLog,
+        timestamp: now
+      }).catch(() => {});
+    }
+
+    // Confirm the coach code and audit log reach the cloud immediately when online
     try {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db, auth } = await import("@/lib/firebase");
       if (auth.currentUser && user.uid !== "USR-GUEST-OFFLINE") {
         await setDoc(doc(db, "users", user.uid), updatedUser, { merge: true });
-        await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog, { merge: true }).catch(
+        await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog).catch(
           () => {}
         );
       }

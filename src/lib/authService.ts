@@ -1345,7 +1345,13 @@ export async function authenticateWithSocialProvider(
             const displayName =
               payload.displayName || u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
             return await loginSocialUser(email, displayName, u.uid);
-          } catch (credErr) {
+          } catch (credErr: any) {
+            if (
+              (typeof navigator !== "undefined" && !navigator.onLine) ||
+              credErr?.code === "auth/network-request-failed"
+            ) {
+              throw new Error(translateFirebaseAuthError(credErr));
+            }
             console.warn("signInWithCredential warning, falling back to Web OAuth 2.0 id_token flow:", credErr);
           }
         }

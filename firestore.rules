@@ -278,6 +278,22 @@ service cloud.firestore {
     //   - updatedAt: number / timestamp (optional)
     //   - expiresAt: number / timestamp (optional)
     //
+    // Collection: subscription_audit_logs
+    // Document ID: {logId} (e.g., "SUB-timestamp-random", 1-100 chars)
+    // Fields:
+    //   - id: string (required, 1-100 chars, must equal logId) [Immutable]
+    //   - userId: string (required, 1-128 chars) [Immutable]
+    //   - userName: string (optional, 0-128 chars)
+    //   - previousPlan: string (optional: 'FREE' | 'PRO')
+    //   - newPlan: string (required for users: 'FREE' | 'PRO')
+    //   - sku: string (optional, 0-80 chars, e.g., 'coach_pro_annual' | 'coach_pro_monthly')
+    //   - expiresAt: number / timestamp (optional; non-superadmin capped at request.time + 370 days)
+    //   - createdAt: number / timestamp (optional) [Immutable]
+    //   - timestamp: string (optional, 0-40 chars, ISO date string)
+    //   - reason: string (optional, 0-250 chars)
+    //   - updatedAt: number / timestamp (optional)
+    //   - plan / email / source / activatedAt: optional SuperAdmin-only override audit fields
+    //
     // ===============================================================
 
     // ===============================================================
@@ -387,6 +403,13 @@ service cloud.firestore {
         val is number ||
         val is timestamp ||
         (val is string && val.size() <= 50);
+    }
+
+    function validOptionalNumberOrTimestamp(data, field) {
+      let val = data.get(field, null);
+      return val == null ||
+        (val is number && val >= 0 && val <= 9999999999999) ||
+        val is timestamp;
     }
 
     function isValidEmail(email) {
@@ -771,6 +794,52 @@ service cloud.firestore {
         validOptionalString(data, 'watchSource', 0, 60);
     }
 
+    function isValidAuditExpiresAt(data) {
+      let exp = data.get('expiresAt', null);
+      return exp == null ||
+        (exp is number && exp >= 0 &&
+          (exp <= request.time.toMillis() + 370 * 24 * 60 * 60 * 1000 ||
+           (isSuperAdmin() && exp <= 9999999999999))) ||
+        (exp is timestamp &&
+          (exp <= request.time + duration.value(370, 'd') || isSuperAdmin()));
+    }
+
+    function isValidSubscriptionAuditLog(data, logId) {
+      let baseAllowed = [
+        'id', 'userId', 'userName', 'previousPlan', 'newPlan',
+        'sku', 'expiresAt', 'createdAt', 'timestamp', 'reason', 'updatedAt'
+      ];
+      let adminAllowed = [
+        'id', 'userId', 'userName', 'previousPlan', 'newPlan',
+        'sku', 'expiresAt', 'createdAt', 'timestamp', 'reason', 'updatedAt',
+        'plan', 'email', 'source', 'activatedAt'
+      ];
+      return data.keys().size() <= 15 &&
+        (data.keys().hasOnly(baseAllowed) || (isSuperAdmin() && data.keys().hasOnly(adminAllowed))) &&
+        data.keys().hasAll(['id', 'userId']) &&
+        validString(logId, 1, 100) &&
+        validString(data.id, 1, 100) &&
+        data.id == logId &&
+        validString(data.userId, 1, 128) &&
+        (
+          ('newPlan' in data && data.newPlan in ['FREE', 'PRO']) ||
+          (isSuperAdmin() && 'plan' in data && data.plan in ['FREE', 'PRO'])
+        ) &&
+        (data.get('newPlan', null) == null || data.newPlan in ['FREE', 'PRO']) &&
+        (data.get('plan', null) == null || data.plan in ['FREE', 'PRO']) &&
+        (data.get('previousPlan', null) == null || data.previousPlan in ['FREE', 'PRO']) &&
+        validOptionalString(data, 'userName', 0, 128) &&
+        validOptionalString(data, 'sku', 0, 80) &&
+        isValidAuditExpiresAt(data) &&
+        validOptionalNumberOrTimestamp(data, 'createdAt') &&
+        validOptionalNumberOrTimestamp(data, 'updatedAt') &&
+        validOptionalNumberOrTimestamp(data, 'activatedAt') &&
+        validOptionalString(data, 'timestamp', 0, 40) &&
+        validOptionalString(data, 'reason', 0, 250) &&
+        validOptionalString(data, 'source', 0, 80) &&
+        (data.get('email', null) == null || data.email == '' || isValidEmail(data.email));
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -1151,6 +1220,29 @@ service cloud.firestore {
       // Only the session owner or superadmin can delete the pairing session
       allow delete: if isAuthenticated() &&
         (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+
+    // 13. Subscription Audit Logs Collection (Append-only billing & launch promo audit trail)
+    match /subscription_audit_logs/{logId} {
+      // Owner can query/read their own subscription audit logs (e.g., restoreCoachStorePurchases);
+      // SuperAdmin can read/list all subscription audit logs.
+      allow read: if isSuperAdmin() ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // Authenticated user can record an audit log only for themselves (with <=370d expiry cap);
+      // SuperAdmin can record audit logs for any user (manual plan overrides).
+      allow create: if isAuthenticated() &&
+        (isSuperAdmin() || request.resource.data.userId == request.auth.uid) &&
+        isValidSubscriptionAuditLog(request.resource.data, logId);
+
+      // Append-only / immutable for regular users; only SuperAdmin may update while keeping userId & createdAt intact.
+      allow update: if isSuperAdmin() &&
+        request.resource.data.userId == resource.data.userId &&
+        (!('createdAt' in resource.data) || request.resource.data.get('createdAt', null) == resource.data.createdAt) &&
+        isValidSubscriptionAuditLog(request.resource.data, logId);
+
+      // Only SuperAdmin may delete subscription audit logs.
+      allow delete: if isSuperAdmin();
     }
 
     // Default Deny for any unspecified paths
