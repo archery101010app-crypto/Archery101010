@@ -869,7 +869,7 @@ export default function SmartwatchMiniApp({
 
       <div
         className={`w-full flex flex-col items-center justify-center ${
-          screenIdx === 1 ? "gap-[6px] mb-[6px]" : "gap-[10px] mb-[6px]"
+          screenIdx === 1 ? "gap-[4.5px] mb-[11px]" : "gap-[10px] mb-[6px]"
         } z-10`}
       >
         {/* SCREEN 00: CONTADOR + AUTO-TIRO */}
@@ -925,74 +925,87 @@ export default function SmartwatchMiniApp({
           </>
         )}
 
-        {/* SCREEN 01: TECLADO COMPLETO DE PUNTUACIÓN (X, 10..1, M) */}
+        {/* SCREEN 01: TECLADO XL DE PUNTUACIÓN (OPCIÓN A — 12 TECLAS XL 2x ÁREA TÁCTIL) */}
         {screenIdx === 1 && (
           <>
-            <WatchBrandHeader
-              compact={true}
-              pillText={`T${currentTanda}/${totalTandas} · ${activeState.totalScore || 0} PTS`}
-              pillColor="cyan"
+            <img
+              src="/images/brand_logo_header.png"
+              srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+              alt="ARCHERY 101010"
+              className={`${
+                isSquare ? "h-[10px]" : "h-[9px]"
+              } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+              draggable={false}
             />
 
-            {/* End Arrow Slots */}
-            <div className="flex items-center justify-center gap-[4px] max-w-[162px]">
-              {Array.from({ length: visibleSlotsCount }).map((_, idx) => {
-                const val = endArrowsList[idx] || "";
-                const isGold = val === "X" || val === "10" || val === "9";
-                const isRed = val === "8" || val === "7";
-                const isBlue = val === "6" || val === "5";
-                return (
-                  <div
-                    key={idx}
-                    className={`w-[22px] h-[16px] rounded-[4px] flex items-center justify-center text-[8.5px] font-extrabold tabular-nums border ${
-                      !val
-                        ? "bg-[#07090E] border-white/10 text-[#6E7785]"
-                        : isGold
-                        ? "bg-[#121107] border-[#FFE500]/65 text-[#FFE500]"
-                        : isRed
-                        ? "bg-[#160708] border-[#FF1E1E]/65 text-white"
-                        : isBlue
-                        ? "bg-[#061320] border-[#00A8F3]/65 text-white"
-                        : "bg-[#0B0E15] border-white/25 text-white"
-                    }`}
-                  >
-                    {val || "·"}
-                  </div>
-                );
-              })}
+            {/* Unified Compact Telemetry + End Arrow Slots Row */}
+            <div
+              className={`flex items-center justify-between gap-[4px] ${
+                isSquare ? "w-[218px]" : "w-[172px]"
+              }`}
+            >
+              <div className="h-[18px] px-[7px] rounded-full bg-[#050D17] border border-[#00A8F3] text-white text-[9px] font-extrabold tracking-[0.03em] tabular-nums flex items-center justify-center whitespace-nowrap shrink-0">
+                T{currentTanda}·{activeState.totalScore || 0}P
+              </div>
+
+              <div className="flex items-center justify-end gap-[2.5px] flex-1 min-w-0">
+                {Array.from({ length: visibleSlotsCount }).map((_, idx) => {
+                  const val = endArrowsList[idx] || "";
+                  const isGold = val === "X" || val === "10" || val === "9";
+                  const isRed = val === "8" || val === "7";
+                  const isBlue = val === "6" || val === "5";
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex-1 max-w-[22px] h-[17px] rounded-[4px] flex items-center justify-center text-[8.5px] font-extrabold tabular-nums border ${
+                        !val
+                          ? "bg-[#07090E] border-[#334155] text-[#64748B]"
+                          : isGold
+                          ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
+                          : isRed
+                          ? "bg-[#160708] border-[#FF1E1E] text-white"
+                          : isBlue
+                          ? "bg-[#061320] border-[#00A8F3] text-white"
+                          : "bg-[#0B0E15] border-[#64748B] text-white"
+                      }`}
+                    >
+                      {val || "-"}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* 4x3 Complete Score Grid (X, 10..1, M) — mathematically contained inside round bezel */}
+            {/* 4x3 XL Score Grid (X, 10..1, M) — ~2x Tactile Area mathematically contained inside round & square bezels */}
             <div
               className={`${
-                isSquare ? "w-[202px]" : "w-[182px]"
-              } grid grid-cols-4 gap-[3.5px]`}
+                isSquare ? "w-[236px]" : "w-[216px]"
+              } grid grid-cols-4 gap-[4px]`}
             >
               {SCORE_KEYS.map((key) => {
                 const isGold = key === "X" || key === "10" || key === "9";
                 const isRed = key === "8" || key === "7";
                 const isBlue = key === "6" || key === "5";
-                const isBlackRing = key === "4" || key === "3";
-                const isWhiteRing = key === "2" || key === "1";
+                const isMiss = key === "M";
 
                 const keyStyle = isGold
-                  ? "bg-[#121107] border-[#FFE500]/65 text-[#FFE500]"
+                  ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
                   : isRed
-                  ? "bg-[#160708] border-[#FF1E1E]/65 text-white"
+                  ? "bg-[#160708] border-[#FF1E1E] text-white"
                   : isBlue
-                  ? "bg-[#061320] border-[#00A8F3]/65 text-white"
-                  : isBlackRing
-                  ? "bg-[#0B0E15] border-white/25 text-white"
-                  : isWhiteRing
-                  ? "bg-[#131722] border-white/40 text-white"
-                  : "bg-[#090B10] border-white/15 text-[#8E96A4]";
+                  ? "bg-[#061320] border-[#00A8F3] text-white"
+                  : isMiss
+                  ? "bg-[#0B0E15] border-[#475569] text-[#CBD5E1]"
+                  : "bg-[#0B0E15] border-[#475569] text-white";
 
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => handleScoreKeyPress(key)}
-                    className={`h-[23px] rounded-[6px] border font-sans text-[10.5px] font-extrabold tabular-nums flex items-center justify-center active:scale-95 transition cursor-pointer ${keyStyle}`}
+                    className={`${
+                      isSquare ? "h-[41px] text-[18.5px]" : "h-[39px] text-[17.5px]"
+                    } rounded-[8px] border-[1.5px] font-sans font-extrabold tabular-nums flex items-center justify-center active:scale-95 transition cursor-pointer ${keyStyle}`}
                   >
                     {key}
                   </button>
@@ -1003,22 +1016,22 @@ export default function SmartwatchMiniApp({
             {/* Bottom Actions: BORRAR | SIG. TANDA */}
             <div
               className={`${
-                isSquare ? "w-[184px]" : "w-[162px]"
-              } grid grid-cols-2 gap-[5px]`}
+                isSquare ? "w-[212px]" : "w-[172px]"
+              } grid grid-cols-2 gap-[6px]`}
             >
               <button
                 type="button"
                 onClick={handleUndoScore}
-                className="h-[20px] rounded-full bg-[#0B0E15] border border-white/15 text-[#CBD5E1] text-[7.5px] font-extrabold tracking-[0.06em] uppercase active:scale-95 transition cursor-pointer"
+                className="h-[27px] rounded-full bg-[#0B0E15] border-[1.5px] border-[#475569] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
               >
                 BORRAR
               </button>
               <button
                 type="button"
                 onClick={handleNextEnd}
-                className="h-[20px] rounded-full bg-[#061523] border border-[#00A8F3]/75 text-white text-[7.5px] font-extrabold tracking-[0.06em] uppercase active:scale-95 transition cursor-pointer"
+                className="h-[27px] rounded-full bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
               >
-                SIG. TANDA →
+                SIG. TANDA
               </button>
             </div>
           </>

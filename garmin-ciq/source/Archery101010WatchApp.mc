@@ -1192,6 +1192,13 @@ class Archery101010WatchView extends WatchUi.View {
 
     public var lastScreenWidth = 240;
     public var lastScreenHeight = 240;
+    public var lastPadStartX = 25;
+    public var lastPadStartY = 55;
+    public var lastKeyW = 44;
+    public var lastKeyH = 37;
+    public var lastKeyGap = 4;
+    public var lastActY = 180;
+    public var lastActH = 26;
 
     (:typecheck(false))
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -1276,34 +1283,117 @@ class Archery101010WatchView extends WatchUi.View {
             dc.drawText(cx, (176.0 * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 1) {
-            drawArchery101010Header(dc, w, h, s, "T" + currentEnd.toString() + "/" + endsCount.toString() + " · " + totalScore.toString() + " PTS", true);
+            // OPCIÓN A: XL 4x3 Score Keypad (2x tactile area across all 11 Garmin screen sizes)
+            var isMono = (minDim <= 180);
 
-            // Current End Arrow Slots (up to 6 compact cells)
-            var slotCount = (arrowsPerEnd < 6) ? arrowsPerEnd : 6;
-            if (slotCount < 1) { slotCount = 6; }
-            var slotW = (22.0 * s).toNumber();
-            var slotH = (15.0 * s).toNumber();
-            var slotGap = (4.0 * s).toNumber();
-            var slotsTotalW = (slotCount * slotW) + ((slotCount - 1) * slotGap);
-            var slotsStartX = cx - (slotsTotalW / 2);
-            var slotsY = (56.0 * s).toNumber();
-
-            for (var si = 0; si < slotCount; si++) {
-                var sx = slotsStartX + si * (slotW + slotGap);
-                var hasVal = (si < currentEndArrows.size());
-                var sVal = hasVal ? currentEndArrows[si] : "-";
-                drawCrispBox(dc, sx, slotsY, slotW, slotH, (4.0 * s).toNumber(), 0x07090E, hasVal ? 0xFFE500 : 0x334155, 1);
-                dc.setColor(hasVal ? Graphics.COLOR_WHITE : 0x64748B, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(sx + (slotW / 2), slotsY + (slotH / 2), fMicro, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            // 1. Official ARCHERY 101010 Logo mathematically inside top circular chord
+            var logoTopY = (19.0 * s).toNumber();
+            var logoBottomY = logoTopY + (11.0 * s).toNumber();
+            if (mBrandLogo != null) {
+                var lw = mBrandLogo.getWidth();
+                var lh = mBrandLogo.getHeight();
+                dc.drawBitmap(cx - (lw / 2), logoTopY, mBrandLogo);
+                logoBottomY = logoTopY + lh;
+            } else {
+                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, logoTopY + (5.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // 12 Tactile Score Keys (4x3: X, 10..1, M) mathematically contained inside circular bezel
-            var padW = (164.0 * s).toNumber();
+            // 2. Unified Compact Score + End Arrow Slots Row: [T1·29P] [X][10][9][-][-][-]
+            var microH = dc.getFontHeight(fMicro);
+            var barY = logoBottomY + (3.5 * s).toNumber();
+            var barH = (16.5 * s).toNumber();
+            if (barH < (microH + 2)) {
+                barH = microH + 2;
+            }
+
+            var maxBarW = ((isMono ? 148.0 : 154.0) * s).toNumber();
+            var ptsStr = "T" + currentEnd.toString() + "·" + totalScore.toString() + "P";
+            var ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
+            var ptsTagW = ptsTextW + (9.0 * s).toNumber();
+            var maxPtsTagW = (62.0 * s).toNumber();
+            if (ptsTagW > maxPtsTagW) {
+                ptsStr = "T" + currentEnd.toString() + "·" + totalScore.toString();
+                ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
+                ptsTagW = ptsTextW + (8.0 * s).toNumber();
+            }
+
+            var slotCount = (arrowsPerEnd < 6) ? arrowsPerEnd : 6;
+            if (slotCount < 1) { slotCount = 6; }
+            var barGap = (4.0 * s).toNumber();
+            if (barGap < 2) { barGap = 2; }
+            var sGap = (2.5 * s).toNumber();
+            if (sGap < 2) { sGap = 2; }
+
+            var slotsAvailW = maxBarW - ptsTagW - barGap;
+            var slotW = (slotsAvailW - ((slotCount - 1) * sGap)) / slotCount;
+            var maxSlotW = (22.0 * s).toNumber();
+            if (slotW > maxSlotW) { slotW = maxSlotW; }
+            if (slotW < 10) { slotW = 10; }
+
+            var slotsActualW = (slotCount * slotW) + ((slotCount - 1) * sGap);
+            var totalBarW = ptsTagW + barGap + slotsActualW;
+            var barStartX = cx - (totalBarW / 2);
+
+            drawCrispBox(
+                dc,
+                barStartX,
+                barY,
+                ptsTagW,
+                barH,
+                barH / 2,
+                isMono ? 0x000000 : 0x050D17,
+                isMono ? 0xFFFFFF : 0x00A8F3,
+                strokePx
+            );
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(barStartX + (ptsTagW / 2), barY + (barH / 2), fMicro, ptsStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var slotsStartX = barStartX + ptsTagW + barGap;
+            for (var si = 0; si < slotCount; si++) {
+                var sx = slotsStartX + si * (slotW + sGap);
+                var hasVal = (si < currentEndArrows.size());
+                var sVal = hasVal ? currentEndArrows[si] : "-";
+                var sBorder = isMono
+                    ? 0xFFFFFF
+                    : (hasVal
+                        ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : ((sVal.equals("8") || sVal.equals("7")) ? 0xFF1E1E : ((sVal.equals("6") || sVal.equals("5")) ? 0x00A8F3 : 0x94A3B8)))
+                        : 0x334155);
+                var sTxtCol = isMono
+                    ? 0xFFFFFF
+                    : (hasVal ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : Graphics.COLOR_WHITE) : 0x64748B);
+                drawCrispBox(dc, sx, barY, slotW, barH, (3.8 * s).toNumber(), isMono ? 0x000000 : 0x07090E, sBorder, 1);
+                dc.setColor(sTxtCol, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(sx + (slotW / 2), barY + (barH / 2), fMicro, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
+
+            // 3. Bottom Action Pills anchored cleanly above pager dots so XL keypad gets full equatorial height
+            var actH = (26.0 * s).toNumber();
+            if (actH < (microH + 4)) { actH = microH + 4; }
+            var pagerClearance = (33.0 * s).toNumber();
+            var actY = h - pagerClearance - actH;
+
+            // 4. 12 XL Tactile Score Keys (4x3: X, 10..1, M) — ~2x area across full equatorial chord
+            var padW = ((isMono ? 168.0 : 190.0) * s).toNumber();
             var kGap = (4.0 * s).toNumber();
+            if (kGap < 2) { kGap = 2; }
+            var kStartY = barY + barH + (4.2 * s).toNumber();
+            var kEndY = actY - (4.2 * s).toNumber();
+            var gridAvailH = kEndY - kStartY;
             var keyW = (padW - (3 * kGap)) / 4;
-            var keyH = (22.0 * s).toNumber();
+            var keyH = (gridAvailH - (2 * kGap)) / 3;
+            if (keyH < (18.0 * s).toNumber()) {
+                keyH = (18.0 * s).toNumber();
+            }
             var kStartX = cx - (padW / 2);
-            var kStartY = (76.0 * s).toNumber();
+
+            lastPadStartX = kStartX;
+            lastPadStartY = kStartY;
+            lastKeyW = keyW;
+            lastKeyH = keyH;
+            lastKeyGap = kGap;
+            lastActY = actY;
+            lastActH = actH;
 
             for (var k = 0; k < 12; k++) {
                 var r = k / 4;
@@ -1312,29 +1402,35 @@ class Archery101010WatchView extends WatchUi.View {
                 var ky = kStartY + r * (keyH + kGap);
                 var isSel = (k == selectedScoreIdx);
 
-                var bgCol = (k < 3) ? 0x121107 : ((k < 5) ? 0x160708 : ((k < 7) ? 0x061320 : 0x0B0E15));
-                var borderCol = isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569)));
-                var txtCol = (k < 3) ? 0xFFE500 : ((k == 11) ? 0xCBD5E1 : Graphics.COLOR_WHITE);
+                var bgCol = isMono
+                    ? (isSel ? 0xFFFFFF : 0x000000)
+                    : ((k < 3) ? 0x121107 : ((k < 5) ? 0x160708 : ((k < 7) ? 0x061320 : 0x0B0E15)));
+                var borderCol = isMono
+                    ? 0xFFFFFF
+                    : (isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569))));
+                var txtCol = isMono
+                    ? (isSel ? 0x000000 : 0xFFFFFF)
+                    : ((k < 3) ? 0xFFE500 : ((k == 11) ? 0xCBD5E1 : Graphics.COLOR_WHITE));
+                var kStroke = (!isMono && isSel) ? (strokePx + 1) : strokePx;
 
-                drawCrispBox(dc, kx, ky, keyW, keyH, (5.0 * s).toNumber(), bgCol, borderCol, strokePx);
+                drawCrispBox(dc, kx, ky, keyW, keyH, (6.5 * s).toNumber(), bgCol, borderCol, kStroke);
+                var keyFont = pickFittingFont(dc, scoreLabels[k], keyW - (6.0 * s).toNumber(), fValue, fLabel, fMicro);
                 dc.setColor(txtCol, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), fLabel, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), keyFont, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Bottom Actions: [ BORRAR ]   [ SIG. TANDA ]  with clear separation & full containment
-            var actGap = (7.0 * s).toNumber();
-            var actWTotal = (165.0 * s).toNumber();
+            // 5. Bottom Actions: [ BORRAR ]   [ SIG. TANDA ]
+            var actGap = (6.0 * s).toNumber();
+            var actWTotal = ((isMono ? 148.0 : 158.0) * s).toNumber();
             var actStartX = cx - (actWTotal / 2);
-            var actY = (156.0 * s).toNumber();
             var actW = (actWTotal - actGap) / 2;
-            var actH = (23.0 * s).toNumber();
 
-            drawCrispBox(dc, actStartX, actY, actW, actH, actH / 2, 0x0B0E15, 0x475569, strokePx);
+            drawCrispBox(dc, actStartX, actY, actW, actH, actH / 2, isMono ? 0x000000 : 0x0B0E15, isMono ? 0xFFFFFF : 0x475569, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, "BORRAR", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             var nextX = actStartX + actW + actGap;
-            drawCrispBox(dc, nextX, actY, actW, actH, actH / 2, 0x061523, 0x00A8F3, strokePx);
+            drawCrispBox(dc, nextX, actY, actW, actH, actH / 2, isMono ? 0x000000 : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, "SIG. TANDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
@@ -1561,19 +1657,19 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 }
             }
         } else if (mView.screenIdx == 1) {
-            var padW = 164.0 * s;
-            var kGap = 4.0 * s;
-            var keyW = (padW - (3.0 * kGap)) / 4.0;
-            var keyH = 22.0 * s;
-            var kStartX = cx - (padW / 2.0);
-            var kStartY = 75.0 * s;
+            var kStartX = mView.lastPadStartX;
+            var kStartY = mView.lastPadStartY;
+            var keyW = mView.lastKeyW;
+            var keyH = mView.lastKeyH;
+            var kGap = mView.lastKeyGap;
+            var halfGap = kGap / 2;
 
             for (var k = 0; k < 12; k++) {
                 var r = k / 4;
                 var c = k % 4;
                 var kx = kStartX + c * (keyW + kGap);
                 var ky = kStartY + r * (keyH + kGap);
-                if (tx >= kx && tx <= (kx + keyW) && ty >= ky && ty <= (ky + keyH)) {
+                if (tx >= (kx - halfGap) && tx <= (kx + keyW + halfGap) && ty >= (ky - halfGap) && ty <= (ky + keyH + halfGap)) {
                     mView.selectedScoreIdx = k;
                     mView.recordScoreInput(mView.scoreLabels[k]);
                     return true;
@@ -1581,7 +1677,9 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             }
 
             // Bottom BORRAR | SIG. TANDA touch buttons
-            if (ty >= (152.0 * s) && ty <= (184.0 * s)) {
+            var actTop = mView.lastActY - (2.0 * s);
+            var actBot = mView.lastActY + mView.lastActH + (3.0 * s);
+            if (ty >= actTop && ty <= actBot) {
                 if (tx < cx) {
                     mView.undoLastScore();
                 } else {

@@ -818,91 +818,138 @@ struct ScorePadWatchScreen: View {
             return Color(red: 1, green: 229/255, blue: 0)
         }
         if key == "M" {
-            return Color.gray
+            return Color(red: 203/255, green: 213/255, blue: 225/255)
         }
         return .white
     }
 
-    private func borderColor(for key: String) -> Color {
+    private func bgColor(for key: String) -> Color {
         if ["X", "10", "9"].contains(key) {
-            return Color(red: 1, green: 229/255, blue: 0).opacity(0.65)
+            return Color(red: 18/255, green: 17/255, blue: 7/255)
         }
         if ["8", "7"].contains(key) {
-            return Color(red: 1, green: 30/255, blue: 30/255).opacity(0.65)
+            return Color(red: 22/255, green: 7/255, blue: 8/255)
         }
         if ["6", "5"].contains(key) {
-            return Color(red: 0, green: 168/255, blue: 243/255).opacity(0.65)
+            return Color(red: 6/255, green: 19/255, blue: 32/255)
         }
-        return Color.white.opacity(0.22)
+        return Color(red: 11/255, green: 14/255, blue: 21/255)
+    }
+
+    private func borderColor(for key: String) -> Color {
+        if ["X", "10", "9"].contains(key) {
+            return Color(red: 1, green: 229/255, blue: 0)
+        }
+        if ["8", "7"].contains(key) {
+            return Color(red: 1, green: 30/255, blue: 30/255)
+        }
+        if ["6", "5"].contains(key) {
+            return Color(red: 0, green: 168/255, blue: 243/255)
+        }
+        return Color(red: 71/255, green: 85/255, blue: 105/255)
     }
 
     var body: some View {
-        VStack(spacing: 3) {
-            WatchBrandHeaderView(pillText: "T\(vm.currentEnd)/\(vm.endsCount) · \(vm.totalScore) PTS")
+        GeometryReader { geo in
+            let slotCount = min(6, max(1, vm.arrowsPerEnd))
+            let keyH = max(27.0, floor((geo.size.height - 62.0) / 3.0))
 
-            HStack(spacing: 3) {
-                ForEach(0..<min(6, max(1, vm.arrowsPerEnd)), id: \.self) { idx in
-                    let val = idx < vm.currentEndArrows.count ? vm.currentEndArrows[idx] : "·"
-                    Text(val)
+            VStack(spacing: 3.5) {
+                Image("brand_logo_full")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 9.5)
+
+                // Unified Compact Telemetry + End Slots Row: [T1·29P] [X][10][9][·][·][·]
+                HStack(spacing: 3.5) {
+                    Text("T\(vm.currentEnd)·\(vm.totalScore)P")
                         .font(.system(size: 8.5, weight: .heavy, design: .rounded).monospacedDigit())
-                        .foregroundColor(val == "·" ? .gray : fgColor(for: val))
-                        .frame(maxWidth: .infinity, minHeight: 14)
-                        .background(Color(red: 7/255, green: 9/255, blue: 14/255))
-                        .cornerRadius(4)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .frame(height: 16)
+                        .background(Color(red: 5/255, green: 13/255, blue: 23/255))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(val == "·" ? Color.white.opacity(0.10) : borderColor(for: val), lineWidth: 1)
+                            Capsule().stroke(Color(red: 0, green: 168/255, blue: 243/255), lineWidth: 1.1)
                         )
-                }
-            }
+                        .clipShape(Capsule())
 
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 3),
-                    GridItem(.flexible(), spacing: 3),
-                    GridItem(.flexible(), spacing: 3),
-                    GridItem(.flexible(), spacing: 3)
-                ],
-                spacing: 3
-            ) {
-                ForEach(scoreKeys, id: \.self) { key in
-                    Button(action: { vm.recordScore(key) }) {
-                        Text(key)
-                            .font(.system(size: 10.5, weight: .black, design: .rounded).monospacedDigit())
-                            .foregroundColor(fgColor(for: key))
-                            .frame(maxWidth: .infinity, minHeight: 19)
+                    HStack(spacing: 2.5) {
+                        ForEach(0..<slotCount, id: \.self) { idx in
+                            let val = idx < vm.currentEndArrows.count ? vm.currentEndArrows[idx] : "–"
+                            let filled = idx < vm.currentEndArrows.count
+                            Text(val)
+                                .font(.system(size: 8.5, weight: .heavy, design: .rounded).monospacedDigit())
+                                .foregroundColor(filled ? fgColor(for: val) : .gray)
+                                .frame(maxWidth: .infinity, minHeight: 16)
+                                .background(Color(red: 7/255, green: 9/255, blue: 14/255))
+                                .cornerRadius(3.5)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3.5)
+                                        .stroke(filled ? borderColor(for: val) : Color.white.opacity(0.16), lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+
+                // XL 4x3 Score Grid (~2x Tactile Area across all Apple Watch sizes: 40mm..49mm Ultra)
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 3.5),
+                        GridItem(.flexible(), spacing: 3.5),
+                        GridItem(.flexible(), spacing: 3.5),
+                        GridItem(.flexible(), spacing: 3.5)
+                    ],
+                    spacing: 3.5
+                ) {
+                    ForEach(scoreKeys, id: \.self) { key in
+                        Button(action: { vm.recordScore(key) }) {
+                            Text(key)
+                                .font(.system(size: 16.5, weight: .black, design: .rounded).monospacedDigit())
+                                .foregroundColor(fgColor(for: key))
+                                .frame(maxWidth: .infinity, minHeight: keyH)
+                                .background(bgColor(for: key))
+                                .cornerRadius(7)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .stroke(borderColor(for: key), lineWidth: 1.2)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                HStack(spacing: 5) {
+                    Button(action: { vm.undoLastScore() }) {
+                        Text("BORRAR")
+                            .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, minHeight: 22)
                             .background(Color(red: 11/255, green: 14/255, blue: 21/255))
-                            .cornerRadius(5)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .stroke(borderColor(for: key), lineWidth: 1)
+                                Capsule().stroke(Color(red: 71/255, green: 85/255, blue: 105/255), lineWidth: 1.1)
                             )
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { vm.advanceToNextEnd() }) {
+                        Text("SIG. TANDA")
+                            .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, minHeight: 22)
+                            .background(Color(red: 6/255, green: 21/255, blue: 35/255))
+                            .overlay(
+                                Capsule().stroke(Color(red: 0, green: 168/255, blue: 243/255), lineWidth: 1.1)
+                            )
+                            .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-
-            HStack(spacing: 4) {
-                Button(action: { vm.undoLastScore() }) {
-                    Text("BORRAR")
-                        .font(.system(size: 7.5, weight: .heavy, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 17)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { vm.advanceToNextEnd() }) {
-                    Text("SIG. TANDA →")
-                        .font(.system(size: 7.5, weight: .heavy, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 17)
-                        .background(Color(red: 6/255, green: 21/255, blue: 35/255))
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(.horizontal, 4)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
         }
-        .padding(.horizontal, 8)
     }
 }
 

@@ -1218,7 +1218,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             int h = getHeight();
 
             // Bottom page indicator tap switches screen
-            if (y > h * 0.87f) {
+            if (y > h * 0.90f) {
                 screenIndex = (screenIndex + 1) % 4;
                 triggerHaptic(20);
                 invalidate();
@@ -1640,56 +1640,129 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 1: PUNTUACIÓN DE TANDA — Full 12 Score Keys (4x3: X, 10..1, M) mathematically contained inside Round & Square displays
+         * SCREEN 1: PUNTUACIÓN DE TANDA (OPCIÓN A — XL 4x3 Keypad: 2.2x Tactile Area, Unified Top Bar, Full Round & Square Containment)
          */
         private void drawScorePadScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            drawBrandHeaderAndPill(
-                    canvas,
-                    cx,
-                    scale,
-                    isRound,
-                    "TANDA " + currentEnd + "/" + syncedEndsCount + " · " + totalScore + " PTS",
-                    false
-            );
+            // 1. Official 4K ARCHERY 101010 Logo mathematically contained inside top circular chord
+            int targetLogoW = Math.round((isRound ? 112f : 126f) * scale);
+            Bitmap logo = getSupersampledLogo(targetLogoW);
+            float logoTopY = (isRound ? 19.0f : 12.0f) * scale;
+            float logoBottomY = logoTopY + 9.5f * scale;
 
-            // Dynamic Current Arrow Slots (3 or 6 slots)
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha(255);
+            paint.setFilterBitmap(true);
+
+            if (logo != null) {
+                float leftX = Math.round(cx - logo.getWidth() / 2f);
+                canvas.drawBitmap(logo, leftX, Math.round(logoTopY), paint);
+                logoBottomY = logoTopY + logo.getHeight();
+            } else {
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(10.0f * scale);
+                paint.setColor(Color.WHITE);
+                drawCenteredText(canvas, "ARCHERY 101010", cx, logoTopY + 4.5f * scale);
+            }
+
+            // 2. Unified Compact Telemetry + End Slots Row: [T1·29P] [X][10][9][—][—][—]
+            float barY = logoBottomY + 4.0f * scale;
+            float barH = 16.5f * scale;
+            float maxBarW = (isRound ? 154f : 204f) * scale;
+
+            String ptsStr = "T" + currentEnd + "·" + totalScore + "P";
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(7.8f * scale);
+            float ptsTextW = paint.measureText(ptsStr);
+            float ptsTagW = Math.min(62f * scale, ptsTextW + 11f * scale);
+
             int slotsCount = Math.max(1, Math.min(6, syncedArrowsPerEnd));
-            float gap = (slotsCount <= 3 ? 4.0f : 2.8f) * scale;
-            float totalSlotsW = 152f * scale * wMult;
-            float slotW = (totalSlotsW - (slotsCount - 1) * gap) / slotsCount;
-            float slotH = 15.5f * scale;
-            float startX = cx - totalSlotsW / 2f;
-            float slotY = 71.5f * scale;
+            float barGap = 4.0f * scale;
+            float sGap = (slotsCount <= 3 ? 3.5f : 2.5f) * scale;
+            float slotsAvailW = maxBarW - ptsTagW - barGap;
+            float slotW = Math.min(22f * scale, (slotsAvailW - (slotsCount - 1) * sGap) / slotsCount);
+            float slotsActualW = (slotsCount * slotW) + ((slotsCount - 1) * sGap);
+            float totalBarW = ptsTagW + barGap + slotsActualW;
+            float barStartX = cx - totalBarW / 2f;
 
+            // Left Score Tag Pill [T1·29P]
+            rect.set(barStartX, barY, barStartX + ptsTagW, barY + barH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#050D17"));
+            canvas.drawRoundRect(rect, barH / 2f, barH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.2f * scale);
+            paint.setColor(Color.parseColor("#00A8F3"));
+            canvas.drawRoundRect(rect, barH / 2f, barH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, ptsStr, rect.centerX(), rect.centerY());
+
+            // Right End Slots
+            float slotsStartX = barStartX + ptsTagW + barGap;
             for (int i = 0; i < slotsCount; i++) {
-                float sx = startX + i * (slotW + gap);
-                rect.set(sx, slotY, sx + slotW, slotY + slotH);
-                String val = i < currentEndArrows.size() ? currentEndArrows.get(i) : "—";
+                float sx = slotsStartX + i * (slotW + sGap);
+                rect.set(sx, barY, sx + slotW, barY + barH);
+                boolean hasVal = i < currentEndArrows.size();
+                String val = hasVal ? currentEndArrows.get(i) : "—";
                 boolean isCurrentSlot = (i == currentEndArrows.size());
+
+                int slotBorder;
+                int slotTxt;
+                if (hasVal) {
+                    if ("X".equals(val) || "10".equals(val) || "9".equals(val)) {
+                        slotBorder = Color.parseColor("#FFE500");
+                        slotTxt = Color.parseColor("#FFE500");
+                    } else if ("8".equals(val) || "7".equals(val)) {
+                        slotBorder = Color.parseColor("#FF1E1E");
+                        slotTxt = Color.WHITE;
+                    } else if ("6".equals(val) || "5".equals(val)) {
+                        slotBorder = Color.parseColor("#00A8F3");
+                        slotTxt = Color.WHITE;
+                    } else {
+                        slotBorder = Color.parseColor("#64748B");
+                        slotTxt = Color.WHITE;
+                    }
+                } else if (isCurrentSlot) {
+                    slotBorder = Color.parseColor("#00A8F3");
+                    slotTxt = Color.parseColor("#94A3B8");
+                } else {
+                    slotBorder = Color.parseColor("#334155");
+                    slotTxt = Color.parseColor("#64748B");
+                }
 
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(isCurrentSlot ? Color.parseColor("#061320") : Color.parseColor("#07090E"));
-                canvas.drawRoundRect(rect, 4f * scale, 4f * scale, paint);
+                canvas.drawRoundRect(rect, 3.8f * scale, 3.8f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1.0f * scale);
-                paint.setColor(isCurrentSlot ? Color.parseColor("#00A8F3") : Color.parseColor("#1FFFFFFF"));
-                canvas.drawRoundRect(rect, 4f * scale, 4f * scale, paint);
+                paint.setColor(slotBorder);
+                canvas.drawRoundRect(rect, 3.8f * scale, 3.8f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize((slotsCount <= 3 ? 9.0f : 7.8f) * scale);
-                paint.setColor(Color.WHITE);
+                paint.setTextSize((slotsCount <= 3 ? 8.8f : 7.6f) * scale);
+                paint.setColor(slotTxt);
                 drawCenteredText(canvas, val, rect.centerX(), rect.centerY());
             }
 
-            // 12 Score Keypad Buttons (3 rows x 4 cols): X, 10, 9, 8 / 7, 6, 5, 4 / 3, 2, 1, M
-            float keypadW = 158f * scale * wMult;
-            float kGap = 3.0f * scale;
+            // 3. Bottom Action Pills [BORRAR] [SIG. TANDA] anchored cleanly inside lower chord
+            float btnH = 25.5f * scale;
+            float btnY = (isRound ? 179.0f : 185.0f) * scale;
+            float pairW = (isRound ? 158f : 196f) * scale;
+            float pairGap = 6.0f * scale;
+            float btnW = (pairW - pairGap) / 2f;
+
+            // 4. 12 XL Score Keypad Buttons (4x3: X, 10..1, M) across full safe equatorial width
+            float keypadW = (isRound ? 190f : 214f) * scale;
+            float kGap = 3.8f * scale;
+            float kStartY = barY + barH + 4.2f * scale;
+            float kEndY = btnY - 4.5f * scale;
+            float gridAvailH = kEndY - kStartY;
             float keyW = (keypadW - 3f * kGap) / 4f;
-            float keyH = 20.0f * scale;
+            float keyH = Math.max(24f * scale, (gridAvailH - 2f * kGap) / 3f);
             float kStartX = cx - keypadW / 2f;
-            float kStartY = 90.5f * scale;
 
             for (int i = 0; i < 12; i++) {
                 int row = i / 4;
@@ -1698,83 +1771,74 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 float ky = kStartY + row * (keyH + kGap);
                 scoreButtons[i].set(kx, ky, kx + keyW, ky + keyH);
 
-                // Official World Archery ring color accents on Matte OLED chassis
                 int fillHex;
                 int strokeHex;
                 int textHex;
                 if (i <= 2) { // X, 10, 9 (Gold)
-                    fillHex = Color.parseColor("#111007");
-                    strokeHex = Color.parseColor("#99FFE500");
+                    fillHex = Color.parseColor("#121107");
+                    strokeHex = Color.parseColor("#FFE500");
                     textHex = Color.parseColor("#FFE500");
                 } else if (i <= 4) { // 8, 7 (Red)
                     fillHex = Color.parseColor("#160708");
-                    strokeHex = Color.parseColor("#99FF1E1E");
+                    strokeHex = Color.parseColor("#FF1E1E");
                     textHex = Color.WHITE;
-                } else if (i <= 6) { // 6, 5 (Cyan/Blue)
-                    fillHex = Color.parseColor("#05111B");
-                    strokeHex = Color.parseColor("#9900A8F3");
+                } else if (i <= 6) { // 6, 5 (Cyan)
+                    fillHex = Color.parseColor("#061320");
+                    strokeHex = Color.parseColor("#00A8F3");
                     textHex = Color.WHITE;
-                } else if (i <= 8) { // 4, 3 (Black ring)
-                    fillHex = Color.parseColor("#0B0E14");
-                    strokeHex = Color.parseColor("#38FFFFFF");
+                } else if (i <= 10) { // 4, 3, 2, 1
+                    fillHex = Color.parseColor("#0B0E15");
+                    strokeHex = Color.parseColor("#475569");
                     textHex = Color.WHITE;
-                } else if (i <= 10) { // 2, 1 (White ring)
-                    fillHex = Color.parseColor("#121620");
-                    strokeHex = Color.parseColor("#55FFFFFF");
-                    textHex = Color.WHITE;
-                } else { // M (Miss)
-                    fillHex = Color.parseColor("#090B10");
-                    strokeHex = Color.parseColor("#26FFFFFF");
-                    textHex = Color.parseColor("#8E96A4");
+                } else { // M
+                    fillHex = Color.parseColor("#0B0E15");
+                    strokeHex = Color.parseColor("#475569");
+                    textHex = Color.parseColor("#CBD5E1");
                 }
 
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(fillHex);
-                canvas.drawRoundRect(scoreButtons[i], 5f * scale, 5f * scale, paint);
+                canvas.drawRoundRect(scoreButtons[i], 6.5f * scale, 6.5f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.0f * scale);
+                paint.setStrokeWidth(1.3f * scale);
                 paint.setColor(strokeHex);
-                canvas.drawRoundRect(scoreButtons[i], 5f * scale, 5f * scale, paint);
+                canvas.drawRoundRect(scoreButtons[i], 6.5f * scale, 6.5f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize(9.2f * scale);
+                paint.setTextSize(15.5f * scale);
                 paint.setColor(textHex);
                 drawCenteredText(canvas, scoreLabels[i], scoreButtons[i].centerX(), scoreButtons[i].centerY());
             }
 
-            // Bottom row: BORRAR and SIG. TANDA → (pairW = 144f sits cleanly within y=180 circular chord)
-            float pairW = 144f * scale * wMult;
-            float btnW = (pairW - 4.5f * scale) / 2f;
-            float btnH = 19.5f * scale;
-            float btnY = 160.5f * scale;
+            // 5. Render Bottom Action Pills: BORRAR and SIG. TANDA
             btnLeftPrimary.set(cx - pairW / 2f, btnY, cx - pairW / 2f + btnW, btnY + btnH);
             btnRightSecondary.set(cx + pairW / 2f - btnW, btnY, cx + pairW / 2f, btnY + btnH);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#0B0E14"));
+            paint.setColor(Color.parseColor("#0B0E15"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(Color.parseColor("#24FFFFFF"));
+            paint.setStrokeWidth(1.2f * scale);
+            paint.setColor(Color.parseColor("#475569"));
             canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(6.8f * scale);
-            paint.setColor(Color.parseColor("#8E96A4"));
+            paint.setTextSize(8.2f * scale);
+            paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "BORRAR", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#061523"));
             canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
+            paint.setStrokeWidth(1.2f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
             canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "SIG. TANDA →", btnRightSecondary.centerX(), btnRightSecondary.centerY());
+            drawCenteredText(canvas, "SIG. TANDA", btnRightSecondary.centerX(), btnRightSecondary.centerY());
         }
 
         /**
