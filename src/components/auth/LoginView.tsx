@@ -347,9 +347,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               <button
                 type="button"
                 onClick={() => setShowInstallBanner(false)}
-                className="text-white hover:text-white p-0.5 cursor-pointer"
+                aria-label="Cerrar aviso de instalación"
+                className="w-9 h-9 -mr-1.5 -mt-1.5 rounded-full flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer shrink-0"
               >
-                <X size={14} />
+                <X size={15} aria-hidden="true" />
               </button>
             </div>
             <p className="text-[11.6px] text-white leading-snug">
@@ -427,17 +428,19 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-white hover:text-white transition cursor-pointer"
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-pressed={showPassword}
+              className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
           </div>
 
-          <div className="flex justify-end -mt-1.5">
+          <div className="flex justify-end -mt-2">
             <button
               type="button"
               onClick={handleOpenPasswordReset}
-              className="text-[12.8px] text-cyan-neon hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
+              className="min-h-[38px] px-1 inline-flex items-center text-[12.8px] text-cyan-neon hover:text-cyan-neon font-semibold hover:underline cursor-pointer"
             >
               {t("forgotPassword")}
             </button>
@@ -469,8 +472,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
 
         {/* Register link */}
         <button
+          type="button"
           onClick={onNavigateToRegister}
-          className="text-center text-xs text-yellow-gold font-semibold hover:underline cursor-pointer py-1"
+          className="min-h-[38px] flex items-center justify-center text-center text-xs text-yellow-gold font-semibold hover:underline cursor-pointer py-1"
         >
           {t("signUpLink")}
         </button>
@@ -490,7 +494,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             onClick={() => handleSocialLogin("google")}
             className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
@@ -506,7 +510,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             onClick={() => handleSocialLogin("apple")}
             className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
-            <svg className="w-4 h-4 shrink-0 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <svg aria-hidden="true" className="w-4 h-4 shrink-0 text-white" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
             </svg>
             <span>{t("appleLogin")}</span>
@@ -528,12 +532,15 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               initial={{ scale: 0.96, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.96, y: 10 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Recuperar Contraseña"
               className="w-full max-w-[360px] bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-4 relative shadow-2xl"
             >
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-cyan-neon">
-                    <KeyRound size={15} />
+                    <KeyRound size={15} aria-hidden="true" />
                   </div>
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
                     Recuperar Contraseña
@@ -542,9 +549,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 <button
                   type="button"
                   onClick={() => setShowResetModal(false)}
-                  className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white hover:text-white cursor-pointer"
+                  aria-label="Cerrar ventana de recuperación"
+                  className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] flex items-center justify-center text-white cursor-pointer shrink-0 transition"
                 >
-                  <X size={14} />
+                  <X size={15} aria-hidden="true" />
                 </button>
               </div>
 
@@ -611,12 +619,39 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         )}
       </AnimatePresence>
 
-      {/* Footer copyright */}
-      <footer className="text-center text-[11.6px] text-white tracking-wider mt-8">
-        {t("copyright")}
+      {/* Footer legal links & copyright */}
+      <footer className="flex flex-col items-center gap-1.5 text-center text-[11.6px] text-white tracking-wider mt-8">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <a
+            href="/privacy"
+            onClick={(e) => {
+              if (typeof window !== "undefined" && window.location.protocol === "file:") {
+                e.preventDefault();
+                window.open("https://archery101010-c0bb4.web.app/privacy", "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="min-h-[38px] px-1.5 inline-flex items-center text-white/80 hover:text-cyan-neon underline underline-offset-4 transition-colors"
+          >
+            {t("privacyLink")}
+          </a>
+          <span aria-hidden="true" className="text-white/40">·</span>
+          <a
+            href="/terms"
+            onClick={(e) => {
+              if (typeof window !== "undefined" && window.location.protocol === "file:") {
+                e.preventDefault();
+                window.open("https://archery101010-c0bb4.web.app/terms", "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="min-h-[38px] px-1.5 inline-flex items-center text-white/80 hover:text-cyan-neon underline underline-offset-4 transition-colors"
+          >
+            {t("termsLink")}
+          </a>
+        </div>
+        <span>{t("copyright")}</span>
       </footer>
 
-      {/* iOS Safari Installation Steps Modal */}
+      {/* Mobile Browser Installation Steps Modal */}
       <AnimatePresence>
         {showIOSModal && (
           <motion.div
@@ -629,18 +664,22 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Instalación en Dispositivo Móvil"
               className="w-full max-w-[340px] bg-neutral-950 border border-neutral-800 p-5 rounded-[32px] flex flex-col gap-4 relative"
             >
               <div className="flex justify-between items-center">
                 <h3 className="text-white text-xs font-black uppercase tracking-wider">
-                  Instalación en iPhone / iPad
+                  Instalación en Dispositivo Móvil
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowIOSModal(false)}
-                  className="p-1 rounded-full bg-neutral-900 border border-neutral-800 text-white hover:text-white cursor-pointer"
+                  aria-label="Cerrar guía de instalación"
+                  className="w-9 h-9 rounded-full bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 flex items-center justify-center text-white cursor-pointer shrink-0 transition"
                 >
-                  <X size={14} />
+                  <X size={15} aria-hidden="true" />
                 </button>
               </div>
 
@@ -650,7 +689,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     1
                   </div>
                   <p>
-                    Abre esta app en el navegador <span className="text-white font-bold">Safari</span>.
+                    Abre esta app en <span className="text-white font-bold">el navegador</span>.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">

@@ -271,9 +271,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     () => Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0
   );
   const [gpsActive, setGpsActive] = useState<boolean>(false);
-  const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean>(
-    config?.practiceType === "Volumen"
-  );
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean>(false);
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
   const watchFinishedSessionRef = useRef<boolean>(false);
@@ -3027,8 +3025,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   disabled={isGeneratingImage}
                   className="w-full h-11 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
-                  <Share2 size={16} />
-                  <span>Compartir Planilla por WhatsApp</span>
+                  <Share2 size={16} aria-hidden="true" />
+                  <span>Compartir Planilla por Mensajería</span>
                 </button>
                 <button
                   onClick={handleFinishAndSave}

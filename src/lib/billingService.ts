@@ -1,7 +1,13 @@
 "use client";
 
 import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
-import { UserProfile, updateProfile, generateClubInviteCode, isLinkedToExternalCoach } from "@/lib/authService";
+import {
+  UserProfile,
+  updateProfile,
+  generateClubInviteCode,
+  isLinkedToExternalCoach,
+  calculateAgeFromBirthDate
+} from "@/lib/authService";
 
 export interface StoreProduct {
   id: string;
@@ -101,6 +107,13 @@ export async function activateCoachLaunchPromo(
   productSku: string = "coach_pro_monthly"
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
+    if (user.role !== "superadmin" && user.birthDate && user.birthDate.trim()) {
+      const age = calculateAgeFromBirthDate(user.birthDate);
+      if (age === null || age < 18) {
+        throw new Error("Debes ser mayor de 18 años para activar una cuenta de Entrenador.");
+      }
+    }
+
     const normalizedSku = String(productSku || "").toLowerCase();
     const isAnnual =
       productSku === "coach_pro_annual" ||
@@ -210,14 +223,15 @@ export async function restoreCoachStorePurchases(
 
   // 1. Query subscription_audit_logs in Firestore for userId == user.uid where expiresAt > Date.now()
   try {
-    const { collection, query, where, getDocs, doc, getDoc } = await import("firebase/firestore");
+    const { collection, query, where, getDocs, doc, getDoc, limit } = await import("firebase/firestore");
     const { db, auth } = await import("@/lib/firebase");
 
     if (auth.currentUser) {
       try {
         const q = query(
           collection(db, "subscription_audit_logs"),
-          where("userId", "==", user.uid)
+          where("userId", "==", user.uid),
+          limit(100)
         );
         const snap = await getDocs(q);
         snap.forEach((docSnap) => {

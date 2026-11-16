@@ -37,7 +37,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     @Published var stepsCount: Int = 0
     @Published var distanceWalkedM: Double = 0.0
     @Published var syncedActiveKcal: Int = -1
-    @Published var autoDetectEnabled: Bool = true
+    @Published var autoDetectEnabled: Bool = false
     @Published var sensitivityLevel: Int = 1 // 0: BAJA, 1: MEDIA, 2: ALTA
     @Published var isWalkingPaused: Bool = false
     @Published var isPhoneConnected: Bool = false
@@ -88,8 +88,10 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     override init() {
         super.init()
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: "autoDetectEnabled") != nil {
-            autoDetectEnabled = defaults.bool(forKey: "autoDetectEnabled")
+        if defaults.object(forKey: "autoDetectEnabled_v2") != nil {
+            autoDetectEnabled = defaults.bool(forKey: "autoDetectEnabled_v2")
+        } else {
+            autoDetectEnabled = false
         }
         if defaults.object(forKey: "sensitivityLevel") != nil {
             sensitivityLevel = max(0, min(2, defaults.integer(forKey: "sensitivityLevel")))
@@ -279,8 +281,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             autoDetectEnabled = false // MODO MANUAL
         }
         let defaults = UserDefaults.standard
-        defaults.set(autoDetectEnabled, forKey: "autoDetectEnabled")
+        defaults.set(autoDetectEnabled, forKey: "autoDetectEnabled_v2")
         defaults.set(sensitivityLevel, forKey: "sensitivityLevel")
+        syncShotDetectionMotionSensors()
         WKInterfaceDevice.current().play(.click)
         sendCommandToPhone([
             "type": "TOGGLE_AUTO_DETECT",
@@ -302,8 +305,24 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     private func startSensors() {
         restartPedometerFromNow()
+        syncShotDetectionMotionSensors()
+    }
 
-        if motionManager.isGyroAvailable {
+    private func syncShotDetectionMotionSensors() {
+        guard autoDetectEnabled else {
+            pendingShotActive = false
+            isWalkingPaused = false
+            if motionManager.isGyroActive {
+                motionManager.stopGyroUpdates()
+            }
+            if motionManager.isAccelerometerActive {
+                motionManager.stopAccelerometerUpdates()
+            }
+            motionBuf.removeAll()
+            return
+        }
+
+        if motionManager.isGyroAvailable && !motionManager.isGyroActive {
             motionManager.gyroUpdateInterval = 0.025
             motionManager.startGyroUpdates(to: .main) { [weak self] data, _ in
                 guard let self = self, let rot = data?.rotationRate else { return }
@@ -312,7 +331,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             }
         }
 
-        if motionManager.isAccelerometerAvailable {
+        if motionManager.isAccelerometerAvailable && !motionManager.isAccelerometerActive {
             motionManager.accelerometerUpdateInterval = 0.025 // 40 Hz
             motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
                 guard let self = self, let acc = data?.acceleration else { return }
@@ -622,7 +641,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                         } else if cmdType == "TOGGLE_AUTO_DETECT" {
                             if let enabled = dict["enabled"] as? Bool {
                                 self.autoDetectEnabled = enabled
-                                UserDefaults.standard.set(enabled, forKey: "autoDetectEnabled")
+                                UserDefaults.standard.set(enabled, forKey: "autoDetectEnabled_v2")
+                                self.syncShotDetectionMotionSensors()
                             }
                             if let sens = dict["sensitivityLevel"] as? Int {
                                 self.sensitivityLevel = max(0, min(2, sens))
@@ -666,7 +686,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             if let endArrows = obj["currentEndArrows"] as? [String] { self.currentEndArrows = endArrows }
             if let autoEn = obj["autoDetectEnabled"] as? Bool {
                 self.autoDetectEnabled = autoEn
-                UserDefaults.standard.set(autoEn, forKey: "autoDetectEnabled")
+                UserDefaults.standard.set(autoEn, forKey: "autoDetectEnabled_v2")
+                self.syncShotDetectionMotionSensors()
             }
             if let sens = obj["sensitivityLevel"] as? Int {
                 self.sensitivityLevel = max(0, min(2, sens))

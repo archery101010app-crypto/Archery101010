@@ -87,6 +87,34 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const isBotRival = /^RIV-(BOT-|\d+$)/i.test(config?.rival?.uid || "");
   const isFriendDuel = !isBotRival;
   const [isRivalConnected, setIsRivalConnected] = useState<boolean>(!isFriendDuel);
+  const isRivalFirestoreConnectedRef = useRef<boolean>(!isFriendDuel);
+  const rivalUidRef = useRef<string>(
+    config?.rival?.uid && !String(config.rival.uid).startsWith("RIV-FRIEND-")
+      ? String(config.rival.uid)
+      : ""
+  );
+  const duelFinishedRef = useRef<boolean>(config.duelFinished ?? false);
+  const forfeitHandledRef = useRef<boolean>(false);
+  const localVoluntaryForfeitRef = useRef<boolean>(false);
+  const [photoUploadCountdown, setPhotoUploadCountdown] = useState<number>(60);
+
+  useEffect(() => {
+    duelFinishedRef.current = duelFinished;
+  }, [duelFinished]);
+
+  // 60-second countdown during "UPLOAD" photo validation phase so local player is never stuck forever
+  useEffect(() => {
+    if (validationPhase !== "UPLOAD") {
+      setPhotoUploadCountdown(60);
+      return;
+    }
+    if (rivalPhoto) return;
+    setPhotoUploadCountdown(60);
+    const timer = setInterval(() => {
+      setPhotoUploadCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [validationPhase, Boolean(rivalPhoto)]);
 
   const [isCreatorRole, setIsCreatorRole] = useState<boolean>(config.isCreator === true || config.rival.uid === "RIV-FRIEND-PLAYER");
   const isCreatorRoleRef = useRef<boolean>(config.isCreator === true || config.rival.uid === "RIV-FRIEND-PLAYER");
@@ -337,6 +365,210 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   };
 
+  // Mirror local shot history (up to 60 items) to Firestore active_duels/{roomCode} for 4G/5G CGNAT fallback
+  const syncLocalShotsToFirestore = async (
+    nextTiros: (string | number)[][],
+    nextImpacts: ShotImpact[]
+  ) => {
+    if (!isFriendDuel || !config.id) return;
+    try {
+      const shotsPayload: Array<{
+        end: number;
+        idx: number;
+        score: number;
+        label: string;
+        x?: number;
+        y?: number;
+      }> = [];
+      for (let eIdx = 0; eIdx < nextTiros.length; eIdx++) {
+        const endArr = nextTiros[eIdx] || [];
+        for (let aIdx = 0; aIdx < endArr.length; aIdx++) {
+          if (shotsPayload.length >= 60) break;
+          const rawVal = endArr[aIdx];
+          const numScore =
+            rawVal === "X" || rawVal === 10
+              ? 10
+              : rawVal === "M" || rawVal === 0 || rawVal === ""
+              ? 0
+              : Number(rawVal) || 0;
+          const imp = nextImpacts.find((im) => im.endIdx === eIdx && im.arrowIdx === aIdx);
+          const item: {
+            end: number;
+            idx: number;
+            score: number;
+            label: string;
+            x?: number;
+            y?: number;
+          } = {
+            end: eIdx,
+            idx: aIdx,
+            score: numScore,
+            label: String(rawVal)
+          };
+          if (imp && Number.isFinite(imp.x) && Number.isFinite(imp.y)) {
+            item.x = Number(imp.x.toFixed(2));
+            item.y = Number(imp.y.toFixed(2));
+          }
+          shotsPayload.push(item);
+        }
+      }
+
+      const docRef = doc(db, "active_duels", config.id);
+      await updateDoc(docRef, {
+        [isCreatorRoleRef.current ? "creatorShots" : "playerShots"]: shotsPayload,
+        updatedAt: Date.now()
+      });
+    } catch (err) {
+      console.warn("[Firestore Relay] Could not mirror shots:", err);
+    }
+  };
+
+  // Mirror local shoot-off arrow to Firestore active_duels/{roomCode} for 4G/5G CGNAT fallback
+  const syncLocalShootOffToFirestore = async (
+    shootOffPayload: { score: number; distanceToCenter?: number } | null
+  ) => {
+    if (!isFriendDuel || !config.id) return;
+    try {
+      const docRef = doc(db, "active_duels", config.id);
+      await updateDoc(docRef, {
+        [isCreatorRoleRef.current ? "creatorShootoff" : "playerShootoff"]: shootOffPayload,
+        updatedAt: Date.now()
+      });
+    } catch (err) {
+      console.warn("[Firestore Relay] Could not mirror shoot-off:", err);
+    }
+  };
+
+  // Wipe Base64 validation photos & WebRTC SDP from Firestore upon match completion
+  const cleanupFinishedDuelInFirestore = async () => {
+    if (!isFriendDuel || !config.id) return;
+    try {
+      const docRef = doc(db, "active_duels", config.id);
+      await updateDoc(docRef, {
+        status: "finished",
+        creatorPhoto: null,
+        playerPhoto: null,
+        webrtcOffer: null,
+        webrtcAnswer: null,
+        updatedAt: Date.now()
+      });
+    } catch (err) {
+      console.warn("Could not clean up finished duel in Firestore:", err);
+    }
+  };
+
+  // Award Victoria por Abandono (W.O.) when rival forfeits or disconnects >= 30s
+  const awardForfeitVictory = async () => {
+    if (forfeitHandledRef.current || localVoluntaryForfeitRef.current || duelFinishedRef.current) {
+      return;
+    }
+    forfeitHandledRef.current = true;
+    duelFinishedRef.current = true;
+
+    const latestTiros = gameStateRef.current.userTiros;
+    const latestShootOff = gameStateRef.current.userShootOffShot;
+    const shotArrows = latestTiros.flat().length + (latestShootOff !== null ? 1 : 0);
+    const rawUserScore =
+      latestTiros.flat().reduce((sum: number, b) => {
+        const num =
+          b === "X" || b === 10 ? 10 : b === "M" || b === 0 || b === "" ? 0 : Number(b) || 0;
+        return sum + num;
+      }, 0) + (latestShootOff || 0);
+
+    const finalUserScore = isCompound ? Math.max(rawUserScore, 1) : rawUserScore;
+
+    if (!isCompound) {
+      setUserSetPoints(6);
+      setRivalSetPoints(0);
+    }
+    setWinner("USER");
+    setDuelFinished(true);
+    setIsRivalConnected(false);
+    setIsP2PActive(false);
+
+    if (isFriendDuel && config.id) {
+      await updateDoc(doc(db, "active_duels", config.id), {
+        status: "forfeited",
+        winnerUid: user.uid,
+        creatorPhoto: null,
+        playerPhoto: null,
+        webrtcOffer: null,
+        webrtcAnswer: null,
+        updatedAt: Date.now()
+      }).catch((err) => console.warn("Could not record W.O. victory in active_duels:", err));
+    }
+
+    const duelId = config.id || generateResilientId("DUE");
+    const nowTs = Date.now();
+    const endsPlayed = Math.max(1, latestTiros.filter((e) => e.length > 0).length);
+
+    const woSession = sanitizeForFirestore({
+      id: duelId,
+      uid: duelId,
+      userId: user.uid,
+      userUid: user.uid,
+      userName: user.fullName || user.nickname || "Arquero",
+      clubId: user.clubId || null,
+      timestamp: nowTs,
+      updatedAt: nowTs,
+      practiceType: "Control",
+      bowType: config.bowType,
+      format: "Duelo 1v1 (W.O.)",
+      bowConfig: {
+        type: config.bowType,
+        brand: user?.bowConfig?.brand || "Generic",
+        model: user?.bowConfig?.model || "Model",
+        poundage: user?.bowConfig?.poundage || 35
+      },
+      endsCount: Math.min(100, endsPlayed),
+      arrowsPerEnd: 3,
+      distance: config.distance,
+      score: Math.min(2000, finalUserScore),
+      maxScore: Math.min(2000, Math.max(endsPlayed * 30, finalUserScore)),
+      totalArrowsVolume: shotArrows,
+      warmupArrows: 0,
+      sessionNote: isCompound
+        ? "Victoria por Abandono (W.O.) · Puntaje acumulado ganador"
+        : "Victoria por Abandono (W.O.) · 6–0 en sets",
+      isDuel: true,
+      isDraft: false,
+      opponent: config.rival.fullName,
+      opponentCountry: config.rival.country,
+      opponentClubName: config.rival.clubName,
+      opponentClubLogo: config.rival.clubLogo,
+      outcome: "win"
+    });
+
+    try {
+      await saveLocalSession(duelId, woSession);
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "sessions",
+        operation: "INSERT",
+        payloadId: duelId,
+        payload: woSession,
+        timestamp: nowTs
+      });
+    } catch (saveErr) {
+      console.error("Error saving W.O. duel session:", saveErr);
+    }
+
+    try {
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    } catch {}
+
+    await showOledAlert(
+      isCompound
+        ? `Victoria por Abandono (W.O.) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`
+        : `Victoria por Abandono (W.O. · 6–0) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`
+    );
+    onBack();
+  };
+
   // WebRTC DataChannel message handler
   const handleDataMessage = (event: MessageEvent) => {
     try {
@@ -452,7 +684,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             setRivalInputMode(msg.mode);
           }
           break;
-        case "next-end":
+        case "next-end": {
+          const targetNextEnd =
+            typeof msg.nextEnd === "number" ? msg.nextEnd : currentEndRef.current + 1;
           setEndSummary(null);
           setEndSummaryMsg(null);
           setValidationPhase("IDLE");
@@ -460,7 +694,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setRivalPhoto(null);
           setReviewTab("PHOTO");
           setRivalInputMode("TARGET");
-          setCurrentEnd((prev) => prev + 1);
+          setCurrentEnd((prev) => Math.max(prev, targetNextEnd));
           setCurrentArrow(0);
           setIsUserPresent(false);
           setIsRivalPresent(false);
@@ -468,6 +702,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setIsRivalReady(false);
           setIsReadyCheckActive(true);
           break;
+        }
         case "walkie":
           setIsRivalWalkieActive(msg.active);
           setIsRivalSpeaking(msg.active);
@@ -523,10 +758,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           }
           break;
         case "exit":
-          setIsRivalConnected(false);
-          setIsP2PActive(false);
-          void showOledAlert("El oponente ha salido de la arena.");
-          onBack();
+          if (!duelFinishedRef.current && !msg.finished) {
+            void awardForfeitVictory();
+          }
           break;
       }
     } catch (e) {
@@ -679,14 +913,20 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       candidatesHandledRef.current = 0;
       remoteCandidatesQueue.current = [];
 
-      // Connection state monitoring
+      // Connection state monitoring (preserve Firestore relay connection on strict 4G/5G CGNAT)
       pc.onconnectionstatechange = () => {
         console.log("[WebRTC] Connection state changed to:", pc.connectionState);
         if (pc.connectionState === "connected") {
           setIsRivalConnected(true);
-        } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
-          setIsRivalConnected(false);
+        } else if (
+          pc.connectionState === "disconnected" ||
+          pc.connectionState === "failed" ||
+          pc.connectionState === "closed"
+        ) {
           setIsP2PActive(false);
+          if (!isRivalFirestoreConnectedRef.current) {
+            setIsRivalConnected(false);
+          }
         }
       };
 
@@ -751,7 +991,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         dc.onclose = () => {
           console.log("[WebRTC DataChannel] Closed!");
           setIsP2PActive(false);
-          setIsRivalConnected(false);
+          if (!isRivalFirestoreConnectedRef.current) {
+            setIsRivalConnected(false);
+          }
         };
         dc.onmessage = handleDataMessage;
 
@@ -774,7 +1016,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           dc.onclose = () => {
             console.log("[WebRTC DataChannel] Closed!");
             setIsP2PActive(false);
-            setIsRivalConnected(false);
+            if (!isRivalFirestoreConnectedRef.current) {
+              setIsRivalConnected(false);
+            }
           };
           dc.onmessage = handleDataMessage;
         };
@@ -1193,20 +1437,40 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         if (isCreator) {
           // We are creator. Rival is player.
           connected = data.playerConnected === true;
+          if (typeof data.playerUid === "string" && data.playerUid.trim()) {
+            rivalUidRef.current = data.playerUid.trim();
+          }
           if (data.playerName && config.rival.fullName !== data.playerName) {
             config.rival.fullName = data.playerName;
           }
         } else {
           // We are player. Rival is creator.
           connected = data.creatorConnected === true;
+          if (typeof data.creatorUid === "string" && data.creatorUid.trim()) {
+            rivalUidRef.current = data.creatorUid.trim();
+          }
           if (data.creatorName && config.rival.fullName !== data.creatorName) {
             config.rival.fullName = data.creatorName;
           }
         }
 
-        // Monitor connection status: only trust Firestore before WebRTC is active
+        // Detect opponent voluntary forfeit via Firestore
+        if (
+          data.status === "forfeited" &&
+          data.forfeitByUid &&
+          data.forfeitByUid !== user.uid &&
+          !duelFinishedRef.current
+        ) {
+          void awardForfeitVictory();
+          return;
+        }
+
+        isRivalFirestoreConnectedRef.current =
+          connected && data.status !== "forfeited" && data.status !== "cancelled";
+
+        // Monitor connection status: trust Firestore whenever P2P DataChannel isn't open (e.g. 4G/5G CGNAT)
         if (!isP2PActiveRef.current) {
-          setIsRivalConnected(connected);
+          setIsRivalConnected(isRivalFirestoreConnectedRef.current);
         }
 
         // Reliable Firestore fallback for ready states & target verification photo
@@ -1221,6 +1485,105 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         const remotePhoto = isCreator ? data.playerPhoto : data.creatorPhoto;
         if (typeof remotePhoto === "string" && remotePhoto.length > 0) {
           setRivalPhoto(remotePhoto);
+        }
+
+        // Firestore 4G/5G Relay Fallback: idempotently reconcile opponent shots & shoot-off by (end, idx)
+        const remoteShotsRaw = isCreator ? data.playerShots : data.creatorShots;
+        if (Array.isArray(remoteShotsRaw)) {
+          setRivalTiros((prev) => {
+            let changed = false;
+            const nextTiros = prev.map((arr) => [...(arr || [])]);
+            while (nextTiros.length < 5) nextTiros.push([]);
+
+            for (let eIdx = 0; eIdx < 5; eIdx++) {
+              const endItems = remoteShotsRaw
+                .filter((s: any) => s && typeof s.end === "number" && s.end === eIdx)
+                .sort((a: any, b: any) => Number(a.idx ?? 0) - Number(b.idx ?? 0))
+                .slice(0, 3);
+              const remoteVals = endItems.map((s: any) =>
+                s.label !== undefined && s.label !== null && String(s.label).length > 0
+                  ? s.label
+                  : Number(s.score ?? 0)
+              );
+              const localEnd = nextTiros[eIdx] || [];
+
+              if (!isP2PActiveRef.current) {
+                const same =
+                  localEnd.length === remoteVals.length &&
+                  localEnd.every((v, idx) => String(v) === String(remoteVals[idx]));
+                if (!same) {
+                  nextTiros[eIdx] = remoteVals;
+                  changed = true;
+                }
+              } else if (remoteVals.length > localEnd.length) {
+                nextTiros[eIdx] = [...localEnd, ...remoteVals.slice(localEnd.length)];
+                changed = true;
+              }
+            }
+            return changed ? nextTiros : prev;
+          });
+
+          setRivalImpacts((prev) => {
+            const validCoords = remoteShotsRaw.filter(
+              (s: any) =>
+                s &&
+                typeof s.end === "number" &&
+                typeof s.idx === "number" &&
+                typeof s.x === "number" &&
+                typeof s.y === "number"
+            );
+            if (!isP2PActiveRef.current) {
+              const mapped: ShotImpact[] = validCoords.map((s: any) => ({
+                endIdx: s.end,
+                arrowIdx: s.idx,
+                x: s.x,
+                y: s.y,
+                value: String(s.label ?? s.score ?? "0")
+              }));
+              const same =
+                prev.length === mapped.length &&
+                prev.every(
+                  (p, i) =>
+                    p.endIdx === mapped[i].endIdx &&
+                    p.arrowIdx === mapped[i].arrowIdx &&
+                    p.value === mapped[i].value
+                );
+              return same ? prev : mapped;
+            }
+            let added = false;
+            const nextImpacts = [...prev];
+            for (const s of validCoords) {
+              const exists = nextImpacts.some(
+                (imp) => imp.endIdx === s.end && imp.arrowIdx === s.idx
+              );
+              if (!exists) {
+                nextImpacts.push({
+                  endIdx: s.end,
+                  arrowIdx: s.idx,
+                  x: s.x,
+                  y: s.y,
+                  value: String(s.label ?? s.score ?? "0")
+                });
+                added = true;
+              }
+            }
+            return added ? nextImpacts : prev;
+          });
+        }
+
+        const remoteShootoff = isCreator ? data.playerShootoff : data.creatorShootoff;
+        if (remoteShootoff && typeof remoteShootoff.score === "number") {
+          setRivalShootOffShot((prev) =>
+            prev === remoteShootoff.score ? prev : remoteShootoff.score
+          );
+          if (typeof remoteShootoff.distanceToCenter === "number") {
+            setRivalShootOffDistCm((prev) =>
+              prev === remoteShootoff.distanceToCenter ? prev : remoteShootoff.distanceToCenter
+            );
+          }
+        } else if (remoteShootoff === null && !isP2PActiveRef.current) {
+          setRivalShootOffShot((prev) => (prev === null ? prev : null));
+          setRivalShootOffDistCm((prev) => (prev === null ? prev : null));
         }
 
         // Non-blocking UI banner and vibrate on connection established
@@ -1246,8 +1609,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       unsubscribe();
-      // Send exit message to Remote Peer
-      sendDataMessage({ type: "exit" });
+      // Notify remote peer cleanly without triggering false mid-game forfeit when match already ended
+      sendDataMessage({ type: "exit", finished: duelFinishedRef.current });
       // Mark ourselves as offline when unmounting
       updateOurStatus(false);
       // Clean up walkie status
@@ -1413,8 +1776,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     };
   }, [isWalkieTalkieActive]);
 
-  // Voice synthesis (Text-to-Speech)
+  // Voice synthesis (Text-to-Speech — simulated bot duels ONLY; muted in live human duels)
   const speakRivalPhrase = (text: string) => {
+    if (isFriendDuel) return;
     playRadioStatic();
     setWalkieText(text);
     setIsRivalSpeaking(true);
@@ -1465,6 +1829,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const speakRivalPhraseOnTurnStart = () => {
+    if (isFriendDuel) return;
     if (!isWalkieTalkieActive) return;
     if (Math.random() > 0.3) return; // 30% chance
 
@@ -1480,6 +1845,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const speakRivalPhraseOnShot = (score: number) => {
+    if (isFriendDuel) return;
     if (!isWalkieTalkieActive) return;
 
     setTimeout(() => {
@@ -1504,6 +1870,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const speakRivalPhraseOnMatchEnd = (userWon: boolean | null) => {
+    if (isFriendDuel) return;
     if (!isWalkieTalkieActive) return;
 
     setTimeout(() => {
@@ -1740,16 +2107,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setAnimatingValue({ value, id: Date.now() });
 
     // Save impact coordinates
+    const arrowIndexForShot = isShootOff ? 99 : userTiros[currentEnd].length;
     const newImpact: ShotImpact = {
       endIdx: currentEnd,
-      arrowIdx: isShootOff ? 99 : userTiros[currentEnd].length,
+      arrowIdx: arrowIndexForShot,
       x,
       y,
       value
     };
-    setImpacts((prev) => [...prev, newImpact]);
-    
-    // Speak on user shot
+    const nextImpacts = [...impacts, newImpact];
+    setImpacts(nextImpacts);
+
+    // Speak on user shot (bots only)
     speakRivalPhraseOnShot(numericValue);
 
     if (isShootOff) {
@@ -1764,6 +2133,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       setUserShootOffDistCm(distCm);
       if (isFriendDuel) {
         sendDataMessage({ type: "shootoff", value: numericValue, distCm });
+        void syncLocalShootOffToFirestore({
+          score: numericValue,
+          ...(Number.isFinite(distCm) ? { distanceToCenter: distCm } : {})
+        });
       } else {
         simulateRivalShootOff();
       }
@@ -1790,16 +2163,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }
     }
 
-    // Trigger simulated rival shot or send via WebRTC
+    // Trigger simulated rival shot or send via WebRTC + Firestore 4G/5G Relay
     if (isFriendDuel) {
       sendDataMessage({
         type: "shot",
         value,
         x,
         y,
-        arrowIdx: isShootOff ? 99 : userTiros[currentEnd].length,
+        arrowIdx: arrowIndexForShot,
         mode
       });
+      void syncLocalShotsToFirestore(updatedTiros, nextImpacts);
     } else {
       simulateRivalShot(nextArrow, currentEndShots);
     }
@@ -1828,6 +2202,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       setUserShootOffDistCm(null);
       if (isFriendDuel) {
         sendDataMessage({ type: "undo-shootoff" });
+        void syncLocalShootOffToFirestore(null);
       }
       return;
     }
@@ -1836,7 +2211,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (shotsCount === 0) return;
 
     // Remove last impact point
-    setImpacts((prev) => prev.filter(imp => !(imp.endIdx === currentEnd && imp.arrowIdx === shotsCount - 1)));
+    const filteredImpacts = impacts.filter(
+      (imp) => !(imp.endIdx === currentEnd && imp.arrowIdx === shotsCount - 1)
+    );
+    setImpacts(filteredImpacts);
 
     // Remove last shot
     const updatedTiros = [...userTiros];
@@ -1846,6 +2224,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     if (isFriendDuel) {
       sendDataMessage({ type: "undo" });
+      void syncLocalShotsToFirestore(updatedTiros, filteredImpacts);
     } else {
       // Also remove rival corresponding shot
       const updatedRivalTiros = [...rivalTiros];
@@ -1990,6 +2369,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           setRivalShootOffShot(null);
           setUserShootOffDistCm(null);
           setRivalShootOffDistCm(null);
+          if (isFriendDuel) {
+            void syncLocalShootOffToFirestore(null);
+          }
         }
       }, 800);
     }
@@ -2139,6 +2521,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   }, [userSetPoints, rivalSetPoints, endSummary]);
 
   const handleNextEnd = () => {
+    const targetNextEnd = currentEnd + 1;
     setEndSummary(null);
     setEndSummaryMsg(null);
     setValidationPhase("IDLE");
@@ -2146,7 +2529,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setRivalPhoto(null);
     setReviewTab("PHOTO");
     setRivalInputMode("TARGET");
-    setCurrentEnd((prev) => prev + 1);
+    setCurrentEnd((prev) => Math.max(prev, targetNextEnd));
     setCurrentArrow(0);
     setIsUserPresent(false);
     setIsRivalPresent(false);
@@ -2154,7 +2537,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setIsRivalReady(false);
     setIsReadyCheckActive(true);
     if (isFriendDuel) {
-      sendDataMessage({ type: "next-end" });
+      sendDataMessage({ type: "next-end", nextEnd: targetNextEnd });
       updateOurReadyState(false);
       // Clean photos in Firestore for the new end
       const docRef = doc(db, "active_duels", config.id);
@@ -2165,6 +2548,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }).catch(err => console.error("Error clearing photo on next end:", err));
     }
   };
+
+  // Automatically wipe Base64 validation photos & WebRTC SDP in Firestore as soon as the duel concludes
+  useEffect(() => {
+    if (duelFinished && isFriendDuel && !forfeitHandledRef.current && !localVoluntaryForfeitRef.current) {
+      void cleanupFinishedDuelInFirestore();
+    }
+  }, [duelFinished, isFriendDuel]);
 
   const getCumulativeTotal = (tiros: (string | number)[][]): number => {
     return tiros.reduce((sum: number, end) => sum + end.reduce((endSum: number, b) => endSum + getValNumeric(b), 0), 0);
@@ -2220,6 +2610,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     });
 
     try {
+      if (isFriendDuel && !forfeitHandledRef.current) {
+        await cleanupFinishedDuelInFirestore();
+      }
       await saveLocalSession(duelId, newSession);
       // Persist duel result to the cloud so it survives reinstall and reaches the Coach
       await addToSyncQueue({
@@ -2241,12 +2634,63 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "🇲🇽 MEX";
   const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷 CRC";
 
-  // Confirm and go back warning if match in progress
+  // Confirm and go back warning if match in progress (voluntary exit mid-game in online duel triggers forfeit)
   const handleBackWithConfirm = async () => {
     if (duelFinished) {
       onBack();
       return;
     }
+
+    if (isFriendDuel) {
+      const isActiveOnlineMatch =
+        hasConnectedOnceRef.current || isRivalConnected || Boolean(rivalUidRef.current);
+
+      if (isActiveOnlineMatch) {
+        const confirmForfeit = await showOledConfirm(
+          "¿Seguro que deseas abandonar el duelo en línea? Se adjudicará Victoria por Abandono (W.O.) a tu oponente.",
+          {
+            confirmLabel: "Abandonar Duelo",
+            cancelLabel: "Seguir en Arena"
+          }
+        );
+        if (!confirmForfeit) return;
+
+        localVoluntaryForfeitRef.current = true;
+        sendDataMessage({ type: "exit", forfeited: true });
+        if (config.id) {
+          await updateDoc(doc(db, "active_duels", config.id), {
+            status: "forfeited",
+            forfeitByUid: user.uid,
+            winnerUid: rivalUidRef.current || "",
+            creatorPhoto: null,
+            playerPhoto: null,
+            webrtcOffer: null,
+            webrtcAnswer: null,
+            updatedAt: Date.now()
+          }).catch((err) => console.warn("Error recording voluntary forfeit:", err));
+        }
+        onBack();
+        return;
+      }
+
+      const confirmCancelWaiting = await showOledConfirm(
+        "¿Deseas cerrar esta sala en espera y volver al lobby?"
+      );
+      if (confirmCancelWaiting) {
+        localVoluntaryForfeitRef.current = true;
+        if (config.id) {
+          await updateDoc(doc(db, "active_duels", config.id), {
+            status: "cancelled",
+            webrtcOffer: null,
+            webrtcAnswer: null,
+            updatedAt: Date.now()
+          }).catch(() => {});
+        }
+        onBack();
+      }
+      return;
+    }
+
     const confirmExit = await showOledConfirm("¿Seguro que quieres salir? El progreso del duelo se guardará automáticamente como borrador.");
     if (confirmExit) {
       onBack();
@@ -2272,8 +2716,20 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </span>
           {isFriendDuel && (
             <span
-              className={`w-1.5 h-1.5 rounded-full ${isP2PActive ? "bg-cyan-neon animate-pulse" : "bg-red-500 animate-ping"}`}
-              title={isP2PActive ? "Conexión Directa P2P Activa (Coste $0)" : "Buscando conexión directa..."}
+              className={`w-1.5 h-1.5 rounded-full ${
+                isP2PActive
+                  ? "bg-cyan-neon animate-pulse"
+                  : isRivalConnected
+                  ? "bg-emerald-400"
+                  : "bg-red-500 animate-ping"
+              }`}
+              title={
+                isP2PActive
+                  ? "Conexión Directa P2P Activa"
+                  : isRivalConnected
+                  ? "Modo Relay 4G/5G Activo"
+                  : "Buscando conexión..."
+              }
             />
           )}
         </div>
@@ -3338,13 +3794,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold">
+                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold tabular-nums">
                     <span className="text-white">Estado del Rival:</span>
-                    <span className={rivalPhoto ? "text-cyan-neon" : "text-yellow-gold flex items-center gap-1"}>
-                      {rivalPhoto ? "Foto Subida" : (
+                    <span className={rivalPhoto ? "text-cyan-neon" : photoUploadCountdown === 0 ? "text-white" : "text-yellow-gold flex items-center gap-1"}>
+                      {rivalPhoto ? (
+                        "Foto Subida"
+                      ) : photoUploadCountdown === 0 ? (
+                        "Tiempo agotado (sin foto)"
+                      ) : (
                         <>
                           <span className="inline-block w-1.5 h-1.5 border border-yellow-gold border-t-transparent animate-spin rounded-full" />
-                          <span>Esperando rival...</span>
+                          <span>Esperando rival ({photoUploadCountdown}s)...</span>
                         </>
                       )}
                     </span>
@@ -3352,10 +3812,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
                   <button
                     onClick={() => setValidationPhase("REVIEW")}
-                    disabled={!userPhoto || !rivalPhoto}
+                    disabled={!userPhoto || (!rivalPhoto && photoUploadCountdown > 0)}
                     className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black disabled:bg-neutral-900 disabled:text-white disabled:border border-white/5 font-extrabold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
-                    <span>Revisar Diana Rival</span>
+                    <span>
+                      {userPhoto && !rivalPhoto && photoUploadCountdown === 0
+                        ? "Continuar sin Foto Rival"
+                        : "Revisar Diana Rival"}
+                    </span>
                     <span>→</span>
                   </button>
                 </div>
@@ -3406,8 +3870,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             <img src={rivalPhoto} alt="Foto Campo Rival" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full bg-neutral-900 flex flex-col items-center justify-center text-center p-3 relative">
-                              <span className="text-[11.6px] text-white font-extrabold uppercase">Foto de Campo</span>
-                              <span className="text-[9.3px] text-cyan-neon font-bold uppercase mt-1">Duelo con Bot / Solo</span>
+                              <span className="text-[11.6px] text-white font-extrabold uppercase">
+                                {isFriendDuel ? "Sin Foto del Rival" : "Foto de Campo"}
+                              </span>
+                              <span className="text-[9.3px] text-cyan-neon font-bold uppercase mt-1">
+                                {isFriendDuel ? "Tiempo de carga agotado" : "Duelo con Bot / Solo"}
+                              </span>
                             </div>
                           )
                         ) : (
@@ -3602,7 +4070,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
                 >
                   <Share2 size={16} />
-                  <span>Compartir por WhatsApp</span>
+                  <span>Compartir por Mensajería</span>
                 </button>
                 <button
                   onClick={handleSaveAndExit}
@@ -3731,11 +4199,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 {disconnectSeconds >= 30 && (
                   <button
                     onClick={() => {
-                      onBack();
+                      void awardForfeitVictory();
                     }}
-                    className="w-full py-2.5 rounded-xl bg-white border border-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
+                    className="w-full py-2.5 rounded-xl bg-cyan-neon border border-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
                   >
-                    Abandonar y Cerrar Match
+                    Adjudicar Victoria W.O. y Salir
                   </button>
                 )}
               </div>

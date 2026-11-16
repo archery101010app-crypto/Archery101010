@@ -73,8 +73,10 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         {user && onToggleCoachViewMode && !linkedToCoach && (
           <div className="flex bg-[#090B0E] p-0.5 sm:p-1 rounded-full border border-white/[0.08] items-center">
             <button
+              type="button"
+              aria-pressed={!coachViewMode}
               onClick={() => onToggleCoachViewMode(false)}
-              className={`h-7.5 px-2 min-[380px]:px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
+              className={`min-h-[38px] h-[38px] px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -83,8 +85,10 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               {t("roleAthlete")}
             </button>
             <button
+              type="button"
+              aria-pressed={coachViewMode}
               onClick={() => onToggleCoachViewMode(true)}
-              className={`h-7.5 px-2 min-[380px]:px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
+              className={`min-h-[38px] h-[38px] px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -102,12 +106,14 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
 
         {/* Contrast Toggle Button */}
         <motion.button
+          type="button"
           whileTap={{ scale: 0.9 }}
           onClick={handleToggleTheme}
-          className="flex items-center justify-center p-1.5 sm:p-2 rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200"
+          className="w-9.5 h-9.5 min-w-[38px] min-h-[38px] flex items-center justify-center rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200 shrink-0"
           title={theme === "dark" ? "Fondo Claro" : "Fondo Oscuro"}
+          aria-label={theme === "dark" ? "Cambiar a fondo claro" : "Cambiar a fondo oscuro"}
         >
-          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+          {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
         </motion.button>
       </div>
     </header>

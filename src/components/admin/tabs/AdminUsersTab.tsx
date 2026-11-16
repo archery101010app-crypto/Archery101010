@@ -184,7 +184,7 @@ export default function AdminUsersTab() {
       "Nombre Completo",
       "Alias / Gamertag",
       "Correo",
-      "WhatsApp",
+      "Mensajería",
       "Edad",
       "Categoría WA",
       "Fecha de Nacimiento",
@@ -437,12 +437,13 @@ export default function AdminUsersTab() {
           </button>
 
           <button
+            type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
-            title="Descargar tabla en formato Excel / CSV"
+            className="min-h-[38px] flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
+            title="Descargar tabla en formato CSV"
           >
-            <FileSpreadsheet size={14} />
-            <span>Exportar Excel / CSV</span>
+            <FileSpreadsheet size={14} aria-hidden="true" />
+            <span>Exportar Tabla CSV</span>
           </button>
         </div>
       </div>
@@ -676,27 +677,33 @@ export default function AdminUsersTab() {
                     </span>
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1 ml-1">
+                    <div className="flex items-center gap-1.5 ml-1">
                       <button
+                        type="button"
                         onClick={() => setSelectedUser(u)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white transition cursor-pointer"
+                        aria-label={`Ver ficha completa de ${u.fullName}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white transition cursor-pointer"
                         title="Ver Ficha Completa"
                       >
-                        <Eye size={13} />
+                        <Eye size={14} aria-hidden="true" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleToggleRole(u.uid)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon hover:text-cyan-neon transition cursor-pointer"
+                        aria-label={`Cambiar rol de ${u.fullName}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon transition cursor-pointer"
                         title="Cambiar Rol (Atleta / Coach / Admin)"
                       >
-                        <Shield size={13} />
+                        <Shield size={14} aria-hidden="true" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleTogglePlan(u.uid)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold hover:text-yellow-gold transition cursor-pointer"
+                        aria-label={`Alternar plan de ${u.fullName}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold transition cursor-pointer"
                         title="Alternar Plan (FREE / PRO)"
                       >
-                        <Crown size={13} />
+                        <Crown size={14} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -818,7 +825,7 @@ export default function AdminUsersTab() {
                       {selectedUser.clubId || "Ninguno"}
                     </span>
 
-                    <span className="text-white">Teléfono / WhatsApp:</span>
+                    <span className="text-white">Teléfono / Mensajería:</span>
                     <span className="text-white font-bold text-right truncate">
                       {selectedUser.whatsappNumber || "No indicado"}
                     </span>

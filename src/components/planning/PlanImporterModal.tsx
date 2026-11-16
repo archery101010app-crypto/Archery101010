@@ -535,7 +535,7 @@ export default function PlanImporterModal({
             const tsv = getSheetTsv(firstSheet);
             applyRawSpreadsheetTextToMonthTable(tsv);
           } else {
-            setImportError("El archivo Excel parece no tener hojas legibles.");
+            setImportError("El archivo parece no tener hojas legibles.");
           }
         }
       };
@@ -562,10 +562,10 @@ export default function PlanImporterModal({
         applyRawSpreadsheetTextToMonthTable(res.csv);
         setShowSheetsUrlBox(false);
       } else {
-        setImportError(res.error || "No se pudo leer el enlace de Google Sheets.");
+        setImportError(res.error || "No se pudo leer el enlace de la hoja en la nube.");
       }
     } catch {
-      setImportError("Error de red al conectar con Google Sheets.");
+      setImportError("Error de red al conectar con la hoja en la nube.");
     } finally {
       setIsFetchingSheet(false);
     }
@@ -732,16 +732,17 @@ export default function PlanImporterModal({
                 {titleOverride || "Planificador Mensual (Día 1 al 31)"}
               </h3>
               <p className="text-[11.5px] text-white mt-0.5">
-                Escribe directo en cada día o pega tus renglones desde Excel / Google Sheets
+                Escribe directo en cada día o pega tus renglones desde una hoja de cálculo
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition cursor-pointer shrink-0"
+            aria-label="Cerrar planificador"
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition cursor-pointer shrink-0"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -913,52 +914,52 @@ export default function PlanImporterModal({
                 className="hidden"
               />
 
-              {/* Botones rápidos opcionales para traer de Excel / Sheets */}
+              {/* Botones rápidos opcionales para traer de hoja de cálculo */}
               <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handlePasteFromClipboard}
-                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[12px] sm:text-[12.6px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[12px] sm:text-[12.6px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <ClipboardPaste size={13} className="shrink-0" />
-                  <span>Pegar de Excel / Sheets</span>
+                  <ClipboardPaste size={13} className="shrink-0" aria-hidden="true" />
+                  <span>Pegar de Hoja</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <UploadCloud size={13} className="text-cyan-neon shrink-0" />
+                  <UploadCloud size={13} className="text-cyan-neon shrink-0" aria-hidden="true" />
                   <span>Subir .xlsx</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowSheetsUrlBox((v) => !v)}
-                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
-                  <Link2 size={13} className="text-emerald-400 shrink-0" />
-                  <span>Link Sheets</span>
+                  <Link2 size={13} className="text-emerald-400 shrink-0" aria-hidden="true" />
+                  <span>Enlace de Hoja en Nube</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
-                  className="px-2 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
+                  className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                   title="Descargar hoja vacía con los días del mes"
                 >
-                  <Download size={12} className="shrink-0" />
+                  <Download size={12} className="shrink-0" aria-hidden="true" />
                   <span>Plantilla Vacía</span>
                 </button>
               </div>
             </div>
 
-            {/* Si el archivo Excel subido tiene varias pestañas */}
+            {/* Si el archivo subido tiene varias pestañas */}
             {excelSheets.length > 1 && (
               <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
                 <span className="text-[10.5px] font-black uppercase text-cyan-neon">
-                  Pestaña del Excel:
+                  Pestaña del Archivo:
                 </span>
                 {excelSheets.map((sName) => (
                   <button
@@ -972,7 +973,7 @@ export default function PlanImporterModal({
                         );
                       }
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       selectedExcelSheet === sName
                         ? "bg-cyan-neon text-black font-black"
                         : "bg-white/5 text-white hover:bg-white/10"
@@ -988,7 +989,7 @@ export default function PlanImporterModal({
             {showPasteBox && (
               <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
                 <span className="text-[11px] text-white font-bold">
-                  Pega aquí las celdas copiadas de tu Excel o Google Sheets (pueden tener fecha o ser simplemente los renglones del mes):
+                  Pega aquí las celdas copiadas de tu hoja de cálculo (pueden tener fecha o ser simplemente los renglones del mes):
                 </span>
                 <textarea
                   value={pasteBoxText}
@@ -1001,14 +1002,14 @@ export default function PlanImporterModal({
                   <button
                     type="button"
                     onClick={() => setShowPasteBox(false)}
-                    className="px-3 py-1.5 rounded-xl bg-white/5 text-white text-xs font-bold cursor-pointer"
+                    className="min-h-[36px] px-3 py-1.5 rounded-xl bg-white/5 text-white text-xs font-bold cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="button"
                     onClick={() => applyRawSpreadsheetTextToMonthTable(pasteBoxText)}
-                    className="px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase cursor-pointer"
+                    className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase cursor-pointer"
                   >
                     Pasar a la Tabla del Mes
                   </button>
@@ -1016,14 +1017,14 @@ export default function PlanImporterModal({
               </div>
             )}
 
-            {/* Cuadro opcional para pegar link de Google Sheets */}
+            {/* Cuadro opcional para pegar enlace de hoja en la nube */}
             {showSheetsUrlBox && (
               <div className="flex gap-2 pt-2 border-t border-white/10">
                 <input
                   type="url"
                   value={sheetUrlInput}
                   onChange={(e) => setSheetUrlInput(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  placeholder="https://..."
                   className="flex-1 bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-neon"
                 />
                 <button
@@ -1045,9 +1046,10 @@ export default function PlanImporterModal({
               <button
                 type="button"
                 onClick={() => setStatusMessage(null)}
-                className="text-white hover:text-white cursor-pointer"
+                aria-label="Cerrar mensaje de estado"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white hover:bg-white/10 cursor-pointer shrink-0"
               >
-                <X size={14} />
+                <X size={14} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1166,10 +1168,11 @@ export default function PlanImporterModal({
                           <button
                             type="button"
                             onClick={() => handleRepeatWeekdayInMonth(row)}
+                            aria-label={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
                             title={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
-                            className="p-2 rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer shrink-0"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer shrink-0"
                           >
-                            <Copy size={13} />
+                            <Copy size={13} aria-hidden="true" />
                           </button>
                         )}
                       </div>

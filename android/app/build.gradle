@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keystorePropsFile = file("../keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "com.archery101010.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +13,8 @@ android {
         applicationId "com.archery101010.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50900
-        versionName "2.109"
+        versionCode 51000
+        versionName "2.110"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -18,19 +24,27 @@ android {
     }
     signingConfigs {
         release {
-            if (file("archery101010-upload.jks").exists()) {
-                storeFile file("archery101010-upload.jks")
-                storePassword "archery101010"
-                keyAlias "archery101010"
-                keyPassword "archery101010"
+            def ksPath = keystoreProps.getProperty("storeFile") ?: System.getenv("ARCHERY_KEYSTORE_PATH")
+            def ksPass = keystoreProps.getProperty("storePassword") ?: System.getenv("ARCHERY_KEYSTORE_PASSWORD")
+            def ksAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("ARCHERY_KEY_ALIAS")
+            def ksKeyPass = keystoreProps.getProperty("keyPassword") ?: System.getenv("ARCHERY_KEY_PASSWORD")
+            if (ksPath) {
+                def resolvedKsFile = file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath)
+                if (resolvedKsFile.exists() && ksPass && ksAlias && ksKeyPass) {
+                    storeFile resolvedKsFile
+                    storePassword ksPass
+                    keyAlias ksAlias
+                    keyPassword ksKeyPass
+                }
             }
         }
     }
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

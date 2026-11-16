@@ -2,14 +2,27 @@ import { getMessagingInstance } from "./firebase";
 import { getToken } from "firebase/messaging";
 import { updateProfile } from "./authService";
 
-const SENDER_ID = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585";
-const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "";
+const SENDER_ID = (process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585").trim();
+const VAPID_KEY = (process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "").trim();
+const MESSAGING_SW_SCOPE = "/firebase-messaging";
 
 export interface PushSetupOutcome {
   enabled: boolean;
   mode: "fcm" | "in_app" | "denied";
   token: string | null;
   message: string;
+}
+
+export interface NotificationCapabilityStatus {
+  supported: boolean;
+  webPushAvailable: boolean;
+  inAppRealtimeAvailable: boolean;
+  inWebView: boolean;
+  hasVapidKey: boolean;
+  permission: NotificationPermission | "unsupported";
+  activeMode: "fcm" | "in_app" | "denied" | "prompt";
+  statusLabel: string;
+  description: string;
 }
 
 export function isAndroidOrCapacitorWebView(): boolean {
@@ -21,6 +34,131 @@ export function isAndroidOrCapacitorWebView(): boolean {
       /; wv\)/i.test(ua) ||
       (/Android/i.test(ua) && /Version\/\d+/i.test(ua))
   );
+}
+
+function buildMessagingSwUrl(): string {
+  const params = new URLSearchParams({
+    messagingSenderId: SENDER_ID
+  });
+  if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    params.set("apiKey", process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+  }
+  if (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+    params.set("projectId", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  }
+  if (process.env.NEXT_PUBLIC_FIREBASE_APP_ID) {
+    params.set("appId", process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
+  }
+  return `/firebase-messaging-sw.js?${params.toString()}`;
+}
+
+async function getOrRegisterMessagingServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === "undefined" || typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    return null;
+  }
+  try {
+    const existing = await navigator.serviceWorker.getRegistration(MESSAGING_SW_SCOPE);
+    if (existing) {
+      return existing;
+    }
+    const swUrl = buildMessagingSwUrl();
+    return await navigator.serviceWorker.register(swUrl, {
+      scope: MESSAGING_SW_SCOPE
+    });
+  } catch (err) {
+    console.warn("Could not register firebase-messaging-sw.js:", err);
+    return null;
+  }
+}
+
+/**
+ * Exposes a clean capability summary so UI screens can clearly distinguish
+ * full Web Push (FCM background notifications) vs In-App Real-Time Firestore alerts.
+ */
+export function getNotificationCapabilityStatus(): NotificationCapabilityStatus {
+  if (typeof window === "undefined") {
+    return {
+      supported: false,
+      webPushAvailable: false,
+      inAppRealtimeAvailable: false,
+      inWebView: false,
+      hasVapidKey: Boolean(VAPID_KEY),
+      permission: "unsupported",
+      activeMode: "in_app",
+      statusLabel: "No disponible",
+      description: "Entorno de servidor sin soporte de notificaciones."
+    };
+  }
+
+  const inWebView = isAndroidOrCapacitorWebView();
+  const hasWebNotification =
+    "Notification" in window && typeof Notification?.requestPermission === "function";
+  const hasServiceWorker = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+  const hasVapidKey = Boolean(VAPID_KEY);
+  const permission: NotificationPermission | "unsupported" = hasWebNotification
+    ? Notification.permission
+    : "unsupported";
+
+  const webPushAvailable = !inWebView && hasWebNotification && hasServiceWorker && hasVapidKey;
+
+  if (!inWebView && permission === "denied") {
+    return {
+      supported: true,
+      webPushAvailable,
+      inAppRealtimeAvailable: true,
+      inWebView,
+      hasVapidKey,
+      permission,
+      activeMode: "denied",
+      statusLabel: "Alertas en App (Push bloqueado)",
+      description:
+        "Las notificaciones del navegador están bloqueadas; recibirás alertas en vivo dentro de la app."
+    };
+  }
+
+  if (webPushAvailable && permission === "granted") {
+    return {
+      supported: true,
+      webPushAvailable: true,
+      inAppRealtimeAvailable: true,
+      inWebView: false,
+      hasVapidKey: true,
+      permission,
+      activeMode: "fcm",
+      statusLabel: "Web Push + Tiempo Real Activo",
+      description:
+        "Recibirás notificaciones Push en segundo plano y alertas instantáneas dentro de ARCHERY 101010."
+    };
+  }
+
+  if (webPushAvailable && permission === "default") {
+    return {
+      supported: true,
+      webPushAvailable: true,
+      inAppRealtimeAvailable: true,
+      inWebView: false,
+      hasVapidKey: true,
+      permission,
+      activeMode: "prompt",
+      statusLabel: "Push Disponible (Pendiente de Permiso)",
+      description:
+        "Activa las notificaciones para recibir avisos de retos en línea y vinculación de alumnos incluso con la app cerrada."
+    };
+  }
+
+  return {
+    supported: true,
+    webPushAvailable: false,
+    inAppRealtimeAvailable: true,
+    inWebView,
+    hasVapidKey,
+    permission,
+    activeMode: "in_app",
+    statusLabel: "Alertas en Tiempo Real en la App",
+    description: inWebView
+      ? "Alertas instantáneas activas en tiempo real mientras usas la aplicación móvil."
+      : "Alertas instantáneas activas en tiempo real dentro de ARCHERY 101010."
+  };
 }
 
 /**
@@ -41,7 +179,8 @@ export async function configurePushOrInAppNotifications(
   }
 
   const inWebView = isAndroidOrCapacitorWebView();
-  const hasWebNotification = "Notification" in window && typeof Notification?.requestPermission === "function";
+  const hasWebNotification =
+    "Notification" in window && typeof Notification?.requestPermission === "function";
   const hasServiceWorker = typeof navigator !== "undefined" && "serviceWorker" in navigator;
 
   // Android WebView or environments without Web Push API / VAPID_KEY -> enable clean In-App alerts
@@ -79,24 +218,24 @@ export async function configurePushOrInAppNotifications(
         enabled: false,
         mode: "denied",
         token: null,
-        message: "Permiso de notificaciones denegado. Puedes habilitarlo en los ajustes del navegador."
+        message:
+          "Permiso de notificaciones denegado. Puedes habilitarlo en los ajustes del navegador."
       };
     }
 
-    const messaging = await getMessagingInstance();
-    if (!messaging) {
+    const [messaging, registration] = await Promise.all([
+      getMessagingInstance(),
+      getOrRegisterMessagingServiceWorker()
+    ]);
+
+    if (!messaging || !registration) {
       return {
         enabled: true,
         mode: "in_app",
         token: null,
-        message: "Alertas activadas dentro de la aplicación."
+        message: "Alertas en tiempo real activadas dentro de la aplicación."
       };
     }
-
-    const swUrl = `/firebase-messaging-sw.js?messagingSenderId=${encodeURIComponent(SENDER_ID)}`;
-    const registration = await navigator.serviceWorker.register(swUrl, {
-      scope: "/firebase-messaging"
-    });
 
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
@@ -119,7 +258,7 @@ export async function configurePushOrInAppNotifications(
       enabled: true,
       mode: "in_app",
       token: null,
-      message: "Alertas activadas dentro de la aplicación."
+      message: "Alertas en tiempo real activadas dentro de la aplicación."
     };
   } catch (err) {
     console.warn("Web Push fallback to in-app notifications:", err);
@@ -159,13 +298,12 @@ export async function registerPushSilent(userUid: string): Promise<void> {
 
   if (Notification.permission === "granted" && VAPID_KEY) {
     try {
-      const messaging = await getMessagingInstance();
-      if (messaging) {
-        const swUrl = `/firebase-messaging-sw.js?messagingSenderId=${encodeURIComponent(SENDER_ID)}`;
-        const registration = await navigator.serviceWorker.register(swUrl, {
-          scope: "/firebase-messaging"
-        });
+      const [messaging, registration] = await Promise.all([
+        getMessagingInstance(),
+        getOrRegisterMessagingServiceWorker()
+      ]);
 
+      if (messaging && registration) {
         const token = await getToken(messaging, {
           vapidKey: VAPID_KEY,
           serviceWorkerRegistration: registration

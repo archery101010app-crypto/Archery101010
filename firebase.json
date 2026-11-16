@@ -13,6 +13,26 @@
           {
             "key": "Cross-Origin-Opener-Policy",
             "value": "same-origin-allow-popups"
+          },
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(self), microphone=(self), camera=(self)"
           }
         ]
       },
@@ -156,19 +176,6 @@
         ]
       },
       {
-        "source": "/arqueros.csv",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "text/csv; charset=utf-8"
-          },
-          {
-            "key": "Content-Disposition",
-            "value": "attachment; filename=\"arqueros.csv\""
-          }
-        ]
-      },
-      {
         "source": "/playstore-cover-1024x500.png",
         "headers": [
           {
@@ -260,32 +267,6 @@
         ]
       },
       {
-        "source": "/Plan_Maestro_WHOOP_Archery101010_Movil.pdf",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "application/pdf"
-          },
-          {
-            "key": "Content-Disposition",
-            "value": "attachment; filename=\"Plan_Maestro_WHOOP_Archery101010_Movil.pdf\""
-          }
-        ]
-      },
-      {
-        "source": "/Estrategia_Redes_Sociales_WHOOP_Archery101010_Movil.pdf",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "application/pdf"
-          },
-          {
-            "key": "Content-Disposition",
-            "value": "attachment; filename=\"Estrategia_Redes_Sociales_WHOOP_Archery101010_Movil.pdf\""
-          }
-        ]
-      },
-      {
         "source": "/101010-the-app-watermark-transparente.png",
         "headers": [
           {
@@ -312,7 +293,7 @@
         ]
       },
       {
-        "source": "/Archery101010-v2.108.iq",
+        "source": "/Archery101010-v2.110.iq",
         "headers": [
           {
             "key": "Content-Type",
@@ -320,41 +301,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-v2.108.iq\""
-          },
-          {
-            "key": "Cache-Control",
-            "value": "no-store, no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/Archery101010-v2.105.iq",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "application/octet-stream"
-          },
-          {
-            "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-v2.105.iq\""
-          },
-          {
-            "key": "Cache-Control",
-            "value": "no-store, no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/Archery101010-v2.103.iq",
-        "headers": [
-          {
-            "key": "Content-Type",
-            "value": "application/octet-stream"
-          },
-          {
-            "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-v2.103.iq\""
+            "value": "attachment; filename=\"Archery101010-v2.110.iq\""
           },
           {
             "key": "Cache-Control",
@@ -487,37 +434,37 @@
       },
       {
         "source": "/wear-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.108.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.110.aab",
         "type": 302
       },
       {
         "source": "/wear-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.108.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.110.apk",
         "type": 302
       },
       {
         "source": "/phone-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.109.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.110.aab",
         "type": 302
       },
       {
-        "source": "/Archery101010-v2.109.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.109.apk",
+        "source": "/Archery101010-v2.110.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.110.apk",
         "type": 302
       },
       {
         "source": "/archery-app.apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.109.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.110.apk",
         "type": 302
       },
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.109.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.110.apk",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.109.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.110.aab",
         "type": 302
       },
       {
@@ -886,6 +833,7 @@
     "trailingSlash": false
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

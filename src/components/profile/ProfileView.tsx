@@ -536,7 +536,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
         whatsappNumber: clubWhatsApp
       });
       onProfileUpdated(updated);
-      await showOledAlert("WhatsApp de Coach guardado correctamente");
+      await showOledAlert("Teléfono / Mensajería del Coach guardado correctamente");
     } catch (e) {
       console.error(e);
     }
@@ -599,10 +599,12 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
       {/* Header */}
       <div className="flex items-center gap-2.5">
         <button
+          type="button"
           onClick={onBack}
+          aria-label={t("back")}
           className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={16} aria-hidden="true" />
         </button>
         <div className="min-w-0">
           <h2 className="text-white text-[20.2px] sm:text-[22.8px] font-black uppercase tracking-wide truncate leading-tight">
@@ -1141,6 +1143,10 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
           <span className="text-[13.3px] text-white leading-snug">Alertas de retos, duelos 1v1 y recordatorios</span>
         </div>
         <button
+          type="button"
+          role="switch"
+          aria-checked={pushNotif}
+          aria-label={t("pushNotif")}
           onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
           className={`w-10 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 ${
             pushNotif ? "bg-cyan-neon" : "bg-neutral-800 border border-white/10"
@@ -1195,9 +1201,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
                     href={`https://wa.me/${coachProfile.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola Coach ${coachProfile.fullName}, soy ${user.fullName}. Te escribo desde Archery 101010.`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[13.3px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    className="min-h-[36px] px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[13.3px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 transition-all"
                   >
-                    <MessageCircle className="w-3 h-3" /> WhatsApp
+                    <MessageCircle className="w-3.5 h-3.5" aria-hidden="true" /> Mensajería
                   </a>
                 )}
               </div>
@@ -1315,9 +1321,9 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
               </div>
             </div>
 
-            {/* Coach personal WhatsApp */}
+            {/* Coach personal messaging phone */}
             <div className="flex flex-col gap-1">
-              <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">WhatsApp del Coach</span>
+              <span className="text-[12.1px] text-white font-bold uppercase tracking-wider">Teléfono / Mensajería del Coach</span>
               <div className="flex gap-2 min-w-0">
                 <input
                   type="text"

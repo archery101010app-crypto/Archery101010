@@ -153,8 +153,8 @@ html:not(.light-contrast) .intro-skip-btn:hover {
 
 html:not(.light-contrast) input::placeholder,
 html:not(.light-contrast) textarea::placeholder {
-  color: #ffffff !important;
-  opacity: 0.9 !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  opacity: 0.48 !important;
 }
 
 * {

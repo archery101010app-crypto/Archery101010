@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { UserProfile, updateProfile } from "@/lib/authService";
+import { UserProfile, updateProfile, calculateAgeFromBirthDate } from "@/lib/authService";
 import { motion } from "framer-motion";
 import { AlertCircle, User, X, ArrowLeft } from "lucide-react";
+import { COUNTRIES } from "@/lib/countries";
 
 interface ProfileCompletionModalProps {
   user: UserProfile;
@@ -13,10 +14,9 @@ interface ProfileCompletionModalProps {
   onReturnToLogin?: () => void;
 }
 
-import { COUNTRIES } from "@/lib/countries";
-
 export default function ProfileCompletionModal({ user, onComplete, onClose, onReturnToLogin }: ProfileCompletionModalProps) {
   const { t } = useLanguage();
+  const baseId = useId();
   const [fullName, setFullName] = useState(user.fullName || "");
   const [nickname, setNickname] = useState(user.nickname || "");
   const [clubName, setClubName] = useState(
@@ -33,14 +33,37 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
   const [gender, setGender] = useState(user.gender || "M");
   
   const [error, setError] = useState("");
+  const [birthDateInvalid, setBirthDateInvalid] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const todayIso = (() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  })();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setBirthDateInvalid(false);
 
     if (!fullName.trim() || !birthDate || !city.trim() || !country || !gender) {
       setError("Por favor completa todos los campos obligatorios (Nombre, Fecha de nacimiento, Ciudad, País y Género).");
+      return;
+    }
+
+    const age = calculateAgeFromBirthDate(birthDate);
+    if (age === null) {
+      setBirthDateInvalid(true);
+      setError("Ingresa una fecha de nacimiento válida (no se permiten fechas futuras).");
+      return;
+    }
+
+    if (age < 13) {
+      setBirthDateInvalid(true);
+      setError("Debes tener al menos 13 años para crear una cuenta en ARCHERY 101010.");
       return;
     }
 
@@ -97,46 +120,64 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             <User size={20} />
           </div>
           <div>
-            <h3 className="text-white text-lg font-black uppercase tracking-wide">
+            <h3 id={`${baseId}-heading`} className="text-white text-lg font-black uppercase tracking-wide">
               Completa tu Perfil
             </h3>
             <p className="text-[10.5px] text-white uppercase tracking-wider font-bold">
-              Información obligatoria requerida
+              Información obligatoria requerida (13+ años)
             </p>
           </div>
         </div>
 
         <p className="text-xs text-white leading-relaxed">
-          Para continuar usando <strong>Archery 101010</strong>, completa tus datos básicos de arquero. El <strong>Nickname</strong> es opcional.
+          Para continuar usando <strong>ARCHERY 101010</strong>, completa tus datos básicos de arquero. El <strong>Alias</strong> es opcional.
         </p>
 
         {error && (
-          <div className="bg-white border border-white rounded-xl p-3 flex items-center gap-2 text-black font-bold text-xs">
+          <div
+            id={`${baseId}-error`}
+            role="alert"
+            aria-live="assertive"
+            className="bg-white border border-white rounded-xl p-3 flex items-center gap-2 text-black font-bold text-xs"
+          >
             <AlertCircle size={16} className="shrink-0 text-black" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSave} className="flex flex-col gap-3.5 mt-2">
+        <form onSubmit={handleSave} aria-labelledby={`${baseId}-heading`} className="flex flex-col gap-3.5 mt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-fullname`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("fullName")} *
               </label>
               <input
+                id={`${baseId}-fullname`}
+                name="fullName"
                 type="text"
+                autoComplete="name"
+                required
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  if (error) setError("");
+                }}
                 placeholder=""
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-nickname`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 Alias <span className="text-white font-medium normal-case">(Opcional)</span>
               </label>
               <input
+                id={`${baseId}-nickname`}
+                name="nickname"
                 type="text"
+                autoComplete="nickname"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="Opcional"
@@ -147,24 +188,42 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5 min-w-0">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-birthdate`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("birthDate")} *
               </label>
               <input
+                id={`${baseId}-birthdate`}
+                name="birthDate"
                 type="date"
+                autoComplete="bday"
+                required
+                max={todayIso}
+                aria-invalid={birthDateInvalid ? "true" : undefined}
+                aria-describedby={birthDateInvalid && error ? `${baseId}-error` : undefined}
                 value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
+                onChange={(e) => {
+                  setBirthDate(e.target.value);
+                  if (birthDateInvalid) setBirthDateInvalid(false);
+                  if (error) setError("");
+                }}
                 className="min-w-0 w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200 uppercase [color-scheme:dark] tabular-nums"
               />
             </div>
             <div className="flex flex-col gap-1.5 min-w-0">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-city`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("city")} *
               </label>
               <input
+                id={`${baseId}-city`}
+                name="city"
                 type="text"
+                autoComplete="address-level2"
+                required
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => {
+                  setCity(e.target.value);
+                  if (error) setError("");
+                }}
                 placeholder="Ej. San José"
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-3 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
@@ -173,10 +232,13 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-country`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("country")} *
               </label>
               <select
+                id={`${baseId}-country`}
+                name="country"
+                autoComplete="country"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
@@ -190,10 +252,12 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-gender`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
                 {t("gender")} *
               </label>
               <select
+                id={`${baseId}-gender`}
+                name="gender"
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-2.5 py-3 rounded-xl outline-none transition-all duration-200"
@@ -206,11 +270,14 @@ export default function ProfileCompletionModal({ user, onComplete, onClose, onRe
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11.6px] text-white uppercase font-bold tracking-wider">
+            <label htmlFor={`${baseId}-club`} className="text-[11.6px] text-white uppercase font-bold tracking-wider">
               Club <span className="text-white font-medium normal-case">(Opcional)</span>
             </label>
             <input
+              id={`${baseId}-club`}
+              name="clubName"
               type="text"
+              autoComplete="organization"
               value={clubName}
               onChange={(e) => setClubName(e.target.value)}
               placeholder="Opcional"

@@ -477,10 +477,12 @@ export default function HistoryView({
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
+              type="button"
               onClick={onBack}
+              aria-label={t("back")}
               className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center cursor-pointer shrink-0 active:scale-95 transition"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16} aria-hidden="true" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -571,8 +573,9 @@ export default function HistoryView({
                       ].map((f) => (
                         <button
                           key={f.id}
+                          type="button"
                           onClick={() => setDateFilter(f.id as any)}
-                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                          className={`min-h-[36px] h-9 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                             dateFilter === f.id
                               ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                               : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -597,8 +600,9 @@ export default function HistoryView({
                       ].map((f) => (
                         <button
                           key={f.id}
+                          type="button"
                           onClick={() => setPracticeFilter(f.id)}
-                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                          className={`min-h-[36px] h-9 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                             practiceFilter === f.id
                               ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                               : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -624,8 +628,9 @@ export default function HistoryView({
                       ].map((f) => (
                         <button
                           key={f.id}
+                          type="button"
                           onClick={() => setBowFilter(f.id)}
-                          className={`h-7 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
+                          className={`min-h-[36px] h-9 px-3 rounded-lg text-[11.6px] font-bold flex items-center justify-center cursor-pointer transition shrink-0 whitespace-nowrap ${
                             bowFilter === f.id
                               ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/35"
                               : "bg-[#090B0E] border border-white/[0.06] text-white hover:text-white"
@@ -857,26 +862,32 @@ export default function HistoryView({
             {/* Top Toolbar */}
             <div className="flex justify-between items-center">
               <button
+                type="button"
                 onClick={() => setSelectedSession(null)}
-                className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-white hover:text-white cursor-pointer"
+                aria-label="Cerrar detalle de entrenamiento"
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-white hover:bg-neutral-800 cursor-pointer transition"
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft size={16} aria-hidden="true" />
               </button>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => handleShareSessionShotChart(selectedSession)}
                   disabled={isGeneratingImage}
-                  className="p-2 rounded-xl bg-neutral-900 border border-gray-border text-cyan-neon hover:border-cyan-neon transition cursor-pointer disabled:opacity-50"
+                  aria-label="Compartir Foto Diana HD o Planilla"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-cyan-neon hover:border-cyan-neon transition cursor-pointer disabled:opacity-50"
                   title="Compartir Foto Diana HD o Planilla"
                 >
-                  <Share2 size={16} />
+                  <Share2 size={16} aria-hidden="true" />
                 </button>
                 {(!isCoachResultsView || !selectedSession.userId || selectedSession.userId === user.uid) && (
                   <button
+                    type="button"
                     onClick={() => setConfirmDeleteId(selectedSession.id)}
-                    className="p-2 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
+                    aria-label="Eliminar sesión"
+                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={16} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -1146,8 +1157,8 @@ export default function HistoryView({
                         disabled={isGeneratingImage}
                         className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
-                        <Share2 size={15} />
-                        <span>Compartir Planilla por WhatsApp</span>
+                        <Share2 size={15} aria-hidden="true" />
+                        <span>Compartir Planilla por Mensajería</span>
                       </button>
                     </>
                   );
@@ -1163,7 +1174,7 @@ export default function HistoryView({
                   disabled={isGeneratingImage}
                   className="w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  <Camera size={15} />
+                  <Camera size={15} aria-hidden="true" />
                   <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Diana Gráfica (HD)"}</span>
                 </button>
                 <button
@@ -1172,8 +1183,8 @@ export default function HistoryView({
                   disabled={isGeneratingImage}
                   className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  <Share2 size={15} />
-                  <span>Compartir Planilla por WhatsApp</span>
+                  <Share2 size={15} aria-hidden="true" />
+                  <span>Compartir Planilla por Mensajería</span>
                 </button>
               </div>
             )}

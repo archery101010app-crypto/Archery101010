@@ -75,12 +75,12 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
         type="button"
         onClick={() => setIsOpen(true)}
         translate="no"
-        className="notranslate h-8 px-3 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-        aria-label="Select Language"
+        className="notranslate min-h-[38px] h-[38px] px-3.5 rounded-full bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+        aria-label={t("selectLanguage")}
       >
-        <Globe size={13} className="text-cyan-neon shrink-0" />
+        <Globe size={14} className="text-cyan-neon shrink-0" aria-hidden="true" />
         <span>{currentOption.shortLabel}</span>
-        <ChevronDown size={12} className="text-white" />
+        <ChevronDown size={13} className="text-white" aria-hidden="true" />
       </button>
 
       <AnimatePresence>
@@ -98,11 +98,14 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
               exit={{ scale: 0.96, y: 8, opacity: 0 }}
               transition={{ duration: 0.16 }}
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("selectLanguage")}
               className="w-full max-w-[340px] bg-[#0B0D12] border border-white/[0.08] rounded-3xl p-5 flex flex-col gap-4 shadow-2xl"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Globe size={15} className="text-cyan-neon" />
+                  <Globe size={15} className="text-cyan-neon" aria-hidden="true" />
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
                     {t("selectLanguage")}
                   </h3>
@@ -110,9 +113,10 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white cursor-pointer"
+                  aria-label="Cerrar selector de idioma"
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-full bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.1] flex items-center justify-center text-white cursor-pointer transition"
                 >
-                  <X size={14} />
+                  <X size={15} aria-hidden="true" />
                 </button>
               </div>
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -223,9 +223,9 @@
       border-radius: 8px;
       letter-spacing: 1px;
     }
-    .hero-logo-big .b1 { color: var(--cyan-neon); border: 2px solid var(--cyan-neon); box-shadow: 0 0 20px rgba(0,229,255,0.3); }
-    .hero-logo-big .b2 { color: var(--red); border: 2px solid var(--red); box-shadow: 0 0 20px rgba(255,59,48,0.3); }
-    .hero-logo-big .b3 { color: var(--yellow); border: 2px solid var(--yellow); box-shadow: 0 0 20px rgba(255,242,0,0.3); }
+    .hero-logo-big .b1 { color: var(--cyan-neon); border: 2px solid var(--cyan-neon); box-shadow: none; }
+    .hero-logo-big .b2 { color: var(--red); border: 2px solid var(--red); box-shadow: none; }
+    .hero-logo-big .b3 { color: var(--yellow); border: 2px solid var(--yellow); box-shadow: none; }
     .hero-archery {
       font-size: 16px;
       font-weight: 900;
@@ -452,7 +452,7 @@
       height: 8px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 8px rgba(0,200,83,0.5);
+      box-shadow: none;
     }
     .diana-svg-container {
       display: flex;
@@ -541,7 +541,7 @@
       cursor: default;
       transition: transform 0.1s;
     }
-    .kbd-key.gold { color: var(--yellow); border: 2px solid rgba(255,242,0,0.5); background: rgba(255,242,0,0.08); box-shadow: 0 0 12px rgba(255,242,0,0.15); }
+    .kbd-key.gold { color: var(--yellow); border: 2px solid rgba(255,242,0,0.5); background: rgba(255,242,0,0.08); box-shadow: none; }
     .kbd-key.std { color: var(--white); border: 1px solid rgba(0,162,232,0.4); background: transparent; }
     .kbd-key.miss { color: var(--red); border: 1px solid rgba(255,59,48,0.35); }
     .kbd-key.action { color: var(--white); background: linear-gradient(135deg, var(--cyan-base), var(--cyan-neon)); border: none; }
@@ -945,7 +945,7 @@
         </div>
       </div>
       <p class="section-desc">
-        Accede a tu cuenta con Email, Google o Facebook. El proceso de registro de nuevo usuario consta de 5 pasos guiados para configurar tu perfil completo desde el primer momento.
+        Accede a tu cuenta con Email, Google o Cuenta Social. El proceso de registro de nuevo usuario consta de 5 pasos guiados para configurar tu perfil completo desde el primer momento.
       </p>
 
       <div class="feature-grid reveal">
@@ -961,8 +961,8 @@
         </div>
         <div class="feature-card">
           <div class="fc-icon">🔷</div>
-          <div class="fc-title">Login con Facebook</div>
-          <div class="fc-desc">Autenticación rápida con tu cuenta de Facebook, misma experiencia sin fricciones.</div>
+          <div class="fc-title">Acceso Social Rápido</div>
+          <div class="fc-desc">Autenticación rápida con tu cuenta de Cuenta Social, misma experiencia sin fricciones.</div>
         </div>
         <div class="feature-card">
           <div class="fc-icon">🌐</div>
@@ -1060,8 +1060,8 @@
         </div>
         <div class="feature-card">
           <div class="fc-icon">🎵</div>
-          <div class="fc-title">Spotify (FREE)</div>
-          <div class="fc-desc">Integración con Spotify para escuchar música durante el entrenamiento. Disponible para todos los usuarios.</div>
+          <div class="fc-title">Música Integrada</div>
+          <div class="fc-desc">Integración con Música para escuchar música durante el entrenamiento. Disponible para todos los usuarios.</div>
         </div>
       </div>
 
@@ -1536,12 +1536,12 @@
         <div class="feature-card">
           <div class="fc-icon">🔔</div>
           <div class="fc-title">Notificaciones</div>
-          <div class="fc-desc">Activa/desactiva Push, Email y WhatsApp individualmente según tus preferencias.</div>
+          <div class="fc-desc">Activa/desactiva Push, Email y Mensajería Directa individualmente según tus preferencias.</div>
         </div>
         <div class="feature-card">
           <div class="fc-icon">👥</div>
           <div class="fc-title">Gestión de Club (Coach)</div>
-          <div class="fc-desc">Solo para Entrenadores: transfiere el rol de Coach, comparte el código del club y configura WhatsApp.</div>
+          <div class="fc-desc">Solo para Entrenadores: transfiere el rol de Coach, comparte el código del club y configura Mensajería Directa.</div>
         </div>
       </div>
     </section>
@@ -1610,8 +1610,8 @@
         </div>
         <div class="feature-card">
           <div class="fc-icon">📱</div>
-          <div class="fc-title">Invitación Abierta (QR/WhatsApp)</div>
-          <div class="fc-desc">Genera invitaciones rápidas mediante código QR estético o enlace directo para WhatsApp.</div>
+          <div class="fc-title">Invitación Abierta (QR/Mensajería Directa)</div>
+          <div class="fc-desc">Genera invitaciones rápidas mediante código QR estético o enlace directo para Mensajería Directa.</div>
         </div>
       </div>
 
@@ -1723,7 +1723,7 @@
             <li><span class="check">✓</span> Reloj WA completo</li>
             <li><span class="check">✓</span> Matchplay (duelos)</li>
             <li><span class="check">✓</span> Calendario de asistencia</li>
-            <li><span class="check">✓</span> Integración Spotify</li>
+            <li><span class="check">✓</span> Reproductor Musical</li>
             <li><span class="check">✓</span> Notificaciones push</li>
             <li><span class="check" style="color:rgba(142,142,147,0.4)">✗</span> Macrociclos de entrenamiento</li>
             <li><span class="check" style="color:rgba(142,142,147,0.4)">✗</span> Spine Matching (Tuning)</li>
@@ -1817,8 +1817,8 @@
         </div>
         <div class="feature-card">
           <div class="fc-icon">💬</div>
-          <div class="fc-title">WhatsApp</div>
-          <div class="fc-desc">El Coach puede configurar su número para enviarte mensajes de recordatorio de entrenamiento via WhatsApp.</div>
+          <div class="fc-title">Mensajería Directa</div>
+          <div class="fc-desc">El Coach puede configurar su número para enviarte mensajes de recordatorio de entrenamiento via Mensajería Directa.</div>
         </div>
       </div>
 
@@ -1826,7 +1826,7 @@
         <div class="callout-icon">⚙️</div>
         <div>
           <div class="callout-title">Control total desde Perfil</div>
-          <div class="callout-desc">Ve a <strong style="color:var(--white)">Perfil → Notificaciones</strong> para activar o desactivar cada canal (Push, Email, WhatsApp) de forma independiente en cualquier momento.</div>
+          <div class="callout-desc">Ve a <strong style="color:var(--white)">Perfil → Notificaciones</strong> para activar o desactivar cada canal (Push, Email, Mensajería Directa) de forma independiente en cualquier momento.</div>
         </div>
       </div>
     </section>
@@ -2099,8 +2099,8 @@
       <div class="callout tip reveal">
         <div class="callout-icon">📱</div>
         <div>
-          <div class="callout-title">WhatsApp desde el portal</div>
-          <div class="callout-desc">El Coach puede configurar su número de WhatsApp en Perfil → Gestión del Club. Desde la ficha de cada atleta aparecerá un botón verde de WhatsApp que abre un mensaje pre-armado listo para enviar.</div>
+          <div class="callout-title">Mensajería Directa desde el portal</div>
+          <div class="callout-desc">El Coach puede configurar su número de Mensajería Directa en Perfil → Gestión del Club. Desde la ficha de cada atleta aparecerá un botón verde de Mensajería Directa que abre un mensaje pre-armado listo para enviar.</div>
         </div>
       </div>
     </section>

@@ -104,7 +104,7 @@ export default function SmartwatchMiniApp({
         bowPoundageLbs: 38,
         practiceType: "Volumen",
         bowType: "Compound",
-        autoDetectEnabled: true,
+        autoDetectEnabled: false,
         updatedAt: Date.now()
       }
     );
@@ -897,6 +897,7 @@ export default function SmartwatchMiniApp({
               <button
                 type="button"
                 onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
+                aria-label="−1 flecha"
                 className="w-[34px] h-[26px] rounded-full bg-[#180709] border border-[#FF1E1E]/65 text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
               >
                 −1
@@ -917,6 +918,7 @@ export default function SmartwatchMiniApp({
               <button
                 type="button"
                 onClick={() => handleArrowDelta(1, "watch_manual")}
+                aria-label="+1 flecha"
                 className="w-[34px] h-[26px] rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
               >
                 +1
@@ -1290,7 +1292,7 @@ export default function SmartwatchMiniApp({
                   }}
                   className="flex-1 py-1.5 rounded-full bg-[#180709] border border-[#FF1E1E]/55 text-white text-[8.5px] font-extrabold uppercase tracking-[0.08em] inline-flex items-center justify-center gap-1 cursor-pointer"
                 >
-                  <Unlink size={10} />
+                  <Unlink size={10} aria-hidden="true" />
                   <span>DESVINCULAR</span>
                 </button>
               ) : (
@@ -1307,7 +1309,7 @@ export default function SmartwatchMiniApp({
                 disabled={standaloneLinking}
                 className="flex-1 py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8.5px] font-extrabold uppercase tracking-[0.08em] inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
               >
-                <Link2 size={10} />
+                <Link2 size={10} aria-hidden="true" />
                 <span>{standaloneLinking ? "CONECTANDO..." : "VINCULAR"}</span>
               </button>
             </div>
@@ -1346,6 +1348,9 @@ export default function SmartwatchMiniApp({
   return (
     <AnimatePresence>
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="ARCHERY 101010 · Vista de reloj deportivo"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1408,19 +1413,20 @@ export default function SmartwatchMiniApp({
                   pingNativeWatch();
                   setTimeout(() => setIsSyncingWatch(false), 700);
                 }}
+                aria-label="SYNC · Sincronizar reloj"
                 className="bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full px-[10px] py-[5px] text-[8.5px] font-extrabold tracking-[0.06em] uppercase inline-flex items-center gap-[4px] whitespace-nowrap cursor-pointer active:scale-95 transition"
               >
-                <RefreshCw size={10} className={isSyncingWatch ? "animate-spin" : ""} />
+                <RefreshCw size={10} aria-hidden="true" className={isSyncingWatch ? "animate-spin" : ""} />
                 <span>SYNC</span>
               </button>
               {onClose && (
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-[26px] h-[26px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0"
-                  aria-label="Cerrar"
+                  className="w-[36px] h-[36px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0"
+                  aria-label="Cerrar vista previa del reloj"
                 >
-                  <X size={13} />
+                  <X size={15} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -1444,14 +1450,15 @@ export default function SmartwatchMiniApp({
                 onClick={handleCopyPairingCode}
                 className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
                 title="Copiar código de 6 dígitos"
+                aria-label={`Copiar código ${pairingCode}`}
               >
                 <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
                   {pairingCode}
                 </span>
                 {copiedCode ? (
-                  <Check size={11} className="text-[#00A8F3]" />
+                  <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
                 ) : (
-                  <Copy size={11} className="text-[#8E96A4]" />
+                  <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
                 )}
               </button>
             </div>
@@ -1509,6 +1516,7 @@ export default function SmartwatchMiniApp({
               type="button"
               onClick={() => handleArrowDelta(1, "watch_manual")}
               title="Corona del reloj (+1 flecha)"
+              aria-label="Corona del reloj: sumar 1 flecha"
               className="absolute -right-[7px] top-1/2 -translate-y-1/2 w-[6px] h-[38px] rounded-r-[4px] bg-[#1F242E] border border-[#343B48] cursor-pointer active:scale-95"
             />
             <WatchFaceContent />

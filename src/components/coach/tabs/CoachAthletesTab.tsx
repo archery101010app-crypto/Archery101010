@@ -225,10 +225,11 @@ export default function CoachAthletesTab({
               <button
                 type="button"
                 onClick={() => setSearchTerm("")}
-                className="text-white text-xs p-0.5 cursor-pointer shrink-0"
+                aria-label="Limpiar búsqueda"
+                className="w-7 h-7 flex items-center justify-center text-white text-xs cursor-pointer shrink-0"
                 title="Limpiar búsqueda"
               >
-                <X size={13} />
+                <X size={13} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -335,10 +336,10 @@ export default function CoachAthletesTab({
                         e.stopPropagation();
                         onOpenPlanImporter(ath.uid);
                       }}
-                      className="h-8 px-2.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
-                      title={`Cargar plan Excel/Sheets a ${ath.fullName}`}
+                      className="min-h-[36px] h-9 px-2.5 rounded-xl bg-cyan-neon/10 hover:bg-cyan-neon/20 border border-cyan-neon/30 text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1 transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+                      title={`Cargar plan mensual a ${ath.fullName}`}
                     >
-                      <FileSpreadsheet size={12} className="shrink-0" />
+                      <FileSpreadsheet size={12} className="shrink-0" aria-hidden="true" />
                       <span>Plan</span>
                     </button>
                   )}
@@ -376,10 +377,12 @@ export default function CoachAthletesTab({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="p-1 rounded-lg text-white hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+                  aria-label="Cerrar formulario de alumno"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-white hover:bg-neutral-800 transition cursor-pointer shrink-0"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
 
@@ -484,7 +487,7 @@ export default function CoachAthletesTab({
 
                   <div className="flex flex-col gap-1 min-w-0">
                     <label className="min-h-[30px] flex items-end text-[12.6px] leading-tight text-white font-black uppercase tracking-wider">
-                      Teléfono / WhatsApp
+                      Teléfono / Mensajería
                     </label>
                     <input
                       type="tel"

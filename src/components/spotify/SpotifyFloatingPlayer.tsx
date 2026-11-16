@@ -29,6 +29,7 @@ import {
   fetchUserSpotifyPlaylists,
   getSpotifyClientId,
   handleSpotifyOAuthCallbackIfPresent,
+  refreshMusicAccessToken,
   startSpotifyOAuthPKCE
 } from "@/lib/spotifyAuth";
 
@@ -148,14 +149,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       } else if (s.error) {
         const msg =
           s.error === "SPOTIFY_NOT_INSTALLED"
-            ? "Instala la app de Spotify (se abrió la tienda) y vuelve a tocar Conectar."
+            ? "Instala tu app de música compatible y vuelve a tocar Conectar."
             : s.error === "MISSING_CLIENT_ID"
-            ? "Falta activar la llave de Spotify de ARCHERY 101010 (Client ID)."
+            ? "Falta activar la llave de conexión musical de ARCHERY 101010 (Client ID)."
             : s.error === "UserNotAuthorizedException"
-            ? "Autoriza ARCHERY 101010 en la ventana de Spotify y vuelve a intentar."
+            ? "Autoriza ARCHERY 101010 en la ventana de música y vuelve a intentar."
             : s.error === "NotLoggedInException"
-            ? "Abre la app de Spotify, inicia sesión y vuelve a tocar Conectar."
-            : "No se pudo conectar con Spotify. Abre la app de Spotify una vez y reintenta.";
+            ? "Abre tu app de música, inicia sesión y vuelve a tocar Conectar."
+            : "No se pudo conectar con la app de música. Ábrela una vez y reintenta.";
         setAccountFeedback(msg);
       }
     };
@@ -217,8 +218,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       const nativeActive = syncNativeSpotifySessionStatus();
       if (nativeActive && !savedAccount) {
         const autoAcc: ConnectedSpotifyAccount = {
-          username: "spotify",
-          displayName: "Cuenta Spotify Vinculada",
+          username: "music",
+          displayName: "Cuenta Musical Vinculada",
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -227,7 +228,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         await saveLocalSetting("spotify_connected_account", autoAcc);
       }
 
-      // Check if returning from Spotify OAuth 2.0 PKCE callback
+      // Check if returning from OAuth 2.0 PKCE callback
       const callbackResult = await handleSpotifyOAuthCallbackIfPresent();
       if (callbackResult) {
         setConnectedAccount(callbackResult.account);
@@ -257,7 +258,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
           await saveLocalSetting("spotify_active_id", importedItems[0].id);
           await saveLocalSetting("spotify_active_type", "playlist");
         }
-        setAccountFeedback("Cuenta de Spotify sincronizada y playlists importadas.");
+        setAccountFeedback("Cuenta musical sincronizada y listas importadas.");
         setTimeout(() => setAccountFeedback(null), 4000);
       }
     }
@@ -268,8 +269,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       setHasNativeSessionCookie(ok);
       if (ok) {
         const autoAcc: ConnectedSpotifyAccount = {
-          username: "spotify",
-          displayName: "Cuenta Spotify Vinculada",
+          username: "music",
+          displayName: "Cuenta Musical Vinculada",
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -277,7 +278,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         setConnectedAccount(autoAcc);
         await saveLocalSetting("spotify_connected_account", autoAcc);
         setIframeReloadKey((prev) => prev + 1);
-        setAccountFeedback("¡Spotify conectado automáticamente! Reproducción al 100% activada.");
+        setAccountFeedback("¡Música conectada automáticamente! Reproducción completa activada.");
         setTimeout(() => setAccountFeedback(null), 4000);
       }
     };
@@ -296,13 +297,13 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     };
   }, []);
 
-  // Refresh embedded player automatically when user returns from Spotify login window
+  // Refresh embedded player automatically when user returns from login window
   useEffect(() => {
     const handleWindowFocus = () => {
       if (loginPopupWatchingRef.current) {
         loginPopupWatchingRef.current = false;
         setIframeReloadKey((prev) => prev + 1);
-        setAccountFeedback("Sesión de Spotify actualizada en el reproductor.");
+        setAccountFeedback("Sesión musical actualizada en el reproductor.");
         setTimeout(() => setAccountFeedback(null), 3500);
       }
     };
@@ -368,12 +369,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setIsPlaying((prev) => !prev);
   };
 
-  // Connect Spotify Account (User + Official In-App Spotify Web Session Login for 100% full tracks)
+  // Connect Music Account (User + In-App Web Session Login for full tracks)
   const handleConnectSpotifyAccount = async (openSpotifyLoginPopup: boolean) => {
     const cleanUser = extractSpotifyUsername(usernameInput || displayNameInput || "arquero");
     const cleanDisplay =
       displayNameInput.trim() ||
-      (usernameInput.trim() ? extractSpotifyUsername(usernameInput) : "Mi Cuenta Spotify");
+      (usernameInput.trim() ? extractSpotifyUsername(usernameInput) : "Mi Cuenta Musical");
 
     const newAccount: ConnectedSpotifyAccount = {
       username: cleanUser,
@@ -390,9 +391,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     if (openSpotifyLoginPopup) {
       const nativeBridge = getNativeSpotify();
       if (nativeBridge) {
-        // Official Spotify App Remote: authorization happens inside the Spotify app (no embedded login page)
         nativeBridge.connectSpotifyPlayer(oauthClientIdInput || "");
-        setAccountFeedback("Conectando con la app de Spotify…");
+        setAccountFeedback("Conectando con tu app de música…");
         return;
       }
 
@@ -402,19 +402,19 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         encodeURIComponent("https://open.spotify.com/");
       const popup = window.open(
         loginUrl,
-        "SpotifyAccountLogin",
+        "MusicAccountLogin",
         "width=460,height=680,menubar=no,toolbar=no,location=yes,status=no"
       );
       if (!popup) {
         window.open(loginUrl, "_blank", "noopener,noreferrer");
       }
       setAccountFeedback(
-        "Inicia sesión en la ventana de Spotify. Al volver aquí, tu reproductor tendrá acceso completo."
+        "Inicia sesión en la ventana emergente. Al volver aquí, tu reproductor tendrá acceso completo."
       );
     } else {
       syncNativeSpotifySessionStatus();
       setIframeReloadKey((prev) => prev + 1);
-      setAccountFeedback("Usuario de Spotify vinculado correctamente.");
+      setAccountFeedback("Cuenta musical vinculada correctamente.");
       setTimeout(() => setAccountFeedback(null), 3000);
     }
   };
@@ -430,8 +430,13 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
   const handleRefreshOAuthPlaylists = async () => {
     syncNativeSpotifySessionStatus();
-    if (connectedAccount?.accessToken) {
-      const pls = await fetchUserSpotifyPlaylists(connectedAccount.accessToken);
+    if (connectedAccount?.accessToken || connectedAccount?.refreshToken) {
+      const freshToken = await refreshMusicAccessToken(connectedAccount);
+      const pls = await fetchUserSpotifyPlaylists(freshToken || connectedAccount.accessToken);
+      const updatedAcc = await getLocalSetting<ConnectedSpotifyAccount | null>("spotify_connected_account", null);
+      if (updatedAcc) {
+        setConnectedAccount(updatedAcc);
+      }
       if (pls.length > 0) {
         const imported: SpotifyItem[] = pls.map((pl) => ({
           id: pl.id,
@@ -447,14 +452,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         ];
         setCustomPlaylists(merged);
         await saveLocalSetting("spotify_custom_lists", merged);
-        setAccountFeedback(`${imported.length} playlists sincronizadas desde tu cuenta.`);
+        setAccountFeedback(`${imported.length} listas sincronizadas desde tu cuenta.`);
         setTimeout(() => setAccountFeedback(null), 3000);
         return;
       }
     }
-    // Reload embedded player to pick up active Spotify session
+    // Reload embedded player to pick up active music session
     setIframeReloadKey((prev) => prev + 1);
-    setAccountFeedback("Reproductor sincronizado con tu sesión de Spotify.");
+    setAccountFeedback("Reproductor sincronizado con tu sesión musical.");
     setTimeout(() => setAccountFeedback(null), 2500);
   };
 
@@ -551,14 +556,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     e.preventDefault();
     setLinkError(null);
     if (!userPlaylistUrl.trim()) {
-      setLinkError("Pega un enlace de Spotify para continuar.");
+      setLinkError("Pega el enlace de tu lista musical para continuar.");
       return;
     }
 
     const extracted = extractSpotifyItem(userPlaylistUrl);
     if (!extracted) {
       setLinkError(
-        "Enlace no reconocido. En Spotify toca Compartir → Copiar enlace en cualquier playlist, álbum, canción o artista."
+        "Enlace no reconocido. Toca Compartir → Copiar enlace en cualquier lista, álbum, canción o artista."
       );
       return;
     }
@@ -652,31 +657,30 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
   return (
     <>
-      {/* 1. Spotify Collapsible Folding Tab on the Left Edge */}
+      {/* 1. Music Collapsible Folding Tab on the Left Edge */}
       {showSideTab && !isOpen && !isMiniBarActive && (
         <div className="fixed left-0 top-[calc(50%+112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
           <button
+            type="button"
             onClick={() => {
               setHasLoadedIframe(true);
               setIsOpen(true);
             }}
-            aria-label="Abrir Spotify"
-            className="h-28 w-8 md:w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-[#1DB954] border-y border-r border-black/20 cursor-pointer text-black hover:brightness-105 active:scale-95 transition-all duration-200 select-none shadow-md"
+            aria-label="Abrir Música"
+            className="h-28 min-w-[36px] min-h-[36px] w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-[#12151C] border-y border-r border-[#00A8F3]/45 cursor-pointer text-white hover:border-[#00A8F3] active:scale-95 transition-all duration-200 select-none shadow-md"
           >
-            <div className="text-black flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-              </svg>
+            <div className="text-[#00A8F3] flex items-center justify-center shrink-0">
+              <Music size={17} aria-hidden="true" />
             </div>
             <span
-              className="text-[13.8px] sm:text-[13.6px] font-bold text-black select-none tracking-[-0.03em] leading-none"
+              className="text-[13.6px] font-bold text-white select-none tracking-[-0.02em] leading-none"
               style={{
                 fontFamily: "'Outfit', sans-serif",
                 writingMode: "vertical-rl",
                 textOrientation: "mixed",
               }}
             >
-              Spotify
+              Música
             </span>
           </button>
         </div>
@@ -687,49 +691,56 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[62px] left-4 right-4 z-[990] h-12 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.08] rounded-xl px-3 flex items-center justify-between shadow-2xl hover:border-[#1DB954]/40 transition-all max-w-md mx-auto"
+          className="fixed bottom-[62px] left-4 right-4 z-[990] min-h-[52px] py-1.5 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.10] rounded-xl px-3 flex items-center justify-between gap-2 shadow-2xl hover:border-[#00A8F3]/45 transition-all max-w-md mx-auto"
         >
-          <div
+          <button
+            type="button"
             onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2.5 overflow-hidden w-[62%] cursor-pointer"
+            aria-label={`Abrir Música: ${activePlaylistObj ? activePlaylistObj.name : "Focus Olímpico"}`}
+            className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0 text-left cursor-pointer min-h-[36px]"
           >
-            <div className="w-7 h-7 rounded-full bg-[#1DB954] flex items-center justify-center text-black shrink-0">
-              <Music size={14} />
+            <div className="w-8 h-8 rounded-full bg-[#12151C] border border-[#00A8F3]/45 flex items-center justify-center text-[#00A8F3] shrink-0">
+              <Music size={14} aria-hidden="true" />
             </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-[10.5px] text-[#1DB954] font-black uppercase tracking-widest leading-none">
-                {isPlaying ? "Reproduciendo" : "Spotify Activo"}
+            <div className="flex flex-col overflow-hidden min-w-0">
+              <span className="text-[10.5px] text-[#00A8F3] font-black uppercase tracking-widest leading-none">
+                {isPlaying ? "Reproduciendo" : "Música Activa"}
               </span>
               <span className="text-[12.8px] text-white font-bold truncate leading-snug mt-0.5">
                 {activePlaylistObj ? activePlaylistObj.name : "Focus Olímpico"}
               </span>
             </div>
-          </div>
-          <div className="flex items-center gap-1.5">
+          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Play/Pause Real Control Button */}
             <button
+              type="button"
               onClick={handleTogglePlayPause}
-              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-[#1DB954] hover:text-white cursor-pointer hover:bg-[#1B2230] transition"
+              aria-label={isPlaying ? "Pausar música" : "Reproducir música"}
               title={isPlaying ? "Pausar" : "Reproducir"}
+              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-[#00A8F3] hover:text-white hover:border-[#00A8F3]/50 flex items-center justify-center cursor-pointer transition"
             >
               {isPlaying ? (
-                <Pause size={12} fill="currentColor" />
+                <Pause size={14} fill="currentColor" aria-hidden="true" />
               ) : (
-                <Play size={12} fill="currentColor" className="translate-x-[0.5px]" />
+                <Play size={14} fill="currentColor" className="translate-x-[0.5px]" aria-hidden="true" />
               )}
             </button>
 
             {/* Expand Button */}
             <button
+              type="button"
               onClick={() => setIsOpen(true)}
-              className="text-[10.5px] bg-[#141923] border border-white/[0.08] text-white px-2.5 py-1 rounded-lg uppercase font-black cursor-pointer hover:text-white transition"
-              title="Abrir panel de Spotify"
+              aria-label="Abrir panel de Música"
+              title="Abrir panel de Música"
+              className="min-w-[36px] min-h-[36px] text-[10.5px] bg-[#12151C] border border-white/[0.10] hover:border-[#00A8F3]/50 text-white px-3 rounded-lg uppercase font-black cursor-pointer flex items-center justify-center transition"
             >
               Abrir
             </button>
 
             {/* Close Button (✕) - stops player and hides mini-bar */}
             <button
+              type="button"
               onClick={() => {
                 const nb = getNativeSpotify();
                 if (nb && remoteState.connected) nb.spotifyPause();
@@ -737,16 +748,17 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
               }}
-              className="p-1.5 rounded-full bg-[#141923] border border-white/[0.08] text-white hover:text-red-400 cursor-pointer transition"
+              aria-label="Cerrar reproductor de música"
               title="Cerrar reproductor"
+              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-white hover:text-red-400 flex items-center justify-center cursor-pointer transition"
             >
-              <X size={12} />
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         </motion.div>
       )}
 
-      {/* 2. Persistent Clean Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
+      {/* 2. Persistent Clean Music Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
       {(hasLoadedIframe || isOpen || isMiniBarActive) && (
         <div
           className={`fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-3.5 transition-all duration-200 ${
@@ -757,6 +769,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
           aria-hidden={!isOpen}
         >
           <div
+            role="dialog"
+            aria-label="Panel de Música"
             className={`w-full max-w-[400px] max-h-[88vh] bg-[#06080C] border border-white/[0.10] rounded-[26px] p-4 flex flex-col gap-3.5 overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
@@ -780,9 +794,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   className="h-[13px] w-auto object-contain shrink-0 select-none pointer-events-none"
                   draggable={false}
                 />
-                <div className="inline-flex items-center gap-[5px] bg-[#071910] border border-[#1DB954]/45 rounded-full px-[9px] py-[3px] shrink-0">
-                  <span className="w-[5px] h-[5px] rounded-full bg-[#1DB954]" />
-                  <span className="text-[9.5px] font-extrabold text-[#1DB954] tracking-[0.08em] uppercase leading-none">
+                <div className="inline-flex items-center gap-[5px] bg-[#12151C] border border-[#00A8F3]/45 rounded-full px-[9px] py-[3px] shrink-0">
+                  <span className="w-[5px] h-[5px] rounded-full bg-[#00A8F3]" />
+                  <span className="text-[9.5px] font-extrabold text-[#00A8F3] tracking-[0.08em] uppercase leading-none">
                     MÚSICA
                   </span>
                 </div>
@@ -794,11 +808,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   setIsMiniBarActive(true);
                   setIsOpen(false);
                 }}
-                className="w-[28px] h-[28px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
-                title="Cerrar ventana"
-                aria-label="Cerrar"
+                className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
+                title="Minimizar ventana"
+                aria-label="Cerrar ventana de música"
               >
-                <X size={14} />
+                <X size={15} aria-hidden="true" />
               </button>
             </div>
 
@@ -813,6 +827,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   <iframe
                     key={`${activeType}-${activePlaylistId}-${iframeReloadKey}`}
                     ref={iframeRef}
+                    title="Reproductor de música integrado"
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
                     height="152"
@@ -825,17 +840,17 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <button
                   type="button"
                   onClick={handleOpenInNativeSpotify}
-                  className="w-full py-[11px] px-3.5 rounded-[12px] bg-[#1DB954] hover:bg-[#1ED760] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
+                  className="w-full min-h-[40px] py-[11px] px-3.5 rounded-[12px] bg-[#00A8F3] hover:bg-[#19B8FF] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
                 >
-                  <Play size={13} fill="currentColor" />
-                  <span>Abrir canciones completas en Spotify</span>
+                  <Play size={13} fill="currentColor" aria-hidden="true" />
+                  <span>Abrir lista completa en app de música</span>
                 </button>
               </div>
 
               {/* 3. Clean Playlist Selector */}
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] font-extrabold tracking-[0.12em] text-[#94A3B8] uppercase pl-0.5">
-                  ELIGE TU PLAYLIST
+                  ELIGE TU LISTA MUSICAL
                 </span>
 
                 <div className="flex flex-col gap-[7px]">
@@ -848,7 +863,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         onClick={() => handleSelectPlaylist(list)}
                         className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
+                            ? "bg-[#00A8F3]/[0.08] border-[#00A8F3]/50"
                             : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
@@ -865,22 +880,24 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomPlaylist(e, list.id)}
-                            className="w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border border-white/[0.10] text-white/70 hover:text-red-400 transition"
+                            aria-label={`Eliminar lista ${list.name}`}
                             title="Eliminar de mi lista"
+                            className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border border-white/[0.10] text-white/80 hover:text-red-400 cursor-pointer transition"
                           >
-                            <Trash2 size={11} />
+                            <Trash2 size={14} aria-hidden="true" />
                           </button>
                           <div
-                            className={`w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border ${
+                            aria-hidden="true"
+                            className={`w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border ${
                               isActive
-                                ? "border-[#1DB954]/55 text-[#1DB954]"
+                                ? "border-[#00A8F3]/55 text-[#00A8F3]"
                                 : "border-white/[0.10] text-white"
                             }`}
                           >
                             {isActive ? (
-                              <Check size={12} />
+                              <Check size={13} />
                             ) : (
-                              <Play size={10} className="fill-current pl-0.5" />
+                              <Play size={11} className="fill-current pl-0.5" />
                             )}
                           </div>
                         </div>
@@ -896,7 +913,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         onClick={() => handleSelectPlaylist(list)}
                         className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
+                            ? "bg-[#00A8F3]/[0.08] border-[#00A8F3]/50"
                             : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
@@ -910,16 +927,17 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         </div>
 
                         <div
-                          className={`w-[26px] h-[26px] rounded-full flex items-center justify-center bg-[#12151C] border shrink-0 ${
+                          aria-hidden="true"
+                          className={`w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border shrink-0 ${
                             isActive
-                              ? "border-[#1DB954]/55 text-[#1DB954]"
+                              ? "border-[#00A8F3]/55 text-[#00A8F3]"
                               : "border-white/[0.10] text-white"
                           }`}
                         >
                           {isActive ? (
-                            <Check size={12} />
+                            <Check size={13} />
                           ) : (
-                            <Play size={10} className="fill-current pl-0.5" />
+                            <Play size={11} className="fill-current pl-0.5" />
                           )}
                         </div>
                       </div>
@@ -933,24 +951,25 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
+                    aria-label="Enlace de lista musical"
                     value={userPlaylistUrl}
                     onChange={(e) => {
                       setUserPlaylistUrl(e.target.value);
                       if (linkError) setLinkError(null);
                     }}
-                    placeholder="Pega aquí un enlace de Spotify…"
-                    className="flex-1 min-w-0 bg-[#0B0E14] border border-white/[0.09] focus:border-[#1DB954] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#1DB954]"
+                    placeholder="Pega aquí el enlace de tu lista musical…"
+                    className="flex-1 min-w-0 min-h-[38px] bg-[#0B0E14] border border-white/[0.09] focus:border-[#00A8F3] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#00A8F3]"
                   />
                   <button
                     type="submit"
                     disabled={isSavingLink}
-                    className="bg-[#12151C] border border-[#1DB954]/45 hover:border-[#1DB954] text-[#1DB954] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
+                    className="min-w-[36px] min-h-[38px] bg-[#12151C] border border-[#00A8F3]/45 hover:border-[#00A8F3] text-[#00A8F3] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
                   >
                     {saveSuccess ? "✓ Listo" : isSavingLink ? "..." : "+ Agregar"}
                   </button>
                 </div>
                 {linkError && (
-                  <p className="text-[11px] text-red-400 font-bold leading-snug px-1">
+                  <p role="alert" className="text-[11px] text-red-400 font-bold leading-snug px-1">
                     {linkError}
                   </p>
                 )}

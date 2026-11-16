@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import { Settings, Save, Key, MessageSquare, ToggleLeft, ToggleRight, CheckCircle2, Database, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,8 +16,8 @@ import { downloadOrShareFile } from "@/lib/fileDownload";
 import { showOledAlert } from "@/lib/oledDialog";
 
 export default function AdminSettingsTab() {
+  const baseId = useId();
   const [paypalClientId, setPaypalClientId] = useState("");
-  const [paypalSecret, setPaypalSecret] = useState("");
   const [supportWhatsapp, setSupportWhatsapp] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   
@@ -70,10 +70,10 @@ export default function AdminSettingsTab() {
         star_history: starHistory
       };
 
-      // 2. If online, enrich with live Firestore collections
+      // 2. If online, enrich with bounded live Firestore collections (limit 200 per collection)
       if (typeof navigator !== "undefined" && navigator.onLine) {
         try {
-          const { collection, getDocs } = await import("firebase/firestore");
+          const { collection, getDocs, query, limit } = await import("firebase/firestore");
           const { db } = await import("@/lib/firebase");
           const colNames = [
             "users",
@@ -87,7 +87,7 @@ export default function AdminSettingsTab() {
           await Promise.all(
             colNames.map(async (colName) => {
               try {
-                const snap = await getDocs(collection(db, colName));
+                const snap = await getDocs(query(collection(db, colName), limit(200)));
                 if (!snap.empty) {
                   backupPayload.collections[colName] = snap.docs.map((d) => ({
                     id: d.id,
@@ -122,16 +122,17 @@ export default function AdminSettingsTab() {
 
   useEffect(() => {
     async function loadSettings() {
-      const pId = await settingsStore.getItem<string>("paypal_client_id") || "";
-      const pSec = await settingsStore.getItem<string>("paypal_secret") || "";
-      const wapp = await settingsStore.getItem<string>("support_whatsapp") || "";
-      const email = await settingsStore.getItem<string>("support_email") || "info@archery101010.com";
+      // Purge any legacy client-side secret key that may exist from older builds
+      await settingsStore.removeItem("paypal_secret").catch(() => {});
+
+      const pId = (await settingsStore.getItem<string>("paypal_client_id")) || "";
+      const wapp = (await settingsStore.getItem<string>("support_whatsapp")) || "";
+      const email = (await settingsStore.getItem<string>("support_email")) || "info@archery101010.com";
       const flagDuels = await settingsStore.getItem<boolean>("flag_duels_enabled");
       const flagSpotify = await settingsStore.getItem<boolean>("flag_spotify_enabled");
       const flagMacro = await settingsStore.getItem<boolean>("flag_macrocycles_enabled");
 
       setPaypalClientId(pId);
-      setPaypalSecret(pSec);
       setSupportWhatsapp(wapp);
       setSupportEmail(email);
       setDuelsEnabled(flagDuels !== null ? flagDuels : true);
@@ -144,8 +145,8 @@ export default function AdminSettingsTab() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    await settingsStore.removeItem("paypal_secret").catch(() => {});
     await settingsStore.setItem("paypal_client_id", paypalClientId);
-    await settingsStore.setItem("paypal_secret", paypalSecret);
     await settingsStore.setItem("support_whatsapp", supportWhatsapp);
     await settingsStore.setItem("support_email", supportEmail);
     await settingsStore.setItem("flag_duels_enabled", duelsEnabled);
@@ -160,37 +161,40 @@ export default function AdminSettingsTab() {
     <div className="flex flex-col gap-5 w-full p-4 md:p-6 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Configuración General</h2>
-        <p className="text-xs text-white">Ajusta credenciales del sistema, canales de soporte y habilita funcionalidades.</p>
+        <h2 id={`${baseId}-heading`} className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">
+          Configuración General
+        </h2>
+        <p className="text-xs text-white">Ajusta identificadores públicos, canales de soporte y habilita funcionalidades.</p>
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-col gap-5 mt-2">
-        {/* Section: Payment Gateway Keys */}
+      <form onSubmit={handleSave} aria-labelledby={`${baseId}-heading`} className="flex flex-col gap-5 mt-2">
+        {/* Section: Payment Gateway Public Key */}
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-4">
           <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2 flex items-center gap-1.5">
             <Key size={14} className="text-yellow-gold" />
-            <span>Pasarela de Pago (API Comercial)</span>
+            <span>Pasarela de Pago (Identificador Público)</span>
           </h3>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Client ID de Pasarela</label>
+              <label htmlFor={`${baseId}-clientid`} className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                Client ID Público de Pasarela
+              </label>
               <input
-                type="password"
+                id={`${baseId}-clientid`}
+                name="paypalClientId"
+                type="text"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={paypalClientId}
                 onChange={(e) => setPaypalClientId(e.target.value)}
-                className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon tracking-widest"
+                className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon tracking-wider tabular-nums"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Secret Key de Pasarela</label>
-              <input
-                type="password"
-                value={paypalSecret}
-                onChange={(e) => setPaypalSecret(e.target.value)}
-                className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon tracking-widest"
-              />
-            </div>
+            <p className="text-[11px] text-white leading-relaxed">
+              Por seguridad, ninguna llave secreta privada se solicita ni se almacena en el navegador o IndexedDB.
+            </p>
           </div>
         </div>
 
@@ -203,19 +207,32 @@ export default function AdminSettingsTab() {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Teléfono / Mensajería de Soporte</label>
+              <label htmlFor={`${baseId}-phone`} className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                Teléfono / Mensajería de Soporte
+              </label>
               <input
+                id={`${baseId}-phone`}
+                name="supportWhatsapp"
                 type="tel"
+                autoComplete="tel"
                 value={supportWhatsapp}
                 onChange={(e) => setSupportWhatsapp(e.target.value)}
-                className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon"
+                className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon tabular-nums"
                 placeholder="+50688888888"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Email de Contacto</label>
+              <label htmlFor={`${baseId}-email`} className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                Email de Contacto
+              </label>
               <input
+                id={`${baseId}-email`}
+                name="supportEmail"
                 type="email"
+                autoComplete="email"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={supportEmail}
                 onChange={(e) => setSupportEmail(e.target.value)}
                 className="bg-neutral-950 border border-white/10 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-cyan-neon"
@@ -241,6 +258,7 @@ export default function AdminSettingsTab() {
               </div>
               <button
                 type="button"
+                aria-pressed={duelsEnabled}
                 onClick={() => setDuelsEnabled(!duelsEnabled)}
                 className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
@@ -260,6 +278,7 @@ export default function AdminSettingsTab() {
               </div>
               <button
                 type="button"
+                aria-pressed={spotifyEnabled}
                 onClick={() => setSpotifyEnabled(!spotifyEnabled)}
                 className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
@@ -279,6 +298,7 @@ export default function AdminSettingsTab() {
               </div>
               <button
                 type="button"
+                aria-pressed={macrocyclesEnabled}
                 onClick={() => setMacrocyclesEnabled(!macrocyclesEnabled)}
                 className="text-cyan-neon hover:text-white transition cursor-pointer"
               >
@@ -299,7 +319,7 @@ export default function AdminSettingsTab() {
             <span>Respaldo Maestro de Base de Datos (Snapshot .JSON)</span>
           </h3>
           <p className="text-xs text-white leading-relaxed">
-            Descarga una copia de seguridad completa e instantánea con todos los usuarios, perfiles demográficos, sesiones de tiro, calendarios, macrociclos, estrellas y campañas publicitarias de Firestore + IndexedDB.
+            Descarga una copia de seguridad instantánea con usuarios, perfiles demográficos, sesiones de tiro, calendarios, macrociclos, estrellas y campañas publicitarias de Firestore (límite de 200 registros recientes por colección) + IndexedDB.
           </p>
           <button
             type="button"
@@ -317,6 +337,8 @@ export default function AdminSettingsTab() {
           <AnimatePresence>
             {isSaved && (
               <motion.div
+                role="status"
+                aria-live="polite"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}

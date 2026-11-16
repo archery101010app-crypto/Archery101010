@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { translations, TranslationKey } from "../translations/dict";
+import { translations, offlineFallbackTranslations, TranslationKey } from "../translations/dict";
 import { getLocalSetting, saveLocalSetting } from "../db/indexedDB";
 
 export type Language = string;
@@ -96,6 +96,22 @@ function detectSystemLanguage(): string {
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("es");
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Load language preference from IndexedDB / localStorage on mount
   useEffect(() => {
@@ -143,19 +159,22 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
     if (typeof window !== "undefined") {
       localStorage.setItem("preferred_language", lang);
+      const currentlyOnline = typeof navigator !== "undefined" ? navigator.onLine : false;
 
       if (lang === "es") {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
-        if (document.getElementById("google-translate-script")) {
+        if (currentlyOnline && document.getElementById("google-translate-script")) {
           window.location.reload();
           return;
         }
       } else {
         document.cookie = `googtrans=/es/${lang}; path=/;`;
         document.cookie = `googtrans=/es/${lang}; path=/; domain=${window.location.hostname};`;
-        window.location.reload();
-        return;
+        if (currentlyOnline) {
+          window.location.reload();
+          return;
+        }
       }
     }
   };
@@ -166,7 +185,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   }, [language]);
 
-  // Activate neural DOM translation for non-Spanish languages so 100% of screens translate seamlessly
+  // Activate neural DOM translation for non-Spanish languages only when online
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -176,14 +195,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       document.cookie = `googtrans=/es/${language}; path=/;`;
       document.cookie = `googtrans=/es/${language}; path=/; domain=${window.location.hostname};`;
 
-      if (!document.getElementById("google-translate-script")) {
+      const currentlyOnline = typeof navigator !== "undefined" ? navigator.onLine : isOnline;
+      if (currentlyOnline && !document.getElementById("google-translate-script")) {
         const script = document.createElement("script");
         script.id = "google-translate-script";
         script.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
         script.async = true;
+        script.onerror = () => {
+          script.remove();
+        };
         document.body.appendChild(script);
 
         (window as any).googleTranslateElementInit = () => {
+          if (!(window as any).google?.translate?.TranslateElement) return;
           new (window as any).google.translate.TranslateElement(
             {
               pageLanguage: "es",
@@ -198,11 +222,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
     }
-  }, [language]);
+  }, [language, isOnline]);
 
   const t = (key: TranslationKey): string => {
-    const dict = (translations as any)[language] || translations["es"];
-    return dict[key] || translations["es"][key] || String(key);
+    const exactDict = (translations as Record<string, Record<string, string>>)[language];
+    if (exactDict && exactDict[key]) {
+      return exactDict[key];
+    }
+    const fallbackLangDict = offlineFallbackTranslations[language];
+    if (fallbackLangDict && fallbackLangDict[key]) {
+      return fallbackLangDict[key] as string;
+    }
+    if (!isOnline && language !== "es" && translations.en[key]) {
+      return translations.en[key];
+    }
+    return translations.es[key] || String(key);
   };
 
   return (

@@ -1,6 +1,6 @@
 import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
 import { auth, db } from "./firebase";
-import { collection, doc, getDoc, setDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, query, where, getDocs, limit } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -106,6 +106,61 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
       setTimeout(() => reject(new Error("Timeout de conexión a la nube")), timeoutMs)
     )
   ]);
+}
+
+/**
+ * Computes exact age in years from a YYYY-MM-DD (or ISO) birthDate string.
+ * Rejects invalid calendar dates, out-of-range years, and any future date by returning `null`.
+ */
+export function calculateAgeFromBirthDate(birthDateStr: string): number | null {
+  if (!birthDateStr || typeof birthDateStr !== "string") return null;
+  const trimmed = birthDateStr.trim();
+  if (!trimmed) return null;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (ymdMatch) {
+    year = Number(ymdMatch[1]);
+    month = Number(ymdMatch[2]);
+    day = Number(ymdMatch[3]);
+  } else {
+    const parsed = new Date(trimmed);
+    if (isNaN(parsed.getTime())) return null;
+    year = parsed.getFullYear();
+    month = parsed.getMonth() + 1;
+    day = parsed.getDate();
+  }
+
+  if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const birthLocal = new Date(year, month - 1, day);
+  if (
+    birthLocal.getFullYear() !== year ||
+    birthLocal.getMonth() !== month - 1 ||
+    birthLocal.getDate() !== day
+  ) {
+    return null;
+  }
+
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (birthLocal.getTime() > todayLocal.getTime()) {
+    return null;
+  }
+
+  let age = todayLocal.getFullYear() - year;
+  const monthDiff = todayLocal.getMonth() + 1 - month;
+  if (monthDiff < 0 || (monthDiff === 0 && todayLocal.getDate() < day)) {
+    age--;
+  }
+
+  if (age < 0 || age > 125) return null;
+  return age;
 }
 
 function isProfileValid(u: UserProfile | null | undefined): boolean {
@@ -274,7 +329,7 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
   if (typeof navigator === "undefined" || navigator.onLine) {
     try {
       const snap = await withTimeout(
-        getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode))),
+        getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode), limit(10))),
         8000
       );
       const allMatches = snap.docs
@@ -447,7 +502,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       if (directSnap.exists()) {
         user = sanitizeUserProfile(directSnap.data());
       } else {
-        const q = query(collection(db, "users"), where("email", "==", targetEmail));
+        const q = query(collection(db, "users"), where("email", "==", targetEmail), limit(5));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
           // Legacy account with the same email but a different UID: adopt its data under the real Auth UID
@@ -578,6 +633,15 @@ export async function registerUser(
     throw new Error("La contraseña debe tener al menos 6 caracteres.");
   }
 
+  // Validate birthDate and enforce COPPA 13+ age gate BEFORE creating Firebase Auth account
+  const age = calculateAgeFromBirthDate(profileData.birthDate);
+  if (age === null) {
+    throw new Error("Ingresa una fecha de nacimiento válida (no se permiten fechas futuras).");
+  }
+  if (age < 13) {
+    throw new Error("Debes tener al menos 13 años para crear una cuenta en ARCHERY 101010.");
+  }
+
   // 1. Create account in Firebase Authentication so UID matches request.auth.uid in Firestore rules
   let uid = "";
   try {
@@ -588,15 +652,6 @@ export async function registerUser(
     }
   } catch (authErr: any) {
     throw new Error(translateFirebaseAuthError(authErr));
-  }
-
-  // Calculate age
-  const birthDate = new Date(profileData.birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
   }
 
   const isAdult = age >= 18;
@@ -893,42 +948,116 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     }
   }
 
-  const DELETE_BATCH_TIMEOUT_MS = 15000;
+  // Resolve current profile to check if Coach owner needs to unlink students first
+  let targetProfile: UserProfile | null = null;
+  try {
+    const logged = await getLoggedUser();
+    if (logged && logged.uid === uid) {
+      targetProfile = logged;
+    } else {
+      const localList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+      targetProfile = localList.find((u) => u.uid === uid) || null;
+    }
+    if (!targetProfile && isOnline && !isGuest) {
+      const snap = await withTimeout(getDoc(doc(db, "users", uid)), LOGIN_TIMEOUT_MS).catch(() => null);
+      if (snap && snap.exists()) {
+        targetProfile = sanitizeUserProfile({ ...snap.data(), uid });
+      }
+    }
+  } catch {}
 
-  // 2. Delete cloud sessions, stars, and user profile in parallel batches (Promise.allSettled) with a 15s timeout
+  const isCoachOwner = Boolean(
+    targetProfile &&
+      !isLinkedToExternalCoach(targetProfile) &&
+      (targetProfile.role === "coach" ||
+        targetProfile.role === "team_admin" ||
+        targetProfile.role === "team_admin_coach" ||
+        targetProfile.isClubCreator)
+  );
+
+  // Unlink students while caller still holds Coach permissions and profile exists
+  if (isCoachOwner && !isGuest) {
+    try {
+      await leaveCurrentClub(uid);
+    } catch (unlinkErr) {
+      console.warn("Could not fully unlink students before deleting Coach account:", unlinkErr);
+    }
+  }
+
+  // Capture & clear local 6-digit watch pairing code before cloud cleanup
+  let savedPairingCode = "";
+  if (typeof window !== "undefined") {
+    const pairingStorageKey = `archery_watch_pairing_code_${uid}`;
+    try {
+      savedPairingCode = (localStorage.getItem(pairingStorageKey) || "").trim();
+      localStorage.removeItem(pairingStorageKey);
+    } catch {}
+  }
+
+  const DELETE_BATCH_TIMEOUT_MS = 20000;
+
+  // 2. Delete all user cloud records BEFORE calling deleteUser(auth.currentUser)
   if (isOnline && !isGuest) {
     try {
       const { deleteDoc } = await import("firebase/firestore");
+
+      const deleteByQuery = async (colName: string, field: string) => {
+        const q = query(collection(db, colName), where(field, "==", uid), limit(250));
+        const snap = await getDocs(q).catch(() => null);
+        if (!snap || snap.empty) return;
+        const docs = snap.docs;
+        const CHUNK_SIZE = 25;
+        for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+          const chunk = docs.slice(i, i + CHUNK_SIZE);
+          await Promise.allSettled(chunk.map((d) => deleteDoc(doc(db, colName, d.id))));
+        }
+      };
+
       await withTimeout(
         (async () => {
-          const sessQuery = query(collection(db, "sessions"), where("userId", "==", uid));
-          const sessSnap = await getDocs(sessQuery).catch(() => null);
-          if (sessSnap && !sessSnap.empty) {
-            const docs = sessSnap.docs;
-            const CHUNK_SIZE = 25;
-            for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
-              const chunk = docs.slice(i, i + CHUNK_SIZE);
-              await Promise.allSettled(chunk.map((sDoc) => deleteDoc(doc(db, "sessions", sDoc.id))));
-            }
-          }
           await Promise.allSettled([
-            deleteDoc(doc(db, "athlete_stars", uid)),
-            deleteDoc(doc(db, "users", uid))
+            deleteByQuery("sessions", "userId"),
+            deleteByQuery("calendar_events", "createdByUid"),
+            deleteByQuery("macrocycles", "coachId"),
+            deleteByQuery("coach_records", "coachId"),
+            deleteByQuery("star_history", "userId"),
+            deleteByQuery("coach_notifications", "athleteUid"),
+            deleteByQuery("coach_notifications", "coachUid"),
+            deleteByQuery("duel_invitations", "senderUid"),
+            deleteByQuery("duel_invitations", "receiverUid"),
+            /^[0-9]{6}$/.test(savedPairingCode)
+              ? deleteDoc(doc(db, "watch_sessions", savedPairingCode))
+              : Promise.resolve(),
+            deleteDoc(doc(db, "athlete_stars", uid))
           ]);
+
+          // Delete users/{uid} after dependent collections so rule lookups against users/{uid} succeed
+          await deleteDoc(doc(db, "users", uid)).catch(() => {});
         })(),
         DELETE_BATCH_TIMEOUT_MS
       );
     } catch (err) {
-      console.warn("Direct Firestore cleanup timed out or deferred to sync queue:", err);
-      await addToSyncQueue({
-        id: generateResilientId("TXN"),
-        collection: "users",
-        operation: "DELETE",
-        payloadId: uid,
-        payload: { uid },
-        timestamp: Date.now()
-      });
+      // Never push DELETE users/{uid} to syncQueue right before deleteUser(auth.currentUser) when online
+      console.warn("Direct Firestore cleanup timed out:", err);
     }
+
+    // Purge any pending syncQueue items for this uid (e.g. from leaveCurrentClub) before destroying auth session
+    try {
+      const { getSyncQueue, removeFromSyncQueue } = await import("./db/indexedDB");
+      const queue = await getSyncQueue();
+      await Promise.allSettled(
+        queue
+          .filter(
+            (item) =>
+              item.payloadId === uid ||
+              item.payload?.uid === uid ||
+              item.payload?.userId === uid ||
+              item.payload?.createdByUid === uid ||
+              item.payload?.coachId === uid
+          )
+          .map((item) => removeFromSyncQueue(item.id))
+      );
+    } catch {}
 
     // 3. Delete Firebase Authentication user record
     try {
@@ -952,13 +1081,20 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     });
   }
 
-  // 4. Remove user from local simulated_users list and delete local sessions & stars
+  // 4. Remove user from local simulated_users list and delete local sessions, stars, star_history, events & macrocycles
   const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
   const filteredUsers = usersList.filter((u) => u.uid !== uid).map(sanitizeUserProfile);
   await saveLocalSetting("simulated_users", filteredUsers);
 
   try {
-    const { deleteLocalSession, athleteStarsStore } = await import("./db/indexedDB");
+    const {
+      deleteLocalSession,
+      athleteStarsStore,
+      starHistoryStore,
+      calendarStore,
+      macrocyclesStore
+    } = await import("./db/indexedDB");
+
     const localSessions = await getLocalSessions();
     const ownLocalSessions = localSessions.filter((sess) => sess.userId === uid || sess.userUid === uid);
     await Promise.allSettled(
@@ -976,9 +1112,34 @@ export async function deleteUserAccount(uid: string): Promise<void> {
         }
       })
     );
+
     await athleteStarsStore.removeItem(uid);
+
+    const starHistoryKeysToDelete: string[] = [];
+    await starHistoryStore.iterate((val: any, key: string) => {
+      if (val?.userId === uid) {
+        starHistoryKeysToDelete.push(key);
+      }
+    });
+    await Promise.allSettled(starHistoryKeysToDelete.map((k) => starHistoryStore.removeItem(k)));
+
+    const eventKeysToDelete: string[] = [];
+    await calendarStore.iterate((val: any, key: string) => {
+      if (val?.createdByUid === uid) {
+        eventKeysToDelete.push(key);
+      }
+    });
+    await Promise.allSettled(eventKeysToDelete.map((k) => calendarStore.removeItem(k)));
+
+    const macroKeysToDelete: string[] = [];
+    await macrocyclesStore.iterate((val: any, key: string) => {
+      if (val?.coachId === uid) {
+        macroKeysToDelete.push(key);
+      }
+    });
+    await Promise.allSettled(macroKeysToDelete.map((k) => macrocyclesStore.removeItem(k)));
   } catch (err) {
-    console.warn("Error cleaning local sessions during account deletion:", err);
+    console.warn("Error cleaning local stores during account deletion:", err);
   }
 
   // 5. Clear active session
@@ -1026,7 +1187,7 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
       if (directSnap.exists()) {
         user = sanitizeUserProfile(directSnap.data());
       } else {
-        const q = query(collection(db, "users"), where("email", "==", targetEmail));
+        const q = query(collection(db, "users"), where("email", "==", targetEmail), limit(5));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
         if (!querySnapshot.empty) {
           // Legacy account with the same email but a different UID: adopt its data under the real Auth UID
@@ -1581,7 +1742,7 @@ export async function joinClubByInviteCode(
     }
     if (typeof navigator === "undefined" || navigator.onLine) {
       const snapSess = await withTimeout(
-        getDocs(query(collection(db, "sessions"), where("userId", "==", userUid))),
+        getDocs(query(collection(db, "sessions"), where("userId", "==", userUid), limit(250))),
         6000
       ).catch(() => null);
       if (snapSess) {
@@ -1647,8 +1808,8 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
         await withTimeout(
           (async () => {
             const [byCoachSnap, byClubSnap] = await Promise.all([
-              getDocs(query(collection(db, "users"), where("coachId", "==", userUid))).catch(() => null),
-              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId))).catch(() => null)
+              getDocs(query(collection(db, "users"), where("coachId", "==", userUid), limit(250))).catch(() => null),
+              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId), limit(250))).catch(() => null)
             ]);
             byCoachSnap?.forEach((d) => {
               const id = (d.data() as any)?.uid || d.id;

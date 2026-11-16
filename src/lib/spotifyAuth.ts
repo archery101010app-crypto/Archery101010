@@ -71,12 +71,12 @@ export async function getSpotifyClientId(): Promise<string> {
 }
 
 /**
- * Starts the official Spotify OAuth 2.0 Authorization Code with PKCE flow.
+ * Starts the OAuth 2.0 Authorization Code with PKCE flow for music account linking.
  */
 export async function startSpotifyOAuthPKCE(customClientId?: string): Promise<void> {
   const clientId = (customClientId || (await getSpotifyClientId())).trim();
   if (!clientId) {
-    throw new Error("Falta el Client ID de Spotify OAuth.");
+    throw new Error("Falta el Client ID de OAuth musical.");
   }
 
   const codeVerifier = generateRandomString(64);
@@ -100,7 +100,77 @@ export async function startSpotifyOAuthPKCE(customClientId?: string): Promise<vo
 }
 
 /**
- * Checks if the current URL contains a `?code=` callback from Spotify OAuth PKCE
+ * Refreshes the PKCE OAuth music access token using `grant_type: "refresh_token"`
+ * whenever `Date.now() >= token.expiresAt - 60000` (or when `forceRefresh` is true).
+ */
+export async function refreshMusicAccessToken(
+  existingAccount?: ConnectedSpotifyAccount | null,
+  forceRefresh = false
+): Promise<string | null> {
+  try {
+    const account =
+      existingAccount ||
+      (await getLocalSetting<ConnectedSpotifyAccount | null>("spotify_connected_account", null));
+
+    if (!account) return null;
+
+    const expiresAt = typeof account.expiresAt === "number" ? account.expiresAt : 0;
+    if (!forceRefresh && account.accessToken && expiresAt > 0 && Date.now() < expiresAt - 60000) {
+      return account.accessToken;
+    }
+
+    if (!account.refreshToken) {
+      return account.accessToken || null;
+    }
+
+    const clientId = await getSpotifyClientId();
+    if (!clientId) {
+      return account.accessToken || null;
+    }
+
+    const tokenRes = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: "refresh_token",
+        refresh_token: account.refreshToken
+      })
+    });
+
+    if (!tokenRes.ok) {
+      return account.accessToken || null;
+    }
+
+    const tokenData = await tokenRes.json();
+    const newAccessToken: string | undefined = tokenData?.access_token;
+    if (!newAccessToken) {
+      return account.accessToken || null;
+    }
+
+    const newRefreshToken: string | undefined = tokenData?.refresh_token || account.refreshToken;
+    const expiresIn: number = Number(tokenData?.expires_in) || 3600;
+    const newExpiresAt = Date.now() + expiresIn * 1000;
+
+    const updatedAccount: ConnectedSpotifyAccount = {
+      ...account,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresAt: newExpiresAt
+    };
+
+    await saveLocalSetting("spotify_connected_account", updatedAccount);
+    return newAccessToken;
+  } catch (err) {
+    console.warn("Error refreshing music access token:", err);
+    return existingAccount?.accessToken || null;
+  }
+}
+
+/**
+ * Checks if the current URL contains a `?code=` callback from OAuth PKCE
  * and exchanges it for an access token, user profile, and playlists.
  */
 export async function handleSpotifyOAuthCallbackIfPresent(): Promise<{
@@ -162,7 +232,7 @@ export async function handleSpotifyOAuthCallbackIfPresent(): Promise<{
 
     const account: ConnectedSpotifyAccount = {
       username: profile.id || "",
-      displayName: profile.display_name || profile.id || "Usuario Spotify",
+      displayName: profile.display_name || profile.id || "Cuenta Musical",
       email: profile.email,
       avatarUrl: profile.images?.[0]?.url,
       product: profile.product || "premium",
@@ -179,19 +249,50 @@ export async function handleSpotifyOAuthCallbackIfPresent(): Promise<{
     const playlists = await fetchUserSpotifyPlaylists(accessToken);
     return { account, playlists };
   } catch (err) {
-    console.warn("Error completing Spotify PKCE callback:", err);
+    console.warn("Error completing music OAuth PKCE callback:", err);
     return null;
   }
 }
 
 /**
- * Fetches the authenticated user's personal & followed playlists from Spotify Web API.
+ * Fetches the authenticated user's personal & followed playlists.
+ * Automatically refreshes the PKCE access token when expired or within 60s of expiry.
  */
-export async function fetchUserSpotifyPlaylists(accessToken: string): Promise<SpotifyApiPlaylist[]> {
+export async function fetchUserSpotifyPlaylists(accessToken?: string): Promise<SpotifyApiPlaylist[]> {
   try {
-    const res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
-      headers: { Authorization: `Bearer ${accessToken}` }
+    const savedAccount = await getLocalSetting<ConnectedSpotifyAccount | null>(
+      "spotify_connected_account",
+      null
+    );
+
+    let effectiveToken = accessToken || savedAccount?.accessToken || "";
+    if (
+      savedAccount &&
+      (!effectiveToken ||
+        typeof savedAccount.expiresAt !== "number" ||
+        Date.now() >= savedAccount.expiresAt - 60000)
+    ) {
+      const refreshed = await refreshMusicAccessToken(savedAccount);
+      if (refreshed) {
+        effectiveToken = refreshed;
+      }
+    }
+
+    if (!effectiveToken) return [];
+
+    let res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
+      headers: { Authorization: `Bearer ${effectiveToken}` }
     });
+
+    if (res.status === 401 && savedAccount?.refreshToken) {
+      const forcedToken = await refreshMusicAccessToken(savedAccount, true);
+      if (forcedToken) {
+        res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
+          headers: { Authorization: `Bearer ${forcedToken}` }
+        });
+      }
+    }
+
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data?.items)) return [];
@@ -202,7 +303,7 @@ export async function fetchUserSpotifyPlaylists(accessToken: string): Promise<Sp
         id: item.id,
         name: item.name,
         description: item.description || "",
-        ownerName: item.owner?.display_name || item.owner?.id || "Spotify",
+        ownerName: item.owner?.display_name || item.owner?.id || "Lista Musical",
         imageUrl: item.images?.[0]?.url,
         tracksTotal: item.tracks?.total || 0
       }));
@@ -212,8 +313,7 @@ export async function fetchUserSpotifyPlaylists(accessToken: string): Promise<Sp
 }
 
 /**
- * Extracts a clean Spotify username from either a raw username/email or a Spotify profile URL
- * (e.g. https://open.spotify.com/user/123456?si=abc -> 123456)
+ * Extracts a clean username from either a raw username/email or a profile URL
  */
 export function extractSpotifyUsername(input: string): string {
   const trimmed = input.trim();

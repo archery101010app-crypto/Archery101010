@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keystorePropsFile = file("../keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "com.archery101010.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -9,17 +15,24 @@ android {
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Wear OS form-factor versionCode offset (+100000 over mobile versionCode)
-        versionCode 150900
-        versionName "2.109"
+        versionCode 151000
+        versionName "2.110"
     }
 
     signingConfigs {
         release {
-            if (file("../app/archery101010-upload.jks").exists()) {
-                storeFile file("../app/archery101010-upload.jks")
-                storePassword "archery101010"
-                keyAlias "archery101010"
-                keyPassword "archery101010"
+            def ksPath = keystoreProps.getProperty("storeFile") ?: System.getenv("ARCHERY_KEYSTORE_PATH")
+            def ksPass = keystoreProps.getProperty("storePassword") ?: System.getenv("ARCHERY_KEYSTORE_PASSWORD")
+            def ksAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("ARCHERY_KEY_ALIAS")
+            def ksKeyPass = keystoreProps.getProperty("keyPassword") ?: System.getenv("ARCHERY_KEY_PASSWORD")
+            if (ksPath) {
+                def resolvedKsFile = file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath)
+                if (resolvedKsFile.exists() && ksPass && ksAlias && ksKeyPass) {
+                    storeFile resolvedKsFile
+                    storePassword ksPass
+                    keyAlias ksAlias
+                    keyPassword ksKeyPass
+                }
             }
         }
     }
@@ -27,8 +40,9 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

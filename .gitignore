@@ -27,9 +27,11 @@
 
 # debug
 npm-debug.log*
+firebase-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+firebase-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -43,5 +45,10 @@ next-env.d.ts
 
 play-service-account.json
 *.der
+*.jks
+*.keystore
+android/keystore.properties
+/ios/App/App/public/
+/android/app/src/main/assets/public/
 /garmin-ciq/tools/
 /releases/

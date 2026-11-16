@@ -443,6 +443,8 @@ if (typeof window !== "undefined") {
   ensureGlobalNativeWatchDispatcher();
 }
 
+const WATCH_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
 function buildPhoneCloudSessionFields(
   snapshot: BiometricSessionSnapshot | null,
   uid: string
@@ -458,6 +460,7 @@ function buildPhoneCloudSessionFields(
     s?.sensitivityLevel === 0 || s?.sensitivityLevel === 1 || s?.sensitivityLevel === 2
       ? s.sensitivityLevel
       : getSavedSensitivityLevel();
+  const now = Date.now();
 
   return {
     userId: uid,
@@ -478,7 +481,8 @@ function buildPhoneCloudSessionFields(
     sensitivityLevel,
     bowPoundageLbs: Math.max(10, Number(s?.bowPoundageLbs) || 36),
     practiceType: String(s?.practiceType || "Práctica"),
-    updatedAt: Date.now()
+    updatedAt: now,
+    expiresAt: now + WATCH_SESSION_TTL_MS
   };
 }
 

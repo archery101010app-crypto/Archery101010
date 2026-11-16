@@ -1,0 +1,18 @@
+{
+  "name": "archery101010-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions v2 for ARCHERY 101010 FCM Push Notifications",
+  "main": "index.js",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0"
+  }
+}

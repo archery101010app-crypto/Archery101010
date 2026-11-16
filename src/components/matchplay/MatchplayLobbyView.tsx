@@ -125,6 +125,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; system?: string; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
+  const [inviteRemainingSeconds, setInviteRemainingSeconds] = useState<number>(120);
 
   // Competitor Gamertag / Alias State for Duels
   const [isEditingAlias, setIsEditingAlias] = useState(false);
@@ -185,8 +186,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     updateLobbyPresence();
     triggerBgSync();
 
-    // Set up intervals (60s presence heartbeat, 30s background sync)
-    const presenceInterval = setInterval(updateLobbyPresence, 60000);
+    // Set up intervals (180s presence heartbeat, 30s background sync)
+    const presenceInterval = setInterval(updateLobbyPresence, 180000);
     const syncInterval = setInterval(triggerBgSync, 30000);
 
     return () => {
@@ -270,11 +271,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
     if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
       import("firebase/firestore")
-        .then(async ({ collection, query, where, onSnapshot }) => {
+        .then(async ({ collection, query, where, limit, onSnapshot }) => {
           const { db, auth } = await import("@/lib/firebase");
           if (!isMounted || !auth.currentUser) return;
           const tenMinAgo = Date.now() - 10 * 60 * 1000;
-          const onlineQuery = query(collection(db, "users"), where("lastActiveAt", ">=", tenMinAgo));
+          const onlineQuery = query(
+            collection(db, "users"),
+            where("lastActiveAt", ">=", tenMinAgo),
+            limit(80)
+          );
           unsubCloud = onSnapshot(
             onlineQuery,
             (snap) => {
@@ -304,11 +309,48 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     };
   }, [user]);
 
-  // Listen for invitation status updates
+  // Listen for invitation status updates + auto-expire unanswered invites after 120s
   useEffect(() => {
     if (!sentInvite) return;
 
     let unsubscribe: () => void = () => {};
+    let isDisposed = false;
+    setInviteRemainingSeconds(120);
+
+    const countdownInterval = setInterval(() => {
+      setInviteRemainingSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    const expiryTimer = setTimeout(async () => {
+      if (isDisposed) return;
+      isDisposed = true;
+      unsubscribe();
+      clearInterval(countdownInterval);
+
+      try {
+        const { doc, updateDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const nowTs = Date.now();
+        await updateDoc(doc(db, "duel_invitations", sentInvite.id), {
+          status: "cancelled",
+          updatedAt: nowTs
+        }).catch(() => {});
+        if (sentInvite.roomCode) {
+          await updateDoc(doc(db, "active_duels", sentInvite.roomCode), {
+            status: "cancelled",
+            updatedAt: nowTs
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn("Error expiring duel invite:", err);
+      } finally {
+        setSentInvite(null);
+        setInviteStatusMessage("");
+        await showOledAlert(
+          "El desafío en línea expiró automáticamente tras 120 segundos sin respuesta del oponente."
+        );
+      }
+    }, 120000);
 
     async function listenToInvite() {
       try {
@@ -317,20 +359,32 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
         const inviteRef = doc(db, "duel_invitations", sentInvite.id);
         unsubscribe = onSnapshot(inviteRef, (snap) => {
+          if (isDisposed) return;
           if (snap.exists()) {
             const data = snap.data();
             if (data.status === "accepted") {
+              isDisposed = true;
+              clearTimeout(expiryTimer);
+              clearInterval(countdownInterval);
+
               // Challenger transitions to Arena preserving custom duel settings
               const matchConfig = {
                 id: data.roomCode,
                 bowType: data.bowType,
                 distance: data.distance,
                 system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
-                ...(data.targetFace || data.targetType ? { targetFace: data.targetFace || data.targetType, targetType: data.targetType || data.targetFace } : {}),
+                ...(data.targetFace || data.targetType
+                  ? {
+                      targetFace: data.targetFace || data.targetType,
+                      targetType: data.targetType || data.targetFace
+                    }
+                  : {}),
                 isCreator: true,
                 rival: {
                   uid: data.receiverUid,
-                  fullName: realUsers.find(u => u.uid === data.receiverUid)?.fullName || "Oponente en Línea",
+                  fullName:
+                    realUsers.find((u) => u.uid === data.receiverUid)?.fullName ||
+                    "Oponente en Línea",
                   country: "CR",
                   clubName: "Oponente",
                   clubLogo: "0",
@@ -338,17 +392,25 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   rating: 9.0
                 }
               };
-              
+
               // Clean up invite
               deleteDoc(inviteRef).catch(() => {});
-              
+
               setSentInvite(null);
               onStartDuel(matchConfig);
             } else if (data.status === "rejected") {
+              isDisposed = true;
+              clearTimeout(expiryTimer);
+              clearInterval(countdownInterval);
               setInviteStatusMessage("El oponente ha rechazado el reto.");
               setTimeout(() => {
                 setSentInvite(null);
               }, 3000);
+            } else if (data.status === "cancelled") {
+              isDisposed = true;
+              clearTimeout(expiryTimer);
+              clearInterval(countdownInterval);
+              setSentInvite(null);
             }
           }
         });
@@ -359,8 +421,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
     listenToInvite();
 
-    return () => unsubscribe();
-  }, [sentInvite, realUsers]);
+    return () => {
+      isDisposed = true;
+      clearTimeout(expiryTimer);
+      clearInterval(countdownInterval);
+      unsubscribe();
+    };
+  }, [sentInvite?.id]);
 
   const handleChallengeRealUser = async (rival: any) => {
     setInviteStatusMessage("Enviando reto...");
@@ -447,7 +514,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       defaultDistance: u.bowConfig?.defaultDistance || 18
     },
     rating: "9.0",
-    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 300000)) ? "online" as const : "offline" as const,
+    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 360000)) ? "online" as const : "offline" as const,
     lastActiveAt: u.lastActiveAt
   })).filter((riv) => {
     // Exclude mock/demo users from the online list
@@ -896,7 +963,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               ) : (
                 <div className="bg-[#080A0F] border border-white/[0.06] rounded-xl px-3 py-2.5">
                   <p className="text-[12.8px] text-white leading-snug [text-wrap:pretty]">
-                    Genera una sala en vivo con código y enlace directo para compartir por WhatsApp con tu oponente.
+                    Genera una sala en vivo con código y enlace directo para compartir por Mensajería Directa con tu oponente.
                   </p>
                 </div>
               )}
@@ -1012,7 +1079,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           No hay otros arqueros reales conectados en el lobby público en este instante.
                         </p>
                         <p className="text-[11.6px] text-white">
-                          Usa &ldquo;Crear Sala Online y Enviar Reto&rdquo; arriba para enviar un enlace directo por WhatsApp a tu amigo.
+                          Usa &ldquo;Crear Sala Online y Enviar Reto&rdquo; arriba para enviar un enlace directo por Mensajería Directa a tu amigo.
                         </p>
                       </motion.div>
                     ) : (
@@ -1317,7 +1384,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     }}
                     className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap px-2"
                   >
-                    Enviar por WhatsApp
+                    Enviar por Mensajería
                   </button>
                   <button
                     onClick={async () => {
@@ -1397,17 +1464,32 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 {inviteStatusMessage}
               </p>
 
-              <div className="flex flex-col gap-2 mt-2">
+              <div className="bg-[#12151C] border border-white/[0.08] rounded-xl px-3 py-1.5 mx-auto">
+                <span className="text-[11px] font-bold text-cyan-neon tabular-nums uppercase tracking-wider">
+                  Tiempo restante: {inviteRemainingSeconds}s
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-1">
                 <button
                   onClick={async () => {
                     try {
-                      const { doc, deleteDoc } = await import("firebase/firestore");
+                      const { doc, updateDoc } = await import("firebase/firestore");
                       const { db } = await import("@/lib/firebase");
+                      const nowTs = Date.now();
                       // Cancel the invitation in Firestore
-                      await deleteDoc(doc(db, "duel_invitations", sentInvite.id));
-                      
+                      await updateDoc(doc(db, "duel_invitations", sentInvite.id), {
+                        status: "cancelled",
+                        updatedAt: nowTs
+                      }).catch(() => {});
+
                       // Also clean up the active duel room
-                      await deleteDoc(doc(db, "active_duels", sentInvite.roomCode));
+                      if (sentInvite.roomCode) {
+                        await updateDoc(doc(db, "active_duels", sentInvite.roomCode), {
+                          status: "cancelled",
+                          updatedAt: nowTs
+                        }).catch(() => {});
+                      }
                     } catch (err) {
                       console.error("Error cancelling duel invite:", err);
                     } finally {

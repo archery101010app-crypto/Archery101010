@@ -1038,10 +1038,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
+              type="button"
               onClick={onBack}
+              aria-label={language === "es" ? "Volver" : "Back"}
               className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16} aria-hidden="true" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -1064,15 +1066,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         {/* Action buttons below title: symmetric 2-column layout */}
         <div className="grid grid-cols-2 gap-2">
           <button
+            type="button"
             onClick={handleOpenImportModal}
             className="h-10 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
-            title="Planificar todo el mes (Tabla Día 1 al 31 o pegar de Excel / Sheets)"
+            title="Planificar todo el mes (Tabla Día 1 al 31 o pegar de hoja de cálculo)"
           >
-            <FileSpreadsheet size={14} className="shrink-0" />
+            <FileSpreadsheet size={14} className="shrink-0" aria-hidden="true" />
             <span>{language === "es" ? "Plan de Mes" : "Month Plan"}</span>
           </button>
 
           <button
+            type="button"
             onClick={() =>
               handleOpenCreateAssignment(
                 selectedDay || new Date().toISOString().split("T")[0],
@@ -1082,7 +1086,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             className="h-10 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
             title="Escribir agenda para un día"
           >
-            <Plus size={15} className="shrink-0" />
+            <Plus size={15} className="shrink-0" aria-hidden="true" />
             <span>{language === "es" ? "Nueva Agenda" : "New Agenda"}</span>
           </button>
         </div>
@@ -1090,21 +1094,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       {/* Compact Month Selector + View Switcher Bar */}
       <div className="flex items-center justify-between gap-1 bg-[#0D1017] px-1.5 sm:px-2.5 py-1.5 rounded-2xl border border-white/[0.08]">
-        <div className="flex items-center gap-0 min-w-0 flex-1">
+        <div className="flex items-center gap-0.5 min-w-0 flex-1">
           <button
+            type="button"
             onClick={prevMonth}
-            className="w-6 h-7 sm:w-7 sm:h-7 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
+            aria-label={language === "es" ? "Mes anterior" : "Previous month"}
+            className="w-9 h-9 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={16} aria-hidden="true" />
           </button>
-          <span className="text-white font-extrabold text-[15px] sm:text-[16.5px] tracking-tight capitalize whitespace-nowrap px-0.5 tabular-nums">
+          <span className="text-white font-extrabold text-[14.5px] sm:text-[16.5px] tracking-tight capitalize truncate px-0.5 tabular-nums">
             {monthName}
           </span>
           <button
+            type="button"
             onClick={nextMonth}
-            className="w-6 h-7 sm:w-7 sm:h-7 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
+            aria-label={language === "es" ? "Mes siguiente" : "Next month"}
+            className="w-9 h-9 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -1112,25 +1120,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <button
             type="button"
             onClick={() => setCalendarViewMode("month")}
-            className={`px-2 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
+            className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "month"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
             }`}
           >
-            <CalendarIcon size={11} className="shrink-0" />
+            <CalendarIcon size={11} className="shrink-0" aria-hidden="true" />
             <span>Mes</span>
           </button>
           <button
             type="button"
             onClick={() => setCalendarViewMode("agenda")}
-            className={`px-2 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
+            className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-tight transition flex items-center gap-1 cursor-pointer ${
               calendarViewMode === "agenda"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white hover:bg-white/5"
             }`}
           >
-            <CheckCircle2 size={11} className="shrink-0" />
+            <CheckCircle2 size={11} className="shrink-0" aria-hidden="true" />
             <span>Agenda</span>
           </button>
         </div>
@@ -1374,7 +1382,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       onClick={handleOpenImportModal}
                       className="px-4 py-2 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer"
                     >
-                      Planificar Mes (Día 1 al 31 / Excel)
+                      Planificar Mes (Día 1 al 31)
                     </button>
                     <button
                       type="button"
@@ -1767,22 +1775,26 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   )}
 
                   {/* Actions (Edit / Delete) */}
-                  <div className="flex justify-end gap-1.5 border-t border-white/[0.03] pt-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-end gap-2 border-t border-white/[0.03] pt-2" onClick={(e) => e.stopPropagation()}>
                     {canEdit ? (
                       <>
                         <button
+                          type="button"
                           onClick={() => handleOpenEdit(ev)}
-                          className="p-1.5 rounded-lg border border-white/5 bg-neutral-950 text-white hover:text-white transition cursor-pointer"
+                          aria-label={`Editar ${ev.title}`}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-neutral-950 text-white hover:bg-neutral-800 transition cursor-pointer"
                           title="Editar"
                         >
-                          <Edit size={11} />
+                          <Edit size={13} aria-hidden="true" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(ev.id)}
-                          className="p-1.5 rounded-lg border border-white bg-white text-black hover:bg-neutral-200 transition cursor-pointer"
+                          aria-label={`Eliminar ${ev.title}`}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl border border-white bg-white text-black hover:bg-neutral-200 transition cursor-pointer"
                           title="Eliminar"
                         >
-                          <Trash2 size={11} />
+                          <Trash2 size={13} aria-hidden="true" />
                         </button>
                       </>
                     ) : (
@@ -1848,10 +1860,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {countdown.text}
                     </span>
                     <button
+                      type="button"
                       onClick={() => setShowDayModal(false)}
-                      className="p-1 rounded-full text-white hover:text-white hover:bg-white/5 transition"
+                      aria-label="Cerrar detalle del día"
+                      className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                     >
-                      <X size={16} />
+                      <X size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -2355,10 +2369,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowSyncModal(false)}
-                  className="p-1 rounded-full text-white hover:text-white"
+                  aria-label="Cerrar ventana de sincronización"
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
 
@@ -2451,9 +2467,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <button
                   type="button"
                   onClick={() => setShowAssignmentModal(false)}
-                  className="p-1.5 rounded-full bg-white/5 text-white hover:bg-white/10 cursor-pointer"
+                  aria-label="Cerrar agenda del día"
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/10 transition cursor-pointer shrink-0"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
 
@@ -2614,10 +2631,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   {modalMode === "add" ? "Planificar Evento" : "Editar Evento"}
                 </h3>
                 <button
+                  type="button"
                   onClick={() => setShowModal(false)}
-                  className="p-1 rounded-lg text-white hover:text-white"
+                  aria-label="Cerrar formulario de evento"
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
 
@@ -2743,9 +2762,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     setMacroToUnlink(null);
                   }
                 }}
-                className="absolute top-4 right-4 p-1.5 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white transition"
+                aria-label="Cerrar confirmación de desvinculación"
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-white/10 text-white hover:bg-neutral-800 transition cursor-pointer"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
 
               <div className="w-12 h-12 rounded-2xl bg-white border border-white flex items-center justify-center text-black">

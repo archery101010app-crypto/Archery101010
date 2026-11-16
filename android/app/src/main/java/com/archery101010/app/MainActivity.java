@@ -1,16 +1,13 @@
 package com.archery101010.app;
 
 import android.Manifest;
-import android.app.Dialog;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
 import android.graphics.Matrix;
-import android.graphics.Typeface;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -24,23 +21,16 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
-import android.util.TypedValue;
-import android.view.Gravity;
-import android.view.ViewGroup;
-import android.view.Window;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Keep;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.ViewCompat;
@@ -77,29 +67,27 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+@Keep
 public class MainActivity extends BridgeActivity {
     private static volatile WeakReference<MainActivity> activeInstanceRef = new WeakReference<>(null);
 
+    @Keep
     public static MainActivity getActiveInstance() {
         return activeInstanceRef != null ? activeInstanceRef.get() : null;
     }
 
+    @Keep
     public void onBackgroundWatchEvent(final String path, final String payload, final String sourceNodeId) {
         handleIncomingWatchPayload(path, payload, sourceNodeId);
     }
@@ -108,8 +96,6 @@ public class MainActivity extends BridgeActivity {
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
     private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
     private static final String SPOTIFY_PREFS = "archery_spotify_prefs";
-    private static final String DESKTOP_CHROME_UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
@@ -119,7 +105,6 @@ public class MainActivity extends BridgeActivity {
     private File pendingCameraCaptureFile = null;
     private volatile String activeAppOrigin = "https://localhost";
     private volatile boolean isWebWatchListenerReady = false;
-    private Dialog spotifyLoginDialog = null;
 
     // Native Live Session GPS + Movement Tracker (active ONLY during an active training session)
     private volatile boolean isSessionTrackingActive = false;
@@ -326,7 +311,6 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcheryWatchNativeBridge(), "ArcheryWatchNativeBridge");
             webView.addJavascriptInterface(new ArcheryLocationNativeBridge(), "ArcheryLocationNativeBridge");
             webView.addJavascriptInterface(new ArcherySpotifyBridge(), "ArcherySpotifyBridge");
-            restoreAndPromoteSpotifyCookies();
             initWearableListener();
 
             if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
@@ -445,13 +429,6 @@ public class MainActivity extends BridgeActivity {
                                     .apply();
                             }
                         }
-                        if (host.equals("open.spotify.com") && path.startsWith("/embed/") &&
-                            (request.getMethod() == null || "GET".equalsIgnoreCase(request.getMethod()))) {
-                            WebResourceResponse spotifyRes = interceptSpotifyEmbedRequest(uri.toString());
-                            if (spotifyRes != null) {
-                                return spotifyRes;
-                            }
-                        }
                         String urlStr = uri.toString();
                         if (urlStr.startsWith("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") ||
                             urlStr.startsWith("https://archery101010-c0bb4.web.app/__/auth/handler")) {
@@ -476,13 +453,22 @@ public class MainActivity extends BridgeActivity {
                         String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "";
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
                         String path = uri.getPath() != null ? uri.getPath() : "";
-                        if (scheme.equals("market") || scheme.equals("whatsapp") || host.equals("api.whatsapp.com") || host.equals("wa.me") || host.equals("play.google.com")) {
+                        if (scheme.equals("spotify") ||
+                            scheme.equals("market") ||
+                            scheme.equals("whatsapp") ||
+                            scheme.equals("mailto") ||
+                            scheme.equals("tel") ||
+                            host.equals("api.whatsapp.com") ||
+                            host.equals("wa.me") ||
+                            host.equals("play.google.com")) {
                             try {
                                 Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                                 startActivity(intent);
                                 return true;
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                return true;
+                            }
                         }
                         if (!host.isEmpty()) {
                             String lowerPath = path.toLowerCase();
@@ -506,16 +492,30 @@ public class MainActivity extends BridgeActivity {
                                     return true;
                                 } catch (Exception ignored) {}
                             }
-                            if (host.equals("accounts.google.com") ||
-                                host.endsWith(".google.com") ||
-                                host.endsWith(".googleusercontent.com") ||
-                                host.endsWith(".gstatic.com") ||
-                                host.endsWith(".youtube.com") ||
-                                host.equals("accounts.spotify.com") ||
-                                host.equals("open.spotify.com") ||
-                                host.endsWith(".spotify.com") ||
+                            boolean isTrustedAppOrAuthHost =
+                                host.equals("localhost") ||
+                                host.equals("127.0.0.1") ||
+                                host.equals("archery101010-c0bb4.web.app") ||
                                 host.equals("archery101010-c0bb4.firebaseapp.com") ||
-                                host.equals("archery101010-c0bb4.web.app")) {
+                                host.equals("accounts.google.com");
+
+                            if (request.isForMainFrame()) {
+                                if (isTrustedAppOrAuthHost) {
+                                    return false;
+                                }
+                                // Keep the privileged @JavascriptInterface WebView strictly on app origins;
+                                // open external third-party domains (open.spotify.com, youtube.com, etc.) externally.
+                                if ("http".equals(scheme) || "https".equals(scheme)) {
+                                    try {
+                                        Intent extIntent = new Intent(Intent.ACTION_VIEW, uri);
+                                        extIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                        startActivity(extIntent);
+                                        return true;
+                                    } catch (Exception ignored) {
+                                        return true;
+                                    }
+                                }
+                            } else if ("http".equals(scheme) || "https".equals(scheme)) {
                                 return false;
                             }
                         }
@@ -581,7 +581,9 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    @Keep
     public class ArcheryNativeAuth {
+        @Keep
         @JavascriptInterface
         public void startGoogleSignIn() {
             runOnUiThread(() -> {
@@ -602,6 +604,8 @@ public class MainActivity extends BridgeActivity {
                 }
             });
         }
+
+        @Keep
         @JavascriptInterface
         public void reloadInAppOta() {
             runOnUiThread(() -> {
@@ -621,6 +625,7 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    @Keep
     public class ArcheryNativeShare {
         private Uri writeBase64PngToCache(String base64Png, String fileName) throws Exception {
             String cleanBase64 = base64Png;
@@ -642,6 +647,7 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
+        @Keep
         @JavascriptInterface
         public void shareImage(final String base64Png, final String fileName, final String title, final String captionText) {
             runOnUiThread(() -> {
@@ -666,6 +672,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void shareWhatsAppImage(final String base64Png, final String fileName, final String captionText) {
             runOnUiThread(() -> {
@@ -693,6 +700,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void shareWhatsAppText(final String text) {
             runOnUiThread(() -> {
@@ -711,6 +719,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void saveOrShareFile(final String base64Data, final String fileName, final String mimeType, final String title) {
             runOnUiThread(() -> {
@@ -764,6 +773,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void takeCameraPhoto() {
             runOnUiThread(() -> {
@@ -870,17 +880,21 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {}
     }
 
+    @Keep
     public class ArcheryWatchNativeBridge {
+        @Keep
         @JavascriptInterface
         public void onSessionTelemetryUpdate(final String snapshotJson) {
             cacheAndSyncWatchState(snapshotJson);
         }
 
+        @Keep
         @JavascriptInterface
         public void syncTelemetryToWatch(final String snapshotJson) {
             cacheAndSyncWatchState(snapshotJson);
         }
 
+        @Keep
         @JavascriptInterface
         public void sendWatchCommand(final String cmdJson) {
             byte[] bytes = cmdJson != null ? cmdJson.getBytes(StandardCharsets.UTF_8) : new byte[0];
@@ -890,6 +904,7 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
+        @Keep
         @JavascriptInterface
         public String getWatchConnectionStatus() {
             flushPendingWatchCommandsToWebView();
@@ -897,6 +912,7 @@ public class MainActivity extends BridgeActivity {
             return buildWatchConnectionStatusJson();
         }
 
+        @Keep
         @JavascriptInterface
         public void pingWatch() {
             try {
@@ -910,12 +926,14 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception ignored) {}
         }
 
+        @Keep
         @JavascriptInterface
         public void notifyWatchListenerReady() {
             isWebWatchListenerReady = true;
             flushPendingWatchCommandsToWebView();
         }
 
+        @Keep
         @JavascriptInterface
         public void flushPendingWatchCommands() {
             isWebWatchListenerReady = true;
@@ -927,13 +945,16 @@ public class MainActivity extends BridgeActivity {
          * (for every connected watch that does not have the app yet). Falls back to the
          * phone Play Store listing when no watch is reachable.
          */
+        @Keep
         @JavascriptInterface
         public void installAppOnWatch() {
             openWearAppInstallOnWatches();
         }
     }
 
+    @Keep
     public class ArcheryLocationNativeBridge {
+        @Keep
         @JavascriptInterface
         public void startSessionTracking(final double initialMeters) {
             runOnUiThread(() -> {
@@ -976,6 +997,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void stopSessionTracking() {
             runOnUiThread(() -> {
@@ -1219,7 +1241,7 @@ public class MainActivity extends BridgeActivity {
                 state.put("stepsCount", Math.max(state.optInt("stepsCount", 0), steps));
                 state.put("distanceWalkedM", Math.max(state.optInt("distanceWalkedM", 0), walkedM));
             } else if ("TOGGLE_AUTO_DETECT".equals(cmdType) && cmdObj != null) {
-                state.put("autoDetectEnabled", cmdObj.optBoolean("enabled", true));
+                state.put("autoDetectEnabled", cmdObj.optBoolean("enabled", false));
             }
 
             String updatedJson = state.toString();
@@ -1610,13 +1632,16 @@ public class MainActivity extends BridgeActivity {
         refreshWatchConnectionStatus();
     }
 
+    @Keep
     public class ArcherySpotifyBridge {
-        /** Legacy entry point: now connects the official Spotify App Remote player (no embedded login page). */
+        /** Connects the official Spotify App Remote player (no embedded WebView login or cookie scraping). */
+        @Keep
         @JavascriptInterface
         public void openSpotifyLogin() {
             runOnUiThread(() -> connectSpotifyRemote(null));
         }
 
+        @Keep
         @JavascriptInterface
         public boolean isSpotifyAppInstalled() {
             return isSpotifyAppInstalledInternal();
@@ -1626,11 +1651,12 @@ public class MainActivity extends BridgeActivity {
          * Opens a playlist / album / track directly in the official Spotify app (full songs, background
          * playback, works for every user). Falls back to the web player or the Play Store listing.
          */
+        @Keep
         @JavascriptInterface
         public void openInSpotifyApp(final String spotifyUri, final String webUrl) {
             runOnUiThread(() -> {
                 try {
-                    if (isSpotifyAppInstalledInternal()) {
+                    if (spotifyUri != null && !spotifyUri.isEmpty() && isSpotifyAppInstalledInternal()) {
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(spotifyUri));
                         i.setPackage("com.spotify.music");
                         i.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://" + getPackageName()));
@@ -1640,28 +1666,34 @@ public class MainActivity extends BridgeActivity {
                     }
                 } catch (Exception ignored) {}
                 try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                } catch (Exception e) {
-                    openPhonePlayStoreListing("com.spotify.music");
-                }
+                    if (webUrl != null && !webUrl.isEmpty()) {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                        return;
+                    }
+                } catch (Exception ignored) {}
+                openPhonePlayStoreListing("com.spotify.music");
             });
         }
 
+        @Keep
         @JavascriptInterface
         public boolean isSpotifyPlayerConnected() {
             return spotifyRemote != null && spotifyRemote.isConnected();
         }
 
+        @Keep
         @JavascriptInterface
         public boolean hasSpotifyClientId() {
             return !resolveSpotifyClientId(null).isEmpty();
         }
 
+        @Keep
         @JavascriptInterface
         public void connectSpotifyPlayer(final String clientId) {
             runOnUiThread(() -> connectSpotifyRemote(clientId));
         }
 
+        @Keep
         @JavascriptInterface
         public void spotifyPlay(final String spotifyUri) {
             runOnUiThread(() -> {
@@ -1674,6 +1706,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void spotifyTogglePlay() {
             runOnUiThread(() -> {
@@ -1683,134 +1716,43 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        @Keep
         @JavascriptInterface
         public void spotifyPause() {
             runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().pause(); });
         }
 
+        @Keep
         @JavascriptInterface
         public void spotifyNext() {
             runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().skipNext(); });
         }
 
+        @Keep
         @JavascriptInterface
         public void spotifyPrevious() {
             runOnUiThread(() -> { if (spotifyRemote != null && spotifyRemote.isConnected()) spotifyRemote.getPlayerApi().skipPrevious(); });
         }
 
+        @Keep
         @JavascriptInterface
         public boolean hasActiveSpotifySession() {
-            return hasActiveSpotifySessionInternal();
+            return spotifyRemote != null && spotifyRemote.isConnected();
         }
 
+        @Keep
         @JavascriptInterface
         public void clearSpotifySession() {
-            try {
-                getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).edit().clear().apply();
-                CookieManager cm = CookieManager.getInstance();
-                cm.setCookie("https://open.spotify.com", "sp_dc=; Domain=.spotify.com; Path=/; Max-Age=0; Secure; SameSite=None");
-                cm.setCookie("https://accounts.spotify.com", "sp_dc=; Domain=.spotify.com; Path=/; Max-Age=0; Secure; SameSite=None");
-                cm.flush();
-            } catch (Exception ignored) {}
+            runOnUiThread(() -> {
+                try {
+                    if (spotifyRemote != null) {
+                        SpotifyAppRemote.disconnect(spotifyRemote);
+                        spotifyRemote = null;
+                    }
+                    getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).edit().clear().apply();
+                } catch (Exception ignored) {}
+            });
         }
-    }
-
-    private Map<String, String> collectSpotifyCookieMap() {
-        Map<String, String> map = new LinkedHashMap<>();
-        try {
-            String savedAll = getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).getString("spotify_cookies", "");
-            parseCookieStringIntoMap(savedAll, map);
-            String savedSpDc = getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).getString("sp_dc", "");
-            if (savedSpDc != null && !savedSpDc.isEmpty()) {
-                map.put("sp_dc", savedSpDc);
-            }
-            CookieManager cm = CookieManager.getInstance();
-            parseCookieStringIntoMap(cm.getCookie("https://accounts.spotify.com"), map);
-            parseCookieStringIntoMap(cm.getCookie("https://open.spotify.com"), map);
-        } catch (Exception ignored) {}
-        return map;
-    }
-
-    private void parseCookieStringIntoMap(String rawCookieHeader, Map<String, String> target) {
-        if (rawCookieHeader == null || rawCookieHeader.isEmpty()) return;
-        String[] parts = rawCookieHeader.split(";");
-        for (String part : parts) {
-            String trimmed = part != null ? part.trim() : "";
-            int eq = trimmed.indexOf('=');
-            if (eq > 0) {
-                String k = trimmed.substring(0, eq).trim();
-                String v = trimmed.substring(eq + 1).trim();
-                if (!k.isEmpty() && !v.isEmpty()) {
-                    target.put(k, v);
-                }
-            }
-        }
-    }
-
-    private String buildSpotifyCookieHeader() {
-        Map<String, String> map = collectSpotifyCookieMap();
-        if (map.isEmpty()) return "";
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : map.entrySet()) {
-            if (sb.length() > 0) sb.append("; ");
-            sb.append(entry.getKey()).append("=").append(entry.getValue());
-        }
-        return sb.toString();
-    }
-
-    private boolean hasActiveSpotifySessionInternal() {
-        Map<String, String> map = collectSpotifyCookieMap();
-        String spDc = map.get("sp_dc");
-        return spDc != null && spDc.length() > 10;
-    }
-
-    private void restoreAndPromoteSpotifyCookies() {
-        captureAndPersistSpotifyCookies();
-    }
-
-    private boolean captureAndPersistSpotifyCookies() {
-        try {
-            Map<String, String> map = collectSpotifyCookieMap();
-            if (map.isEmpty()) return false;
-            String spDc = map.get("sp_dc");
-            boolean hasSpDc = spDc != null && spDc.length() > 10;
-
-            StringBuilder sb = new StringBuilder();
-            CookieManager cm = CookieManager.getInstance();
-            cm.setAcceptCookie(true);
-            for (Map.Entry<String, String> entry : map.entrySet()) {
-                String k = entry.getKey();
-                String v = entry.getValue();
-                if (sb.length() > 0) sb.append("; ");
-                sb.append(k).append("=").append(v);
-
-                String cookieLine = k + "=" + v + "; Domain=.spotify.com; Path=/; Max-Age=31536000; Secure; SameSite=None" +
-                    ("sp_dc".equals(k) ? "; HttpOnly" : "");
-                cm.setCookie("https://open.spotify.com", cookieLine);
-                cm.setCookie("https://accounts.spotify.com", cookieLine);
-            }
-            cm.flush();
-
-            android.content.SharedPreferences.Editor editor = getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).edit();
-            editor.putString("spotify_cookies", sb.toString());
-            if (hasSpDc) {
-                editor.putString("sp_dc", spDc);
-            }
-            editor.apply();
-            return hasSpDc;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private void dispatchSpotifyLoginResult(final boolean connected) {
-        runOnUiThread(() -> {
-            if (getBridge() != null && getBridge().getWebView() != null) {
-                String js = "if (window.__onNativeSpotifyLoginSuccess) { window.__onNativeSpotifyLoginSuccess({ connected: " +
-                    connected + ", hasSpDc: " + connected + " }); }";
-                getBridge().getWebView().evaluateJavascript(js, null);
-            }
-        });
     }
 
     // ───────────── Official Spotify App Remote (playback controlled from ARCHERY 101010) ─────────────
@@ -1914,281 +1856,6 @@ public class MainActivity extends BridgeActivity {
         if (pendingSpotifyUri != null) {
             spotifyRemote.getPlayerApi().play(pendingSpotifyUri);
             pendingSpotifyUri = null;
-        }
-    }
-
-    private void showInAppSpotifyLoginDialog() {
-        try {
-            if (spotifyLoginDialog != null && spotifyLoginDialog.isShowing()) {
-                spotifyLoginDialog.dismiss();
-            }
-        } catch (Exception ignored) {}
-
-        final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        spotifyLoginDialog = dialog;
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#0B0E14"));
-        root.setLayoutParams(new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-
-        int padH = dpToPx(14);
-        int padV = dpToPx(10);
-        LinearLayout topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setGravity(Gravity.CENTER_VERTICAL);
-        topBar.setBackgroundColor(Color.parseColor("#111620"));
-        topBar.setPadding(padH, padV, padH, padV);
-
-        TextView titleView = new TextView(this);
-        titleView.setText("Conectar con Spotify · Se cerrará automáticamente");
-        titleView.setTextColor(Color.WHITE);
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        topBar.addView(titleView, titleLp);
-
-        TextView closeBtn = new TextView(this);
-        closeBtn.setText("✕");
-        closeBtn.setTextColor(Color.WHITE);
-        closeBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
-        closeBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        closeBtn.setBackgroundColor(Color.parseColor("#1A2232"));
-        closeBtn.setPadding(dpToPx(11), dpToPx(5), dpToPx(11), dpToPx(5));
-        topBar.addView(closeBtn);
-
-        root.addView(topBar, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        final WebView loginWv = new WebView(this);
-        CookieManager cm = CookieManager.getInstance();
-        cm.setAcceptCookie(true);
-        cm.setAcceptThirdPartyCookies(loginWv, true);
-
-        WebSettings ws = loginWv.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setDatabaseEnabled(true);
-        ws.setMediaPlaybackRequiresUserGesture(false);
-        ws.setUserAgentString(DESKTOP_CHROME_UA);
-
-        final android.os.Handler autoWatchHandler = new android.os.Handler(Looper.getMainLooper());
-        final boolean[] autoCompleted = new boolean[]{ false };
-
-        final Runnable autoCompleteIfAuthenticated = () -> {
-            if (autoCompleted[0]) return;
-            if (captureAndPersistSpotifyCookies()) {
-                autoCompleted[0] = true;
-                autoWatchHandler.removeCallbacksAndMessages(null);
-                try {
-                    if (dialog.isShowing()) {
-                        dialog.dismiss();
-                    }
-                } catch (Exception ignored) {}
-                dispatchSpotifyLoginResult(true);
-            }
-        };
-
-        final Runnable periodicCookieWatcher = new Runnable() {
-            @Override
-            public void run() {
-                if (autoCompleted[0] || !dialog.isShowing()) return;
-                autoCompleteIfAuthenticated.run();
-                if (!autoCompleted[0] && dialog.isShowing()) {
-                    autoWatchHandler.postDelayed(this, 350L);
-                }
-            }
-        };
-
-        loginWv.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                runOnUiThread(() -> {
-                    try {
-                        request.grant(request.getResources());
-                    } catch (Exception ignored) {}
-                });
-            }
-        });
-
-        loginWv.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri uri = request.getUrl();
-                if (uri == null) return false;
-                String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "";
-                if ("http".equals(scheme) || "https".equals(scheme)) {
-                    return false;
-                }
-                // Block intent:// or spotify:// redirects so session stays inside WebView
-                return true;
-            }
-
-            @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                autoCompleteIfAuthenticated.run();
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                autoCompleteIfAuthenticated.run();
-            }
-        });
-
-        dialog.setOnDismissListener(d -> {
-            autoWatchHandler.removeCallbacksAndMessages(null);
-        });
-
-        closeBtn.setOnClickListener(v -> {
-            autoWatchHandler.removeCallbacksAndMessages(null);
-            boolean ok = captureAndPersistSpotifyCookies();
-            try {
-                dialog.dismiss();
-            } catch (Exception ignored) {}
-            dispatchSpotifyLoginResult(ok);
-        });
-
-        root.addView(loginWv, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0,
-            1f
-        ));
-
-        dialog.setContentView(root);
-        dialog.show();
-        autoWatchHandler.postDelayed(periodicCookieWatcher, 350L);
-
-        String loginUrl = "https://accounts.spotify.com/es/login?continue=" +
-            Uri.encode("https://open.spotify.com/");
-        loginWv.loadUrl(loginUrl);
-    }
-
-    private int dpToPx(int dp) {
-        return Math.round(dp * getResources().getDisplayMetrics().density);
-    }
-
-    private WebResourceResponse interceptSpotifyEmbedRequest(final String initialUrl) {
-        HttpURLConnection conn = null;
-        try {
-            captureAndPersistSpotifyCookies();
-            String cookieHeader = buildSpotifyCookieHeader();
-            String currentUrl = initialUrl;
-
-            for (int hop = 0; hop < 4; hop++) {
-                URL url = new URL(currentUrl);
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setInstanceFollowRedirects(false);
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
-                conn.setRequestProperty("User-Agent", DESKTOP_CHROME_UA);
-                conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-                conn.setRequestProperty("Accept-Language", "es-ES,es;q=0.9,en;q=0.8");
-                if (cookieHeader != null && !cookieHeader.isEmpty()) {
-                    conn.setRequestProperty("Cookie", cookieHeader);
-                }
-
-                int status = conn.getResponseCode();
-                Map<String, List<String>> headers = conn.getHeaderFields();
-                if (headers != null) {
-                    CookieManager cm = CookieManager.getInstance();
-                    for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-                        if (entry.getKey() != null && "set-cookie".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null) {
-                            for (String sc : entry.getValue()) {
-                                if (sc != null && !sc.isEmpty()) {
-                                    cm.setCookie("https://open.spotify.com", sc);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
-                    String location = conn.getHeaderField("Location");
-                    conn.disconnect();
-                    if (location == null || location.isEmpty()) break;
-                    if (location.startsWith("/")) {
-                        currentUrl = "https://open.spotify.com" + location;
-                    } else {
-                        currentUrl = location;
-                    }
-                    cookieHeader = buildSpotifyCookieHeader();
-                    continue;
-                }
-                break;
-            }
-
-            if (conn == null || conn.getResponseCode() != 200) {
-                return null;
-            }
-
-            InputStream is = conn.getInputStream();
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = is.read(buf)) != -1) {
-                baos.write(buf, 0, n);
-            }
-            is.close();
-
-            String html = new String(baos.toByteArray(), StandardCharsets.UTF_8);
-            html = html
-                .replace("\"isMobile\":true", "\"isMobile\":false")
-                .replace("\"isTablet\":true", "\"isTablet\":false")
-                .replace("\"isIOS\":true", "\"isIOS\":false")
-                .replace("\"isSafari\":true", "\"isSafari\":false");
-
-            String desktopAndEmeShim =
-                "<script>" +
-                "try{" +
-                "var _dUa='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';" +
-                "Object.defineProperty(navigator,'userAgent',{get:function(){return _dUa;},configurable:true});" +
-                "Object.defineProperty(navigator,'appVersion',{get:function(){return '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';},configurable:true});" +
-                "Object.defineProperty(navigator,'platform',{get:function(){return 'Win32';},configurable:true});" +
-                "Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 0;},configurable:true});" +
-                "Object.defineProperty(navigator,'userAgentData',{get:function(){return{brands:[{brand:'Chromium',version:'131'},{brand:'Google Chrome',version:'131'}],mobile:false,platform:'Windows',getHighEntropyValues:function(){return Promise.resolve({architecture:'x86',bitness:'64',mobile:false,model:'',platform:'Windows',platformVersion:'15.0.0',uaFullVersion:'131.0.0.0'});}};},configurable:true});" +
-                "if(navigator.requestMediaKeySystemAccess){" +
-                "var _origRMKSA=navigator.requestMediaKeySystemAccess.bind(navigator);" +
-                "navigator.requestMediaKeySystemAccess=function(ks,cfgs){" +
-                "return _origRMKSA(ks,cfgs).catch(function(){" +
-                "var c1=(cfgs||[]).map(function(c){var x=Object.assign({},c);x.distinctiveIdentifier='optional';x.persistentState='optional';if(Array.isArray(x.audioCapabilities)){x.audioCapabilities=x.audioCapabilities.map(function(a){return{contentType:a.contentType,robustness:'SW_SECURE_CRYPTO'};});}return x;});" +
-                "return _origRMKSA(ks,c1).catch(function(){" +
-                "var c2=(cfgs||[]).map(function(c){var x=Object.assign({},c);if(Array.isArray(x.audioCapabilities)){x.audioCapabilities=x.audioCapabilities.map(function(a){return{contentType:a.contentType};});}if(Array.isArray(x.videoCapabilities)){x.videoCapabilities=x.videoCapabilities.map(function(v){return{contentType:v.contentType};});}return x;});" +
-                "return _origRMKSA(ks,c2);" +
-                "});" +
-                "});" +
-                "};" +
-                "}" +
-                "}catch(e){}" +
-                "</script>";
-
-            int headIdx = html.indexOf("<head");
-            if (headIdx != -1) {
-                int headClose = html.indexOf(">", headIdx);
-                if (headClose != -1) {
-                    html = html.substring(0, headClose + 1) + desktopAndEmeShim + html.substring(headClose + 1);
-                }
-            }
-
-            return new WebResourceResponse(
-                "text/html",
-                "UTF-8",
-                new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8))
-            );
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try {
-                if (conn != null) conn.disconnect();
-            } catch (Exception ignored) {}
         }
     }
 

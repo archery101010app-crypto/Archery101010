@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { getLoggedUser, UserProfile, isLinkedToExternalCoach, CoachLinkNotification, markLocalUserWrite, hasRecentLocalUserWrite } from "@/lib/authService";
 import LoginView from "@/components/auth/LoginView";
 import RegisterView from "@/components/auth/RegisterView";
@@ -10,25 +11,71 @@ import Header from "@/components/ui/Header";
 import IntroScreen from "@/components/ui/IntroScreen";
 import AppUpdateBanner from "@/components/ui/AppUpdateBanner";
 import OledDialogHost from "@/components/ui/OledDialogHost";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { showOledAlert } from "@/lib/oledDialog";
 import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
-import SessionConfigView from "@/components/scoring/SessionConfigView";
-import ScoringView from "@/components/scoring/ScoringView";
-import HistoryView from "@/components/history/HistoryView";
-import CalendarView from "@/components/calendar/CalendarView";
-import ProfileView from "@/components/profile/ProfileView";
-import SpotifyFloatingPlayer from "@/components/spotify/SpotifyFloatingPlayer";
-import MatchplayLobbyView from "@/components/matchplay/MatchplayLobbyView";
-import MatchplayGameView from "@/components/matchplay/MatchplayGameView";
-import CoachPaymentModal from "@/components/subscription/CoachPaymentModal";
-import SuperAdminView from "@/components/admin/SuperAdminView";
 import "@/lib/db/indexedDB";
 import "@/lib/db/syncManager";
 import "@/lib/firebase";
 import "firebase/firestore";
 import "@/lib/adManager";
 import "@/lib/starsManager";
-import "canvas-confetti";
+
+const ViewLoadingFallback = () => (
+  <div className="w-full py-16 flex items-center justify-center">
+    <div className="w-6 h-6 rounded-full border-2 border-cyan-neon/30 border-t-cyan-neon animate-spin" />
+  </div>
+);
+
+const SessionConfigView = dynamic(() => import("@/components/scoring/SessionConfigView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const ScoringView = dynamic(() => import("@/components/scoring/ScoringView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const HistoryView = dynamic(() => import("@/components/history/HistoryView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const CalendarView = dynamic(() => import("@/components/calendar/CalendarView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const ProfileView = dynamic(() => import("@/components/profile/ProfileView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const MatchplayLobbyView = dynamic(() => import("@/components/matchplay/MatchplayLobbyView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const MatchplayGameView = dynamic(() => import("@/components/matchplay/MatchplayGameView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const CoachPortalView = dynamic(() => import("@/components/coach/CoachPortalView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const SuperAdminView = dynamic(() => import("@/components/admin/SuperAdminView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
+const PlanImporterModal = dynamic(() => import("@/components/planning/PlanImporterModal"), {
+  ssr: false
+});
+const CoachPaymentModal = dynamic(() => import("@/components/subscription/CoachPaymentModal"), {
+  ssr: false
+});
+const SmartwatchMiniApp = dynamic(() => import("@/components/watch/SmartwatchMiniApp"), {
+  ssr: false
+});
+const SpotifyFloatingPlayer = dynamic(
+  () => import("@/components/spotify/SpotifyFloatingPlayer"),
+  { ssr: false }
+);
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Star, Users, CheckCircle2 } from "lucide-react";
@@ -84,6 +131,15 @@ export default function Home() {
   const [pendingCoachLinkNotif, setPendingCoachLinkNotif] = useState<CoachLinkNotification | null>(null);
   const [backToast, setBackToast] = useState<string | null>(null);
   const [showCoachPaymentModal, setShowCoachPaymentModal] = useState<boolean>(false);
+  const [showSmartwatchModal, setShowSmartwatchModal] = useState<boolean>(false);
+  const [showPlanImporterModal, setShowPlanImporterModal] = useState<boolean>(false);
+
+  // Initialize global runtime crash telemetry once on mount
+  useEffect(() => {
+    import("@/lib/crashReporter")
+      .then((m) => m.initGlobalCrashHandlers())
+      .catch(() => {});
+  }, []);
 
   const mainRef = React.useRef<HTMLElement | null>(null);
   const currentScreenRef = React.useRef<Screen>(currentScreen);
@@ -169,9 +225,29 @@ export default function Home() {
   }, [showCoachPaymentModal]);
 
   useEffect(() => {
+    if (showSmartwatchModal) {
+      return registerModalDismiss(() => setShowSmartwatchModal(false));
+    }
+  }, [showSmartwatchModal]);
+
+  useEffect(() => {
+    if (showPlanImporterModal) {
+      return registerModalDismiss(() => setShowPlanImporterModal(false));
+    }
+  }, [showPlanImporterModal]);
+
+  useEffect(() => {
     const handleOpenPay = () => setShowCoachPaymentModal(true);
+    const handleOpenWatch = () => setShowSmartwatchModal(true);
+    const handleOpenImporter = () => setShowPlanImporterModal(true);
     window.addEventListener("open-coach-payment", handleOpenPay);
-    return () => window.removeEventListener("open-coach-payment", handleOpenPay);
+    window.addEventListener("open-smartwatch-modal", handleOpenWatch);
+    window.addEventListener("open-plan-importer", handleOpenImporter);
+    return () => {
+      window.removeEventListener("open-coach-payment", handleOpenPay);
+      window.removeEventListener("open-smartwatch-modal", handleOpenWatch);
+      window.removeEventListener("open-plan-importer", handleOpenImporter);
+    };
   }, []);
 
   // Check authentication status and initialize database on mount
@@ -493,7 +569,7 @@ export default function Home() {
     }
   }, [coachViewMode, user?.uid, user?.role, user?.clubId, user?.coachId, user?.isClubCreator]);
 
-  // Periodic user presence heartbeat (throttled to 120s; skips Offline Guest & missing Auth)
+  // Periodic user presence heartbeat (throttled to 300s / 5 min to slash Firestore writes by 60%; skips Offline Guest & missing Auth)
   useEffect(() => {
     if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || !user?.fullName?.trim()) return;
     const uid = user.uid;
@@ -518,7 +594,7 @@ export default function Home() {
     };
 
     updatePresence();
-    const interval = setInterval(updatePresence, 120000);
+    const interval = setInterval(updatePresence, 300000);
 
     return () => clearInterval(interval);
   }, [user?.uid, user?.fullName]);
@@ -1306,10 +1382,12 @@ export default function Home() {
     return (
       <>
         <OledDialogHost />
-        <SuperAdminView 
-          user={user} 
-          onBack={() => setCurrentScreen("PROFILE")} 
-        />
+        <ErrorBoundary sectionName="Panel de Administración">
+          <SuperAdminView
+            user={user}
+            onBack={() => setCurrentScreen("PROFILE")}
+          />
+        </ErrorBoundary>
       </>
     );
   }
@@ -1379,95 +1457,125 @@ export default function Home() {
       >
         <AppUpdateBanner />
         {currentScreen === "HOME" && (
-          <DashboardView
-            user={user}
-            coachViewMode={coachViewMode}
-            onNavigate={(screen, tab) => {
-              if (tab) setInitialHistoryTab(tab);
-              else setInitialHistoryTab("SESSIONS");
-              setCurrentScreen(screen);
-            }}
-            onUserUpdate={setUser}
-          />
+          coachViewMode && !isLinkedToExternalCoach(user) ? (
+            <ErrorBoundary sectionName="Portal de Entrenador">
+              <CoachPortalView
+                user={user}
+                onNavigate={(screen: Screen, tab?: "SESSIONS" | "VOLUME") => {
+                  if (tab) setInitialHistoryTab(tab);
+                  else setInitialHistoryTab("SESSIONS");
+                  setCurrentScreen(screen);
+                }}
+                onUserUpdate={setUser}
+              />
+            </ErrorBoundary>
+          ) : (
+            <ErrorBoundary sectionName="Inicio">
+              <DashboardView
+                user={user}
+                coachViewMode={coachViewMode}
+                onNavigate={(screen, tab) => {
+                  if (tab) setInitialHistoryTab(tab);
+                  else setInitialHistoryTab("SESSIONS");
+                  setCurrentScreen(screen);
+                }}
+                onUserUpdate={setUser}
+              />
+            </ErrorBoundary>
+          )
         )}
         {currentScreen === "TARGET" && (
           !sessionConfig ? (
-            <SessionConfigView
-              user={user}
-              onBack={() => setCurrentScreen("HOME")}
-              onStartSession={(config) => setSessionConfig(config)}
-            />
+            <ErrorBoundary sectionName="Configuración de Sesión">
+              <SessionConfigView
+                user={user}
+                onBack={() => setCurrentScreen("HOME")}
+                onStartSession={(config) => setSessionConfig(config)}
+              />
+            </ErrorBoundary>
           ) : (
-            <ScoringView
-              user={user}
-              config={sessionConfig}
-              onBack={() => {
-                setSessionConfig(null);
-                setCurrentScreen("HOME");
-              }}
-              onSessionSaved={() => {
-                setActiveDraft(null);
-                setSessionConfig(null);
-                setInitialHistoryTab("SESSIONS");
-                setCurrentScreen("HISTORY");
-              }}
-            />
+            <ErrorBoundary sectionName="Planilla de Tiro">
+              <ScoringView
+                user={user}
+                config={sessionConfig}
+                onBack={() => {
+                  setSessionConfig(null);
+                  setCurrentScreen("HOME");
+                }}
+                onSessionSaved={() => {
+                  setActiveDraft(null);
+                  setSessionConfig(null);
+                  setInitialHistoryTab("SESSIONS");
+                  setCurrentScreen("HISTORY");
+                }}
+              />
+            </ErrorBoundary>
           )
         )}
         {currentScreen === "MATCHPLAY_LOBBY" && (
-          <MatchplayLobbyView
-            user={user}
-            onBack={() => setCurrentScreen("HOME")}
-            onStartDuel={(config) => {
-              setDuelConfig(config);
-              setCurrentScreen("MATCHPLAY_ARENA");
-            }}
-          />
+          <ErrorBoundary sectionName="Lobby de Eliminatorias">
+            <MatchplayLobbyView
+              user={user}
+              onBack={() => setCurrentScreen("HOME")}
+              onStartDuel={(config) => {
+                setDuelConfig(config);
+                setCurrentScreen("MATCHPLAY_ARENA");
+              }}
+            />
+          </ErrorBoundary>
         )}
         {currentScreen === "MATCHPLAY_ARENA" && (
-          <MatchplayGameView
-            user={user}
-            config={duelConfig}
-            onBack={() => {
-              setDuelConfig(null);
-              setCurrentScreen("MATCHPLAY_LOBBY");
-            }}
-            onDuelSaved={() => {
-              setDuelConfig(null);
-              setCurrentScreen("HOME");
-            }}
-          />
+          <ErrorBoundary sectionName="Arena 1 vs 1">
+            <MatchplayGameView
+              user={user}
+              config={duelConfig}
+              onBack={() => {
+                setDuelConfig(null);
+                setCurrentScreen("MATCHPLAY_LOBBY");
+              }}
+              onDuelSaved={() => {
+                setDuelConfig(null);
+                setCurrentScreen("HOME");
+              }}
+            />
+          </ErrorBoundary>
         )}
         {currentScreen === "HISTORY" && (
-          <HistoryView
-            user={user}
-            initialTab={initialHistoryTab}
-            coachViewMode={coachViewMode}
-            onBack={() => setCurrentScreen("HOME")}
-          />
+          <ErrorBoundary sectionName="Historial">
+            <HistoryView
+              user={user}
+              initialTab={initialHistoryTab}
+              coachViewMode={coachViewMode}
+              onBack={() => setCurrentScreen("HOME")}
+            />
+          </ErrorBoundary>
         )}
         {currentScreen === "CALENDAR" && (
-          <CalendarView
-            user={user}
-            onBack={() => setCurrentScreen("HOME")}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-            coachViewMode={coachViewMode}
-          />
+          <ErrorBoundary sectionName="Calendario">
+            <CalendarView
+              user={user}
+              onBack={() => setCurrentScreen("HOME")}
+              onNavigate={(screen) => setCurrentScreen(screen)}
+              coachViewMode={coachViewMode}
+            />
+          </ErrorBoundary>
         )}
         {currentScreen === "PROFILE" && (
-          <ProfileView
-            user={user}
-            onBack={() => setCurrentScreen("HOME")}
-            onLogout={handleLogout}
-            onProfileUpdated={(updated) => setUser(updated)}
-            onNavigate={setCurrentScreen}
-            onOpenCoachPortal={() => {
-              if (!isLinkedToExternalCoach(user)) {
-                setCoachViewMode(true);
-                setCurrentScreen("HOME");
-              }
-            }}
-          />
+          <ErrorBoundary sectionName="Perfil">
+            <ProfileView
+              user={user}
+              onBack={() => setCurrentScreen("HOME")}
+              onLogout={handleLogout}
+              onProfileUpdated={(updated) => setUser(updated)}
+              onNavigate={setCurrentScreen}
+              onOpenCoachPortal={() => {
+                if (!isLinkedToExternalCoach(user)) {
+                  setCoachViewMode(true);
+                  setCurrentScreen("HOME");
+                }
+              }}
+            />
+          </ErrorBoundary>
         )}
       </main>
 
@@ -1495,10 +1603,31 @@ export default function Home() {
         coachViewMode={coachViewMode}
       />
 
-      {/* Spotify Floating Player */}
-      <SpotifyFloatingPlayer
-        showSideTab={false}
-      />
+      {/* Floating Music Player & Companion Smartwatch Mini-App */}
+      <ErrorBoundary sectionName="Reproductor de Música" compact>
+        <SpotifyFloatingPlayer showSideTab={false} />
+      </ErrorBoundary>
+
+      {showSmartwatchModal && (
+        <ErrorBoundary sectionName="Smartwatch Deportivo" compact>
+          <SmartwatchMiniApp
+            isOpen={showSmartwatchModal}
+            onClose={() => setShowSmartwatchModal(false)}
+          />
+        </ErrorBoundary>
+      )}
+
+      {user && showPlanImporterModal && (
+        <ErrorBoundary sectionName="Importador de Planes" compact>
+          <PlanImporterModal
+            isOpen={showPlanImporterModal}
+            onClose={() => setShowPlanImporterModal(false)}
+            user={user}
+            coachViewMode={coachViewMode}
+            onSuccess={() => setShowPlanImporterModal(false)}
+          />
+        </ErrorBoundary>
+      )}
 
       {/* Star Unlock Celebrate Overlay Modal */}
       <AnimatePresence>
@@ -1866,13 +1995,15 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Coach PRO Subscription & Payment Modal */}
-      {user && (
-        <CoachPaymentModal
-          isOpen={showCoachPaymentModal}
-          onClose={() => setShowCoachPaymentModal(false)}
-          user={user}
-          onSuccess={handleCoachPaymentSuccess}
-        />
+      {user && showCoachPaymentModal && (
+        <ErrorBoundary sectionName="Suscripción Entrenador" compact>
+          <CoachPaymentModal
+            isOpen={showCoachPaymentModal}
+            onClose={() => setShowCoachPaymentModal(false)}
+            user={user}
+            onSuccess={handleCoachPaymentSuccess}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Floating Back Navigation Toast (OLED Mobile HUD) */}

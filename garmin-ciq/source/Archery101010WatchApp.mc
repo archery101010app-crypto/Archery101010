@@ -82,7 +82,7 @@ class Archery101010WatchView extends WatchUi.View {
     public var gpsDistanceM = 0.0;
     public var distanceWalkedM = 0;
     public var activeKcal = 0;
-    public var autoDetectEnabled = true;
+    public var autoDetectEnabled = false;
     public var sensitivityLevel = 1; // 0: BAJA, 1: MEDIA, 2: ALTA
     public var selectedScoreIdx = 0; // 0..11
     public var scoreLabels as Lang.Array<Lang.String> = ["X", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1", "M"];
@@ -153,7 +153,7 @@ class Archery101010WatchView extends WatchUi.View {
         loadBrandResources();
         loadStateFromStorage();
         initStepBaseline();
-        registerHighFreqAccelerometer();
+        syncHighFreqAccelerometer();
 
         mSensorTimer = new Timer.Timer();
         mSensorTimer.start(method(:onSensorTick), 100, true);
@@ -200,6 +200,9 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function registerHighFreqAccelerometer() as Void {
+        if (mHighFreqAccelActive) {
+            return;
+        }
         if (Sensor has :registerSensorDataListener) {
             try {
                 var opts = {
@@ -214,6 +217,26 @@ class Archery101010WatchView extends WatchUi.View {
             } catch (ex) {
                 mHighFreqAccelActive = false;
             }
+        }
+    }
+
+    (:typecheck(false))
+    function unregisterHighFreqAccelerometer() as Void {
+        mPendingShotActive = false;
+        if (mHighFreqAccelActive && (Sensor has :unregisterSensorDataListener)) {
+            try {
+                Sensor.unregisterSensorDataListener();
+            } catch (ex) {}
+        }
+        mHighFreqAccelActive = false;
+    }
+
+    (:typecheck(false))
+    function syncHighFreqAccelerometer() as Void {
+        if (autoDetectEnabled) {
+            registerHighFreqAccelerometer();
+        } else {
+            unregisterHighFreqAccelerometer();
         }
     }
 
@@ -243,8 +266,12 @@ class Archery101010WatchView extends WatchUi.View {
             if (sc != null && sc instanceof Lang.Number && sc >= 0) { stepsCount = sc; }
             var dw = Application.Storage.getValue("distanceWalkedM");
             if (dw != null && dw instanceof Lang.Number && dw >= 0) { distanceWalkedM = dw; }
-            var ad = Application.Storage.getValue("autoDetectEnabled");
-            if (ad != null && ad instanceof Lang.Boolean) { autoDetectEnabled = ad; }
+            var ad = Application.Storage.getValue("autoDetect_v2");
+            if (ad != null && ad instanceof Lang.Boolean) {
+                autoDetectEnabled = ad;
+            } else {
+                autoDetectEnabled = false;
+            }
             var sl = Application.Storage.getValue("sensitivityLevel");
             if (sl != null && sl instanceof Lang.Number) { sensitivityLevel = sl; }
             var ea = Application.Storage.getValue("currentEndArrows");
@@ -274,7 +301,7 @@ class Archery101010WatchView extends WatchUi.View {
             Application.Storage.setValue("currentEnd", currentEnd);
             Application.Storage.setValue("stepsCount", stepsCount);
             Application.Storage.setValue("distanceWalkedM", distanceWalkedM);
-            Application.Storage.setValue("autoDetectEnabled", autoDetectEnabled);
+            Application.Storage.setValue("autoDetect_v2", autoDetectEnabled);
             Application.Storage.setValue("sensitivityLevel", sensitivityLevel);
             Application.Storage.setValue("currentEndArrows", currentEndArrows);
         } catch (ex) {}
@@ -570,6 +597,7 @@ class Archery101010WatchView extends WatchUi.View {
         } else {
             autoDetectEnabled = false; // MODO MANUAL
         }
+        syncHighFreqAccelerometer();
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(60, 40)]);
         }
@@ -683,6 +711,10 @@ class Archery101010WatchView extends WatchUi.View {
             }
             if (data.hasKey("activeKcal")) {
                 activeKcal = data["activeKcal"].toNumber();
+            }
+            if (data.hasKey("autoDetectEnabled") && data["autoDetectEnabled"] != null) {
+                autoDetectEnabled = (data["autoDetectEnabled"] == true);
+                syncHighFreqAccelerometer();
             }
             saveStateToStorage();
             WatchUi.requestUpdate();
@@ -1071,6 +1103,7 @@ class Archery101010WatchView extends WatchUi.View {
             bowPoundageLbs = extractFsInt(fields, "bowPoundageLbs", bowPoundageLbs);
             autoDetectEnabled = extractFsBool(fields, "autoDetectEnabled", autoDetectEnabled);
             sensitivityLevel = extractFsInt(fields, "sensitivityLevel", sensitivityLevel);
+            syncHighFreqAccelerometer();
 
             var cloudWalked = extractFsInt(fields, "distanceWalkedM", 0);
             if (cloudWalked > distanceWalkedM) {

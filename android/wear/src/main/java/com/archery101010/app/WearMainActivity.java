@@ -101,7 +101,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private int screenIndex = 0; // 0..3
     private int arrowCount = 0;
-    private boolean autoDetectEnabled = true;
+    private boolean autoDetectEnabled = false;
     // Sensitivity level: 0 = BAJA (less sensitive), 1 = MEDIA (default), 2 = ALTA (more sensitive)
     private int sensitivityLevel = 1;
     private long lastShotTimestamp = 0L;
@@ -222,7 +222,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
         syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
         syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
-        autoDetectEnabled = prefs.getBoolean("autoDetectEnabled", true);
+        autoDetectEnabled = prefs.getBoolean("autoDetectEnabled_v2", false);
         sensitivityLevel = Math.max(0, Math.min(2, prefs.getInt("sensitivityLevel", 1)));
         cmdSequence = prefs.getLong("cmdSequence", 0L);
 
@@ -240,16 +240,31 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         initWearCommunication();
     }
 
-    private void ensureSensorAndHeartbeatActive() {
-        if (sensorManager != null && accelerometer != null && !isSensorRegistered) {
-            try {
-                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
-                if (gyroscope != null) {
-                    sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
-                }
-                isSensorRegistered = true;
-            } catch (Exception ignored) {}
+    private synchronized void syncShotDetectionSensors() {
+        if (sensorManager == null) return;
+        if (autoDetectEnabled) {
+            if (!isSensorRegistered && accelerometer != null) {
+                try {
+                    sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                    if (gyroscope != null) {
+                        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+                    }
+                    isSensorRegistered = true;
+                } catch (Exception ignored) {}
+            }
+        } else {
+            pendingShotActive = false;
+            if (isSensorRegistered) {
+                try {
+                    sensorManager.unregisterListener(this);
+                } catch (Exception ignored) {}
+                isSensorRegistered = false;
+            }
         }
+    }
+
+    private void ensureSensorAndHeartbeatActive() {
+        syncShotDetectionSensors();
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
         heartbeatHandler.postDelayed(heartbeatRunnable, 4000L);
     }
@@ -365,9 +380,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
 
             // Sensitivity chosen on the phone (BAJA / MEDIA / ALTA) must drive the watch detector too
-            if ("SET_SENSITIVITY".equals(rootObj.optString("type", ""))) {
-                sensitivityLevel = Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", sensitivityLevel)));
-                if (rootObj.has("enabled")) autoDetectEnabled = rootObj.optBoolean("enabled", autoDetectEnabled);
+            String rootType = rootObj.optString("type", "");
+            if ("SET_SENSITIVITY".equals(rootType) || "TOGGLE_AUTO_DETECT".equals(rootType)) {
+                if (rootObj.has("sensitivityLevel")) {
+                    sensitivityLevel = Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", sensitivityLevel)));
+                }
+                if (rootObj.has("enabled")) {
+                    autoDetectEnabled = rootObj.optBoolean("enabled", autoDetectEnabled);
+                }
+                syncShotDetectionSensors();
                 saveState();
                 runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 return;
@@ -475,6 +496,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             if (obj.has("autoDetectEnabled") && !hasUnackedLocalAction) {
                 autoDetectEnabled = obj.optBoolean("autoDetectEnabled", autoDetectEnabled);
+                syncShotDetectionSensors();
             }
             saveState();
             runOnUiThread(() -> {
@@ -640,7 +662,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putFloat("walkedMeters", getEffectiveWalkedMeters());
         editor.putInt("syncedArrowsPerEnd", syncedArrowsPerEnd);
         editor.putInt("syncedEndsCount", syncedEndsCount);
-        editor.putBoolean("autoDetectEnabled", autoDetectEnabled);
+        editor.putBoolean("autoDetectEnabled_v2", autoDetectEnabled);
         editor.putInt("sensitivityLevel", sensitivityLevel);
         editor.putLong("cmdSequence", cmdSequence);
         editor.apply();
@@ -1239,6 +1261,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 } else {
                     autoDetectEnabled = false; // MODO MANUAL
                 }
+                syncShotDetectionSensors();
                 triggerHaptic(25);
                 saveState();
                 sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + ",\"sensitivityLevel\":" + sensitivityLevel + "}");

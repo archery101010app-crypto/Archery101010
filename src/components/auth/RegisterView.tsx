@@ -32,6 +32,15 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
   const [birthDate, setBirthDate] = useState("");
   const [country, setCountry] = useState("CR");
   const [gender, setGender] = useState("M");
+  const [isAndroidNativeApp, setIsAndroidNativeApp] = useState(false);
+
+  const nowLocal = new Date();
+  const todayIso = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
+
+  useEffect(() => {
+    const w = window as any;
+    setIsAndroidNativeApp(!!w.ArcheryNativeAuth || w.Capacitor?.getPlatform?.() === "android");
+  }, []);
 
   useEffect(() => {
     let resolved = false;
@@ -75,16 +84,21 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
     setStep(step + 1);
   };
 
-  const handleSocialRegister = async () => {
+  const handleSocialRegister = async (provider: "google" | "apple" = "google") => {
     setLoading(true);
     setError("");
     try {
-      const user = await authenticateWithSocialProvider("google");
+      const user = await authenticateWithSocialProvider(provider);
       if (user) {
         onRegisterSuccess(user);
       }
     } catch (err: any) {
-      setError(err.message || "Error al registrarse con Google");
+      setError(
+        err.message ||
+          (provider === "apple"
+            ? "Error al registrarse con Apple"
+            : "Error al registrarse con Google")
+      );
     } finally {
       setLoading(false);
     }
@@ -100,6 +114,32 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
       setError("Completa todos los campos obligatorios");
       return;
     }
+
+    const parts = birthDate.split("-").map((n) => parseInt(n, 10));
+    if (parts.length !== 3 || parts.some((n) => isNaN(n))) {
+      setError("Ingresa una fecha de nacimiento válida");
+      return;
+    }
+    const [bYear, bMonth, bDay] = parts;
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const birthObj = new Date(bYear, bMonth - 1, bDay);
+
+    if (birthObj.getTime() > todayStart.getTime()) {
+      setError(t("futureBirthDateError"));
+      return;
+    }
+
+    let age = today.getFullYear() - bYear;
+    const monthDiff = today.getMonth() - (bMonth - 1);
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bDay)) {
+      age--;
+    }
+    if (age < 13) {
+      setError(t("ageRestrictionError"));
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -131,22 +171,24 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
       {/* Top Header */}
       <div className="flex justify-between items-center mb-6">
         <button
+          type="button"
           onClick={onNavigateToLogin}
-          className="text-white hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+          className="min-h-[38px] px-2 -ml-2 rounded-xl text-white hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={16} aria-hidden="true" />
           <span>{t("back")}</span>
         </button>
         <span className="text-xs text-white font-bold tracking-widest uppercase">
           {t("registerTitle")}
         </span>
         <button
+          type="button"
           onClick={onNavigateToLogin}
-          className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer"
+          className="w-9.5 h-9.5 min-w-[38px] min-h-[38px] rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer"
           title="Cerrar y volver al inicio de sesión"
           aria-label="Cerrar"
         >
-          <X size={16} />
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
 
@@ -211,14 +253,17 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("passwordPlaceholder")}
+                  autoComplete="new-password"
                   className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 text-white hover:text-white transition cursor-pointer"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={showPassword}
+                  className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
               </div>
               <div className="relative flex items-center">
@@ -227,18 +272,21 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirmar contraseña"
+                  autoComplete="new-password"
                   className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 text-white hover:text-white transition cursor-pointer"
+                  aria-label={showConfirmPassword ? "Ocultar confirmación de contraseña" : "Mostrar confirmación de contraseña"}
+                  aria-pressed={showConfirmPassword}
+                  className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
                 >
-                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showConfirmPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
               </div>
 
-              {/* 1-tap Social Registration (Google) */}
+              {/* 1-tap Social Registration (Google & Apple) */}
               <div className="flex items-center gap-4 pt-2 pb-1">
                 <div className="h-[1px] flex-1 bg-white/10" />
                 <span className="text-[11.6px] text-white font-bold uppercase tracking-widest">
@@ -251,10 +299,10 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={handleSocialRegister}
+                  onClick={() => handleSocialRegister("google")}
                   className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
                 >
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
@@ -262,6 +310,20 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   </svg>
                   <span>{t("googleLogin")}</span>
                 </button>
+
+                {!isAndroidNativeApp && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleSocialRegister("apple")}
+                    className="w-full py-3.5 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50"
+                  >
+                    <svg aria-hidden="true" className="w-4 h-4 shrink-0 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+                    </svg>
+                    <span>{t("appleRegister")}</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           )}
@@ -322,6 +384,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   <label className="text-[11.6px] font-bold uppercase tracking-wider text-white">{t("birthDate")} *</label>
                   <input
                     type="date"
+                    max={todayIso}
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                     className="min-w-0 w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white text-xs sm:text-sm px-2.5 py-3 rounded-xl outline-none transition-all duration-200 uppercase"
@@ -361,14 +424,46 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         </AnimatePresence>
       </div>
 
+      {/* Pre-registration Legal Consent Notice (#19) */}
+      <p className="text-[11.5px] text-white/80 text-center leading-relaxed max-w-sm mx-auto mt-5">
+        {t("legalConsentPrefix")}{" "}
+        <a
+          href="/terms"
+          onClick={(e) => {
+            if (typeof window !== "undefined" && window.location.protocol === "file:") {
+              e.preventDefault();
+              window.open("https://archery101010-c0bb4.web.app/terms", "_blank", "noopener,noreferrer");
+            }
+          }}
+          className="text-cyan-neon hover:underline underline-offset-2 font-semibold"
+        >
+          {t("termsLink")}
+        </a>{" "}
+        {t("legalConsentAnd")}{" "}
+        <a
+          href="/privacy"
+          onClick={(e) => {
+            if (typeof window !== "undefined" && window.location.protocol === "file:") {
+              e.preventDefault();
+              window.open("https://archery101010-c0bb4.web.app/privacy", "_blank", "noopener,noreferrer");
+            }
+          }}
+          className="text-cyan-neon hover:underline underline-offset-2 font-semibold"
+        >
+          {t("privacyLink")}
+        </a>
+        .
+      </p>
+
       {/* Navigation Buttons footer */}
-      <div className="flex justify-between items-center mt-8 gap-4">
+      <div className="flex justify-between items-center mt-4 gap-4">
         {step > 1 ? (
           <button
+            type="button"
             onClick={handlePrev}
             className="flex-1 py-3.5 rounded-xl border border-white/10 bg-[#0D0F12] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={16} aria-hidden="true" />
             <span>{t("prev")}</span>
           </button>
         ) : (
@@ -377,14 +472,16 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
         {step < 2 ? (
           <button
+            type="button"
             onClick={handleNext}
             className="flex-1 py-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer"
           >
             <span>{t("next")}</span>
-            <ArrowRight size={16} />
+            <ArrowRight size={16} aria-hidden="true" />
           </button>
         ) : (
           <button
+            type="button"
             onClick={handleRegister}
             disabled={loading}
             className="flex-1 py-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center transition-all duration-200 cursor-pointer"

@@ -233,10 +233,12 @@ export default function AthleteDetailSheet({
 
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-neutral-900 border border-white/5 text-white hover:text-white transition cursor-pointer"
+          aria-label="Cerrar ficha del atleta"
+          className="absolute top-3.5 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-neutral-900 border border-white/5 text-white hover:bg-neutral-800 transition cursor-pointer"
         >
-          <X size={16} />
+          <X size={16} aria-hidden="true" />
         </button>
 
         {/* Athlete Overview Card */}
@@ -275,8 +277,8 @@ export default function AthleteDetailSheet({
                   onClick={() => onOpenPlanImporter(athlete.uid)}
                   className="flex-1 min-w-0 py-2.5 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-98"
                 >
-                  <FileSpreadsheet size={13} className="shrink-0" />
-                  <span className="truncate">Cargar Plan Excel / Sheets</span>
+                  <FileSpreadsheet size={13} className="shrink-0" aria-hidden="true" />
+                  <span className="truncate">Cargar Plan Mensual</span>
                 </button>
               )}
               {onUnlinkAthlete && (
@@ -465,7 +467,7 @@ export default function AthleteDetailSheet({
                 </div>
                 {athlete.whatsappNumber && (
                   <div className="mt-1">
-                    <span className="text-[10.5px] text-white block">WhatsApp</span>
+                    <span className="text-[10.5px] text-white block">Mensajería</span>
                     <span className="text-white text-xs font-medium tabular-nums">{athlete.whatsappNumber}</span>
                   </div>
                 )}
@@ -1093,9 +1095,10 @@ export default function AthleteDetailSheet({
                 />
                 <button
                   type="submit"
+                  aria-label="Enviar nota"
                   className="w-10 h-10 rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black flex items-center justify-center transition cursor-pointer shrink-0"
                 >
-                  <Send size={15} />
+                  <Send size={15} aria-hidden="true" />
                 </button>
               </form>
 
