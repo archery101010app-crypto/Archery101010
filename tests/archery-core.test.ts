@@ -169,3 +169,92 @@ describe("Archery 101010 — Cloud Scalability Guard (Zero Unbounded Collection 
     );
   });
 });
+
+describe("Archery 101010 — Internationalization, Regional Units, RTL, Timezone & Decimal Guard", () => {
+  it("parses European/LatAm decimal commas and converts Metric <-> Imperial accurately", async () => {
+    const {
+      parseLocaleDecimal,
+      cmToFeetInches,
+      feetInchesToCm,
+      kgToLbs,
+      lbsToKg,
+      yardsToMeters,
+      metersToYards,
+      getMinimumConsentAge,
+      isRtlLanguage,
+      getSpeechLocale
+    } = await import("../src/lib/i18n/regionalUtils.ts");
+
+    assert.equal(parseLocaleDecimal("38,5"), 38.5);
+    assert.equal(parseLocaleDecimal("38.5"), 38.5);
+    assert.equal(parseLocaleDecimal("1.234,5"), 1234.5);
+    assert.equal(parseLocaleDecimal("1,234.5"), 1234.5);
+
+    const fi = cmToFeetInches(178);
+    assert.equal(fi.feet, 5);
+    assert.equal(fi.inches, 10);
+    assert.equal(feetInchesToCm(5, 10), 178);
+
+    assert.equal(lbsToKg(kgToLbs(75)), 75);
+    assert.ok(Math.abs(yardsToMeters(20) - 18.29) <= 0.02);
+    assert.ok(Math.abs(metersToYards(18.288) - 20) <= 0.1);
+
+    assert.equal(getMinimumConsentAge("DE"), 16);
+    assert.equal(getMinimumConsentAge("FR"), 16);
+    assert.equal(getMinimumConsentAge("CZ"), 15);
+    assert.equal(getMinimumConsentAge("KR"), 14);
+    assert.equal(getMinimumConsentAge("ES"), 14);
+    assert.equal(getMinimumConsentAge("US"), 13);
+    assert.equal(getMinimumConsentAge("CR"), 13);
+
+    assert.equal(isRtlLanguage("ar"), true);
+    assert.equal(isRtlLanguage("iw"), true);
+    assert.equal(isRtlLanguage("en"), false);
+    assert.equal(getSpeechLocale("ko"), "ko-KR");
+    assert.equal(getSpeechLocale("ja"), "ja-JP");
+    assert.equal(getSpeechLocale("iw"), "he-IL");
+  });
+
+  it("never injects legacy translate.google.com DOM script or UTC .toISOString().split('T')[0] in src/", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    function walk(dir: string): string[] {
+      const out: string[] = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          out.push(...walk(full));
+        } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+          out.push(full);
+        }
+      }
+      return out;
+    }
+
+    const srcRoot = path.resolve(process.cwd(), "src");
+    const googleTranslateOffenders: string[] = [];
+    const utcDateOffenders: string[] = [];
+
+    for (const file of walk(srcRoot)) {
+      const content = fs.readFileSync(file, "utf8");
+      if (content.includes("translate.google.com/translate_a/element.js")) {
+        googleTranslateOffenders.push(path.relative(srcRoot, file));
+      }
+      if (/\.toISOString\(\)\.split\(\s*["']T["']\s*\)\[0\]/.test(content)) {
+        utcDateOffenders.push(path.relative(srcRoot, file));
+      }
+    }
+
+    assert.deepEqual(
+      googleTranslateOffenders,
+      [],
+      `Found legacy Google Translate DOM widget in: ${googleTranslateOffenders.join(", ")}`
+    );
+    assert.deepEqual(
+      utcDateOffenders,
+      [],
+      `Found UTC midnight bug (.toISOString().split('T')[0]) in: ${utcDateOffenders.join(", ")}`
+    );
+  });
+});

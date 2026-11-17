@@ -24,7 +24,7 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess, onNavigateToRegister }: LoginViewProps) {
-  const { language, t } = useLanguage();
+  const { language, t, tx } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -139,7 +139,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           const displayName =
             firebaseUser.displayName ||
             firebaseUser.providerData?.find((p) => p.displayName)?.displayName ||
-            "Arquero";
+            tx("Arquero", "Archer");
           const user = await loginSocialUser(email, displayName, firebaseUser.uid);
           onLoginSuccess(user);
         } catch (err) {
@@ -192,21 +192,36 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     setResetModalSuccess("");
     const targetEmail = (resetEmail || email).trim().toLowerCase();
     if (!targetEmail) {
-      setResetModalError("Ingresa el correo electrónico de tu cuenta.");
+      setResetModalError(
+        tx(
+          "Ingresa el correo electrónico de tu cuenta.",
+          "Enter your account email address."
+        )
+      );
       return;
     }
     setResetLoading(true);
     try {
       await sendPasswordReset(targetEmail);
       setEmail(targetEmail);
-      const msg =
+      const msg = tx(
         `Enlace enviado a ${targetEmail}.\n\n` +
-        `• Revisa tu Bandeja de Entrada, Promociones o Spam.\n` +
-        `• Abre el enlace para elegir tu nueva contraseña.`;
+          `• Revisa tu Bandeja de Entrada, Promociones o Spam.\n` +
+          `• Abre el enlace para elegir tu nueva contraseña.`,
+        `Reset link sent to ${targetEmail}.\n\n` +
+          `• Check your Inbox, Promotions, or Spam folder.\n` +
+          `• Open the link to set your new password.`
+      );
       setResetModalSuccess(msg);
       setResetSuccessMsg(msg);
     } catch (err: any) {
-      setResetModalError(err.message || "No se pudo enviar el correo de recuperación.");
+      setResetModalError(
+        err.message ||
+          tx(
+            "No se pudo enviar el correo de recuperación.",
+            "Could not send password recovery email."
+          )
+      );
     } finally {
       setResetLoading(false);
     }
@@ -221,7 +236,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       await saveLocalSetting("current_user", bypassUser);
       onLoginSuccess(bypassUser);
     } catch (err: any) {
-      setError(err.message || "Error al ingresar en modo local.");
+      setError(
+        err.message || tx("Error al ingresar en modo local.", "Error signing in locally.")
+      );
     } finally {
       setLoading(false);
     }
@@ -235,8 +252,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
     }
 
     if (!deferredPrompt) {
-      // Fallback for browsers that don't support beforeinstallprompt but are Android/Chrome
-      await showOledAlert("Para instalar, ve al menú del navegador (tres puntos) y selecciona 'Instalar aplicación' o 'Añadir a pantalla de inicio'.");
+      // Fallback for browsers that don't support beforeinstallprompt
+      await showOledAlert(
+        tx(
+          "Para instalar, ve al menú del navegador (tres puntos) y selecciona 'Instalar aplicación' o 'Añadir a pantalla de inicio'.",
+          "To install, open your browser menu (three dots) and select 'Install app' or 'Add to Home screen'."
+        )
+      );
       return;
     }
     
@@ -250,7 +272,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError("Por favor ingresa un correo");
+      setError(tx("Por favor ingresa un correo", "Please enter an email address"));
       return;
     }
     setLoading(true);
@@ -261,7 +283,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       const user = await loginUser(email, password);
       onLoginSuccess(user);
     } catch (err: any) {
-      setError(err.message || "Error al iniciar sesión");
+      setError(err.message || tx("Error al iniciar sesión", "Error signing in"));
     } finally {
       setLoading(false);
     }
@@ -278,7 +300,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       }
     } catch (err: any) {
       console.error("Error en autenticación social:", err);
-      setError(err.message || "Error en autenticación social.");
+      setError(err.message || tx("Error en autenticación social.", "Social authentication error."));
     } finally {
       setLoading(false);
     }
@@ -337,31 +359,34 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                 </div>
                 <div className="flex flex-col">
                   <span className="text-white text-xs font-black uppercase tracking-wider">
-                    Instalar como App Local
+                    {tx("Instalar como App Local", "Install as Local App")}
                   </span>
                   <span className="text-[9.3px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
-                    Recomendado · Velocidad 10x
+                    {tx("Recomendado · Velocidad 10x", "Recommended · 10x Speed")}
                   </span>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowInstallBanner(false)}
-                aria-label="Cerrar aviso de instalación"
+                aria-label={tx("Cerrar aviso de instalación", "Close install banner")}
                 className="w-9 h-9 -mr-1.5 -mt-1.5 rounded-full flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer shrink-0"
               >
                 <X size={15} aria-hidden="true" />
               </button>
             </div>
             <p className="text-[11.6px] text-white leading-snug">
-              Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.
+              {tx(
+                "Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.",
+                "Install this app on your home screen. It runs locally for instant zero-latency speed and full offline support."
+              )}
             </p>
             <button
               type="button"
               onClick={handleInstallClick}
               className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-center"
             >
-              Instalar Ahora
+              {tx("Instalar Ahora", "Install Now")}
             </button>
           </motion.div>
         )}
@@ -428,7 +453,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-label={showPassword ? tx("Ocultar contraseña", "Hide password") : tx("Mostrar contraseña", "Show password")}
               aria-pressed={showPassword}
               className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
             >
@@ -465,7 +490,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               className="w-full py-3.5 rounded-xl bg-[#0D0F12] hover:bg-white/[0.04] text-cyan-neon font-black text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer flex justify-center items-center gap-2 mt-2 border border-cyan-neon/30"
             >
               <Unlock size={14} />
-              <span>Ingresar en Modo Local (Sin Contraseña)</span>
+              <span>{tx("Ingresar en Modo Local (Sin Contraseña)", "Sign In Locally (Offline Session)")}</span>
             </motion.button>
           )}
         </form>
@@ -534,7 +559,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               exit={{ scale: 0.96, y: 10 }}
               role="dialog"
               aria-modal="true"
-              aria-label="Recuperar Contraseña"
+              aria-label={tx("Recuperar Contraseña", "Reset Password")}
               className="w-full max-w-[360px] bg-[#0B0D12] border border-white/[0.08] p-6 rounded-3xl flex flex-col gap-4 relative shadow-2xl"
             >
               <div className="flex justify-between items-center">
@@ -543,13 +568,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     <KeyRound size={15} aria-hidden="true" />
                   </div>
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
-                    Recuperar Contraseña
+                    {tx("Recuperar Contraseña", "Reset Password")}
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowResetModal(false)}
-                  aria-label="Cerrar ventana de recuperación"
+                  aria-label={tx("Cerrar ventana de recuperación", "Close password recovery dialog")}
                   className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] flex items-center justify-center text-white cursor-pointer shrink-0 transition"
                 >
                   <X size={15} aria-hidden="true" />
@@ -557,7 +582,10 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               </div>
 
               <p className="text-xs text-white leading-relaxed">
-                Ingresa el correo electrónico de tu cuenta y te enviaremos un enlace automático para crear o restablecer tu contraseña.
+                {tx(
+                  "Ingresa el correo electrónico de tu cuenta y te enviaremos un enlace automático para crear o restablecer tu contraseña.",
+                  "Enter your account email address and we will send you an automatic link to create or reset your password."
+                )}
               </p>
 
               {resetModalError && (
@@ -578,7 +606,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     onClick={() => setShowResetModal(false)}
                     className="w-full py-3 rounded-xl bg-white text-black font-black text-xs uppercase tracking-wider cursor-pointer text-center"
                   >
-                    Entendido
+                    {tx("Entendido", "Got it")}
                   </button>
                 </div>
               ) : (
@@ -591,7 +619,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                       type="email"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="correo@ejemplo.com"
+                      placeholder={tx("correo@ejemplo.com", "you@example.com")}
                       autoFocus
                       className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-10 pr-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
                     />
@@ -602,14 +630,14 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                       onClick={() => setShowResetModal(false)}
                       className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white hover:text-white text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
                     >
-                      Cancelar
+                      {t("cancel")}
                     </button>
                     <button
                       type="submit"
                       disabled={resetLoading}
                       className="flex-[1.5] py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer text-center disabled:opacity-50"
                     >
-                      {resetLoading ? "Enviando..." : "Enviar Enlace"}
+                      {resetLoading ? tx("Enviando...", "Sending...") : tx("Enviar Enlace", "Send Link")}
                     </button>
                   </div>
                 </form>
@@ -666,17 +694,17 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               exit={{ scale: 0.95, y: 10 }}
               role="dialog"
               aria-modal="true"
-              aria-label="Instalación en Dispositivo Móvil"
+              aria-label={tx("Instalación en Dispositivo Móvil", "Install on Mobile Device")}
               className="w-full max-w-[340px] bg-neutral-950 border border-neutral-800 p-5 rounded-[32px] flex flex-col gap-4 relative"
             >
               <div className="flex justify-between items-center">
                 <h3 className="text-white text-xs font-black uppercase tracking-wider">
-                  Instalación en Dispositivo Móvil
+                  {tx("Instalación en Dispositivo Móvil", "Install on Mobile Device")}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowIOSModal(false)}
-                  aria-label="Cerrar guía de instalación"
+                  aria-label={tx("Cerrar guía de instalación", "Close installation guide")}
                   className="w-9 h-9 rounded-full bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 flex items-center justify-center text-white cursor-pointer shrink-0 transition"
                 >
                   <X size={15} aria-hidden="true" />
@@ -689,7 +717,8 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     1
                   </div>
                   <p>
-                    Abre esta app en <span className="text-white font-bold">el navegador</span>.
+                    {tx("Abre esta app en", "Open this app in")}{" "}
+                    <span className="text-white font-bold">{tx("el navegador", "your browser")}</span>.
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
@@ -697,11 +726,11 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     2
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
-                    Presiona el botón de compartir 
+                    {tx("Presiona el botón de compartir", "Tap the share button")}
                     <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[11.6px] text-white inline-flex items-center gap-1">
-                      Compartir <Share size={10} />
-                    </span> 
-                    abajo en la barra del sistema.
+                      {t("share")} <Share size={10} />
+                    </span>
+                    {tx("abajo en la barra del sistema.", "in the bottom system bar.")}
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
@@ -709,9 +738,9 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     3
                   </div>
                   <p className="flex items-center gap-1.5 flex-wrap">
-                    Desliza hacia abajo y pulsa 
+                    {tx("Desliza hacia abajo y pulsa", "Scroll down and tap")}
                     <span className="bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[11.6px] text-white font-bold inline-flex items-center gap-1">
-                      Añadir a pantalla de inicio <Plus size={10} />
+                      {tx("Añadir a pantalla de inicio", "Add to Home Screen")} <Plus size={10} />
                     </span>.
                   </p>
                 </div>
@@ -720,14 +749,18 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                     4
                   </div>
                   <p>
-                    Presiona <span className="text-white font-bold">Añadir</span> arriba a la derecha. ¡Listo!
+                    {tx("Presiona", "Tap")} <span className="text-white font-bold">{tx("Añadir", "Add")}</span>{" "}
+                    {tx("arriba a la derecha. ¡Listo!", "in the top right corner. Done!")}
                   </p>
                 </div>
               </div>
 
               <div className="bg-[#0D0F12] border border-cyan-neon/20 p-3 rounded-xl flex items-center justify-center text-center mt-2">
                 <span className="text-[10.5px] text-cyan-neon font-medium leading-tight">
-                  Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.
+                  {tx(
+                    "Una vez añadida, se descargará en local y cargará al instante cada vez que la abras.",
+                    "Once added, it caches locally and loads instantly every time you open it."
+                  )}
                 </span>
               </div>
             </motion.div>

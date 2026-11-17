@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 import WatchConnectivity
 import CoreMotion
 import WatchKit
@@ -6,12 +7,14 @@ import WatchKit
 /// ARCHERY 101010 — Official WatchOS Companion App (`watchOS 10+`)
 /// Matte OLED Design DNA:
 ///  - Official 4K Retina Brand Logo (`brand_logo_full`) at 100% full luminance
-///  - Tabular Athletic Numerals (`Outfit` / SF Pro Rounded Tabular)
-///  - 4 Screens synchronized in real time with Phone via `WatchConnectivity`:
-///      0: Contador 4 Dígitos (`0 0 0 0`) + Auto-Tiro + `mts · kcal`
-///      1: Puntuación Completa de Tanda (`X, 10..1, M`) + Slots + `BORRAR` / `SIG. TANDA →`
-///      2: Métricas Biométricas (`DISTANCIA RECORRIDA` en `mts · ft` + `GASTO ENERGÉTICO` en `kcal`)
-///      3: Resumen de Sesión + `ENVIAR SESIÓN A COACH`
+///  - Tabular Athletic Numerals (`Outfit` / Rounded Tabular)
+///  - Bilingual ES/EN + Metric/Imperial Regional Units
+///  - 5 Screens synchronized in real time via `WatchConnectivity` + 6-Digit Cloud Code:
+///      0: 4-Digit Counter (`0 0 0 0`) + Auto-Shot + Walked Distance & `kcal`
+///      1: XL 4x3 Scorepad (`X, 10..1, M`) + Slots + `BORRAR`/`DEL` & `SIG. TANDA`/`NEXT END`
+///      2: Biometrics (`DISTANCIA`/`DISTANCE` + `PASOS`/`STEPS` + `kcal`)
+///      3: Session Summary + `GUARDAR`/`SAVE`
+///      4: 6-Digit Cloud Code (`CÓDIGO NUBE`/`CLOUD CODE`)
 @main
 struct Archery101010WatchApp: App {
     @StateObject private var viewModel = WatchSessionViewModel()
@@ -38,9 +41,33 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     @Published var distanceWalkedM: Double = 0.0
     @Published var syncedActiveKcal: Int = -1
     @Published var autoDetectEnabled: Bool = false
-    @Published var sensitivityLevel: Int = 1 // 0: BAJA, 1: MEDIA, 2: ALTA
+    @Published var sensitivityLevel: Int = 1 // 0: BAJA/LOW, 1: MEDIA/MED, 2: ALTA/HIGH
     @Published var isWalkingPaused: Bool = false
     @Published var isPhoneConnected: Bool = false
+
+    // 6-Digit Cloud Sync state
+    @Published var pairingDigits: [Int] = [1, 0, 1, 0, 1, 0]
+    @Published var hasPairingCode: Bool = false
+    @Published var pairingCode: String = ""
+    @Published var isEditingCode: Bool = false
+    @Published var editDigitPos: Int = 0
+    @Published var isCloudSynced: Bool = false
+
+    var isSpanish: Bool {
+        if #available(watchOS 9.0, iOS 16.0, *) {
+            return Locale.current.language.languageCode?.identifier == "es"
+        } else {
+            return (Locale.current.languageCode ?? "en").lowercased().hasPrefix("es")
+        }
+    }
+
+    var isImperial: Bool {
+        return !Locale.current.usesMetricSystem
+    }
+
+    func tr(_ es: String, _ en: String) -> String {
+        return isSpanish ? es : en
+    }
 
     private let motionManager = CMMotionManager()
     private let pedometer = CMPedometer()
@@ -97,12 +124,21 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             sensitivityLevel = max(0, min(2, defaults.integer(forKey: "sensitivityLevel")))
         }
         currentSessionId = defaults.string(forKey: "currentSessionId") ?? ""
+        if let savedCode = defaults.string(forKey: "pairingCode"), savedCode.count == 6 {
+            pairingCode = savedCode
+            hasPairingCode = true
+            parsePairingDigits(savedCode)
+        }
         if WCSession.isSupported() {
             let session = WCSession.default
             session.delegate = self
             session.activate()
         }
         startSensors()
+        startCloudPollingTimer()
+        if hasPairingCode && pairingCode.count == 6 {
+            pollFirestoreCloud()
+        }
     }
 
     private func resetSessionCounters(newSessionId: String) {
@@ -293,14 +329,17 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     var currentStatusPillLabel: String {
+        let syncedNow = isPhoneConnected || isCloudSynced
         if !autoDetectEnabled {
-            return isPhoneConnected ? "MANUAL · CONECTADO" : "MODO MANUAL"
+            return syncedNow ? tr("MANUAL · CONECTADO", "MANUAL · SYNCED") : tr("MODO MANUAL", "MANUAL MODE")
         }
         if isWalkingPaused {
-            return "PAUSA · CAMINANDO"
+            return tr("PAUSA · CAMINANDO", "PAUSED · WALKING")
         }
-        let sens = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA")
-        return isPhoneConnected ? "AUTO · \(sens) · SYNC" : "AUTO · \(sens) · LOCAL"
+        let sens = (sensitivityLevel == 0)
+            ? tr("BAJA", "LOW")
+            : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"))
+        return syncedNow ? "AUTO · \(sens) · SYNC" : "\(tr("AUTO TIRO", "AUTO SHOT")) · \(sens)"
     }
 
     private func startSensors() {
@@ -484,6 +523,31 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         max(0, Int(round(Double(walkedMetersInt) * 3.28084)))
     }
 
+    var walkedMetricString: String {
+        if walkedMetersInt >= 1000 {
+            return String(format: "%.2f km", Double(walkedMetersInt) / 1000.0)
+        }
+        return "\(walkedMetersInt) m"
+    }
+
+    var walkedImperialString: String {
+        let miles = Double(walkedMetersInt) / 1609.344
+        if miles >= 0.1 {
+            return String(format: "%.2f mi", miles)
+        }
+        return "\(walkedFeetInt) ft"
+    }
+
+    var walkedPrimaryString: String {
+        isImperial ? walkedImperialString : walkedMetricString
+    }
+
+    var walkedDualString: String {
+        isImperial
+            ? "\(walkedImperialString) · \(walkedMetricString)"
+            : "\(walkedMetricString) · \(walkedImperialString)"
+    }
+
     var activeKcal: Int {
         if arrowCount <= 0 && walkedMetersInt < 10 {
             return max(0, syncedActiveKcal)
@@ -493,11 +557,174 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         return Int(round(Double(arrowCount) * kcalPerArrow + walkKcal))
     }
 
+    func parsePairingDigits(_ code: String) {
+        let chars = Array(code)
+        guard chars.count == 6 else { return }
+        for i in 0..<6 {
+            var d = Int(String(chars[i])) ?? ((i == 0) ? 1 : 0)
+            if d < 0 || d > 9 { d = (i == 0) ? 1 : 0 }
+            if i == 0 && d == 0 { d = 1 }
+            pairingDigits[i] = d
+        }
+    }
+
+    func adjustSelectedCodeDigit(delta: Int) {
+        let cur = pairingDigits[editDigitPos]
+        if editDigitPos == 0 {
+            var nextFirst = cur + delta
+            if nextFirst > 9 { nextFirst = 1 }
+            if nextFirst < 1 { nextFirst = 9 }
+            pairingDigits[0] = nextFirst
+        } else {
+            pairingDigits[editDigitPos] = (cur + delta + 10) % 10
+        }
+        isEditingCode = true
+        WKInterfaceDevice.current().play(.click)
+    }
+
+    func commitPairingDigits() {
+        let built = pairingDigits.map { String($0) }.joined()
+        pairingCode = built
+        hasPairingCode = true
+        isEditingCode = false
+        UserDefaults.standard.set(built, forKey: "pairingCode")
+        WKInterfaceDevice.current().play(.success)
+        pollFirestoreCloud()
+        syncWithFirestoreCloud(eventType: "SYNC_TELEMETRY_FROM_WATCH", extraValue: nil)
+    }
+
+    private func startCloudPollingTimer() {
+        Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.hasPairingCode, self.pairingCode.count == 6 else { return }
+            self.pollFirestoreCloud()
+        }
+    }
+
+    private func syncWithFirestoreCloud(eventType: String, extraValue: String?) {
+        guard hasPairingCode, pairingCode.count == 6 else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        cmdSequence += 1
+        let cmdId = "wos-\(nowMs)-\(cmdSequence)"
+
+        var cmdFields: [String: Any] = [
+            "type": ["stringValue": eventType],
+            "cmdId": ["stringValue": cmdId],
+            "_cmdId": ["stringValue": cmdId],
+            "_ts": ["integerValue": "\(nowMs)"]
+        ]
+        if eventType == "INCREMENT_ARROW" {
+            cmdFields["delta"] = ["integerValue": "1"]
+            cmdFields["source"] = ["stringValue": extraValue ?? "watch_manual"]
+        } else if eventType == "DECREMENT_ARROW" {
+            cmdFields["delta"] = ["integerValue": "-1"]
+            cmdFields["source"] = ["stringValue": "watch_manual"]
+            cmdFields["totalScore"] = ["integerValue": "\(totalScore)"]
+        } else if eventType == "SCORE_INPUT", let val = extraValue {
+            cmdFields["value"] = ["stringValue": val]
+            cmdFields["totalScore"] = ["integerValue": "\(totalScore)"]
+        } else if eventType == "UNDO_ARROW" {
+            cmdFields["totalScore"] = ["integerValue": "\(totalScore)"]
+        } else if eventType == "TOGGLE_AUTO_DETECT" {
+            cmdFields["enabled"] = ["booleanValue": autoDetectEnabled]
+            cmdFields["sensitivityLevel"] = ["integerValue": "\(sensitivityLevel)"]
+        } else if eventType == "SYNC_TELEMETRY_FROM_WATCH" {
+            cmdFields["stepsCount"] = ["integerValue": "\(stepsCount)"]
+            cmdFields["distanceWalkedM"] = ["integerValue": "\(walkedMetersInt)"]
+            cmdFields["activeKcal"] = ["integerValue": "\(activeKcal)"]
+        }
+
+        let docFields: [String: Any] = [
+            "lastWatchCmd": ["mapValue": ["fields": cmdFields]],
+            "lastWatchCmdId": ["stringValue": cmdId],
+            "lastWatchCmdSeq": ["integerValue": "\(cmdSequence)"],
+            "watchStepsCount": ["integerValue": "\(stepsCount)"],
+            "watchDistanceM": ["integerValue": "\(walkedMetersInt)"],
+            "watchSource": ["stringValue": "WATCHOS"],
+            "updatedAt": ["integerValue": "\(nowMs)"]
+        ]
+
+        let urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/\(pairingCode)?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true"
+        guard let url = URL(string: urlStr),
+              let body = try? JSONSerialization.data(withJSONObject: ["fields": docFields]) else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("PATCH", forHTTPHeaderField: "X-HTTP-Method-Override")
+        req.httpBody = body
+
+        URLSession.shared.dataTask(with: req) { [weak self] _, resp, _ in
+            guard let self = self, let http = resp as? HTTPURLResponse else { return }
+            let ok = (200..<300).contains(http.statusCode)
+            DispatchQueue.main.async {
+                if self.isCloudSynced != ok {
+                    self.isCloudSynced = ok
+                }
+            }
+        }.resume()
+    }
+
+    func pollFirestoreCloud() {
+        guard hasPairingCode, pairingCode.count == 6,
+              let url = URL(string: "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/\(pairingCode)") else { return }
+
+        URLSession.shared.dataTask(with: url) { [weak self] data, resp, _ in
+            guard let self = self, let http = resp as? HTTPURLResponse else { return }
+            if http.statusCode == 200,
+               let data = data,
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let fields = root["fields"] as? [String: Any] {
+                func fsInt(_ key: String, _ fallback: Int) -> Int {
+                    guard let node = fields[key] as? [String: Any] else { return fallback }
+                    if let s = node["integerValue"] as? String, let n = Int(s) { return n }
+                    if let d = node["doubleValue"] as? Double { return Int(round(d)) }
+                    return fallback
+                }
+                let activeNode = fields["sessionActive"] as? [String: Any]
+                let sessionActive = (activeNode?["booleanValue"] as? Bool) ?? true
+                let sidNode = fields["sessionId"] as? [String: Any]
+                let incomingSid = (sidNode?["stringValue"] as? String) ?? ""
+
+                DispatchQueue.main.async {
+                    self.isCloudSynced = true
+                    if !sessionActive {
+                        if self.arrowCount > 0 || self.totalScore > 0 || self.stepsCount > 0 {
+                            self.resetSessionCounters(newSessionId: "")
+                        }
+                        return
+                    }
+                    if !incomingSid.isEmpty && !self.currentSessionId.isEmpty && incomingSid != self.currentSessionId {
+                        self.resetSessionCounters(newSessionId: incomingSid)
+                    } else if !incomingSid.isEmpty && self.currentSessionId.isEmpty {
+                        self.currentSessionId = incomingSid
+                    }
+                    self.arrowCount = fsInt("arrowsCount", self.arrowCount)
+                    self.totalScore = fsInt("totalScore", self.totalScore)
+                    self.currentEnd = max(1, fsInt("currentEnd", self.currentEnd))
+                    self.distanceM = fsInt("distanceM", self.distanceM)
+                    self.arrowsPerEnd = max(1, fsInt("arrowsPerEnd", self.arrowsPerEnd))
+                    self.endsCount = max(1, fsInt("totalEnds", self.endsCount))
+                    let cloudWalk = Double(fsInt("distanceWalkedM", 0))
+                    if cloudWalk > self.distanceWalkedM {
+                        self.distanceWalkedM = cloudWalk
+                    }
+                    let cloudKcal = fsInt("caloriesBurnedKcal", -1)
+                    if cloudKcal > self.syncedActiveKcal {
+                        self.syncedActiveKcal = cloudKcal
+                    }
+                }
+            } else if http.statusCode == 404 {
+                DispatchQueue.main.async { self.isCloudSynced = false }
+            }
+        }.resume()
+    }
+
     func incrementArrow(delta: Int, source: String = "watch_manual") {
         arrowCount = max(0, arrowCount + delta)
         WKInterfaceDevice.current().play(delta > 0 ? .directionUp : .directionDown)
+        let evt = delta > 0 ? "INCREMENT_ARROW" : "DECREMENT_ARROW"
         sendCommandToPhone([
-            "type": delta > 0 ? "INCREMENT_ARROW" : "DECREMENT_ARROW",
+            "type": evt,
             "delta": delta,
             "source": source,
             "totalScore": totalScore
@@ -558,6 +785,10 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func sendCommandToPhone(_ payload: [String: Any]) {
+        if let evtType = payload["type"] as? String {
+            let extra = (payload["value"] as? String) ?? (payload["source"] as? String)
+            syncWithFirestoreCloud(eventType: evtType, extraValue: extra)
+        }
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         cmdSequence += 1
@@ -712,6 +943,7 @@ struct ArcheryWatchPagerView: View {
             ScorePadWatchScreen(vm: vm).tag(1)
             BiometricsWatchScreen(vm: vm).tag(2)
             SummaryWatchScreen(vm: vm).tag(3)
+            CloudCodeWatchScreen(vm: vm).tag(4)
         }
         .tabViewStyle(.page)
     }
@@ -767,26 +999,33 @@ struct CounterWatchScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        let syncedNow = vm.isPhoneConnected || vm.isCloudSynced
+        VStack(spacing: 5) {
             WatchBrandHeaderView(
                 pillText: vm.currentStatusPillLabel,
                 isYellowPill: vm.autoDetectEnabled && vm.isWalkingPaused,
-                isMutedPill: !vm.isPhoneConnected && !(vm.autoDetectEnabled && vm.isWalkingPaused)
+                isMutedPill: !syncedNow && !(vm.autoDetectEnabled && vm.isWalkingPaused)
             )
             .onTapGesture { vm.cycleSensitivityMode() }
 
-            HStack(spacing: 4) {
-                ForEach(0..<4, id: \.self) { idx in
-                    Text(digits[idx])
-                        .font(.system(size: 22, weight: .black, design: .rounded).monospacedDigit())
-                        .foregroundColor(idx == 3 ? Color(red: 1, green: 229/255, blue: 0) : .white)
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(Color(red: 11/255, green: 14/255, blue: 21/255))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(idx == 3 ? Color(red: 1, green: 229/255, blue: 0) : Color.white.opacity(0.14), lineWidth: 1)
-                        )
+            VStack(spacing: 3) {
+                Text(vm.tr("FLECHAS", "ARROWS"))
+                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .foregroundColor(.gray)
+
+                HStack(spacing: 4) {
+                    ForEach(0..<4, id: \.self) { idx in
+                        Text(digits[idx])
+                            .font(.system(size: 21, weight: .black, design: .rounded).monospacedDigit())
+                            .foregroundColor(idx == 3 ? Color(red: 1, green: 229/255, blue: 0) : .white)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(Color(red: 11/255, green: 14/255, blue: 21/255))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(idx == 3 ? Color(red: 1, green: 229/255, blue: 0) : Color.white.opacity(0.14), lineWidth: 1)
+                            )
+                    }
                 }
             }
             .padding(5)
@@ -806,10 +1045,10 @@ struct CounterWatchScreen: View {
                 Spacer()
 
                 VStack(spacing: 1) {
-                    Text("\(vm.walkedMetersInt) mts · \(vm.activeKcal) kcal")
+                    Text("\(vm.walkedPrimaryString) · \(vm.activeKcal) kcal")
                         .font(.system(size: 10, weight: .heavy, design: .rounded).monospacedDigit())
                         .foregroundColor(.white)
-                    Text("TANDA \(vm.currentEnd) · \(vm.distanceM) M")
+                    Text("\(vm.tr("TANDA", "END")) \(vm.currentEnd) · \(vm.distanceM) M")
                         .font(.system(size: 7.5, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundColor(.gray)
                 }
@@ -881,9 +1120,9 @@ struct ScorePadWatchScreen: View {
                     .scaledToFit()
                     .frame(height: 9.5)
 
-                // Unified Compact Telemetry + End Slots Row: [T1·29P] [X][10][9][·][·][·]
+                // Unified Compact Telemetry + End Slots Row: [T1·29P / E1·29P] [X][10][9][·][·][·]
                 HStack(spacing: 3.5) {
-                    Text("T\(vm.currentEnd)·\(vm.totalScore)P")
+                    Text("\(vm.tr("T", "E"))\(vm.currentEnd)·\(vm.totalScore)P")
                         .font(.system(size: 8.5, weight: .heavy, design: .rounded).monospacedDigit())
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -913,7 +1152,7 @@ struct ScorePadWatchScreen: View {
                     }
                 }
 
-                // XL 4x3 Score Grid (~2x Tactile Area across all Apple Watch sizes: 40mm..49mm Ultra)
+                // XL 4x3 Score Grid (~2x Tactile Area across all smartwatch sizes: 40mm..49mm)
                 LazyVGrid(
                     columns: [
                         GridItem(.flexible(), spacing: 3.5),
@@ -942,7 +1181,7 @@ struct ScorePadWatchScreen: View {
 
                 HStack(spacing: 5) {
                     Button(action: { vm.undoLastScore() }) {
-                        Text("BORRAR")
+                        Text(vm.tr("BORRAR", "DEL"))
                             .font(.system(size: 8.5, weight: .heavy, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 22)
@@ -955,7 +1194,7 @@ struct ScorePadWatchScreen: View {
                     .buttonStyle(.plain)
 
                     Button(action: { vm.advanceToNextEnd() }) {
-                        Text("SIG. TANDA")
+                        Text(vm.tr("SIG. TANDA", "NEXT END"))
                             .font(.system(size: 8.5, weight: .heavy, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 22)
@@ -979,16 +1218,27 @@ struct BiometricsWatchScreen: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            WatchBrandHeaderView(pillText: "PODÓMETRO · PASOS", isYellowPill: true)
-                .onTapGesture { vm.syncTelemetryManual() }
+            WatchBrandHeaderView(
+                pillText: vm.tr("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS"),
+                isYellowPill: true
+            )
+            .onTapGesture { vm.syncTelemetryManual() }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("DISTANCIA RECORRIDA")
-                    .font(.system(size: 7.5, weight: .bold, design: .rounded))
-                    .foregroundColor(.gray)
-                Text("\(vm.walkedMetersInt) mts · \(vm.walkedFeetInt) ft")
-                    .font(.system(size: 14, weight: .black, design: .rounded).monospacedDigit())
+                HStack {
+                    Text(vm.tr("DISTANCIA", "DISTANCE"))
+                        .font(.system(size: 7.5, weight: .bold, design: .rounded))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("\(vm.stepsCount) \(vm.tr("PASOS", "STEPS"))")
+                        .font(.system(size: 7.5, weight: .heavy, design: .rounded).monospacedDigit())
+                        .foregroundColor(Color(red: 0, green: 168/255, blue: 243/255))
+                }
+                Text(vm.walkedDualString)
+                    .font(.system(size: 13.5, weight: .black, design: .rounded).monospacedDigit())
                     .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(7)
@@ -996,7 +1246,7 @@ struct BiometricsWatchScreen: View {
             .cornerRadius(8)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("GASTO ENERGÉTICO")
+                Text(vm.tr("GASTO ENERGÉTICO", "ACTIVE ENERGY"))
                     .font(.system(size: 7.5, weight: .bold, design: .rounded))
                     .foregroundColor(.gray)
                 Text("\(vm.activeKcal) kcal")
@@ -1016,15 +1266,16 @@ struct SummaryWatchScreen: View {
     @ObservedObject var vm: WatchSessionViewModel
 
     var body: some View {
+        let syncedNow = vm.isPhoneConnected || vm.isCloudSynced
         VStack(spacing: 6) {
             WatchBrandHeaderView(
-                pillText: vm.isPhoneConnected ? "CONECTADO CON TELÉFONO" : "MODO LOCAL",
-                isMutedPill: !vm.isPhoneConnected
+                pillText: syncedNow ? vm.tr("RESUMEN · CONECTADO", "SUMMARY · SYNCED") : vm.tr("RESUMEN · LOCAL", "SUMMARY · LOCAL"),
+                isMutedPill: !syncedNow
             )
 
             HStack(spacing: 5) {
                 VStack {
-                    Text("FLECHAS")
+                    Text(vm.tr("FLECHAS", "ARROWS"))
                         .font(.system(size: 7, weight: .bold))
                         .foregroundColor(.gray)
                     Text("\(vm.arrowCount)")
@@ -1036,7 +1287,7 @@ struct SummaryWatchScreen: View {
                 .cornerRadius(8)
 
                 VStack {
-                    Text("PUNTOS")
+                    Text(vm.tr("PUNTAJE", "SCORE"))
                         .font(.system(size: 7, weight: .bold))
                         .foregroundColor(.gray)
                     Text("\(vm.totalScore)")
@@ -1049,15 +1300,123 @@ struct SummaryWatchScreen: View {
                 .cornerRadius(8)
             }
 
-            Text("\(vm.walkedMetersInt) mts · \(vm.walkedFeetInt) ft · \(vm.activeKcal) kcal")
+            Text("\(vm.walkedPrimaryString) · \(vm.activeKcal) kcal")
                 .font(.system(size: 10, weight: .heavy, design: .rounded).monospacedDigit())
                 .foregroundColor(.white)
 
             Button(action: { vm.finishSession() }) {
-                Text("ENVIAR SESIÓN A COACH")
-                    .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                Text(vm.tr("GUARDAR", "SAVE"))
+                    .font(.system(size: 9, weight: .heavy, design: .rounded))
                     .frame(maxWidth: .infinity, minHeight: 24)
                     .background(Color(red: 6/255, green: 21/255, blue: 35/255))
+                    .overlay(
+                        Capsule().stroke(Color(red: 0, green: 168/255, blue: 243/255), lineWidth: 1.1)
+                    )
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+    }
+}
+
+struct CloudCodeWatchScreen: View {
+    @ObservedObject var vm: WatchSessionViewModel
+
+    var body: some View {
+        let headerText: String = {
+            if vm.isEditingCode {
+                return "\(vm.tr("EDITAR", "EDIT")) \(vm.editDigitPos + 1)/6"
+            }
+            if vm.isCloudSynced {
+                return vm.tr("CÓDIGO NUBE · SYNC", "CLOUD CODE · SYNC")
+            }
+            return vm.hasPairingCode
+                ? vm.tr("CÓDIGO NUBE", "CLOUD CODE")
+                : vm.tr("TOCA PARA VINCULAR", "TAP TO LINK")
+        }()
+
+        VStack(spacing: 6) {
+            WatchBrandHeaderView(
+                pillText: headerText,
+                isYellowPill: vm.isEditingCode,
+                isMutedPill: !vm.isCloudSynced && !vm.isEditingCode
+            )
+
+            HStack(spacing: 3.5) {
+                ForEach(0..<6, id: \.self) { idx in
+                    let isSel = (idx == vm.editDigitPos)
+                    Button(action: {
+                        if vm.editDigitPos == idx {
+                            vm.adjustSelectedCodeDigit(delta: 1)
+                        } else {
+                            vm.editDigitPos = idx
+                            vm.isEditingCode = true
+                            WKInterfaceDevice.current().play(.click)
+                        }
+                    }) {
+                        Text("\(vm.pairingDigits[idx])")
+                            .font(.system(size: 16, weight: .black, design: .rounded).monospacedDigit())
+                            .foregroundColor(isSel ? .white : Color(red: 1, green: 229/255, blue: 0))
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(isSel ? Color(red: 8/255, green: 21/255, blue: 35/255) : Color(red: 11/255, green: 14/255, blue: 21/255))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(isSel ? Color(red: 0, green: 168/255, blue: 243/255) : Color(red: 1, green: 229/255, blue: 0), lineWidth: 1.1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 5) {
+                Button(action: { vm.adjustSelectedCodeDigit(delta: -1) }) {
+                    Text("−")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .frame(width: 32, height: 22)
+                        .background(Color(red: 24/255, green: 7/255, blue: 9/255))
+                        .overlay(Capsule().stroke(Color(red: 1, green: 30/255, blue: 30/255), lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    vm.isEditingCode = true
+                    vm.editDigitPos = (vm.editDigitPos + 1) % 6
+                    WKInterfaceDevice.current().play(.click)
+                }) {
+                    Text(vm.tr("EDITAR >", "EDIT >"))
+                        .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                        .frame(maxWidth: .infinity, minHeight: 22)
+                        .background(Color(red: 11/255, green: 14/255, blue: 21/255))
+                        .overlay(Capsule().stroke(Color(red: 71/255, green: 85/255, blue: 105/255), lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { vm.adjustSelectedCodeDigit(delta: 1) }) {
+                    Text("+")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .frame(width: 32, height: 22)
+                        .background(Color(red: 6/255, green: 21/255, blue: 35/255))
+                        .overlay(Capsule().stroke(Color(red: 0, green: 168/255, blue: 243/255), lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button(action: { vm.commitPairingDigits() }) {
+                Text(vm.isEditingCode ? vm.tr("LISTO", "DONE") : (vm.isCloudSynced ? vm.tr("VINCULADO", "SYNCED") : vm.tr("CÓDIGO NUBE", "CLOUD CODE")))
+                    .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                    .frame(maxWidth: .infinity, minHeight: 23)
+                    .background(Color(red: 6/255, green: 21/255, blue: 35/255))
+                    .overlay(
+                        Capsule().stroke(
+                            vm.isCloudSynced ? Color(red: 1, green: 229/255, blue: 0) : Color(red: 0, green: 168/255, blue: 243/255),
+                            lineWidth: 1.1
+                        )
+                    )
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

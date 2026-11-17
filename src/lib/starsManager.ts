@@ -6,6 +6,7 @@ import {
   addToSyncQueue,
   generateResilientId
 } from "@/lib/db/indexedDB";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export interface StarDefinition {
   level: number;
@@ -113,7 +114,7 @@ export async function checkAndAwardStar(
 
   try {
     const now = Date.now();
-    const todayStr = new Date(now).toISOString().split("T")[0];
+    const todayStr = getLocalISODate(now);
     const currentDoc = await athleteStarsStore.getItem<AthleteStarDoc>(userId);
 
     // Seed existing bowStats from legacy top-level fields if not yet populated

@@ -30,6 +30,8 @@ import { isProActive } from "@/lib/billingService";
 import { getSessionArrows } from "@/lib/scoring/sessionMetrics";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import PlanImporterModal from "@/components/planning/PlanImporterModal";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { getLocalISODate, formatRegionalDate } from "@/lib/i18n/regionalUtils";
 
 interface CoachMacrocycleTabProps {
   user: UserProfile;
@@ -39,6 +41,7 @@ interface CoachMacrocycleTabProps {
 }
 
 export default function CoachMacrocycleTab({ user, onUpgrade, athletes: externalAthletes, sessions: externalSessions }: CoachMacrocycleTabProps) {
+  const { language } = useLanguage();
   const isPro = isProActive(user);
   const canonicalClubId =
     user.clubId && user.clubId !== "CLB-DEMO" ? user.clubId : `CLB-${user.uid}`;
@@ -152,7 +155,8 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
     try {
       const targetAthletes = syncTargetType === "selected" ? syncSelectedAthleteIds : undefined;
       const summary = await syncCycleToMonthCalendar(macroToSync, syncYear, syncMonth, user, {
-        targetAthleteIds: targetAthletes
+        targetAthleteIds: targetAthletes,
+        lang: language
       });
       setShowSyncModal(false);
 
@@ -281,17 +285,18 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
   };
 
   const handleOpenCreate = () => {
+    const todayIso = getLocalISODate();
     setEditingId(null);
     setName("");
-    setStartDate(new Date().toISOString().split("T")[0]);
-    setEndDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+    setStartDate(todayIso);
+    setEndDate(getLocalISODate(Date.now() + 90 * 24 * 60 * 60 * 1000));
     setVolumeGoal(8000);
     setPhases([
       {
         id: "etapa-init",
         name: "Etapa 1",
-        startDate: new Date().toISOString().split("T")[0],
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        startDate: todayIso,
+        endDate: getLocalISODate(Date.now() + 30 * 24 * 60 * 60 * 1000),
         weeklySessionGoal: 3,
         weeklyArrowGoal: 200,
         notes: "",
@@ -487,7 +492,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
 
   // Determine current phase active for details / cards based on today's date
   const getCurrentPhaseType = (macro: Macrocycle): MacrocyclePhase | null => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalISODate();
     const found = macro.phases.find((p) => today >= p.startDate && today <= p.endDate);
     return found || macro.phases[0] || null;
   };
@@ -792,7 +797,7 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
               {/* Phases list */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1.5">
                 {selectedMacro.phases.map((phase) => {
-                  const today = new Date().toISOString().split("T")[0];
+                  const today = getLocalISODate();
                   const isActive = today >= phase.startDate && today <= phase.endDate;
 
                   return (
@@ -1333,10 +1338,12 @@ export default function CoachMacrocycleTab({ user, onUpgrade, athletes: external
       {/* Month Sync Modal */}
       <AnimatePresence>
         {showSyncModal && macroToSync && (() => {
-          const monthNames = [
-            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-          ];
+          const monthNames = Array.from({ length: 12 }, (_, idx) => {
+            const raw = formatRegionalDate(new Date(syncYear, idx, 15, 12, 0, 0), language, {
+              month: "long"
+            });
+            return raw && raw !== "—" ? raw.charAt(0).toUpperCase() + raw.slice(1) : `Mes ${idx + 1}`;
+          });
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
               <div className="absolute inset-0" onClick={() => setShowSyncModal(false)} />

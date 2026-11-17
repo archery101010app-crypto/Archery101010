@@ -8,6 +8,7 @@ import {
   isLinkedToExternalCoach,
   calculateAgeFromBirthDate
 } from "@/lib/authService";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export interface StoreProduct {
   id: string;
@@ -155,7 +156,7 @@ export async function activateCoachLaunchPromo(
       sku: isAnnual ? "coach_pro_annual" : "coach_pro_monthly",
       expiresAt,
       createdAt: now,
-      timestamp: new Date(now).toISOString().split("T")[0],
+      timestamp: getLocalISODate(now),
       reason: `Activación Bonificada de Lanzamiento (${isAnnual ? "Anual 365d" : "Mensual 30d"})`
     };
 

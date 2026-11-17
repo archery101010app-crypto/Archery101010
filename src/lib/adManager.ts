@@ -1,5 +1,6 @@
 import { adCampaignsStore, adImpressionsStore, generateResilientId } from "@/lib/db/indexedDB";
 import { AdCampaign, AdImpression } from "@/lib/db/adTypes";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 function parseCampaignBoundMs(dateStr: string | undefined, isEnd: boolean): number | null {
   if (!dateStr || typeof dateStr !== "string" || !dateStr.trim()) return null;
@@ -51,7 +52,7 @@ export async function getNextPopup(
     if (activePopups.length === 0) return null;
 
     // Check impressions and frequency
-    const today = new Date(now).toISOString().split("T")[0];
+    const today = getLocalISODate(now);
 
     for (const campaign of activePopups) {
       const impKey = `${campaign.id}_${today}`;
@@ -203,7 +204,7 @@ async function syncAdMetricsToCloud(
 export async function recordImpression(campaignId: string, visitorId: string): Promise<void> {
   try {
     const now = Date.now();
-    const today = new Date(now).toISOString().split("T")[0];
+    const today = getLocalISODate(now);
     const impKey = `${campaignId}_${today}`;
 
     const currentImp = await adImpressionsStore.getItem<AdImpression>(impKey);

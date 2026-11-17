@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import {
+  formatRegionalDate,
+  formatWalkedDistanceRegional,
+  parseLocaleDecimal
+} from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
 import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
@@ -171,9 +176,13 @@ export function getDianaPresetKey(
 }
 
 export default function ScoringView({ user, config, onBack, onSessionSaved }: ScoringViewProps) {
-  const { t } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   useWakeLock(true); // Keep display awake during active shooting session
   const isBlockFormat = config.format === "WA 600" || config.format === "WA 720";
+  const shootingDistanceLabel =
+    config?.distanceUnit === "yd" && config?.distanceValue
+      ? `${config.distanceValue} yd`
+      : `${config?.distance || 18}m`;
 
   const presetType = useMemo(() => {
     return getDianaPresetKey(config.bowType, config.distance, config.format, config.targetType);
@@ -257,9 +266,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const tallyCountRef = useRef<number>(tallyCount);
   tallyCountRef.current = tallyCount;
 
-  // Notes state
+  // Notes & Sight Mark state
   const [endNote, setEndNote] = useState("");
   const [sessionNote, setSessionNote] = useState("");
+  const [sightMarkInput, setSightMarkInput] = useState<string>(
+    config?.sightMark !== undefined && config?.sightMark !== null ? String(config.sightMark) : ""
+  );
   const [isFinishing, setIsFinishing] = useState(false); // Session summary modal state
   const [showDispersionDrawer, setShowDispersionDrawer] = useState(false); // Modal de Clics de Mira & Agrupación
   const [dispersionScope, setDispersionScope] = useState<"END" | "GLOBAL">("GLOBAL");
@@ -461,6 +473,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       setEnds(config.ends);
       setImpacts(config.impacts || []);
       setSessionNote(config.sessionNote || "");
+      if (config.sightMark !== undefined && config.sightMark !== null) {
+        setSightMarkInput(String(config.sightMark));
+      }
       const savedSteps = Number(config.stepsCount) || Number(config.biometrics?.stepsCount) || 0;
       if (savedSteps > 0) {
         stepsCountRef.current = Math.max(stepsCountRef.current, savedSteps);
@@ -555,12 +570,27 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [gpsDistanceM]);
 
   const bowPoundageLbs = useMemo(() => {
+    const rawLb = config?.bowPoundageLbs ?? user?.bowConfig?.poundage;
+    const localeParsed = parseLocaleDecimal(rawLb, NaN);
+    if (Number.isFinite(localeParsed) && localeParsed >= 12 && localeParsed <= 85) {
+      return localeParsed;
+    }
     return parseBowPoundageLbs(user, config?.bowPoundageLbs);
   }, [user, config?.bowPoundageLbs]);
 
   const athleteWeightKg = useMemo(() => {
+    const localeParsed = parseLocaleDecimal(user?.physicalData?.weight, NaN);
+    if (Number.isFinite(localeParsed) && localeParsed >= 30 && localeParsed <= 180) {
+      return localeParsed;
+    }
     return parseAthleteWeightKg(user);
   }, [user]);
+
+  const normalizedSightMark = useMemo(() => {
+    if (!sightMarkInput.trim()) return undefined;
+    const parsed = parseLocaleDecimal(sightMarkInput, NaN);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [sightMarkInput]);
 
   const activeKcal = useMemo(() => {
     return calculateActiveKcal({
@@ -695,7 +725,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         updatedAt: nowTs,
         practiceType: config.practiceType || "Práctica",
         bowType: config.bowType || "Recurve",
-        distance: Number(config.distance) || 18,
+        distance: parseLocaleDecimal(config.distance, 18) || 18,
+        ...(config.distanceUnit ? { distanceUnit: config.distanceUnit } : {}),
+        ...(config.distanceValue ? { distanceValue: parseLocaleDecimal(config.distanceValue, 18) } : {}),
+        ...(normalizedSightMark !== undefined ? { sightMark: normalizedSightMark } : {}),
         format: config.format || "Libre",
         endsCount: Math.min(100, Number(config.endsCount) || 10),
         arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
@@ -740,7 +773,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     };
 
     autoSave();
-  }, [ends, impacts, sessionNote, tallyCount, distanceWalkedM, activeKcal]);
+  }, [ends, impacts, sessionNote, tallyCount, distanceWalkedM, activeKcal, normalizedSightMark]);
 
   // Scroll active row into view in keyboard table
   useEffect(() => {
@@ -996,14 +1029,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         tensCount: tens,
         xsCount: xs,
         distanceM: config.distance || 70,
+        distanceLabel: shootingDistanceLabel,
         bowType: config.bowType || user.bowConfig?.type || "Recurve",
         format: config.format || "World Archery",
         archerName,
+        dateStr: formatRegionalDate(new Date(), language),
         sessionNote,
         dispersion: globalDispersion,
         activeKcal,
         distanceWalkedM,
-        bowPoundageLbs
+        bowPoundageLbs,
+        lang: language,
+        unitSystem
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -1246,7 +1283,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       timestamp: Date.now(),
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || "Recurve",
-      distance: Number(config.distance) || 18,
+      distance: parseLocaleDecimal(config.distance, 18) || 18,
+      ...(config.distanceUnit ? { distanceUnit: config.distanceUnit } : {}),
+      ...(config.distanceValue ? { distanceValue: parseLocaleDecimal(config.distanceValue, 18) } : {}),
+      ...(normalizedSightMark !== undefined ? { sightMark: normalizedSightMark } : {}),
       format: config.format || "Libre",
       endsCount: Math.min(100, Number(config.endsCount) || 10),
       arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
@@ -1380,7 +1420,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       drawWeightLbs: bowPoundageLbs,
       distanceWalkedM,
       durationMinutes,
-      archerWeightKg: user.physicalData?.weight || athleteWeightKg
+      archerWeightKg: athleteWeightKg
     });
 
     const sessionId = generateResilientId("SES");
@@ -1393,7 +1433,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       updatedAt: nowTs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || "Recurve",
-      distance: Number(config.distance) || 18,
+      distance: parseLocaleDecimal(config.distance, 18) || 18,
+      ...(config.distanceUnit ? { distanceUnit: config.distanceUnit } : {}),
+      ...(config.distanceValue ? { distanceValue: parseLocaleDecimal(config.distanceValue, 18) } : {}),
+      ...(normalizedSightMark !== undefined ? { sightMark: normalizedSightMark } : {}),
       format: `${config.format || "WA 720"} (Bloque 1)`,
       endsCount: Math.min(100, halfEnds),
       arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 6),
@@ -1537,7 +1580,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       drawWeightLbs: bowPoundageLbs,
       distanceWalkedM,
       durationMinutes,
-      archerWeightKg: user.physicalData?.weight || athleteWeightKg
+      archerWeightKg: athleteWeightKg
     });
     const rawSessionObj: Record<string, any> = {
       id: sessionId,
@@ -1548,7 +1591,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       updatedAt: nowTs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || "Recurve",
-      distance: Number(config.distance) || 18,
+      distance: parseLocaleDecimal(config.distance, 18) || 18,
+      ...(config.distanceUnit ? { distanceUnit: config.distanceUnit } : {}),
+      ...(config.distanceValue ? { distanceValue: parseLocaleDecimal(config.distanceValue, 18) } : {}),
+      ...(normalizedSightMark !== undefined ? { sightMark: normalizedSightMark } : {}),
       format: config.format || "Libre",
       endsCount: Math.min(100, effectiveEndsCount),
       arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
@@ -1721,14 +1767,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         tensCount: tens,
         xsCount: xs,
         distanceM: config.distance || 70,
+        distanceLabel: shootingDistanceLabel,
         bowType: config.bowType || "Recurve",
         format: config.format || "World Archery",
         archerName,
+        dateStr: formatRegionalDate(new Date(), language),
         sessionNote,
         dispersion: globalDispersion,
         activeKcal,
         distanceWalkedM,
-        bowPoundageLbs
+        bowPoundageLbs,
+        lang: language,
+        unitSystem
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -1965,13 +2015,25 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             <ArrowLeft size={16} />
           </button>
           <div className="min-w-0">
-            <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate leading-tight">
-              {config.format === "Libre" ? "Ajuste libre" : config.format} · {config.distance}m
-              {presetType === "WA_300_COMPOUND" && " · 10 Oficial"}
+            <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate leading-tight tabular-nums">
+              {config.format === "Libre" ? tx("Ajuste libre", "Custom") : config.format} · {shootingDistanceLabel}
+              {presetType === "WA_300_COMPOUND" && tx(" · 10 Oficial", " · Official 10")}
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
             <p className="text-[11px] text-white uppercase tracking-wider truncate">
-              {config.practiceType === "Control" ? t("practiceControl") : config.practiceType} · {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType}
+              {config.practiceType === "Control"
+                ? t("practiceControl")
+                : config.practiceType === "Práctica"
+                ? t("practicePractice")
+                : t("practiceVolume")}{" "}
+              ·{" "}
+              {config.bowType === "Recurve"
+                ? t("bowRecurve")
+                : config.bowType === "Compound"
+                ? t("bowCompound")
+                : config.bowType === "Barebow"
+                ? t("bowBarebow")
+                : config.bowType}
             </p>
           </div>
         </div>
@@ -2016,14 +2078,19 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex justify-between items-center gap-2">
           <div className="flex items-baseline gap-2">
             <span className="text-[10.5px] text-white font-bold tracking-widest uppercase">
-              Distancia
+              {t("distance")}
             </span>
             <span className="text-xl font-black text-white leading-none tabular-nums">
-              {config.distance} <span className="text-xs text-white">m</span>
+              {config.distanceUnit === "yd" && config.distanceValue
+                ? config.distanceValue
+                : config.distance}{" "}
+              <span className="text-xs text-white">
+                {config.distanceUnit === "yd" ? "yd" : "m"}
+              </span>
             </span>
           </div>
           <span className="text-[10.5px] text-cyan-neon font-black tracking-wider uppercase bg-cyan-neon/10 px-2.5 py-1 rounded-full border border-cyan-neon/25 whitespace-nowrap">
-            Práctica de Volumen
+            {t("practiceVolume")}
           </span>
         </div>
       ) : (
@@ -2118,11 +2185,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     : "bg-[#FFF200]"
                 }`}
               />
-              <span className="sm:hidden">DISTANCIA</span>
-              <span className="hidden sm:inline">DISTANCIA RECORRIDA</span>
+              <span className="sm:hidden">{t("cardDistance")}</span>
+              <span className="hidden sm:inline">{t("cardWalked")}</span>
             </span>
             <span className="text-[15.5px] sm:text-[17.5px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
-              {formatKmAndMiles(distanceWalkedM, false)}
+              {formatWalkedDistanceRegional(distanceWalkedM, unitSystem)}
             </span>
           </div>
 
@@ -2847,28 +2914,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               {config.practiceType === "Volumen" ? (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-bold">Total Flechas</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">{t("cardArrows")}</span>
                     <p className="text-2xl font-black text-cyan-neon mt-0.5 tabular-nums">
                       {tallyCount}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-bold">Distancia</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">{t("distance")}</span>
                     <p className="text-2xl font-black text-yellow-gold mt-0.5 tabular-nums">
-                      {config.distance}m
+                      {shootingDistanceLabel}
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-center">
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-bold">Puntaje Total</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">{t("cardScore")}</span>
                     <p className="text-2xl font-black text-cyan-neon mt-0.5 tabular-nums">
                       {calculateTotalScore()}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-bold">Precisión</span>
+                    <span className="text-[10.5px] text-white uppercase font-bold">{t("precisionLabel")}</span>
                     <p className="text-2xl font-black text-yellow-gold mt-0.5 tabular-nums">
                       {(() => {
                         const shotArrowsCount = ends.reduce(
@@ -2898,10 +2965,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
                 <div className="flex flex-col items-center justify-center">
                   <span className="text-[12px] text-white uppercase font-black tracking-wider block">
-                    DISTANCIA RECORRIDA
+                    {t("cardWalked")}
                   </span>
                   <p className="text-[19px] font-black text-white mt-0.5 tabular-nums">
-                    {formatKmAndMiles(distanceWalkedM, false)}
+                    {formatWalkedDistanceRegional(distanceWalkedM, unitSystem)}
                   </p>
                 </div>
               </div>
@@ -2975,7 +3042,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <input
                     type="number"
                     value={confirmedVolume}
-                    onChange={(e) => setConfirmedVolume(Math.max(0, parseInt(e.target.value) || 0))}
+                    onChange={(e) => setConfirmedVolume(Math.max(0, Math.round(parseLocaleDecimal(e.target.value, 0))))}
                     className="w-14 text-center font-black text-white text-base bg-transparent outline-none border-none tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
@@ -3018,7 +3085,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   className="w-full h-11 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Camera size={16} />
-                  <span>{isGeneratingImage ? "Generando Imagen..." : "Compartir Diana Gráfica (HD)"}</span>
+                  <span>{isGeneratingImage ? t("loading") : t("shareNativeBtn")}</span>
                 </button>
                 <button
                   onClick={handleShareScorecardWhatsApp}
@@ -3026,14 +3093,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   className="w-full h-11 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Share2 size={16} aria-hidden="true" />
-                  <span>Compartir Planilla por Mensajería</span>
+                  <span>{t("shareScorecardMessaging")}</span>
                 </button>
                 <button
                   onClick={handleFinishAndSave}
                   className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 transition"
                 >
                   <Save size={15} />
-                  <span>Guardar Entrenamiento</span>
+                  <span>{tx("Guardar Entrenamiento", "Save Training")}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -3043,7 +3110,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   }}
                   className="w-full h-11 rounded-xl bg-transparent border border-white/10 text-white hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap transition cursor-pointer"
                 >
-                  Seguir Tirando
+                  {tx("Seguir Tirando", "Keep Shooting")}
                 </button>
               </div>
             </motion.div>
@@ -3129,7 +3196,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 <input
                   type="number"
                   value={confirmedVolume}
-                  onChange={(e) => setConfirmedVolume(Math.max(0, parseInt(e.target.value) || 0))}
+                  onChange={(e) => setConfirmedVolume(Math.max(0, Math.round(parseLocaleDecimal(e.target.value, 0))))}
                   className="w-20 text-center font-black text-white text-2xl bg-transparent outline-none border-none tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
@@ -3180,10 +3247,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate">
-                      Centro y Ajuste de Mira
+                      {tx("Centro y Ajuste de Mira", "Group Center & Sight Adjustment")}
                     </h3>
                     <p className="text-[11.6px] text-white truncate tabular-nums">
-                      {config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : (config.bowType || "Recurvo")} · {config.distance || 70}m · Dianas WA
+                      {config.bowType === "Recurve"
+                        ? t("bowRecurve")
+                        : config.bowType === "Compound"
+                        ? t("bowCompound")
+                        : t("bowBarebow")}{" "}
+                      · {shootingDistanceLabel} · {tx("Dianas WA", "WA Targets")}
                     </p>
                   </div>
                 </div>
@@ -3309,13 +3381,35 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
               )}
 
+              {/* Sight Mark Decimal Input (supports dot 4.85 & comma 4,85 via parseLocaleDecimal) */}
+              <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-[10.5px] font-black uppercase text-white tracking-wider block">
+                    {tx("Marca de Mira", "Sight Mark")} ({shootingDistanceLabel})
+                  </span>
+                  {normalizedSightMark !== undefined && (
+                    <span className="text-[10.5px] text-cyan-neon font-bold tabular-nums">
+                      = {normalizedSightMark}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={sightMarkInput}
+                  onChange={(e) => setSightMarkInput(e.target.value)}
+                  placeholder="4.85 / 4,85"
+                  className="w-28 bg-[#090B0E] border border-white/10 focus:border-cyan-neon rounded-xl px-2.5 py-1.5 text-center text-xs font-black text-white tabular-nums outline-none transition"
+                />
+              </div>
+
               {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setShowDispersionDrawer(false)}
                 className="w-full h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs uppercase flex items-center justify-center whitespace-nowrap cursor-pointer transition"
               >
-                Cerrar Análisis
+                {tx("Cerrar Análisis", "Close Analysis")}
               </button>
             </motion.div>
           </div>

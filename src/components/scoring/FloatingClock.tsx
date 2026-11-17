@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCw, Minimize2, Square, X, Clock, Volume2, AlertTriangle, Radio } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { getSpeechLocale, pickVoiceForLanguage } from "@/lib/i18n/regionalUtils";
 import { 
   initWAAudio, 
   playWA2Beeps, 
@@ -23,22 +24,54 @@ interface FloatingClockProps {
   onTimeUpdate?: (timeStr: string, phase: "prep" | "shoot" | "stop" | null, isOver: boolean, isWarn: boolean) => void;
 }
 
-/**
- * Official World Archery Timing Presets (Book 2 Art. 7.3 & Book 3 Art. 13.4 / 15.1.1)
- * Current WA Standard: 30 seconds per arrow (90s for 3 arrows, 180s for 6 arrows)
- * Classic / Para-Archery: 40 seconds per arrow (120s for 3 arrows, 240s for 6 arrows)
- * Alternating Matchplay / Shoot-Off: 20 seconds (1 arrow)
- */
-const WA_OFFICIAL_PRESETS = [
-  { id: "WA_90", label: "3 Flechas WA (90s)", sub: "30s/flecha · Oficial", prep: 10, shoot: 90 },
-  { id: "WA_180", label: "6 Flechas WA (180s)", sub: "30s/flecha · Oficial", prep: 10, shoot: 180 },
-  { id: "WA_120", label: "3 Flechas (120s)", sub: "40s/flecha · Clásico", prep: 10, shoot: 120 },
-  { id: "WA_240", label: "6 Flechas (240s)", sub: "40s/flecha · Clásico", prep: 10, shoot: 240 },
-  { id: "WA_20", label: "Duelo / 1 Flecha (20s)", sub: "Tiro alternado WA", prep: 10, shoot: 20 }
-];
-
 export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange, onTimeUpdate }: FloatingClockProps) {
-  const { t } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
+
+  /**
+   * Official World Archery Timing Presets (Book 2 Art. 7.3 & Book 3 Art. 13.4 / 15.1.1)
+   * Current WA Standard: 30 seconds per arrow (90s for 3 arrows, 180s for 6 arrows)
+   * Classic / Para-Archery: 40 seconds per arrow (120s for 3 arrows, 240s for 6 arrows)
+   * Alternating Matchplay / Shoot-Off: 20 seconds (1 arrow)
+   */
+  const waOfficialPresets = [
+    {
+      id: "WA_90",
+      label: tx("3 Flechas WA (90s)", "3 Arrows WA (90s)"),
+      sub: tx("30s/flecha · Oficial", "30s/arrow · Official"),
+      prep: 10,
+      shoot: 90
+    },
+    {
+      id: "WA_180",
+      label: tx("6 Flechas WA (180s)", "6 Arrows WA (180s)"),
+      sub: tx("30s/flecha · Oficial", "30s/arrow · Official"),
+      prep: 10,
+      shoot: 180
+    },
+    {
+      id: "WA_120",
+      label: tx("3 Flechas (120s)", "3 Arrows (120s)"),
+      sub: tx("40s/flecha · Clásico", "40s/arrow · Classic"),
+      prep: 10,
+      shoot: 120
+    },
+    {
+      id: "WA_240",
+      label: tx("6 Flechas (240s)", "6 Arrows (240s)"),
+      sub: tx("40s/flecha · Clásico", "40s/arrow · Classic"),
+      prep: 10,
+      shoot: 240
+    },
+    {
+      id: "WA_20",
+      label: tx("Duelo / 1 Flecha (20s)", "Match / 1 Arrow (20s)"),
+      sub: tx("Tiro alternado WA", "Alternating WA"),
+      prep: 10,
+      shoot: 20
+    }
+  ];
   // Default to current WA 30s/arrow rule: 90s for 3 arrows, 180s for 6 arrows
   const defaultShootByArrows = arrowsPerEnd === 6 ? 180 : 90;
 
@@ -154,8 +187,14 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     if (!enableVoice) return;
     if (typeof window !== "undefined" && window.speechSynthesis) {
       try {
+        const activeLang = languageRef.current || language || "es";
         const utterance = new SpeechSynthesisUtterance(String(num));
-        utterance.lang = "es-ES";
+        utterance.lang = getSpeechLocale(activeLang);
+        const voices = window.speechSynthesis.getVoices();
+        const selectedVoice = pickVoiceForLanguage(voices, activeLang);
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+        }
         utterance.rate = 1.25;
         utterance.pitch = 1.0;
         utterance.volume = 0.95;
@@ -350,7 +389,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
               </div>
               <button
                 onClick={() => setIsOverlayOpen(false)}
-                aria-label="Minimizar reloj"
+                aria-label={t("minimize")}
                 className="p-2 rounded-full bg-white/10 text-white cursor-pointer hover:bg-white/20 active:scale-95 transition shrink-0"
               >
                 <Minimize2 size={20} />
@@ -416,20 +455,23 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     />
                     <span className="tabular-nums">
                       {phase === "prep"
-                        ? "LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)"
+                        ? tx("LUZ ROJA · LÍNEA DE TIRO (2 PITIDOS)", "RED LIGHT · SHOOTING LINE (2 BEEPS)")
                         : phase === "stop"
-                        ? "LUZ ROJA · FIN DE TIEMPO (3 PITIDOS)"
+                        ? tx("LUZ ROJA · FIN DE TIEMPO (3 PITIDOS)", "RED LIGHT · TIME EXPIRED (3 BEEPS)")
                         : lightState === "YELLOW"
-                        ? `LUZ AMARILLA · ÚLTIMOS ${getWarningThreshold(shootTime)}s`
-                        : "LUZ VERDE · TIEMPO DE TIRO (1 PITIDO)"}
+                        ? tx(
+                            `LUZ AMARILLA · ÚLTIMOS ${getWarningThreshold(shootTime)}s`,
+                            `YELLOW LIGHT · LAST ${getWarningThreshold(shootTime)}s`
+                          )
+                        : tx("LUZ VERDE · TIEMPO DE TIRO (1 PITIDO)", "GREEN LIGHT · SHOOTING TIME (1 BEEP)")}
                     </span>
                   </span>
                   <p className="text-white text-xs font-bold mt-0.5">
                     {phase === "prep"
-                      ? "Avanza a la línea de tiro · Prohibido levantar el arco"
+                      ? tx("Avanza a la línea de tiro · Prohibido levantar el arco", "Walk to the shooting line · Do not raise bow")
                       : phase === "stop"
-                      ? "Alto al fuego · Ir a anotar y recoger flechas"
-                      : "Disparo autorizado"}
+                      ? tx("Alto al fuego · Ir a anotar y recoger flechas", "Cease fire · Score and collect arrows")
+                      : tx("Disparo autorizado", "Shooting authorized")}
                   </p>
                 </div>
 
@@ -476,7 +518,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                       className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-cyan-neon text-black font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:bg-cyan-neon/90 active:scale-95 transition min-w-0"
                     >
                       <Play size={14} className="shrink-0" />
-                      <span className="min-w-0">Nueva Ronda (2 Pitidos)</span>
+                      <span className="min-w-0">{tx("Nueva Ronda (2 Pitidos)", "New End (2 Beeps)")}</span>
                     </button>
                   )}
                   <button
@@ -498,7 +540,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     className="min-h-[46px] h-11.5 px-2.5 sm:px-5 rounded-xl bg-neutral-800 border border-white/20 text-white font-extrabold text-[12.5px] sm:text-[13.8px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 text-center leading-tight sm:whitespace-nowrap cursor-pointer hover:bg-neutral-700 active:scale-95 transition min-w-0"
                   >
                     <Square size={15} className="shrink-0" />
-                    <span className="min-w-0">Configurar</span>
+                    <span className="min-w-0">{tx("Configurar", "Configure")}</span>
                   </button>
                 </div>
 
@@ -506,10 +548,10 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 <button
                   onClick={handleEmergencyStop}
                   className="min-h-[46px] h-11.5 w-full max-w-md sm:w-auto px-4 sm:px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black text-[12.5px] sm:text-[13.8px] uppercase tracking-wider sm:tracking-widest flex items-center justify-center gap-2 text-center leading-tight whitespace-nowrap border border-white active:scale-95 transition cursor-pointer"
-                  title="Detención inmediata de tiro según reglamento World Archery"
+                  title={tx("Detención inmediata de tiro según reglamento World Archery", "Immediate emergency stop per World Archery rules")}
                 >
                   <AlertTriangle size={16} className="shrink-0" />
-                  <span>Alto al Fuego (5 Pitidos)</span>
+                  <span>{tx("Alto al Fuego (5 Pitidos)", "Emergency Stop (5 Beeps)")}</span>
                 </button>
               </div>
             ) : (
@@ -517,17 +559,20 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
               <div className="flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto gap-4 relative z-10 my-2">
                 <div className="text-center">
                   <p className="text-white text-[12.8px]">
-                    Reglamento WA: 2 pitidos (Rojo) · 1 pitido (Verde) · 30s (Amarillo) · 3 pitidos (Fin)
+                    {tx(
+                      "Reglamento WA: 2 pitidos (Rojo) · 1 pitido (Verde) · 30s (Amarillo) · 3 pitidos (Fin)",
+                      "WA Rules: 2 beeps (Red) · 1 beep (Green) · 30s (Yellow) · 3 beeps (End)"
+                    )}
                   </p>
                 </div>
 
                 {/* Official WA Quick Presets */}
                 <div className="w-full bg-[#0D1017] border border-white/[0.08] rounded-2xl p-2.5 flex flex-col gap-1.5">
                   <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider px-1">
-                    Formatos Oficiales World Archery
+                    {tx("Formatos Oficiales World Archery", "Official World Archery Formats")}
                   </span>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {WA_OFFICIAL_PRESETS.map((preset) => {
+                    {waOfficialPresets.map((preset) => {
                       const isSelected = shootTime === preset.shoot && prepTime === preset.prep;
                       return (
                         <button
@@ -563,14 +608,14 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[11.6px] font-black uppercase text-white tracking-wider flex items-center gap-1">
                       <Radio size={12} className="text-cyan-neon" />
-                      Señal Acústica WA
+                      {tx("Señal Acústica WA", "WA Sound Signal")}
                     </span>
                     <button
                       onClick={() => playWATestTone(soundMode)}
                       className="text-[11.6px] font-bold text-cyan-neon hover:text-white flex items-center gap-1 cursor-pointer"
                     >
                       <Volume2 size={12} />
-                      <span>Probar</span>
+                      <span>{tx("Probar", "Test")}</span>
                     </button>
                   </div>
 
@@ -584,7 +629,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>Bocina WA</span>
+                      <span>{tx("Bocina WA", "WA Horn")}</span>
                     </button>
                     <button
                       type="button"
@@ -595,7 +640,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>Silbato</span>
+                      <span>{tx("Silbato", "Whistle")}</span>
                     </button>
                     <button
                       type="button"
@@ -606,19 +651,19 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                           : "bg-[#090B0E] text-white hover:text-white border border-white/[0.06]"
                       }`}
                     >
-                      <span>Silencio</span>
+                      <span>{tx("Silencio", "Mute")}</span>
                     </button>
                   </div>
 
                   {/* Voice countdown toggle */}
                   <div className="flex items-center justify-between border-t border-white/5 pt-2 px-1">
                     <span className="text-[11.6px] text-white font-medium">
-                      Voz opcional en últimos 10s (Entrenamiento)
+                      {tx("Voz opcional en últimos 10s (Entrenamiento)", "Optional voice countdown in last 10s (Practice)")}
                     </span>
                     <button
                       type="button"
                       onClick={handleVoiceToggle}
-                      aria-label="Cuenta regresiva de voz"
+                      aria-label={tx("Cuenta regresiva de voz", "Voice countdown")}
                       className={`w-10 h-5 shrink-0 rounded-full transition-colors relative cursor-pointer ${
                         enableVoice ? "bg-cyan-neon" : "bg-neutral-800"
                       }`}
@@ -636,7 +681,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                 <div className="grid grid-cols-2 gap-3 w-full">
                   <div className="flex flex-col gap-1">
                     <label className="text-[12.8px] text-white text-center font-bold">
-                      Preparación (Rojo · s)
+                      {t("prepSecs")}
                     </label>
                     <input
                       type="number"
@@ -650,7 +695,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
                   <div className="flex flex-col gap-1">
                     <label className="text-[12.8px] text-white text-center font-bold">
-                      Tiro (Verde/Amarillo · s)
+                      {t("shootSecs")}
                     </label>
                     <input
                       type="number"

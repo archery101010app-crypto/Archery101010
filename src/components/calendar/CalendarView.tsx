@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import {
+  getLocalISODate,
+  formatRegionalDate,
+  LANG_TO_BCP47,
+  toStandardLangCode
+} from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
 import { 
   getLocalSessions, 
@@ -436,7 +442,9 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevMonthDays = new Date(year, month, 0).getDate();
 
-  const rawMonthOnly = currentDate.toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+  const activeLocale =
+    LANG_TO_BCP47[language] || LANG_TO_BCP47[toStandardLangCode(language)] || "en-US";
+  const rawMonthOnly = formatRegionalDate(currentDate, language, {
     month: "long"
   });
   const monthName = `${rawMonthOnly.charAt(0).toUpperCase()}${rawMonthOnly.slice(1)} ${year}`;
@@ -562,9 +570,21 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     });
   }
 
-  const daysOfWeek = language === "es" 
-    ? ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"]
-    : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const daysOfWeek =
+    language === "es"
+      ? ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"]
+      : language === "en"
+      ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+      : Array.from({ length: 7 }, (_, i) => {
+          try {
+            return new Intl.DateTimeFormat(activeLocale, { weekday: "short" })
+              .format(new Date(2026, 10, 1 + i, 12, 0, 0))
+              .replace(/\.$/, "")
+              .slice(0, 3);
+          } catch {
+            return ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i];
+          }
+        });
 
   // Helper to calculate countdown
   const getDaysRemaining = (eventDateStr: string): { text: string; colorClass: string; isPast: boolean } => {
@@ -646,7 +666,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
     setIsSyncing(true);
     try {
-      const summary = await syncCycleToMonthCalendar(macro, year, month, user);
+      const summary = await syncCycleToMonthCalendar(macro, year, month, user, { lang: language });
       
       // Reload events
       const updatedEvents = await getLocalEvents();
@@ -930,7 +950,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const handleOpenAdd = () => {
     setModalMode("add");
     setTitle("");
-    setEventDate(selectedDay || new Date().toISOString().split("T")[0]);
+    setEventDate(selectedDay || getLocalISODate());
     setDescription("");
     setEventType("training");
     setShowModal(true);
@@ -1079,7 +1099,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             type="button"
             onClick={() =>
               handleOpenCreateAssignment(
-                selectedDay || new Date().toISOString().split("T")[0],
+                selectedDay || getLocalISODate(),
                 null
               )
             }
@@ -1221,7 +1241,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           {/* Days of week header */}
           <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center border-b border-white/5 pb-2">
             {daysOfWeek.map((day, dIdx) => (
-              <div key={day} className="flex items-center justify-center py-0.5">
+              <div key={`${day}-${dIdx}`} className="flex items-center justify-center py-0.5">
                 <span
                   className={`text-xs sm:text-sm font-black uppercase tracking-wider leading-none ${
                     dIdx === 0 ? "text-cyan-neon" : "text-white"
@@ -1358,7 +1378,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         <div className="bg-neutral-900/40 p-3 sm:p-4 rounded-3xl border border-white/5 flex flex-col gap-2.5">
           {(() => {
             const currentMonthCells = cells.filter((c) => c.isCurrentMonth);
-            const weekdayLabelsShort = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+            const weekdayLabelsShort = Array.from({ length: 7 }, (_, i) => {
+              try {
+                return new Intl.DateTimeFormat(activeLocale, { weekday: "short" })
+                  .format(new Date(2026, 10, 1 + i, 12, 0, 0))
+                  .replace(/\.$/, "")
+                  .toUpperCase();
+              } catch {
+                return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][i];
+              }
+            });
 
             const rowsToRender = currentMonthCells.filter((c) => {
               if (agendaShowEmptyDays) return true;
@@ -1575,7 +1604,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       {/* Fase Actual details block */}
       {(() => {
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getLocalISODate();
         const activePhaseInfo = getPhaseOnDate(todayStr);
         if (!activePhaseInfo) return null;
 
@@ -1750,7 +1779,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       <div className="flex items-center gap-1 text-[10.5px] text-white">
                         <Clock size={10} />
                         <span>
-                          {new Date(ev.date + "T00:00:00").toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+                          {formatRegionalDate(ev.date, language, {
                             weekday: "short",
                             day: "numeric",
                             month: "short"
@@ -1831,10 +1860,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
           const countdown = getDaysRemaining(selectedDay);
 
-          const formattedDayTitle = new Date(selectedDay + "T00:00:00").toLocaleDateString(
-            language === "es" ? "es-ES" : "en-US",
-            { weekday: "long", day: "numeric", month: "long", year: "numeric" }
-          );
+          const formattedDayTitle = formatRegionalDate(selectedDay, language, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          });
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">

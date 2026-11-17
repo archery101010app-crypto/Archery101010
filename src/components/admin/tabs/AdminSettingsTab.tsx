@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/indexedDB";
 import { downloadOrShareFile } from "@/lib/fileDownload";
 import { showOledAlert } from "@/lib/oledDialog";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export default function AdminSettingsTab() {
   const baseId = useId();
@@ -105,7 +106,7 @@ export default function AdminSettingsTab() {
       }
 
       const jsonStr = JSON.stringify(backupPayload, null, 2);
-      const today = new Date().toISOString().split("T")[0];
+      const today = getLocalISODate();
       await downloadOrShareFile({
         filename: `archery101010_respaldo_maestro_${today}.json`,
         mimeType: "application/json;charset=utf-8",

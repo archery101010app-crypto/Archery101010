@@ -39,24 +39,32 @@ import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.ref.WeakReference;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Archery 101010 — Native Wear OS Watch App (Round & Square Smartwatches)
- * WHOOP / Apple / Nike Matte OLED Design DNA:
+ * Matte OLED Design DNA:
  *  - Official 4K Retina Brand Logo (ARCHERY in Good Times + Geometric 101010)
  *  - Bundled Outfit Athletic Tabular Typography (Zero coder slashed zeros, zero neon glow)
- *  - Mathematically Centered Vertical & Horizontal Layout for both Round and Square displays
- *  - 4 Screens:
- *      0: Contador y Auto-Tiro (VOLUMEN · FLECHAS + −1 / +1 / Live Mts & Kcal)
- *      1: Puntuación de Tanda (X, 10, 9, 8, 7, M Keypad)
- *      2: Métricas (Distancia Mts/Ft + Gasto Energético Kcal)
- *      3: Resumen y Envío a Coach
+ *  - Bilingual ES/EN + Metric/Imperial Regional Units
+ *  - 5 Screens:
+ *      0: Counter & Auto-Shot (ARROWS + -1 / +1 / Walked Distance & Kcal)
+ *      1: XL 4x3 Scorepad (X, 10..1, M + DEL / NEXT END)
+ *      2: Biometrics (Walked Distance m/km or ft/mi + Steps + Active Energy Kcal)
+ *      3: Session Summary & Save Session
+ *      4: 6-Digit Cloud Code Pairing
  */
 public class WearMainActivity extends Activity implements SensorEventListener {
     private static volatile WeakReference<WearMainActivity> activeInstanceRef = new WeakReference<>(null);
@@ -99,7 +107,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
 
-    private int screenIndex = 0; // 0..3
+    private int screenIndex = 0; // 0..4
     private int arrowCount = 0;
     private boolean autoDetectEnabled = false;
     // Sensitivity level: 0 = BAJA (less sensitive), 1 = MEDIA (default), 2 = ALTA (more sensitive)
@@ -169,6 +177,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int distanceMeters = 18;
     private float drawWeightLbs = 38f;
 
+    // 6-Digit Cloud Pairing state
+    private final int[] pairingDigits = new int[]{1, 0, 1, 0, 1, 0};
+    private boolean hasPairingCode = false;
+    private String pairingCode = "";
+    private boolean isEditingCode = false;
+    private int editDigitPos = 0;
+    private volatile boolean isCloudSynced = false;
+    private final ExecutorService cloudExecutor = Executors.newSingleThreadExecutor();
+
     // Connection & sync race-condition guards
     private volatile boolean isPhoneConnected = false;
     private volatile long lastPhoneSyncMs = 0L;
@@ -189,6 +206,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             sendToPhone("{\"type\":\"REQUEST_STATE\"}");
             if (stepsCount > lastSyncedStepsCount) {
                 syncTelemetryToPhone();
+            }
+            if (hasPairingCode && pairingCode.length() == 6) {
+                pollFirestoreCloud();
             }
             checkPhoneNodeConnectivity();
             heartbeatHandler.postDelayed(this, 4000L);
@@ -214,6 +234,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         currentSessionId = prefs.getString("currentSessionId", "");
+        String savedCode = prefs.getString("pairingCode", "");
+        if (savedCode != null && savedCode.length() == 6) {
+            pairingCode = savedCode;
+            hasPairingCode = true;
+            parsePairingDigitsFromString(savedCode);
+        }
         arrowCount = prefs.getInt("arrowCount", 0);
         totalScore = prefs.getInt("totalScore", 0);
         totalScoredArrows = prefs.getInt("totalScoredArrows", 0);
@@ -238,6 +264,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         ensureSensorAndHeartbeatActive();
         initWearCommunication();
+        if (hasPairingCode && pairingCode.length() == 6) {
+            pollFirestoreCloud();
+        }
     }
 
     private synchronized void syncShotDetectionSensors() {
@@ -548,8 +577,235 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 putReq.getDataMap().putString("command_json", enrichedPayload);
                 putReq.getDataMap().putLong("sent_at", now);
                 Wearable.getDataClient(this).putDataItem(putReq.asPutDataRequest().setUrgent());
+                if (hasPairingCode && pairingCode.length() == 6) {
+                    syncCommandWithFirestoreCloud(enrichedPayload);
+                }
             }
         } catch (Exception ignored) {}
+    }
+
+    private void parsePairingDigitsFromString(String codeStr) {
+        if (codeStr == null || codeStr.length() != 6) return;
+        for (int i = 0; i < 6; i++) {
+            int d = codeStr.charAt(i) - '0';
+            if (d < 0 || d > 9) d = (i == 0) ? 1 : 0;
+            if (i == 0 && d == 0) d = 1;
+            pairingDigits[i] = d;
+        }
+    }
+
+    private void adjustSelectedCodeDigit(int delta) {
+        int cur = pairingDigits[editDigitPos];
+        if (editDigitPos == 0) {
+            int nextFirst = cur + delta;
+            if (nextFirst > 9) nextFirst = 1;
+            if (nextFirst < 1) nextFirst = 9;
+            pairingDigits[0] = nextFirst;
+        } else {
+            pairingDigits[editDigitPos] = (cur + delta + 10) % 10;
+        }
+        isEditingCode = true;
+        triggerHaptic(20);
+        if (canvasView != null) canvasView.invalidate();
+    }
+
+    private void commitPairingDigits() {
+        StringBuilder sb = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            sb.append(pairingDigits[i]);
+        }
+        pairingCode = sb.toString();
+        hasPairingCode = true;
+        isEditingCode = false;
+        saveState();
+        triggerHaptic(45);
+        pollFirestoreCloud();
+        syncTelemetryToPhone();
+        if (canvasView != null) canvasView.invalidate();
+    }
+
+    private void syncCommandWithFirestoreCloud(final String commandJson) {
+        if (!hasPairingCode || pairingCode.length() != 6 || commandJson == null) return;
+        final String code = pairingCode;
+        final int curSteps = stepsCount;
+        final int curWalkM = Math.round(getEffectiveWalkedMeters());
+        final int curKcal = getActiveKcal();
+        final int curScore = totalScore;
+        final boolean curAuto = autoDetectEnabled;
+        final int curSens = sensitivityLevel;
+
+        cloudExecutor.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                JSONObject src = new JSONObject(commandJson);
+                String eventType = src.optString("type", "");
+                if (eventType.isEmpty() || "REQUEST_STATE".equals(eventType)) return;
+                long nowMs = System.currentTimeMillis();
+                long seq = src.optLong("_cmdSeq", nowMs % 100000L);
+                String cmdId = "wear-" + nowMs + "-" + seq;
+
+                JSONObject cmdFields = new JSONObject();
+                cmdFields.put("type", new JSONObject().put("stringValue", eventType));
+                cmdFields.put("cmdId", new JSONObject().put("stringValue", cmdId));
+                cmdFields.put("_cmdId", new JSONObject().put("stringValue", cmdId));
+                cmdFields.put("_ts", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+                if ("INCREMENT_ARROW".equals(eventType)) {
+                    cmdFields.put("delta", new JSONObject().put("integerValue", "1"));
+                    cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
+                } else if ("DECREMENT_ARROW".equals(eventType)) {
+                    cmdFields.put("delta", new JSONObject().put("integerValue", "-1"));
+                    cmdFields.put("source", new JSONObject().put("stringValue", "watch_manual"));
+                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
+                } else if ("SCORE_INPUT".equals(eventType)) {
+                    JSONObject pay = src.optJSONObject("payload");
+                    String val = pay != null ? pay.optString("value", src.optString("value", "")) : src.optString("value", "");
+                    cmdFields.put("value", new JSONObject().put("stringValue", val));
+                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
+                } else if ("UNDO_ARROW".equals(eventType)) {
+                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
+                } else if ("TOGGLE_AUTO_DETECT".equals(eventType)) {
+                    cmdFields.put("enabled", new JSONObject().put("booleanValue", curAuto));
+                    cmdFields.put("sensitivityLevel", new JSONObject().put("integerValue", String.valueOf(curSens)));
+                } else if ("SYNC_TELEMETRY_FROM_WATCH".equals(eventType)) {
+                    cmdFields.put("stepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
+                    cmdFields.put("distanceWalkedM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
+                    cmdFields.put("activeKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
+                }
+
+                JSONObject docFields = new JSONObject();
+                docFields.put("lastWatchCmd", new JSONObject().put("mapValue", new JSONObject().put("fields", cmdFields)));
+                docFields.put("lastWatchCmdId", new JSONObject().put("stringValue", cmdId));
+                docFields.put("lastWatchCmdSeq", new JSONObject().put("integerValue", String.valueOf(seq)));
+                docFields.put("watchStepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
+                docFields.put("watchDistanceM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
+                docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+                docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
+                        + code
+                        + "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+                conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setDoOutput(true);
+
+                byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(body);
+                }
+                int rc = conn.getResponseCode();
+                boolean ok = rc >= 200 && rc < 300;
+                if (ok != isCloudSynced) {
+                    isCloudSynced = ok;
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private int extractFsInt(JSONObject fields, String key, int fallback) {
+        if (fields == null || !fields.has(key)) return fallback;
+        JSONObject node = fields.optJSONObject(key);
+        if (node == null) return fallback;
+        if (node.has("integerValue")) {
+            try { return Integer.parseInt(node.optString("integerValue", String.valueOf(fallback))); } catch (Exception ignored) {}
+        }
+        if (node.has("doubleValue")) {
+            return (int) Math.round(node.optDouble("doubleValue", fallback));
+        }
+        return fallback;
+    }
+
+    private void pollFirestoreCloud() {
+        if (!hasPairingCode || pairingCode.length() != 6) return;
+        final String code = pairingCode;
+        cloudExecutor.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" + code;
+                conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                int rc = conn.getResponseCode();
+                if (rc == 200) {
+                    StringBuilder sb = new StringBuilder();
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                    }
+                    JSONObject doc = new JSONObject(sb.toString());
+                    JSONObject fields = doc.optJSONObject("fields");
+                    if (fields != null) {
+                        isCloudSynced = true;
+                        long now = System.currentTimeMillis();
+                        boolean recentlyTapped = (now - lastLocalActionTimeMs) < 3500L;
+                        JSONObject activeNode = fields.optJSONObject("sessionActive");
+                        boolean sessionActive = activeNode == null || activeNode.optBoolean("booleanValue", true);
+                        JSONObject sidNode = fields.optJSONObject("sessionId");
+                        String incomingSid = sidNode != null ? sidNode.optString("stringValue", "") : "";
+
+                        runOnUiThread(() -> {
+                            if (!sessionActive) {
+                                if (!recentlyTapped && (arrowCount > 0 || totalScore > 0 || stepsCount > 0)) {
+                                    resetWatchSessionCounters(true);
+                                }
+                                if (canvasView != null) canvasView.invalidate();
+                                return;
+                            }
+                            if (!incomingSid.isEmpty() && !currentSessionId.isEmpty() && !incomingSid.equals(currentSessionId)) {
+                                resetWatchSessionCounters(false);
+                                currentSessionId = incomingSid;
+                            } else if (!incomingSid.isEmpty()) {
+                                currentSessionId = incomingSid;
+                            }
+                            if (!recentlyTapped) {
+                                arrowCount = extractFsInt(fields, "arrowsCount", arrowCount);
+                                totalScore = extractFsInt(fields, "totalScore", totalScore);
+                                currentEnd = Math.max(1, extractFsInt(fields, "currentEnd", currentEnd));
+                                JSONObject arrField = fields.optJSONObject("currentEndArrows");
+                                JSONObject arrVal = arrField != null ? arrField.optJSONObject("arrayValue") : null;
+                                JSONArray vals = arrVal != null ? arrVal.optJSONArray("values") : null;
+                                if (arrVal != null) {
+                                    currentEndArrows.clear();
+                                    if (vals != null) {
+                                        for (int i = 0; i < vals.length(); i++) {
+                                            JSONObject item = vals.optJSONObject(i);
+                                            if (item != null && item.has("stringValue")) {
+                                                currentEndArrows.add(item.optString("stringValue", ""));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            distanceMeters = extractFsInt(fields, "distanceM", distanceMeters);
+                            syncedArrowsPerEnd = Math.max(1, extractFsInt(fields, "arrowsPerEnd", syncedArrowsPerEnd));
+                            syncedEndsCount = Math.max(1, extractFsInt(fields, "totalEnds", syncedEndsCount));
+                            drawWeightLbs = Math.max(12f, (float) extractFsInt(fields, "bowPoundageLbs", Math.round(drawWeightLbs)));
+                            int cloudWalk = extractFsInt(fields, "distanceWalkedM", 0);
+                            if (cloudWalk > distanceWalkedM) distanceWalkedM = cloudWalk;
+                            int cloudKcal = extractFsInt(fields, "caloriesBurnedKcal", -1);
+                            if (cloudKcal > syncedActiveKcal) syncedActiveKcal = cloudKcal;
+                            saveState();
+                            if (canvasView != null) canvasView.invalidate();
+                        });
+                    }
+                } else if (rc == 404) {
+                    isCloudSynced = false;
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
     }
 
     private void syncTelemetryToPhone() {
@@ -618,6 +874,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 wakeLock.release();
             } catch (Exception ignored) {}
         }
+        try {
+            cloudExecutor.shutdownNow();
+        } catch (Exception ignored) {}
         super.onDestroy();
     }
 
@@ -654,6 +913,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private void saveState() {
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
         editor.putString("currentSessionId", currentSessionId);
+        if (hasPairingCode && pairingCode.length() == 6) {
+            editor.putString("pairingCode", pairingCode);
+        }
         editor.putInt("arrowCount", arrowCount);
         editor.putInt("totalScore", totalScore);
         editor.putInt("totalScoredArrows", totalScoredArrows);
@@ -680,6 +942,21 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
     }
 
+    private boolean isSpanishLocale() {
+        boolean isSpanish = Locale.getDefault().getLanguage().toLowerCase().startsWith("es");
+        return isSpanish;
+    }
+
+    private boolean isImperialUnits() {
+        boolean isImperial = "US".equalsIgnoreCase(Locale.getDefault().getCountry())
+                || "GB".equalsIgnoreCase(Locale.getDefault().getCountry());
+        return isImperial;
+    }
+
+    private String tr(String es, String en) {
+        return isSpanishLocale() ? es : en;
+    }
+
     private float getEffectiveWalkedMeters() {
         return Math.max(0f, Math.max(distanceWalkedM, stepsCount * 0.76f));
     }
@@ -703,18 +980,32 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return (int) Math.round((arrowsShot * kcalPerArrow) + walkKcal);
     }
 
-    private String getFormattedKm() {
-        int mts = Math.max(0, Math.round(getEffectiveWalkedMeters()));
-        return String.valueOf(mts);
+    private String getFormattedWalkedMetric() {
+        float walkedM = getEffectiveWalkedMeters();
+        if (walkedM >= 1000f) {
+            return String.format(Locale.US, "%.2f km", walkedM / 1000.0);
+        }
+        return Math.max(0, Math.round(walkedM)) + " m";
     }
 
-    private String getFormattedMi() {
-        int ft = Math.max(0, Math.round(getEffectiveWalkedMeters() * 3.28084f));
-        return String.valueOf(ft);
+    private String getFormattedWalkedImperial() {
+        float walkedM = getEffectiveWalkedMeters();
+        double miles = walkedM / 1609.344;
+        if (miles >= 0.1) {
+            return String.format(Locale.US, "%.2f mi", miles);
+        }
+        int ft = Math.max(0, Math.round(walkedM * 3.28084f));
+        return ft + " ft";
+    }
+
+    private String getFormattedWalkedPrimary() {
+        return isImperialUnits() ? getFormattedWalkedImperial() : getFormattedWalkedMetric();
     }
 
     private String getFormattedKmAndMi() {
-        return getFormattedKm() + " mts · " + getFormattedMi() + " ft";
+        String met = getFormattedWalkedMetric();
+        String imp = getFormattedWalkedImperial();
+        return isImperialUnits() ? (imp + " · " + met) : (met + " · " + imp);
     }
 
     private void recordDetectedSteps(long now, int stepDelta) {
@@ -1111,6 +1402,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         private final RectF btnCenterMetrics = new RectF();
         private final RectF btnCounterChassis = new RectF();
         private final RectF btnToggleDetector = new RectF();
+        private final RectF btnCloudMid = new RectF();
+        private final RectF btnCloudSave = new RectF();
+        private final RectF[] digitBoxes = new RectF[6];
         private final RectF[] scoreButtons = new RectF[12];
         private final String[] scoreLabels = new String[]{
             "X", "10", "9", "8",
@@ -1122,6 +1416,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             super(context);
             for (int i = 0; i < 12; i++) {
                 scoreButtons[i] = new RectF();
+            }
+            for (int i = 0; i < 6; i++) {
+                digitBoxes[i] = new RectF();
             }
             setFocusable(true);
             setFocusableInTouchMode(true);
@@ -1178,9 +1475,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     float dy = e2.getY() - e1.getY();
                     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
                         if (dx < 0) {
-                            screenIndex = (screenIndex + 1) % 4;
+                            isEditingCode = false;
+                            screenIndex = (screenIndex + 1) % 5;
                         } else {
-                            screenIndex = (screenIndex + 3) % 4;
+                            isEditingCode = false;
+                            screenIndex = (screenIndex + 4) % 5;
                         }
                         triggerHaptic(20);
                         invalidate();
@@ -1241,7 +1540,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             // Bottom page indicator tap switches screen
             if (y > h * 0.90f) {
-                screenIndex = (screenIndex + 1) % 4;
+                isEditingCode = false;
+                screenIndex = (screenIndex + 1) % 5;
                 triggerHaptic(20);
                 invalidate();
                 return;
@@ -1357,6 +1657,38 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     resetWatchSessionCounters(true);
                     screenIndex = 0;
                     invalidate();
+                }
+            } else if (screenIndex == 4) {
+                for (int di = 0; di < 6; di++) {
+                    if (digitBoxes[di].contains(x, y)) {
+                        isEditingCode = true;
+                        if (editDigitPos == di) {
+                            adjustSelectedCodeDigit(1);
+                        } else {
+                            editDigitPos = di;
+                            triggerHaptic(20);
+                            invalidate();
+                        }
+                        return;
+                    }
+                }
+                if (btnLeftPrimary.contains(x, y)) {
+                    adjustSelectedCodeDigit(-1);
+                    return;
+                }
+                if (btnCloudMid.contains(x, y)) {
+                    isEditingCode = true;
+                    editDigitPos = (editDigitPos + 1) % 6;
+                    triggerHaptic(20);
+                    invalidate();
+                    return;
+                }
+                if (btnRightSecondary.contains(x, y)) {
+                    adjustSelectedCodeDigit(1);
+                    return;
+                }
+                if (btnCloudSave.contains(x, y)) {
+                    commitPairingDigits();
                 }
             }
         }
@@ -1506,20 +1838,22 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawScorePadScreen(canvas, cx, scale, isRound, wMult);
             } else if (screenIndex == 2) {
                 drawBiometricsScreen(canvas, cx, scale, isRound, wMult);
-            } else {
+            } else if (screenIndex == 3) {
                 drawSummaryScreen(canvas, cx, scale, isRound, wMult);
+            } else {
+                drawCloudCodeScreen(canvas, cx, scale, isRound, wMult);
             }
 
-            // Bottom WHOOP-style Pill Pager Dots (y = 223f on virtual 240f grid)
+            // Bottom Pill Pager Dots (y = 223f on virtual 240f grid)
             float dotY = h - 16.5f * scale;
-            float dotGap = 4.5f * scale;
-            float activeW = 11.5f * scale;
+            float dotGap = 4.2f * scale;
+            float activeW = 11.0f * scale;
             float inactiveW = 3.6f * scale;
             float dotH = 3.6f * scale;
-            float totalDotsW = activeW + 3f * inactiveW + 3f * dotGap;
+            float totalDotsW = activeW + 4f * inactiveW + 4f * dotGap;
             float curX = cx - totalDotsW / 2f;
 
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 5; i++) {
                 float itemW = (i == screenIndex) ? activeW : inactiveW;
                 rect.set(curX, dotY - dotH / 2f, curX + itemW, dotY + dotH / 2f);
                 paint.setColor(i == screenIndex ? Color.parseColor("#00A8F3") : Color.parseColor("#38FFFFFF"));
@@ -1529,24 +1863,27 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 0: CONTADOR Y AUTO-TIRO (Mathematically centered: 39f..188f around cy = 114f..120f)
+         * SCREEN 0: COUNTER & AUTO-SHOT (Mathematically centered: 39f..188f around cy = 114f..120f)
          */
         private void drawCounterScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
             long now = System.currentTimeMillis();
             boolean isWalkingPaused = autoDetectEnabled && (now < walkingLockUntilMs);
-            String sensLabel = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA");
+            boolean isSyncedNow = isPhoneConnected || isCloudSynced;
+            String sensLabel = (sensitivityLevel == 0)
+                    ? tr("BAJA", "LOW")
+                    : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"));
             String pillLabel;
             if (!autoDetectEnabled) {
-                pillLabel = "MODO MANUAL";
+                pillLabel = isSyncedNow ? tr("MODO MANUAL · LIVE", "MANUAL MODE · LIVE") : tr("MODO MANUAL", "MANUAL MODE");
             } else if (isWalkingPaused) {
-                pillLabel = "PAUSA · CAMINANDO";
+                pillLabel = tr("PAUSA · CAMINANDO", "PAUSED · WALKING");
                 postInvalidateDelayed(Math.max(250L, (walkingLockUntilMs - now) + 60L));
             } else {
-                pillLabel = "AUTO · " + sensLabel + (isPhoneConnected ? " · LIVE" : "");
+                pillLabel = tr("AUTO-TIRO · ", "AUTO SHOT · ") + sensLabel + (isSyncedNow ? " · LIVE" : "");
             }
             drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, isWalkingPaused);
 
-            // Outer Counter Chassis: VOLUMEN · FLECHAS (top = 77f, bottom = 152f, centerY = 114.5f)
+            // Outer Counter Chassis: VOLUMEN · FLECHAS / VOLUME · ARROWS (top = 77f, bottom = 152f, centerY = 114.5f)
             float chassisW = 168f * scale * wMult;
             float chassisH = 74f * scale;
             float chassisTop = 77f * scale;
@@ -1562,11 +1899,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawRoundRect(btnCounterChassis, 11.5f * scale, 11.5f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
-            // Label "VOLUMEN · FLECHAS"
+            // Label "VOLUMEN · FLECHAS" / "VOLUME · ARROWS"
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.4f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
-            drawCenteredText(canvas, "VOLUMEN · FLECHAS", cx, chassisTop + 10.5f * scale);
+            drawCenteredText(canvas, tr("VOLUMEN · FLECHAS", "VOLUME · ARROWS"), cx, chassisTop + 10.5f * scale);
 
             // Inner Dark Tray holding the 4 Digit Cells
             float trayPad = 7.5f * scale;
@@ -1612,7 +1949,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawCenteredText(canvas, String.valueOf(digits.charAt(i)), rect.centerX(), rect.centerY());
             }
 
-            // Bottom Symmetrical Row: [-1]  |  0.04 km · 2 kcal / TANDA 1 · 18 M  |  [+1]
+            // Bottom Symmetrical Row: [-1]  |  Walked · kcal / TANDA 1 · 18 M  |  [+1]
             float rowW = 160f * scale * wMult;
             float btnW = 30f * scale;
             float btnH = 22.5f * scale;
@@ -1633,18 +1970,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "−1", btnRightSecondary.centerX(), btnRightSecondary.centerY());
 
-            // Center Telemetry (15 mts · 2 kcal / TANDA 1 · 18 M)
+            // Center Telemetry (m/km or ft/mi · kcal / TANDA 1 · 18 M | END 1 · 18 M)
             btnCenterMetrics.set(btnRightSecondary.right + 4f * scale, btnTop - 2f * scale, cx + rowW / 2f - btnW - 4f * scale, btnTop + btnH + 2f * scale);
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(8.8f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedKm() + " mts · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
+            drawCenteredText(canvas, getFormattedWalkedPrimary() + " · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
 
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.6f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             int displayTanda = Math.max(1, currentEnd);
-            drawCenteredText(canvas, "TANDA " + displayTanda + " · " + distanceMeters + " M", cx, btnTop + 17.5f * scale);
+            drawCenteredText(canvas, tr("TANDA ", "END ") + displayTanda + " · " + distanceMeters + " M", cx, btnTop + 17.5f * scale);
 
             // Right Button: +1 (stored in btnLeftPrimary)
             btnLeftPrimary.set(cx + rowW / 2f - btnW, btnTop, cx + rowW / 2f, btnTop + btnH);
@@ -1663,7 +2000,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 1: PUNTUACIÓN DE TANDA (OPCIÓN A — XL 4x3 Keypad: 2.2x Tactile Area, Unified Top Bar, Full Round & Square Containment)
+         * SCREEN 1: XL 4x3 SCOREPAD (OPCIÓN A — 2.2x Tactile Area, Unified Top Bar, Full Round & Square Containment)
          */
         private void drawScorePadScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
             // 1. Official 4K ARCHERY 101010 Logo mathematically contained inside top circular chord
@@ -1688,12 +2025,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawCenteredText(canvas, "ARCHERY 101010", cx, logoTopY + 4.5f * scale);
             }
 
-            // 2. Unified Compact Telemetry + End Slots Row: [T1·29P] [X][10][9][—][—][—]
+            // 2. Unified Compact Telemetry + End Slots Row: [T1·29P / E1·29P] [X][10][9][—][—][—]
             float barY = logoBottomY + 4.0f * scale;
             float barH = 16.5f * scale;
             float maxBarW = (isRound ? 154f : 204f) * scale;
 
-            String ptsStr = "T" + currentEnd + "·" + totalScore + "P";
+            String ptsStr = tr("T", "E") + currentEnd + "·" + totalScore + "P";
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(7.8f * scale);
             float ptsTextW = paint.measureText(ptsStr);
@@ -1708,7 +2045,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float totalBarW = ptsTagW + barGap + slotsActualW;
             float barStartX = cx - totalBarW / 2f;
 
-            // Left Score Tag Pill [T1·29P]
+            // Left Score Tag Pill [T1·29P / E1·29P]
             rect.set(barStartX, barY, barStartX + ptsTagW, barY + barH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#050D17"));
@@ -1770,7 +2107,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawCenteredText(canvas, val, rect.centerX(), rect.centerY());
             }
 
-            // 3. Bottom Action Pills [BORRAR] [SIG. TANDA] anchored cleanly inside lower chord
+            // 3. Bottom Action Pills [BORRAR / DEL] [SIG. TANDA / NEXT END] anchored cleanly inside lower chord
             float btnH = 25.5f * scale;
             float btnY = (isRound ? 179.0f : 185.0f) * scale;
             float pairW = (isRound ? 158f : 196f) * scale;
@@ -1835,7 +2172,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawCenteredText(canvas, scoreLabels[i], scoreButtons[i].centerX(), scoreButtons[i].centerY());
             }
 
-            // 5. Render Bottom Action Pills: BORRAR and SIG. TANDA
+            // 5. Render Bottom Action Pills: BORRAR / DEL and SIG. TANDA / NEXT END
             btnLeftPrimary.set(cx - pairW / 2f, btnY, cx - pairW / 2f + btnW, btnY + btnH);
             btnRightSecondary.set(cx + pairW / 2f - btnW, btnY, cx + pairW / 2f, btnY + btnH);
 
@@ -1850,7 +2187,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(8.2f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "BORRAR", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+            drawCenteredText(canvas, tr("BORRAR", "DEL"), btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#061523"));
@@ -1861,19 +2198,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "SIG. TANDA", btnRightSecondary.centerX(), btnRightSecondary.centerY());
+            drawCenteredText(canvas, tr("SIG. TANDA", "NEXT END"), btnRightSecondary.centerX(), btnRightSecondary.centerY());
         }
 
         /**
-         * SCREEN 2: MÉTRICAS (PODÓMETRO · PASOS / KCAL) (Mathematically centered: 39f..188f)
+         * SCREEN 2: BIOMETRICS (STEPS / DISTANCE / ACTIVE KCAL) (Mathematically centered: 39f..188f)
          */
         private void drawBiometricsScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "PODÓMETRO · PASOS", true);
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, tr("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS"), true);
 
             float cardW = 166f * scale * wMult;
             float cardH = 38.5f * scale;
 
-            // Card 1: DISTANCIA RECORRIDA (mts · ft + PASOS badge)
+            // Card 1: WALKED DISTANCE (mi/ft first when Imperial, m/km first when Metric + STEPS badge)
             float card1Top = 77f * scale;
             rect.set(cx - cardW / 2f, card1Top, cx + cardW / 2f, card1Top + cardH);
             paint.setStyle(Paint.Style.FILL);
@@ -1889,15 +2226,20 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTextSize(6.2f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             paint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText("DISTANCIA RECORRIDA", rect.left + 9.5f * scale, card1Top + 13.5f * scale, paint);
+            canvas.drawText(tr("DISTANCIA RECORRIDA", "WALKED DISTANCE"), rect.left + 9.5f * scale, card1Top + 13.5f * scale, paint);
 
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(12.2f * scale);
+            paint.setTextSize(11.6f * scale);
             paint.setColor(Color.WHITE);
             canvas.drawText(getFormattedKmAndMi(), rect.left + 9.5f * scale, card1Top + 29.5f * scale, paint);
 
-            // PASOS Badge inside Card 1
-            float badgeW = 34f * scale;
+            // PASOS / STEPS Badge inside Card 1
+            String stepsBadgeTxt = stepsCount > 0
+                    ? (stepsCount + " " + tr("PASOS", "STEPS"))
+                    : tr("PASOS", "STEPS");
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(5.6f * scale);
+            float badgeW = Math.max(34f * scale, paint.measureText(stepsBadgeTxt) + 9f * scale);
             float badgeH = 14.5f * scale;
             RectF badgeRect = new RectF(rect.right - badgeW - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
             paint.setColor(Color.parseColor("#04101C"));
@@ -1907,11 +2249,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#8000A8F3"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(5.8f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "PASOS", badgeRect.centerX(), badgeRect.centerY());
+            drawCenteredText(canvas, stepsBadgeTxt, badgeRect.centerX(), badgeRect.centerY());
 
-            // Card 2: GASTO ENERGÉTICO (kcal + ACTIVA badge)
+            // Card 2: GASTO ENERGÉTICO / ACTIVE ENERGY (kcal + ACTIVA / ACTIVE badge)
             float card2Top = 121.5f * scale;
             rect.set(cx - cardW / 2f, card2Top, cx + cardW / 2f, card2Top + cardH);
             paint.setStyle(Paint.Style.FILL);
@@ -1927,14 +2268,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTextSize(6.2f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             paint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText("GASTO ENERGÉTICO", rect.left + 9.5f * scale, card2Top + 13.5f * scale, paint);
+            canvas.drawText(tr("GASTO ENERGÉTICO", "ACTIVE ENERGY"), rect.left + 9.5f * scale, card2Top + 13.5f * scale, paint);
 
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(13f * scale);
             paint.setColor(Color.WHITE);
             canvas.drawText(getActiveKcal() + " kcal", rect.left + 9.5f * scale, card2Top + 29.5f * scale, paint);
 
-            // ACTIVA Badge inside Card 2
+            // ACTIVA / ACTIVE Badge inside Card 2
             float badge2W = 36f * scale;
             badgeRect.set(rect.right - badge2W - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
             paint.setColor(Color.parseColor("#101008"));
@@ -1944,9 +2285,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#80FFE500"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(6.2f * scale);
+            paint.setTextSize(6.0f * scale);
             paint.setColor(Color.parseColor("#FFE500"));
-            drawCenteredText(canvas, "ACTIVA", badgeRect.centerX(), badgeRect.centerY());
+            drawCenteredText(canvas, tr("ACTIVA", "ACTIVE"), badgeRect.centerX(), badgeRect.centerY());
 
             // Bottom Sync Subtitle (tap triggers immediate telemetry sync)
             btnLeftPrimary.set(cx - 75f * scale, 166f * scale, cx + 75f * scale, 190f * scale);
@@ -1955,17 +2296,25 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#8E96A4"));
             drawCenteredText(
                     canvas,
-                    arrowCount + " FLECHAS · " + Math.round(drawWeightLbs) + " LBS · SYNC EN VIVO",
+                    arrowCount + " " + tr("FLECHAS", "ARROWS") + " · " + Math.round(drawWeightLbs) + " LBS · " + tr("SYNC EN VIVO", "LIVE SYNC"),
                     cx,
                     175f * scale
             );
         }
 
         /**
-         * SCREEN 3: RESUMEN Y ENVÍO A COACH (Mathematically centered: 39f..188f)
+         * SCREEN 3: SESSION SUMMARY & SAVE SESSION (Mathematically centered: 39f..188f)
          */
         private void drawSummaryScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, "SINCRONIZADO CON COACH", false);
+            boolean isSyncedNow = isPhoneConnected || isCloudSynced;
+            drawBrandHeaderAndPill(
+                    canvas,
+                    cx,
+                    scale,
+                    isRound,
+                    isSyncedNow ? tr("RESUMEN · CONECTADO", "SUMMARY · SYNCED") : tr("RESUMEN", "SUMMARY"),
+                    false
+            );
 
             float gridW = 166f * scale * wMult;
             float colGap = 5f * scale;
@@ -1973,7 +2322,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float row1Top = 76f * scale;
             float row1H = 36f * scale;
 
-            // Box 1: FLECHAS
+            // Box 1: FLECHAS / ARROWS
             rect.set(cx - gridW / 2f, row1Top, cx - gridW / 2f + colW, row1Top + row1H);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#07090E"));
@@ -1987,13 +2336,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.0f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
-            drawCenteredText(canvas, "FLECHAS", rect.centerX(), row1Top + 10.5f * scale);
+            drawCenteredText(canvas, tr("FLECHAS", "ARROWS"), rect.centerX(), row1Top + 10.5f * scale);
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(12.5f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, arrowCount + " FL", rect.centerX(), row1Top + 25f * scale);
+            drawCenteredText(canvas, arrowCount + (isSpanishLocale() ? " FL" : " AR"), rect.centerX(), row1Top + 25f * scale);
 
-            // Box 2: ENERGÍA
+            // Box 2: PUNTAJE · ENERGÍA / SCORE · ENERGY
             rect.set(cx + gridW / 2f - colW, row1Top, cx + gridW / 2f, row1Top + row1H);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#07090E"));
@@ -2007,13 +2356,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.0f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
-            drawCenteredText(canvas, "ENERGÍA", rect.centerX(), row1Top + 10.5f * scale);
+            drawCenteredText(canvas, totalScore > 0 ? tr("PUNTAJE", "SCORE") : tr("ENERGÍA", "ENERGY"), rect.centerX(), row1Top + 10.5f * scale);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(12.5f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getActiveKcal() + " kcal", rect.centerX(), row1Top + 25f * scale);
+            paint.setTextSize(12.2f * scale);
+            paint.setColor(totalScore > 0 ? Color.parseColor("#FFE500") : Color.WHITE);
+            drawCenteredText(canvas, totalScore > 0 ? (totalScore + " PTS") : (getActiveKcal() + " kcal"), rect.centerX(), row1Top + 25f * scale);
 
-            // Box 3 (Full width): DISTANCIA TOTAL
+            // Box 3 (Full width): DISTANCIA TOTAL / TOTAL DISTANCE
             float row2Top = 117f * scale;
             float row2H = 34f * scale;
             rect.set(cx - gridW / 2f, row2Top, cx + gridW / 2f, row2Top + row2H);
@@ -2029,13 +2378,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTypeface(outfitBold);
             paint.setTextSize(6.0f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
-            drawCenteredText(canvas, "DISTANCIA TOTAL", cx, row2Top + 10f * scale);
+            drawCenteredText(canvas, tr("DISTANCIA TOTAL", "TOTAL DISTANCE"), cx, row2Top + 10f * scale);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(11.2f * scale);
+            paint.setTextSize(11.0f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedKmAndMi(), cx, row2Top + 23.5f * scale);
+            drawCenteredText(canvas, getFormattedWalkedPrimary() + " · " + getActiveKcal() + " kcal", cx, row2Top + 23.5f * scale);
 
-            // Bottom Action Button: ENVIAR SESIÓN A COACH
+            // Bottom Action Button: GUARDAR SESIÓN / SAVE SESSION
             float btnW = 152f * scale * wMult;
             float btnH = 22.5f * scale;
             float btnTop = 160f * scale;
@@ -2053,7 +2402,118 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(7.2f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, "ENVIAR SESIÓN A COACH", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+            drawCenteredText(canvas, tr("GUARDAR SESIÓN", "SAVE SESSION"), btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+        }
+
+        /**
+         * SCREEN 4: 6-DIGIT CLOUD CODE PAIRING (CÓDIGO NUBE / CLOUD CODE)
+         */
+        private void drawCloudCodeScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
+            String headerPill = isEditingCode
+                    ? (tr("EDITAR ", "EDIT ") + (editDigitPos + 1) + "/6")
+                    : (isCloudSynced
+                            ? tr("CÓDIGO NUBE · VINCULADO", "CLOUD CODE · SYNCED")
+                            : (hasPairingCode ? tr("CÓDIGO NUBE", "CLOUD CODE") : tr("TOCA PARA VINCULAR", "TAP TO LINK")));
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, headerPill, isEditingCode);
+
+            float dBoxW = 23f * scale * wMult;
+            float dBoxH = 38f * scale;
+            float dGap = 4f * scale;
+            float dTotalW = (dBoxW * 6f) + (dGap * 5f);
+            float dStartX = cx - (dTotalW / 2f);
+            float dStartY = 76f * scale;
+
+            for (int di = 0; di < 6; di++) {
+                float dx = dStartX + di * (dBoxW + dGap);
+                digitBoxes[di].set(dx, dStartY, dx + dBoxW, dStartY + dBoxH);
+                boolean isSel = (di == editDigitPos);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(isSel ? Color.parseColor("#081523") : Color.parseColor("#0B0E15"));
+                canvas.drawRoundRect(digitBoxes[di], 5.5f * scale, 5.5f * scale, paint);
+
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1.2f * scale);
+                paint.setColor(isSel ? Color.parseColor("#00A8F3") : Color.parseColor("#FFE500"));
+                canvas.drawRoundRect(digitBoxes[di], 5.5f * scale, 5.5f * scale, paint);
+                paint.setStyle(Paint.Style.FILL);
+
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(16.5f * scale);
+                paint.setColor(isSel ? Color.WHITE : Color.parseColor("#FFE500"));
+                drawCenteredText(canvas, String.valueOf(pairingDigits[di]), digitBoxes[di].centerX(), digitBoxes[di].centerY());
+            }
+
+            // Control Row: [-] | [EDITAR > / EDIT >] | [+]
+            float ctrlY = 121f * scale;
+            float ctrlH = 23f * scale;
+            float ctrlW = 156f * scale * wMult;
+            float cStartX = cx - ctrlW / 2f;
+            float smallW = 36f * scale;
+            float btnGap = 6f * scale;
+            float midW = ctrlW - (2f * smallW) - (2f * btnGap);
+
+            btnLeftPrimary.set(cStartX, ctrlY, cStartX + smallW, ctrlY + ctrlH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#180709"));
+            canvas.drawRoundRect(btnLeftPrimary, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#FF1E1E"));
+            canvas.drawRoundRect(btnLeftPrimary, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(11f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "−", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+
+            float midX = cStartX + smallW + btnGap;
+            btnCloudMid.set(midX, ctrlY, midX + midW, ctrlY + ctrlH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#0B0E15"));
+            canvas.drawRoundRect(btnCloudMid, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#475569"));
+            canvas.drawRoundRect(btnCloudMid, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(7.4f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, tr("EDITAR >", "EDIT >"), btnCloudMid.centerX(), btnCloudMid.centerY());
+
+            float plusX = midX + midW + btnGap;
+            btnRightSecondary.set(plusX, ctrlY, plusX + smallW, ctrlY + ctrlH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#061523"));
+            canvas.drawRoundRect(btnRightSecondary, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#00A8F3"));
+            canvas.drawRoundRect(btnRightSecondary, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(11f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, "+", btnRightSecondary.centerX(), btnRightSecondary.centerY());
+
+            // Bottom Save / Link CTA
+            float saveW = 148f * scale * wMult;
+            float saveH = 22.5f * scale;
+            float saveY = 151f * scale;
+            btnCloudSave.set(cx - saveW / 2f, saveY, cx + saveW / 2f, saveY + saveH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#061523"));
+            canvas.drawRoundRect(btnCloudSave, saveH / 2f, saveH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(isCloudSynced ? Color.parseColor("#FFE500") : Color.parseColor("#00A8F3"));
+            canvas.drawRoundRect(btnCloudSave, saveH / 2f, saveH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(7.4f * scale);
+            paint.setColor(Color.WHITE);
+            String saveCta = isEditingCode
+                    ? tr("LISTO", "DONE")
+                    : (isCloudSynced ? tr("VINCULADO · SYNC", "SYNCED · SYNC") : tr("CÓDIGO NUBE · VINCULAR", "LINK CLOUD CODE"));
+            drawCenteredText(canvas, saveCta, btnCloudSave.centerX(), btnCloudSave.centerY());
         }
     }
 }

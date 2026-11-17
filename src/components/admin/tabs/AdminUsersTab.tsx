@@ -33,8 +33,11 @@ import {
   fetchAdminUsersPage,
   searchAdminUsersInCloud
 } from "@/lib/adminCloudPagination";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { getLocalISODate, formatRegionalDate } from "@/lib/i18n/regionalUtils";
 
 export default function AdminUsersTab() {
+  const { language } = useLanguage();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
@@ -56,7 +59,7 @@ export default function AdminUsersTab() {
     if (isNaN(num)) return "Fecha no registrada";
     const date = new Date(num);
     if (isNaN(date.getTime())) return "Fecha no registrada";
-    return date.toLocaleDateString("es-ES", {
+    return formatRegionalDate(date, language, {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -357,7 +360,7 @@ export default function AdminUsersTab() {
 
     // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel compatibility with special characters
     const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalISODate();
     await downloadOrShareFile({
       filename: `suscriptores_demografia_archery101010_${today}.csv`,
       mimeType: "text/csv;charset=utf-8",

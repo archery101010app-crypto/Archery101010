@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, MessageCircle, X, Camera, ImagePlus, Circle, Layers, RefreshCw } from "lucide-react";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   ShareTargetResult,
   renderTargetShotChartCanvas,
@@ -17,6 +18,7 @@ interface StravaShareModalProps {
 type ActiveButtonTab = "black" | "transparent" | "upload" | "camera";
 
 export default function StravaShareModal({ shareResult, onClose }: StravaShareModalProps) {
+  const { language, unitSystem, t, tx } = useLanguage();
   const [activeTab, setActiveTab] = useState<ActiveButtonTab>("black");
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
   const [cameraPhotoUrl, setCameraPhotoUrl] = useState<string | null>(null);
@@ -77,6 +79,8 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
 
         const canvas = await renderTargetShotChartCanvas({
           ...shareResult.params,
+          lang: shareResult.params.lang || language,
+          unitSystem: shareResult.params.unitSystem || unitSystem,
           themeMode: resolvedThemeMode,
           backgroundPhotoUrl: isPhotoDesign ? currentPhotoUrl : null
         });
@@ -96,7 +100,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     return () => {
       cancelled = true;
     };
-  }, [activeTab, currentPhotoUrl, shareResult]);
+  }, [activeTab, currentPhotoUrl, shareResult, language, unitSystem]);
 
   if (!shareResult) return null;
 
@@ -148,9 +152,10 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
   };
 
   const getModeSuffix = () => {
-    if (activeTab === "transparent") return "-Transparente";
-    if (activeTab === "upload") return "-Foto";
-    if (activeTab === "camera") return "-Camara";
+    const isEs = language === "es";
+    if (activeTab === "transparent") return isEs ? "-Transparente" : "-Transparent";
+    if (activeTab === "upload") return isEs ? "-Foto" : "-Photo";
+    if (activeTab === "camera") return isEs ? "-Camara" : "-Camera";
     return "";
   };
 
@@ -160,13 +165,23 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     await triggerNativeImageShare(currentDataUrl, outFileName, "ARCHERY 101010 THE APP", captionText);
   };
 
-  const handleWhatsAppShare = async () => {
+  const handleShareWithScorecard = async () => {
     const { fileName, captionText } = shareResult;
     const outFileName = fileName.replace(/\.png$/i, `${getModeSuffix()}.png`);
 
-    if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
-      window.ArcheryNativeShare.shareWhatsAppImage(currentDataUrl, outFileName, captionText);
-      return;
+    // 1. Universal Native OS Share (Android Chooser / iOS & Mobile Web Share Sheet: KakaoTalk, LINE, iMessage, Telegram, etc.)
+    if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareImage) {
+      try {
+        window.ArcheryNativeShare.shareImage(
+          currentDataUrl,
+          outFileName,
+          "ARCHERY 101010 THE APP",
+          captionText
+        );
+        return;
+      } catch (err) {
+        console.error("Native shareImage error:", err);
+      }
     }
 
     try {
@@ -181,11 +196,23 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         });
         return;
       }
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title: "ARCHERY 101010 THE APP",
+          text: captionText
+        });
+        return;
+      }
     } catch (err: any) {
       if (err?.name === "AbortError") return;
     }
 
-    window.location.href = `whatsapp://send?text=${encodeURIComponent(captionText)}`;
+    if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
+      window.ArcheryNativeShare.shareWhatsAppImage(currentDataUrl, outFileName, captionText);
+      return;
+    }
+
+    await triggerNativeImageShare(currentDataUrl, outFileName, "ARCHERY 101010 THE APP", captionText);
   };
 
   return (
@@ -197,7 +224,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
         className="fixed inset-0 z-[200000] bg-black/94 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-hidden overscroll-contain"
       >
         <div className="w-full max-w-sm max-h-[92dvh] overflow-y-auto overscroll-contain flex flex-col items-center justify-between gap-1.5">
-          {/* Gallery File Picker (Sube Foto) */}
+          {/* Gallery File Picker */}
           <input
             ref={uploadInputRef}
             type="file"
@@ -206,7 +233,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
             className="hidden"
           />
 
-          {/* Direct Camera Capture Fallback for Mobile Browsers (Toma Foto) */}
+          {/* Direct Camera Capture Fallback for Mobile Browsers */}
           <input
             ref={cameraInputRef}
             type="file"
@@ -226,19 +253,20 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 className="h-5 w-auto object-contain select-none self-start"
               />
               <span className="text-[11.5px] font-extrabold uppercase tracking-wider sm:tracking-[0.14em] text-white/85 truncate">
-                Telemetría Oficial · Lista para Compartir
+                {tx("Telemetría Oficial · Lista para Compartir", "Official Telemetry · Ready to Share")}
               </span>
             </div>
             <button
               type="button"
               onClick={onClose}
+              aria-label={t("closeClock")}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition shrink-0"
             >
               <X size={18} />
             </button>
           </div>
 
-          {/* 4-Mode Selector Bar: Fondo Negro | Fondo Transparente | Sube Foto | Toma Foto */}
+          {/* 4-Mode Selector Bar: Fondo Negro | Transparente | Galería | Cámara */}
           <div className="w-full flex flex-col gap-1.5 my-1 shrink-0">
             <div className="grid grid-cols-2 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
               <button
@@ -251,7 +279,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <Circle size={10} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
-                <span className="truncate">Fondo Negro</span>
+                <span className="truncate">{tx("Fondo Negro", "Black OLED")}</span>
               </button>
 
               <button
@@ -264,7 +292,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <Layers size={11.5} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">Fondo Transparente</span>
+                <span className="truncate">{tx("Transparente", "Transparent")}</span>
               </button>
 
               <button
@@ -277,7 +305,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <ImagePlus size={12} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">Sube Foto</span>
+                <span className="truncate">{tx("Galería", "Photo")}</span>
               </button>
 
               <button
@@ -290,7 +318,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <Camera size={12} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">Toma Foto</span>
+                <span className="truncate">{tx("Cámara", "Camera")}</span>
               </button>
             </div>
 
@@ -301,7 +329,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[11.5px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
               >
                 <RefreshCw size={11} strokeWidth={2.5} />
-                <span className="truncate">Cambiar foto</span>
+                <span className="truncate">{tx("Cambiar foto", "Change photo")}</span>
               </button>
             )}
           </div>
@@ -325,7 +353,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
           >
             <img
               src={currentDataUrl}
-              alt="ARCHERY 101010 THE APP Telemetría"
+              alt="ARCHERY 101010 THE APP"
               className={`max-h-[42dvh] w-auto mx-auto object-contain block select-none transition-opacity duration-150 ${
                 isRendering ? "opacity-60" : "opacity-100"
               }`}
@@ -340,16 +368,16 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               className="w-full h-11 px-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
             >
               <Share2 size={16} strokeWidth={2.4} className="shrink-0" />
-              <span className="truncate">Compartir Imagen (Redes Sociales)</span>
+              <span className="truncate">{t("shareNativeBtn")}</span>
             </button>
 
             <button
               type="button"
-              onClick={handleWhatsAppShare}
+              onClick={handleShareWithScorecard}
               className="w-full h-11 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
             >
               <MessageCircle size={16} className="text-emerald-400 shrink-0" strokeWidth={2.4} />
-              <span className="truncate">Enviar Foto + Planilla</span>
+              <span className="truncate">{tx("Enviar Foto + Planilla", "Share Photo + Scorecard")}</span>
             </button>
 
             <button
@@ -357,7 +385,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               onClick={onClose}
               className="w-full h-9 rounded-xl bg-transparent hover:bg-white/[0.05] text-white/75 hover:text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer transition"
             >
-              Cerrar Vista Previa
+              {tx("Cerrar Vista Previa", "Close Preview")}
             </button>
           </div>
         </div>

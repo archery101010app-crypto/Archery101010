@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/indexedDB";
 import { UserProfile } from "@/lib/authService";
 import { ParsedDailyEntry } from "@/lib/cycleImporter";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 
 export interface SyncCycleSummary {
   syncedDaysCount: number;
@@ -100,14 +101,21 @@ export async function syncCycleToMonthCalendar(
     customNotes?: string;
     targetAthleteId?: string;
     targetAthleteIds?: string[];
+    lang?: string;
   }
 ): Promise<SyncCycleSummary> {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthNames = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
-  const monthName = monthNames[month] || `Mes ${month + 1}`;
+  const activeLang =
+    options?.lang ||
+    (typeof window !== "undefined" ? localStorage.getItem("preferred_language") || undefined : undefined) ||
+    "es";
+  const rawRegionalMonth = formatRegionalDate(new Date(year, month, 15, 12, 0, 0), activeLang, {
+    month: "long"
+  });
+  const monthName =
+    rawRegionalMonth && rawRegionalMonth !== "—"
+      ? rawRegionalMonth.charAt(0).toUpperCase() + rawRegionalMonth.slice(1)
+      : `Mes ${month + 1}`;
 
   let syncedDaysCount = 0;
   let trainingDaysCount = 0;
@@ -240,7 +248,8 @@ export async function syncCycleToMonthCalendar(
 export async function saveDailyEntriesToCalendar(
   dailyEntries: ParsedDailyEntry[],
   macrocycle: Macrocycle,
-  author: UserProfile
+  author: UserProfile,
+  lang?: string
 ): Promise<SyncCycleSummary> {
   let syncedDaysCount = 0;
   let trainingDaysCount = 0;
@@ -319,8 +328,13 @@ export async function saveDailyEntriesToCalendar(
     );
   }
 
+  const activeLang =
+    lang ||
+    (typeof window !== "undefined" ? localStorage.getItem("preferred_language") || undefined : undefined) ||
+    "es";
   const firstDate = dailyEntries[0]?.date ? new Date(dailyEntries[0].date + "T12:00:00") : new Date();
-  const monthName = firstDate.toLocaleDateString("es-ES", { month: "long" });
+  const rawMonthName = formatRegionalDate(firstDate, activeLang, { month: "long" });
+  const monthName = rawMonthName && rawMonthName !== "—" ? rawMonthName : `Mes ${firstDate.getMonth() + 1}`;
 
   return {
     syncedDaysCount,

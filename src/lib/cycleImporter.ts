@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
 import { downloadOrShareFile } from "@/lib/fileDownload";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export interface ParsedDailyEntry {
   date: string; // YYYY-MM-DD
@@ -18,6 +19,7 @@ export interface ParsedDailyEntry {
 export interface ParseSpreadsheetOptions {
   referenceYear?: number;
   referenceMonth?: number; // 1..12
+  preferMonthFirst?: boolean;
 }
 
 export interface ParsedCycleResult {
@@ -35,31 +37,172 @@ export interface ParsedCycleResult {
 }
 
 const SPANISH_MONTHS: Record<string, string> = {
-  ene: "01", enero: "01", jan: "01", january: "01",
-  feb: "02", febrero: "02", february: "02",
-  mar: "03", marzo: "03", march: "03",
-  abr: "04", abril: "04", apr: "04", april: "04",
+  // 01 - ES / EN / PT / FR / DE / IT / KO / JA
+  ene: "01", enero: "01",
+  jan: "01", january: "01",
+  janeiro: "01",
+  janv: "01", janvier: "01",
+  jän: "01", jaen: "01", januar: "01",
+  gen: "01", gennaio: "01",
+  "1월": "01", "01월": "01", "일월": "01",
+  "1月": "01", "01月": "01", "一月": "01",
+
+  // 02
+  feb: "02", febrero: "02",
+  february: "02",
+  fev: "02", fevereiro: "02",
+  févr: "02", fevr: "02", février: "02", fevrier: "02",
+  februar: "02",
+  febbraio: "02",
+  "2월": "02", "02월": "02", "이월": "02",
+  "2月": "02", "02月": "02", "二月": "02",
+
+  // 03
+  mar: "03", marzo: "03",
+  march: "03",
+  março: "03", marco: "03",
+  mars: "03",
+  mär: "03", märz: "03", maerz: "03", marz: "03",
+  "3월": "03", "03월": "03", "삼월": "03",
+  "3月": "03", "03月": "03", "三月": "03",
+
+  // 04
+  abr: "04", abril: "04",
+  apr: "04", april: "04",
+  avr: "04", avril: "04",
+  aprile: "04",
+  "4월": "04", "04월": "04", "사월": "04",
+  "4月": "04", "04月": "04", "四月": "04",
+
+  // 05
   may: "05", mayo: "05",
-  jun: "06", junio: "06", june: "06",
-  jul: "07", julio: "07", july: "07",
-  ago: "08", agosto: "08", aug: "08", august: "08",
-  sep: "09", sept: "09", septiembre: "09", set: "09", september: "09",
-  oct: "10", octubre: "10", october: "10",
-  nov: "11", noviembre: "11", november: "11",
-  dic: "12", diciembre: "12", dec: "12", december: "12"
+  mai: "05", maio: "05",
+  mag: "05", maggio: "05",
+  "5월": "05", "05월": "05", "오월": "05",
+  "5月": "05", "05月": "05", "五月": "05",
+
+  // 06
+  jun: "06", junio: "06",
+  june: "06",
+  junho: "06",
+  juin: "06",
+  juni: "06",
+  giu: "06", giugno: "06",
+  "6월": "06", "06월": "06", "유월": "06",
+  "6月": "06", "06月": "06", "六月": "06",
+
+  // 07
+  jul: "07", julio: "07",
+  july: "07",
+  julho: "07",
+  juil: "07", juillet: "07",
+  juli: "07",
+  lug: "07", luglio: "07",
+  "7월": "07", "07월": "07", "칠월": "07",
+  "7月": "07", "07月": "07", "七月": "07",
+
+  // 08
+  ago: "08", agosto: "08",
+  aug: "08", august: "08",
+  août: "08", aout: "08",
+  "8월": "08", "08월": "08", "팔월": "08",
+  "8月": "08", "08月": "08", "八月": "08",
+
+  // 09
+  sep: "09", sept: "09", septiembre: "09",
+  september: "09",
+  set: "09", setembro: "09",
+  septembre: "09",
+  settembre: "09",
+  "9월": "09", "09월": "09", "구월": "09",
+  "9月": "09", "09月": "09", "九月": "09",
+
+  // 10
+  oct: "10", octubre: "10",
+  october: "10",
+  out: "10", outubro: "10",
+  octobre: "10",
+  okt: "10", oktober: "10",
+  ott: "10", ottobre: "10",
+  "10월": "10", "시월": "10",
+  "10月": "10", "十月": "10",
+
+  // 11
+  nov: "11", noviembre: "11",
+  november: "11",
+  novembro: "11",
+  novembre: "11",
+  "11월": "11", "십일월": "11",
+  "11月": "11", "十一月": "11",
+
+  // 12
+  dic: "12", diciembre: "12",
+  dec: "12", december: "12",
+  dez: "12", dezembro: "12",
+  déc: "12", décembre: "12", decembre: "12",
+  dezember: "12",
+  dicembre: "12",
+  "12월": "12", "십이월": "12",
+  "12月": "12", "十二月": "12"
 };
 
-const DAY_NAMES_REGEX = /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom|mon|tue|wed|thu|fri|sat|sun|d[ií]a|day|fecha)\b[\s,\.\-:#°º]*/i;
+export const MULTILINGUAL_MONTHS = SPANISH_MONTHS;
+
+function resolveMonthCode(rawWord?: string): string | undefined {
+  if (!rawWord) return undefined;
+  const clean = rawWord.trim().toLowerCase().replace(/\.$/, "");
+  return (
+    SPANISH_MONTHS[clean] ||
+    (clean.length >= 4 ? SPANISH_MONTHS[clean.slice(0, 4)] : undefined) ||
+    (clean.length >= 3 ? SPANISH_MONTHS[clean.slice(0, 3)] : undefined)
+  );
+}
+
+const LATIN_WEEKDAY_PATTERN =
+  "lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|" +
+  "monday|tuesday|wednesday|thursday|friday|saturday|sunday|" +
+  "segunda(?:-feira)?|ter[çc]a(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|" +
+  "lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|" +
+  "montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend|sonntag|" +
+  "luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica|" +
+  "lun|mar|mi[eé]|jue|vie|s[aá]b|dom|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|" +
+  "seg|ter|qua|qui|sex|mer|jeu|ven|sam|dim|mo|di|mi|do|fr|sa|so|gio|sab";
+
+const DAY_NAMES_REGEX = new RegExp(
+  `^(?:` +
+    `(?:${LATIN_WEEKDAY_PATTERN}|d[ií]a|day|fecha|data|datum|date|jour|tag|giorno)(?=$|[\\s,\\.\\-:#°º()\\/])|` +
+    `(?:월요일|화요일|수요일|목요일|금요일|토요일|일요일|月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日曜日|月曜|火曜|水曜|木曜|金曜|土曜|日曜)(?=$|[\\s,\\.\\-:#°º()\\/0-9])|` +
+    `(?:월|화|수|목|금|토|일|月|火|水|木|金|土|日)(?=[\\s,\\.\\-:#°º()\\/]+)` +
+  `)[\\s,\\.\\-:#°º]*`,
+  "i"
+);
+
+const STANDALONE_WEEKDAY_REGEX = new RegExp(
+  `^(?:${LATIN_WEEKDAY_PATTERN}|월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일|月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日曜日|月曜|火曜|水曜|木曜|金曜|土曜|日曜|月|火|水|木|金|土|日)$`,
+  "i"
+);
+
+const TRAILING_CJK_WEEKDAY_REGEX =
+  /\s*[\(（](?:월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일|月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日曜日|月曜|火曜|水曜|木曜|金曜|土曜|日曜|月|火|水|木|金|土|日|[a-zà-ÿ]{2,10})[\)）]\s*$/i;
+
+function stripWeekdayTokens(raw: string): string {
+  return raw
+    .trim()
+    .replace(DAY_NAMES_REGEX, "")
+    .replace(TRAILING_CJK_WEEKDAY_REGEX, "")
+    .trim();
+}
 
 /**
- * Checks if a cell represents a plain day-of-month number (1..31), optionally prefixed by a weekday name (e.g. "15", "Lunes 15", "Día 15", "15.")
+ * Checks if a cell represents a plain day-of-month number (1..31), optionally prefixed by a weekday name (e.g. "15", "Lunes 15", "Día 15", "15.", "15일", "15日")
  */
 export function extractDayOfMonthNumber(raw?: string): number | null {
   if (!raw) return null;
-  const cleaned = raw
-    .trim()
-    .replace(DAY_NAMES_REGEX, "")
-    .replace(/^(d[ií]a|day)\s*/i, "")
+  const stripped = stripWeekdayTokens(raw);
+  if (/[월月]/.test(stripped)) return null;
+  const cleaned = stripped
+    .replace(/^(?:d[ií]a|day|jour|tag|giorno)\s*/i, "")
+    .replace(/(?:일|日)$/, "")
     .replace(/[\.\-º°#]+$/, "")
     .trim();
   if (/^\d{1,2}$/.test(cleaned)) {
@@ -89,7 +232,7 @@ export function excelSerialToYMD(serial: number): string | null {
  */
 export function isValidDateCell(raw?: string): boolean {
   if (!raw) return false;
-  const cleaned = raw.trim().replace(DAY_NAMES_REGEX, "").trim().toLowerCase();
+  const cleaned = stripWeekdayTokens(raw).toLowerCase();
   if (!cleaned) return false;
 
   // Excel serial date (40000..60000)
@@ -98,13 +241,28 @@ export function isValidDateCell(raw?: string): boolean {
     if (num >= 40000 && num <= 60000) return true;
   }
 
+  // Korean / Japanese date e.g. "2026년 11월 16일", "11월 16일", "2026年11月16日", "11月16日"
+  const cjkMatch = cleaned.match(/^(?:(\d{2,4})\s*[년年]\s*)?(\d{1,2})\s*[월月]\s*(\d{1,2})\s*[일日]?$/);
+  if (cjkMatch) {
+    const m = parseInt(cjkMatch[2], 10);
+    const d = parseInt(cjkMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return true;
+  }
+
   // YYYY-MM-DD or YYYY/MM/DD
   if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(cleaned)) return true;
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY
-  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(cleaned)) return true;
+  // DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY or DD/MM/YY
+  const fullSlash = cleaned.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (fullSlash) {
+    const a = parseInt(fullSlash[1], 10);
+    const b = parseInt(fullSlash[2], 10);
+    if ((a >= 1 && a <= 31 && b >= 1 && b <= 12) || (a >= 1 && a <= 12 && b >= 1 && b <= 31)) {
+      return true;
+    }
+  }
 
-  // Short DD/MM or DD-MM (without year, e.g. "28/10" or "05-11")
+  // Short DD/MM, MM/DD or DD-MM (without year, e.g. "28/10", "10/28", "05-11")
   const dmMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
   if (dmMatch) {
     const d = parseInt(dmMatch[1], 10);
@@ -114,21 +272,21 @@ export function isValidDateCell(raw?: string): boolean {
     }
   }
 
-  // DD de mes de YYYY or DD mes YYYY or DD-mes (e.g., "15 oct 2026", "15-oct", "28 de octubre")
-  const textMonthMatch = cleaned.match(/^(\d{1,2})(?:\s*de\s*|[\/\-\.\s]+)([a-záéíóú]{3,12})(?:(?:\s*de\s*|[\/\-\.\s]+)(\d{2,4}))?$/);
+  // DD de mes de YYYY or DD mes YYYY or DD-mes (ES/EN/PT/FR/DE/IT, e.g., "15 oct 2026", "15. märz 2026", "28 de outubro")
+  const textMonthMatch = cleaned.match(
+    /^(\d{1,2})\.?(?:\s*(?:de|do|da|of)\s*|\s*d'\s*|[\/\-\.\s]+)([a-zà-ÿçœ\.]{3,14})(?:(?:\s*(?:de|do|da|of)\s*|[\/\-\.,\s]+)(\d{2,4}))?$/
+  );
   if (textMonthMatch) {
-    const monthWord = textMonthMatch[2];
-    if (SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)]) return true;
+    if (resolveMonthCode(textMonthMatch[2])) return true;
   }
 
-  // Month DD, YYYY or Month DD (e.g. "Oct 28", "Octubre 28, 2026")
-  const monthFirstMatch = cleaned.match(/^([a-záéíóú]{3,12})[\s\-\.]+(\d{1,2})(?:[\s,\-\.]+(\d{2,4}))?$/);
+  // Month DD, YYYY or Month DD (e.g. "Oct 28", "Octubre 28, 2026", "Fevereiro 14, 2026")
+  const monthFirstMatch = cleaned.match(/^([a-zà-ÿçœ\.]{3,14})[\s\-\.]+(\d{1,2})\.?(?:[\s,\-\.]+(\d{2,4}))?$/);
   if (monthFirstMatch) {
-    const monthWord = monthFirstMatch[1];
-    if (SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)]) return true;
+    if (resolveMonthCode(monthFirstMatch[1])) return true;
   }
 
-  // Embedded full date inside text (e.g. "Lunes 26/10/2026")
+  // Embedded full date inside text (e.g. "Lunes 26/10/2026" or "Monday 10/26/2026")
   if (/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(cleaned)) return true;
   if (/\b\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}\b/.test(cleaned)) return true;
 
@@ -138,15 +296,22 @@ export function isValidDateCell(raw?: string): boolean {
 /**
  * Normalizes dates from any common format into YYYY-MM-DD
  */
-export function normalizeDateString(raw: string, fallbackDate: string, referenceYear?: number, referenceMonth?: number): string {
+export function normalizeDateString(
+  raw: string,
+  fallbackDate: string,
+  referenceYear?: number,
+  referenceMonth?: number,
+  preferMonthFirst = false
+): string {
   if (!raw) return fallbackDate;
-  const refY = referenceYear || new Date().getFullYear();
-  const refM = referenceMonth || (new Date().getMonth() + 1);
+  const nowLocal = new Date();
+  const refY = referenceYear || nowLocal.getFullYear();
+  const refM = referenceMonth || (nowLocal.getMonth() + 1);
 
-  const trimmed = raw.trim().replace(DAY_NAMES_REGEX, "").trim().toLowerCase();
+  const trimmed = stripWeekdayTokens(raw).toLowerCase();
   if (!trimmed) return fallbackDate;
 
-  // Excel serial number
+  // Excel serial number (keep UTC math for timezone-less Excel serial integers)
   if (/^\d{5}(?:\.\d+)?$/.test(trimmed)) {
     const serialDate = excelSerialToYMD(parseFloat(trimmed));
     if (serialDate) return serialDate;
@@ -157,6 +322,19 @@ export function normalizeDateString(raw: string, fallbackDate: string, reference
     return trimmed;
   }
 
+  // Korean / Japanese date e.g. "2026년 11월 16일", "11월 16일", "2026年11月16日", "11月16日"
+  const cjkMatch = trimmed.match(/(?:(\d{2,4})\s*[년年]\s*)?(\d{1,2})\s*[월月]\s*(\d{1,2})\s*[일日]?/);
+  if (cjkMatch) {
+    let [, rawYear, mStr, dStr] = cjkMatch;
+    let y = rawYear || String(refY);
+    if (y.length === 2) y = `20${y}`;
+    const mNum = parseInt(mStr, 10);
+    const dNum = parseInt(dStr, 10);
+    if (mNum >= 1 && mNum <= 12 && dNum >= 1 && dNum <= 31) {
+      return `${y}-${String(mNum).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
+    }
+  }
+
   // Embedded YYYY-MM-DD or YYYY/MM/DD
   const ymdMatch = trimmed.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (ymdMatch) {
@@ -164,26 +342,36 @@ export function normalizeDateString(raw: string, fallbackDate: string, reference
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY
+  // A/B/YYYY (handles both DD/MM/YYYY and US MM/DD/YYYY intelligently)
   const dmyMatch = trimmed.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
   if (dmyMatch) {
-    let [, d, m, y] = dmyMatch;
+    let [, aStr, bStr, y] = dmyMatch;
     if (y.length === 2) {
       y = `20${y}`;
     }
-    const mNum = parseInt(m, 10);
-    const dNum = parseInt(d, 10);
-    if (mNum > 12 && dNum <= 12) {
-      return `${y}-${d.padStart(2, "0")}-${m.padStart(2, "0")}`;
+    const aNum = parseInt(aStr, 10);
+    const bNum = parseInt(bStr, 10);
+    if (aNum <= 12 && bNum > 12) {
+      // Unambiguous US MM/DD/YYYY (A <= 12 && B > 12)
+      return `${y}-${aStr.padStart(2, "0")}-${bStr.padStart(2, "0")}`;
     }
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    if (aNum > 12 && bNum <= 12) {
+      // Unambiguous DD/MM/YYYY (A > 12 && B <= 12)
+      return `${y}-${bStr.padStart(2, "0")}-${aStr.padStart(2, "0")}`;
+    }
+    if (preferMonthFirst && aNum >= 1 && aNum <= 12 && bNum >= 1 && bNum <= 31) {
+      return `${y}-${aStr.padStart(2, "0")}-${bStr.padStart(2, "0")}`;
+    }
+    return `${y}-${bStr.padStart(2, "0")}-${aStr.padStart(2, "0")}`;
   }
 
-  // DD mes YYYY or DD-mes (e.g. "26 oct 2026", "26 de octubre", "26-oct")
-  const textMonthMatch = trimmed.match(/(\d{1,2})(?:\s*de\s*|[\/\-\.\s]+)([a-záéíóú]{3,12})(?:(?:\s*de\s*|[\/\-\.\s]+)(\d{2,4}))?/);
+  // DD mes YYYY or DD-mes (ES/EN/PT/FR/DE/IT)
+  const textMonthMatch = trimmed.match(
+    /(\d{1,2})\.?(?:\s*(?:de|do|da|of)\s*|\s*d'\s*|[\/\-\.\s]+)([a-zà-ÿçœ\.]{3,14})(?:(?:\s*(?:de|do|da|of)\s*|[\/\-\.,\s]+)(\d{2,4}))?/
+  );
   if (textMonthMatch) {
     const [, d, monthWord, rawYear] = textMonthMatch;
-    const monthCode = SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)];
+    const monthCode = resolveMonthCode(monthWord);
     if (monthCode) {
       let y = rawYear || String(refY);
       if (y.length === 2) y = `20${y}`;
@@ -191,11 +379,11 @@ export function normalizeDateString(raw: string, fallbackDate: string, reference
     }
   }
 
-  // Month DD, YYYY (e.g. "Oct 28", "Octubre 28 2026")
-  const monthFirstMatch = trimmed.match(/^([a-záéíóú]{3,12})[\s\-\.]+(\d{1,2})(?:[\s,\-\.]+(\d{2,4}))?/);
+  // Month DD, YYYY (e.g. "Oct 28", "Octubre 28 2026", "Mars 15, 2026")
+  const monthFirstMatch = trimmed.match(/^([a-zà-ÿçœ\.]{3,14})[\s\-\.]+(\d{1,2})\.?(?:[\s,\-\.]+(\d{2,4}))?/);
   if (monthFirstMatch) {
     const [, monthWord, d, rawYear] = monthFirstMatch;
-    const monthCode = SPANISH_MONTHS[monthWord] || SPANISH_MONTHS[monthWord.slice(0, 3)];
+    const monthCode = resolveMonthCode(monthWord);
     if (monthCode) {
       let y = rawYear || String(refY);
       if (y.length === 2) y = `20${y}`;
@@ -203,20 +391,26 @@ export function normalizeDateString(raw: string, fallbackDate: string, reference
     }
   }
 
-  // Short DD/MM or DD-MM (without year, e.g. "28/10")
+  // Short DD/MM or MM/DD (without year, e.g. "28/10" or "10/28")
   const dmMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
   if (dmMatch) {
-    const dNum = parseInt(dmMatch[1], 10);
-    const mNum = parseInt(dmMatch[2], 10);
-    if (dNum >= 1 && dNum <= 31 && mNum >= 1 && mNum <= 12) {
-      return `${refY}-${String(mNum).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
+    const aNum = parseInt(dmMatch[1], 10);
+    const bNum = parseInt(dmMatch[2], 10);
+    if (aNum <= 12 && bNum > 12 && bNum <= 31) {
+      return `${refY}-${String(aNum).padStart(2, "0")}-${String(bNum).padStart(2, "0")}`;
     }
-    if (mNum >= 1 && mNum <= 31 && dNum >= 1 && dNum <= 12) {
-      return `${refY}-${String(dNum).padStart(2, "0")}-${String(mNum).padStart(2, "0")}`;
+    if (aNum > 12 && aNum <= 31 && bNum >= 1 && bNum <= 12) {
+      return `${refY}-${String(bNum).padStart(2, "0")}-${String(aNum).padStart(2, "0")}`;
+    }
+    if (preferMonthFirst && aNum >= 1 && aNum <= 12 && bNum >= 1 && bNum <= 31) {
+      return `${refY}-${String(aNum).padStart(2, "0")}-${String(bNum).padStart(2, "0")}`;
+    }
+    if (aNum >= 1 && aNum <= 31 && bNum >= 1 && bNum <= 12) {
+      return `${refY}-${String(bNum).padStart(2, "0")}-${String(aNum).padStart(2, "0")}`;
     }
   }
 
-  // Plain day of month number (1..31) e.g. "28" or "Lunes 28" or "Día 28"
+  // Plain day of month number (1..31) e.g. "28" or "Lunes 28" or "Día 28" or "28일" or "28日"
   const dayNum = extractDayOfMonthNumber(raw);
   if (dayNum !== null) {
     return `${refY}-${String(refM).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
@@ -432,21 +626,275 @@ export function parseDelimitedTextToMatrix(rawText: string): string[][] {
 
 /**
  * Helper to check if a header cell represents a specific semantic column
+ * Supports ES, EN, PT, FR, DE, IT, KO, JA spreadsheet headers.
  */
 function classifyHeader(hRaw: string): "date" | "startDate" | "endDate" | "title" | "arrows" | "focus" | "notes" | "sessions" | "unknown" {
   const h = hRaw.trim().toLowerCase();
   if (!h) return "unknown";
 
-  if (/\binicio\b|fecha\s*inicio|\bdesde\b|start\s*date|\bstart\b/.test(h)) return "startDate";
-  if (/\bfin\b|fecha\s*fin|\btermino\b|\btérmino\b|end\s*date|\bhasta\b|\bend\b/.test(h)) return "endDate";
-  if (h === "fecha" || h.includes("fecha") || h === "día" || h === "dia" || h.startsWith("día ") || h.startsWith("dia ") || h === "date" || h === "day") return "date";
-  if ((h.includes("sesion") || h.includes("sesión")) && h.includes("sem")) return "sessions";
-  if (h.includes("flecha") || h.includes("volumen") || h.includes("tiros") || h.includes("arrows") || h.includes("cant")) return "arrows";
-  if (h.includes("actividad") || h.includes("tarea") || h.includes("entrenamiento") || h.includes("trabajo") || h.includes("ejercicio") || h.includes("rutina") || h.includes("sesión") || h.includes("sesion") || h.includes("título") || h.includes("titulo") || h.includes("etapa") || h.includes("fase") || h.includes("nombre") || h.includes("plan")) return "title";
-  if (h.includes("enfoque") || h.includes("técnica") || h.includes("tecnica") || h.includes("foco") || h.includes("objetivo")) return "focus";
-  if (h.includes("nota") || h.includes("indicacion") || h.includes("indicación") || h.includes("observacion") || h.includes("observación") || h.includes("detalle") || h.includes("comentario") || h.includes("descrip")) return "notes";
+  if (
+    /\binicio\b|\binício\b|fecha\s*inicio|data\s*(?:de\s*)?in[ií]cio|\bdesde\b|start\s*date|\bstart\b|\bd[eé]but\b|date\s*de\s*d[eé]but|startdatum|\bbeginn\b|data\s*inizio|\binizio\b|시작일|시작\s*날짜|開始日|開始/.test(
+      h
+    )
+  ) {
+    return "startDate";
+  }
+
+  if (
+    /\bfin\b|\bfim\b|fecha\s*fin|data\s*(?:de\s*)?fim|data\s*final|\btermino\b|\bt[eé]rmino\b|end\s*date|\bhasta\b|\bat[eé]\b|\bend\b|date\s*de\s*fin|enddatum|\bende\b|data\s*fine|\bfine\b|종료일|종료\s*날짜|마감일|終了日|終了/.test(
+      h
+    )
+  ) {
+    return "endDate";
+  }
+
+  if (
+    h === "fecha" ||
+    h.includes("fecha") ||
+    h === "día" ||
+    h === "dia" ||
+    h.startsWith("día ") ||
+    h.startsWith("dia ") ||
+    h === "date" ||
+    h === "day" ||
+    h === "data" ||
+    h === "datum" ||
+    h === "tag" ||
+    h === "jour" ||
+    h === "journée" ||
+    h === "giorno" ||
+    h === "날짜" ||
+    h === "일자" ||
+    h === "요일" ||
+    h === "日付" ||
+    h === "月日" ||
+    h === "曜日"
+  ) {
+    return "date";
+  }
+
+  if (
+    ((h.includes("sesion") ||
+      h.includes("sesión") ||
+      h.includes("session") ||
+      h.includes("sessão") ||
+      h.includes("sessoes") ||
+      h.includes("sessões") ||
+      h.includes("séance") ||
+      h.includes("seance") ||
+      h.includes("einheit")) &&
+      (h.includes("sem") || h.includes("week") || h.includes("hebdo") || h.includes("woche") || h.includes("sett"))) ||
+    /주간\s*세션|주당\s*훈련|훈련\s*횟수|週間セッション|週回数|練習回数/.test(h)
+  ) {
+    return "sessions";
+  }
+
+  if (
+    h.includes("flecha") ||
+    h.includes("volumen") ||
+    h.includes("volume") ||
+    h.includes("tiros") ||
+    h.includes("arrow") ||
+    h.includes("shots") ||
+    h.includes("cant") ||
+    h.includes("seta") ||
+    h.includes("disparo") ||
+    h.includes("flèche") ||
+    h.includes("fleche") ||
+    h.includes("pfeil") ||
+    h.includes("umfang") ||
+    h.includes("schüss") ||
+    h.includes("schuess") ||
+    h.includes("frecc") ||
+    h.includes("tiri") ||
+    h.includes("화살") ||
+    h.includes("발수") ||
+    h.includes("볼륨") ||
+    h.includes("射数") ||
+    h.includes("矢数") ||
+    h.includes("本数") ||
+    h.includes("アロー")
+  ) {
+    return "arrows";
+  }
+
+  if (
+    h.includes("actividad") ||
+    h.includes("activity") ||
+    h.includes("atividade") ||
+    h.includes("activité") ||
+    h.includes("activite") ||
+    h.includes("aktivität") ||
+    h.includes("aktivitaet") ||
+    h.includes("attività") ||
+    h.includes("attivita") ||
+    h.includes("tarea") ||
+    h.includes("task") ||
+    h.includes("tarefa") ||
+    h.includes("tâche") ||
+    h.includes("tache") ||
+    h.includes("aufgabe") ||
+    h.includes("compito") ||
+    h.includes("entrenamiento") ||
+    h.includes("training") ||
+    h.includes("workout") ||
+    h.includes("treino") ||
+    h.includes("treinamento") ||
+    h.includes("entraînement") ||
+    h.includes("entrainement") ||
+    h.includes("allenamento") ||
+    h.includes("trabajo") ||
+    h.includes("ejercicio") ||
+    h.includes("exercise") ||
+    h.includes("drill") ||
+    h.includes("exercício") ||
+    h.includes("exercicio") ||
+    h.includes("übung") ||
+    h.includes("uebung") ||
+    h.includes("esercizio") ||
+    h.includes("rutina") ||
+    h.includes("routine") ||
+    h.includes("rotina") ||
+    h.includes("sesión") ||
+    h.includes("sesion") ||
+    h.includes("session") ||
+    h.includes("sessão") ||
+    h.includes("séance") ||
+    h.includes("seance") ||
+    h.includes("einheit") ||
+    h.includes("título") ||
+    h.includes("titulo") ||
+    h.includes("title") ||
+    h.includes("titre") ||
+    h.includes("titel") ||
+    h.includes("titolo") ||
+    h.includes("etapa") ||
+    h.includes("stage") ||
+    h.includes("étape") ||
+    h.includes("etape") ||
+    h.includes("etappe") ||
+    h.includes("tappa") ||
+    h.includes("fase") ||
+    h.includes("phase") ||
+    h.includes("nombre") ||
+    h.includes("name") ||
+    h.includes("nome") ||
+    h === "nom" ||
+    h.includes("plan") ||
+    h.includes("plano") ||
+    h.includes("piano") ||
+    /활동|과제|훈련|운동|연습|세션|제목|단계|페이즈|이름|계획|活動|課題|メニュー|練習|トレーニング|セッション|タイトル|段階|フェーズ|ステージ|名前/.test(h)
+  ) {
+    return "title";
+  }
+
+  if (
+    h.includes("enfoque") ||
+    h.includes("focus") ||
+    h.includes("fokus") ||
+    h.includes("técnica") ||
+    h.includes("tecnica") ||
+    h.includes("technique") ||
+    h.includes("technik") ||
+    h.includes("foco") ||
+    h.includes("objetivo") ||
+    h.includes("objective") ||
+    h.includes("objectif") ||
+    h.includes("obiettivo") ||
+    h.includes("schwerpunkt") ||
+    h === "ziel" ||
+    /중점|포커스|기술|목표|핵심|フォーカス|重点|技術|課題点|目標/.test(h)
+  ) {
+    return "focus";
+  }
+
+  if (
+    h.includes("nota") ||
+    h.includes("note") ||
+    h.includes("notiz") ||
+    h.includes("remarque") ||
+    h.includes("remark") ||
+    h.includes("bemerkung") ||
+    h.includes("hinweis") ||
+    h.includes("indicacion") ||
+    h.includes("indicación") ||
+    h.includes("observacion") ||
+    h.includes("observación") ||
+    h.includes("observação") ||
+    h.includes("observacao") ||
+    h.includes("observation") ||
+    h.includes("osservazion") ||
+    h.includes("detalle") ||
+    h.includes("detalhe") ||
+    h.includes("détail") ||
+    h.includes("detail") ||
+    h.includes("dettagli") ||
+    h.includes("comentario") ||
+    h.includes("comentário") ||
+    h.includes("comment") ||
+    h.includes("kommentar") ||
+    h.includes("descrip") ||
+    h.includes("descriç") ||
+    h.includes("descriz") ||
+    h.includes("beschreibung") ||
+    /메모|비고|노트|참고|설명|코멘트|メモ|備考|ノート|コメント|詳細|説明/.test(h)
+  ) {
+    return "notes";
+  }
 
   return "unknown";
+}
+
+const INLINE_ARROWS_REGEX =
+  /(?:^|\b)(\d{1,4})\s*(?:(?:flechas?|fl\.?|tiros?|arrows?|shots?|setas?|fl[eè]ches?|pfeile?|frecce|freccia)\b|(?:화살|발|射数|射|本))/i;
+
+function isRestDayText(lowerText: string): boolean {
+  const t = lowerText.trim();
+  if (!t) return false;
+  return (
+    t === "descanso" ||
+    t.includes("descanso") ||
+    t === "libre" ||
+    t.includes("día libre") ||
+    t.includes("dia libre") ||
+    t.includes("dia livre") ||
+    t === "folga" ||
+    t.includes("folga") ||
+    t === "rest" ||
+    t === "rest day" ||
+    t === "day off" ||
+    t === "off" ||
+    t === "repos" ||
+    t.includes("jour de repos") ||
+    t === "relâche" ||
+    t === "relache" ||
+    t === "ruhetag" ||
+    t.includes("ruhetag") ||
+    t === "frei" ||
+    t === "riposo" ||
+    t.includes("giorno di riposo") ||
+    t === "휴식" ||
+    t === "휴식일" ||
+    t === "휴무" ||
+    t.includes("휴식") ||
+    t === "休息" ||
+    t === "休養" ||
+    t === "休養日" ||
+    t === "休み" ||
+    t === "オフ"
+  );
+}
+
+function isCompetitionText(lowerText: string): boolean {
+  return /torneo|torneio|competencia|competição|compétition|competition|campeonato|clasificatorio|tournament|championship|qualifier|tournoi|wettkampf|turnier|meisterschaft|gara|대회|시합|경기|大会|試合/i.test(
+    lowerText
+  );
+}
+
+function isMeetingText(lowerText: string): boolean {
+  return /reuni[oó]n|reunião|réunion|charla|junta|meeting|briefing|besprechung|riunione|회의|미팅|ミーティング|会議/i.test(
+    lowerText
+  );
 }
 
 /**
@@ -471,7 +919,7 @@ export function parseSpreadsheetData(
   options?: ParseSpreadsheetOptions
 ): ParsedCycleResult {
   const warnings: string[] = [];
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalISODate();
 
   const cleanRawLower = (rawText || "").toLowerCase();
   if (!rawText || !rawText.trim() || cleanRawLower.includes("offline mode active") || cleanRawLower.includes("connect to the internet")) {
@@ -507,19 +955,41 @@ export function parseSpreadsheetData(
     };
   }
 
-  // Try to detect reference month/year if mentioned in a top banner row or plan name (e.g. "NOVIEMBRE 2026" or "Plan Octubre")
+  // Detect whether slash dates in the sheet use US MM/DD/YYYY (when A <= 12 && B > 12 appears and A > 12 never appears)
+  let preferMonthFirst = Boolean(options?.preferMonthFirst);
+  if (options?.preferMonthFirst === undefined) {
+    let usMonthFirstHits = 0;
+    let dayFirstHits = 0;
+    for (const r of rows.slice(0, 40)) {
+      for (const c of r) {
+        const m = (c || "").trim().match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+        if (m) {
+          const a = parseInt(m[1], 10);
+          const b = parseInt(m[2], 10);
+          if (a >= 1 && a <= 12 && b > 12 && b <= 31) usMonthFirstHits++;
+          else if (a > 12 && a <= 31 && b >= 1 && b <= 12) dayFirstHits++;
+        }
+      }
+    }
+    if (usMonthFirstHits > 0 && dayFirstHits === 0) {
+      preferMonthFirst = true;
+    }
+  }
+
+  // Try to detect reference month/year if mentioned in a top banner row or plan name (e.g. "NOVIEMBRE 2026", "11월", "11月", or "Plan Octubre")
   let refYear = options?.referenceYear || new Date().getFullYear();
   let refMonth = options?.referenceMonth || (new Date().getMonth() + 1);
 
   if (!options?.referenceYear || !options?.referenceMonth) {
     const searchSpace = [defaultCycleName, ...rows.slice(0, 6).map((r) => r.join(" "))].join(" ").toLowerCase();
     if (!options?.referenceYear) {
-      const yearMatch = searchSpace.match(/\b(202\d|203\d)\b/);
+      const yearMatch = searchSpace.match(/\b(202\d|203\d)\b/) || searchSpace.match(/(202\d|203\d)\s*[년年]/);
       if (yearMatch) refYear = parseInt(yearMatch[1], 10);
     }
     if (!options?.referenceMonth) {
-      for (const [mWord, mCode] of Object.entries(SPANISH_MONTHS)) {
-        if (mWord.length >= 4 && searchSpace.includes(mWord)) {
+      const sortedMonthEntries = Object.entries(SPANISH_MONTHS).sort((a, b) => b[0].length - a[0].length);
+      for (const [mWord, mCode] of sortedMonthEntries) {
+        if ((mWord.length >= 4 || /[월月]/.test(mWord)) && searchSpace.includes(mWord)) {
           refMonth = parseInt(mCode, 10);
           break;
         }
@@ -527,12 +997,12 @@ export function parseSpreadsheetData(
     }
   }
 
-  // Also check if any cell in the sheet has a full YYYY-MM-DD or DD/MM/YYYY date to anchor refYear & refMonth automatically
+  // Also check if any cell in the sheet has a full YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY date to anchor refYear & refMonth automatically
   if (!options?.referenceYear || !options?.referenceMonth) {
     outerDateScan: for (const r of rows.slice(0, 20)) {
       for (const c of r) {
         if (isValidDateCell(c)) {
-          const norm = normalizeDateString(c, "", refYear, refMonth);
+          const norm = normalizeDateString(c, "", refYear, refMonth, preferMonthFirst);
           if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) {
             const [yStr, mStr] = norm.split("-");
             if (!options?.referenceYear) refYear = parseInt(yStr, 10);
@@ -576,7 +1046,7 @@ export function parseSpreadsheetData(
         const isFullDate = isValidDateCell(rawDayCell);
         if (dNum === null && !isFullDate) continue;
 
-        const date = normalizeDateString(rawDayCell, "", refYear, refMonth);
+        const date = normalizeDateString(rawDayCell, "", refYear, refMonth, preferMonthFirst);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
 
         // Collect any text written in the same cell after the day number (if multi-line) + all cells below in this column
@@ -589,8 +1059,8 @@ export function parseSpreadsheetData(
         for (let subR = dayRowIdx + 1; subR < nextDayRowIdx; subR++) {
           const cellVal = (rows[subR]?.[col] || "").trim();
           if (!cellVal) continue;
-          // Ignore weekday header rows (e.g. Lunes, Martes...)
-          if (/^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom)$/i.test(cellVal)) {
+          // Ignore weekday header rows across all supported languages
+          if (STANDALONE_WEEKDAY_REGEX.test(cellVal)) {
             continue;
           }
           const subItems = splitCellIntoListItems(cellVal);
@@ -603,15 +1073,13 @@ export function parseSpreadsheetData(
 
         const joinedAll = itemsForDay.join(" · ");
         let targetArrows = 0;
-        const arrowMatches = joinedAll.match(/\b(\d{1,4})\s*(?:flechas|flecha|fl\.?|tiros|arrows)\b/i);
+        const arrowMatches = joinedAll.match(INLINE_ARROWS_REGEX);
         if (arrowMatches) {
           targetArrows = parseInt(arrowMatches[1], 10) || 0;
         }
 
         const lowerAll = joinedAll.toLowerCase();
-        const isRestDay =
-          (lowerAll === "descanso" || lowerAll.includes("descanso") || lowerAll === "libre" || lowerAll === "rest") &&
-          targetArrows === 0;
+        const isRestDay = isRestDayText(lowerAll) && targetArrows === 0;
 
         gridDailyMap.set(date, {
           date,
@@ -624,7 +1092,13 @@ export function parseSpreadsheetData(
             label: `Tarea ${i + 1}`,
             value: item
           })),
-          type: isRestDay ? "other" : lowerAll.includes("torneo") || lowerAll.includes("competencia") ? "competition" : "training",
+          type: isRestDay
+            ? "other"
+            : isCompetitionText(lowerAll)
+            ? "competition"
+            : isMeetingText(lowerAll)
+            ? "meeting"
+            : "training",
           isRestDay
         });
       }
@@ -757,11 +1231,23 @@ export function parseSpreadsheetData(
       for (let c = 0; c < maxCols; c++) {
         if (c === dateCol || c === titleCol || c === focusCol || c === notesCol) continue;
         const hText = (headerRow[c] || "").toLowerCase();
-        if (hText && !hText.includes("flecha") && !hText.includes("volumen") && !hText.includes("tiro") && !hText.includes("cant") && !hText.includes("meta")) {
+        if (
+          hText &&
+          classifyHeader(hText) !== "arrows" &&
+          !hText.includes("meta") &&
+          !hText.includes("goal") &&
+          !hText.includes("qty") &&
+          !hText.includes("anzahl")
+        ) {
           continue;
         }
         const nonEmptyVals = dataRows.map((r) => (r[c] || "").trim()).filter(Boolean);
-        if (nonEmptyVals.length > 0 && nonEmptyVals.every((v) => /^\d+(\s*(fl|flechas|tiros))?$/i.test(v))) {
+        if (
+          nonEmptyVals.length > 0 &&
+          nonEmptyVals.every((v) =>
+            /^\d+(\s*(?:fl\.?|flechas?|tiros?|arrows?|shots?|setas?|fl[eè]ches?|pfeile?|frecce|화살|발|射数|射|本))?$/i.test(v)
+          )
+        ) {
           arrowsCol = c;
           break;
         }
@@ -805,7 +1291,7 @@ export function parseSpreadsheetData(
       let date: string;
       if (rawDateCell && (isValidDateCell(rawDateCell) || extractDayOfMonthNumber(rawDateCell) !== null)) {
         const fallback = `${refYear}-${String(refMonth).padStart(2, "0")}-${String(Math.min(31, rowIdx + 1)).padStart(2, "0")}`;
-        date = normalizeDateString(rawDateCell, fallback, refYear, refMonth);
+        date = normalizeDateString(rawDateCell, fallback, refYear, refMonth, preferMonthFirst);
         lastValidDate = date;
       } else if (!rawDateCell && lastValidDate) {
         // Continuation row! The user left the date blank to add more items to the same date's list
@@ -839,8 +1325,8 @@ export function parseSpreadsheetData(
         const rawCellVal = (row[c] || "").trim();
         if (!rawCellVal) continue;
 
-        // Skip if this column is just a standalone weekday name next to the date column (e.g. "Lunes")
-        if (c <= 1 && /^(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom)$/i.test(rawCellVal)) {
+        // Skip if this column is just a standalone weekday name next to the date column (e.g. "Lunes", "Monday", "Lundi", "Montag", "월요일", "月曜日")
+        if (c <= 1 && STANDALONE_WEEKDAY_REGEX.test(rawCellVal)) {
           continue;
         }
 
@@ -866,7 +1352,7 @@ export function parseSpreadsheetData(
 
       if (targetArrows === 0) {
         const joinedRowText = row.filter((_, idx) => idx !== activeDateCol).join(" ");
-        const inlineArrowsMatch = joinedRowText.match(/\b(\d{1,4})\s*(?:flechas|flecha|fl\.?|tiros|arrows)\b/i);
+        const inlineArrowsMatch = joinedRowText.match(INLINE_ARROWS_REGEX);
         if (inlineArrowsMatch) {
           targetArrows = parseInt(inlineArrowsMatch[1], 10) || 0;
         }
@@ -894,12 +1380,7 @@ export function parseSpreadsheetData(
       }
 
       const lowerAll = `${literalTitle} ${rawNotes} ${rawFocus}`.toLowerCase();
-      const isRestWord =
-        lowerAll === "descanso" ||
-        lowerAll.includes("descanso") ||
-        lowerAll.includes("libre") ||
-        lowerAll === "rest" ||
-        lowerAll === "off";
+      const isRestWord = isRestDayText(lowerAll);
 
       const isRestDay = isRestWord && targetArrows === 0;
 
@@ -912,9 +1393,9 @@ export function parseSpreadsheetData(
       let type: "training" | "competition" | "meeting" | "other" = "training";
       if (isRestDay) {
         type = "other";
-      } else if (lowerAll.includes("torneo") || lowerAll.includes("competencia") || lowerAll.includes("campeonato") || lowerAll.includes("clasificatorio")) {
+      } else if (isCompetitionText(lowerAll)) {
         type = "competition";
-      } else if (lowerAll.includes("reunión") || lowerAll.includes("reunion") || lowerAll.includes("charla") || lowerAll.includes("junta")) {
+      } else if (isMeetingText(lowerAll)) {
         type = "meeting";
       }
 
@@ -1050,8 +1531,8 @@ export function parseSpreadsheetData(
     const rawEnd = (row[endCol] || "").trim();
     if (!rawName && !rawStart && !rawEnd) return;
 
-    const startDate = normalizeDateString(rawStart, currentEstimatedStartDate, refYear, refMonth);
-    let endDate = normalizeDateString(rawEnd, startDate, refYear, refMonth);
+    const startDate = normalizeDateString(rawStart, currentEstimatedStartDate, refYear, refMonth, preferMonthFirst);
+    let endDate = normalizeDateString(rawEnd, startDate, refYear, refMonth, preferMonthFirst);
     if (endDate < startDate) endDate = startDate;
 
     const rawSessions = row[sessionsCol] || "";
@@ -1074,7 +1555,7 @@ export function parseSpreadsheetData(
       color
     });
 
-    currentEstimatedStartDate = new Date(new Date(endDate + "T12:00:00").getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    currentEstimatedStartDate = getLocalISODate(new Date(endDate + "T12:00:00").getTime() + 24 * 60 * 60 * 1000);
   });
 
   if (parsedStages.length === 0) {

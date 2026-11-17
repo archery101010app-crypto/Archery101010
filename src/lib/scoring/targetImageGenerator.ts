@@ -1,8 +1,19 @@
 "use client";
 
-import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis, getConvexHull, getExactTargetDimensions } from "./dispersionAnalytics";
+import { ShotImpactData, DispersionAnalysis, calculateDispersionAnalysis } from "./dispersionAnalytics";
 import { DIANA_PRESETS } from "@/components/scoring/ScoringView";
-import { calculateActiveKcal, formatMetersAndFeet } from "./biometricsEngine";
+import { calculateActiveKcal } from "./biometricsEngine";
+import {
+  UnitSystem,
+  formatRegionalDate,
+  formatShootingDistance,
+  formatWalkedDistanceRegional
+} from "@/lib/i18n/regionalUtils";
+import {
+  translations,
+  offlineFallbackTranslations,
+  TranslationKey
+} from "@/lib/translations/dict";
 
 export interface EndSummaryItem {
   arrows: string[];
@@ -20,6 +31,7 @@ export interface TargetShotChartParams {
   tensCount: number;
   xsCount: number;
   distanceM: number;
+  distanceLabel?: string;
   bowType: string;
   format?: string;
   archerName: string;
@@ -31,7 +43,51 @@ export interface TargetShotChartParams {
   bowPoundageLbs?: number;
   themeMode?: TelemetryCardThemeMode;
   backgroundPhotoUrl?: string | null;
+  lang?: string;
+  unitSystem?: UnitSystem;
 }
+
+function resolveCardLang(lang?: string): string {
+  if (lang && lang.trim()) return lang.trim();
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("preferred_language") || "es";
+  }
+  return "es";
+}
+
+function resolveCardUnitSystem(unitSystem?: UnitSystem): UnitSystem {
+  if (unitSystem === "imperial" || unitSystem === "metric") return unitSystem;
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("preferred_unit_system");
+    if (stored === "imperial" || stored === "metric") return stored;
+  }
+  return "metric";
+}
+
+function tCard(lang: string, key: TranslationKey): string {
+  const exact = (translations as Record<string, Record<string, string>>)[lang];
+  if (exact && exact[key]) return exact[key];
+  const fallback = offlineFallbackTranslations[lang];
+  if (fallback && fallback[key]) return fallback[key] as string;
+  if (lang !== "es" && translations.en[key]) return translations.en[key];
+  return translations.es[key] || String(key);
+}
+
+const OFFICIAL_BADGE_BY_LANG: Record<string, string> = {
+  es: "TELEMETRÍA OFICIAL",
+  en: "OFFICIAL TELEMETRY",
+  ko: "공식 텔레메트리",
+  ja: "公式テレメトリー",
+  fr: "TÉLÉMÉTRIE OFFICIELLE",
+  de: "OFFIZIELLE TELEMETRIE",
+  pt: "TELEMETRIA OFICIAL",
+  it: "TELEMETRIA UFFICIALE",
+  "zh-CN": "官方训练遥测",
+  iw: "טלמטריה רשמית",
+  ru: "ОФИЦ. ТЕЛЕМЕТРИЯ",
+  cs: "OFICIÁLNÍ TELEMETRIE",
+  ar: "القياس الرسمي"
+};
 
 declare global {
   interface Window {
@@ -167,6 +223,8 @@ function drawFallbackArchery101010TheApp(ctx: CanvasRenderingContext2D, centerX:
  * - "transparent": 100% Alpha Transparent PNG with +20% Left-Aligned Target (547px) & Smoked Glass
  */
 export async function renderTargetShotChartCanvas(params: TargetShotChartParams): Promise<HTMLCanvasElement> {
+  const resolvedLang = resolveCardLang(params.lang);
+  const resolvedUnitSystem = resolveCardUnitSystem(params.unitSystem);
   const {
     impacts: rawImpacts,
     ends = [],
@@ -179,7 +237,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     bowType,
     format = "World Archery",
     archerName,
-    dateStr = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }),
+    dateStr = formatRegionalDate(new Date(), resolvedLang),
     dispersion: initialDispersion,
     themeMode = "black",
     backgroundPhotoUrl = null
@@ -304,7 +362,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     : "rgba(255, 255, 255, 0.24)";
 
   // 2. Top Header Row
-  // TELEMETRÍA OFICIAL (+30% box & text: 411x62, r=31, font 25.4px)
+  // OFFICIAL TELEMETRY Badge (+30% box & text: 411x62, r=31, font 25.4px)
   ctx.fillStyle = isBlackMode ? "rgba(255, 255, 255, 0.05)" : boxFillStyle;
   ctx.strokeStyle = isBlackMode ? "rgba(255, 255, 255, 0.20)" : "rgba(255, 255, 255, 0.26)";
   ctx.lineWidth = 1.5;
@@ -312,11 +370,14 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.fill();
   ctx.stroke();
 
+  const badgeText =
+    OFFICIAL_BADGE_BY_LANG[resolvedLang] ||
+    (resolvedLang.toLowerCase().startsWith("es") ? "TELEMETRÍA OFICIAL" : "OFFICIAL TELEMETRY");
   ctx.font = `800 25.4px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("TELEMETRÍA OFICIAL", 54 + 411 / 2, 76 + 62 / 2 + 1);
+  ctx.fillText(badgeText, 54 + 411 / 2, 76 + 62 / 2 + 1, 385);
 
   // Archer Name & Subtitle
   ctx.save();
@@ -329,16 +390,26 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.font = `900 42px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(archerName || "Arquero", 54, 198, 630);
+  ctx.fillText(archerName || tCard(resolvedLang, "roleAthlete"), 54, 198, 630);
 
   const displayBowType =
-    bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
+    bowType === "Recurve"
+      ? tCard(resolvedLang, "bowRecurve")
+      : bowType === "Compound"
+      ? tCard(resolvedLang, "bowCompound")
+      : bowType === "Barebow"
+      ? tCard(resolvedLang, "bowBarebow")
+      : bowType || tCard(resolvedLang, "bowRecurve");
+  const displayShootDist =
+    params.distanceLabel || formatShootingDistance(distanceM, resolvedUnitSystem);
+  const displayFormat =
+    format === "Libre" && !resolvedLang.toLowerCase().startsWith("es") ? "Custom" : format;
   ctx.font = `700 22.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${displayBowType} • ${distanceM}m • ${format} • ${dateStr}`, 54, 236, 630);
+  ctx.fillText(`${displayBowType} • ${displayShootDist} • ${displayFormat} • ${dateStr}`, 54, 236, 630);
   ctx.restore();
 
-  // PUNTUACIÓN TOTAL Box (+15% box & text: 315x168, r=32, x=711, y=76)
+  // SCORE Box (+15% box & text: 315x168, r=32, x=711, y=76)
   ctx.fillStyle = boxFillStyle;
   ctx.strokeStyle = isBlackMode ? "rgba(253, 216, 53, 0.55)" : "rgba(253, 216, 53, 0.68)";
   ctx.lineWidth = 2;
@@ -351,16 +422,21 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.font = `800 20.7px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText("PUNTUACIÓN TOTAL", scoreBoxCenterX, 114);
+  ctx.fillText(tCard(resolvedLang, "cardScore").toUpperCase(), scoreBoxCenterX, 114, 285);
 
   ctx.font = `900 69px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${score}`, scoreBoxCenterX, 182);
 
   const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
-  ctx.font = `700 19.6px ${appFont}`;
+  ctx.font = `700 18.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`/ ${effectiveMaxScore} pts (${pct}%)`, scoreBoxCenterX, 218);
+  ctx.fillText(
+    `/ ${effectiveMaxScore} (${pct}%) • ${totalArrowsCount} ${tCard(resolvedLang, "cardArrows").toUpperCase()}`,
+    scoreBoxCenterX,
+    218,
+    290
+  );
 
   // 3. Virtual Target Position & Size based on Design 1 (Black) vs Design 2 (Photo / Transparent)
   // Design 1 (Black): +30% centered target -> diameter 754px (radius 377px), center (540, 771)
@@ -508,11 +584,26 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   const boxGap = 16;
   const boxW = 231; // 4 * 231 + 3 * 16 = 972px (54..1026)
 
+  const hasGrouping = Boolean(dispersion && dispersion.spreadCm > 0);
   const kpiItems = [
-    { title: "PROMEDIO", main: `${avgArrow} PTS` },
-    { title: "PRECISIÓN", main: `${tensCount} 10s • ${xsCount} Xs` },
-    { title: "KCAL", main: `${computedKcal} kcal` },
-    { title: "DISTANCIA", main: formatMetersAndFeet(computedDistanceM, false) }
+    {
+      title: tCard(resolvedLang, "cardAverage").toUpperCase(),
+      main: `${avgArrow} pts`
+    },
+    {
+      title: hasGrouping
+        ? tCard(resolvedLang, "cardGrouping").toUpperCase()
+        : tCard(resolvedLang, "precisionLabel").toUpperCase(),
+      main: hasGrouping ? `Ø ${dispersion!.spreadCm.toFixed(1)} cm` : `${tensCount} 10s • ${xsCount} Xs`
+    },
+    {
+      title: tCard(resolvedLang, "cardCalories").toUpperCase(),
+      main: `${computedKcal} kcal`
+    },
+    {
+      title: tCard(resolvedLang, "cardWalked").toUpperCase(),
+      main: formatWalkedDistanceRegional(computedDistanceM, resolvedUnitSystem)
+    }
   ];
 
   kpiItems.forEach((item, idx) => {
@@ -648,23 +739,39 @@ export async function triggerNativeImageShare(
  * - Fondo Transparente
  */
 export async function shareTargetShotChart(params: TargetShotChartParams): Promise<ShareTargetResult> {
+  const resolvedLang = resolveCardLang(params.lang);
+  const resolvedUnitSystem = resolveCardUnitSystem(params.unitSystem);
+  const isSpanish = resolvedLang.toLowerCase().startsWith("es");
+  const displayShootDist =
+    params.distanceLabel || formatShootingDistance(params.distanceM, resolvedUnitSystem);
+
   const initialParams: TargetShotChartParams = {
     ...params,
+    lang: resolvedLang,
+    unitSystem: resolvedUnitSystem,
+    distanceLabel: displayShootDist,
+    dateStr: params.dateStr || formatRegionalDate(new Date(), resolvedLang),
     themeMode: params.themeMode || "black"
   };
   const canvas = await renderTargetShotChartCanvas(initialParams);
   const dataUrl = canvas.toDataURL("image/png");
-  const fileName = `Archery101010-Telemetria-${Date.now()}.png`;
+  const fileName = `Archery101010-Telemetry-${Date.now()}.png`;
   const totalArrows =
     params.ends && params.ends.length > 0
       ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
       : params.impacts?.length || 0;
   const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
-  const captionText =
-    `🎯 *ARCHERY 101010 THE APP*\n` +
-    `• *Arquero:* ${params.archerName || "Arquero"}\n` +
-    `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
-    `• *Precisión:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${params.distanceM}m`;
+
+  const archerFallback = tCard(resolvedLang, "roleAthlete");
+  const captionText = isSpanish
+    ? `🎯 *ARCHERY 101010 THE APP*\n` +
+      `• *Arquero:* ${params.archerName || "Arquero"}\n` +
+      `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
+      `• *Precisión:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}`
+    : `🎯 *ARCHERY 101010 THE APP*\n` +
+      `• *${archerFallback}:* ${params.archerName || archerFallback}\n` +
+      `• *${tCard(resolvedLang, "cardScore")}:* ${params.score} / ${effectiveMax} pts\n` +
+      `• *10s / Xs:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}`;
 
   return {
     sharedNatively: false,
@@ -676,11 +783,15 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
 }
 
 /**
- * Formats the complete Scorecard (Planilla) WITHOUT any homepage URL so WhatsApp
- * never converts it into a homepage link preview, and shares it junto con la
- * captura gráfica ARCHERY 101010 THE APP directamente por WhatsApp.
+ * Formats the complete Scorecard (Planilla) WITHOUT any homepage URL and shares
+ * the PNG telemetry card + scorecard text via universal native OS sharing
+ * (KakaoTalk, LINE, iMessage, Telegram, Mail, etc.) with messaging fallback.
  */
 export async function shareScorecardWhatsAppNative(params: TargetShotChartParams): Promise<ShareTargetResult> {
+  const resolvedLang = resolveCardLang(params.lang);
+  const resolvedUnitSystem = resolveCardUnitSystem(params.unitSystem);
+  const isSpanish = resolvedLang.toLowerCase().startsWith("es");
+
   const {
     ends = [],
     score,
@@ -708,7 +819,20 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
   const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
   const avgPerArrow = totalArrows > 0 ? (score / totalArrows).toFixed(2) : "0.00";
   const bowLabel =
-    bowType === "Recurve" ? "Recurvo" : bowType === "Compound" ? "Compuesto" : bowType || "Recurvo";
+    bowType === "Recurve"
+      ? tCard(resolvedLang, "bowRecurve")
+      : bowType === "Compound"
+      ? tCard(resolvedLang, "bowCompound")
+      : bowType === "Barebow"
+      ? tCard(resolvedLang, "bowBarebow")
+      : bowType || tCard(resolvedLang, "bowRecurve");
+  const displayShootDist =
+    params.distanceLabel || formatShootingDistance(distanceM, resolvedUnitSystem);
+  const displayFormat = format === "Libre" && !isSpanish ? "Custom" : format;
+  const walkedStr =
+    typeof params.distanceWalkedM === "number" && params.distanceWalkedM > 0
+      ? formatWalkedDistanceRegional(params.distanceWalkedM, resolvedUnitSystem)
+      : "";
 
   const endsDetail = ends
     .map((e, idx) => {
@@ -723,35 +847,62 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     .filter(Boolean)
     .join("\n");
 
-  const message =
-    `*PLANILLA OFICIAL · ARCHERY 101010 THE APP*\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `• *Arquero:* ${archerName || "Arquero"}\n` +
-    `• *Arco:* ${bowLabel}\n` +
-    `• *Modalidad:* ${format} · ${distanceM}m\n` +
-    `• *Flechas Tiradas:* ${totalArrows}\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `*PUNTUACIÓN TOTAL:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
-    `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
-    `• *Promedio:* ${avgPerArrow} pts\n` +
-    (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
-    (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🎯 *ARCHERY 101010 THE APP*`;
+  const archerFallback = tCard(resolvedLang, "roleAthlete");
+  const message = isSpanish
+    ? `*PLANILLA OFICIAL · ARCHERY 101010 THE APP*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Arquero:* ${archerName || "Arquero"}\n` +
+      `• *Arco:* ${bowLabel}\n` +
+      `• *Modalidad:* ${displayFormat} · ${displayShootDist}\n` +
+      `• *Flechas Tiradas:* ${totalArrows}\n` +
+      (walkedStr ? `• *Recorrido:* ${walkedStr}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `*PUNTUACIÓN TOTAL:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
+      `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
+      `• *Promedio:* ${avgPerArrow} pts\n` +
+      (endsDetail ? `\n*Desglose de Tiradas:*\n${endsDetail}\n` : "") +
+      (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎯 *ARCHERY 101010 THE APP*`
+    : `*OFFICIAL SCORECARD · ARCHERY 101010 THE APP*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *${archerFallback}:* ${archerName || archerFallback}\n` +
+      `• *${tCard(resolvedLang, "bowType")}:* ${bowLabel}\n` +
+      `• *${tCard(resolvedLang, "sessionFormat")}:* ${displayFormat} · ${displayShootDist}\n` +
+      `• *${tCard(resolvedLang, "cardArrows")}:* ${totalArrows}\n` +
+      (walkedStr ? `• *${tCard(resolvedLang, "cardWalked")}:* ${walkedStr}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `*${tCard(resolvedLang, "cardScore")}:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
+      `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
+      `• *${tCard(resolvedLang, "cardAverage")}:* ${avgPerArrow} pts\n` +
+      (endsDetail ? `\n*Ends Breakdown:*\n${endsDetail}\n` : "") +
+      (sessionNote ? `\n*Notes:* ${sessionNote}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎯 *ARCHERY 101010 THE APP*`;
 
-  const canvas = await renderTargetShotChartCanvas(params);
+  const enrichedParams: TargetShotChartParams = {
+    ...params,
+    lang: resolvedLang,
+    unitSystem: resolvedUnitSystem,
+    distanceLabel: displayShootDist,
+    dateStr: params.dateStr || formatRegionalDate(new Date(), resolvedLang)
+  };
+  const canvas = await renderTargetShotChartCanvas(enrichedParams);
   const dataUrl = canvas.toDataURL("image/png");
-  const fileName = `Archery101010-Planilla-${Date.now()}.png`;
+  const fileName = `Archery101010-Scorecard-${Date.now()}.png`;
+  const shareTitle = `${archerName || archerFallback} • ARCHERY 101010 THE APP`;
 
-  if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
+  // 1. Universal Native Android Chooser (supports KakaoTalk, LINE, Messages, Telegram, etc.)
+  if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareImage) {
     try {
-      window.ArcheryNativeShare.shareWhatsAppImage(dataUrl, fileName, message);
-      return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
+      window.ArcheryNativeShare.shareImage(dataUrl, fileName, shareTitle, message);
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params: enrichedParams };
     } catch (err) {
-      console.error("Native shareWhatsAppImage error:", err);
+      console.error("Native shareImage error:", err);
     }
   }
 
+  // 2. Universal Web Share API with PNG File + Scorecard Text
   try {
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png", 0.95));
     if (blob && typeof navigator !== "undefined" && navigator.canShare) {
@@ -759,15 +910,32 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `Planilla ${archerName || "Arquero"} • ARCHERY 101010 THE APP`,
+          title: shareTitle,
           text: message
         });
-        return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
+        return { sharedNatively: true, dataUrl, fileName, captionText: message, params: enrichedParams };
       }
+    }
+    if (typeof navigator !== "undefined" && navigator.share) {
+      await navigator.share({
+        title: shareTitle,
+        text: message
+      });
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params: enrichedParams };
     }
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      return { sharedNatively: true, dataUrl, fileName, captionText: message, params };
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params: enrichedParams };
+    }
+  }
+
+  // 3. Fallback native bridge or protocol link
+  if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareWhatsAppImage) {
+    try {
+      window.ArcheryNativeShare.shareWhatsAppImage(dataUrl, fileName, message);
+      return { sharedNatively: true, dataUrl, fileName, captionText: message, params: enrichedParams };
+    } catch (err) {
+      console.error("Fallback shareWhatsAppImage error:", err);
     }
   }
 
@@ -775,5 +943,5 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
   if (typeof window !== "undefined") {
     window.location.href = `whatsapp://send?text=${encoded}`;
   }
-  return { sharedNatively: false, dataUrl, fileName, captionText: message, params };
+  return { sharedNatively: false, dataUrl, fileName, captionText: message, params: enrichedParams };
 }

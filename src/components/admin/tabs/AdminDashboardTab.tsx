@@ -7,6 +7,8 @@ import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, getLocalSessions, getSyncQueue, adCampaignsStore } from "@/lib/db/indexedDB";
 import { COUNTRIES_MAP as COUNTRIES } from "@/lib/countries";
 import { fetchAdminGlobalCounts, fetchAdminUsersPage, AdminGlobalCounts } from "@/lib/adminCloudPagination";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 
 interface RealActivityItem {
   id: string;
@@ -19,7 +21,7 @@ interface RealActivityItem {
   iconColor: string;
 }
 
-function formatTimeAgo(timestamp?: number | string): string {
+function formatTimeAgo(timestamp?: number | string, lang: string = "es"): string {
   if (!timestamp) return "Fecha no registrada";
   const num = typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp;
   if (isNaN(num) || num <= 0) return "Fecha no registrada";
@@ -32,10 +34,11 @@ function formatTimeAgo(timestamp?: number | string): string {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays === 1) return "ayer";
   if (diffDays < 30) return `hace ${diffDays} días`;
-  return new Date(num).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+  return formatRegionalDate(num, lang, { day: "2-digit", month: "short" });
 }
 
 export default function AdminDashboardTab() {
+  const { language } = useLanguage();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [syncQueueCount, setSyncQueueCount] = useState<number>(0);
@@ -113,7 +116,7 @@ export default function AdminDashboardTab() {
           user: s.archerName || s.athleteName || s.userName || "Arquero",
           action: "completó sesión de entrenamiento",
           detail: `${arrowsCount} flechas${s.distance ? ` a ${s.distance}m` : ""}${s.bowType ? ` (${s.bowType})` : ""} • ${score} pts`,
-          timeAgo: formatTimeAgo(ts),
+          timeAgo: formatTimeAgo(ts, language),
           timestamp: ts,
           icon: Activity,
           iconColor: "text-cyan-neon"
@@ -137,7 +140,7 @@ export default function AdminDashboardTab() {
             user: u.fullName || u.email || "Usuario",
             action: "se registró en la plataforma",
             detail: `${roleLabel} • Arco: ${u.bowConfig?.type || "Sin definir"}${u.country ? ` • ${u.country}` : ""}`,
-            timeAgo: formatTimeAgo(ts),
+            timeAgo: formatTimeAgo(ts, language),
             timestamp: ts,
             icon: Users,
             iconColor: "text-green-400"
@@ -153,7 +156,7 @@ export default function AdminDashboardTab() {
           user: l.userName || "Usuario",
           action: `cambió plan a ${l.newPlan}`,
           detail: l.reason || "Actualización de suscripción",
-          timeAgo: formatTimeAgo(ts),
+          timeAgo: formatTimeAgo(ts, language),
           timestamp: ts,
           icon: CreditCard,
           iconColor: "text-yellow-gold"
@@ -168,7 +171,7 @@ export default function AdminDashboardTab() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     loadRealData();

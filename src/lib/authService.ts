@@ -1,5 +1,10 @@
 import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
 import { auth, db } from "./firebase";
+import {
+  toStandardLangCode,
+  getMinimumConsentAge,
+  getDefaultUnitSystemForCountry
+} from "./i18n/regionalUtils";
 import { collection, doc, getDoc, setDoc, query, where, getDocs, limit } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
@@ -60,6 +65,7 @@ export interface UserProfile {
   /** Epoch ms when the free monthly Coach PRO access expires (re-activated by the coach once a month, still free). */
   proExpiresAt?: number;
   isClubCreator: boolean;
+  unitSystem?: "metric" | "imperial";
   whatsappNumber?: string;
   clubInviteCode?: string;
   profileSetupCompleted?: boolean;
@@ -358,6 +364,25 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
   return localOwners.find((u) => u.isClubCreator) || localOwners[0] || localMatches[0] || null;
 }
 
+function resolveActiveAuthLanguage(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("preferred_language");
+      if (saved && saved.trim()) {
+        return toStandardLangCode(saved);
+      }
+    } catch {}
+    const browserLang =
+      typeof navigator !== "undefined" ? navigator.language?.split("-")[0] : "";
+    return toStandardLangCode(browserLang || "en");
+  }
+  return "en";
+}
+
+function txAuth(esText: string, enText: string): string {
+  return resolveActiveAuthLanguage() === "es" ? esText : enText;
+}
+
 export function translateFirebaseAuthError(err: any): string {
   const code = err?.code || "";
   if (
@@ -366,42 +391,75 @@ export function translateFirebaseAuthError(err: any): string {
     code === "auth/user-not-found" ||
     code === "auth/invalid-login-credentials"
   ) {
-    return "Correo o contraseña incorrectos. Si creaste tu cuenta con Google, usa el botón 'Iniciar con Google' o pulsa '¿Olvidaste tu contraseña?' para asignarle una clave.";
+    return txAuth(
+      "Correo o contraseña incorrectos. Si creaste tu cuenta con Google, usa el botón 'Iniciar con Google' o pulsa '¿Olvidaste tu contraseña?' para asignarle una clave.",
+      "Incorrect email or password. If you signed up with Google, use 'Sign in with Google' or tap 'Forgot your password?' to set a password."
+    );
   }
   if (code === "auth/email-already-in-use") {
-    return "Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.";
+    return txAuth(
+      "Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.",
+      "This email address is already registered. Please sign in or reset your password."
+    );
   }
   if (code === "auth/account-exists-with-different-credential") {
-    return "Ya existe una cuenta con este correo vinculada a otro método de ingreso (Google o Correo). Inicia sesión con el método que usaste originalmente.";
+    return txAuth(
+      "Ya existe una cuenta con este correo vinculada a otro método de ingreso (Google o Correo). Inicia sesión con el método que usaste originalmente.",
+      "An account with this email already exists under another sign-in method (Google, Apple, or Email). Please sign in using your original method."
+    );
   }
   if (code === "auth/weak-password") {
-    return "La contraseña debe tener al menos 6 caracteres.";
+    return txAuth(
+      "La contraseña debe tener al menos 6 caracteres.",
+      "Password must be at least 6 characters long."
+    );
   }
   if (code === "auth/invalid-email") {
-    return "El formato del correo electrónico no es válido.";
+    return txAuth(
+      "El formato del correo electrónico no es válido.",
+      "Invalid email address format."
+    );
   }
   if (code === "auth/user-disabled") {
-    return "Esta cuenta ha sido deshabilitada temporalmente. Contacta al soporte de Archery 101010.";
+    return txAuth(
+      "Esta cuenta ha sido deshabilitada temporalmente. Contacta al soporte de Archery 101010.",
+      "This account has been temporarily disabled. Please contact ARCHERY 101010 support."
+    );
   }
   if (code === "auth/too-many-requests") {
-    return "Demasiados intentos fallidos. Por seguridad, espera unos minutos o restablece tu contraseña.";
+    return txAuth(
+      "Demasiados intentos fallidos. Por seguridad, espera unos minutos o restablece tu contraseña.",
+      "Too many failed attempts. For security, please wait a few minutes or reset your password."
+    );
   }
   if (code === "auth/network-request-failed") {
-    return "Error de conexión. Verifica tu acceso a internet e inténtalo de nuevo.";
+    return txAuth(
+      "Error de conexión. Verifica tu acceso a internet e inténtalo de nuevo.",
+      "Network connection error. Please check your internet access and try again."
+    );
   }
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-    return "Inicio de sesión cancelado.";
+    return txAuth("Inicio de sesión cancelado.", "Sign-in cancelled.");
   }
   if (code === "auth/popup-blocked") {
-    return "Las ventanas emergentes están bloqueadas en tu navegador. Permítelas o ingresa con tu correo y contraseña.";
+    return txAuth(
+      "Las ventanas emergentes están bloqueadas en tu navegador. Permítelas o ingresa con tu correo y contraseña.",
+      "Pop-up windows are blocked in your browser. Please allow them or sign in with email and password."
+    );
   }
   if (code === "auth/operation-not-allowed" || code === "auth/configuration-not-found") {
-    return "Este método de inicio de sesión aún no está habilitado en el servidor. Por favor ingresa con tu correo y contraseña.";
+    return txAuth(
+      "Este método de inicio de sesión aún no está habilitado en el servidor. Por favor ingresa con tu correo y contraseña.",
+      "This sign-in method is not enabled yet. Please sign in with your email and password."
+    );
   }
   if (code === "auth/requires-recent-login") {
-    return "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta.";
+    return txAuth(
+      "Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta.",
+      "For security, please log out and sign in again before deleting your account."
+    );
   }
-  return err?.message || "Error de autenticación.";
+  return err?.message || txAuth("Error de autenticación.", "Authentication error.");
 }
 
 function isSuperAdminEmail(email?: string | null): boolean {
@@ -430,14 +488,25 @@ export async function getLoggedUser(): Promise<UserProfile | null> {
 export async function sendPasswordReset(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) {
-    throw new Error("Ingresa tu correo electrónico para enviarte el enlace de recuperación.");
+    throw new Error(
+      txAuth(
+        "Ingresa tu correo electrónico para enviarte el enlace de recuperación.",
+        "Enter your email address to receive a password reset link."
+      )
+    );
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(cleanEmail)) {
-    throw new Error("El formato del correo electrónico no es válido.");
+    throw new Error(
+      txAuth(
+        "El formato del correo electrónico no es válido.",
+        "Invalid email address format."
+      )
+    );
   }
   try {
-    auth.languageCode = "es";
+    const activeLang = resolveActiveAuthLanguage();
+    auth.languageCode = activeLang;
     const continueUrl =
       typeof window !== "undefined" && window.location?.origin
         ? window.location.origin
@@ -630,17 +699,45 @@ export async function registerUser(
   const rawPassword = profileData.password;
 
   if (!rawPassword || rawPassword.length < 6) {
-    throw new Error("La contraseña debe tener al menos 6 caracteres.");
+    throw new Error(
+      txAuth(
+        "La contraseña debe tener al menos 6 caracteres.",
+        "Password must be at least 6 characters long."
+      )
+    );
   }
 
-  // Validate birthDate and enforce COPPA 13+ age gate BEFORE creating Firebase Auth account
+  // Validate birthDate and enforce regional digital consent age gate (18+ mandatory for Coaches) BEFORE creating Firebase Auth account
   const age = calculateAgeFromBirthDate(profileData.birthDate);
   if (age === null) {
-    throw new Error("Ingresa una fecha de nacimiento válida (no se permiten fechas futuras).");
+    throw new Error(
+      txAuth(
+        "Ingresa una fecha de nacimiento válida (no se permiten fechas futuras).",
+        "Please enter a valid date of birth (future dates are not allowed)."
+      )
+    );
   }
-  if (age < 13) {
-    throw new Error("Debes tener al menos 13 años para crear una cuenta en ARCHERY 101010.");
+  const minConsentAge = getMinimumConsentAge(profileData.country);
+  const requiresCoachAdultAge =
+    profileData.clubId === "CREATE_NEW" || profileData.actAsCoach === true;
+  if (requiresCoachAdultAge && age < 18) {
+    throw new Error(
+      txAuth(
+        "Debes tener al menos 18 años para crear un club o registrarte como Coach.",
+        "You must be at least 18 years old to create a club or register as a Coach."
+      )
+    );
   }
+  if (age < minConsentAge) {
+    throw new Error(
+      txAuth(
+        `Debes tener al menos ${minConsentAge} años en tu país para crear una cuenta en ARCHERY 101010.`,
+        `You must be at least ${minConsentAge} years old in your country to create an ARCHERY 101010 account.`
+      )
+    );
+  }
+
+  auth.languageCode = resolveActiveAuthLanguage();
 
   // 1. Create account in Firebase Authentication so UID matches request.auth.uid in Firestore rules
   let uid = "";
@@ -707,6 +804,7 @@ export async function registerUser(
     role: finalRole,
     plan: finalRole === "superadmin" ? "PRO" : "FREE", // Todas las cuentas inician FREE; Coach PRO se activa gratis cada mes
     isClubCreator: isCreator,
+    unitSystem: profileData.unitSystem || getDefaultUnitSystemForCountry(profileData.country),
     clubInviteCode: inviteCode,
     clubLogo,
     clubCountry,
@@ -1436,14 +1534,15 @@ export async function authenticateWithSocialProvider(
     (!!(window as any).Capacitor?.isNativePlatform?.() ||
       !!(window as any).ArcheryNativeAuth);
 
-  auth.languageCode = "es";
+  const activeLang = resolveActiveAuthLanguage();
+  auth.languageCode = activeLang;
 
   // Apple Sign-In (Apple App Store Guideline 4.8 compliance)
   if (providerName === "apple") {
     const appleProvider = new OAuthProvider("apple.com");
     appleProvider.addScope("email");
     appleProvider.addScope("name");
-    appleProvider.setCustomParameters({ locale: auth.languageCode || "es" });
+    appleProvider.setCustomParameters({ locale: activeLang });
 
     try {
       const result = await signInWithPopup(auth, appleProvider);
@@ -1488,10 +1587,15 @@ export async function authenticateWithSocialProvider(
 
       if (!payload || !payload.success) {
         if (payload?.statusCode === 12501 || payload?.statusCode === 16) {
-          throw new Error("Inicio de sesión cancelado.");
+          throw new Error(txAuth("Inicio de sesión cancelado.", "Sign-in cancelled."));
         }
         if (payload?.statusCode === -2) {
-          throw new Error("Google tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.");
+          throw new Error(
+            txAuth(
+              "Google tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.",
+              "Google took too long to respond. Check your connection and try again."
+            )
+          );
         }
         // If native Play Services GoogleSignIn fails with statusCode 10 (e.g., Play App Signing SHA-1 mismatch) or 12500,
         // seamlessly fall through to the Web OAuth 2.0 id_token flow (which uses GOOGLE_WEB_CLIENT_ID and never checks SHA-1)
@@ -1527,18 +1631,19 @@ export async function authenticateWithSocialProvider(
       `&response_type=id_token` +
       `&scope=${encodeURIComponent("openid email profile")}` +
       `&nonce=${encodeURIComponent(nonce)}` +
+      `&hl=${encodeURIComponent(activeLang)}` +
       `&prompt=select_account`;
     window.location.assign(oauthUrl);
     return null;
   }
 
-  const provider = new GoogleAuthProvider();
-  provider.addScope("email");
-  provider.addScope("profile");
-  provider.setCustomParameters({ prompt: "select_account" });
+  const googleProvider = new GoogleAuthProvider();
+  googleProvider.addScope("email");
+  googleProvider.addScope("profile");
+  googleProvider.setCustomParameters({ prompt: "select_account", hl: activeLang });
 
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, googleProvider);
     const u = result.user;
     const email = requireRealEmail(u.email, u.providerData?.find((p) => p.email)?.email);
     const displayName = u.displayName || u.providerData?.find((p) => p.displayName)?.displayName || "";
@@ -1546,7 +1651,7 @@ export async function authenticateWithSocialProvider(
     return await loginSocialUser(email, displayName, u.uid);
   } catch (popupErr: any) {
     if (popupErr?.code === "auth/popup-blocked") {
-      await signInWithRedirect(auth, provider);
+      await signInWithRedirect(auth, googleProvider);
       return null;
     }
     throw new Error(translateFirebaseAuthError(popupErr));

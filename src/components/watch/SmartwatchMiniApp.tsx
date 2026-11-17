@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, RefreshCw, Copy, Check, Link2, Unlink } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { formatWalkedDistanceRegional } from "@/lib/i18n/regionalUtils";
 import {
   BiometricSessionSnapshot,
   WatchConnectionStatus,
   CloudWatchPairingStatus,
-  formatKmAndMiles,
   publishWatchState,
   readStoredWatchState,
   sendWatchCommand,
@@ -56,6 +57,8 @@ export default function SmartwatchMiniApp({
   onFinishAndSendToCoach
 }: SmartwatchMiniAppProps) {
   const isStandalone = Boolean(standaloneWatchScreen || standalone);
+  const { language, unitSystem, tx } = useLanguage();
+  const isSpanish = language === "es";
 
   // 0: Contador, 1: Puntos (X..M), 2: Métricas, 3: Auto-Tiro, 4: Resumen
   const [screenIdx, setScreenIdx] = useState<number>(0);
@@ -701,7 +704,7 @@ export default function SmartwatchMiniApp({
     requestMotionPermissionFromUserGesture();
     const clean = standaloneCodeInput.replace(/\D/g, "").slice(0, 6);
     if (clean.length !== 6) {
-      setStandaloneLinkError("Ingresa los 6 dígitos");
+      setStandaloneLinkError(tx("Ingresa los 6 dígitos", "Enter all 6 digits"));
       return;
     }
     setStandaloneLinking(true);
@@ -715,7 +718,7 @@ export default function SmartwatchMiniApp({
       setShowStandaloneLinkPanel(false);
       triggerHaptic([40, 30, 50]);
     } else {
-      setStandaloneLinkError(res.error || "No se pudo vincular");
+      setStandaloneLinkError(res.error || tx("No se pudo vincular", "Could not link code"));
     }
   };
 
@@ -741,14 +744,24 @@ export default function SmartwatchMiniApp({
   const digits = String(Math.max(0, Math.min(9999, activeState.arrowsCount)))
     .padStart(4, "0")
     .split("");
-  const mtsVal = Math.round(Math.max(0, Number(activeState.distanceWalkedM) || 0));
-  const ftVal = Math.round(mtsVal * 3.28084);
+  const walkedPrimaryStr = formatWalkedDistanceRegional(activeState.distanceWalkedM, unitSystem);
+  const walkedMetricStr = formatWalkedDistanceRegional(activeState.distanceWalkedM, "metric");
+  const walkedImperialStr = formatWalkedDistanceRegional(activeState.distanceWalkedM, "imperial");
+  const walkedDualStr =
+    unitSystem === "imperial"
+      ? `${walkedImperialStr} · ${walkedMetricStr}`
+      : `${walkedMetricStr} · ${walkedImperialStr}`;
+  const sensitivityDisplay =
+    sensitivity === "BAJA"
+      ? tx("BAJA", "LOW")
+      : sensitivity === "ALTA"
+      ? tx("ALTA", "HIGH")
+      : tx("MEDIA", "MED");
   const perEndCount = Math.max(1, activeState.arrowsPerEnd || 6);
   const currentTanda =
     typeof activeState.currentEndIndex === "number"
       ? activeState.currentEndIndex + 1
       : Math.floor(activeState.arrowsCount / perEndCount) + 1;
-  const totalTandas = Math.max(1, activeState.endsCount || 12);
   const endArrowsList = Array.isArray(activeState.currentEndArrows)
     ? activeState.currentEndArrows
     : [];
@@ -818,8 +831,11 @@ export default function SmartwatchMiniApp({
     >
       <div className="text-center text-[7.5px] font-bold tracking-[0.14em] text-[#8E96A4] uppercase mb-[6px] whitespace-nowrap tabular-nums">
         {highlightGold
-          ? `FLECHA #${activeState.arrowsCount} REGISTRADA`
-          : "VOLUMEN · FLECHAS"}
+          ? tx(
+              `FLECHA #${activeState.arrowsCount} REGISTRADA`,
+              `ARROW #${activeState.arrowsCount} LOGGED`
+            )
+          : tx("VOLUMEN · FLECHAS", "VOLUME · ARROWS")}
       </div>
 
       <div className="grid grid-cols-4 gap-[5px] bg-[#030407] p-[5px] rounded-[9px] border border-white/[0.06]">
@@ -855,6 +871,7 @@ export default function SmartwatchMiniApp({
 
   const WatchFaceContent = () => (
     <div
+      dir="ltr"
       onWheel={handleWheel}
       className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none transition-all ${
         isSquare ? "rounded-[48px]" : "rounded-full"
@@ -872,16 +889,16 @@ export default function SmartwatchMiniApp({
           screenIdx === 1 ? "gap-[4.5px] mb-[11px]" : "gap-[10px] mb-[6px]"
         } z-10`}
       >
-        {/* SCREEN 00: CONTADOR + AUTO-TIRO */}
+        {/* SCREEN 00: CONTADOR + AUTO-TIRO / COUNTER + AUTO SHOT */}
         {screenIdx === 0 && (
           <>
             <WatchBrandHeader
               pillText={
                 justDetectedShot
-                  ? "SUELTA DETECTADA · +1"
+                  ? tx("SUELTA DETECTADA · +1", "SHOT DETECTED · +1")
                   : activeState.autoDetectEnabled
-                  ? `AUTO · ${sensitivity}`
-                  : "MODO MANUAL"
+                  ? `${tx("AUTO TIRO", "AUTO SHOT")} · ${sensitivityDisplay}`
+                  : tx("MODO MANUAL", "MANUAL MODE")
               }
               pillColor={justDetectedShot ? "yellow" : "cyan"}
               onClickPill={handleToggleAuto}
@@ -897,7 +914,7 @@ export default function SmartwatchMiniApp({
               <button
                 type="button"
                 onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
-                aria-label="−1 flecha"
+                aria-label={tx("−1 flecha", "−1 arrow")}
                 className="w-[34px] h-[26px] rounded-full bg-[#180709] border border-[#FF1E1E]/65 text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
               >
                 −1
@@ -908,17 +925,17 @@ export default function SmartwatchMiniApp({
                 className="flex flex-col items-center cursor-pointer text-center"
               >
                 <div className="text-[10.5px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
-                  {mtsVal} mts · {activeState.activeKcal} kcal
+                  {walkedPrimaryStr} · {activeState.activeKcal} kcal
                 </div>
                 <span className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1.5px]">
-                  TANDA {currentTanda} · {activeState.distanceM} M
+                  {tx("TANDA", "END")} {currentTanda} · {activeState.distanceM} M
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={() => handleArrowDelta(1, "watch_manual")}
-                aria-label="+1 flecha"
+                aria-label={tx("+1 flecha", "+1 arrow")}
                 className="w-[34px] h-[26px] rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
               >
                 +1
@@ -947,7 +964,8 @@ export default function SmartwatchMiniApp({
               }`}
             >
               <div className="h-[18px] px-[7px] rounded-full bg-[#050D17] border border-[#00A8F3] text-white text-[9px] font-extrabold tracking-[0.03em] tabular-nums flex items-center justify-center whitespace-nowrap shrink-0">
-                T{currentTanda}·{activeState.totalScore || 0}P
+                {tx("T", "E")}
+                {currentTanda}·{activeState.totalScore || 0}P
               </div>
 
               <div className="flex items-center justify-end gap-[2.5px] flex-1 min-w-0">
@@ -1015,7 +1033,7 @@ export default function SmartwatchMiniApp({
               })}
             </div>
 
-            {/* Bottom Actions: BORRAR | SIG. TANDA */}
+            {/* Bottom Actions: BORRAR / DEL | SIG. TANDA / NEXT END */}
             <div
               className={`${
                 isSquare ? "w-[212px]" : "w-[172px]"
@@ -1026,24 +1044,24 @@ export default function SmartwatchMiniApp({
                 onClick={handleUndoScore}
                 className="h-[27px] rounded-full bg-[#0B0E15] border-[1.5px] border-[#475569] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
               >
-                BORRAR
+                {tx("BORRAR", "DEL")}
               </button>
               <button
                 type="button"
                 onClick={handleNextEnd}
                 className="h-[27px] rounded-full bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
               >
-                SIG. TANDA
+                {tx("SIG. TANDA", "NEXT END")}
               </button>
             </div>
           </>
         )}
 
-        {/* SCREEN 02: MÉTRICAS (MTS/FT + KCAL) */}
+        {/* SCREEN 02: BIOMETRICS (DISTANCE + STEPS + KCAL) */}
         {screenIdx === 2 && (
           <>
             <WatchBrandHeader
-              pillText="PODÓMETRO · PASOS"
+              pillText={tx("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS")}
               pillColor="yellow"
             />
 
@@ -1051,23 +1069,22 @@ export default function SmartwatchMiniApp({
               <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase whitespace-nowrap">
-                    DISTANCIA RECORRIDA
+                    {tx("DISTANCIA RECORRIDA", "WALKED DISTANCE")}
                   </div>
-                  <div className="text-[14.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
-                    {mtsVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">mts</span>
-                    {" · "}
-                    {ftVal} <span className="text-[9.5px] font-bold text-[#8E96A4]">ft</span>
+                  <div className="text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
+                    {walkedDualStr}
                   </div>
                 </div>
-                <span className="text-[7px] font-extrabold text-white border border-[#00A8F3]/50 bg-[#04101C] px-1.5 py-0.5 rounded uppercase shrink-0">
-                  PASOS
+                <span className="text-[7px] font-extrabold text-white border border-[#00A8F3]/50 bg-[#04101C] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
+                  {activeState.stepsCount ? `${activeState.stepsCount} ` : ""}
+                  {tx("PASOS", "STEPS")}
                 </span>
               </div>
 
               <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase whitespace-nowrap">
-                    GASTO ENERGÉTICO
+                    {tx("GASTO ENERGÉTICO", "ACTIVE ENERGY")}
                   </div>
                   <div className="text-[15.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
                     {activeState.activeKcal}{" "}
@@ -1075,23 +1092,25 @@ export default function SmartwatchMiniApp({
                   </div>
                 </div>
                 <span className="text-[7px] font-extrabold text-[#FFE500] border border-[#FFE500]/50 bg-[#101008] px-1.5 py-0.5 rounded uppercase shrink-0">
-                  ACTIVA
+                  {tx("ACTIVA", "ACTIVE")}
                 </span>
               </div>
             </div>
 
             <div className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums">
-              {activeState.arrowsCount} FLECHAS · {activeState.bowPoundageLbs} LBS
+              {activeState.arrowsCount} {tx("FLECHAS", "ARROWS")} · {activeState.bowPoundageLbs} LBS
             </div>
           </>
         )}
 
-        {/* SCREEN 03: AUTO-TIRO & SENSIBILIDAD */}
+        {/* SCREEN 03: AUTO-SHOT & SENSITIVITY */}
         {screenIdx === 3 && (
           <>
             <WatchBrandHeader
               pillText={
-                activeState.autoDetectEnabled ? "SUELTA AUTOMÁTICA · +1" : "DETECTOR EN PAUSA"
+                activeState.autoDetectEnabled
+                  ? tx("AUTO TIRO · +1", "AUTO SHOT · +1")
+                  : tx("MODO MANUAL", "MANUAL MODE")
               }
               pillColor="yellow"
               onClickPill={handleToggleAuto}
@@ -1107,7 +1126,7 @@ export default function SmartwatchMiniApp({
                   isSquare ? "w-[214px]" : "w-[196px]"
                 } py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8px] font-extrabold tracking-[0.08em] uppercase active:scale-95 transition cursor-pointer whitespace-nowrap`}
               >
-                ACTIVAR SENSOR DE MUÑECA
+                {tx("ACTIVAR SENSOR DE MUÑECA", "ENABLE WRIST SENSOR")}
               </button>
             ) : (
               <div
@@ -1124,10 +1143,10 @@ export default function SmartwatchMiniApp({
                   className="text-left cursor-pointer"
                 >
                   <div className="text-[7px] font-bold text-[#8E96A4] tracking-[0.1em] uppercase whitespace-nowrap">
-                    SENSIBILIDAD · {sensitivity}
+                    {tx("SENSIBILIDAD", "SENSITIVITY")} · {sensitivityDisplay}
                   </div>
                   <div className="text-[9px] font-extrabold text-white uppercase whitespace-nowrap">
-                    COMPUESTO / RECURVO
+                    {tx("COMPUESTO / RECURVO", "COMPOUND / RECURVE")}
                   </div>
                 </button>
 
@@ -1143,27 +1162,32 @@ export default function SmartwatchMiniApp({
           </>
         )}
 
-        {/* SCREEN 04: RESUMEN Y ENVÍO A COACH */}
+        {/* SCREEN 04: SUMMARY & SAVE */}
         {screenIdx === 4 && (
           <>
             <WatchBrandHeader
-              pillText={isWatchConnected ? "RELOJ CONECTADO" : "RESUMEN DE SESIÓN"}
+              pillText={
+                isWatchConnected
+                  ? tx("RELOJ CONECTADO", "WATCH SYNCED")
+                  : tx("RESUMEN", "SUMMARY")
+              }
               pillColor={isWatchConnected ? "cyan" : "muted"}
             />
 
             <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} grid grid-cols-2 gap-1.5`}>
               <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl p-1.5 text-center">
                 <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  FLECHAS
+                  {tx("FLECHAS", "ARROWS")}
                 </div>
                 <div className="text-[14.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
-                  {activeState.arrowsCount} <span className="text-[9px] text-[#8E96A4]">FL</span>
+                  {activeState.arrowsCount}{" "}
+                  <span className="text-[9px] text-[#8E96A4]">{isSpanish ? "FL" : "AR"}</span>
                 </div>
               </div>
 
               <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl p-1.5 text-center">
                 <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  PUNTOS / KCAL
+                  {tx("PUNTAJE / KCAL", "SCORE / KCAL")}
                 </div>
                 <div className="text-[13.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
                   {activeState.totalScore || 0}
@@ -1174,10 +1198,10 @@ export default function SmartwatchMiniApp({
 
               <div className="col-span-2 bg-[#07090E] border border-[#FFE500]/45 rounded-xl p-1.5 text-center">
                 <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  DISTANCIA TOTAL
+                  {tx("DISTANCIA TOTAL", "TOTAL DISTANCE")}
                 </div>
                 <div className="text-[13px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
-                  {formatKmAndMiles(activeState.distanceWalkedM, true)}
+                  {walkedDualStr}
                 </div>
               </div>
             </div>
@@ -1189,7 +1213,7 @@ export default function SmartwatchMiniApp({
                 isSquare ? "w-[198px]" : "w-[184px]"
               } py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8px] font-extrabold tracking-[0.08em] uppercase active:scale-95 transition cursor-pointer whitespace-nowrap`}
             >
-              ENVIAR SESIÓN A COACH
+              {tx("GUARDAR SESIÓN", "SAVE")}
             </button>
           </>
         )}
@@ -1210,7 +1234,7 @@ export default function SmartwatchMiniApp({
               className={`h-[4px] rounded-full transition-all cursor-pointer ${
                 isCurrent ? "w-[13px] bg-[#00A8F3]" : "w-[4px] bg-white/20"
               }`}
-              aria-label={`Pantalla ${idx + 1}`}
+              aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
             />
           );
         })}
@@ -1222,7 +1246,10 @@ export default function SmartwatchMiniApp({
   if (isStandalone) {
     const linkedCode = cloudStatus.watchLinked ? cloudStatus.pairingCode : "";
     return (
-      <div className="min-h-screen w-full bg-[#020305] flex flex-col items-center justify-center p-2.5 gap-2.5 select-none">
+      <div
+        dir="ltr"
+        className="min-h-screen w-full bg-[#020305] flex flex-col items-center justify-center p-2.5 gap-2.5 select-none"
+      >
         {/* Top Cloud Pairing Status / Toggle Pill */}
         <div className="flex items-center gap-2">
           <button
@@ -1240,7 +1267,9 @@ export default function SmartwatchMiniApp({
               }`}
             />
             <span>
-              {linkedCode ? `CONECTADO · ${linkedCode}` : "VINCULAR CÓDIGO 6 DÍGITOS"}
+              {linkedCode
+                ? `${tx("VINCULADO", "SYNCED")} · ${linkedCode}`
+                : tx("CÓDIGO NUBE · 6 DÍGITOS", "CLOUD CODE · 6 DIGITS")}
             </span>
           </button>
 
@@ -1262,7 +1291,7 @@ export default function SmartwatchMiniApp({
             className="w-full max-w-[284px] bg-[#07090E] border border-white/10 rounded-[18px] p-3 flex flex-col items-center gap-2"
           >
             <div className="text-[8.5px] font-extrabold tracking-[0.12em] text-[#8E96A4] uppercase text-center">
-              CÓDIGO DE RELOJ · 6 DÍGITOS
+              {tx("CÓDIGO NUBE · 6 DÍGITOS", "CLOUD CODE · 6 DIGITS")}
             </div>
             <input
               type="text"
@@ -1293,7 +1322,7 @@ export default function SmartwatchMiniApp({
                   className="flex-1 py-1.5 rounded-full bg-[#180709] border border-[#FF1E1E]/55 text-white text-[8.5px] font-extrabold uppercase tracking-[0.08em] inline-flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Unlink size={10} aria-hidden="true" />
-                  <span>DESVINCULAR</span>
+                  <span>{tx("DESVINCULAR", "UNLINK")}</span>
                 </button>
               ) : (
                 <button
@@ -1301,7 +1330,7 @@ export default function SmartwatchMiniApp({
                   onClick={() => setShowStandaloneLinkPanel(false)}
                   className="px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[#8E96A4] text-[8.5px] font-extrabold uppercase tracking-[0.08em] cursor-pointer"
                 >
-                  CERRAR
+                  {tx("CERRAR", "CLOSE")}
                 </button>
               )}
               <button
@@ -1310,7 +1339,11 @@ export default function SmartwatchMiniApp({
                 className="flex-1 py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8.5px] font-extrabold uppercase tracking-[0.08em] inline-flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
               >
                 <Link2 size={10} aria-hidden="true" />
-                <span>{standaloneLinking ? "CONECTANDO..." : "VINCULAR"}</span>
+                <span>
+                  {standaloneLinking
+                    ? tx("VINCULANDO...", "LINKING...")
+                    : tx("VINCULAR", "LINK")}
+                </span>
               </button>
             </div>
           </form>
@@ -1324,14 +1357,14 @@ export default function SmartwatchMiniApp({
             onClick={() => setScreenIdx((s) => (s + 4) % 5)}
             className="px-3.5 py-1.5 rounded-full bg-[#07090E] border border-white/15 text-white text-[10px] font-extrabold uppercase cursor-pointer"
           >
-            ◀ Anterior
+            {tx("◀ Anterior", "◀ Prev")}
           </button>
           <button
             type="button"
             onClick={() => setScreenIdx((s) => (s + 1) % 5)}
             className="px-3.5 py-1.5 rounded-full bg-[#07090E] border border-white/15 text-white text-[10px] font-extrabold uppercase cursor-pointer"
           >
-            Siguiente ▶
+            {tx("Siguiente ▶", "Next ▶")}
           </button>
         </div>
       </div>
@@ -1350,13 +1383,19 @@ export default function SmartwatchMiniApp({
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label="ARCHERY 101010 · Vista de reloj deportivo"
+        aria-label={tx(
+          "ARCHERY 101010 · Vista de reloj deportivo",
+          "ARCHERY 101010 · Sports watch view"
+        )}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[10050] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-3 select-none overflow-hidden overscroll-contain"
       >
-        <div className="w-full max-w-[384px] max-h-[95dvh] overflow-y-auto overscroll-contain overflow-x-hidden bg-[#06080C] border border-white/10 rounded-[26px] pt-[14px] pb-[14px] px-[14px] flex flex-col items-center gap-[10px] relative">
+        <div
+          dir="ltr"
+          className="w-full max-w-[384px] max-h-[95dvh] overflow-y-auto overscroll-contain overflow-x-hidden bg-[#06080C] border border-white/10 rounded-[26px] pt-[14px] pb-[14px] px-[14px] flex flex-col items-center gap-[10px] relative"
+        >
           {/* Top 101010 tricolor line */}
           <div
             className="absolute top-0 left-12 right-12 h-[2px]"
@@ -1384,8 +1423,14 @@ export default function SmartwatchMiniApp({
                 }`}
                 title={
                   isWatchConnected
-                    ? "Reloj inteligente conectado en tiempo real"
-                    : "Esperando conexión con reloj inteligente"
+                    ? tx(
+                        "Reloj inteligente conectado en tiempo real",
+                        "Smartwatch connected in real time"
+                      )
+                    : tx(
+                        "Esperando conexión con reloj inteligente",
+                        "Waiting for smartwatch connection"
+                      )
                 }
               >
                 <span
@@ -1398,7 +1443,9 @@ export default function SmartwatchMiniApp({
                     isWatchConnected ? "text-white" : "text-[#8E96A4]"
                   }`}
                 >
-                  {isWatchConnected ? "CONECTADO" : "EN ESPERA"}
+                  {isWatchConnected
+                    ? tx("CONECTADO", "CONNECTED")
+                    : tx("EN ESPERA", "STANDBY")}
                 </span>
               </div>
             </div>
@@ -1413,7 +1460,7 @@ export default function SmartwatchMiniApp({
                   pingNativeWatch();
                   setTimeout(() => setIsSyncingWatch(false), 700);
                 }}
-                aria-label="SYNC · Sincronizar reloj"
+                aria-label={tx("SYNC · Sincronizar reloj", "SYNC · Sync watch")}
                 className="bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full px-[10px] py-[5px] text-[8.5px] font-extrabold tracking-[0.06em] uppercase inline-flex items-center gap-[4px] whitespace-nowrap cursor-pointer active:scale-95 transition"
               >
                 <RefreshCw size={10} aria-hidden="true" className={isSyncingWatch ? "animate-spin" : ""} />
@@ -1424,7 +1471,7 @@ export default function SmartwatchMiniApp({
                   type="button"
                   onClick={onClose}
                   className="w-[36px] h-[36px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0"
-                  aria-label="Cerrar vista previa del reloj"
+                  aria-label={tx("Cerrar vista previa del reloj", "Close watch preview")}
                 >
                   <X size={15} aria-hidden="true" />
                 </button>
@@ -1437,20 +1484,23 @@ export default function SmartwatchMiniApp({
             <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap">
-                  CÓDIGO NUBE · RELOJ DEPORTIVO
+                  {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
                 </div>
                 <div className="text-[9px] font-bold text-white/80 truncate">
                   {hasCloudWatchLinked
-                    ? "● Reloj vinculado en vivo"
-                    : "Ingresa este código en tu reloj o /watch"}
+                    ? tx("● Reloj vinculado en vivo", "● Watch linked live")
+                    : tx(
+                        "Ingresa este código en tu reloj o /watch",
+                        "Enter this code on your watch or /watch"
+                      )}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleCopyPairingCode}
                 className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
-                title="Copiar código de 6 dígitos"
-                aria-label={`Copiar código ${pairingCode}`}
+                title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
+                aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
               >
                 <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
                   {pairingCode}
@@ -1474,12 +1524,15 @@ export default function SmartwatchMiniApp({
               className="w-full bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full py-[7px] text-[9px] font-extrabold tracking-[0.08em] uppercase tabular-nums cursor-pointer active:scale-95 transition"
             >
               {watchConnStatus.connectedNodesCount > 0
-                ? "● Instalar en mi reloj"
-                : "● Reloj no detectado · Abrir tienda"}
+                ? tx("● Instalar en mi reloj", "● Install on my watch")
+                : tx(
+                    "● Reloj no detectado · Abrir tienda",
+                    "● Watch not detected · Open store"
+                  )}
             </button>
           )}
 
-          {/* Minimal Mode Switch (Redondo / Cuadrado) */}
+          {/* Minimal Mode Switch (Redondo / Cuadrado | Round / Square) */}
           <div className="w-full grid grid-cols-2 gap-[4px] bg-[#030407] border border-white/[0.08] rounded-[12px] p-[3px]">
             <button
               type="button"
@@ -1490,7 +1543,7 @@ export default function SmartwatchMiniApp({
                   : "text-[#6E7785] border border-transparent hover:text-white/80"
               }`}
             >
-              REDONDO
+              {tx("REDONDO", "ROUND")}
             </button>
             <button
               type="button"
@@ -1501,7 +1554,7 @@ export default function SmartwatchMiniApp({
                   : "text-[#6E7785] border border-transparent hover:text-white/80"
               }`}
             >
-              CUADRADO
+              {tx("CUADRADO", "SQUARE")}
             </button>
           </div>
 
@@ -1515,21 +1568,21 @@ export default function SmartwatchMiniApp({
             <button
               type="button"
               onClick={() => handleArrowDelta(1, "watch_manual")}
-              title="Corona del reloj (+1 flecha)"
-              aria-label="Corona del reloj: sumar 1 flecha"
+              title={tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")}
+              aria-label={tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")}
               className="absolute -right-[7px] top-1/2 -translate-y-1/2 w-[6px] h-[38px] rounded-r-[4px] bg-[#1F242E] border border-[#343B48] cursor-pointer active:scale-95"
             />
             <WatchFaceContent />
           </div>
 
-          {/* Clean Bottom Navigation Tabs (5 screens including PUNTOS) */}
+          {/* Clean Bottom Navigation Tabs (5 screens) */}
           <div className="w-full grid grid-cols-5 gap-[4px]">
             {[
-              { idx: 0, label: "CONTADOR" },
-              { idx: 1, label: "PUNTOS" },
-              { idx: 2, label: "MÉTRICAS" },
+              { idx: 0, label: tx("FLECHAS", "ARROWS") },
+              { idx: 1, label: tx("PUNTOS", "SCORE") },
+              { idx: 2, label: tx("PASOS", "STEPS") },
               { idx: 3, label: "AUTO" },
-              { idx: 4, label: "RESUMEN" }
+              { idx: 4, label: tx("RESUMEN", "SUMMARY") }
             ].map((tab) => (
               <button
                 key={tab.idx}

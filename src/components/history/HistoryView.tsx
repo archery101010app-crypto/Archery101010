@@ -2,15 +2,21 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import {
+  formatRegionalDate,
+  formatShootingDistance,
+  formatWalkedDistanceRegional,
+  getLocalISODate
+} from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSessions, deleteLocalSession, addToSyncQueue, generateResilientId, getLocalSession, saveLocalSession, getLocalSetting, isFictitiousSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, Filter, Target, Trash2, ArrowLeft, Share2, Award, FileText, ChevronRight, Camera } from "lucide-react";
+import { Filter, Target, Trash2, ArrowLeft, Share2, FileText, ChevronRight, Camera, Download } from "lucide-react";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
-import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles, parseBowPoundageLbs } from "@/lib/scoring/biometricsEngine";
+import { getSessionDistanceWalkedM, getSessionActiveKcal, parseBowPoundageLbs } from "@/lib/scoring/biometricsEngine";
 import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
@@ -28,7 +34,7 @@ export default function HistoryView({
   coachViewMode = false,
   onBack
 }: HistoryViewProps) {
-  const { language, t } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   const isCoachResultsView = Boolean(
     coachViewMode &&
       (user?.clubId ||
@@ -40,13 +46,41 @@ export default function HistoryView({
   const canonicalClubId = user?.uid ? `CLB-${user.uid.replace("USR-", "")}` : "";
   const [athleteNamesByUid, setAthleteNamesByUid] = useState<Record<string, string>>({});
 
+  const defaultArcherLabel = t("roleAthlete");
+
   const getSessionAthleteName = (session: any): string => {
-    if (!session) return "Arquero";
+    if (!session) return defaultArcherLabel;
     if (session.userName && String(session.userName).trim()) return String(session.userName).trim();
     const uidKey = session.userId || session.userUid || "";
     if (uidKey && athleteNamesByUid[uidKey]) return athleteNamesByUid[uidKey];
-    if (uidKey && uidKey === user?.uid) return user.fullName || user.nickname || "Arquero";
-    return "Arquero";
+    if (uidKey && uidKey === user?.uid) return user.fullName || user.nickname || defaultArcherLabel;
+    return defaultArcherLabel;
+  };
+
+  const getLocalizedBowName = (bowType?: string): string => {
+    if (bowType === "Recurve") return t("bowRecurve");
+    if (bowType === "Compound") return t("bowCompound");
+    if (bowType === "Barebow") return t("bowBarebow");
+    return bowType || t("bowRecurve");
+  };
+
+  const getLocalizedPracticeName = (practiceType?: string): string => {
+    if (practiceType === "Control") return t("practiceControl");
+    if (practiceType === "Práctica") return t("practicePractice");
+    if (practiceType === "Volumen") return t("practiceVolume");
+    return practiceType || "";
+  };
+
+  const getSessionShootingDistLabel = (session: any): string => {
+    if (session?.distanceUnit === "yd" && session?.distanceValue) {
+      return `${session.distanceValue} yd`;
+    }
+    return formatShootingDistance(
+      Number(session?.distance) || 18,
+      unitSystem,
+      session?.distanceUnit,
+      session?.distanceValue
+    );
   };
   
   // Data State
@@ -87,7 +121,7 @@ export default function HistoryView({
     try {
       const archerName = isCoachResultsView
         ? getSessionAthleteName(session)
-        : user.nickname || user.fullName || "Arquero";
+        : user.nickname || user.fullName || defaultArcherLabel;
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
       const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
       const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
@@ -101,7 +135,8 @@ export default function HistoryView({
             session.targetType
           )
         : null;
-      const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+      const dateStr = formatRegionalDate(session.timestamp, language);
+      const distanceLabel = getSessionShootingDistLabel(session);
 
       const result = await shareTargetShotChart({
         impacts: session.impacts || [],
@@ -112,6 +147,7 @@ export default function HistoryView({
         tensCount: tens,
         xsCount: xs,
         distanceM: Number(session.distance) || 18,
+        distanceLabel,
         bowType: session.bowType || "Recurve",
         format: session.format || "World Archery",
         archerName,
@@ -120,7 +156,9 @@ export default function HistoryView({
         dispersion,
         activeKcal: getSessionActiveKcal(session, user),
         distanceWalkedM: getSessionDistanceWalkedM(session),
-        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs)
+        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs),
+        lang: language,
+        unitSystem
       });
       setStravaSharePreview(result);
     } catch (err) {
@@ -136,11 +174,12 @@ export default function HistoryView({
     try {
       const archerName = isCoachResultsView
         ? getSessionAthleteName(session)
-        : user.nickname || user.fullName || "Arquero";
+        : user.nickname || user.fullName || defaultArcherLabel;
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
       const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
       const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
-      const dateStr = new Date(session.timestamp).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+      const dateStr = formatRegionalDate(session.timestamp, language);
+      const distanceLabel = getSessionShootingDistLabel(session);
 
       const result = await shareScorecardWhatsAppNative({
         impacts: session.impacts || [],
@@ -151,6 +190,7 @@ export default function HistoryView({
         tensCount: tens,
         xsCount: xs,
         distanceM: Number(session.distance) || 18,
+        distanceLabel,
         bowType: session.bowType || "Recurve",
         format: session.format || "World Archery",
         archerName,
@@ -158,14 +198,132 @@ export default function HistoryView({
         sessionNote: session.sessionNote,
         activeKcal: getSessionActiveKcal(session, user),
         distanceWalkedM: getSessionDistanceWalkedM(session),
-        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs)
+        bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs),
+        lang: language,
+        unitSystem
       });
       setStravaSharePreview(result);
     } catch (err) {
-      console.error("Error sharing WhatsApp scorecard from History:", err);
+      console.error("Error sharing scorecard from History:", err);
     } finally {
       setIsGeneratingImage(false);
     }
+  };
+
+  const handleExportCsv = async (customSessions?: any[]) => {
+    const sourceList =
+      customSessions ||
+      (activeTab === "VOLUME"
+        ? sessions.filter((s) => s.deletedByArcher !== true && getSessionArrows(s) > 0)
+        : filteredSessions);
+    if (!sourceList || sourceList.length === 0) return;
+
+    const isEs = language === "es";
+    const headers = isEs
+      ? [
+          "Fecha",
+          "Atleta",
+          "Tipo",
+          "Formato",
+          "Arco",
+          "Distancia",
+          "Flechas",
+          "Puntaje",
+          "Puntaje Máx",
+          "Promedio",
+          "10s",
+          "Xs",
+          "Kcal",
+          "Recorrido",
+          "Notas"
+        ]
+      : [
+          "Date",
+          "Athlete",
+          "Practice Type",
+          "Format",
+          "Bow",
+          "Distance",
+          "Arrows",
+          "Score",
+          "Max Score",
+          "Average",
+          "10s",
+          "Xs",
+          "Kcal",
+          "Walked Distance",
+          "Notes"
+        ];
+
+    const escapeCsvField = (val: unknown): string => {
+      const str = val === undefined || val === null ? "" : String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const rows = sourceList.map((s) => {
+      const arrows = getSessionArrows(s);
+      const score = isVolumeSession(s) ? 0 : getSessionScore(s);
+      const maxSc = isVolumeSession(s) ? 0 : getSessionMaxScore(s);
+      const avg = !isVolumeSession(s) && arrows > 0 ? (score / arrows).toFixed(2) : "0.00";
+      const tens = (s.ends || []).reduce(
+        (acc: number, e: any) =>
+          acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length,
+        0
+      );
+      const xs = (s.ends || []).reduce(
+        (acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length,
+        0
+      );
+      return [
+        formatRegionalDate(s.timestamp, language),
+        getSessionAthleteName(s),
+        getLocalizedPracticeName(s.practiceType),
+        s.format === "Libre" && !isEs ? "Custom" : s.format || "",
+        getLocalizedBowName(s.bowType),
+        getSessionShootingDistLabel(s),
+        arrows,
+        score,
+        maxSc,
+        avg,
+        tens,
+        xs,
+        getSessionActiveKcal(s, user),
+        formatWalkedDistanceRegional(getSessionDistanceWalkedM(s), unitSystem),
+        s.sessionNote || ""
+      ];
+    });
+
+    const csvContent =
+      "\uFEFF" +
+      [headers, ...rows].map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
+    const fileName = `Archery101010-${getLocalISODate(new Date())}.csv`;
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+    if (
+      typeof window !== "undefined" &&
+      window.ArcheryNativeShare &&
+      typeof navigator !== "undefined" &&
+      navigator.canShare
+    ) {
+      try {
+        const csvFile = new File([blob], fileName, { type: "text/csv" });
+        if (navigator.canShare({ files: [csvFile] })) {
+          await navigator.share({ files: [csvFile], title: fileName });
+          return;
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
   const loadSessions = async () => {
@@ -433,7 +591,7 @@ export default function HistoryView({
   };
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+    return formatRegionalDate(timestamp, language, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -487,38 +645,53 @@ export default function HistoryView({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-white text-[18px] sm:text-[20px] font-black uppercase tracking-wide leading-tight">
-                  {isCoachResultsView ? "Resultados" : "Historial"}
+                  {isCoachResultsView ? t("navResults") : t("navHistory")}
                 </h2>
                 {isCoachResultsView && (
                   <span className="text-[9.5px] bg-yellow-gold/15 text-yellow-gold font-black uppercase px-2 py-0.5 rounded-full border border-yellow-gold/30 shrink-0 whitespace-nowrap">
-                    Coach
+                    {t("roleCoach")}
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-white/70 font-semibold uppercase tracking-wider leading-tight mt-0.5 truncate">
-                {isCoachResultsView ? "Sesiones y Volumen del Equipo" : t("historyTitle")}
+                {isCoachResultsView ? tx("Sesiones y Volumen del Equipo", "Team Sessions & Volume") : t("historyTitle")}
               </p>
             </div>
           </div>
 
-          {activeTab === "SESSIONS" && (
-            <button
-              type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              className={`h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95 transition ${
-                showFilters || dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL"
-                  ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
-                  : "bg-[#0D1017] border-white/[0.08] text-white hover:bg-white/[0.05]"
-              }`}
-              title="Filtrar sesiones"
-            >
-              <Filter size={13} />
-              <span>Filtrar</span>
-              {(dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL") && (
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon" />
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {sessions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleExportCsv()}
+                className="h-9 px-2.5 sm:px-3 rounded-xl border bg-[#0D1017] border-white/[0.08] text-white hover:bg-white/[0.05] text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95 transition"
+                title={t("exportCsvBtn")}
+              >
+                <Download size={13} className="text-cyan-neon shrink-0" />
+                <span className="hidden sm:inline">{t("exportCsvBtn")}</span>
+                <span className="sm:hidden">CSV</span>
+              </button>
+            )}
+
+            {activeTab === "SESSIONS" && (
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className={`h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95 transition ${
+                  showFilters || dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL"
+                    ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
+                    : "bg-[#0D1017] border-white/[0.08] text-white hover:bg-white/[0.05]"
+                }`}
+                title={tx("Filtrar sesiones", "Filter sessions")}
+              >
+                <Filter size={13} />
+                <span>{tx("Filtrar", "Filter")}</span>
+                {(dateFilter !== "ALL" || practiceFilter !== "ALL" || bowFilter !== "ALL") && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Full-width centered 2-column switcher: Puntuaciones / Volumen */}
@@ -532,7 +705,7 @@ export default function HistoryView({
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            Puntuaciones
+            {t("practiceControl")}
           </button>
           <button
             type="button"
@@ -543,7 +716,7 @@ export default function HistoryView({
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            Volumen
+            {t("practiceVolume")}
           </button>
         </div>
       </div>
@@ -617,14 +790,14 @@ export default function HistoryView({
                   {/* Bow Type Filters */}
                   <div className="flex items-center gap-2 overflow-x-auto">
                     <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                      Arco:
+                      {tx("Arco:", "Bow:")}
                     </span>
                     <div className="flex gap-1.5">
                       {[
                         { id: "ALL", label: t("filterAll") },
-                        { id: "Recurve", label: "Recurvo" },
-                        { id: "Compound", label: "Compuesto" },
-                        { id: "Barebow", label: "Barebow" }
+                        { id: "Recurve", label: t("bowRecurve") },
+                        { id: "Compound", label: t("bowCompound") },
+                        { id: "Barebow", label: t("bowBarebow") }
                       ].map((f) => (
                         <button
                           key={f.id}
@@ -651,10 +824,13 @@ export default function HistoryView({
             {filteredSessions.length === 0 ? (
               <div className="bg-[#0D1017]/70 border border-white/[0.06] rounded-3xl py-12 px-6 flex flex-col items-center justify-center text-center gap-1.5 my-2">
                 <span className="text-white font-bold text-sm">
-                  No se encontraron sesiones registradas
+                  {tx("No se encontraron sesiones registradas", "No recorded sessions found")}
                 </span>
                 <span className="text-white/60 text-xs max-w-[260px]">
-                  Tus sesiones de entrenamiento y controles aparecerán aquí automáticamente.
+                  {tx(
+                    "Tus sesiones de entrenamiento y controles aparecerán aquí automáticamente.",
+                    "Your training and scoring sessions will appear here automatically."
+                  )}
                 </span>
               </div>
             ) : (
@@ -677,14 +853,14 @@ export default function HistoryView({
                         )}
                         <span className="text-[11.6px] text-white font-bold">{formatDate(session.timestamp)}</span>
                         <span className="text-[9.3px] bg-neutral-950 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/10 font-bold uppercase">
-                          {session.practiceType === "Control" ? t("practiceControl") : session.practiceType}
+                          {getLocalizedPracticeName(session.practiceType)}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5 tabular-nums">
                         {isVolumeSession(session) ? (
                           <>
                             <span className="text-xl font-black text-cyan-neon tabular-nums">{getSessionArrows(session)}</span>
-                            <span className="text-[11.6px] text-white font-bold">flechas</span>
+                            <span className="text-[11.6px] text-white font-bold">{t("arrowsLabel")}</span>
                           </>
                         ) : (
                           <>
@@ -699,10 +875,10 @@ export default function HistoryView({
                         )}
                       </div>
                       <span className="text-[11.6px] text-white tabular-nums truncate">
-                        {session.format} · {session.bowType === "Recurve" ? "Recurvo" : session.bowType === "Compound" ? "Compuesto" : session.bowType} · {session.distance}m
+                        {session.format === "Libre" ? tx("Libre", "Custom") : session.format} · {getLocalizedBowName(session.bowType)} · {getSessionShootingDistLabel(session)}
                       </span>
                       <span className="text-[10.5px] font-bold text-white tabular-nums truncate">
-                        {getSessionActiveKcal(session, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(session), false)}
+                        {getSessionActiveKcal(session, user)} kcal · {formatWalkedDistanceRegional(getSessionDistanceWalkedM(session), unitSystem)}
                       </span>
                     </div>
 
@@ -747,9 +923,9 @@ export default function HistoryView({
               
               <div className="flex flex-col gap-2.5">
                 {[
-                  { name: "Recurvo", val: volStats.recurve },
-                  { name: "Compuesto", val: volStats.compound },
-                  { name: "Barebow", val: volStats.barebow }
+                  { name: t("bowRecurve"), val: volStats.recurve },
+                  { name: t("bowCompound"), val: volStats.compound },
+                  { name: t("bowBarebow"), val: volStats.barebow }
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
@@ -777,8 +953,8 @@ export default function HistoryView({
               <div className="flex flex-col gap-2.5">
                 {[
                   { name: t("practiceControl"), val: volStats.control },
-                  { name: "Práctica", val: volStats.practice },
-                  { name: "Volumen", val: volStats.volume }
+                  { name: t("practicePractice"), val: volStats.practice },
+                  { name: t("practiceVolume"), val: volStats.volume }
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
@@ -829,15 +1005,15 @@ export default function HistoryView({
                           )}
                           <span className="text-xs font-extrabold text-white uppercase">{formatDate(s.timestamp)}</span>
                         </div>
-                        <span className="text-[10.5px] text-white tabular-nums">{s.practiceType === "Control" ? t("practiceControl") : s.practiceType} · {s.distance}m</span>
+                        <span className="text-[10.5px] text-white tabular-nums">{getLocalizedPracticeName(s.practiceType)} · {getSessionShootingDistLabel(s)}</span>
                         <span className="text-[10px] font-bold text-white tabular-nums">
-                          {getSessionActiveKcal(s, user)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(s), false)}
+                          {getSessionActiveKcal(s, user)} kcal · {formatWalkedDistanceRegional(getSessionDistanceWalkedM(s), unitSystem)}
                         </span>
                       </div>
                       <div className="text-right">
                         <span className="text-base font-black text-cyan-neon tabular-nums">{arrows}</span>
                         <span className="text-[10.5px] text-white block font-bold">
-                          flechas
+                          {t("arrowsLabel")}
                         </span>
                       </div>
                     </div>
@@ -864,7 +1040,7 @@ export default function HistoryView({
               <button
                 type="button"
                 onClick={() => setSelectedSession(null)}
-                aria-label="Cerrar detalle de entrenamiento"
+                aria-label={t("back")}
                 className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-white hover:bg-neutral-800 cursor-pointer transition"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
@@ -872,11 +1048,20 @@ export default function HistoryView({
               <div className="flex gap-2">
                 <button
                   type="button"
+                  onClick={() => handleExportCsv([selectedSession])}
+                  aria-label={t("exportCsvBtn")}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-white hover:border-cyan-neon transition cursor-pointer"
+                  title={t("exportCsvBtn")}
+                >
+                  <Download size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleShareSessionShotChart(selectedSession)}
                   disabled={isGeneratingImage}
-                  aria-label="Compartir Foto Diana HD o Planilla"
+                  aria-label={t("shareNativeBtn")}
                   className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-cyan-neon hover:border-cyan-neon transition cursor-pointer disabled:opacity-50"
-                  title="Compartir Foto Diana HD o Planilla"
+                  title={t("shareNativeBtn")}
                 >
                   <Share2 size={16} aria-hidden="true" />
                 </button>
@@ -884,7 +1069,7 @@ export default function HistoryView({
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteId(selectedSession.id)}
-                    aria-label="Eliminar sesión"
+                    aria-label={t("delete")}
                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-white hover:bg-neutral-200 border border-white text-black cursor-pointer transition"
                   >
                     <Trash2 size={16} aria-hidden="true" />
@@ -897,7 +1082,7 @@ export default function HistoryView({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                  Detalle de Entrenamiento
+                  {t("details")}
                 </h3>
                 {isCoachResultsView && (
                   <span className="text-[10px] bg-cyan-neon/10 text-cyan-neon px-2 py-0.5 rounded-md border border-cyan-neon/25 font-black uppercase tracking-wider">
@@ -906,7 +1091,7 @@ export default function HistoryView({
                 )}
               </div>
               <p className="text-xs text-white mt-0.5">
-                {formatDate(selectedSession.timestamp)} · {selectedSession.format}
+                {formatDate(selectedSession.timestamp)} · {selectedSession.format === "Libre" ? tx("Libre", "Custom") : selectedSession.format}
               </p>
             </div>
 
@@ -914,27 +1099,27 @@ export default function HistoryView({
             {isVolumeSession(selectedSession) ? (
               <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Volumen de Flechas</span>
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("totalVolume")}</span>
                   <span className="text-3xl font-black text-cyan-neon tabular-nums">
-                    {getSessionArrows(selectedSession)} <span className="text-xs text-white">flechas</span>
+                    {getSessionArrows(selectedSession)} <span className="text-xs text-white">{t("arrowsLabel")}</span>
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Tipo</span>
-                  <p className="text-base font-black text-yellow-gold leading-tight">Sin puntaje</p>
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("practiceType")}</span>
+                  <p className="text-base font-black text-yellow-gold leading-tight">{t("practiceVolume")}</p>
                 </div>
               </div>
             ) : (
               <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Puntos Totales</span>
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("totalPoints")}</span>
                   <span className="text-3xl font-black text-white tabular-nums">
                     {getSessionScore(selectedSession)} <span className="text-xs text-white">/ {getSessionMaxScore(selectedSession)}</span>
                   </span>
-                  <span className="text-[10.5px] text-white font-bold mt-0.5 tabular-nums">{getSessionArrows(selectedSession)} flechas</span>
+                  <span className="text-[10.5px] text-white font-bold mt-0.5 tabular-nums">{getSessionArrows(selectedSession)} {t("arrowsLabel")}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">Precisión</span>
+                  <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("precisionLabel")}</span>
                   <p className="text-2xl font-black text-yellow-gold leading-tight tabular-nums">
                     {getSessionMaxScore(selectedSession) > 0 ? Math.round((getSessionScore(selectedSession) / getSessionMaxScore(selectedSession)) * 100) : 0}%
                   </p>
@@ -945,24 +1130,24 @@ export default function HistoryView({
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">Distancia</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.distance}m</span>
+                <span className="text-[9.3px] text-white uppercase block">{t("distance")}</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{getSessionShootingDistLabel(selectedSession)}</span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">Arco</span>
+                <span className="text-[9.3px] text-white uppercase block">{t("bowType")}</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
-                  {selectedSession.bowType === "Recurve" ? "Recurvo" : selectedSession.bowType === "Compound" ? "Compuesto" : selectedSession.bowType}
+                  {getLocalizedBowName(selectedSession.bowType)}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">Tipo</span>
+                <span className="text-[9.3px] text-white uppercase block">{t("practiceType")}</span>
                 <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
-                  {selectedSession.practiceType === "Control" ? t("practiceControl") : selectedSession.practiceType}
+                  {getLocalizedPracticeName(selectedSession.practiceType)}
                 </span>
               </div>
               <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">Rondas</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.endsCount} Ends</span>
+                <span className="text-[9.3px] text-white uppercase block">{t("rounds")}</span>
+                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.endsCount} {t("rounds")}</span>
               </div>
             </div>
 
@@ -978,10 +1163,10 @@ export default function HistoryView({
               </div>
               <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
                 <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
-                  DISTANCIA RECORRIDA
+                  {t("cardWalked")}
                 </span>
                 <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
-                  {formatKmAndMiles(getSessionDistanceWalkedM(selectedSession), false)}
+                  {formatWalkedDistanceRegional(getSessionDistanceWalkedM(selectedSession), unitSystem)}
                 </span>
               </div>
             </div>
@@ -1149,7 +1334,7 @@ export default function HistoryView({
                         className="w-full py-3 mt-1 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         <Camera size={15} />
-                        <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Foto Diana (HD)"}</span>
+                        <span>{isGeneratingImage ? t("loading") : t("shareNativeBtn")}</span>
                       </button>
                       <button
                         type="button"
@@ -1158,7 +1343,7 @@ export default function HistoryView({
                         className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         <Share2 size={15} aria-hidden="true" />
-                        <span>Compartir Planilla por Mensajería</span>
+                        <span>{t("shareScorecardMessaging")}</span>
                       </button>
                     </>
                   );
@@ -1175,7 +1360,7 @@ export default function HistoryView({
                   className="w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <Camera size={15} aria-hidden="true" />
-                  <span>{isGeneratingImage ? "Generando Foto HD..." : "Compartir Diana Gráfica (HD)"}</span>
+                  <span>{isGeneratingImage ? t("loading") : t("shareNativeBtn")}</span>
                 </button>
                 <button
                   type="button"
@@ -1184,7 +1369,7 @@ export default function HistoryView({
                   className="w-full py-3 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <Share2 size={15} aria-hidden="true" />
-                  <span>Compartir Planilla por Mensajería</span>
+                  <span>{t("shareScorecardMessaging")}</span>
                 </button>
               </div>
             )}
@@ -1193,7 +1378,7 @@ export default function HistoryView({
             {selectedSession.sessionNote && (
               <div className="bg-neutral-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-1.5">
                 <span className="text-xs text-white font-bold uppercase tracking-wider">
-                  Notas de la Sesión
+                  {tx("Notas de la Sesión", "Session Notes")}
                 </span>
                 <p className="text-xs text-white leading-relaxed italic">
                   "{selectedSession.sessionNote}"
@@ -1212,22 +1397,27 @@ export default function HistoryView({
         {confirmDeleteId && (
           <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-gray-border rounded-3xl p-6 w-full max-w-xs flex flex-col gap-4 text-center">
-              <h3 className="text-white text-base font-black uppercase">¿Eliminar Sesión?</h3>
+              <h3 className="text-white text-base font-black uppercase">
+                {tx("¿Eliminar Sesión?", "Delete Session?")}
+              </h3>
               <p className="text-xs text-white">
-                Esta acción no se puede deshacer. Se eliminará también de la nube cuando te conectes.
+                {tx(
+                  "Esta acción no se puede deshacer. Se eliminará también de la nube cuando te conectes.",
+                  "This action cannot be undone. It will also be removed from cloud sync."
+                )}
               </p>
               <div className="flex gap-3 mt-2">
                 <button
                   onClick={() => handleDelete(confirmDeleteId)}
                   className="flex-1 py-3 rounded-full bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase cursor-pointer transition"
                 >
-                  Eliminar
+                  {t("delete")}
                 </button>
                 <button
                   onClick={() => setConfirmDeleteId(null)}
                   className="flex-1 py-3 rounded-full bg-transparent border border-gray-border text-white hover:text-white font-bold text-xs uppercase cursor-pointer"
                 >
-                  Cancelar
+                  {t("cancel")}
                 </button>
               </div>
             </div>

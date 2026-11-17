@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 import { UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
 import { 
   getLocalSessions, 
@@ -260,7 +261,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         );
         setAthletes(clubArchers);
 
-        const dateKey = new Date().toISOString().split("T")[0];
+        const dateKey = getLocalISODate();
         const savedAttendance = await getLocalSetting<Record<string, boolean>>(`attendance_${user.clubId}_${dateKey}`, {});
         setAttendance(savedAttendance);
       }
@@ -275,7 +276,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     };
     setAttendance(nextAttendance);
 
-    const dateKey = new Date().toISOString().split("T")[0];
+    const dateKey = getLocalISODate();
     await saveLocalSetting(`attendance_${user.clubId}_${dateKey}`, nextAttendance);
   };
 

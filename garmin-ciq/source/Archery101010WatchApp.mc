@@ -89,6 +89,11 @@ class Archery101010WatchView extends WatchUi.View {
     public var currentEndArrows as Lang.Array<Lang.String> = [] as Lang.Array<Lang.String>;
     public var currentSessionId = "";
 
+    // Locale & Regional Units state (ES vs EN universal fallback + Metric vs Imperial)
+    public var isSpanish = false;
+    public var isImperial = false;
+    public var lastSavedFeedbackMs = 0;
+
     // 6-Digit Cloud Sync state
     public var pairingDigits as Lang.Array<Lang.Number> = [1, 0, 1, 0, 1, 0];
     public var hasPairingCode = false;
@@ -150,6 +155,7 @@ class Archery101010WatchView extends WatchUi.View {
 
     function initialize() {
         View.initialize();
+        refreshDeviceLocaleAndUnits();
         loadBrandResources();
         loadStateFromStorage();
         initStepBaseline();
@@ -161,6 +167,62 @@ class Archery101010WatchView extends WatchUi.View {
         if (hasPairingCode && pairingCode.length() == 6) {
             pollFirestoreCloud();
         }
+    }
+
+    function onShow() as Void {
+        refreshDeviceLocaleAndUnits();
+    }
+
+    (:typecheck(false))
+    function refreshDeviceLocaleAndUnits() as Void {
+        try {
+            var devSettings = System.getDeviceSettings();
+            if (devSettings != null) {
+                if (devSettings has :systemLanguage) {
+                    isSpanish = (devSettings.systemLanguage == System.LANGUAGE_SPA);
+                }
+                if (devSettings has :distanceUnits) {
+                    isImperial = (devSettings.distanceUnits == System.UNIT_STATUTE);
+                }
+            }
+        } catch (ex) {}
+    }
+
+    function tr(esStr as Lang.String, enStr as Lang.String) as Lang.String {
+        return isSpanish ? esStr : enStr;
+    }
+
+    function formatWalkedMetric(meters as Lang.Number) as Lang.String {
+        var safeM = (meters >= 0) ? meters : 0;
+        if (safeM >= 1000) {
+            var hundKm = (safeM * 100 + 500) / 1000;
+            var kmW = hundKm / 100;
+            var kmF = hundKm % 100;
+            return kmW.toString() + "." + ((kmF < 10) ? "0" : "") + kmF.toString() + " km";
+        }
+        return safeM.toString() + " m";
+    }
+
+    function formatWalkedImperial(meters as Lang.Number) as Lang.String {
+        var safeM = (meters >= 0) ? meters : 0;
+        var hundMi = ((safeM * 100.0) / 1609.344 + 0.5).toNumber();
+        if (hundMi >= 10) {
+            var miW = hundMi / 100;
+            var miF = hundMi % 100;
+            return miW.toString() + "." + ((miF < 10) ? "0" : "") + miF.toString() + " mi";
+        }
+        var ftVal = (safeM * 3.28084 + 0.5).toNumber();
+        return ftVal.toString() + " ft";
+    }
+
+    function formatWalkedPrimary(meters as Lang.Number) as Lang.String {
+        return isImperial ? formatWalkedImperial(meters) : formatWalkedMetric(meters);
+    }
+
+    function formatWalkedDual(meters as Lang.Number) as Lang.String {
+        var mStr = formatWalkedMetric(meters);
+        var iStr = formatWalkedImperial(meters);
+        return isImperial ? (iStr + " · " + mStr) : (mStr + " · " + iStr);
     }
 
     (:typecheck(false))
@@ -857,9 +919,20 @@ class Archery101010WatchView extends WatchUi.View {
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(85, 110)]);
         }
+        lastSavedFeedbackMs = System.getTimer() + 2800;
         syncWithPhoneApp("FINISH_SESSION_FROM_WATCH", null);
         resetAllCounters("");
+        WatchUi.requestUpdate();
+    }
+
+    function resetSessionFromWatch() as Void {
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(55, 50)]);
+        }
+        lastSavedFeedbackMs = 0;
+        resetAllCounters("");
         screenIdx = 0;
+        WatchUi.requestUpdate();
     }
 
     function recalculateMetrics() as Void {
@@ -1195,8 +1268,15 @@ class Archery101010WatchView extends WatchUi.View {
         if (pillW > maxPillW) { pillW = maxPillW; }
         var pillX = cx - (pillW / 2);
 
-        var isYellow = (statusLabel.find("CAMINANDO") != null) || (statusLabel.find("EDITAR") != null);
-        var isMuted = (statusLabel.find("LOCAL") != null) || (statusLabel.find("SIN VINCULAR") != null);
+        var isYellow = (statusLabel.find("CAMINANDO") != null)
+            || (statusLabel.find("WALKING") != null)
+            || (statusLabel.find("EDIT") != null)
+            || (statusLabel.find("ENVIADO") != null)
+            || (statusLabel.find("SAVED") != null);
+        var isMuted = (statusLabel.find("LOCAL") != null)
+            || (statusLabel.find("SIN VINCULAR") != null)
+            || (statusLabel.find("TAP TO LINK") != null)
+            || (statusLabel.find("TOCA PARA") != null);
         var fillCol = isYellow ? 0x121106 : (isMuted ? 0x0A0D13 : 0x050D17);
         var borderCol = isYellow ? 0xFFE500 : (isMuted ? 0x475569 : 0x00A8F3);
 
@@ -1256,15 +1336,34 @@ class Archery101010WatchView extends WatchUi.View {
         dc.clear();
 
         var mts = distanceWalkedM;
-        var ft = (distanceWalkedM * 3.28084).toNumber();
-        var mtsFtStr = mts.toString() + " mts · " + ft.toString() + " ft";
+        var walkedPrimaryStr = formatWalkedPrimary(mts);
+        var walkedDualStr = formatWalkedDual(mts);
+        var maxPillTxtW = (148.0 * s).toNumber();
 
         if (screenIdx == 0) {
-            var sensTxt = (sensitivityLevel == 0) ? "BAJA" : ((sensitivityLevel == 2) ? "ALTA" : "MEDIA");
-            var connSuffix = isConnectedNow ? " · SYNC" : "";
-            var pillTxt = !autoDetectEnabled
-                ? ("MANUAL" + connSuffix)
-                : ((System.getTimer() < mWalkingLockUntilMs) ? "PAUSA · CAMINANDO" : ("AUTO · " + sensTxt + connSuffix));
+            var sensShort = (sensitivityLevel == 0)
+                ? tr("BAJA", "LOW")
+                : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"));
+            var sensFull = (sensitivityLevel == 0)
+                ? tr("SENS BAJA", "SENS LOW")
+                : ((sensitivityLevel == 2) ? tr("SENS ALTA", "SENS HIGH") : tr("SENS MEDIA", "SENS MED"));
+
+            var pillTxt = "";
+            if (!autoDetectEnabled) {
+                pillTxt = isConnectedNow ? "MANUAL · SYNC" : tr("MODO MANUAL", "MANUAL MODE");
+            } else if (System.getTimer() < mWalkingLockUntilMs) {
+                pillTxt = tr("PAUSA · CAMINANDO", "PAUSED · WALKING");
+                if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
+                    pillTxt = tr("CAMINANDO", "WALKING");
+                }
+            } else {
+                pillTxt = isConnectedNow
+                    ? (tr("AUTO TIRO · ", "AUTO SHOT · ") + sensShort)
+                    : (tr("AUTO TIRO · ", "AUTO SHOT · ") + sensShort);
+                if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
+                    pillTxt = sensFull;
+                }
+            }
             drawArchery101010Header(dc, w, h, s, pillTxt, false);
 
             var d3 = (arrowsCount / 1000) % 10;
@@ -1290,7 +1389,7 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Dedicated Tactile Row: [-1]  |  T1 · 18M  |  [+1]  (Zero collision with telemetry)
+            // Dedicated Tactile Row: [-1]  |  TANDA 1 · 18M / END 1 · 18M  |  [+1]  (Zero collision with telemetry)
             var rowY = (131.0 * s).toNumber();
             var btnW = (42.0 * s).toNumber();
             var btnH = (28.0 * s).toNumber();
@@ -1306,14 +1405,23 @@ class Archery101010WatchView extends WatchUi.View {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fLabel, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var endDistLabel = "T" + currentEnd.toString() + " · " + distanceM.toString() + "M";
+            var centerAvailW = rowW - (2 * btnW) - (8.0 * s).toNumber();
+            var fullEndLabel = tr("TANDA ", "END ") + currentEnd.toString() + " · " + distanceM.toString() + "M";
+            var shortEndLabel = tr("T", "E") + currentEnd.toString() + " · " + distanceM.toString() + "M";
+            var endDistLabel = (dc.getTextWidthInPixels(fullEndLabel, fMicro) <= centerAvailW) ? fullEndLabel : shortEndLabel;
             dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, rowY + (btnH / 2), fMicro, endDistLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            // Dedicated Bottom Telemetry Line (100% separated vertically below buttons)
-            var telemStr = mts.toString() + " mts · " + activeKcal.toString() + " kcal";
+            // Dedicated Bottom Telemetry Lines (100% separated vertically below buttons)
+            var telemStr = walkedPrimaryStr + " · " + activeKcal.toString() + " kcal";
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, (176.0 * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, ((minDim > 180 ? 173.0 : 176.0) * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            if (minDim > 180) {
+                var subCounterStr = arrowsCount.toString() + " " + tr("FLECHAS", "ARROWS") + " · " + totalScore.toString() + " PTS";
+                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, (192.0 * s).toNumber(), fMicro, subCounterStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
 
         } else if (screenIdx == 1) {
             // OPCIÓN A: XL 4x3 Score Keypad (2x tactile area across all 11 Garmin screen sizes)
@@ -1332,7 +1440,7 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(cx, logoTopY + (5.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // 2. Unified Compact Score + End Arrow Slots Row: [T1·29P] [X][10][9][-][-][-]
+            // 2. Unified Compact Score + End Arrow Slots Row: [T1·29P / E1·29P] [X][10][9][-][-][-]
             var microH = dc.getFontHeight(fMicro);
             var barY = logoBottomY + (3.5 * s).toNumber();
             var barH = (16.5 * s).toNumber();
@@ -1341,12 +1449,13 @@ class Archery101010WatchView extends WatchUi.View {
             }
 
             var maxBarW = ((isMono ? 148.0 : 154.0) * s).toNumber();
-            var ptsStr = "T" + currentEnd.toString() + "·" + totalScore.toString() + "P";
+            var endTagPrefix = tr("T", "E");
+            var ptsStr = endTagPrefix + currentEnd.toString() + "·" + totalScore.toString() + "P";
             var ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
             var ptsTagW = ptsTextW + (9.0 * s).toNumber();
             var maxPtsTagW = (62.0 * s).toNumber();
             if (ptsTagW > maxPtsTagW) {
-                ptsStr = "T" + currentEnd.toString() + "·" + totalScore.toString();
+                ptsStr = endTagPrefix + currentEnd.toString() + "·" + totalScore.toString();
                 ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
                 ptsTagW = ptsTextW + (8.0 * s).toNumber();
             }
@@ -1452,23 +1561,28 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(kx + (keyW / 2), ky + (keyH / 2), keyFont, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // 5. Bottom Actions: [ BORRAR ]   [ SIG. TANDA ]
+            // 5. Bottom Actions: [ BORRAR / DEL ]   [ SIG. TANDA / NEXT END ]
             var actGap = (6.0 * s).toNumber();
             var actWTotal = ((isMono ? 148.0 : 158.0) * s).toNumber();
             var actStartX = cx - (actWTotal / 2);
             var actW = (actWTotal - actGap) / 2;
+            var actBtnInnerW = actW - (8.0 * s).toNumber();
 
+            var delLbl = tr("BORRAR", "DEL");
             drawCrispBox(dc, actStartX, actY, actW, actH, actH / 2, isMono ? 0x000000 : 0x0B0E15, isMono ? 0xFFFFFF : 0x475569, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, "BORRAR", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, delLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
+            var nextFull = tr("SIG. TANDA", "NEXT END");
+            var nextShort = tr("SIG.", "NEXT");
+            var nextLbl = (dc.getTextWidthInPixels(nextFull, fMicro) <= actBtnInnerW) ? nextFull : nextShort;
             var nextX = actStartX + actW + actGap;
             drawCrispBox(dc, nextX, actY, actW, actH, actH / 2, isMono ? 0x000000 : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, "SIG. TANDA", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, nextLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 2) {
-            drawArchery101010Header(dc, w, h, s, "MÉTRICAS EN VIVO", false);
+            drawArchery101010Header(dc, w, h, s, tr("BIOMETRÍA", "BIOMETRICS"), false);
 
             var cardW = (164.0 * s).toNumber();
             var cardH = (44.0 * s).toNumber();
@@ -1478,25 +1592,34 @@ class Archery101010WatchView extends WatchUi.View {
             var innerMaxW = cardW - (14.0 * s).toNumber();
 
             drawCrispBox(dc, cardX, card1Y, cardW, cardH, (9.0 * s).toNumber(), 0x07090E, 0x00A8F3, strokePx);
+            var distHdrFull = tr("DISTANCIA · ", "DISTANCE · ") + stepsCount.toString() + tr(" PASOS", " STEPS");
+            var distHdrShort = stepsCount.toString() + tr(" PASOS", " STEPS");
+            var distHdr = (dc.getTextWidthInPixels(distHdrFull, fMicro) <= innerMaxW) ? distHdrFull : distHdrShort;
             dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (13.0 * s).toNumber(), fMicro, "DISTANCIA · " + stepsCount.toString() + " PASOS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            var distFont = pickFittingFont(dc, mtsFtStr, innerMaxW, fValue, fLabel, fMicro);
+            dc.drawText(cx, card1Y + (13.0 * s).toNumber(), fMicro, distHdr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            var distFont = pickFittingFont(dc, walkedDualStr, innerMaxW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (30.0 * s).toNumber(), distFont, mtsFtStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, card1Y + (30.0 * s).toNumber(), distFont, walkedDualStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             drawCrispBox(dc, cardX, card2Y, cardW, cardH, (9.0 * s).toNumber(), 0x07090E, 0xFF1E1E, strokePx);
             dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card2Y + (13.0 * s).toNumber(), fMicro, "GASTO ENERGÉTICO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, card2Y + (13.0 * s).toNumber(), fMicro, tr("ENERGÍA", "ENERGY"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             var kcalStr = activeKcal.toString() + " kcal";
             var kcalFont = pickFittingFont(dc, kcalStr, innerMaxW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, card2Y + (30.0 * s).toNumber(), kcalFont, kcalStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
+            var bioFootFull = arrowsCount.toString() + tr(" FLECHAS · ", " ARROWS · ") + bowPoundageLbs.toString() + " LBS";
+            var bioFootShort = arrowsCount.toString() + tr(" FL · ", " AR · ") + bowPoundageLbs.toString() + " LBS";
+            var bioFoot = (dc.getTextWidthInPixels(bioFootFull, fMicro) <= innerMaxW) ? bioFootFull : bioFootShort;
             dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, (177.0 * s).toNumber(), fMicro, arrowsCount.toString() + " FL · " + bowPoundageLbs.toString() + " LBS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, (177.0 * s).toNumber(), fMicro, bioFoot, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else if (screenIdx == 3) {
-            var sumStatus = isConnectedNow ? "CONECTADO · NUBE" : "MODO LOCAL";
+            var justSaved = (lastSavedFeedbackMs > 0) && (System.getTimer() < lastSavedFeedbackMs);
+            var sumStatus = justSaved
+                ? tr("ENVIADO", "SAVED")
+                : (isConnectedNow ? tr("RESUMEN · SYNC", "SUMMARY · SYNC") : tr("RESUMEN", "SUMMARY"));
             drawArchery101010Header(dc, w, h, s, sumStatus, false);
 
             var sumW = (164.0 * s).toNumber();
@@ -1504,35 +1627,64 @@ class Archery101010WatchView extends WatchUi.View {
             var sumY = (70.0 * s).toNumber();
             var sumH = (72.0 * s).toNumber();
             var sumInnerW = sumW - (14.0 * s).toNumber();
+            var halfW = (sumW / 2) - (8.0 * s).toNumber();
+            var leftColCx = sumX + (sumW / 4);
+            var rightColCx = sumX + ((sumW * 3) / 4);
 
             drawCrispBox(dc, sumX, sumY, sumW, sumH, (10.0 * s).toNumber(), 0x07090E, isConnectedNow ? 0x00A8F3 : 0xFFE500, strokePx);
 
-            var line1 = arrowsCount.toString() + " FL · " + totalScore.toString() + " PTS";
-            var line1Font = pickFittingFont(dc, line1, sumInnerW, fValue, fLabel, fMicro);
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(leftColCx, sumY + (12.0 * s).toNumber(), fMicro, tr("FLECHAS", "ARROWS"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(rightColCx, sumY + (12.0 * s).toNumber(), fMicro, tr("PUNTAJE", "SCORE"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var arrValStr = arrowsCount.toString();
+            var arrFont = pickFittingFont(dc, arrValStr, halfW, fValue, fLabel, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, sumY + (22.0 * s).toNumber(), line1Font, line1, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(leftColCx, sumY + (30.0 * s).toNumber(), arrFont, arrValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var ptsValStr = totalScore.toString();
+            var ptsFont = pickFittingFont(dc, ptsValStr, halfW, fValue, fLabel, fMicro);
+            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(rightColCx, sumY + (30.0 * s).toNumber(), ptsFont, ptsValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             dc.setColor(0x1E293B, Graphics.COLOR_TRANSPARENT);
-            dc.drawLine(sumX + (12.0 * s).toNumber(), sumY + (39.0 * s).toNumber(), sumX + sumW - (12.0 * s).toNumber(), sumY + (39.0 * s).toNumber());
+            dc.drawLine(cx, sumY + (7.0 * s).toNumber(), cx, sumY + (41.0 * s).toNumber());
+            dc.drawLine(sumX + (12.0 * s).toNumber(), sumY + (45.0 * s).toNumber(), sumX + sumW - (12.0 * s).toNumber(), sumY + (45.0 * s).toNumber());
 
-            var line2 = mts.toString() + " mts · " + activeKcal.toString() + " kcal";
-            var line2Font = pickFittingFont(dc, line2, sumInnerW, fLabel, fMicro, fMicro);
-            dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, sumY + (55.0 * s).toNumber(), line2Font, line2, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var ctaW = (150.0 * s).toNumber();
-            var ctaH = (26.0 * s).toNumber();
-            var ctaX = cx - (ctaW / 2);
-            var ctaY = (152.0 * s).toNumber();
-            drawCrispBox(dc, ctaX, ctaY, ctaW, ctaH, ctaH / 2, 0x061523, 0x00A8F3, strokePx);
+            var line2 = walkedPrimaryStr + " · " + activeKcal.toString() + " kcal";
+            var line2Font = pickFittingFont(dc, line2, sumInnerW, fMicro, fMicro, fMicro);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, ctaY + (ctaH / 2), fMicro, "FINALIZAR SESIÓN", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, sumY + (58.0 * s).toNumber(), line2Font, line2, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var ctaTotalW = (154.0 * s).toNumber();
+            var ctaGap = (6.0 * s).toNumber();
+            var ctaBtnW = (ctaTotalW - ctaGap) / 2;
+            var ctaH = (26.0 * s).toNumber();
+            var ctaStartX = cx - (ctaTotalW / 2);
+            var ctaY = (152.0 * s).toNumber();
+
+            drawCrispBox(dc, ctaStartX, ctaY, ctaBtnW, ctaH, ctaH / 2, 0x0B0E15, 0x475569, strokePx);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(ctaStartX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, tr("NUEVA", "RESET"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var saveBtnX = ctaStartX + ctaBtnW + ctaGap;
+            var saveBtnLbl = justSaved ? tr("ENVIADO", "SAVED") : tr("GUARDAR", "SAVE");
+            drawCrispBox(dc, saveBtnX, ctaY, ctaBtnW, ctaH, ctaH / 2, 0x061523, justSaved ? 0xFFE500 : 0x00A8F3, strokePx);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(saveBtnX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, saveBtnLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         } else {
             // SCREEN 4: 6-DIGIT CLOUD PAIRING CODE PICKER
             var pairHeader = isEditingCode
-                ? ("EDITAR DÍGITO " + (editDigitPos + 1).toString() + "/6")
-                : (isCloudSynced ? "NUBE CONECTADA" : (hasPairingCode ? "CÓDIGO GUARDADO" : "SIN VINCULAR"));
+                ? (tr("EDITAR ", "EDIT ") + (editDigitPos + 1).toString() + "/6")
+                : (isCloudSynced
+                    ? tr("VINCULADO", "SYNCED")
+                    : (hasPairingCode ? tr("CÓDIGO NUBE", "CLOUD CODE") : tr("TOCA PARA VINCULAR", "TAP TO LINK")));
+            if (dc.getTextWidthInPixels(pairHeader, fMicro) > maxPillTxtW) {
+                pairHeader = isEditingCode
+                    ? ("EDIT " + (editDigitPos + 1).toString() + "/6")
+                    : (isCloudSynced ? tr("VINCULADO", "SYNCED") : tr("CÓDIGO NUBE", "CLOUD CODE"));
+            }
             drawArchery101010Header(dc, w, h, s, pairHeader, false);
 
             var dBoxW = (23.0 * s).toNumber();
@@ -1550,7 +1702,7 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(dx + (dBoxW / 2), dStartY + (dBoxH / 2), fValue, pairingDigits[di].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Touch & Button Row: [-] | [DÍGITO >] | [+]
+            // Touch & Button Row: [-] | [EDITAR > / EDIT >] | [+]
             var ctrlY = (116.0 * s).toNumber();
             var ctrlH = (25.0 * s).toNumber();
             var ctrlW = (156.0 * s).toNumber();
@@ -1564,9 +1716,13 @@ class Archery101010WatchView extends WatchUi.View {
             dc.drawText(cStartX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "-", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             var midX = cStartX + smallW + btnGap;
+            var midLbl = isEditingCode ? tr("EDITAR >", "EDIT >") : tr("EDITAR", "EDIT");
+            if (dc.getTextWidthInPixels(midLbl, fMicro) > (midW - (6.0 * s).toNumber())) {
+                midLbl = tr("EDIT >", "EDIT >");
+            }
             drawCrispBox(dc, midX, ctrlY, midW, ctrlH, ctrlH / 2, 0x0B0E15, 0x475569, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), fMicro, "DÍGITO >", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), fMicro, midLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             var plusBtnX = midX + midW + btnGap;
             drawCrispBox(dc, plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2, 0x061523, 0x00A8F3, strokePx);
@@ -1578,9 +1734,17 @@ class Archery101010WatchView extends WatchUi.View {
             var saveH = (25.0 * s).toNumber();
             var saveX = cx - (saveW / 2);
             var saveY = (149.0 * s).toNumber();
+            var saveLbl = isEditingCode
+                ? tr("LISTO", "DONE")
+                : (isCloudSynced ? tr("VINCULADO", "SYNCED") : tr("TOCA PARA VINCULAR", "TAP TO LINK"));
+            if (dc.getTextWidthInPixels(saveLbl, fMicro) > (saveW - (10.0 * s).toNumber())) {
+                saveLbl = isEditingCode
+                    ? tr("LISTO", "DONE")
+                    : (isCloudSynced ? tr("VINCULADO", "SYNCED") : tr("CÓDIGO NUBE", "CLOUD CODE"));
+            }
             drawCrispBox(dc, saveX, saveY, saveW, saveH, saveH / 2, 0x061523, isCloudSynced ? 0xFFE500 : 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, saveY + (saveH / 2), fMicro, isCloudSynced ? "SINCRONIZAR" : "VINCULAR CÓDIGO", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, saveY + (saveH / 2), fMicro, saveLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
         drawPagerDots(dc, w, h, s);
@@ -1725,7 +1889,11 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         } else if (mView.screenIdx == 3) {
             if (ty >= (148.0 * s) && ty <= (186.0 * s)) {
-                mView.finishSessionAndReset();
+                if (tx < cx) {
+                    mView.resetSessionFromWatch();
+                } else {
+                    mView.finishSessionAndReset();
+                }
                 return true;
             }
         } else if (mView.screenIdx == 4) {
@@ -1741,6 +1909,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 for (var di = 0; di < 6; di++) {
                     var dx = dStartX + di * (dBoxW + dGap);
                     if (tx >= dx && tx <= (dx + dBoxW)) {
+                        mView.isEditingCode = true;
                         if (mView.editDigitPos == di) {
                             mView.adjustSelectedCodeDigit(1);
                         } else {
@@ -1752,8 +1921,9 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 }
             }
 
-            // [-] | [DÍGITO >] | [+] row
+            // [-] | [EDITAR > / EDIT >] | [+] row
             if (ty >= (113.0 * s) && ty <= (144.0 * s)) {
+                mView.isEditingCode = true;
                 if (tx < (cx - (34.0 * s))) {
                     mView.adjustSelectedCodeDigit(-1);
                 } else if (tx > (cx + (34.0 * s))) {
@@ -1765,7 +1935,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 return true;
             }
 
-            // VINCULAR CÓDIGO button
+            // LISTO / DONE / VINCULAR button
             if (ty >= (146.0 * s) && ty <= (182.0 * s)) {
                 mView.commitPairingDigits();
                 return true;

@@ -3,6 +3,13 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { translations, offlineFallbackTranslations, TranslationKey } from "../translations/dict";
 import { getLocalSetting, saveLocalSetting } from "../db/indexedDB";
+import {
+  UnitSystem,
+  isRtlLanguage,
+  toStandardLangCode,
+  getDefaultUnitSystemForCountry
+} from "../i18n/regionalUtils";
+import { auth } from "../firebase";
 
 export type Language = string;
 
@@ -18,6 +25,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "es", shortLabel: "ES", name: "Español", nativeName: "Español", flag: "🇪🇸" },
   { code: "en", shortLabel: "EN", name: "Inglés", nativeName: "English", flag: "🇺🇸" },
   { code: "ko", shortLabel: "KO", name: "Coreano", nativeName: "한국어", flag: "🇰🇷" },
+  { code: "ja", shortLabel: "JA", name: "Japonés", nativeName: "日本語", flag: "🇯🇵" },
   { code: "fr", shortLabel: "FR", name: "Francés", nativeName: "Français", flag: "🇫🇷" },
   { code: "de", shortLabel: "DE", name: "Alemán", nativeName: "Deutsch", flag: "🇩🇪" },
   { code: "pt", shortLabel: "PT", name: "Portugués", nativeName: "Português", flag: "🇧🇷" },
@@ -26,13 +34,17 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "iw", shortLabel: "HE", name: "Hebreo", nativeName: "עברית", flag: "🇮🇱" },
   { code: "ru", shortLabel: "RU", name: "Ruso", nativeName: "Русский", flag: "🇷🇺" },
   { code: "cs", shortLabel: "CS", name: "Checo", nativeName: "Čeština", flag: "🇨🇿" },
-  { code: "ar", shortLabel: "AR", name: "Árabe", nativeName: "العربية", flag: "🇸🇦" },
+  { code: "ar", shortLabel: "AR", name: "Árabe", nativeName: "العربية", flag: "🇸🇦" }
 ];
 
 interface LanguageContextProps {
   language: Language;
   setLanguage: (lang: Language) => Promise<void>;
+  unitSystem: UnitSystem;
+  setUnitSystem: (units: UnitSystem) => Promise<void>;
+  isRtl: boolean;
   t: (key: TranslationKey) => string;
+  tx: (esText: string, enText: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextProps | undefined>(undefined);
@@ -41,40 +53,34 @@ function normalizeLangCode(raw: string): string {
   const lower = raw.trim().toLowerCase();
   if (lower.startsWith("zh")) return "zh-CN";
   if (lower === "he" || lower.startsWith("he-") || lower === "iw") return "iw";
+  if (lower.startsWith("ja") || lower === "jp") return "ja";
   const base = lower.split("-")[0];
   return base;
 }
 
-// Helper function to detect standard system OS language or timezone location fallback
 function detectSystemLanguage(): string {
   if (typeof window === "undefined") return "es";
 
   const supportedCodes = SUPPORTED_LANGUAGES.map((l) => l.code);
 
-  // 1. Check navigator.languages
   if (navigator.languages && navigator.languages.length > 0) {
     for (const lang of navigator.languages) {
       const normalized = normalizeLangCode(lang);
       if (supportedCodes.includes(normalized)) {
         return normalized;
       }
-      if (normalized.length === 2 || normalized.length === 3) {
-        return normalized;
-      }
     }
   }
 
-  // 2. Check navigator.language
   if (navigator.language) {
     const normalized = normalizeLangCode(navigator.language);
-    if (supportedCodes.includes(normalized) || normalized.length === 2 || normalized.length === 3) {
+    if (supportedCodes.includes(normalized)) {
       return normalized;
     }
   }
 
-  // 3. Fallback check by Timezone/Location
   try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone.toLowerCase();
     const spanishTzs = [
       "madrid", "canary", "mexico", "monterrey", "merida", "tijuana", "chihuahua",
       "hermosillo", "cancun", "bogota", "caracas", "santiago", "buenos_aires",
@@ -82,147 +88,132 @@ function detectSystemLanguage(): string {
       "el_salvador", "tegucigalpa", "managua", "costa_rica", "panama", "havana",
       "santo_domingo", "puerto_rico"
     ];
-    const lowerTz = tz.toLowerCase();
-    if (spanishTzs.some((city) => lowerTz.includes(city))) {
+    if (spanishTzs.some((city) => tz.includes(city))) {
       return "es";
     }
+    if (tz.includes("seoul")) return "ko";
+    if (tz.includes("tokyo")) return "ja";
+    if (tz.includes("sao_paulo") || tz.includes("lisbon")) return "pt";
+    if (tz.includes("paris")) return "fr";
+    if (tz.includes("berlin") || tz.includes("zurich") || tz.includes("vienna")) return "de";
+    if (tz.includes("rome")) return "it";
+    if (tz.includes("shanghai") || tz.includes("beijing") || tz.includes("taipei")) return "zh-CN";
+    if (tz.includes("jerusalem")) return "iw";
+    if (tz.includes("prague")) return "cs";
+    if (tz.includes("riyadh") || tz.includes("dubai") || tz.includes("cairo")) return "ar";
   } catch {
     // Ignore timezone parsing errors
   }
 
-  return "es";
+  return "en";
+}
+
+function detectSystemUnitSystem(): UnitSystem {
+  if (typeof window === "undefined") return "metric";
+  try {
+    const loc = (navigator.language || "").toUpperCase();
+    if (loc.endsWith("-US") || loc.endsWith("_US")) {
+      return "imperial";
+    }
+  } catch {}
+  return "metric";
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("es");
+  const [unitSystem, setUnitSystemState] = useState<UnitSystem>("metric");
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isOnline, setIsOnline] = useState<boolean>(() =>
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
 
+  // Purge any legacy Google Translate cookies/scripts from earlier versions so React 19 DOM never crashes
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    try {
+      document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
+      const legacyScript = document.getElementById("google-translate-script");
+      if (legacyScript) legacyScript.remove();
+    } catch {}
   }, []);
 
-  // Load language preference from IndexedDB / localStorage on mount
   useEffect(() => {
-    async function loadPreference() {
+    async function loadPreferences() {
       try {
-        const savedLang = await getLocalSetting<string | null>("preferred_language", null);
-        if (savedLang) {
-          setLanguageState(savedLang);
+        const [savedLang, savedUnits] = await Promise.all([
+          getLocalSetting<string | null>("preferred_language", null),
+          getLocalSetting<UnitSystem | null>("preferred_unit_system", null)
+        ]);
+
+        const localLang =
+          savedLang ||
+          (typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null) ||
+          detectSystemLanguage();
+        setLanguageState(localLang);
+
+        const rawLocalUnits =
+          savedUnits ||
+          (typeof window !== "undefined"
+            ? (localStorage.getItem("preferred_unit_system") as UnitSystem | null)
+            : null);
+        if (rawLocalUnits === "metric" || rawLocalUnits === "imperial") {
+          setUnitSystemState(rawLocalUnits);
         } else {
-          let localLang: string | null = null;
-          if (typeof window !== "undefined") {
-            localLang = localStorage.getItem("preferred_language");
-          }
-          if (localLang) {
-            setLanguageState(localLang);
+          // Check active user profile country if saved
+          const activeProfile = await getLocalSetting<any>("current_user", null).catch(() => null);
+          if (activeProfile?.unitSystem === "imperial" || activeProfile?.unitSystem === "metric") {
+            setUnitSystemState(activeProfile.unitSystem);
+          } else if (activeProfile?.country) {
+            setUnitSystemState(getDefaultUnitSystemForCountry(activeProfile.country));
           } else {
-            const detected = detectSystemLanguage();
-            setLanguageState(detected);
+            setUnitSystemState(detectSystemUnitSystem());
           }
         }
       } catch {
-        let localLang: string | null = null;
-        if (typeof window !== "undefined") {
-          localLang = localStorage.getItem("preferred_language");
-        }
-        if (localLang) {
-          setLanguageState(localLang);
-        } else {
-          const detected = detectSystemLanguage();
-          setLanguageState(detected);
-        }
+        setLanguageState(detectSystemLanguage());
+        setUnitSystemState(detectSystemUnitSystem());
       } finally {
         setIsLoaded(true);
       }
     }
-    loadPreference();
+    loadPreferences();
   }, []);
 
   const setLanguage = async (lang: Language) => {
     setLanguageState(lang);
     try {
       await saveLocalSetting("preferred_language", lang);
-    } catch {
-      // Ignore IndexedDB error
-    }
+    } catch {}
     if (typeof window !== "undefined") {
-      localStorage.setItem("preferred_language", lang);
-      const currentlyOnline = typeof navigator !== "undefined" ? navigator.onLine : false;
-
-      if (lang === "es") {
-        document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
-        if (currentlyOnline && document.getElementById("google-translate-script")) {
-          window.location.reload();
-          return;
-        }
-      } else {
-        document.cookie = `googtrans=/es/${lang}; path=/;`;
-        document.cookie = `googtrans=/es/${lang}; path=/; domain=${window.location.hostname};`;
-        if (currentlyOnline) {
-          window.location.reload();
-          return;
-        }
-      }
+      try {
+        localStorage.setItem("preferred_language", lang);
+      } catch {}
     }
   };
 
+  const setUnitSystem = async (units: UnitSystem) => {
+    setUnitSystemState(units);
+    try {
+      await saveLocalSetting("preferred_unit_system", units);
+    } catch {}
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("preferred_unit_system", units);
+      } catch {}
+    }
+  };
+
+  // Sync <html lang>, <html dir="rtl"|"ltr">, and Firebase Auth languageCode automatically
   useEffect(() => {
+    const stdLang = toStandardLangCode(language);
     if (typeof document !== "undefined") {
-      document.documentElement.lang = language;
+      document.documentElement.lang = stdLang;
+      document.documentElement.dir = isRtlLanguage(language) ? "rtl" : "ltr";
     }
-  }, [language]);
-
-  // Activate neural DOM translation for non-Spanish languages only when online
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const needTranslate = language !== "es";
-
-    if (needTranslate) {
-      document.cookie = `googtrans=/es/${language}; path=/;`;
-      document.cookie = `googtrans=/es/${language}; path=/; domain=${window.location.hostname};`;
-
-      const currentlyOnline = typeof navigator !== "undefined" ? navigator.onLine : isOnline;
-      if (currentlyOnline && !document.getElementById("google-translate-script")) {
-        const script = document.createElement("script");
-        script.id = "google-translate-script";
-        script.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-        script.async = true;
-        script.onerror = () => {
-          script.remove();
-        };
-        document.body.appendChild(script);
-
-        (window as any).googleTranslateElementInit = () => {
-          if (!(window as any).google?.translate?.TranslateElement) return;
-          new (window as any).google.translate.TranslateElement(
-            {
-              pageLanguage: "es",
-              layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE,
-              autoDisplay: false,
-            },
-            "google_translate_element"
-          );
-        };
+    try {
+      if (auth) {
+        auth.languageCode = stdLang;
       }
-    } else {
-      document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
-    }
-  }, [language, isOnline]);
+    } catch {}
+  }, [language]);
 
   const t = (key: TranslationKey): string => {
     const exactDict = (translations as Record<string, Record<string, string>>)[language];
@@ -233,15 +224,23 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     if (fallbackLangDict && fallbackLangDict[key]) {
       return fallbackLangDict[key] as string;
     }
-    if (!isOnline && language !== "es" && translations.en[key]) {
+    // For all non-Spanish languages, fall back to English World Archery terminology rather than Spanish
+    if (language !== "es" && translations.en[key]) {
       return translations.en[key];
     }
     return translations.es[key] || String(key);
   };
 
+  const tx = (esText: string, enText: string): string => {
+    return language === "es" ? esText : enText;
+  };
+
+  const isRtl = isRtlLanguage(language);
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
-      <div id="google_translate_element" style={{ display: "none", visibility: "hidden" }} />
+    <LanguageContext.Provider
+      value={{ language, setLanguage, unitSystem, setUnitSystem, isRtl, t, tx }}
+    >
       {isLoaded ? (
         children
       ) : (

@@ -11,6 +11,7 @@ import {
   fetchAdminUsersPage,
   searchAdminUsersInCloud
 } from "@/lib/adminCloudPagination";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 interface SubscriptionLog {
   id: string;
@@ -231,7 +232,7 @@ export default function AdminSubscriptionsTab() {
       newPlan: nextPlan,
       expiresAt: nextExpiresAt,
       createdAt: now,
-      timestamp: new Date(now).toISOString().split("T")[0],
+      timestamp: getLocalISODate(now),
       reason: "Override manual por SuperAdmin"
     };
 

@@ -13,6 +13,8 @@ import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic, startRingingSound, stopRingingSound } from "@/lib/soundUtils";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, getExactTargetDimensions } from "@/lib/scoring/dispersionAnalytics";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { getSpeechLocale, pickVoiceForLanguage } from "@/lib/i18n/regionalUtils";
 
 import { COUNTRIES } from "@/lib/countries";
 
@@ -32,6 +34,9 @@ export interface ShotImpact {
 }
 
 export default function MatchplayGameView({ user, config, onBack, onDuelSaved }: MatchplayGameViewProps) {
+  const { language } = useLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const isCompound = config.system === "cumulative" || config.bowType === "Compound";
   const dianaPresetKey = getDianaPresetKey(
     config.bowType || (isCompound ? "Compound" : "Recurve"),
@@ -1776,43 +1781,69 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     };
   }, [isWalkieTalkieActive]);
 
+  const RIVAL_PHRASE_EN_MAP: Record<string, string> = {
+    "¡Venga! A ver qué tal tiras esta flecha.": "Let's go! Let's see how you shoot this arrow.",
+    "Mucha concentración en esta línea.": "Full focus on the shooting line.",
+    "El viento está un poco inestable hoy, ¿eh?": "Wind feels a bit tricky today, right?",
+    "¡Buen tiro! Mantén el ritmo.": "Nice shooting! Keep up the rhythm.",
+    "Siento un poco de presión en la línea de tiro.": "Feeling the pressure on the shooting line.",
+    "Tu turno. ¡Apunta bien!": "Your turn. Aim steady!",
+    "¡Impresionante! ¡Qué centro!": "Impressive! Dead center!",
+    "¡Un diez perfecto! Qué gran tiro.": "A perfect ten! Great shot.",
+    "Vaya tiro en el amarillo. Me pones presión.": "Right in the gold. Putting the pressure on me!",
+    "¡Bien hecho! Excelente ejecución.": "Well done! Clean execution.",
+    "Una flecha difícil, el viento debió moverla.": "Tough arrow, the wind must have caught it.",
+    "No te preocupes, el próximo tiro será mejor.": "No worries, the next shot will be better.",
+    "Tranquilo, sacúdete ese tiro y concéntrate.": "Shake that one off and stay focused.",
+    "Eso dolió, ¡recuperemos en la siguiente!": "Tough break, let's bounce back on the next arrow!",
+    "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!": "Great match! You shot brilliantly. Congratulations on the win!",
+    "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego.": "What a great match! Close from start to finish. Good game!",
+    "¡Un empate increíble! Vaya nivel de competencia.": "Incredible tie! Amazing level of competition."
+  };
+
+  const resolveActiveBotLang = (): string => {
+    const stored =
+      typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null;
+    return stored || languageRef.current || language || "es";
+  };
+
   // Voice synthesis (Text-to-Speech — simulated bot duels ONLY; muted in live human duels)
   const speakRivalPhrase = (text: string) => {
     if (isFriendDuel) return;
+    const activeLang = resolveActiveBotLang();
+    const isSpanish = activeLang.toLowerCase().startsWith("es");
+    const spokenText = isSpanish ? text : RIVAL_PHRASE_EN_MAP[text] || text;
+
     playRadioStatic();
-    setWalkieText(text);
+    setWalkieText(spokenText);
     setIsRivalSpeaking(true);
 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "es-ES";
-      
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.lang = getSpeechLocale(activeLang);
+
       const voices = window.speechSynthesis.getVoices();
-      const isFemale = ["Daniela", "Laura"].some(n => config.rival.fullName.includes(n));
-      const spanishVoices = voices.filter(v => v.lang.startsWith("es"));
-      
-      if (spanishVoices.length > 0) {
-        const selectedVoice = spanishVoices.find(v => {
-          const nameLower = v.name.toLowerCase();
-          if (isFemale) {
-            return nameLower.includes("sabina") || nameLower.includes("helena") || nameLower.includes("female") || nameLower.includes("mujer") || nameLower.includes("google");
-          } else {
-            return nameLower.includes("julio") || nameLower.includes("pablo") || nameLower.includes("male") || nameLower.includes("hombre");
-          }
-        }) || spanishVoices[0];
+      const isFemale = ["Daniela", "Laura", "Sofia", "Emma", "Yuna", "Sakura"].some((n) =>
+        (config?.rival?.fullName || "").includes(n)
+      );
+      const selectedVoice =
+        pickVoiceForLanguage(voices, activeLang, isFemale) ||
+        (!isSpanish ? pickVoiceForLanguage(voices, "en", isFemale) : undefined);
+
+      if (selectedVoice) {
         utterance.voice = selectedVoice;
       }
-      
+
       utterance.rate = 1.05;
       utterance.pitch = isFemale ? 1.15 : 0.95;
-      
+
       utterance.onend = () => {
         setIsRivalSpeaking(false);
         playRadioStatic();
         setTimeout(() => setWalkieText(null), 2500);
       };
-      
+
       utterance.onerror = () => {
         setIsRivalSpeaking(false);
         setTimeout(() => setWalkieText(null), 2500);
@@ -1833,14 +1864,24 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isWalkieTalkieActive) return;
     if (Math.random() > 0.3) return; // 30% chance
 
-    const phrases = [
-      "¡Venga! A ver qué tal tiras esta flecha.",
-      "Mucha concentración en esta línea.",
-      "El viento está un poco inestable hoy, ¿eh?",
-      "¡Buen tiro! Mantén el ritmo.",
-      "Siento un poco de presión en la línea de tiro.",
-      "Tu turno. ¡Apunta bien!"
-    ];
+    const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
+    const phrases = isSpanish
+      ? [
+          "¡Venga! A ver qué tal tiras esta flecha.",
+          "Mucha concentración en esta línea.",
+          "El viento está un poco inestable hoy, ¿eh?",
+          "¡Buen tiro! Mantén el ritmo.",
+          "Siento un poco de presión en la línea de tiro.",
+          "Tu turno. ¡Apunta bien!"
+        ]
+      : [
+          "Let's go! Let's see how you shoot this arrow.",
+          "Full focus on the shooting line.",
+          "Wind feels a bit tricky today, right?",
+          "Nice shooting! Keep up the rhythm.",
+          "Feeling the pressure on the shooting line.",
+          "Your turn. Aim steady!"
+        ];
     speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
   };
 
@@ -1849,21 +1890,36 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isWalkieTalkieActive) return;
 
     setTimeout(() => {
+      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
       if (score === 10) {
-        const phrases = [
-          "¡Impresionante! ¡Qué centro!",
-          "¡Un diez perfecto! Qué gran tiro.",
-          "Vaya tiro en el amarillo. Me pones presión.",
-          "¡Bien hecho! Excelente ejecución."
-        ];
+        const phrases = isSpanish
+          ? [
+              "¡Impresionante! ¡Qué centro!",
+              "¡Un diez perfecto! Qué gran tiro.",
+              "Vaya tiro en el amarillo. Me pones presión.",
+              "¡Bien hecho! Excelente ejecución."
+            ]
+          : [
+              "Impressive! Dead center!",
+              "A perfect ten! Great shot.",
+              "Right in the gold. Putting the pressure on me!",
+              "Well done! Clean execution."
+            ];
         speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
       } else if (score <= 6) {
-        const phrases = [
-          "Una flecha difícil, el viento debió moverla.",
-          "No te preocupes, el próximo tiro será mejor.",
-          "Tranquilo, sacúdete ese tiro y concéntrate.",
-          "Eso dolió, ¡recuperemos en la siguiente!"
-        ];
+        const phrases = isSpanish
+          ? [
+              "Una flecha difícil, el viento debió moverla.",
+              "No te preocupes, el próximo tiro será mejor.",
+              "Tranquilo, sacúdete ese tiro y concéntrate.",
+              "Eso dolió, ¡recuperemos en la siguiente!"
+            ]
+          : [
+              "Tough arrow, the wind must have caught it.",
+              "No worries, the next shot will be better.",
+              "Shake that one off and stay focused.",
+              "Tough break, let's bounce back on the next arrow!"
+            ];
         speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
       }
     }, 1000);
@@ -1874,12 +1930,25 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isWalkieTalkieActive) return;
 
     setTimeout(() => {
+      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
       if (userWon === true) {
-        speakRivalPhrase("¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!");
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!"
+            : "Great match! You shot brilliantly. Congratulations on the win!"
+        );
       } else if (userWon === false) {
-        speakRivalPhrase("¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego.");
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego."
+            : "What a great match! Close from start to finish. Good game!"
+        );
       } else {
-        speakRivalPhrase("¡Un empate increíble! Vaya nivel de competencia.");
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Un empate increíble! Vaya nivel de competencia."
+            : "Incredible tie! Amazing level of competition."
+        );
       }
     }, 1500);
   };
@@ -2235,40 +2304,59 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   };
 
-  // WhatsApp Duel Result Sharing (Android Web Share API + Direct URL fallback)
+  // Universal Duel Result Sharing (Web Share API prioritized + Messaging fallback)
   const handleShareDuelWhatsApp = async () => {
     const userTotal = userTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0);
     const rivalTotal = rivalTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0);
-    const outcomeText = winner === "USER" ? "¡VICTORIA!" : winner === "RIVAL" ? "Derrota" : "Empate";
+    const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
+    const outcomeText = isSpanish
+      ? winner === "USER"
+        ? "¡VICTORIA!"
+        : winner === "RIVAL"
+        ? "Derrota"
+        : "Empate"
+      : winner === "USER"
+      ? "VICTORY!"
+      : winner === "RIVAL"
+      ? "Defeat"
+      : "Tie";
 
-    const message = 
-      `*ELIMINATORIAS ONLINE · 101010 THE APP*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `• *Resultado:* ${outcomeText}\n` +
-      `• *Formato:* ${config.bowType} · ${config.distance}m\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `• *${user.fullName || "Tú"}:* ${userTotal} pts ${!isCompound ? `(${userSetPoints} SP)` : ""}\n` +
-      `• *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `🎯 *101010 THE APP*`;
-
-    if (typeof window !== "undefined" && (window as any).ArcheryNativeShare?.shareWhatsAppText) {
-      (window as any).ArcheryNativeShare.shareWhatsAppText(message);
-      return;
-    }
+    const message = isSpanish
+      ? `*ELIMINATORIAS ONLINE · 101010 THE APP*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *Resultado:* ${outcomeText}\n` +
+        `• *Formato:* ${config.bowType} · ${config.distance}m\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *${user.fullName || "Tú"}:* ${userTotal} pts ${!isCompound ? `(${userSetPoints} SP)` : ""}\n` +
+        `• *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 *101010 THE APP*`
+      : `*ONLINE MATCH · 101010 THE APP*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *Result:* ${outcomeText}\n` +
+        `• *Format:* ${config.bowType} · ${config.distance}m\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *${user.fullName || "You"}:* ${userTotal} pts ${!isCompound ? `(${userSetPoints} SP)` : ""}\n` +
+        `• *${config.rival.fullName}:* ${rivalTotal} pts ${!isCompound ? `(${rivalSetPoints} SP)` : ""}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 *101010 THE APP*`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: `Duelo 1v1 - 101010 THE APP`,
-          text: message,
+          title: isSpanish ? `Duelo 1v1 - 101010 THE APP` : `1v1 Match - 101010 THE APP`,
+          text: message
         });
         return;
       } catch (err: any) {
-        if (err.name !== "AbortError") {
-          console.error("Share error:", err);
-        }
+        if (err.name === "AbortError") return;
+        console.error("Share error:", err);
       }
+    }
+
+    if (typeof window !== "undefined" && (window as any).ArcheryNativeShare?.shareWhatsAppText) {
+      (window as any).ArcheryNativeShare.shareWhatsAppText(message);
+      return;
     }
 
     const encoded = encodeURIComponent(message);

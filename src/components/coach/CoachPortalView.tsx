@@ -42,6 +42,7 @@ import { Macrocycle } from "@/lib/db/macrocycleTypes";
 import { SyncCycleSummary, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
 import { activateCoachLaunchPromo } from "@/lib/billingService";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 interface CoachPortalViewProps {
   user: UserProfile;
@@ -338,7 +339,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       setAthletes(clubArchers);
 
       // 2. Load attendance for today (local + Firestore coach_records/ATT-<clubId>-<dateKey>)
-      const dateKey = new Date().toISOString().split("T")[0];
+      const dateKey = getLocalISODate();
       const localAttKey = `attendance_${activeClubId}_${dateKey}`;
       const savedAttendance = await getLocalSetting<Record<string, boolean>>(localAttKey, {});
       if (!isCancelled) {
@@ -681,7 +682,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     };
     setAttendance(nextAttendance);
 
-    const dateKey = new Date().toISOString().split("T")[0];
+    const dateKey = getLocalISODate();
     await saveLocalSetting(`attendance_${activeClubId}_${dateKey}`, nextAttendance);
 
     const presentUids = Object.entries(nextAttendance)

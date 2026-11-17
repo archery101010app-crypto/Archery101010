@@ -7,6 +7,7 @@ import { AdCampaign, AdSlide } from "@/lib/db/adTypes";
 import { adCampaignsStore, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 import { seedDemoAdCampaigns } from "@/lib/adManager";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
+import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export default function AdminCampaignsTab() {
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
@@ -65,8 +66,8 @@ export default function AdminCampaignsTab() {
     setName("");
     setType("popup");
     setSlides([{ id: "slide-1", imageUrl: "", title: "", subtitle: "", linkUrl: "", backgroundColor: "" }]);
-    setStartDate(new Date().toISOString().split("T")[0]);
-    setEndDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+    setStartDate(getLocalISODate());
+    setEndDate(getLocalISODate(Date.now() + 90 * 24 * 60 * 60 * 1000));
     setShowOnAppOpen(true);
     setFrequencyMinutes(15);
     setMaxImpressionsPerDay(5);

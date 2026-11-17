@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import {
+  formatRegionalDate,
+  formatShootingDistance,
+  yardsToMeters
+} from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession, getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession, saveLocalSetting } from "@/lib/db/indexedDB";
 import { showOledConfirm } from "@/lib/oledDialog";
-import { ArrowLeft, Target, ChevronDown, Trash2, RotateCcw } from "lucide-react";
+import { ArrowLeft, Trash2, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SessionConfigViewProps {
@@ -12,10 +17,32 @@ interface SessionConfigViewProps {
   onStartSession: (config: any) => void;
 }
 
-const DISTANCES = [18, 30, 50, 60, 70];
+const METRIC_DISTANCES = [18, 30, 50, 60, 70];
+const IMPERIAL_DISTANCES = [20, 30, 40, 50, 60];
+
+function getCanonicalMetersForYards(yd: number): number {
+  if (yd === 20) return 18;
+  return Math.round(yardsToMeters(yd));
+}
+
+function getNearestYardPreset(meters: number): number {
+  if (meters <= 22) return 20;
+  const approxYards = meters * 1.0936133;
+  return IMPERIAL_DISTANCES.reduce((best, curr) =>
+    Math.abs(curr - approxYards) < Math.abs(best - approxYards) ? curr : best
+  );
+}
+
+function getNearestMeterPreset(yd: number): number {
+  if (yd === 20) return 18;
+  const approxMeters = yardsToMeters(yd);
+  return METRIC_DISTANCES.reduce((best, curr) =>
+    Math.abs(curr - approxMeters) < Math.abs(best - approxMeters) ? curr : best
+  );
+}
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
-  const { language, t } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
@@ -27,10 +54,22 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [format, setFormat] = useState<string>("Libre");
   const [targetType, setTargetType] = useState<string>("WA 300");
   const [bowType, setBowType] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
-  const [distance, setDistance] = useState(
-    user?.bowConfig?.defaultDistance && user.bowConfig.defaultDistance <= 70 
-      ? user.bowConfig.defaultDistance 
-      : 18
+
+  const defaultMeters =
+    user?.bowConfig?.defaultDistance && user.bowConfig.defaultDistance <= 70
+      ? user.bowConfig.defaultDistance
+      : 18;
+
+  const [distanceUnit, setDistanceUnit] = useState<"m" | "yd">(
+    unitSystem === "imperial" ? "yd" : "m"
+  );
+  const [distanceValue, setDistanceValue] = useState<number>(() =>
+    unitSystem === "imperial" ? getNearestYardPreset(defaultMeters) : defaultMeters
+  );
+  const [distance, setDistance] = useState<number>(() =>
+    unitSystem === "imperial"
+      ? getCanonicalMetersForYards(getNearestYardPreset(defaultMeters))
+      : defaultMeters
   );
   const [endsCount, setEndsCount] = useState(10);
   const [arrowsPerEnd, setArrowsPerEnd] = useState(3);
@@ -48,6 +87,40 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     }
     checkDrafts();
   }, [user.uid]);
+
+  const handleDistanceUnitSwitch = (nextUnit: "m" | "yd") => {
+    if (nextUnit === distanceUnit) return;
+    if (nextUnit === "yd") {
+      const nextYd = getNearestYardPreset(distance);
+      const nextCanonicalM = getCanonicalMetersForYards(nextYd);
+      setDistanceUnit("yd");
+      setDistanceValue(nextYd);
+      setDistance(nextCanonicalM);
+      if (format === "WA 360") {
+        if (nextCanonicalM === 18) {
+          setEndsCount(12);
+          setArrowsPerEnd(3);
+        } else {
+          setEndsCount(6);
+          setArrowsPerEnd(6);
+        }
+      }
+    } else {
+      const nextM = getNearestMeterPreset(distanceValue);
+      setDistanceUnit("m");
+      setDistanceValue(nextM);
+      setDistance(nextM);
+      if (format === "WA 360") {
+        if (nextM === 18) {
+          setEndsCount(12);
+          setArrowsPerEnd(3);
+        } else {
+          setEndsCount(6);
+          setArrowsPerEnd(6);
+        }
+      }
+    }
+  };
 
   // Automatically adjust parameters based on Format selection
   const handleFormatChange = (newFormat: string) => {
@@ -67,17 +140,22 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       setEndsCount(12);
       setArrowsPerEnd(6);
       if (distance === 18) {
-        setDistance(bowType === "Compound" ? 50 : 70);
+        const officialM = bowType === "Compound" ? 50 : 70;
+        setDistanceUnit("m");
+        setDistanceValue(officialM);
+        setDistance(officialM);
       }
     } else if (newFormat === "WA 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
       setDistance(18);
+      setDistanceValue(distanceUnit === "yd" ? 20 : 18);
       setTargetType("WA 300");
     } else if (newFormat === "Vegas 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
       setDistance(18);
+      setDistanceValue(distanceUnit === "yd" ? 20 : 18);
       setTargetType("Vegas 300");
     }
   };
@@ -88,12 +166,16 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     const safeArrowsPerEnd = Math.min(12, Math.max(1, arrowsPerEnd));
     const safeMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / safeArrowsPerEnd)));
     const safeEndsCount = Math.min(safeMaxEnds, Math.max(1, endsCount));
+    const canonicalMeters =
+      distanceUnit === "yd" ? getCanonicalMetersForYards(distanceValue) : distance;
     onStartSession({
       practiceType,
       format,
       targetType: format === "Vegas 300" || targetType === "Vegas 300" ? "Vegas 300" : "WA 300",
       bowType,
-      distance,
+      distance: canonicalMeters,
+      distanceUnit,
+      distanceValue: distanceUnit === "yd" ? distanceValue : canonicalMeters,
       autoScore: true,
       includeNotes: true,
       endsCount: safeEndsCount,
@@ -125,8 +207,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     if (
       draftSession &&
       (await showOledConfirm(
-        "¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.",
-        { confirmLabel: "Descartar", cancelLabel: "Cancelar" }
+        tx(
+          "¿Estás seguro de que quieres descartar esta sesión pausada? Se perderá todo tu progreso.",
+          "Are you sure you want to discard this paused session? All progress will be lost."
+        ),
+        {
+          confirmLabel: tx("Descartar", "Discard"),
+          cancelLabel: t("cancel")
+        }
       ))
     ) {
       await deleteLocalSession(draftSession.id);
@@ -147,6 +235,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     }
   };
 
+  const getLocalizedBowName = (type?: string) => {
+    if (type === "Recurve") return t("bowRecurve");
+    if (type === "Compound") return t("bowCompound");
+    if (type === "Barebow") return t("bowBarebow");
+    return type || t("bowBarebow");
+  };
+
+  const activeDistancePresets = distanceUnit === "yd" ? IMPERIAL_DISTANCES : METRIC_DISTANCES;
+
   return (
     <div className="flex flex-col gap-4 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
@@ -161,7 +258,9 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <h2 className="text-white text-[21.1px] sm:text-[23.8px] font-black uppercase tracking-wide truncate leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[13.9px] text-white uppercase tracking-wider truncate">Configuración</p>
+          <p className="text-[13.9px] text-white uppercase tracking-wider truncate">
+            {tx("Configuración", "Configuration")}
+          </p>
         </div>
       </div>
 
@@ -178,13 +277,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-[13.9px] text-yellow-gold font-black tracking-widest uppercase flex items-center gap-1.5">
                   <RotateCcw size={13} />
-                  Sesión Pausada
+                  {tx("Sesión Pausada", "Paused Session")}
                 </span>
-                <h4 className="text-white text-[16.7px] font-bold mt-1 truncate">
-                  {draftSession.format} · {draftSession.distance}m · {draftSession.bowType === "Recurve" ? "Recurvo" : draftSession.bowType === "Compound" ? "Compuesto" : draftSession.bowType}
+                <h4 className="text-white text-[16.7px] font-bold mt-1 truncate tabular-nums">
+                  {draftSession.format === "Libre" ? tx("Libre", "Custom") : draftSession.format} ·{" "}
+                  {formatShootingDistance(
+                    Number(draftSession.distance) || 18,
+                    unitSystem,
+                    draftSession.distanceUnit,
+                    draftSession.distanceValue
+                  )}{" "}
+                  · {getLocalizedBowName(draftSession.bowType)}
                 </h4>
-                <p className="text-[12.6px] text-white">
-                  Pausado el {new Date(draftSession.timestamp).toLocaleDateString(language === "es" ? "es-ES" : "en-US", {
+                <p className="text-[12.6px] text-white tabular-nums">
+                  {tx("Pausado el", "Paused on")}{" "}
+                  {formatRegionalDate(draftSession.timestamp, language, {
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
@@ -195,7 +302,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <button
                 onClick={handleDiscardDraft}
                 className="w-8 h-8 rounded-lg border border-white bg-white text-black hover:bg-neutral-200 flex items-center justify-center shrink-0 transition cursor-pointer"
-                title="Descartar Borrador"
+                title={tx("Descartar Borrador", "Discard Draft")}
               >
                 <Trash2 size={14} />
               </button>
@@ -206,7 +313,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16.7px] uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
             >
               <RotateCcw size={15} />
-              <span>Reanudar Entrenamiento</span>
+              <span>{tx("Reanudar Entrenamiento", "Resume Training")}</span>
             </button>
           </motion.div>
         )}
@@ -233,9 +340,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             ))}
           </div>
           <p className="text-[13.4px] text-white leading-snug px-1">
-            {practiceType === "Control" && "Simulación oficial de torneo con tiempos, diana activa y planilla reglamentaria."}
-            {practiceType === "Práctica" && "Entrenamiento libre con análisis de agrupación y notas por ronda."}
-            {practiceType === "Volumen" && "Contador rápido de carga física de flechas sin puntuación en diana."}
+            {practiceType === "Control" &&
+              tx(
+                "Simulación oficial de torneo con tiempos, diana activa y planilla reglamentaria.",
+                "Official tournament simulation with timing, interactive target, and official scorecard."
+              )}
+            {practiceType === "Práctica" &&
+              tx(
+                "Entrenamiento libre con análisis de agrupación y notas por ronda.",
+                "Open practice with grouping analytics and end notes."
+              )}
+            {practiceType === "Volumen" &&
+              tx(
+                "Contador rápido de carga física de flechas sin puntuación en diana.",
+                "Fast arrow volume counter for physical load without target scoring."
+              )}
           </p>
         </div>
 
@@ -246,7 +365,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {[
-              { id: "Libre", label: "Libre" },
+              { id: "Libre", label: tx("Libre", "Custom") },
               { id: "WA 720", label: "WA 720" },
               { id: "WA 360", label: "WA 360" },
               { id: "WA 300", label: "WA 300" },
@@ -270,9 +389,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           </div>
           {format !== "Libre" && (
             <p className="text-[13.9px] text-cyan-neon tabular-nums font-bold px-1">
-              {endsCount} Ends × {arrowsPerEnd} Flechas ({endsCount * arrowsPerEnd * 10} pts máx)
-              {bowType === "Compound" && format === "WA 300" ? " · 10 Reducido Oficial" : ""}
-              {bowType === "Compound" && format === "Vegas 300" ? " · 10 Completo" : ""}
+              {endsCount} {t("rounds")} × {arrowsPerEnd} {t("arrowsLabel")} ({endsCount * arrowsPerEnd * 10} pts {tx("máx", "max")})
+              {bowType === "Compound" && format === "WA 300"
+                ? tx(" · 10 Reducido Oficial", " · Official Inner 10")
+                : ""}
+              {bowType === "Compound" && format === "Vegas 300"
+                ? tx(" · 10 Completo", " · Full 10 Ring")
+                : ""}
             </p>
           )}
         </div>
@@ -294,43 +417,75 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
-                {type === "Recurve" ? "Recurvo" : type === "Compound" ? "Compuesto" : "Barebow"}
+                {getLocalizedBowName(type)}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Distance Chips presets */}
+        {/* Distance Chips presets + Metric (m) / Imperial (yd) unit pill toggle */}
         <div className="flex flex-col gap-2">
-          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
-            {t("distance")}
-          </label>
-          <div className="grid grid-cols-5 gap-2 w-full">
-            {DISTANCES.map((d) => (
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
+              {t("distance")}
+            </label>
+            <div className="inline-flex items-center bg-[#0D0F12] border border-white/10 rounded-xl p-0.5 tabular-nums">
               <button
-                key={d}
                 type="button"
-                onClick={() => {
-                  setDistance(d);
-                  if (format === "WA 360") {
-                    if (d === 18) {
-                      setEndsCount(12);
-                      setArrowsPerEnd(3);
-                    } else {
-                      setEndsCount(6);
-                      setArrowsPerEnd(6);
-                    }
-                  }
-                }}
-                className={`h-12 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
-                  distance === d
-                    ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
-                    : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
+                onClick={() => handleDistanceUnitSwitch("m")}
+                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                  distanceUnit === "m"
+                    ? "bg-cyan-neon text-black"
+                    : "text-white/75 hover:text-white"
                 }`}
               >
-                {d}m
+                m
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => handleDistanceUnitSwitch("yd")}
+                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                  distanceUnit === "yd"
+                    ? "bg-cyan-neon text-black"
+                    : "text-white/75 hover:text-white"
+                }`}
+              >
+                yd
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-5 gap-2 w-full">
+            {activeDistancePresets.map((d) => {
+              const isSelected = distanceValue === d;
+              return (
+                <button
+                  key={`${distanceUnit}-${d}`}
+                  type="button"
+                  onClick={() => {
+                    const nextCanonicalM =
+                      distanceUnit === "yd" ? getCanonicalMetersForYards(d) : d;
+                    setDistanceValue(d);
+                    setDistance(nextCanonicalM);
+                    if (format === "WA 360") {
+                      if (nextCanonicalM === 18) {
+                        setEndsCount(12);
+                        setArrowsPerEnd(3);
+                      } else {
+                        setEndsCount(6);
+                        setArrowsPerEnd(6);
+                      }
+                    }
+                  }}
+                  className={`h-12 px-1 sm:px-2 rounded-xl border text-[15px] sm:text-[17px] tracking-tight font-black transition-all duration-200 cursor-pointer flex items-center justify-center text-center tabular-nums whitespace-nowrap ${
+                    isSelected
+                      ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
+                      : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
+                  }`}
+                >
+                  {distanceUnit === "yd" ? `${d} yd` : `${d}m`}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -364,7 +519,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[16.7px] text-white font-bold">Flechas</label>
+              <label className="text-[16.7px] text-white font-bold">{tx("Flechas", "Arrows")}</label>
               <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
@@ -411,23 +566,34 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
               <div>
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
-                  Metodología de Práctica
+                  {tx("Metodología de Práctica", "Practice Methodology")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase mt-1">
-                  Modo: {practiceInfoType === "Control" ? t("practiceControl") : practiceInfoType}
+                  {tx("Modo:", "Mode:")}{" "}
+                  {practiceInfoType === "Control"
+                    ? t("practiceControl")
+                    : practiceInfoType === "Práctica"
+                    ? t("practicePractice")
+                    : t("practiceVolume")}
                 </h3>
               </div>
 
               <p className="text-xs text-white leading-relaxed">
-                {practiceInfoType === "Control" && (
-                  "Simulación estricta de competencia. Con tiempos oficiales, planilla de puntuación reglamentaria, diana activa y sin interrupciones. Ideal para evaluar tu nivel en torneos."
-                )}
-                {practiceInfoType === "Práctica" && (
-                  "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas."
-                )}
-                {practiceInfoType === "Volumen" && (
-                  "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión."
-                )}
+                {practiceInfoType === "Control" &&
+                  tx(
+                    "Simulación estricta de competencia. Con tiempos oficiales, planilla de puntuación reglamentaria, diana activa y sin interrupciones. Ideal para evaluar tu nivel en torneos.",
+                    "Strict competition simulation with official timing, regulatory scorecard, active target, and zero interruptions. Ideal for tournament readiness."
+                  )}
+                {practiceInfoType === "Práctica" &&
+                  tx(
+                    "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas.",
+                    "Flexible open practice. Record shots to analyze groupings and form with per-end notes enabled."
+                  )}
+                {practiceInfoType === "Volumen" &&
+                  tx(
+                    "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión.",
+                    "Tracks total arrows shot during the session for physical volume statistics."
+                  )}
               </p>
 
               <div className="flex items-center gap-2 border-t border-white/5 pt-3">
@@ -439,7 +605,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
                 />
                 <label htmlFor="dontShowAgain" className="text-[11.6px] text-white font-bold cursor-pointer uppercase select-none">
-                  No volver a mostrar
+                  {tx("No volver a mostrar", "Don't show again")}
                 </label>
               </div>
 
@@ -448,7 +614,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   onClick={handleConfirmPracticeInfo}
                   className="flex-1 py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer transition-colors"
                 >
-                  Entendido, Iniciar
+                  {tx("Entendido, Iniciar", "Got it, Start")}
                 </button>
               </div>
             </div>

@@ -10,7 +10,7 @@ interface LanguageSelectorProps {
 }
 
 export default function LanguageSelector({ variant = "pill" }: LanguageSelectorProps) {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, tx } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
   const currentOption =
@@ -113,7 +113,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  aria-label="Cerrar selector de idioma"
+                  aria-label={tx("Cerrar selector de idioma", "Close language selector")}
                   className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-full bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.1] flex items-center justify-center text-white cursor-pointer transition"
                 >
                   <X size={15} aria-hidden="true" />
