@@ -168,24 +168,10 @@ export function yardsToMeters(yards: number): number {
 
 export function formatShootingDistance(
   distanceMeters: number,
-  unitSystem: UnitSystem = "metric",
-  distanceUnitOverride?: "m" | "yd",
-  distanceValueOverride?: number
+  _unitSystem: UnitSystem = "metric",
+  _distanceUnitOverride?: "m" | "yd",
+  _distanceValueOverride?: number
 ): string {
-  if (distanceUnitOverride === "yd" && distanceValueOverride) {
-    return `${distanceValueOverride} yd`;
-  }
-  if (distanceUnitOverride === "m") {
-    return `${Math.round(distanceMeters)}m`;
-  }
-  if (unitSystem === "imperial") {
-    // Common exact NFAA/Imperial equivalents: 18.29m -> 20 yd, 27.43m -> 30 yd, 36.58m -> 40 yd, 45.72m -> 50 yd, 54.86m -> 60 yd
-    const yds = metersToYards(distanceMeters);
-    if (Math.abs(yds - Math.round(yds)) <= 0.15) {
-      return `${Math.round(yds)} yd`;
-    }
-    return `${Math.round(distanceMeters)}m`;
-  }
   return `${Math.round(distanceMeters * 10) / 10}m`;
 }
 

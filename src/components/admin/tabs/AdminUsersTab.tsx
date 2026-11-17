@@ -722,7 +722,7 @@ export default function AdminUsersTab() {
               { id: "ALL", label: tx("Arcos", "Bows") },
               { id: "Recurve", label: t("bowRecurve") },
               { id: "Compound", label: t("bowCompound") },
-              { id: "Barebow", label: tx("Raso", "Barebow") }
+              { id: "Barebow", label: "Barebow" }
             ].map((b) => (
               <button
                 key={b.id}

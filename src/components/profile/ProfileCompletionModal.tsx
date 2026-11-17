@@ -354,7 +354,7 @@ export default function ProfileCompletionModal({
     registerAsCoach || isExistingCoach ? 18 : getMinimumConsentAge(country);
 
   const distanceOptions = [
-    { meters: 18, label: unitSystem === "imperial" ? "20 yd" : "18m" },
+    { meters: 18, label: "18m" },
     { meters: 30, label: "30m" },
     { meters: 50, label: "50m" },
     { meters: 70, label: "70m" }

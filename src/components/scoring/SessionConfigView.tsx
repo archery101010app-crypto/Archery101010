@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import {
-  formatRegionalDate,
-  formatShootingDistance,
-  yardsToMeters
-} from "@/lib/i18n/regionalUtils";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSessions, deleteLocalSession, saveLocalSetting } from "@/lib/db/indexedDB";
 import { showOledConfirm } from "@/lib/oledDialog";
@@ -17,32 +13,10 @@ interface SessionConfigViewProps {
   onStartSession: (config: any) => void;
 }
 
-const METRIC_DISTANCES = [18, 30, 50, 60, 70];
-const IMPERIAL_DISTANCES = [20, 30, 40, 50, 60];
-
-function getCanonicalMetersForYards(yd: number): number {
-  if (yd === 20) return 18;
-  return Math.round(yardsToMeters(yd));
-}
-
-function getNearestYardPreset(meters: number): number {
-  if (meters <= 22) return 20;
-  const approxYards = meters * 1.0936133;
-  return IMPERIAL_DISTANCES.reduce((best, curr) =>
-    Math.abs(curr - approxYards) < Math.abs(best - approxYards) ? curr : best
-  );
-}
-
-function getNearestMeterPreset(yd: number): number {
-  if (yd === 20) return 18;
-  const approxMeters = yardsToMeters(yd);
-  return METRIC_DISTANCES.reduce((best, curr) =>
-    Math.abs(curr - approxMeters) < Math.abs(best - approxMeters) ? curr : best
-  );
-}
+const DISTANCES = [18, 30, 50, 60, 70];
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
-  const { language, unitSystem, t, tx } = useLanguage();
+  const { language, t, tx } = useLanguage();
   const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
@@ -60,17 +34,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       ? user.bowConfig.defaultDistance
       : 18;
 
-  const [distanceUnit, setDistanceUnit] = useState<"m" | "yd">(
-    unitSystem === "imperial" ? "yd" : "m"
-  );
-  const [distanceValue, setDistanceValue] = useState<number>(() =>
-    unitSystem === "imperial" ? getNearestYardPreset(defaultMeters) : defaultMeters
-  );
-  const [distance, setDistance] = useState<number>(() =>
-    unitSystem === "imperial"
-      ? getCanonicalMetersForYards(getNearestYardPreset(defaultMeters))
-      : defaultMeters
-  );
+  const [distance, setDistance] = useState<number>(defaultMeters);
   const [endsCount, setEndsCount] = useState(10);
   const [arrowsPerEnd, setArrowsPerEnd] = useState(3);
 
@@ -87,40 +51,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     }
     checkDrafts();
   }, [user.uid]);
-
-  const handleDistanceUnitSwitch = (nextUnit: "m" | "yd") => {
-    if (nextUnit === distanceUnit) return;
-    if (nextUnit === "yd") {
-      const nextYd = getNearestYardPreset(distance);
-      const nextCanonicalM = getCanonicalMetersForYards(nextYd);
-      setDistanceUnit("yd");
-      setDistanceValue(nextYd);
-      setDistance(nextCanonicalM);
-      if (format === "WA 360") {
-        if (nextCanonicalM === 18) {
-          setEndsCount(12);
-          setArrowsPerEnd(3);
-        } else {
-          setEndsCount(6);
-          setArrowsPerEnd(6);
-        }
-      }
-    } else {
-      const nextM = getNearestMeterPreset(distanceValue);
-      setDistanceUnit("m");
-      setDistanceValue(nextM);
-      setDistance(nextM);
-      if (format === "WA 360") {
-        if (nextM === 18) {
-          setEndsCount(12);
-          setArrowsPerEnd(3);
-        } else {
-          setEndsCount(6);
-          setArrowsPerEnd(6);
-        }
-      }
-    }
-  };
 
   // Automatically adjust parameters based on Format selection
   const handleFormatChange = (newFormat: string) => {
@@ -140,22 +70,17 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       setEndsCount(12);
       setArrowsPerEnd(6);
       if (distance === 18) {
-        const officialM = bowType === "Compound" ? 50 : 70;
-        setDistanceUnit("m");
-        setDistanceValue(officialM);
-        setDistance(officialM);
+        setDistance(bowType === "Compound" ? 50 : 70);
       }
     } else if (newFormat === "WA 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
       setDistance(18);
-      setDistanceValue(distanceUnit === "yd" ? 20 : 18);
       setTargetType("WA 300");
     } else if (newFormat === "Vegas 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
       setDistance(18);
-      setDistanceValue(distanceUnit === "yd" ? 20 : 18);
       setTargetType("Vegas 300");
     }
   };
@@ -166,16 +91,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     const safeArrowsPerEnd = Math.min(12, Math.max(1, arrowsPerEnd));
     const safeMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / safeArrowsPerEnd)));
     const safeEndsCount = Math.min(safeMaxEnds, Math.max(1, endsCount));
-    const canonicalMeters =
-      distanceUnit === "yd" ? getCanonicalMetersForYards(distanceValue) : distance;
     onStartSession({
       practiceType,
       format,
       targetType: format === "Vegas 300" || targetType === "Vegas 300" ? "Vegas 300" : "WA 300",
       bowType,
-      distance: canonicalMeters,
-      distanceUnit,
-      distanceValue: distanceUnit === "yd" ? distanceValue : canonicalMeters,
+      distance,
+      distanceUnit: "m",
+      distanceValue: distance,
       autoScore: true,
       includeNotes: true,
       endsCount: safeEndsCount,
@@ -242,8 +165,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     return type || t("bowBarebow");
   };
 
-  const activeDistancePresets = distanceUnit === "yd" ? IMPERIAL_DISTANCES : METRIC_DISTANCES;
-
   return (
     <div className="flex flex-col gap-4 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
@@ -281,13 +202,8 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 </span>
                 <h4 className="text-white text-[16.7px] font-bold mt-1 truncate tabular-nums">
                   {draftSession.format === "Libre" ? tx("Libre", "Custom") : draftSession.format} ·{" "}
-                  {formatShootingDistance(
-                    Number(draftSession.distance) || 18,
-                    unitSystem,
-                    draftSession.distanceUnit,
-                    draftSession.distanceValue
-                  )}{" "}
-                  · {getLocalizedBowName(draftSession.bowType)}
+                  {`${Math.round(Number(draftSession.distance) || 18)}m`} ·{" "}
+                  {getLocalizedBowName(draftSession.bowType)}
                 </h4>
                 <p className="text-[12.6px] text-white tabular-nums">
                   {tx("Pausado el", "Paused on")}{" "}
@@ -423,51 +339,22 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           </div>
         </div>
 
-        {/* Distance Chips presets + Metric (m) / Imperial (yd) unit pill toggle */}
+        {/* Distance Chips presets (meters only) */}
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
-              {t("distance")}
-            </label>
-            <div className="inline-flex items-center bg-[#0D0F12] border border-white/10 rounded-xl p-0.5 tabular-nums">
-              <button
-                type="button"
-                onClick={() => handleDistanceUnitSwitch("m")}
-                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer ${
-                  distanceUnit === "m"
-                    ? "bg-cyan-neon text-black"
-                    : "text-white/75 hover:text-white"
-                }`}
-              >
-                m
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDistanceUnitSwitch("yd")}
-                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer ${
-                  distanceUnit === "yd"
-                    ? "bg-cyan-neon text-black"
-                    : "text-white/75 hover:text-white"
-                }`}
-              >
-                yd
-              </button>
-            </div>
-          </div>
+          <label className="text-[16.7px] text-white font-bold uppercase tracking-wider">
+            {t("distance")}
+          </label>
           <div className="grid grid-cols-5 gap-2 w-full">
-            {activeDistancePresets.map((d) => {
-              const isSelected = distanceValue === d;
+            {DISTANCES.map((d) => {
+              const isSelected = distance === d;
               return (
                 <button
-                  key={`${distanceUnit}-${d}`}
+                  key={d}
                   type="button"
                   onClick={() => {
-                    const nextCanonicalM =
-                      distanceUnit === "yd" ? getCanonicalMetersForYards(d) : d;
-                    setDistanceValue(d);
-                    setDistance(nextCanonicalM);
+                    setDistance(d);
                     if (format === "WA 360") {
-                      if (nextCanonicalM === 18) {
+                      if (d === 18) {
                         setEndsCount(12);
                         setArrowsPerEnd(3);
                       } else {
@@ -482,7 +369,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                       : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                   }`}
                 >
-                  {distanceUnit === "yd" ? `${d} yd` : `${d}m`}
+                  {`${d}m`}
                 </button>
               );
             })}

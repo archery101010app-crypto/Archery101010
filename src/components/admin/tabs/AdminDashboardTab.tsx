@@ -581,7 +581,7 @@ export default function AdminDashboardTab() {
               {[
                 { label: "Recurvo", count: recurveCount, color: "text-cyan-neon" },
                 { label: "Compuesto", count: compoundCount, color: "text-yellow-gold" },
-                { label: "Barebow / Raso", count: barebowCount, color: "text-emerald-400" }
+                { label: "Barebow", count: barebowCount, color: "text-emerald-400" }
               ].map((b) => {
                 const pct = users.length > 0 ? Math.round((b.count / totalUsersCount) * 100) : 0;
                 return (

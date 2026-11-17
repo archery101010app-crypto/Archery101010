@@ -83,7 +83,7 @@ const RIVAL_LIST = [
     clubName: "Club Halcones",
     clubLogo: "2",
     clubCountry: "CR",
-    bowConfig: { type: "Barebow", brand: "Raso", model: "Clásico", poundage: 36, defaultDistance: 18 },
+    bowConfig: { type: "Barebow", brand: "Barebow", model: "Clásico", poundage: 36, defaultDistance: 18 },
     rating: "8.2",
     status: "busy"
   },
