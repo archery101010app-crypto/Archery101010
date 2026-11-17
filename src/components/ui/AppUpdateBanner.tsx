@@ -65,17 +65,23 @@ export default function AppUpdateBanner() {
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [legacyRestartNotice, setLegacyRestartNotice] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    // Clean leftover ?v=...&t=... update query parameters silently without triggering navigation
+    // Clean leftover ?v=...&t=...&ota=... update query parameters silently without triggering navigation
     if (typeof window !== "undefined") {
       try {
         const curUrl = new URL(window.location.href);
-        if (curUrl.searchParams.has("v") || curUrl.searchParams.has("t")) {
+        if (
+          curUrl.searchParams.has("v") ||
+          curUrl.searchParams.has("t") ||
+          curUrl.searchParams.has("ota")
+        ) {
           curUrl.searchParams.delete("v");
           curUrl.searchParams.delete("t");
+          curUrl.searchParams.delete("ota");
           const nextRelative =
             curUrl.pathname + (curUrl.search ? curUrl.search : "") + (curUrl.hash ? curUrl.hash : "");
           window.history.replaceState(null, "", nextRelative || "/");
@@ -174,19 +180,46 @@ export default function AppUpdateBanner() {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
-      // Bust HTTP cache for current HTML document in background before in-place reload
-      await fetch(window.location.pathname || "/", { cache: "reload" }).catch(() => {});
+      // Bust HTTP cache for root HTML documents in background before in-place reload
+      await Promise.all([
+        fetch("/", {
+          cache: "reload",
+          headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+        }).catch(() => {}),
+        fetch(window.location.pathname || "/", {
+          cache: "reload",
+          headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+        }).catch(() => {}),
+      ]);
     } catch {
       // Ignore cache cleanup error
     }
 
+    // 1. Modern Android native shell (v2.107+): reload 100% in-app via Java WebView.loadUrl()
     if (typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function") {
       winAny.ArcheryNativeAuth.reloadInAppOta();
       return;
     }
 
-    // In-place reload stays 100% inside the Android WebView / PWA without triggering external browser jumps
-    window.location.reload();
+    // 2. Legacy Android native shell (< v2.107): NEVER call window.location.reload() on .web.app,
+    // because legacy Capacitor Bridge.launchIntent() intercepts JS reloads and opens external Chrome.
+    // Instead, close the Activity cleanly via @capacitor/app so reopening loads the new bundle in-app.
+    if (winAny.ArcheryNativeAuth) {
+      setLegacyRestartNotice(true);
+      setTimeout(async () => {
+        try {
+          const { App } = await import("@capacitor/app");
+          await App.exitApp();
+        } catch {
+          // User can simply close and reopen the app if exitApp is unavailable
+        }
+      }, 950);
+      return;
+    }
+
+    // 3. Standard Web Browser / Installed PWA: cache-busted same-origin reload stays 100% in-place
+    const targetPath = window.location.pathname || "/";
+    window.location.replace(`${targetPath}?ota=${Date.now()}`);
   };
 
   return (
@@ -198,16 +231,23 @@ export default function AppUpdateBanner() {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
-              {tx(
-                `Nueva versión disponible · v${remoteInfo.version}`,
-                `New version available · v${remoteInfo.version}`
-              )}
+              {legacyRestartNotice
+                ? tx("Actualización lista · Reiniciando", "Update ready · Restarting")
+                : tx(
+                    `Nueva versión disponible · v${remoteInfo.version}`,
+                    `New version available · v${remoteInfo.version}`
+                  )}
             </span>
             <span className="text-[10.5px] text-[#8E96A4] truncate tabular-nums">
-              {tx(
-                `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
-                `Instant one-tap update (current v${APP_VERSION})`
-              )}
+              {legacyRestartNotice
+                ? tx(
+                    "Vuelve a tocar el ícono de la app para abrirla actualizada",
+                    "Tap the app icon again to open the updated version"
+                  )
+                : tx(
+                    `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
+                    `Instant one-tap update (current v${APP_VERSION})`
+                  )}
             </span>
           </div>
         </div>

@@ -315,7 +315,9 @@ public class MainActivity extends BridgeActivity {
 
             if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
                 activeAppOrigin = "https://archery101010-c0bb4.web.app";
-                webView.loadUrl("https://archery101010-c0bb4.web.app/");
+                java.util.Map<String, String> otaStartupHeaders = new java.util.HashMap<>();
+                otaStartupHeaders.put("Cache-Control", "no-cache");
+                webView.loadUrl("https://archery101010-c0bb4.web.app/", otaStartupHeaders);
             }
 
             // Subclass Capacitor's BridgeWebChromeClient so <input type="file"> (Excel/Photos) keeps working 100%
@@ -618,7 +620,10 @@ public class MainActivity extends BridgeActivity {
                     if (getBridge() != null && getBridge().getWebView() != null) {
                         WebView wv = getBridge().getWebView();
                         wv.clearCache(true);
-                        wv.loadUrl("https://archery101010-c0bb4.web.app/");
+                        java.util.Map<String, String> otaHeaders = new java.util.HashMap<>();
+                        otaHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
+                        otaHeaders.put("Pragma", "no-cache");
+                        wv.loadUrl("https://archery101010-c0bb4.web.app/?ota=" + System.currentTimeMillis(), otaHeaders);
                     }
                 } catch (Exception ignored) {}
             });
