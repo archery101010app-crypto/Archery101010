@@ -1,32 +1,38 @@
-const CACHE_NAME = "archery-101010-cache-v2.117";
-const ASSETS_TO_CACHE = [
-  "/",
-  "/favicon.ico"
-];
+const CACHE_NAME = "archery-101010-cache-v2.118";
 
-// Install event - cache core assets
+// Install event - pre-warm offline root shell bypassing HTTP disk cache
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled([
+        fetch("/", { cache: "reload", credentials: "same-origin" }).then((res) => {
+          if (res && res.ok) return cache.put("/", res);
+        }),
+        fetch("/favicon.ico", { cache: "reload", credentials: "same-origin" }).then((res) => {
+          if (res && res.ok) return cache.put("/favicon.ico", res);
+        }),
+      ]);
     })
   );
-  // Force active state immediately without waiting for open pages to close
+  // Activate immediately without waiting for open tabs/WebViews to close
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Activate event - purge every older cache version immediately
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames.map((cache) => {
+            if (cache !== CACHE_NAME) {
+              return caches.delete(cache);
+            }
+          })
+        )
+      )
+      .then(() => self.clients.claim())
   );
 });
 
@@ -44,10 +50,12 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin HTTP/HTTPS requests
   if (url.origin !== self.location.origin) return;
 
-  // Never cache or intercept live version manifests or Firebase Auth redirect handlers
+  // Never cache or intercept live version manifests, SW scripts, or Firebase Auth redirect handlers
   if (
     url.pathname === "/version.json" ||
     url.pathname === "/app-version.json" ||
+    url.pathname === "/sw.js" ||
+    url.pathname === "/firebase-messaging-sw.js" ||
     url.pathname.startsWith("/__/auth/")
   ) {
     return;
@@ -61,8 +69,10 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith(".js") ||
     url.pathname.endsWith(".css");
 
+  // IMPORTANT: Pass URL string (event.request.url) when setting RequestInit ({ cache: "no-store" }).
+  // Passing a Request object with mode === "navigate" + non-empty RequestInit throws a TypeError in Chromium!
   const networkFetch = isNavigation
-    ? fetch(event.request, { cache: "no-store" })
+    ? fetch(event.request.url, { cache: "no-store", credentials: "same-origin" })
     : fetch(event.request);
 
   event.respondWith(
@@ -71,6 +81,9 @@ self.addEventListener("fetch", (event) => {
         if (response && response.ok && response.status === 200 && response.type === "basic") {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
+            if (isNavigation && url.pathname === "/") {
+              cache.put("/", responseClone.clone()).catch(() => {});
+            }
             cache.put(event.request, responseClone).catch(() => {});
           });
         }
@@ -80,7 +93,10 @@ self.addEventListener("fetch", (event) => {
         // Retry once bypassing stale connection state for JS/CSS chunks when online
         if (isJsOrCssChunk) {
           try {
-            const retryRes = await fetch(event.request, { cache: "no-cache" });
+            const retryRes = await fetch(event.request.url, {
+              cache: "no-cache",
+              credentials: "same-origin",
+            });
             if (retryRes && retryRes.ok) {
               const retryClone = retryRes.clone();
               caches.open(CACHE_NAME).then((cache) => {
@@ -108,18 +124,17 @@ self.addEventListener("fetch", (event) => {
             {
               status: 503,
               statusText: "Offline",
-              headers: { "Content-Type": "text/html; charset=utf-8" }
+              headers: { "Content-Type": "text/html; charset=utf-8" },
             }
           );
         }
 
-        // Never return plain-text 503 for JS/CSS/API assets so chunk loaders get standard network error semantics
         return Response.error();
       })
   );
 });
 
-// Listen for the skipWaiting command from the main thread
+// Listen for control commands from the main thread
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();

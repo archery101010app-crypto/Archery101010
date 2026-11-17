@@ -382,4 +382,33 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     const importerSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/cycleImporter.ts"), "utf8");
     assert.equal(/^import\s+\*\s+as\s+XLSX\s+from\s+["']xlsx["']/m.test(importerSrc), false);
   });
+
+  it("keeps Service Worker and OTA updater free of navigate-RequestInit TypeErrors and external browser jumps", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { APP_VERSION } = await import("../src/lib/version.ts");
+
+    const swSrc = fs.readFileSync(path.resolve(process.cwd(), "public/sw.js"), "utf8");
+    assert.equal(
+      /fetch\(\s*event\.request\s*,\s*\{/.test(swSrc),
+      false,
+      "sw.js must never pass a navigate Request object alongside non-empty RequestInit"
+    );
+    assert.ok(
+      swSrc.includes(`archery-101010-cache-v${APP_VERSION}`),
+      "sw.js CACHE_NAME must match APP_VERSION"
+    );
+
+    const bannerSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/ui/AppUpdateBanner.tsx"),
+      "utf8"
+    );
+    assert.equal(bannerSrc.includes("exitApp("), false, "AppUpdateBanner must not rely on exitApp on remote OTA origins");
+    assert.equal(bannerSrc.includes("window.open("), false, "AppUpdateBanner must never open external browser tabs");
+
+    const verJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/version.json"), "utf8"));
+    const appVerJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/app-version.json"), "utf8"));
+    assert.equal(verJson.version, APP_VERSION);
+    assert.equal(appVerJson.version, APP_VERSION);
+  });
 });

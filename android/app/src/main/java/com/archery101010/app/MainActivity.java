@@ -609,6 +609,16 @@ public class MainActivity extends BridgeActivity {
 
         @Keep
         @JavascriptInterface
+        public String getShellVersion() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
+        @Keep
+        @JavascriptInterface
         public void reloadInAppOta() {
             runOnUiThread(() -> {
                 try {
@@ -623,7 +633,7 @@ public class MainActivity extends BridgeActivity {
                         java.util.Map<String, String> otaHeaders = new java.util.HashMap<>();
                         otaHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
                         otaHeaders.put("Pragma", "no-cache");
-                        wv.loadUrl("https://archery101010-c0bb4.web.app/?ota=" + System.currentTimeMillis(), otaHeaders);
+                        wv.loadUrl("https://archery101010-c0bb4.web.app/?ota=" + System.currentTimeMillis() + "&skipIntro=1", otaHeaders);
                     }
                 } catch (Exception ignored) {}
             });

@@ -109,6 +109,7 @@ export default function Home() {
         if (
           search.includes("skipIntro=1") ||
           search.includes("v=") ||
+          search.includes("ota=") ||
           sessionStorage.getItem("archery_intro_shown") === "1"
         ) {
           return false;
@@ -1234,6 +1235,15 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.style.fontSize = "";
   }, []);
+
+  // Expose active scoring/duel guard so OTA auto-refresh never interrupts an active shooting session
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as unknown as { __archeryBusySession?: boolean }).__archeryBusySession =
+        (currentScreen === "TARGET" && Boolean(sessionConfig)) ||
+        currentScreen === "MATCHPLAY_ARENA";
+    }
+  }, [currentScreen, sessionConfig]);
 
   // Offline-first storage (IndexedDB + Firestore sync) persists changes immediately;
   // never block reloads or in-app updates with browser beforeunload confirmation dialogs.
