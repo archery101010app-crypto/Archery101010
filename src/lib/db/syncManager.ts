@@ -1,11 +1,14 @@
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { logger } from "@/lib/logger";
 import {
   SyncItem,
+  sessionsStore,
   getSyncQueue,
   removeFromSyncQueue,
   updateSyncItem,
+  markSessionTombstone,
   sanitizeForFirestore,
   isFictitiousSession,
   isFictitiousUser
@@ -107,10 +110,8 @@ export async function runSync(
               ...item,
               operation: mergedOp,
               payload: mergedPayload,
-              attempts: item.lastAttemptAt
-                ? Math.max(existing.attempts || 0, item.attempts || 0)
-                : item.attempts || 0,
-              lastAttemptAt: item.lastAttemptAt
+              attempts: Math.max(existing.attempts || 0, item.attempts || 0),
+              lastAttemptAt: item.lastAttemptAt ?? existing.lastAttemptAt
             };
             latestByTarget.set(targetKey, mergedItem);
             mergedPersistQueue.push(mergedItem);
@@ -187,9 +188,12 @@ export async function runSync(
               await removeFromSyncQueue(item.id);
               return;
             }
+            const rawPayload = item.payload || {};
+            const { syncedAt: _localOnlySyncedAt, ...cloudFields } =
+              item.collection === "sessions" ? rawPayload : { syncedAt: undefined, ...rawPayload };
             const cleanPayload = sanitizeForFirestore({
-              ...(item.payload || {}),
-              updatedAt: item.payload?.updatedAt ?? Date.now()
+              ...cloudFields,
+              updatedAt: rawPayload?.updatedAt ?? Date.now()
             });
             if (item.operation === "INSERT") {
               await withTimeout(setDoc(docRef, cleanPayload, { merge: true }), NETWORK_TIMEOUT_MS);
@@ -204,9 +208,26 @@ export async function runSync(
                 );
               }
             } else if (item.operation === "DELETE") {
+              if (item.collection === "sessions") {
+                await markSessionTombstone(item.payloadId);
+              }
               await withTimeout(deleteDoc(docRef), NETWORK_TIMEOUT_MS);
             }
 
+            if (
+              item.collection === "sessions" &&
+              (item.operation === "INSERT" || item.operation === "UPDATE")
+            ) {
+              const existingLocal = await sessionsStore.getItem<any>(item.payloadId);
+              if (existingLocal) {
+                await sessionsStore.setItem(item.payloadId, {
+                  ...existingLocal,
+                  syncedAt: Date.now()
+                });
+              }
+            }
+
+            logger.debug(`[SyncManager] Synced ${item.operation} ${targetKey}`);
             await removeFromSyncQueue(item.id);
           } catch (err: any) {
             const errCode = String(err?.code || "");
@@ -238,7 +259,7 @@ export async function runSync(
 
             if (isTransientNetworkError) {
               // NEVER drop user sessions/events on weak or offline signal! Keep indefinitely with backoff.
-              console.warn(
+              logger.debug(
                 `[SyncManager] Transient network failure for ${item.id} (${targetKey}), attempt #${nextAttempts}. Retained in queue with backoff.`
               );
               await updateSyncItem(item.id, {
@@ -248,15 +269,16 @@ export async function runSync(
               });
               networkAborted = true;
             } else {
-              console.error(`Failed to sync item ${item.id}:`, err);
+              logger.warn(`Failed to sync item ${item.id}:`, err);
               const isUnrecoverableSchemaOrPerm =
                 errCode.includes("permission-denied") ||
                 errCode.includes("invalid-argument") ||
+                errCode.includes("failed-precondition") ||
                 errMsg.includes("Missing or insufficient permissions") ||
                 errMsg.includes("Unsupported field value");
 
-              if (isUnrecoverableSchemaOrPerm && nextAttempts >= 5) {
-                console.warn(
+              if (nextAttempts >= 5 || (isUnrecoverableSchemaOrPerm && nextAttempts >= 5)) {
+                logger.warn(
                   `[SyncManager] Dropping unrecoverable sync item ${item.id} (${targetKey}) after ${nextAttempts} attempts.`
                 );
                 await removeFromSyncQueue(item.id);
@@ -287,7 +309,7 @@ export async function runSync(
       queue = await getSyncQueue();
     }
   } catch (globalErr) {
-    console.error("Critical error in sync loop:", globalErr);
+    logger.error("Critical error in sync loop:", globalErr);
   } finally {
     isSyncing = false;
 
@@ -302,7 +324,7 @@ export async function runSync(
       syncPendingIgnoreBackoff = false;
       queueMicrotask(() => {
         runSync(onProgressUpdate, nextIgnore).catch((e) =>
-          console.error("Microtask sync error:", e)
+          logger.debug("Microtask sync error:", e)
         );
       });
     } else if (onProgressUpdate) {
@@ -315,17 +337,17 @@ export async function runSync(
 // Auto-flush queue immediately when device regains connectivity, returns to foreground, or Auth hydrates
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => {
-    runSync(undefined, true).catch((err) => console.error("Auto-online sync failed:", err));
+    runSync(undefined, true).catch((err) => logger.debug("Auto-online sync failed:", err));
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && navigator.onLine) {
-      runSync().catch((err) => console.error("Visibility wakeup sync failed:", err));
+      runSync().catch((err) => logger.debug("Visibility wakeup sync failed:", err));
     }
   });
   try {
     onAuthStateChanged(auth, (fbUser) => {
       if (fbUser && navigator.onLine) {
-        runSync().catch((err) => console.error("Auth wakeup sync failed:", err));
+        runSync().catch((err) => logger.debug("Auth wakeup sync failed:", err));
       }
     });
   } catch {

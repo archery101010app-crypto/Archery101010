@@ -28,7 +28,13 @@ struct Archery101010WatchApp: App {
 }
 
 final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate {
-    @Published var screenIndex: Int = 0
+    @Published var screenIndex: Int = 0 {
+        didSet {
+            if screenIndex != oldValue {
+                markUserActivity(isWriteAction: false)
+            }
+        }
+    }
     @Published var arrowCount: Int = 0
     @Published var totalScore: Int = 0
     @Published var currentEnd: Int = 1
@@ -111,9 +117,17 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private var lastSyncedStepsCount: Int = 0
     private var lastTelemetrySyncTimeMs: Int64 = 0
     private var cmdSequence: Int64 = 0
+    private var cloudPollTimer: Timer?
+    private var lastActivityMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
+    private var lastCloudPollMs: Int64 = 0
+    private var lastLocalActionMs: Int64 = 0
+    private var lastRemoteStateSig: String = ""
+    private var lastPhoneContextSig: String = ""
 
     override init() {
         super.init()
+        let bootNowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        lastActivityMs = bootNowMs
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "autoDetectEnabled_v2") != nil {
             autoDetectEnabled = defaults.bool(forKey: "autoDetectEnabled_v2")
@@ -135,10 +149,14 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             session.activate()
         }
         startSensors()
-        startCloudPollingTimer()
         if hasPairingCode && pairingCode.count == 6 {
             pollFirestoreCloud()
         }
+        startCloudPollingTimer()
+    }
+
+    deinit {
+        cloudPollTimer?.invalidate()
     }
 
     private func resetSessionCounters(newSessionId: String) {
@@ -306,6 +324,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func cycleSensitivityMode() {
+        markUserActivity(isWriteAction: true)
         if !autoDetectEnabled {
             autoDetectEnabled = true
             sensitivityLevel = 1 // MEDIA
@@ -579,6 +598,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             pairingDigits[editDigitPos] = (cur + delta + 10) % 10
         }
         isEditingCode = true
+        markUserActivity(isWriteAction: true)
         WKInterfaceDevice.current().play(.click)
     }
 
@@ -587,17 +607,67 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         pairingCode = built
         hasPairingCode = true
         isEditingCode = false
+        lastRemoteStateSig = ""
+        markUserActivity(isWriteAction: true)
         UserDefaults.standard.set(built, forKey: "pairingCode")
         WKInterfaceDevice.current().play(.success)
         pollFirestoreCloud()
         syncWithFirestoreCloud(eventType: "SYNC_TELEMETRY_FROM_WATCH", extraValue: nil)
+        scheduleNextCloudPoll()
+    }
+
+    private func currentAdaptivePollIntervalMs(nowMs: Int64) -> Int64 {
+        let idleMs = max(0, nowMs - lastActivityMs)
+        // 3-Tier Adaptive Cloud Polling:
+        // Active (< 90s): 8,000 ms | Warm Idle (90s..5m): 20,000 ms | Deep Idle (>= 5m): 45,000 ms
+        if idleMs < 90_000 {
+            return 8_000
+        } else if idleMs < 300_000 {
+            return 20_000
+        }
+        return 45_000
+    }
+
+    private func scheduleNextCloudPoll() {
+        let scheduleWork = { [weak self] in
+            guard let self = self else { return }
+            self.cloudPollTimer?.invalidate()
+            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            let intervalMs = self.currentAdaptivePollIntervalMs(nowMs: nowMs)
+            let elapsedMs = self.lastCloudPollMs > 0 ? max(0, nowMs - self.lastCloudPollMs) : 0
+            let waitMs = max(1_000, intervalMs - elapsedMs)
+            let timer = Timer.scheduledTimer(withTimeInterval: Double(waitMs) / 1000.0, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                if self.hasPairingCode && self.pairingCode.count == 6 && !self.isEditingCode {
+                    self.pollFirestoreCloud()
+                }
+                self.scheduleNextCloudPoll()
+            }
+            timer.tolerance = min(1.0, (Double(waitMs) / 1000.0) * 0.1)
+            self.cloudPollTimer = timer
+        }
+        if Thread.isMainThread {
+            scheduleWork()
+        } else {
+            DispatchQueue.main.async(execute: scheduleWork)
+        }
+    }
+
+    func markUserActivity(isWriteAction: Bool = false) {
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        lastActivityMs = nowMs
+        if isWriteAction {
+            lastLocalActionMs = nowMs
+        } else if hasPairingCode && pairingCode.count == 6 && !isEditingCode && (nowMs - lastLocalActionMs) >= 3_500 {
+            if lastCloudPollMs == 0 || (nowMs - lastCloudPollMs) >= 8_000 {
+                pollFirestoreCloud()
+            }
+        }
+        scheduleNextCloudPoll()
     }
 
     private func startCloudPollingTimer() {
-        Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
-            guard let self = self, self.hasPairingCode, self.pairingCode.count == 6 else { return }
-            self.pollFirestoreCloud()
-        }
+        scheduleNextCloudPoll()
     }
 
     private func syncWithFirestoreCloud(eventType: String, extraValue: String?) {
@@ -667,6 +737,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     func pollFirestoreCloud() {
         guard hasPairingCode, pairingCode.count == 6,
               let url = URL(string: "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/\(pairingCode)") else { return }
+        lastCloudPollMs = Int64(Date().timeIntervalSince1970 * 1000)
 
         URLSession.shared.dataTask(with: url) { [weak self] data, resp, _ in
             guard let self = self, let http = resp as? HTTPURLResponse else { return }
@@ -680,15 +751,57 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     if let d = node["doubleValue"] as? Double { return Int(round(d)) }
                     return fallback
                 }
+                func fsBool(_ key: String, _ fallback: Bool) -> Bool {
+                    guard let node = fields[key] as? [String: Any],
+                          let b = node["booleanValue"] as? Bool else { return fallback }
+                    return b
+                }
                 let activeNode = fields["sessionActive"] as? [String: Any]
                 let sessionActive = (activeNode?["booleanValue"] as? Bool) ?? true
                 let sidNode = fields["sessionId"] as? [String: Any]
                 let incomingSid = (sidNode?["stringValue"] as? String) ?? ""
 
+                var hasEndArrowsField = false
+                var parsedEndArrows: [String] = []
+                if let arrNode = fields["currentEndArrows"] as? [String: Any],
+                   let av = arrNode["arrayValue"] as? [String: Any] {
+                    hasEndArrowsField = true
+                    if let vals = av["values"] as? [[String: Any]] {
+                        for item in vals {
+                            if let sv = item["stringValue"] as? String {
+                                parsedEndArrows.append(sv)
+                            }
+                        }
+                    }
+                }
+                let endArrowsJoined = parsedEndArrows.joined(separator: ",")
+
                 DispatchQueue.main.async {
                     self.isCloudSynced = true
+                    let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+                    let fsArrows = fsInt("arrowsCount", self.arrowCount)
+                    let fsScore = fsInt("totalScore", self.totalScore)
+                    let fsEnd = max(1, fsInt("currentEnd", self.currentEnd))
+                    let fsDistM = fsInt("distanceM", self.distanceM)
+                    let fsPerEnd = max(1, fsInt("arrowsPerEnd", self.arrowsPerEnd))
+                    let fsEnds = max(1, fsInt("totalEnds", self.endsCount))
+                    let hasAutoField = fields["autoDetectEnabled"] != nil
+                    let fsAuto = fsBool("autoDetectEnabled", self.autoDetectEnabled)
+                    let fsSens = max(0, min(2, fsInt("sensitivityLevel", self.sensitivityLevel)))
+
+                    // Detect genuine remote cloud state changes to immediately resume Active Tier
+                    let remoteSig = "\(sessionActive ? 1 : 0)|\(incomingSid)|\(fsArrows)|\(fsScore)|\(fsEnd)|\(endArrowsJoined)|\(fsDistM)|\(fsPerEnd)|\(fsEnds)|\(fsAuto ? 1 : 0)|\(fsSens)"
+                    if self.lastRemoteStateSig.isEmpty {
+                        self.lastRemoteStateSig = remoteSig
+                    } else if self.lastRemoteStateSig != remoteSig {
+                        self.lastRemoteStateSig = remoteSig
+                        self.lastActivityMs = nowMs
+                        self.scheduleNextCloudPoll()
+                    }
+
+                    let recentlyTapped = (nowMs - self.lastLocalActionMs) < 3_500
                     if !sessionActive {
-                        if self.arrowCount > 0 || self.totalScore > 0 || self.stepsCount > 0 {
+                        if !recentlyTapped && (self.arrowCount > 0 || self.totalScore > 0 || self.stepsCount > 0) {
                             self.resetSessionCounters(newSessionId: "")
                         }
                         return
@@ -698,12 +811,24 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     } else if !incomingSid.isEmpty && self.currentSessionId.isEmpty {
                         self.currentSessionId = incomingSid
                     }
-                    self.arrowCount = fsInt("arrowsCount", self.arrowCount)
-                    self.totalScore = fsInt("totalScore", self.totalScore)
-                    self.currentEnd = max(1, fsInt("currentEnd", self.currentEnd))
-                    self.distanceM = fsInt("distanceM", self.distanceM)
-                    self.arrowsPerEnd = max(1, fsInt("arrowsPerEnd", self.arrowsPerEnd))
-                    self.endsCount = max(1, fsInt("totalEnds", self.endsCount))
+                    if !recentlyTapped {
+                        self.arrowCount = fsArrows
+                        self.totalScore = fsScore
+                        self.currentEnd = fsEnd
+                        if hasEndArrowsField {
+                            self.currentEndArrows = parsedEndArrows
+                        }
+                        if hasAutoField {
+                            self.autoDetectEnabled = fsAuto
+                            UserDefaults.standard.set(fsAuto, forKey: "autoDetectEnabled_v2")
+                            self.syncShotDetectionMotionSensors()
+                        }
+                        self.sensitivityLevel = fsSens
+                        UserDefaults.standard.set(fsSens, forKey: "sensitivityLevel")
+                    }
+                    self.distanceM = fsDistM
+                    self.arrowsPerEnd = fsPerEnd
+                    self.endsCount = fsEnds
                     let cloudWalk = Double(fsInt("distanceWalkedM", 0))
                     if cloudWalk > self.distanceWalkedM {
                         self.distanceWalkedM = cloudWalk
@@ -720,6 +845,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func incrementArrow(delta: Int, source: String = "watch_manual") {
+        markUserActivity(isWriteAction: true)
         arrowCount = max(0, arrowCount + delta)
         WKInterfaceDevice.current().play(delta > 0 ? .directionUp : .directionDown)
         let evt = delta > 0 ? "INCREMENT_ARROW" : "DECREMENT_ARROW"
@@ -732,6 +858,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func recordScore(_ label: String) {
+        markUserActivity(isWriteAction: true)
         if currentEndArrows.count >= arrowsPerEnd {
             if currentEnd < endsCount {
                 currentEnd += 1
@@ -754,7 +881,11 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func undoLastScore() {
-        guard !currentEndArrows.isEmpty else { return }
+        guard !currentEndArrows.isEmpty else {
+            markUserActivity(isWriteAction: false)
+            return
+        }
+        markUserActivity(isWriteAction: true)
         let removed = currentEndArrows.removeLast()
         let pts = (removed == "X" || removed == "10") ? 10 : (removed == "M" ? 0 : (Int(removed) ?? 0))
         totalScore = max(0, totalScore - pts)
@@ -764,7 +895,11 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func advanceToNextEnd() {
-        guard !currentEndArrows.isEmpty else { return }
+        guard !currentEndArrows.isEmpty else {
+            markUserActivity(isWriteAction: false)
+            return
+        }
+        markUserActivity(isWriteAction: true)
         currentEndArrows.removeAll()
         currentEnd = min(endsCount, currentEnd + 1)
         WKInterfaceDevice.current().play(.success)
@@ -772,11 +907,16 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func syncTelemetryManual() {
+        markUserActivity(isWriteAction: true)
         WKInterfaceDevice.current().play(.click)
         maybeSyncTelemetryToPhone(force: true)
+        if hasPairingCode && pairingCode.count == 6 {
+            pollFirestoreCloud()
+        }
     }
 
     func finishSession() {
+        markUserActivity(isWriteAction: true)
         WKInterfaceDevice.current().play(.success)
         maybeSyncTelemetryToPhone(force: true)
         sendCommandToPhone(["type": "FINISH_SESSION_FROM_WATCH"])
@@ -865,6 +1005,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             if msgType == "PHONE_COMMAND" {
                 DispatchQueue.main.async {
                     self.isPhoneConnected = true
+                    self.lastActivityMs = Int64(Date().timeIntervalSince1970 * 1000)
                     if let cmdType = dict["cmdType"] as? String {
                         if cmdType == "SET_SENSITIVITY", let sens = dict["sensitivityLevel"] as? Int {
                             self.sensitivityLevel = max(0, min(2, sens))
@@ -881,6 +1022,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                             }
                         }
                     }
+                    self.scheduleNextCloudPoll()
                 }
                 return
             }
@@ -895,6 +1037,21 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             self.isPhoneConnected = WCSession.default.isReachable
             let sessionActive = (obj["sessionActive"] as? Bool) ?? true
             let incomingSessionId = (obj["sessionId"] as? String) ?? ""
+            let nextArrows = (obj["arrowsCount"] as? Int) ?? self.arrowCount
+            let nextScore = (obj["totalScore"] as? Int) ?? self.totalScore
+            let nextEndIdx = (obj["currentEndIndex"] as? Int) ?? (self.currentEnd - 1)
+            let nextEndArrows = ((obj["currentEndArrows"] as? [String]) ?? self.currentEndArrows).joined(separator: ",")
+            let nextDistM = (obj["distanceM"] as? Int) ?? self.distanceM
+            let nextAuto = (obj["autoDetectEnabled"] as? Bool) ?? self.autoDetectEnabled
+            let nextSens = (obj["sensitivityLevel"] as? Int) ?? self.sensitivityLevel
+            let phoneSig = "\(sessionActive ? 1 : 0)|\(incomingSessionId)|\(nextArrows)|\(nextScore)|\(nextEndIdx)|\(nextEndArrows)|\(nextDistM)|\(nextAuto ? 1 : 0)|\(nextSens)"
+            if self.lastPhoneContextSig.isEmpty {
+                self.lastPhoneContextSig = phoneSig
+            } else if self.lastPhoneContextSig != phoneSig {
+                self.lastPhoneContextSig = phoneSig
+                self.lastActivityMs = Int64(Date().timeIntervalSince1970 * 1000)
+                self.scheduleNextCloudPoll()
+            }
 
             if !sessionActive || (!incomingSessionId.isEmpty && !self.currentSessionId.isEmpty && incomingSessionId != self.currentSessionId) {
                 self.resetSessionCounters(newSessionId: sessionActive ? incomingSessionId : "")
@@ -946,6 +1103,7 @@ struct ArcheryWatchPagerView: View {
             CloudCodeWatchScreen(vm: vm).tag(4)
         }
         .tabViewStyle(.page)
+        .onAppear { vm.markUserActivity(isWriteAction: false) }
     }
 }
 
@@ -1352,6 +1510,7 @@ struct CloudCodeWatchScreen: View {
                         } else {
                             vm.editDigitPos = idx
                             vm.isEditingCode = true
+                            vm.markUserActivity(isWriteAction: true)
                             WKInterfaceDevice.current().play(.click)
                         }
                     }) {
@@ -1384,6 +1543,7 @@ struct CloudCodeWatchScreen: View {
                 Button(action: {
                     vm.isEditingCode = true
                     vm.editDigitPos = (vm.editDigitPos + 1) % 6
+                    vm.markUserActivity(isWriteAction: true)
                     WKInterfaceDevice.current().play(.click)
                 }) {
                     Text(vm.tr("EDITAR >", "EDIT >"))

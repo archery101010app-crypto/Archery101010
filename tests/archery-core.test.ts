@@ -258,3 +258,128 @@ describe("Archery 101010 — Internationalization, Regional Units, RTL, Timezone
     );
   });
 });
+
+describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer & Repo Hygiene", () => {
+  it("evaluates Recurve Set System (6 pts win, 5-5 shoot-off) and Compound Cumulative (15 arrows) accurately", async () => {
+    const {
+      evaluateMatchStanding,
+      resolveWorldArcheryShootOff
+    } = await import("../src/lib/scoring/matchplayScoring.ts");
+
+    // 3 straight end wins -> 6-0 immediate victory in Recurve
+    const recurveWin = evaluateMatchStanding(
+      "Recurve",
+      [
+        ["10", "10", "9"],
+        ["X", "10", "9"],
+        ["10", "9", "9"]
+      ],
+      [
+        ["9", "9", "9"],
+        ["10", "9", "8"],
+        ["9", "9", "8"]
+      ]
+    );
+    assert.equal(recurveWin.isFinished, true);
+    assert.equal(recurveWin.winner, "ARCHER");
+    assert.equal(recurveWin.archerMatchScore, 6);
+    assert.equal(recurveWin.rivalMatchScore, 0);
+
+    // 5-5 after 5 ends -> triggers Shoot-Off
+    const recurveTie = evaluateMatchStanding(
+      "Recurve",
+      [
+        ["10", "10", "9"],
+        ["9", "9", "8"],
+        ["10", "9", "9"],
+        ["9", "9", "9"],
+        ["10", "10", "8"]
+      ],
+      [
+        ["9", "9", "9"],
+        ["10", "9", "9"],
+        ["10", "9", "9"],
+        ["9", "9", "9"],
+        ["10", "10", "8"]
+      ]
+    );
+    assert.equal(recurveTie.archerMatchScore, 5);
+    assert.equal(recurveTie.rivalMatchScore, 5);
+    assert.equal(recurveTie.needsShootOff, true);
+
+    // Compound 5 ends cumulative
+    const compoundTie = evaluateMatchStanding(
+      "Compound",
+      [
+        ["X", "10", "9"],
+        ["10", "10", "9"],
+        ["10", "10", "10"],
+        ["10", "9", "9"],
+        ["X", "10", "9"]
+      ],
+      [
+        ["10", "10", "9"],
+        ["10", "10", "9"],
+        ["10", "10", "10"],
+        ["10", "9", "9"],
+        ["10", "10", "9"]
+      ]
+    );
+    assert.equal(compoundTie.archerMatchScore, 145);
+    assert.equal(compoundTie.rivalMatchScore, 145);
+    assert.equal(compoundTie.needsShootOff, true);
+
+    // Compound X beats 10 when compoundXWinsOverTen is enabled
+    assert.equal(resolveWorldArcheryShootOff("X", "10", 18.0, 6.0, true), "ARCHER");
+    assert.equal(resolveWorldArcheryShootOff("10", "10", 11.2, 14.5, false), "ARCHER");
+  });
+
+  it("recognizes multilingual months (ES/EN/PT/FR/DE/IT/KO/JA) and Excel serial dates in cycleImporter", async () => {
+    const {
+      MULTILINGUAL_MONTHS,
+      excelSerialToYMD,
+      extractDayOfMonthNumber
+    } = await import("../src/lib/cycleImporter.ts");
+
+    assert.equal(MULTILINGUAL_MONTHS["enero"], "01");
+    assert.equal(MULTILINGUAL_MONTHS["fevereiro"], "02");
+    assert.equal(MULTILINGUAL_MONTHS["février"], "02");
+    assert.equal(MULTILINGUAL_MONTHS["märz"], "03");
+    assert.equal(MULTILINGUAL_MONTHS["maggio"], "05");
+    assert.equal(MULTILINGUAL_MONTHS["10월"], "10");
+    assert.equal(MULTILINGUAL_MONTHS["12月"], "12");
+
+    assert.equal(extractDayOfMonthNumber("Lunes 15"), 15);
+    assert.equal(extractDayOfMonthNumber("Day 22"), 22);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(excelSerialToYMD(46000) || ""));
+  });
+
+  it("wires Cloud Functions in firebase.json and drops legacy devMode translation keys", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const fbJson = JSON.parse(
+      fs.readFileSync(path.resolve(process.cwd(), "firebase.json"), "utf8")
+    );
+    assert.ok(Array.isArray(fbJson.functions) && fbJson.functions.length > 0, "functions block missing in firebase.json");
+
+    const { translations } = await import("../src/lib/translations/dict.ts");
+    assert.equal("devMode" in translations.es, false);
+    assert.equal("devMode" in translations.en, false);
+  });
+
+  it("evaluates Coach PRO subscription expiry math accurately and lazy-loads xlsx", async () => {
+    const { computeProRemainingDays, isCoachProActive } = await import("../src/lib/billingService.ts");
+    const now = 1_800_000_000_000;
+    const tenDaysLater = now + 10 * 24 * 60 * 60 * 1000;
+
+    assert.equal(computeProRemainingDays(tenDaysLater, now), 10);
+    assert.equal(computeProRemainingDays(now - 1000, now), 0);
+    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: tenDaysLater } as any, now), true);
+    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: now - 5000 } as any, now), false);
+
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const importerSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/cycleImporter.ts"), "utf8");
+    assert.equal(/^import\s+\*\s+as\s+XLSX\s+from\s+["']xlsx["']/m.test(importerSrc), false);
+  });
+});

@@ -1,19 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  BarChart3, 
-  Users, 
-  Megaphone, 
-  CreditCard, 
-  Settings, 
+import {
+  BarChart3,
+  Users,
+  Megaphone,
+  CreditCard,
+  Settings,
   ArrowLeft,
-  Menu,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 // Tabs Components
 import AdminDashboardTab from "./tabs/AdminDashboardTab";
@@ -30,36 +30,66 @@ interface SuperAdminViewProps {
 type TabType = "DASHBOARD" | "USERS" | "CAMPAIGNS" | "SUBSCRIPTIONS" | "SETTINGS";
 
 export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
+  const { tx } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabType>("DASHBOARD");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const tabsConfig = [
-    { id: "DASHBOARD", label: "Dashboard", icon: BarChart3, component: AdminDashboardTab },
-    { id: "USERS", label: "Arqueros Inscritos", icon: Users, component: AdminUsersTab },
-    { id: "CAMPAIGNS", label: "Campañas", icon: Megaphone, component: AdminCampaignsTab },
-    { id: "SUBSCRIPTIONS", label: "Suscripciones", icon: CreditCard, component: AdminSubscriptionsTab },
-    { id: "SETTINGS", label: "Configuración", icon: Settings, component: AdminSettingsTab }
+    {
+      id: "DASHBOARD",
+      label: tx("Dashboard", "Dashboard"),
+      icon: BarChart3,
+      component: AdminDashboardTab
+    },
+    {
+      id: "USERS",
+      label: tx("Arqueros Inscritos", "Registered Archers"),
+      icon: Users,
+      component: AdminUsersTab
+    },
+    {
+      id: "CAMPAIGNS",
+      label: tx("Campañas", "Campaigns"),
+      icon: Megaphone,
+      component: AdminCampaignsTab
+    },
+    {
+      id: "SUBSCRIPTIONS",
+      label: tx("Suscripciones", "Subscriptions"),
+      icon: CreditCard,
+      component: AdminSubscriptionsTab
+    },
+    {
+      id: "SETTINGS",
+      label: tx("Configuración", "Settings"),
+      icon: Settings,
+      component: AdminSettingsTab
+    }
   ];
 
-  const currentTab = tabsConfig.find((t) => t.id === activeTab);
+  const currentTab = tabsConfig.find((tItem) => tItem.id === activeTab);
   const ActiveComponent = currentTab ? currentTab.component : AdminDashboardTab;
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-white flex flex-col md:flex-row relative">
-      
       {/* MOBILE HEADER & TABS (< 768px) */}
       <div className="md:hidden flex flex-col w-full bg-[#0E0E12] border-b border-white/10 sticky top-0 z-40">
         <div className="px-4 py-3 flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
-            <button 
+            <button
               onClick={onBack}
-              className="p-1.5 rounded-xl bg-white/5 text-white hover:text-white"
+              aria-label={tx("Volver a la App", "Back to App")}
+              className="p-1.5 rounded-xl bg-white/5 text-white hover:text-white cursor-pointer"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16} className="rtl:rotate-180" />
             </button>
-            <h1 className="text-[15.8px] font-black uppercase tracking-widest text-cyan-neon whitespace-nowrap">Super Admin</h1>
+            <h1 className="text-[15.8px] font-black uppercase tracking-widest text-cyan-neon whitespace-nowrap">
+              Super Admin
+            </h1>
           </div>
-          <span className="text-[11.6px] font-bold text-white min-w-0 truncate">{user.email}</span>
+          <span className="text-[11.6px] font-bold text-white min-w-0 truncate select-text">
+            {user.email}
+          </span>
         </div>
 
         {/* Scrollable Horizontal Tab Bar */}
@@ -86,8 +116,8 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
       </div>
 
       {/* TABLET / DESKTOP SIDEBAR (>= 768px) */}
-      <div 
-        className={`hidden md:flex flex-col border-r border-white/10 bg-[#0E0E12] sticky top-0 h-screen transition-all duration-300 flex-shrink-0 z-40 ${
+      <div
+        className={`hidden md:flex flex-col border-e border-white/10 bg-[#0E0E12] sticky top-0 h-screen transition-all duration-300 flex-shrink-0 z-40 ${
           sidebarCollapsed ? "w-16" : "w-60"
         }`}
       >
@@ -95,14 +125,25 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
         <div className="p-4 flex items-center justify-between border-b border-white/5">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-widest text-cyan-neon">Super Admin Panel</span>
+              <span className="text-xs font-black uppercase tracking-widest text-cyan-neon">
+                {tx("Panel Super Admin", "Super Admin Panel")}
+              </span>
             </div>
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label={
+              sidebarCollapsed
+                ? tx("Expandir barra lateral", "Expand sidebar")
+                : tx("Contraer barra lateral", "Collapse sidebar")
+            }
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white hover:text-white mx-auto cursor-pointer"
           >
-            {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            {sidebarCollapsed ? (
+              <ChevronRight size={14} className="rtl:rotate-180" />
+            ) : (
+              <ChevronLeft size={14} className="rtl:rotate-180" />
+            )}
           </button>
         </div>
 
@@ -133,19 +174,23 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
         <div className="p-4 border-t border-white/5 flex flex-col gap-2">
           {!sidebarCollapsed && (
             <div className="flex flex-col mb-1.5">
-              <span className="text-[10.5px] font-black text-white uppercase tracking-widest leading-none">Usuario</span>
-              <span className="text-[11.6px] text-white truncate font-semibold mt-0.5">{user.email}</span>
+              <span className="text-[10.5px] font-black text-white uppercase tracking-widest leading-none">
+                {tx("Usuario", "Account")}
+              </span>
+              <span className="text-[11.6px] text-white truncate font-semibold mt-0.5 select-text">
+                {user.email}
+              </span>
             </div>
           )}
-          
+
           <button
             onClick={onBack}
             className={`flex items-center rounded-xl p-2.5 bg-neutral-900 border border-white/5 text-xs font-bold text-white hover:text-white hover:border-white/15 transition cursor-pointer ${
               sidebarCollapsed ? "justify-center" : "gap-2"
             }`}
           >
-            <ArrowLeft size={14} />
-            {!sidebarCollapsed && <span>Volver a la App</span>}
+            <ArrowLeft size={14} className="rtl:rotate-180" />
+            {!sidebarCollapsed && <span>{tx("Volver a la App", "Back to App")}</span>}
           </button>
         </div>
       </div>

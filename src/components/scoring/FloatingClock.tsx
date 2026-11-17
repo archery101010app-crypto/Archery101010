@@ -267,6 +267,9 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
   const handleEmergencyStop = () => {
     triggerHaptic("miss");
     if (timerRef.current) clearInterval(timerRef.current);
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis?.cancel();
+    }
     setIsActive(false);
     setIsPaused(false);
     setPhase("stop");
@@ -324,11 +327,27 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
 
   const handleStop = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis?.cancel();
+    }
     setIsActive(false);
     setIsPaused(false);
     setPhase("prep");
     setTimeLeft(prepTime);
   };
+
+  // Unmount cleanup: stop timer and cancel any active speechSynthesis countdown immediately
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis?.cancel();
+      }
+    };
+  }, []);
 
   const handleDisableToggle = () => {
     const nextState = !isDisabled;
@@ -381,7 +400,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   draggable={false}
                 />
                 <span
-                  className="text-white text-[15px] sm:text-[16.5px] font-black tracking-widest uppercase pl-0.5"
+                  className="text-white text-[15px] sm:text-[16.5px] font-black tracking-widest uppercase ps-0.5"
                   style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
                 >
                   TIMER
@@ -583,7 +602,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                             setPrepTime(preset.prep);
                             setShootTime(preset.shoot);
                           }}
-                          className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col ${
+                          className={`p-2 rounded-xl border text-start transition cursor-pointer flex flex-col ${
                             preset.id === "WA_20" ? "col-span-2" : ""
                           } ${
                             isSelected
@@ -670,7 +689,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     >
                       <div
                         className={`w-4 h-4 rounded-full bg-black transition-transform absolute top-0.5 ${
-                          enableVoice ? "left-5" : "left-1"
+                          enableVoice ? "start-5" : "start-1"
                         }`}
                       />
                     </button>
@@ -715,7 +734,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   whileTap={{ scale: 0.94 }}
                   className="w-[112px] h-[112px] rounded-full bg-cyan-neon hover:bg-[#19c8ff] border-4 border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer text-black"
                 >
-                  <Play size={28} fill="black" className="ml-1" />
+                  <Play size={28} fill="black" className="ms-1" />
                   <span className="text-[12.8px] font-black tracking-widest uppercase">{t("startClock")}</span>
                 </motion.button>
 

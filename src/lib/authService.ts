@@ -68,6 +68,8 @@ export interface UserProfile {
   unitSystem?: "metric" | "imperial";
   whatsappNumber?: string;
   clubInviteCode?: string;
+  /** Verified 6-digit Coach invite code proof persisted when an archer links to a club. */
+  joinedWithInviteCode?: string;
   profileSetupCompleted?: boolean;
   lastActiveAt?: number;
   createdAt?: number;
@@ -273,6 +275,7 @@ function sanitizeUserProfile(u: any): UserProfile {
       copy.coachName = null;
       copy.coachEmail = null;
       copy.clubInviteCode = "";
+      copy.joinedWithInviteCode = "";
     } else if (
       copy.role === "coach" ||
       copy.role === "team_admin" ||
@@ -782,6 +785,11 @@ export async function registerUser(
         userFields.coachId = clubCoach.uid;
         userFields.coachName = clubCoach.fullName || "Entrenador";
         userFields.coachEmail = clubCoach.email || "";
+        (userFields as any).joinedWithInviteCode = String(
+          clubCoach.clubInviteCode || profileData.clubId || ""
+        )
+          .trim()
+          .toUpperCase();
         clubLogo = clubCoach.clubLogo || "0";
         clubCountry = clubCoach.clubCountry || clubCoach.country;
       } else {
@@ -1129,7 +1137,14 @@ export async function deleteUserAccount(uid: string): Promise<void> {
             deleteDoc(doc(db, "athlete_stars", uid))
           ]);
 
-          // Delete users/{uid} after dependent collections so rule lookups against users/{uid} succeed
+          // Delete users_public/{uid} and users/{uid} after dependent collections; also invoke server-side recursive purge callable if deployed
+          await deleteDoc(doc(db, "users_public", uid)).catch(() => {});
+          try {
+            const { getFunctions, httpsCallable } = await import("firebase/functions");
+            const { app } = await import("./firebase");
+            const purgeFn = httpsCallable(getFunctions(app), "purgeDeletedUserAccount");
+            await withTimeout(purgeFn({ uid }), 8000).catch(() => {});
+          } catch {}
           await deleteDoc(doc(db, "users", uid)).catch(() => {});
         })(),
         DELETE_BATCH_TIMEOUT_MS
@@ -1806,7 +1821,8 @@ export async function joinClubByInviteCode(
     coachId: clubCoach.uid,
     coachName: clubCoach.fullName || "Entrenador",
     coachEmail: clubCoach.email || "",
-    clubInviteCode: ""
+    clubInviteCode: "",
+    joinedWithInviteCode: cleanCode
   };
 
   const updated = await updateProfile(userUid, updates);

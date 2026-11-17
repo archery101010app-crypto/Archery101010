@@ -85,7 +85,7 @@ import BannerWidget from "@/components/ads/BannerWidget";
 import NotificationBar from "@/components/ads/NotificationBar";
 import AdPopupOverlay from "@/components/ads/AdPopupOverlay";
 import { AdCampaign } from "@/lib/db/adTypes";
-import { startRealtimeSync, stopRealtimeSync } from "@/lib/db/realtimeSync";
+import { startRealtimeSync, stopRealtimeSync, syncPublicUserPresence } from "@/lib/db/realtimeSync";
 import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 // Screens that the authenticated user can access
@@ -569,34 +569,101 @@ export default function Home() {
     }
   }, [coachViewMode, user?.uid, user?.role, user?.clubId, user?.coachId, user?.isClubCreator]);
 
-  // Periodic user presence heartbeat (throttled to 300s / 5 min to slash Firestore writes by 60%; skips Offline Guest & missing Auth)
+  const userPresenceRef = React.useRef<UserProfile | null>(user);
+  const bootstrappedPresenceUidRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    userPresenceRef.current = user;
+  }, [user]);
+
+  // Keep `users_public/{uid}` synchronized whenever public profile metadata changes after bootstrap
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || !user.fullName?.trim()) return;
+    if (bootstrappedPresenceUidRef.current === user.uid) {
+      syncPublicUserPresence(user).catch(() => {});
+    }
+  }, [
+    user?.uid,
+    user?.fullName,
+    user?.nickname,
+    user?.country,
+    user?.bowConfig?.type,
+    user?.clubId,
+    user?.clubName,
+    user?.clubInviteCode,
+    user?.role
+  ]);
+
+  // Periodic user presence heartbeat (300s / 5 min):
+  // - Updates `users/{uid}` `lastActiveAt` ONLY ONCE on initial session bootstrap
+  // - Writes 5-minute heartbeats to `users_public/{uid}` via `syncPublicUserPresence` to eliminate O(N^2) club read storms
   useEffect(() => {
     if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || !user?.fullName?.trim()) return;
     const uid = user.uid;
+    let authUnsub: () => void = () => {};
+    let cancelled = false;
 
-    const updatePresence = async () => {
+    const bootstrapSessionPresence = async () => {
       try {
-        if (typeof navigator !== "undefined" && !navigator.onLine) return;
+        if (cancelled || (typeof navigator !== "undefined" && !navigator.onLine)) return;
         const { auth, db } = await import("@/lib/firebase");
         if (!auth.currentUser || auth.currentUser.uid !== uid) return;
-        const { doc, updateDoc } = await import("firebase/firestore");
+        const currentProfile = userPresenceRef.current;
+        if (!currentProfile || currentProfile.uid !== uid) return;
+
+        if (bootstrappedPresenceUidRef.current !== uid) {
+          bootstrappedPresenceUidRef.current = uid;
+          const { doc, updateDoc } = await import("firebase/firestore");
+          const now = Date.now();
+          await updateDoc(doc(db, "users", uid), {
+            lastActiveAt: now,
+            updatedAt: now
+          }).catch(() => {});
+        }
+
+        await syncPublicUserPresence(currentProfile);
         const { runSync } = await import("@/lib/db/syncManager");
-        const now = Date.now();
-        // Use updateDoc (ignoring not-found) so heartbeat never triggers an invalid create rule error
-        await updateDoc(doc(db, "users", uid), {
-          lastActiveAt: now,
-          updatedAt: now
-        }).catch(() => {});
         runSync().catch(() => {});
       } catch {
         // Silently catch offline/network errors
       }
     };
 
-    updatePresence();
-    const interval = setInterval(updatePresence, 300000);
+    const heartbeatPublicPresence = async () => {
+      try {
+        if (cancelled || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+        const currentProfile = userPresenceRef.current;
+        if (!currentProfile || currentProfile.uid !== uid) return;
+        await syncPublicUserPresence(currentProfile);
+        const { runSync } = await import("@/lib/db/syncManager");
+        runSync().catch(() => {});
+      } catch {
+        // Silently catch offline/network errors
+      }
+    };
 
-    return () => clearInterval(interval);
+    (async () => {
+      try {
+        const { onAuthStateChanged } = await import("firebase/auth");
+        const { auth } = await import("@/lib/firebase");
+        if (cancelled) return;
+        if (auth.currentUser?.uid === uid) {
+          bootstrapSessionPresence();
+        }
+        authUnsub = onAuthStateChanged(auth, (fbUser) => {
+          if (!cancelled && fbUser?.uid === uid && bootstrappedPresenceUidRef.current !== uid) {
+            bootstrapSessionPresence();
+          }
+        });
+      } catch {}
+    })();
+
+    const interval = setInterval(heartbeatPublicPresence, 300000);
+
+    return () => {
+      cancelled = true;
+      authUnsub();
+      clearInterval(interval);
+    };
   }, [user?.uid, user?.fullName]);
 
   // Listen for "?join=..." invite code in the URL on startup or login
@@ -832,7 +899,7 @@ export default function Home() {
                   if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
                     new Notification("¡Nuevo Alumno Vinculado!", {
                       body: `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
-                      icon: "/icons/icon-192x192.png"
+                      icon: "/icon-192.png"
                     });
                   }
                 } catch {
@@ -1090,7 +1157,6 @@ export default function Home() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
-      const uid = user.uid;
 
       if (document.visibilityState === "visible") {
         try {
@@ -1098,35 +1164,20 @@ export default function Home() {
           runSync().catch(() => {});
 
           if (user.fullName?.trim() && (typeof navigator === "undefined" || navigator.onLine)) {
-            const { auth, db } = await import("@/lib/firebase");
-            if (auth.currentUser && auth.currentUser.uid === uid) {
-              const { doc, updateDoc } = await import("firebase/firestore");
-              const now = Date.now();
-              await updateDoc(doc(db, "users", uid), {
-                lastActiveAt: now,
-                updatedAt: now
-              }).catch(() => {});
-            }
+            await syncPublicUserPresence(user);
           }
         } catch (err) {
           console.error("[Firebase Reconnect] Error during visibility sync:", err);
         }
       } else if (document.visibilityState === "hidden") {
-        // Tab closed or minimized: set presence offline immediately
+        // Tab closed or minimized: set public presence offline immediately
         // BUT skip if the user is in the middle of a Matchplay duel
         if (currentScreen === "MATCHPLAY_ARENA" || !user.fullName?.trim()) {
           return;
         }
         try {
           if (typeof navigator !== "undefined" && !navigator.onLine) return;
-          const { auth, db } = await import("@/lib/firebase");
-          if (auth.currentUser && auth.currentUser.uid === uid) {
-            const { doc, updateDoc } = await import("firebase/firestore");
-            await updateDoc(doc(db, "users", uid), {
-              lastActiveAt: 0,
-              updatedAt: Date.now()
-            }).catch(() => {});
-          }
+          await syncPublicUserPresence(user, 0);
         } catch {
           // Silently catch errors
         }
@@ -1226,7 +1277,9 @@ export default function Home() {
     if (typeof window !== "undefined") {
       (window as any).__archeryManualLogout = true;
     }
+    const outgoingUser = user;
     const outgoingUid = user?.uid;
+    bootstrappedPresenceUidRef.current = null;
     setUser(null);
     setAuthScreen("LOGIN");
     setSessionConfig(null);
@@ -1234,6 +1287,9 @@ export default function Home() {
 
     if (outgoingUid && outgoingUid !== "USR-GUEST-OFFLINE") {
       try {
+        if (outgoingUser) {
+          await syncPublicUserPresence(outgoingUser, 0);
+        }
         const { auth, db } = await import("@/lib/firebase");
         if (auth.currentUser && auth.currentUser.uid === outgoingUid && (typeof navigator === "undefined" || navigator.onLine)) {
           const { doc, updateDoc } = await import("firebase/firestore");

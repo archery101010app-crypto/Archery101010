@@ -21,6 +21,8 @@ import {
   athleteStarsStore,
   starHistoryStore,
   getSyncQueue,
+  getSessionTombstones,
+  markSessionTombstone,
   isFictitiousUser,
   isFictitiousSession,
   sanitizeForFirestore
@@ -32,8 +34,44 @@ import {
   getExternalCoachUid,
   isLinkedToExternalCoach
 } from "@/lib/authService";
+import { logger } from "@/lib/logger";
 
 const SESSION_QUERY_LIMIT = 200;
+const SESSION_BACKFILL_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Syncs only the safe public presence & club directory fields to `users_public/{uid}`.
+ * Decouples 5-minute online heartbeats from `users/{uid}` to eliminate O(N^2) club read storms.
+ */
+export async function syncPublicUserPresence(
+  profile: Partial<UserProfile> & { uid: string },
+  lastActiveOverride?: number
+): Promise<void> {
+  if (!profile?.uid || profile.uid === "USR-GUEST-OFFLINE") return;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  if (!auth.currentUser || auth.currentUser.uid !== profile.uid) return;
+
+  const now = Date.now();
+  const publicPayload = {
+    uid: profile.uid,
+    fullName: (profile.fullName || "").slice(0, 100),
+    nickname: (profile.nickname || "").slice(0, 50),
+    country: (profile.country || "CR").slice(0, 10),
+    bowType: profile.bowConfig?.type || "Recurve",
+    clubId: (profile.clubId || "").slice(0, 100),
+    clubName: (profile.clubName || "").slice(0, 100),
+    clubInviteCode: (profile.clubInviteCode || "").slice(0, 20),
+    role: profile.role || "archer",
+    lastActiveAt: typeof lastActiveOverride === "number" ? lastActiveOverride : now,
+    updatedAt: now
+  };
+
+  try {
+    await setDoc(doc(db, "users_public", profile.uid), publicPayload, { merge: true });
+  } catch (err: any) {
+    logger.debug("Public presence sync skipped:", err?.message || err);
+  }
+}
 
 /**
  * Helper to check if two user profiles are functionally different, ignoring transient synchronization timestamps.
@@ -141,7 +179,7 @@ export function startRealtimeSync(
     isLocalhost;
 
   if (isMockFirebase) {
-    console.log("Mock Firebase configuration detected. Real-time sync disabled.");
+    logger.debug("Mock Firebase configuration detected. Real-time sync disabled.");
     return;
   }
 
@@ -165,12 +203,13 @@ export function startRealtimeSync(
     ? scope?.coachId || getExternalCoachUid({ uid: currentUserUid, clubId: rawClubId }) || null
     : null;
 
-  console.log("Initializing Scoped Real-Time Turbo Sync Firestore listeners...");
+  logger.debug("Initializing Scoped Real-Time Turbo Sync Firestore listeners...");
 
   // =========================================================================
-  // 1. Scoped & Bounded Users Listeners (replaces full-collection O(N^2) scan)
+  // 1. Scoped & Bounded Users + users_public Presence Listeners
   // =========================================================================
   const liveUsersBySource = new Map<string, Map<string, UserProfile>>();
+  const livePublicUsersBySource = new Map<string, Map<string, Record<string, any>>>();
   const attachedCoachDocUids = new Set<string>();
 
   async function reconcileUsersSnapshot(removedUids: string[] = []) {
@@ -185,9 +224,65 @@ export function startRealtimeSync(
         });
       });
 
-      const usersList = Array.from(unionRemote.values());
       const rawLocalUsers = (await settingsStore.getItem<UserProfile[]>("simulated_users")) || [];
       const localUsers = rawLocalUsers.filter((u) => !isFictitiousUser(u));
+      const localByUid = new Map(localUsers.map((u) => [u.uid, u]));
+
+      // Overlay live public presence / club roster entries from `users_public` without overwriting private profile fields
+      livePublicUsersBySource.forEach((pubMap) => {
+        pubMap.forEach((pub, uid) => {
+          if (!uid || isFictitiousUser(pub)) return;
+          const existingFull = unionRemote.get(uid);
+          if (existingFull) {
+            // Only refresh presence timestamp on peer profiles (never overwrite `current_user` full profile fields)
+            if (
+              uid !== currentUserUid &&
+              typeof pub.lastActiveAt === "number" &&
+              (Number(pub.updatedAt) || 0) >= (Number(existingFull.updatedAt) || 0)
+            ) {
+              unionRemote.set(uid, {
+                ...existingFull,
+                lastActiveAt: pub.lastActiveAt,
+                updatedAt: Math.max(Number(existingFull.updatedAt) || 0, Number(pub.updatedAt) || 0)
+              });
+            }
+          } else if (uid !== currentUserUid) {
+            const cachedLocal = localByUid.get(uid);
+            const bowType =
+              pub.bowType === "Compound" || pub.bowType === "Barebow" ? pub.bowType : "Recurve";
+            const publicProfile: UserProfile = {
+              uid,
+              email: cachedLocal?.email || "",
+              fullName: pub.fullName || cachedLocal?.fullName || "Arquero",
+              nickname: pub.nickname || cachedLocal?.nickname || "",
+              birthDate: cachedLocal?.birthDate || "",
+              country: pub.country || cachedLocal?.country || "CR",
+              city: cachedLocal?.city || "",
+              gender: cachedLocal?.gender || "",
+              bowConfig: cachedLocal?.bowConfig || {
+                type: bowType,
+                brand: "",
+                model: "",
+                poundage: 36
+              },
+              clubId: pub.clubId || null,
+              clubName: pub.clubName || null,
+              clubInviteCode: pub.clubInviteCode || "",
+              role: pub.role || "archer",
+              plan: cachedLocal?.plan || "FREE",
+              isClubCreator:
+                pub.role === "coach" ||
+                pub.role === "team_admin" ||
+                pub.role === "team_admin_coach",
+              lastActiveAt: typeof pub.lastActiveAt === "number" ? pub.lastActiveAt : 0,
+              updatedAt: typeof pub.updatedAt === "number" ? pub.updatedAt : 0
+            };
+            unionRemote.set(uid, publicProfile);
+          }
+        });
+      });
+
+      const usersList = Array.from(unionRemote.values());
       const queue = await getSyncQueue();
       const nowQueueMs = Date.now();
       const pendingUserUids = new Set(
@@ -217,7 +312,6 @@ export function startRealtimeSync(
         )
       );
 
-      const localByUid = new Map(localUsers.map((u) => [u.uid, u]));
       const mergedList: UserProfile[] = [];
 
       for (const remoteU of usersList) {
@@ -333,7 +427,7 @@ export function startRealtimeSync(
     }
   }
 
-  function attachUserDocListener(sourceKey: string, targetUid: string) {
+  function attachUserDocListener(sourceKey: string, targetUid: string, silentPermDenied = false) {
     if (!targetUid) return;
     if (sourceKey.startsWith("coach:")) {
       attachedCoachDocUids.add(targetUid);
@@ -355,7 +449,37 @@ export function startRealtimeSync(
         }
         await reconcileUsersSnapshot(removed);
       },
-      (err) => reportListenerError(`users:${sourceKey}`, err)
+      (err) => {
+        if (silentPermDenied && String(err?.code || "").includes("permission-denied")) {
+          logger.debug(`Firestore users:${sourceKey} restricted; using users_public fallback.`);
+          return;
+        }
+        reportListenerError(`users:${sourceKey}`, err);
+      }
+    );
+    activeUnsubscribes.push(unsub);
+  }
+
+  function attachPublicUserDocListener(sourceKey: string, targetUid: string) {
+    if (!targetUid) return;
+    const sourceMap = new Map<string, Record<string, any>>();
+    livePublicUsersBySource.set(sourceKey, sourceMap);
+
+    const unsub = onSnapshot(
+      doc(db, "users_public", targetUid),
+      async (docSnap) => {
+        if (generation !== syncGeneration) return;
+        const removed: string[] = [];
+        if (docSnap.exists()) {
+          const data = { ...(docSnap.data() as Record<string, any>), uid: (docSnap.data() as any)?.uid || docSnap.id };
+          sourceMap.set(data.uid, data);
+        } else {
+          if (sourceMap.has(targetUid)) removed.push(targetUid);
+          sourceMap.delete(targetUid);
+        }
+        await reconcileUsersSnapshot(removed);
+      },
+      (err) => logger.debug(`Firestore users_public:${sourceKey} listener notice:`, err?.message || err)
     );
     activeUnsubscribes.push(unsub);
   }
@@ -386,6 +510,32 @@ export function startRealtimeSync(
     activeUnsubscribes.push(unsub);
   }
 
+  function attachPublicUsersQueryListener(sourceKey: string, q: Query<DocumentData>) {
+    const sourceMap = new Map<string, Record<string, any>>();
+    livePublicUsersBySource.set(sourceKey, sourceMap);
+
+    const unsub = onSnapshot(
+      q,
+      async (snapshot) => {
+        if (generation !== syncGeneration) return;
+        const removed: string[] = [];
+        snapshot.docChanges().forEach((change) => {
+          const data = change.doc.data() as Record<string, any>;
+          const uid = data?.uid || change.doc.id;
+          if (change.type === "removed") {
+            sourceMap.delete(uid);
+            removed.push(uid);
+          } else if (data) {
+            sourceMap.set(uid, { ...data, uid });
+          }
+        });
+        await reconcileUsersSnapshot(removed);
+      },
+      (err) => logger.debug(`Firestore users_public:${sourceKey} listener notice:`, err?.message || err)
+    );
+    activeUnsubscribes.push(unsub);
+  }
+
   // Always listen to current user's own document
   attachUserDocListener("self", currentUserUid);
 
@@ -394,15 +544,27 @@ export function startRealtimeSync(
       "superadmin",
       query(collection(db, "users"), orderBy("createdAt", "desc"), limit(50))
     );
+    attachPublicUsersQueryListener(
+      "superadmin_public",
+      query(collection(db, "users_public"), limit(100))
+    );
   } else if (isCoachRole) {
     attachUsersQueryListener(
       "coach_club",
       query(collection(db, "users"), where("clubId", "==", canonicalClubId), limit(200))
     );
+    attachPublicUsersQueryListener(
+      "coach_club_public",
+      query(collection(db, "users_public"), where("clubId", "==", canonicalClubId), limit(150))
+    );
     if (effectiveClubId && effectiveClubId !== canonicalClubId) {
       attachUsersQueryListener(
         "coach_alt_club",
         query(collection(db, "users"), where("clubId", "==", effectiveClubId), limit(200))
+      );
+      attachPublicUsersQueryListener(
+        "coach_alt_club_public",
+        query(collection(db, "users_public"), where("clubId", "==", effectiveClubId), limit(150))
       );
     }
     attachUsersQueryListener(
@@ -411,13 +573,14 @@ export function startRealtimeSync(
     );
   } else {
     if (effectiveClubId) {
-      attachUsersQueryListener(
-        "archer_club",
-        query(collection(db, "users"), where("clubId", "==", effectiveClubId), limit(150))
+      attachPublicUsersQueryListener(
+        "archer_club_public",
+        query(collection(db, "users_public"), where("clubId", "==", effectiveClubId), limit(150))
       );
     }
     if (initialCoachUid && initialCoachUid !== currentUserUid) {
-      attachUserDocListener(`coach:${initialCoachUid}`, initialCoachUid);
+      attachPublicUserDocListener(`coach_pub:${initialCoachUid}`, initialCoachUid);
+      attachUserDocListener(`coach:${initialCoachUid}`, initialCoachUid, true);
     }
   }
 
@@ -443,6 +606,10 @@ export function startRealtimeSync(
             "coach_club",
             query(collection(db, "users"), where("clubId", "==", canonicalClubId), limit(200))
           );
+          attachPublicUsersQueryListener(
+            "coach_club_public",
+            query(collection(db, "users_public"), where("clubId", "==", canonicalClubId), limit(150))
+          );
         }
         return;
       }
@@ -453,7 +620,8 @@ export function startRealtimeSync(
         storedUser.coachId !== currentUserUid &&
         !attachedCoachDocUids.has(storedUser.coachId)
       ) {
-        attachUserDocListener(`coach:${storedUser.coachId}`, storedUser.coachId);
+        attachPublicUserDocListener(`coach_pub:${storedUser.coachId}`, storedUser.coachId);
+        attachUserDocListener(`coach:${storedUser.coachId}`, storedUser.coachId, true);
       }
     })
     .catch(() => {});
@@ -730,7 +898,7 @@ export function startRealtimeSync(
   // 5. Sync Sessions (Scoped & Bounded to limit(200), preserving older local sessions)
   // =========================================================================
   async function applySessionsSnapshot(snapshot: any, isFirst: boolean, isOwnScope: boolean) {
-    const queue = await getSyncQueue();
+    const [queue, tombstones] = await Promise.all([getSyncQueue(), getSessionTombstones()]);
     const pendingSessionIds = new Set(
       queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
     );
@@ -746,11 +914,12 @@ export function startRealtimeSync(
         }
       });
 
+      const nowMs = Date.now();
       const keysToRemove: string[] = [];
       const localSessionsToRescue: Array<{ key: string; value: any }> = [];
 
       await sessionsStore.iterate((value: any, key: string) => {
-        if (isFictitiousSession(value, key)) {
+        if (isFictitiousSession(value, key) || tombstones.has(key)) {
           keysToRemove.push(key);
           return;
         }
@@ -758,35 +927,63 @@ export function startRealtimeSync(
         const isOwnSession = value && (value.userId === currentUserUid || value.userUid === currentUserUid);
         if (!isOwnSession || value.isDraft) return;
 
-        // Only rescue unsynced local sessions that fall within the active window (never re-upload archived history past limit(200))
         if (!remoteIds.has(key) && !pendingSessionIds.has(key)) {
-          const localTs = Number(value.timestamp) || 0;
-          if (!isWindowFull || (oldestRemoteTimestamp < Infinity && localTs > oldestRemoteTimestamp)) {
+          const localTs = Number(value.timestamp || value.createdAt) || 0;
+          const inActiveWindow =
+            !isWindowFull || (oldestRemoteTimestamp < Infinity && localTs > oldestRemoteTimestamp);
+
+          // Previously synced session missing from remote active window => deleted on another device
+          if (value.syncedAt && inActiveWindow) {
+            keysToRemove.push(key);
+            return;
+          }
+
+          // Only auto-backfill never-synced local sessions from the last 14 days that were never deleted
+          const isNeverSynced = !value.syncedAt;
+          const isWithin14Days = localTs > 0 && nowMs - localTs <= SESSION_BACKFILL_MAX_AGE_MS;
+          const isNotDeleted = !value.deletedAt && !value.deletedByArcher && !tombstones.has(key);
+
+          if (inActiveWindow && isNeverSynced && isWithin14Days && isNotDeleted) {
             localSessionsToRescue.push({ key, value });
           }
         }
       });
 
       for (const { key, value } of localSessionsToRescue) {
+        const { syncedAt: _omitLocalSyncedAt, ...cloudSessionFields } = value || {};
+        const syncTs = Date.now();
         const payload = sanitizeForFirestore({
-          ...value,
+          ...cloudSessionFields,
           id: value.id || value.uid || key,
           userId: currentUserUid,
           clubId: value.clubId || effectiveClubId || null,
-          updatedAt: Date.now()
+          updatedAt: syncTs
         });
-        setDoc(doc(db, "sessions", key), payload, { merge: true }).catch((e) =>
-          console.warn("Could not rescue local session to cloud:", e?.message || e)
-        );
+        setDoc(doc(db, "sessions", key), payload, { merge: true })
+          .then(async () => {
+            const currentLocal = await sessionsStore.getItem<any>(key);
+            if (currentLocal) {
+              await sessionsStore.setItem(key, { ...currentLocal, syncedAt: syncTs });
+            }
+          })
+          .catch((e) =>
+            logger.warn("Could not rescue local session to cloud:", e?.message || e)
+          );
       }
 
       // Merge incoming remote sessions incrementally into IndexedDB without wiping older local sessions
       await Promise.all([
-        ...keysToRemove.map((k) => sessionsStore.removeItem(k)),
+        ...keysToRemove.map(async (k) => {
+          await markSessionTombstone(k);
+          await sessionsStore.removeItem(k);
+        }),
         ...snapshot.docs
           .filter((d: any) => !pendingSessionIds.has(d.id) && !isFictitiousSession(d.data(), d.id))
           .map(async (d: any) => {
             const data = d.data();
+            if (tombstones.has(d.id) && !data?.restoredByCoach) {
+              return;
+            }
             if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
               const existingLocal = await sessionsStore.getItem<any>(d.id);
               if (
@@ -797,7 +994,11 @@ export function startRealtimeSync(
                 return;
               }
             }
-            await sessionsStore.setItem(d.id, { ...data, id: d.id });
+            await sessionsStore.setItem(d.id, {
+              ...data,
+              id: d.id,
+              syncedAt: data?.syncedAt || Date.now()
+            });
           })
       ]);
     } else {
@@ -826,11 +1027,15 @@ export function startRealtimeSync(
             if (existingLocal?.isDraft && currentUserUid && existingLocal.userId === currentUserUid) {
               return;
             }
+            await markSessionTombstone(docId);
             await sessionsStore.removeItem(docId);
           } else {
             const data = change.doc.data();
             if (isFictitiousSession(data, docId)) {
               await sessionsStore.removeItem(docId);
+              return;
+            }
+            if (tombstones.has(docId) && !data?.restoredByCoach) {
               return;
             }
             if (data?.isDraft && currentUserUid && data.userId === currentUserUid) {
@@ -843,7 +1048,11 @@ export function startRealtimeSync(
                 return;
               }
             }
-            await sessionsStore.setItem(docId, { ...data, id: docId });
+            await sessionsStore.setItem(docId, {
+              ...data,
+              id: docId,
+              syncedAt: data?.syncedAt || Date.now()
+            });
           }
         })
       );
@@ -1028,7 +1237,7 @@ export function stopRealtimeSync() {
   syncGeneration++;
   activeSyncKey = null;
   if (activeUnsubscribes.length > 0) {
-    console.log("Detaching real-time Firestore sync listeners...");
+    logger.debug("Detaching real-time Firestore sync listeners...");
     activeUnsubscribes.forEach((unsub) => {
       try {
         unsub();

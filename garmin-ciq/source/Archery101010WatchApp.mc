@@ -23,6 +23,7 @@ using Toybox.Lang;
  */
 class Archery101010WatchApp extends Application.AppBase {
     hidden var mView as Archery101010WatchView?;
+    hidden var mPhoneMsgCallback = null;
 
     function initialize() {
         AppBase.initialize();
@@ -30,9 +31,15 @@ class Archery101010WatchApp extends Application.AppBase {
 
     function onStart(state) {
         Position.enableLocationEvents(Position.LOCATION_CONTINUOUS, method(:onPosition));
+        // Connect IQ Companion Listener Hygiene (#12):
+        // Direct Connect IQ BLE PhoneAppMessages are an optional local fast-path ONLY when paired
+        // with a native Connect IQ companion SDK integration; 6-digit Cloud Sync over HTTPS
+        // (watch_sessions/{code}) is the universal standalone channel across Android, iOS, and Web.
+        // Keep registration safely wrapped in has-check + try/catch with a retained callback reference.
         if (Communications has :registerForPhoneAppMessages) {
             try {
-                Communications.registerForPhoneAppMessages(method(:onPhoneMessage));
+                mPhoneMsgCallback = method(:onPhoneMessage);
+                Communications.registerForPhoneAppMessages(mPhoneMsgCallback);
             } catch (ex) {}
         }
     }
@@ -44,6 +51,7 @@ class Archery101010WatchApp extends Application.AppBase {
                 Sensor.unregisterSensorDataListener();
             } catch (ex) {}
         }
+        mPhoneMsgCallback = null;
         if (mView != null) {
             mView.saveStateToStorage();
         }
@@ -142,7 +150,10 @@ class Archery101010WatchView extends WatchUi.View {
     private var mPeakT2 = 0;
     private var mCmdSeq = 0;
     private var mLastLocalActionMs = 0;
+    private var mLastActivityMs = 0;
     private var mLastCloudPollMs = 0;
+    private var mLastRemoteStateSig = "";
+    private var mLastBleStateSig = "";
     private var mLastTelemetryPushSteps = 0;
     private var mSensorTimer = null;
 
@@ -155,6 +166,9 @@ class Archery101010WatchView extends WatchUi.View {
 
     function initialize() {
         View.initialize();
+        var initNow = System.getTimer();
+        mLastActivityMs = initNow;
+        mLastCloudPollMs = initNow;
         refreshDeviceLocaleAndUnits();
         loadBrandResources();
         loadStateFromStorage();
@@ -171,6 +185,34 @@ class Archery101010WatchView extends WatchUi.View {
 
     function onShow() as Void {
         refreshDeviceLocaleAndUnits();
+        markUserActivity(false);
+    }
+
+    function getAdaptiveCloudPollIntervalMs(now as Lang.Number) as Lang.Number {
+        if (now < mLastActivityMs) {
+            mLastActivityMs = now;
+        }
+        var idleMs = now - mLastActivityMs;
+        // 3-Tier Adaptive Cloud Polling:
+        // Active (< 90s): 8,000 ms | Warm Idle (90s..5m): 20,000 ms | Deep Idle (>= 5m): 45,000 ms
+        if (idleMs < 90000) {
+            return 8000;
+        } else if (idleMs < 300000) {
+            return 20000;
+        }
+        return 45000;
+    }
+
+    function markUserActivity(isWriteAction as Lang.Boolean) as Void {
+        var now = System.getTimer();
+        mLastActivityMs = now;
+        if (!isWriteAction && hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+            var sinceLocalMs = (now >= mLastLocalActionMs) ? (now - mLastLocalActionMs) : 999999;
+            if ((now < mLastCloudPollMs || (now - mLastCloudPollMs) >= 8000) && sinceLocalMs >= 1500) {
+                mLastCloudPollMs = now;
+                pollFirestoreCloud();
+            }
+        }
     }
 
     (:typecheck(false))
@@ -390,6 +432,10 @@ class Archery101010WatchView extends WatchUi.View {
         pairingCode = built;
         hasPairingCode = true;
         isEditingCode = false;
+        mLastRemoteStateSig = "";
+        var now = System.getTimer();
+        mLastActivityMs = now;
+        mLastCloudPollMs = now;
         saveStateToStorage();
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(70, 60)]);
@@ -400,6 +446,7 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function adjustSelectedCodeDigit(delta as Lang.Number) as Void {
+        markUserActivity(true);
         var cur = pairingDigits[editDigitPos];
         if (editDigitPos == 0) {
             var nextFirst = cur + delta;
@@ -649,6 +696,8 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function cycleSensitivityMode() as Void {
+        mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         if (!autoDetectEnabled) {
             autoDetectEnabled = true;
             sensitivityLevel = 1; // MEDIA
@@ -708,10 +757,17 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
-        // Poll 6-digit Cloud session every 8 seconds when paired
-        if (hasPairingCode && pairingCode.length() == 6 && (now - mLastCloudPollMs) >= 8000) {
-            mLastCloudPollMs = now;
-            pollFirestoreCloud();
+        // 3-Tier Adaptive Cloud Polling (8s Active <90s | 20s Warm Idle 90s..5m | 45s Deep Idle >=5m)
+        if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+            if (now < mLastCloudPollMs) {
+                mLastCloudPollMs = now;
+            }
+            var pollIntervalMs = getAdaptiveCloudPollIntervalMs(now);
+            var sinceLocalMs = (now >= mLastLocalActionMs) ? (now - mLastLocalActionMs) : 999999;
+            if ((now - mLastCloudPollMs) >= pollIntervalMs && sinceLocalMs >= 1500) {
+                mLastCloudPollMs = now;
+                pollFirestoreCloud();
+            }
         }
 
         // Fallback single-sample accel check ONLY when high-freq listener is unavailable AND autoDetectEnabled
@@ -735,23 +791,36 @@ class Archery101010WatchView extends WatchUi.View {
     function handleIncomingPhoneData(data) as Void {
         if (data instanceof Lang.Dictionary) {
             isBleConnected = true;
-            if (data.hasKey("sessionActive") && data["sessionActive"] == false) {
+            var bleAct = !(data.hasKey("sessionActive") && data["sessionActive"] == false);
+            var bleSid = (data.hasKey("sessionId") && data["sessionId"] != null) ? data["sessionId"].toString() : currentSessionId;
+            var bleArr = data.hasKey("arrowsCount") ? data["arrowsCount"].toNumber() : arrowsCount;
+            var bleScore = data.hasKey("totalScore") ? data["totalScore"].toNumber() : totalScore;
+            var bleEnd = data.hasKey("currentEndIndex") ? (data["currentEndIndex"].toNumber() + 1) : currentEnd;
+            var bleAuto = (data.hasKey("autoDetectEnabled") && data["autoDetectEnabled"] != null)
+                ? (data["autoDetectEnabled"] == true)
+                : autoDetectEnabled;
+            var nextBleSig = (bleAct ? "1|" : "0|") + bleSid + "|" + bleArr.toString() + "|" + bleScore.toString() + "|" + bleEnd.toString() + "|" + (bleAuto ? "1" : "0");
+            if (mLastBleStateSig.length() == 0) {
+                mLastBleStateSig = nextBleSig;
+            } else if (!nextBleSig.equals(mLastBleStateSig)) {
+                mLastBleStateSig = nextBleSig;
+                mLastActivityMs = System.getTimer();
+            }
+
+            if (!bleAct) {
                 resetAllCounters("");
                 return;
             }
-            if (data.hasKey("sessionId") && data["sessionId"] != null) {
-                var sid = data["sessionId"].toString();
-                if (sid.length() > 0 && currentSessionId.length() > 0 && !sid.equals(currentSessionId)) {
-                    resetAllCounters(sid);
-                } else if (sid.length() > 0) {
-                    currentSessionId = sid;
-                }
+            if (bleSid.length() > 0 && currentSessionId.length() > 0 && !bleSid.equals(currentSessionId)) {
+                resetAllCounters(bleSid);
+            } else if (bleSid.length() > 0) {
+                currentSessionId = bleSid;
             }
             if (data.hasKey("arrowsCount")) {
-                arrowsCount = data["arrowsCount"].toNumber();
+                arrowsCount = bleArr;
             }
             if (data.hasKey("totalScore")) {
-                totalScore = data["totalScore"].toNumber();
+                totalScore = bleScore;
             }
             if (data.hasKey("distanceM")) {
                 distanceM = data["distanceM"].toNumber();
@@ -763,7 +832,7 @@ class Archery101010WatchView extends WatchUi.View {
                 endsCount = data["endsCount"].toNumber();
             }
             if (data.hasKey("currentEndIndex")) {
-                currentEnd = data["currentEndIndex"].toNumber() + 1;
+                currentEnd = bleEnd;
             }
             if (data.hasKey("distanceWalkedM")) {
                 var incomingM = data["distanceWalkedM"].toNumber();
@@ -775,7 +844,7 @@ class Archery101010WatchView extends WatchUi.View {
                 activeKcal = data["activeKcal"].toNumber();
             }
             if (data.hasKey("autoDetectEnabled") && data["autoDetectEnabled"] != null) {
-                autoDetectEnabled = (data["autoDetectEnabled"] == true);
+                autoDetectEnabled = bleAuto;
                 syncHighFreqAccelerometer();
             }
             saveStateToStorage();
@@ -842,6 +911,7 @@ class Archery101010WatchView extends WatchUi.View {
 
     function incrementArrow(delta as Lang.Number, isAuto as Lang.Boolean) as Void {
         mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         arrowsCount = arrowsCount + delta;
         if (arrowsCount < 0) { arrowsCount = 0; }
         if (Attention has :vibrate) {
@@ -857,6 +927,7 @@ class Archery101010WatchView extends WatchUi.View {
 
     function recordScoreInput(val as Lang.String) as Void {
         mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         var pts = scorePointsForLabel(val);
         if (currentEndArrows.size() >= arrowsPerEnd) {
             currentEndArrows = [] as Lang.Array<Lang.String>;
@@ -878,9 +949,11 @@ class Archery101010WatchView extends WatchUi.View {
 
     function undoLastScore() as Void {
         if (currentEndArrows.size() <= 0) {
+            markUserActivity(false);
             return;
         }
         mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         var lastIdx = currentEndArrows.size() - 1;
         var removed = currentEndArrows[lastIdx];
         currentEndArrows = currentEndArrows.slice(0, lastIdx) as Lang.Array<Lang.String>;
@@ -900,9 +973,11 @@ class Archery101010WatchView extends WatchUi.View {
 
     function advanceNextEnd() as Void {
         if (currentEndArrows.size() <= 0) {
+            markUserActivity(false);
             return;
         }
         mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         currentEndArrows = [] as Lang.Array<Lang.String>;
         if (currentEnd < endsCount) {
             currentEnd = currentEnd + 1;
@@ -916,6 +991,8 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function finishSessionAndReset() as Void {
+        mLastLocalActionMs = System.getTimer();
+        markUserActivity(true);
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(85, 110)]);
         }
@@ -926,6 +1003,7 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function resetSessionFromWatch() as Void {
+        markUserActivity(false);
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(55, 50)]);
         }
@@ -955,26 +1033,29 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function syncWithPhoneApp(eventType as Lang.String, extra) as Void {
-        // 1. Primary 6-Digit Cloud Sync via Firestore REST over HTTPS
+        // 1. Universal standalone 6-Digit Cloud Sync via Firestore REST over HTTPS
         syncWithFirestoreCloud(eventType, extra);
 
-        // 2. Secondary direct BLE phone app channel (safe try/catch)
-        try {
-            var payload = {
-                "type" => eventType,
-                "arrowsCount" => arrowsCount,
-                "totalScore" => totalScore,
-                "stepsCount" => stepsCount,
-                "distanceWalkedM" => distanceWalkedM,
-                "activeKcal" => activeKcal,
-                "autoDetectEnabled" => autoDetectEnabled,
-                "sensitivityLevel" => sensitivityLevel
-            };
-            if (extra != null && eventType.equals("SCORE_INPUT")) {
-                payload["value"] = extra;
-            }
-            Communications.transmit(payload, null, new CommListener(self));
-        } catch (ex) {}
+        // 2. Optional local Connect IQ BLE fast-path ONLY when paired with a native Connect IQ
+        // companion SDK integration (#12); wrapped in has-check + try/catch so standalone operation never faults.
+        if (Communications has :transmit) {
+            try {
+                var payload = {
+                    "type" => eventType,
+                    "arrowsCount" => arrowsCount,
+                    "totalScore" => totalScore,
+                    "stepsCount" => stepsCount,
+                    "distanceWalkedM" => distanceWalkedM,
+                    "activeKcal" => activeKcal,
+                    "autoDetectEnabled" => autoDetectEnabled,
+                    "sensitivityLevel" => sensitivityLevel
+                };
+                if (extra != null && eventType.equals("SCORE_INPUT")) {
+                    payload["value"] = extra;
+                }
+                Communications.transmit(payload, null, new CommListener(self));
+            } catch (ex) {}
+        }
     }
 
     (:typecheck(false))
@@ -1130,6 +1211,48 @@ class Archery101010WatchView extends WatchUi.View {
 
             var sessionActive = extractFsBool(fields, "sessionActive", true);
             var incomingSid = extractFsString(fields, "sessionId", "");
+            var fsArrows = extractFsInt(fields, "arrowsCount", arrowsCount);
+            var fsScore = extractFsInt(fields, "totalScore", totalScore);
+            var fsEnd = extractFsInt(fields, "currentEnd", currentEnd);
+            var fsDistM = extractFsInt(fields, "distanceM", distanceM);
+            var fsPerEnd = extractFsInt(fields, "arrowsPerEnd", arrowsPerEnd);
+            var fsTotalEnds = extractFsInt(fields, "totalEnds", endsCount);
+            var fsAuto = extractFsBool(fields, "autoDetectEnabled", autoDetectEnabled);
+            var fsSens = extractFsInt(fields, "sensitivityLevel", sensitivityLevel);
+
+            var hasEndArrowsField = false;
+            var parsedEndArrows = [] as Lang.Array<Lang.String>;
+            var endArrowsJoined = "";
+            if (fields.hasKey("currentEndArrows") && fields["currentEndArrows"] instanceof Lang.Dictionary) {
+                var arrNode = fields["currentEndArrows"];
+                if (arrNode.hasKey("arrayValue") && arrNode["arrayValue"] instanceof Lang.Dictionary) {
+                    hasEndArrowsField = true;
+                    var av = arrNode["arrayValue"];
+                    if (av.hasKey("values") && av["values"] instanceof Lang.Array) {
+                        var vals = av["values"];
+                        for (var i = 0; i < vals.size(); i++) {
+                            var item = vals[i];
+                            if ((item instanceof Lang.Dictionary) && item.hasKey("stringValue") && item["stringValue"] != null) {
+                                var sv = item["stringValue"].toString();
+                                parsedEndArrows.add(sv);
+                                endArrowsJoined = endArrowsJoined + ((i > 0) ? "," : "") + sv;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Detect genuine remote state changes to immediately resume Active Tier polling
+            var remoteSig = (sessionActive ? "1|" : "0|") + incomingSid + "|" +
+                fsArrows.toString() + "|" + fsScore.toString() + "|" + fsEnd.toString() + "|" +
+                endArrowsJoined + "|" + fsDistM.toString() + "|" + fsPerEnd.toString() + "|" +
+                fsTotalEnds.toString() + "|" + (fsAuto ? "1|" : "0|") + fsSens.toString();
+            if (mLastRemoteStateSig.length() == 0) {
+                mLastRemoteStateSig = remoteSig;
+            } else if (!remoteSig.equals(mLastRemoteStateSig)) {
+                mLastRemoteStateSig = remoteSig;
+                mLastActivityMs = System.getTimer();
+            }
 
             if (!sessionActive) {
                 if (arrowsCount > 0 || totalScore > 0 || stepsCount > 0 || distanceWalkedM > 0) {
@@ -1145,37 +1268,23 @@ class Archery101010WatchView extends WatchUi.View {
                 currentSessionId = incomingSid;
             }
 
-            var recentlyTapped = (System.getTimer() - mLastLocalActionMs) < 3500;
+            var nowTimer = System.getTimer();
+            var recentlyTapped = (nowTimer >= mLastLocalActionMs) && ((nowTimer - mLastLocalActionMs) < 3500);
             if (!recentlyTapped) {
-                arrowsCount = extractFsInt(fields, "arrowsCount", arrowsCount);
-                totalScore = extractFsInt(fields, "totalScore", totalScore);
-                currentEnd = extractFsInt(fields, "currentEnd", currentEnd);
-
-                if (fields.hasKey("currentEndArrows") && fields["currentEndArrows"] instanceof Lang.Dictionary) {
-                    var arrNode = fields["currentEndArrows"];
-                    if (arrNode.hasKey("arrayValue") && arrNode["arrayValue"] instanceof Lang.Dictionary) {
-                        var av = arrNode["arrayValue"];
-                        var parsedArr = [] as Lang.Array<Lang.String>;
-                        if (av.hasKey("values") && av["values"] instanceof Lang.Array) {
-                            var vals = av["values"];
-                            for (var i = 0; i < vals.size(); i++) {
-                                var item = vals[i];
-                                if ((item instanceof Lang.Dictionary) && item.hasKey("stringValue") && item["stringValue"] != null) {
-                                    parsedArr.add(item["stringValue"].toString());
-                                }
-                            }
-                        }
-                        currentEndArrows = parsedArr;
-                    }
+                arrowsCount = fsArrows;
+                totalScore = fsScore;
+                currentEnd = fsEnd;
+                if (hasEndArrowsField) {
+                    currentEndArrows = parsedEndArrows;
                 }
             }
 
-            distanceM = extractFsInt(fields, "distanceM", distanceM);
-            arrowsPerEnd = extractFsInt(fields, "arrowsPerEnd", arrowsPerEnd);
-            endsCount = extractFsInt(fields, "totalEnds", endsCount);
+            distanceM = fsDistM;
+            arrowsPerEnd = fsPerEnd;
+            endsCount = fsTotalEnds;
             bowPoundageLbs = extractFsInt(fields, "bowPoundageLbs", bowPoundageLbs);
-            autoDetectEnabled = extractFsBool(fields, "autoDetectEnabled", autoDetectEnabled);
-            sensitivityLevel = extractFsInt(fields, "sensitivityLevel", sensitivityLevel);
+            autoDetectEnabled = fsAuto;
+            sensitivityLevel = fsSens;
             syncHighFreqAccelerometer();
 
             var cloudWalked = extractFsInt(fields, "distanceWalkedM", 0);
@@ -1766,6 +1875,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             var val = mView.scoreLabels[mView.selectedScoreIdx];
             mView.recordScoreInput(val);
         } else if (mView.screenIdx == 2) {
+            mView.markUserActivity(true);
             mView.syncWithPhoneApp("SYNC_TELEMETRY_FROM_WATCH", null);
         } else if (mView.screenIdx == 3) {
             mView.finishSessionAndReset();
@@ -1773,9 +1883,11 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             if (!mView.isEditingCode) {
                 mView.isEditingCode = true;
                 mView.editDigitPos = 0;
+                mView.markUserActivity(true);
                 WatchUi.requestUpdate();
             } else if (mView.editDigitPos < 5) {
                 mView.editDigitPos = mView.editDigitPos + 1;
+                mView.markUserActivity(true);
                 WatchUi.requestUpdate();
             } else {
                 mView.commitPairingDigits();
@@ -1790,6 +1902,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
         mView.screenIdx = (mView.screenIdx + 1) % 5;
+        mView.markUserActivity(false);
         WatchUi.requestUpdate();
         return true;
     }
@@ -1800,6 +1913,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
         mView.screenIdx = (mView.screenIdx + 4) % 5;
+        mView.markUserActivity(false);
         WatchUi.requestUpdate();
         return true;
     }
@@ -1830,6 +1944,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         if (ty >= (h - (28.0 * s))) {
             mView.isEditingCode = false;
             mView.screenIdx = (mView.screenIdx + 1) % 5;
+            mView.markUserActivity(false);
             WatchUi.requestUpdate();
             return true;
         }
@@ -1846,6 +1961,8 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 if (tx < (cx - (34.0 * s))) {
                     if (mView.arrowsCount > 0) {
                         mView.incrementArrow(-1, false);
+                    } else {
+                        mView.markUserActivity(false);
                     }
                     return true;
                 } else if (tx > (cx + (34.0 * s))) {
@@ -1885,6 +2002,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 return true;
             }
         } else if (mView.screenIdx == 2) {
+            mView.markUserActivity(true);
             mView.syncWithPhoneApp("SYNC_TELEMETRY_FROM_WATCH", null);
             return true;
         } else if (mView.screenIdx == 3) {
@@ -1914,6 +2032,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                             mView.adjustSelectedCodeDigit(1);
                         } else {
                             mView.editDigitPos = di;
+                            mView.markUserActivity(true);
                             WatchUi.requestUpdate();
                         }
                         return true;
@@ -1930,6 +2049,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                     mView.adjustSelectedCodeDigit(1);
                 } else {
                     mView.editDigitPos = (mView.editDigitPos + 1) % 6;
+                    mView.markUserActivity(true);
                     WatchUi.requestUpdate();
                 }
                 return true;
@@ -1941,12 +2061,14 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 return true;
             }
         }
+        mView.markUserActivity(false);
         return false;
     }
 
     function onBack() {
         if (mView.screenIdx == 4 && mView.isEditingCode) {
             mView.isEditingCode = false;
+            mView.markUserActivity(false);
             WatchUi.requestUpdate();
             return true;
         }
@@ -1955,9 +2077,11 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         } else if (mView.screenIdx == 1) {
             mView.selectedScoreIdx = (mView.selectedScoreIdx + 1) % 12;
+            mView.markUserActivity(false);
             WatchUi.requestUpdate();
             return true;
         }
+        mView.markUserActivity(false);
         return false;
     }
 }

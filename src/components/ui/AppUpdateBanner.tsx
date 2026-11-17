@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { RefreshCw, X, Sparkles } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 interface RemoteVersionInfo {
   version: string;
@@ -60,6 +61,7 @@ function markVersionAttempted(ver: string): void {
 }
 
 export default function AppUpdateBanner() {
+  const { tx } = useLanguage();
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -196,10 +198,16 @@ export default function AppUpdateBanner() {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
-              {`Nueva versión v${remoteInfo.version} lista`}
+              {tx(
+                `Nueva versión disponible · v${remoteInfo.version}`,
+                `New version available · v${remoteInfo.version}`
+              )}
             </span>
             <span className="text-[10.5px] text-[#8E96A4] truncate tabular-nums">
-              {`Actualiza al instante con un toque (tienes v${APP_VERSION})`}
+              {tx(
+                `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
+                `Instant one-tap update (current v${APP_VERSION})`
+              )}
             </span>
           </div>
         </div>
@@ -212,13 +220,16 @@ export default function AppUpdateBanner() {
             className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95"
           >
             <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
-            <span>{isUpdating ? "Actualizando..." : "Actualizar"}</span>
+            <span>
+              {isUpdating ? tx("Actualizando...", "Updating...") : tx("Actualizar", "Update")}
+            </span>
           </button>
           <button
             type="button"
             onClick={handleDismiss}
             className="p-1.5 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
-            title="Cerrar aviso"
+            title={tx("Cerrar aviso", "Dismiss")}
+            aria-label={tx("Cerrar aviso", "Dismiss")}
           >
             <X size={14} />
           </button>

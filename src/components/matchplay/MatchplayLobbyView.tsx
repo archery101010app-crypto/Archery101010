@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { UserProfile, updateProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check, Target } from "lucide-react";
@@ -9,6 +9,8 @@ import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { logger } from "@/lib/logger";
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -99,13 +101,31 @@ const RIVAL_LIST = [
   }
 ];
 
-const formatMatchDate = (timestamp: any) => {
-  if (!timestamp) return "Fecha N/A";
-  const date = new Date(timestamp);
-  return isNaN(date.getTime()) ? "Fecha N/A" : date.toLocaleDateString();
-};
-
 export default function MatchplayLobbyView({ user, onBack, onStartDuel }: MatchplayLobbyViewProps) {
+  const { language, t, tx, isRtl } = useLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const txCurrent = (esText: string, enText: string) =>
+    languageRef.current === "es" ? esText : enText;
+
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  const formatBowLabel = (b?: string) =>
+    b === "Recurve"
+      ? tx("Recurvo", "Recurve")
+      : b === "Compound"
+      ? tx("Compuesto", "Compound")
+      : "Barebow";
+
+  const formatMatchDate = (timestamp: any) => {
+    if (!timestamp) return tx("Fecha N/A", "Date N/A");
+    const date = new Date(timestamp);
+    return isNaN(date.getTime())
+      ? tx("Fecha N/A", "Date N/A")
+      : date.toLocaleDateString(language === "es" ? "es-ES" : "en-US");
+  };
+
   const [activeTab, setActiveTab] = useState<"SEARCH" | "DRAFTS" | "HISTORY">("SEARCH");
   const [drafts, setDrafts] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -145,11 +165,30 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     try {
       const updated = await updateProfile(user.uid, { nickname: cleanAlias });
       window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updated } }));
+      if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
+        const now = Date.now();
+        await setDoc(
+          doc(db, "users_public", user.uid),
+          {
+            uid: user.uid,
+            fullName: user.fullName || "",
+            nickname: cleanAlias,
+            country: user.country || "CR",
+            bowType: user.bowConfig?.type || "Recurve",
+            clubId: user.clubId || "",
+            clubName: user.clubName || "",
+            role: user.role || "archer",
+            lastActiveAt: now,
+            updatedAt: now
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
     } catch (err) {
-      console.error("Error updating matchplay alias:", err);
+      logger.error("Error updating matchplay alias:", err);
     }
   };
-  // Sincronización automática de presencia y cola en el lobby (optimizada a 60s y sin errores en modo invitado)
+  // Public lobby presence heartbeat on `users_public` (180s interval, zero PII exposure)
   useEffect(() => {
     if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
     const uid = user.uid;
@@ -157,18 +196,31 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     const updateLobbyPresence = async () => {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       try {
-        const { doc, updateDoc } = await import("firebase/firestore");
+        const { doc, setDoc } = await import("firebase/firestore");
         const { db, auth } = await import("@/lib/firebase");
         if (!auth.currentUser || auth.currentUser.uid !== uid) return;
+        const curUser = userRef.current;
         const now = Date.now();
-        const docRef = doc(db, "users", uid);
-        await updateDoc(docRef, {
-          lastActiveAt: now,
-          updatedAt: now
-        });
+        const docRef = doc(db, "users_public", curUser.uid);
+        await setDoc(
+          docRef,
+          {
+            uid: curUser.uid,
+            fullName: curUser.fullName || "",
+            nickname: curUser.nickname || "",
+            country: curUser.country || "CR",
+            bowType: curUser.bowConfig?.type || "Recurve",
+            clubId: curUser.clubId || "",
+            clubName: curUser.clubName || "",
+            role: curUser.role || "archer",
+            lastActiveAt: now,
+            updatedAt: now
+          },
+          { merge: true }
+        );
       } catch (err: any) {
         if (err?.code !== "not-found") {
-          console.warn("[Lobby Presence] Error updating presence:", err);
+          logger.warn("[Lobby Presence] Error updating presence:", err);
         }
       }
     };
@@ -177,9 +229,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       import("@/lib/db/syncManager")
         .then(({ runSync }) => {
-          runSync().catch((err) => console.error("[Lobby] Background sync failed:", err));
+          runSync().catch((err) => logger.warn("[Lobby] Background sync failed:", err));
         })
-        .catch((err) => console.error("[Lobby] Failed to import syncManager:", err));
+        .catch((err) => logger.warn("[Lobby] Failed to import syncManager:", err));
     };
 
     // Run immediately on mount
@@ -198,10 +250,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   const handleDeleteDraft = async (id: string) => {
     if (
-      !(await showOledConfirm("¿Seguro que deseas eliminar este duelo activo permanentemente?", {
-        confirmLabel: "Eliminar",
-        cancelLabel: "Cancelar"
-      }))
+      !(await showOledConfirm(
+        tx(
+          "¿Seguro que deseas eliminar este duelo activo permanentemente?",
+          "Are you sure you want to permanently delete this active match?"
+        ),
+        {
+          confirmLabel: tx("Eliminar", "Delete"),
+          cancelLabel: tx("Cancelar", "Cancel")
+        }
+      ))
     ) {
       return;
     }
@@ -214,7 +272,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       );
       setDrafts(duelSessions.filter((s) => s.isDraft === true));
     } catch (err) {
-      console.error("Error deleting draft:", err);
+      logger.error("Error deleting draft:", err);
     }
   };
 
@@ -233,13 +291,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         setDrafts(activeDrafts);
         setHistory(completedHistory);
       } catch (err) {
-        console.error("Error loading duels:", err);
+        logger.error("Error loading duels:", err);
       }
     }
     loadDuels();
   }, [user, activeTab]);
 
-  // Load 100% real authenticated users (local cache + live Firestore presence)
+  // Load 100% real authenticated users (local cache + live Firestore `users_public` presence)
   useEffect(() => {
     let isMounted = true;
     let unsubCloud: (() => void) | null = null;
@@ -263,7 +321,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           setRealUsers(Array.from(byUid.values()));
         }
       } catch (err) {
-        console.error("Error loading real users for duels:", err);
+        logger.error("Error loading real users for duels:", err);
       }
     };
 
@@ -276,7 +334,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           if (!isMounted || !auth.currentUser) return;
           const tenMinAgo = Date.now() - 10 * 60 * 1000;
           const onlineQuery = query(
-            collection(db, "users"),
+            collection(db, "users_public"),
             where("lastActiveAt", ">=", tenMinAgo),
             limit(80)
           );
@@ -287,11 +345,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               mergeAndPublish();
             },
             (err) => {
-              console.warn("[Lobby] Live online users listener error:", err);
+              logger.warn("[Lobby] Live online users listener error:", err);
             }
           );
         })
-        .catch((err) => console.warn("[Lobby] Could not init live online users listener:", err));
+        .catch((err) => logger.warn("[Lobby] Could not init live online users listener:", err));
     }
 
     const handleDbChange = (e: Event) => {
@@ -342,12 +400,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           }).catch(() => {});
         }
       } catch (err) {
-        console.warn("Error expiring duel invite:", err);
+        logger.warn("Error expiring duel invite:", err);
       } finally {
         setSentInvite(null);
         setInviteStatusMessage("");
         await showOledAlert(
-          "El desafío en línea expiró automáticamente tras 120 segundos sin respuesta del oponente."
+          txCurrent(
+            "El desafío en línea expiró automáticamente tras 120 segundos sin respuesta del oponente.",
+            "The online challenge expired automatically after 120 seconds with no response."
+          )
         );
       }
     }, 120000);
@@ -384,9 +445,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   uid: data.receiverUid,
                   fullName:
                     realUsers.find((u) => u.uid === data.receiverUid)?.fullName ||
-                    "Oponente en Línea",
+                    txCurrent("Oponente en Línea", "Online Opponent"),
                   country: "CR",
-                  clubName: "Oponente",
+                  clubName: txCurrent("Oponente", "Opponent"),
                   clubLogo: "0",
                   clubCountry: "CR",
                   rating: 9.0
@@ -402,7 +463,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               isDisposed = true;
               clearTimeout(expiryTimer);
               clearInterval(countdownInterval);
-              setInviteStatusMessage("El oponente ha rechazado el reto.");
+              setInviteStatusMessage(
+                txCurrent("El oponente ha rechazado el reto.", "The opponent declined the challenge.")
+              );
               setTimeout(() => {
                 setSentInvite(null);
               }, 3000);
@@ -415,7 +478,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           }
         });
       } catch (err) {
-        console.error("Error listening to sent invite:", err);
+        logger.error("Error listening to sent invite:", err);
       }
     }
 
@@ -430,7 +493,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   }, [sentInvite?.id]);
 
   const handleChallengeRealUser = async (rival: any) => {
-    setInviteStatusMessage("Enviando reto...");
+    setInviteStatusMessage(tx("Enviando reto...", "Sending challenge..."));
     
     // Generate matchplay code
     const code = "MAT-" + Math.random().toString(36).substring(2, 5).toUpperCase() + "-" + Math.random().toString(36).substring(2, 5).toUpperCase();
@@ -478,11 +541,18 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       });
 
       setSentInvite({ id: inviteId, ...inviteData });
-      setInviteStatusMessage(`Esperando a que ${rival.fullName} acepte el reto...`);
+      setInviteStatusMessage(
+        tx(
+          `Esperando a que ${rival.fullName} acepte el reto...`,
+          `Waiting for ${rival.fullName} to accept the challenge...`
+        )
+      );
 
     } catch (err) {
-      console.error("Error creating real-time challenge:", err);
-      await showOledAlert("Error al enviar el reto. Intenta de nuevo.");
+      logger.error("Error creating real-time challenge:", err);
+      await showOledAlert(
+        tx("Error al enviar el reto. Intenta de nuevo.", "Failed to send challenge. Please try again.")
+      );
     }
   };
 
@@ -496,47 +566,63 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }
   };
 
-  // Filter rivals: actual registered users who are currently online
-  const filteredRivals = realUsers.map((u) => ({
-    uid: u.uid || "",
-    fullName: u.fullName || "",
-    nickname: u.nickname || (u.fullName ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) : "arquero"),
-    email: u.email || "",
-    country: u.country || "CR",
-    clubName: u.clubName || "Independiente",
-    clubLogo: u.clubLogo || "0",
-    clubCountry: u.clubCountry || u.country || "CR",
-    bowConfig: {
-      type: (u.bowConfig?.type || "Barebow") as "Recurve" | "Compound" | "Barebow",
-      brand: u.bowConfig?.brand || "Olímpico",
-      model: u.bowConfig?.model || "Estándar",
-      poundage: u.bowConfig?.poundage || 35,
-      defaultDistance: u.bowConfig?.defaultDistance || 18
-    },
-    rating: "9.0",
-    status: (u.lastActiveAt && (Math.abs(Date.now() - u.lastActiveAt) < 360000)) ? "online" as const : "offline" as const,
-    lastActiveAt: u.lastActiveAt
-  })).filter((riv) => {
-    // Exclude mock/demo users from the online list
-    if (isMockUser(riv.uid, riv.email, riv.fullName)) return false;
+  // Filter rivals: actual registered users who are currently online via `users_public`
+  const filteredRivals = realUsers
+    .map((u) => {
+      const resolvedBowType = (((u as any).bowType || u.bowConfig?.type || "Recurve") as
+        | "Recurve"
+        | "Compound"
+        | "Barebow");
+      const fallbackDistance =
+        resolvedBowType === "Compound" ? 50 : resolvedBowType === "Recurve" ? 70 : 18;
+      return {
+        uid: u.uid || "",
+        fullName: u.fullName || "",
+        nickname:
+          u.nickname ||
+          (u.fullName ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) : "arquero"),
+        email: u.email || "",
+        country: u.country || "CR",
+        clubName: u.clubName || tx("Independiente", "Independent"),
+        clubLogo: u.clubLogo || "0",
+        clubCountry: u.clubCountry || u.country || "CR",
+        bowConfig: {
+          type: resolvedBowType,
+          brand: u.bowConfig?.brand || tx("Olímpico", "Olympic"),
+          model: u.bowConfig?.model || tx("Estándar", "Standard"),
+          poundage: u.bowConfig?.poundage || 35,
+          defaultDistance: u.bowConfig?.defaultDistance || fallbackDistance
+        },
+        rating: "9.0",
+        status:
+          u.lastActiveAt && Math.abs(Date.now() - u.lastActiveAt) < 360000
+            ? ("online" as const)
+            : ("offline" as const),
+        lastActiveAt: u.lastActiveAt
+      };
+    })
+    .filter((riv) => {
+      // Exclude mock/demo users from the online list
+      if (isMockUser(riv.uid, riv.email, riv.fullName)) return false;
 
-    // Exclude the current user themselves
-    if (riv.uid === user.uid) return false;
+      // Exclude the current user themselves
+      if (riv.uid === user.uid) return false;
 
-    // Exclude users without a valid name
-    if (!riv.fullName || !riv.fullName.trim()) return false;
+      // Exclude users without a valid name
+      if (!riv.fullName || !riv.fullName.trim()) return false;
 
-    const matchesSearch = (riv.fullName || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
-                          (riv.clubName || "").toLowerCase().includes((searchQuery || "").toLowerCase());
-    const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
-    
-    let matchesDist = true;
-    if (distanceFilter !== "ALL") {
-      matchesDist = riv.bowConfig.defaultDistance === Number(distanceFilter);
-    }
+      const matchesSearch =
+        (riv.fullName || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+        (riv.clubName || "").toLowerCase().includes((searchQuery || "").toLowerCase());
+      const matchesBow = bowFilter === "ALL" || riv.bowConfig.type === bowFilter;
 
-    return matchesSearch && matchesBow && matchesDist && riv.status === "online";
-  });
+      let matchesDist = true;
+      if (distanceFilter !== "ALL") {
+        matchesDist = riv.bowConfig.defaultDistance === Number(distanceFilter);
+      }
+
+      return matchesSearch && matchesBow && matchesDist && riv.status === "online";
+    });
 
   // Filter practice bots (simulated opponents)
   const practiceBots = RIVAL_LIST.map((riv) => ({
@@ -606,7 +692,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         ? `${window.location.origin}?join=${generatedCode}`
         : `https://archery101010-c0bb4.web.app?join=${generatedCode}`;
 
-      const shareText = `¡Te desafío a una Eliminatoria Online 1 vs 1 en Archery 101010!\n\nFormato: ${customBow === "Recurve" ? "Recurvo" : customBow === "Compound" ? "Compuesto" : "Barebow"} a ${customDistance}m\nCódigo de Sala: ${generatedCode}\n\nEntra al duelo en vivo aquí:\n${shareUrl}`;
+      const shareText = tx(
+        `¡Te desafío a una Eliminatoria Online 1 vs 1 en Archery 101010!\n\nFormato: ${formatBowLabel(customBow)} a ${customDistance}m\nCódigo de Sala: ${generatedCode}\n\nEntra al duelo en vivo aquí:\n${shareUrl}`,
+        `I challenge you to a Live 1 vs 1 Match on Archery 101010!\n\nFormat: ${formatBowLabel(customBow)} at ${customDistance}m\nRoom Code: ${generatedCode}\n\nJoin the live match here:\n${shareUrl}`
+      );
 
       // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
       if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
@@ -628,7 +717,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           status: "waiting",
           updatedAt: Date.now()
         }).catch((err) => {
-          console.error("Error creating active duel in Firestore immediately:", err);
+          logger.error("Error creating active duel in Firestore immediately:", err);
         });
       }
 
@@ -651,10 +740,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     };
     
     const botNames = {
-      Rookie: "Bot Novato",
-      Medium: "Arquero Medio",
-      High: "Alto Nivel",
-      Olympic: "Campeón Olímpico"
+      Rookie: tx("Bot Novato", "Rookie Bot"),
+      Medium: tx("Arquero Medio", "Intermediate Archer"),
+      High: tx("Alto Nivel", "High Level Bot"),
+      Olympic: tx("Campeón Olímpico", "Olympic Champion")
     };
 
     const matchConfig = {
@@ -707,7 +796,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           isCreator: false,
           rival: {
             uid: data.creatorUid || "RIV-FRIEND-CREATOR",
-            fullName: data.creatorName || "Anfitrión del Duelo",
+            fullName: data.creatorName || tx("Anfitrión del Duelo", "Match Host"),
             country: data.creatorCountry || "CR",
             clubName: "Lobby Archery",
             clubLogo: "1",
@@ -717,11 +806,18 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         };
         onStartDuel(matchConfig);
       } else {
-        await showOledAlert("El código de duelo no existe o es inválido.");
+        await showOledAlert(
+          tx("El código de duelo no existe o es inválido.", "Room code does not exist or is invalid.")
+        );
       }
     } catch (err) {
-      console.error("Error joining duel in Firestore:", err);
-      await showOledAlert("No se pudo conectar al duelo. Verifica tu conexión a internet.");
+      logger.error("Error joining duel in Firestore:", err);
+      await showOledAlert(
+        tx(
+          "No se pudo conectar al duelo. Verifica tu conexión a internet.",
+          "Could not connect to the match. Check your internet connection."
+        )
+      );
     }
   };
 
@@ -729,26 +825,26 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     <div className="flex flex-col gap-4 py-3 min-h-full relative overflow-hidden">
       {/* Hero Header: Eliminatorias Online 1v1 */}
       <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 relative overflow-hidden z-10 flex flex-col gap-2.5">
-        <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+        <div className="absolute top-0 inset-x-0 h-[3px] flex">
           <div className="flex-1 bg-cyan-neon" />
           <div className="flex-1 bg-red-rival" />
           <div className="flex-1 bg-yellow-gold" />
         </div>
 
-        {/* Row 1: Back button + Live Badge on Left, Alias Pill on Right */}
+        {/* Row 1: Back button + Live Badge on Start, Alias Pill on End */}
         <div className="flex items-center justify-between gap-2 pt-0.5">
           <div className="flex items-center gap-2">
             <button
               onClick={onBack}
-              aria-label="Volver"
+              aria-label={tx("Volver", "Back")}
               className="h-8 w-8 rounded-xl bg-[#141923] border border-white/[0.08] text-white hover:text-white flex items-center justify-center cursor-pointer transition shrink-0"
             >
-              <ArrowLeft size={15} />
+              <ArrowLeft size={15} className={isRtl ? "rotate-180" : ""} />
             </button>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
               <span className="text-[10.5px] text-emerald-400 uppercase tracking-wider font-black whitespace-nowrap">
-                EN VIVO · 1 VS 1
+                {tx("EN VIVO · 1 VS 1", "LIVE · 1 VS 1")}
               </span>
             </div>
           </div>
@@ -763,7 +859,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   value={currentAlias}
                   onChange={(e) => setCurrentAlias(e.target.value)}
                   className="h-6 w-24 bg-[#121722] border border-cyan-neon text-cyan-neon tabular-nums font-bold text-xs px-1.5 rounded outline-none"
-                  placeholder="alias"
+                  placeholder={tx("alias", "handle")}
                 />
                 <button
                   type="submit"
@@ -776,8 +872,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               <button
                 type="button"
                 onClick={() => setIsEditingAlias(true)}
-                className="flex items-center gap-1.5 text-left cursor-pointer group"
-                title="Cambiar tu alias para retos online"
+                className="flex items-center gap-1.5 text-start cursor-pointer group"
+                title={tx("Cambiar tu alias para retos online", "Change your handle for online matches")}
               >
                 <span className="text-[12.8px] tabular-nums font-bold text-cyan-neon truncate max-w-[110px]">
                   @{currentAlias}
@@ -794,10 +890,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             className="text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-wider leading-snug [text-wrap:balance]"
             style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
           >
-            ELIMINATORIAS ONLINE
+            {tx("ELIMINATORIAS ONLINE", "ONLINE MATCHPLAY")}
           </h2>
           <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
-            Compite flecha a flecha en tiempo real bajo reglamento oficial WA (Recurvo y Barebow a 6 pts de set · Compuesto a 15 flechas).
+            {tx(
+              "Compite flecha a flecha en tiempo real bajo reglamento oficial WA (Recurvo y Barebow a 6 pts de set · Compuesto a 15 flechas).",
+              "Compete arrow-for-arrow in real time under official WA rules (Recurve & Barebow to 6 set pts · Compound 15 arrows)."
+            )}
           </p>
         </div>
       </div>
@@ -812,7 +911,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               : "text-white hover:text-white"
           }`}
         >
-          Arena 1 vs 1
+          {tx("Arena 1 vs 1", "1 vs 1 Arena")}
         </button>
         <button
           onClick={() => setActiveTab("DRAFTS")}
@@ -822,7 +921,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               : "text-white hover:text-white"
           }`}
         >
-          <span>En Curso</span>
+          <span>{tx("En Curso", "In Progress")}</span>
           {drafts.length > 0 && (
             <span className="px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none tabular-nums">
               {drafts.length}
@@ -837,7 +936,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               : "text-white hover:text-white"
           }`}
         >
-          Historial
+          {tx("Historial", "History")}
         </button>
       </div>
 
@@ -848,10 +947,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           <div className="bg-[#0D1017] border border-white/[0.1] rounded-2xl p-4 flex flex-col gap-3.5">
             <div className="flex items-center justify-between flex-wrap gap-1.5">
               <span className="text-xs font-black uppercase tracking-wider text-white whitespace-nowrap">
-                Nueva Eliminatoria
+                {tx("Nueva Eliminatoria", "New Match")}
               </span>
               <span className="text-[12.6px] sm:text-[13.2px] font-bold text-cyan-neon bg-cyan-neon/10 border border-cyan-neon/25 px-2.5 py-0.5 rounded-lg whitespace-nowrap shrink-0 tabular-nums">
-                {customBow === "Compound" ? "15 Flechas · Acumulado" : "Sistema de Sets · 6 Pts"}
+                {customBow === "Compound"
+                  ? tx("15 Flechas · Acumulado", "15 Arrows · Cumulative")
+                  : tx("Sistema de Sets · 6 Pts", "Set System · 6 Pts")}
               </span>
             </div>
 
@@ -867,7 +968,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       : "text-white hover:text-white"
                   }`}
                 >
-                  <span className="min-w-0">Contra Amigo Online</span>
+                  <span className="min-w-0">{tx("Contra Amigo Online", "vs Online Friend")}</span>
                 </button>
                 <button
                   type="button"
@@ -878,7 +979,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       : "text-white hover:text-white"
                   }`}
                 >
-                  <span className="min-w-0">Contra Bot Olímpico</span>
+                  <span className="min-w-0">{tx("Contra Bot Olímpico", "vs Olympic Bot")}</span>
                 </button>
               </div>
 
@@ -886,7 +987,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Modalidad de Arco
+                    {tx("Modalidad de Arco", "Bow Division")}
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
                     {(["Recurve", "Compound", "Barebow"] as const).map((b) => (
@@ -900,7 +1001,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
                         }`}
                       >
-                        {b === "Recurve" ? "Recurvo" : b === "Compound" ? "Compuesto" : "Barebow"}
+                        {formatBowLabel(b)}
                       </button>
                     ))}
                   </div>
@@ -908,7 +1009,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Distancia Oficial
+                    {tx("Distancia Oficial", "Official Distance")}
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
                     {([18, 50, 70] as const).map((d) => (
@@ -933,15 +1034,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               {duelMode === "BOT" ? (
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Nivel del Oponente Simulado
+                    {tx("Nivel del Oponente Simulado", "Simulated Opponent Level")}
                   </span>
                   <div className="grid grid-cols-4 gap-1.5">
                     {(
                       [
-                        { id: "Rookie", label: "Novato", avg: "7.2" },
-                        { id: "Medium", label: "Medio", avg: "8.3" },
-                        { id: "High", label: "Alto", avg: "9.2" },
-                        { id: "Olympic", label: "Olímpico", avg: "9.8" }
+                        { id: "Rookie", label: tx("Novato", "Rookie"), avg: "7.2" },
+                        { id: "Medium", label: tx("Medio", "Medium"), avg: "8.3" },
+                        { id: "High", label: tx("Alto", "High"), avg: "9.2" },
+                        { id: "Olympic", label: tx("Olímpico", "Olympic"), avg: "9.8" }
                       ] as const
                     ).map((lvl) => (
                       <button
@@ -955,7 +1056,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         }`}
                       >
                         <span className="text-[10.5px] font-black uppercase whitespace-nowrap">{lvl.label}</span>
-                        <span className="text-[9.3px] font-bold opacity-80 tabular-nums mt-0.5">Prom. {lvl.avg}</span>
+                        <span className="text-[9.3px] font-bold opacity-80 tabular-nums mt-0.5">
+                          {tx("Prom.", "Avg.")} {lvl.avg}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -963,7 +1066,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               ) : (
                 <div className="bg-[#080A0F] border border-white/[0.06] rounded-xl px-3 py-2.5">
                   <p className="text-[12.8px] text-white leading-snug [text-wrap:pretty]">
-                    Genera una sala en vivo con código y enlace directo para compartir por Mensajería Directa con tu oponente.
+                    {tx(
+                      "Genera una sala en vivo con código y enlace directo para compartir por Mensajería Directa con tu oponente.",
+                      "Create a live room with a code and direct link to share via Direct Messaging with your opponent."
+                    )}
                   </p>
                 </div>
               )}
@@ -978,8 +1084,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               >
                 <span className="truncate">
                   {duelMode === "FRIEND"
-                    ? "Crear Sala Online y Enviar Reto"
-                    : "Iniciar Eliminatoria vs Bot"}
+                    ? tx("Crear Sala Online y Enviar Reto", "Create Online Room & Send Challenge")
+                    : tx("Iniciar Eliminatoria vs Bot", "Start Match vs Bot")}
                 </span>
               </button>
             </form>
@@ -990,10 +1096,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             <div className="bg-[#0D1017] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-black uppercase tracking-wider text-white">
-                  Unirse con Código de Invitación
+                  {tx("Unirse con Código de Invitación", "Join with Invite Code")}
                 </span>
                 <span className="text-[12.8px] text-white">
-                  Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.
+                  {tx(
+                    "Si un amigo te envió un código de sala, escríbelo aquí para entrar directo.",
+                    "If a friend sent you a room code, enter it here to join directly."
+                  )}
                 </span>
               </div>
               <form onSubmit={handleJoinRoomSubmit} className="flex gap-2 items-center w-full min-w-0">
@@ -1001,14 +1110,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   type="text"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Ej. INV-R70-X9A"
-                  className="flex-1 min-w-0 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold"
+                  placeholder={tx("Ej. INV-R70-X9A", "e.g. INV-R70-X9A")}
+                  className="flex-1 min-w-0 h-10 bg-[#080A0F] border border-white/[0.1] focus:border-cyan-neon text-white text-xs px-3 rounded-xl outline-none transition uppercase text-center tabular-nums font-bold select-text"
                 />
                 <button
                   type="submit"
                   className="h-10 px-4 rounded-xl bg-white/[0.1] hover:bg-cyan-neon hover:text-black border border-white/[0.12] text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer transition active:scale-95 shrink-0 whitespace-nowrap"
                 >
-                  Entrar a Sala
+                  {tx("Entrar a Sala", "Join Room")}
                 </button>
               </form>
             </div>
@@ -1017,7 +1126,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           {/* Search and Filters */}
           <div className="flex flex-col gap-2 pt-1">
             <div className="relative flex items-center">
-              <span className="absolute left-3 text-white">
+              <span className="absolute start-3 text-white">
                 <Search size={14} />
               </span>
               <input
@@ -1026,10 +1135,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={
                   duelMode === "FRIEND"
-                    ? "Filtrar arqueros en línea por nombre o club..."
-                    : "Filtrar bots olímpicos por nombre o club..."
+                    ? tx(
+                        "Filtrar arqueros en línea por nombre o club...",
+                        "Filter online archers by name or club..."
+                      )
+                    : tx(
+                        "Filtrar bots olímpicos por nombre o club...",
+                        "Filter Olympic bots by name or club..."
+                      )
                 }
-                className="w-full h-10 bg-[#0D1017] border border-white/[0.08] text-white text-xs pl-9 pr-4 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
+                className="w-full h-10 bg-[#0D1017] border border-white/[0.08] text-white text-xs ps-9 pe-4 rounded-xl outline-none focus:border-cyan-neon transition duration-150"
               />
             </div>
 
@@ -1046,7 +1161,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       : "bg-[#0D1017] border-white/[0.07] text-white hover:text-white"
                   }`}
                 >
-                  {bow === "Recurve" ? "Recurvo" : bow === "Compound" ? "Compuesto" : "Barebow"}
+                  {formatBowLabel(bow)}
                 </button>
               ))}
             </div>
@@ -1057,9 +1172,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             {duelMode === "FRIEND" ? (
               /* Real Online Archers ONLY (Zero Bots) */
               <div className="flex flex-col gap-2.5">
-                <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
+                <h4 className="text-white text-xs font-black uppercase tracking-wider ps-1 flex items-center gap-1.5 tabular-nums">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  Arqueros Conectados en Línea ({filteredRivals.length})
+                  {tx("Arqueros Conectados en Línea", "Online Archers")} ({filteredRivals.length})
                 </h4>
 
                 <motion.div
@@ -1076,10 +1191,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       >
                         <Users size={16} className="text-white" />
                         <p className="text-[12.8px] text-white font-semibold">
-                          No hay otros arqueros reales conectados en el lobby público en este instante.
+                          {tx(
+                            "No hay otros arqueros reales conectados en el lobby público en este instante.",
+                            "No other live archers are connected in the public lobby right now."
+                          )}
                         </p>
                         <p className="text-[11.6px] text-white">
-                          Usa &ldquo;Crear Sala Online y Enviar Reto&rdquo; arriba para enviar un enlace directo por Mensajería Directa a tu amigo.
+                          {tx(
+                            "Usa \"Crear Sala Online y Enviar Reto\" arriba para enviar un enlace directo por Mensajería Directa a tu amigo.",
+                            "Use \"Create Online Room & Send Challenge\" above to send a direct link via Direct Messaging to your friend."
+                          )}
                         </p>
                       </motion.div>
                     ) : (
@@ -1097,7 +1218,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                 <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.1] flex items-center justify-center text-white font-black text-xs">
                                   {riv.fullName.substring(0, 2).toUpperCase()}
                                 </div>
-                                <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
+                                <span className="absolute -bottom-1 -end-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                               </div>
                               
                               <div className="flex flex-col min-w-0">
@@ -1107,7 +1228,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                     <span className="text-cyan-neon tabular-nums text-[10.5px] font-bold">@{riv.nickname}</span>
                                   )}
                                   <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
-                                    {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
+                                    {formatBowLabel(riv.bowConfig.type)}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
@@ -1120,12 +1241,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             </div>
 
                             <div className="flex flex-col items-end gap-1.5">
-                              <span className="text-[10.5px] text-emerald-400 font-black tracking-tight">En línea</span>
+                              <span className="text-[10.5px] text-emerald-400 font-black tracking-tight">
+                                {tx("En línea", "Online")}
+                              </span>
                               <button
                                 onClick={() => handleChallengeRealUser(riv)}
                                 className="px-3.5 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-cyan-neon hover:bg-[#19c8ff] text-black"
                               >
-                                Retar 1v1
+                                {tx("Retar 1v1", "Challenge 1v1")}
                               </button>
                             </div>
                           </motion.div>
@@ -1138,8 +1261,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
             ) : (
               /* Simulated Practice Bots ONLY when Contra Bot Olímpico is selected */
               <div className="flex flex-col gap-2.5">
-                <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                  Simuladores de Eliminatoria (Bots WA)
+                <h4 className="text-white text-xs font-black uppercase tracking-wider ps-1 flex items-center gap-1.5">
+                  {tx("Simuladores de Eliminatoria (Bots WA)", "Matchplay Simulators (WA Bots)")}
                 </h4>
 
                 <motion.div
@@ -1161,14 +1284,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                             <div className="w-10 h-10 rounded-full bg-[#080A0F] border border-white/[0.08] flex items-center justify-center text-white font-bold text-xs">
                               {riv.fullName.substring(0, 2).toUpperCase()}
                             </div>
-                            <span className="absolute -bottom-1 -right-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
+                            <span className="absolute -bottom-1 -end-1 text-[9.3px] font-black uppercase tracking-wider bg-[#0D1017] border border-white/15 text-white px-1 py-0.5 rounded leading-none whitespace-nowrap">{flag}</span>
                           </div>
                           
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
                               <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white font-bold uppercase shrink-0">
-                                {riv.bowConfig.type === "Recurve" ? "Recurvo" : riv.bowConfig.type === "Compound" ? "Compuesto" : riv.bowConfig.type}
+                                {formatBowLabel(riv.bowConfig.type)}
                               </span>
                             </div>
                             <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
@@ -1182,13 +1305,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
                         <div className="flex flex-col items-end gap-1.5">
                           <span className="text-[10.5px] text-yellow-gold font-bold tracking-tight tabular-nums">
-                            Prom. {riv.rating}
+                            {tx("Prom.", "Avg.")} {riv.rating}
                           </span>
                           <button
                             onClick={() => handleStartSimulatedDuel(riv)}
                             className="px-3 py-1.5 rounded-xl text-[11.6px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
                           >
-                            Competir
+                            {tx("Competir", "Compete")}
                           </button>
                         </div>
                       </motion.div>
@@ -1203,16 +1326,18 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
       {activeTab === "DRAFTS" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider ps-1 flex items-center gap-1.5 tabular-nums">
             <Users size={13} className="text-cyan-neon" />
-            Eliminatorias en Curso ({drafts.length})
+            {tx("Eliminatorias en Curso", "Matches in Progress")} ({drafts.length})
           </h4>
           
           <div className="flex flex-col gap-2.5">
             {drafts.length === 0 ? (
               <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-2">
                 <ShieldAlert size={20} className="text-white" />
-                <p className="text-xs text-white">No tienes eliminatorias en curso guardadas.</p>
+                <p className="text-xs text-white">
+                  {tx("No tienes eliminatorias en curso guardadas.", "You have no active matches saved.")}
+                </p>
               </div>
             ) : (
               drafts.map((dr) => (
@@ -1224,7 +1349,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-white text-xs font-bold truncate">vs {dr.opponent}</span>
                       <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-cyan-neon font-extrabold uppercase shrink-0">
-                        {dr.bowConfig?.type === "Recurve" ? "Recurvo" : dr.bowConfig?.type === "Compound" ? "Compuesto" : (dr.bowConfig?.type || "Barebow")}
+                        {formatBowLabel(dr.bowConfig?.type)}
                       </span>
                     </div>
                     <span className="text-[11.6px] text-white truncate tabular-nums">
@@ -1236,7 +1361,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     <button
                       onClick={() => handleDeleteDraft(dr.uid)}
                       className="h-8 w-8 rounded-xl border border-white bg-white hover:bg-neutral-200 text-black flex items-center justify-center cursor-pointer transition active:scale-95"
-                      title="Eliminar Duelo"
+                      title={tx("Eliminar Duelo", "Delete Match")}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -1260,7 +1385,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       }}
                       className="h-8 px-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[11.6px] uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center whitespace-nowrap"
                     >
-                      Reanudar
+                      {tx("Reanudar", "Resume")}
                     </button>
                   </div>
                 </div>
@@ -1272,16 +1397,21 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
       {activeTab === "HISTORY" && (
         <div className="flex flex-col gap-4 z-10 flex-1">
-          <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1 flex items-center gap-1.5 tabular-nums">
+          <h4 className="text-white text-xs font-black uppercase tracking-wider ps-1 flex items-center gap-1.5 tabular-nums">
             <Trophy size={13} className="text-yellow-gold" />
-            Historial de Eliminatorias ({history.length})
+            {tx("Historial de Eliminatorias", "Matchplay History")} ({history.length})
           </h4>
           
           <div className="flex flex-col gap-2.5">
             {history.length === 0 ? (
               <div className="bg-[#0D1017] border border-white/[0.06] rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-2">
                 <ShieldAlert size={20} className="text-white" />
-                <p className="text-xs text-white">No has completado ninguna eliminatoria todavía.</p>
+                <p className="text-xs text-white">
+                  {tx(
+                    "No has completado ninguna eliminatoria todavía.",
+                    "You haven't completed any matches yet."
+                  )}
+                </p>
               </div>
             ) : (
               history.map((h) => {
@@ -1295,11 +1425,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-white text-xs font-bold truncate">vs {h.opponent} ({flag})</span>
                         <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
-                          {h.bowConfig?.type === "Recurve" ? "Recurvo" : h.bowConfig?.type === "Compound" ? "Compuesto" : (h.bowConfig?.type || "Barebow")}
+                          {formatBowLabel(h.bowConfig?.type)}
                         </span>
                       </div>
                       <span className="text-[11.6px] text-white tabular-nums">
-                        Puntos: {h.score} pts · {h.distance} m · {formatMatchDate(h.timestamp)}
+                        {tx("Puntos", "Score")}: {h.score} pts · {h.distance} m · {formatMatchDate(h.timestamp)}
                       </span>
                     </div>
                     
@@ -1311,7 +1441,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           ? "bg-white border-white text-black"
                           : "bg-white/[0.05] border-white/10 text-white"
                       }`}>
-                        {h.outcome === "win" ? "Victoria" : h.outcome === "loss" ? "Derrota" : "Empate"}
+                        {h.outcome === "win"
+                          ? tx("Victoria", "Victory")
+                          : h.outcome === "loss"
+                          ? tx("Derrota", "Defeat")
+                          : tx("Empate", "Tie")}
                       </span>
                     </div>
                   </div>
@@ -1335,7 +1469,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-[#0B0E14] border border-white/[0.1] rounded-3xl p-6 w-full max-w-sm text-center relative shadow-2xl overflow-hidden"
             >
-              <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+              <div className="absolute top-0 inset-x-0 h-[3px] flex">
                 <div className="flex-1 bg-cyan-neon" />
                 <div className="flex-1 bg-red-rival" />
                 <div className="flex-1 bg-yellow-gold" />
@@ -1343,25 +1477,28 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
               <div className="relative z-10 flex flex-col items-center">
                 <span className="text-[11.6px] text-emerald-400 font-black tracking-widest uppercase block mb-1">
-                  Sala Online Creada
+                  {tx("Sala Online Creada", "Online Room Created")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  Eliminatoria 1 vs 1 en Vivo
+                  {tx("Eliminatoria 1 vs 1 en Vivo", "Live 1 vs 1 Match")}
                 </h3>
                 <p className="text-xs text-white mt-1 leading-snug">
-                  Comparte este código o enlace con tu rival para que se una a la sala.
+                  {tx(
+                    "Comparte este código o enlace con tu rival para que se una a la sala.",
+                    "Share this code or link with your opponent to join the room."
+                  )}
                 </p>
 
                 {/* Display Invite Code Box */}
                 <div className="my-5 bg-[#080A0F] border border-white/[0.1] p-4 rounded-2xl w-full flex flex-col items-center gap-2">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">
-                    Código Oficial de Sala
+                    {tx("Código Oficial de Sala", "Official Room Code")}
                   </span>
-                  <span className="text-white text-lg tabular-nums font-black tracking-widest uppercase">
+                  <span className="text-white text-lg tabular-nums font-black tracking-widest uppercase select-text">
                     {generatedInvite.code}
                   </span>
                   <span className="text-[11.6px] text-cyan-neon font-bold tabular-nums">
-                    {generatedInvite.bowType === "Recurve" ? "Recurvo" : generatedInvite.bowType === "Compound" ? "Compuesto" : "Barebow"} · {generatedInvite.distance} m
+                    {formatBowLabel(generatedInvite.bowType)} · {generatedInvite.distance} m
                   </span>
                 </div>
 
@@ -1371,12 +1508,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       if (typeof navigator !== "undefined" && navigator.share) {
                         try {
                           await navigator.share({
-                            title: "Eliminatoria Online 1v1 - Archery 101010",
+                            title: tx(
+                              "Eliminatoria Online 1v1 - Archery 101010",
+                              "Online 1v1 Match - Archery 101010"
+                            ),
                             text: generatedInvite.text
                           });
                           return;
                         } catch (e) {
-                          // Fallback to direct WhatsApp web/app link if dismissed or failed
+                          // Fallback to direct messaging link if dismissed or failed
                         }
                       }
                       const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(generatedInvite.text)}`;
@@ -1384,16 +1524,18 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     }}
                     className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap px-2"
                   >
-                    Enviar por Mensajería
+                    {tx("Enviar por Mensajería", "Send via Messaging")}
                   </button>
                   <button
                     onClick={async () => {
                       navigator.clipboard.writeText(generatedInvite.code);
-                      await showOledAlert("¡Código de sala copiado al portapapeles!");
+                      await showOledAlert(
+                        tx("¡Código de sala copiado al portapapeles!", "Room code copied to clipboard!")
+                      );
                     }}
                     className="h-10 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1] font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap px-2"
                   >
-                    Copiar Código
+                    {tx("Copiar Código", "Copy Code")}
                   </button>
                 </div>
 
@@ -1408,9 +1550,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       isCreator: true,
                       rival: {
                         uid: "RIV-FRIEND-PLAYER",
-                        fullName: "Desafiante Invitado",
+                        fullName: tx("Desafiante Invitado", "Invited Challenger"),
                         country: "CR",
-                        clubName: "Oponente Invitado",
+                        clubName: tx("Oponente Invitado", "Invited Opponent"),
                         clubLogo: "0",
                         clubCountry: "CR",
                         rating: 9.0
@@ -1422,14 +1564,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   }}
                   className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition flex items-center justify-center whitespace-nowrap"
                 >
-                  Entrar a la Sala de Duelo
+                  {tx("Entrar a la Sala de Duelo", "Enter Match Room")}
                 </button>
 
                 <button
                   onClick={() => setGeneratedInvite(null)}
                   className="text-[11.6px] text-white hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
                 >
-                  Cerrar
+                  {tx("Cerrar", "Close")}
                 </button>
               </div>
             </motion.div>
@@ -1453,10 +1595,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
               <div className="flex flex-col gap-1.5">
                 <span className="text-[10.5px] text-cyan-neon font-black tracking-widest uppercase">
-                  Desafío en Proceso
+                  {tx("Desafío en Proceso", "Challenge Pending")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  Retando Jugador
+                  {tx("Retando Jugador", "Challenging Archer")}
                 </h3>
               </div>
 
@@ -1464,9 +1606,20 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 {inviteStatusMessage}
               </p>
 
+              {sentInvite.roomCode && (
+                <div className="bg-[#080A0F] border border-white/[0.08] rounded-xl px-3 py-1.5 mx-auto">
+                  <span className="text-[11px] font-black text-white tabular-nums uppercase tracking-widest select-text">
+                    {sentInvite.roomCode}
+                  </span>
+                </div>
+              )}
+
               <div className="bg-[#12151C] border border-white/[0.08] rounded-xl px-3 py-1.5 mx-auto">
                 <span className="text-[11px] font-bold text-cyan-neon tabular-nums uppercase tracking-wider">
-                  Tiempo restante: {inviteRemainingSeconds}s
+                  {tx(
+                    `Tiempo restante: ${inviteRemainingSeconds}s`,
+                    `Time remaining: ${inviteRemainingSeconds}s`
+                  )}
                 </span>
               </div>
 
@@ -1491,14 +1644,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         }).catch(() => {});
                       }
                     } catch (err) {
-                      console.error("Error cancelling duel invite:", err);
+                      logger.error("Error cancelling duel invite:", err);
                     } finally {
                       setSentInvite(null);
                     }
                   }}
                   className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"
                 >
-                  Cancelar Desafío
+                  {tx("Cancelar Desafío", "Cancel Challenge")}
                 </button>
               </div>
             </motion.div>

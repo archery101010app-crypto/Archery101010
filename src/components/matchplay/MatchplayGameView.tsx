@@ -15,6 +15,7 @@ import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, getExactTargetDimensions } from "@/lib/scoring/dispersionAnalytics";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getSpeechLocale, pickVoiceForLanguage } from "@/lib/i18n/regionalUtils";
+import { logger } from "@/lib/logger";
 
 import { COUNTRIES } from "@/lib/countries";
 
@@ -34,9 +35,11 @@ export interface ShotImpact {
 }
 
 export default function MatchplayGameView({ user, config, onBack, onDuelSaved }: MatchplayGameViewProps) {
-  const { language } = useLanguage();
+  const { language, tx, isRtl } = useLanguage();
   const languageRef = useRef(language);
   languageRef.current = language;
+  const txCurrent = (esText: string, enText: string) =>
+    languageRef.current === "es" ? esText : enText;
   const isCompound = config.system === "cumulative" || config.bowType === "Compound";
   const dianaPresetKey = getDianaPresetKey(
     config.bowType || (isCompound ? "Compound" : "Recurve"),
@@ -188,7 +191,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     };
   }, [userTiros, currentEnd, currentArrow, validationPhase, isUserReady, isUserPresent, userPhoto, impacts, mode, userShootOffShot, userShootOffDistCm]);
 
+  const isMountedRef = useRef<boolean>(true);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
+  const walkieAudioCtxRef = useRef<AudioContext | null>(null);
+  const walkieMicStreamRef = useRef<MediaStream | null>(null);
   const audioAnalyserRef = useRef<AnalyserNode | null>(null);
   const micAnimFrameId = useRef<number | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -363,9 +369,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (dataChannelRef.current && dataChannelRef.current.readyState === "open") {
       try {
         dataChannelRef.current.send(JSON.stringify(msg));
-        console.log("[WebRTC DataChannel] Sent:", msg);
+        logger.debug("[WebRTC DataChannel] Sent:", msg);
       } catch (e) {
-        console.error("Error sending WebRTC data message:", e);
+        logger.error("Error sending WebRTC data message:", e);
       }
     }
   };
@@ -424,7 +430,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         updatedAt: Date.now()
       });
     } catch (err) {
-      console.warn("[Firestore Relay] Could not mirror shots:", err);
+      logger.warn("[Firestore Relay] Could not mirror shots:", err);
     }
   };
 
@@ -440,7 +446,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         updatedAt: Date.now()
       });
     } catch (err) {
-      console.warn("[Firestore Relay] Could not mirror shoot-off:", err);
+      logger.warn("[Firestore Relay] Could not mirror shoot-off:", err);
     }
   };
 
@@ -458,7 +464,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         updatedAt: Date.now()
       });
     } catch (err) {
-      console.warn("Could not clean up finished duel in Firestore:", err);
+      logger.warn("Could not clean up finished duel in Firestore:", err);
     }
   };
 
@@ -500,7 +506,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         webrtcOffer: null,
         webrtcAnswer: null,
         updatedAt: Date.now()
-      }).catch((err) => console.warn("Could not record W.O. victory in active_duels:", err));
+      }).catch((err) => logger.warn("Could not record W.O. victory in active_duels:", err));
     }
 
     const duelId = config.id || generateResilientId("DUE");
@@ -555,7 +561,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         timestamp: nowTs
       });
     } catch (saveErr) {
-      console.error("Error saving W.O. duel session:", saveErr);
+      logger.error("Error saving W.O. duel session:", saveErr);
     }
 
     try {
@@ -568,8 +574,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
     await showOledAlert(
       isCompound
-        ? `Victoria por Abandono (W.O.) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`
-        : `Victoria por Abandono (W.O. · 6–0) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`
+        ? txCurrent(
+            `Victoria por Abandono (W.O.) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`,
+            `Walkover Victory (W.O.) awarded against ${config.rival.fullName}. Your win has been saved to history.`
+          )
+        : txCurrent(
+            `Victoria por Abandono (W.O. · 6–0) adjudicada frente a ${config.rival.fullName}. Tu victoria ha sido guardada en el historial.`,
+            `Walkover Victory (W.O. · 6–0) awarded against ${config.rival.fullName}. Your win has been saved to history.`
+          )
     );
     onBack();
   };
@@ -578,11 +590,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const handleDataMessage = (event: MessageEvent) => {
     try {
       const msg = JSON.parse(event.data);
-      console.log("[WebRTC DataChannel] Received:", msg);
+      logger.debug("[WebRTC DataChannel] Received:", msg);
 
       switch (msg.type) {
         case "sync-state": {
-          console.log("[WebRTC Sync] Received full rival state sync:", msg);
+          logger.debug("[WebRTC Sync] Received full rival state sync:", msg);
           if (msg.userTiros) {
             setRivalTiros(msg.userTiros);
           }
@@ -744,7 +756,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         case "call-decline":
           if (callStateRef.current === "DIALING") {
             setCallState("IDLE");
-            void showOledAlert("El rival ha rechazado la llamada.");
+            void showOledAlert(
+              txCurrent("El rival ha rechazado la llamada.", "The opponent declined the call.")
+            );
           }
           break;
         case "call-cancel":
@@ -769,7 +783,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           break;
       }
     } catch (e) {
-      console.error("Error parsing WebRTC data message:", e);
+      logger.error("Error parsing WebRTC data message:", e);
     }
   };
 
@@ -782,7 +796,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       setMicrophoneAllowed(true);
       return stream;
     } catch (err) {
-      console.warn("[WebRTC] Microphone access denied:", err);
+      logger.warn("[WebRTC] Microphone access denied:", err);
       setMicrophoneAllowed(false);
       return null;
     }
@@ -806,17 +820,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           );
 
           if (audioTransceiver) {
-            console.log("[WebRTC] Found audio transceiver, replacing track on its sender");
+            logger.debug("[WebRTC] Found audio transceiver, replacing track on its sender");
             audioTransceiver.direction = "sendrecv";
             await audioTransceiver.sender.replaceTrack(track);
           } else {
             // Fallback to searching senders or adding track
             const sender = pc.getSenders().find(s => s.track?.kind === "audio" || s.dtmf !== null);
             if (sender) {
-              console.log("[WebRTC] Replacing track on fallback audio sender");
+              logger.debug("[WebRTC] Replacing track on fallback audio sender");
               await sender.replaceTrack(track);
             } else {
-              console.log("[WebRTC] Adding audio track to connection (no transceiver found)");
+              logger.debug("[WebRTC] Adding audio track to connection (no transceiver found)");
               pc.addTrack(track, stream);
             }
           }
@@ -824,7 +838,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       } else {
         // Stop and release local audio tracks (turns off the device recording light and saves power)
         if (microphoneStreamRef.current) {
-          console.log("[WebRTC] Stopping local microphone tracks");
+          logger.debug("[WebRTC] Stopping local microphone tracks");
           microphoneStreamRef.current.getTracks().forEach(t => t.stop());
           microphoneStreamRef.current = null;
         }
@@ -835,12 +849,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           t => t.receiver?.track?.kind === "audio"
         );
         if (audioTransceiver && audioTransceiver.sender) {
-          console.log("[WebRTC] Removing track from audio transceiver sender (hangup)");
+          logger.debug("[WebRTC] Removing track from audio transceiver sender (hangup)");
           await audioTransceiver.sender.replaceTrack(null);
         }
       }
     } catch (e) {
-      console.error("Error setting local audio track active:", e);
+      logger.error("Error setting local audio track active:", e);
     }
   };
 
@@ -865,13 +879,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       }
       return track;
     } catch (e) {
-      console.warn("[WebRTC] Failed to create silent audio track:", e);
+      logger.warn("[WebRTC] Failed to create silent audio track:", e);
       return null;
     }
   };
 
   const handleDataChannelOpen = () => {
-    console.log("[WebRTC DataChannel] Open! Sending sync-state...");
+    logger.debug("[WebRTC DataChannel] Open! Sending sync-state...");
     setIsP2PActive(true);
     setIsRivalConnected(true);
     
@@ -894,33 +908,44 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // WebRTC initialization (P2P Connection)
   const initWebRTC = async (isCreator: boolean, data: any) => {
-    console.log("[WebRTC] Initializing P2P connection. Offerer:", isCreator);
+    logger.debug("[WebRTC] Initializing P2P connection. Offerer:", isCreator);
     try {
       if (peerConnectionRef.current) return;
 
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:openrelay.metered.ca:80" },
-          {
-            urls: [
-              "turn:openrelay.metered.ca:80?transport=udp",
-              "turn:openrelay.metered.ca:80?transport=tcp",
-              "turn:openrelay.metered.ca:443?transport=tcp"
-            ],
-            username: "openrelayproject",
-            credential: "openrelayproject"
-          }
-        ]
-      });
+      const iceServers: RTCIceServer[] = [
+        ...(process.env.NEXT_PUBLIC_TURN_URL
+          ? [
+              {
+                urls: process.env.NEXT_PUBLIC_TURN_URL.split(",")
+                  .map((u) => u.trim())
+                  .filter(Boolean),
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME || "",
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL || ""
+              }
+            ]
+          : []),
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:openrelay.metered.ca:80" },
+        {
+          urls: [
+            "turn:openrelay.metered.ca:80?transport=udp",
+            "turn:openrelay.metered.ca:80?transport=tcp",
+            "turn:openrelay.metered.ca:443?transport=tcp"
+          ],
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        }
+      ];
+
+      const pc = new RTCPeerConnection({ iceServers });
       peerConnectionRef.current = pc;
       candidatesHandledRef.current = 0;
       remoteCandidatesQueue.current = [];
 
       // Connection state monitoring (preserve Firestore relay connection on strict 4G/5G CGNAT)
       pc.onconnectionstatechange = () => {
-        console.log("[WebRTC] Connection state changed to:", pc.connectionState);
+        logger.debug("[WebRTC] Connection state changed to:", pc.connectionState);
         if (pc.connectionState === "connected") {
           setIsRivalConnected(true);
         } else if (
@@ -945,16 +970,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               [isCreator ? "creatorCandidates" : "playerCandidates"]: arrayUnion(JSON.stringify(candidateJson)),
               updatedAt: Date.now()
             });
-            console.log("[WebRTC] Wrote ICE candidate to Firestore");
+            logger.debug("[WebRTC] Wrote ICE candidate to Firestore");
           } catch (e) {
-            console.error("Error writing ICE candidate:", e);
+            logger.error("Error writing ICE candidate:", e);
           }
         }
       };
 
       // Handle incoming remote audio stream track
       pc.ontrack = (event) => {
-        console.log("[WebRTC] Got remote stream track!", event.track);
+        logger.debug("[WebRTC] Got remote stream track!", event.track);
         if (remoteAudioRef.current) {
           const stream = event.streams[0] || new MediaStream([event.track]);
           remoteAudioRef.current.srcObject = stream;
@@ -965,7 +990,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           // from freezing the thread during initial lobby/game connection setup
           if (callStateRef.current === "ACTIVE") {
             remoteAudioRef.current.play().catch(err => {
-              console.warn("[WebRTC] Autoplay prevented remote audio playback ontrack:", err);
+              logger.warn("[WebRTC] Autoplay prevented remote audio playback ontrack:", err);
             });
           }
         }
@@ -975,13 +1000,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       // We do NOT call acquireMicrophoneStream() here to prevent blocking the initial P2P connection
       const silentTrack = createSilentAudioTrack();
       if (silentTrack) {
-        console.log("[WebRTC] Injecting initial silent audio track for full-duplex negotiation");
+        logger.debug("[WebRTC] Injecting initial silent audio track for full-duplex negotiation");
         pc.addTrack(silentTrack, new MediaStream([silentTrack]));
       } else {
         try {
           pc.addTransceiver("audio", { direction: "sendrecv" });
         } catch (e) {
-          console.warn("[WebRTC] Failed to add transceiver:", e);
+          logger.warn("[WebRTC] Failed to add transceiver:", e);
         }
       }
 
@@ -994,7 +1019,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           handleDataChannelOpen();
         };
         dc.onclose = () => {
-          console.log("[WebRTC DataChannel] Closed!");
+          logger.debug("[WebRTC DataChannel] Closed!");
           setIsP2PActive(false);
           if (!isRivalFirestoreConnectedRef.current) {
             setIsRivalConnected(false);
@@ -1019,7 +1044,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             handleDataChannelOpen();
           };
           dc.onclose = () => {
-            console.log("[WebRTC DataChannel] Closed!");
+            logger.debug("[WebRTC DataChannel] Closed!");
             setIsP2PActive(false);
             if (!isRivalFirestoreConnectedRef.current) {
               setIsRivalConnected(false);
@@ -1029,7 +1054,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         };
       }
     } catch (err) {
-      console.error("Error initializing WebRTC:", err);
+      logger.error("Error initializing WebRTC:", err);
     }
   };
 
@@ -1044,7 +1069,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         if (data.webrtcAnswer && pc.signalingState === "have-local-offer") {
           const answer = JSON.parse(data.webrtcAnswer);
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          console.log("[WebRTC] Creator set remote answer!");
+          logger.debug("[WebRTC] Creator set remote answer!");
 
           // Process queued candidates
           const queued = remoteCandidatesQueue.current;
@@ -1052,32 +1077,33 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           for (const candInit of queued) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candInit));
-              console.log("[WebRTC] Applied queued candidate");
+              logger.debug("[WebRTC] Applied queued candidate");
             } catch (e) {
-              console.error("[WebRTC] Error applying queued candidate:", e);
+              logger.warn("[WebRTC] Error applying queued candidate:", e);
             }
           }
         }
 
-        // Process Player Candidates
-        if (data.playerCandidates && data.playerCandidates.length > 0) {
+        // Process Player Candidates (per-candidate try/catch so one malformed candidate never stalls P2P)
+        if (Array.isArray(data.playerCandidates) && data.playerCandidates.length > 0) {
           const handledCount = candidatesHandledRef.current;
           if (data.playerCandidates.length > handledCount) {
             for (let i = handledCount; i < data.playerCandidates.length; i++) {
-              const cand = JSON.parse(data.playerCandidates[i]);
-              if (pc.remoteDescription && pc.remoteDescription.type) {
-                try {
+              try {
+                const cand = JSON.parse(data.playerCandidates[i]);
+                if (pc.remoteDescription && pc.remoteDescription.type) {
                   await pc.addIceCandidate(new RTCIceCandidate(cand));
-                  console.log("[WebRTC] Added remote candidate directly");
-                } catch (e) {
-                  console.error("[WebRTC] Error adding remote candidate:", e);
+                  logger.debug("[WebRTC] Added remote candidate directly");
+                } else {
+                  logger.debug("[WebRTC] Queued remote candidate (remoteDescription not set)");
+                  remoteCandidatesQueue.current.push(cand);
                 }
-              } else {
-                console.log("[WebRTC] Queued remote candidate (remoteDescription not set)");
-                remoteCandidatesQueue.current.push(cand);
+              } catch (candErr) {
+                logger.warn("[WebRTC] Skipping invalid player ICE candidate:", candErr);
+              } finally {
+                candidatesHandledRef.current = i + 1;
               }
             }
-            candidatesHandledRef.current = data.playerCandidates.length;
           }
         }
       } else {
@@ -1085,7 +1111,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         if (data.webrtcOffer && pc.signalingState === "stable") {
           const offer = JSON.parse(data.webrtcOffer);
           await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          console.log("[WebRTC] Player set remote offer!");
+          logger.debug("[WebRTC] Player set remote offer!");
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -1102,37 +1128,38 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           for (const candInit of queued) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candInit));
-              console.log("[WebRTC] Applied queued candidate");
+              logger.debug("[WebRTC] Applied queued candidate");
             } catch (e) {
-              console.error("[WebRTC] Error applying queued candidate:", e);
+              logger.warn("[WebRTC] Error applying queued candidate:", e);
             }
           }
         }
 
-        // Process Creator Candidates
-        if (data.creatorCandidates && data.creatorCandidates.length > 0) {
+        // Process Creator Candidates (per-candidate try/catch so one malformed candidate never stalls P2P)
+        if (Array.isArray(data.creatorCandidates) && data.creatorCandidates.length > 0) {
           const handledCount = candidatesHandledRef.current;
           if (data.creatorCandidates.length > handledCount) {
             for (let i = handledCount; i < data.creatorCandidates.length; i++) {
-              const cand = JSON.parse(data.creatorCandidates[i]);
-              if (pc.remoteDescription && pc.remoteDescription.type) {
-                try {
+              try {
+                const cand = JSON.parse(data.creatorCandidates[i]);
+                if (pc.remoteDescription && pc.remoteDescription.type) {
                   await pc.addIceCandidate(new RTCIceCandidate(cand));
-                  console.log("[WebRTC] Added remote candidate directly");
-                } catch (e) {
-                  console.error("[WebRTC] Error adding remote candidate:", e);
+                  logger.debug("[WebRTC] Added remote candidate directly");
+                } else {
+                  logger.debug("[WebRTC] Queued remote candidate (remoteDescription not set)");
+                  remoteCandidatesQueue.current.push(cand);
                 }
-              } else {
-                console.log("[WebRTC] Queued remote candidate (remoteDescription not set)");
-                remoteCandidatesQueue.current.push(cand);
+              } catch (candErr) {
+                logger.warn("[WebRTC] Skipping invalid creator ICE candidate:", candErr);
+              } finally {
+                candidatesHandledRef.current = i + 1;
               }
             }
-            candidatesHandledRef.current = data.creatorCandidates.length;
           }
         }
       }
     } catch (err) {
-      console.error("Error handling WebRTC signaling update:", err);
+      logger.error("Error handling WebRTC signaling update:", err);
     }
   };
 
@@ -1172,7 +1199,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const triggerAutoReconnect = async () => {
     if (isReconnectingRef.current) return;
     isReconnectingRef.current = true;
-    console.log("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle...");
+    logger.debug("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle...");
     try {
       const docRef = doc(db, "active_duels", config.id);
       const isCreator = isCreatorRoleRef.current;
@@ -1187,7 +1214,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           playerCandidates: [],
           updatedAt: Date.now()
         });
-        console.log("[WebRTC Auto-Reconnect] Creator reset signaling fields. Renegotiating...");
+        logger.debug("[WebRTC Auto-Reconnect] Creator reset signaling fields. Renegotiating...");
       } else if (disconnectSecondsRef.current > 20) {
         closeWebRTC();
         await updateDoc(docRef, {
@@ -1199,7 +1226,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           playerCandidates: [],
           updatedAt: Date.now()
         });
-        console.log("[WebRTC Auto-Reconnect] Player (>20s disconnected) reset signaling fields.");
+        logger.debug("[WebRTC Auto-Reconnect] Player (>20s disconnected) reset signaling fields.");
       } else {
         closeWebRTC();
         await updateDoc(docRef, {
@@ -1207,10 +1234,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           playerConnectedAt: Date.now(),
           updatedAt: Date.now()
         });
-        console.log("[WebRTC Auto-Reconnect] Player waiting for incoming creator webrtcOffer...");
+        logger.debug("[WebRTC Auto-Reconnect] Player waiting for incoming creator webrtcOffer...");
       }
     } catch (err) {
-      console.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
+      logger.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
     } finally {
       isReconnectingRef.current = false;
     }
@@ -1223,7 +1250,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!isRivalConnected) {
       triggerAutoReconnect();
       interval = setInterval(() => {
-        console.log("[WebRTC Reconnect loop] Still disconnected. Retrying...");
+        logger.debug("[WebRTC Reconnect loop] Still disconnected. Retrying...");
         triggerAutoReconnect();
       }, 8000);
     }
@@ -1232,14 +1259,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     };
   }, [isRivalConnected, isFriendDuel, duelFinished]);
   const closeWebRTC = () => {
-    console.log("[WebRTC] Closing peer connection.");
+    logger.debug("[WebRTC] Closing peer connection.");
     if (peerConnectionRef.current) {
       // Clean up any silent audio track context to prevent memory leaks or audio node issues
       try {
         peerConnectionRef.current.getSenders().forEach(sender => {
           const track = sender.track;
           if (track && (track as any)._dummySource) {
-            console.log("[WebRTC] Cleaning up dummy silent audio track source");
+            logger.debug("[WebRTC] Cleaning up dummy silent audio track source");
             try { (track as any)._dummySource.stop(); } catch (e) {}
             try { (track as any)._dummyCtx.close(); } catch (e) {}
           }
@@ -1267,11 +1294,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // VoIP call controls
   const dialCall = () => {
     if (!isFriendDuel) {
-      void showOledAlert("Las llamadas de voz VoIP solo están disponibles en duelos con arqueros reales en línea.");
+      void showOledAlert(
+        tx(
+          "Las llamadas de voz VoIP solo están disponibles en duelos con arqueros reales en línea.",
+          "VoIP voice calls are only available in matches with live online archers."
+        )
+      );
       return;
     }
     if (!isP2PActive) {
-      void showOledAlert("Conexión directa P2P no activa aún. Por favor espera a que el oponente esté conectado.");
+      void showOledAlert(
+        tx(
+          "Conexión directa P2P no activa aún. Por favor espera a que el oponente esté conectado.",
+          "Direct P2P connection is not active yet. Please wait for your opponent to connect."
+        )
+      );
       return;
     }
     if (callStateRef.current !== "IDLE") return;
@@ -1282,7 +1319,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (remoteAudioRef.current) {
       remoteAudioRef.current.muted = false;
       remoteAudioRef.current.volume = 1.0;
-      remoteAudioRef.current.play().catch(e => console.log("[WebRTC] Unlocking remote audio on dial:", e));
+      remoteAudioRef.current.play().catch(e => logger.debug("[WebRTC] Unlocking remote audio on dial:", e));
     }
   };
 
@@ -1304,7 +1341,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (remoteAudioRef.current) {
       remoteAudioRef.current.muted = false;
       remoteAudioRef.current.volume = 1.0;
-      remoteAudioRef.current.play().catch(e => console.warn("[WebRTC] Play remote audio error:", e));
+      remoteAudioRef.current.play().catch(e => logger.warn("[WebRTC] Play remote audio error:", e));
     }
   };
 
@@ -1404,20 +1441,20 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           });
         }
       } catch (err) {
-        console.error("Error updating connection status in Firestore:", err);
+        logger.warn("Error updating connection status in Firestore:", err);
       }
     };
 
-    updateOurStatus(true);
+    updateOurStatus(true).catch(() => {});
 
     // Reset our ready states locally and on Firestore to guarantee fresh starts
     setIsUserReady(false);
     setIsRivalReady(false);
-    updateOurReadyState(false);
+    updateOurReadyState(false).catch(() => {});
 
     // Bind beforeunload to handle abrupt page closes
     const handleBeforeUnload = () => {
-      updateOurStatus(false);
+      updateOurStatus(false).catch(() => {});
       // Clean walkie on close
       try {
         const isCreator = isCreatorRoleRef.current;
@@ -1427,8 +1464,8 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           webrtcAnswer: null,
           creatorCandidates: [],
           playerCandidates: []
-        });
-      } catch (e) {}
+        }).catch(() => {});
+      } catch {}
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
@@ -1593,7 +1630,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
         // Non-blocking UI banner and vibrate on connection established
         if (connected && !lastConnectedState) {
-          setConnectionBanner("Oponente conectado a la arena");
+          setConnectionBanner(
+            txCurrent("Oponente conectado a la arena", "Opponent connected to the arena")
+          );
           if (navigator.vibrate) {
             navigator.vibrate([30, 50, 30]);
           }
@@ -1614,10 +1653,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       unsubscribe();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
       // Notify remote peer cleanly without triggering false mid-game forfeit when match already ended
       sendDataMessage({ type: "exit", finished: duelFinishedRef.current });
-      // Mark ourselves as offline when unmounting
-      updateOurStatus(false);
+      // Mark ourselves as offline when unmounting (guarded against unhandledrejection)
+      updateOurStatus(false).catch(() => {});
       // Clean up walkie status
       try {
         const isCreator = isCreatorRoleRef.current;
@@ -1627,8 +1669,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           webrtcAnswer: null,
           creatorCandidates: [],
           playerCandidates: []
-        });
-      } catch (e) {}
+        }).catch(() => {});
+      } catch {}
+      stopMicrophoneAnalysis();
       closeWebRTC();
       stopRingingSound();
     };
@@ -1653,7 +1696,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         });
       }
     } catch (err) {
-      console.error("Error updating ready state in Firestore:", err);
+      logger.warn("Error updating ready state in Firestore:", err);
     }
   };
 
@@ -1709,17 +1752,55 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   }, [readyCountdown]);
 
-  // Walkie-Talkie mic handler
+  // Walkie-Talkie mic handler (isolated stream + AudioContext refs so Android mic indicator turns off immediately)
   const startMicrophoneAnalysis = async () => {
     try {
-      const stream = await acquireMicrophoneStream();
+      if (micAnimFrameId.current !== null) {
+        cancelAnimationFrame(micAnimFrameId.current);
+        micAnimFrameId.current = null;
+      }
+      if (walkieMicStreamRef.current) {
+        walkieMicStreamRef.current.getTracks().forEach((t) => t.stop());
+        walkieMicStreamRef.current = null;
+      }
+      if (walkieAudioCtxRef.current) {
+        walkieAudioCtxRef.current.close().catch(() => {});
+        walkieAudioCtxRef.current = null;
+      }
+
+      let stream: MediaStream | null = null;
+      const existingLiveTracks = microphoneStreamRef.current
+        ? microphoneStreamRef.current.getAudioTracks().filter((t) => t.readyState === "live")
+        : [];
+      if (existingLiveTracks.length > 0) {
+        stream = new MediaStream(existingLiveTracks.map((t) => t.clone()));
+      } else {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          setMicrophoneAllowed(true);
+        } catch (micErr) {
+          logger.warn("[WebRTC] Walkie microphone access denied:", micErr);
+          setMicrophoneAllowed(false);
+        }
+      }
+
+      if (!isMountedRef.current) {
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop());
+        }
+        return;
+      }
+
       if (!stream) {
         simulateStaticWave();
         return;
       }
 
+      walkieMicStreamRef.current = stream;
+
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
+      const ctx: AudioContext = new AudioContextClass();
+      walkieAudioCtxRef.current = ctx;
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 32;
@@ -1743,7 +1824,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       updateWave();
     } catch (e) {
-      console.warn("Microphone analysis failed:", e);
+      logger.warn("Microphone analysis failed:", e);
       simulateStaticWave();
     }
   };
@@ -1762,9 +1843,22 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   };
 
   const stopMicrophoneAnalysis = () => {
-    if (micAnimFrameId.current) {
+    if (micAnimFrameId.current !== null) {
       cancelAnimationFrame(micAnimFrameId.current);
       micAnimFrameId.current = null;
+    }
+    if (walkieMicStreamRef.current) {
+      walkieMicStreamRef.current.getTracks().forEach((t) => t.stop());
+      walkieMicStreamRef.current = null;
+    }
+    if (callStateRef.current !== "ACTIVE" && microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
+      microphoneStreamRef.current = null;
+      setMicrophoneAllowed(false);
+    }
+    if (walkieAudioCtxRef.current) {
+      walkieAudioCtxRef.current.close().catch(() => {});
+      walkieAudioCtxRef.current = null;
     }
     audioAnalyserRef.current = null;
     setWalkieWaveAnim([10, 10, 10, 10]);
@@ -1780,6 +1874,35 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       stopMicrophoneAnalysis();
     };
   }, [isWalkieTalkieActive]);
+
+  // Unconditional unmount cleanup for both bot and live duels (cancels speechSynthesis, rAF, mic streams & AudioContext)
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (micAnimFrameId.current !== null) {
+        cancelAnimationFrame(micAnimFrameId.current);
+        micAnimFrameId.current = null;
+      }
+      if (walkieMicStreamRef.current) {
+        walkieMicStreamRef.current.getTracks().forEach((t) => t.stop());
+        walkieMicStreamRef.current = null;
+      }
+      if (microphoneStreamRef.current) {
+        microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
+        microphoneStreamRef.current = null;
+      }
+      if (walkieAudioCtxRef.current) {
+        walkieAudioCtxRef.current.close().catch(() => {});
+        walkieAudioCtxRef.current = null;
+      }
+      audioAnalyserRef.current = null;
+      stopRingingSound();
+    };
+  }, []);
 
   const RIVAL_PHRASE_EN_MAP: Record<string, string> = {
     "¡Venga! A ver qué tal tiras esta flecha.": "Let's go! Let's see how you shoot this arrow.",
@@ -1809,7 +1932,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
   // Voice synthesis (Text-to-Speech — simulated bot duels ONLY; muted in live human duels)
   const speakRivalPhrase = (text: string) => {
-    if (isFriendDuel) return;
+    if (isFriendDuel || !isMountedRef.current) return;
     const activeLang = resolveActiveBotLang();
     const isSpanish = activeLang.toLowerCase().startsWith("es");
     const spokenText = isSpanish ? text : RIVAL_PHRASE_EN_MAP[text] || text;
@@ -2452,7 +2575,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             speakRivalPhraseOnMatchEnd(false);
           }
         } else {
-          void showOledAlert("¡Empate exacto en distancia al centro! Se dispara otra flecha de desempate.");
+          void showOledAlert(
+            tx(
+              "¡Empate exacto en distancia al centro! Se dispara otra flecha de desempate.",
+              "Exact tie in distance to center! Shoot another shoot-off arrow."
+            )
+          );
           setUserShootOffShot(null);
           setRivalShootOffShot(null);
           setUserShootOffDistCm(null);
@@ -2526,24 +2654,42 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (isCompound) {
       // Cumulative compound logic
       if (userSum > rivalSum) {
-        summaryMsg = `¡Ganaste la ronda! +${userSum} a +${rivalSum}`;
+        summaryMsg = tx(
+          `¡Ganaste la ronda! +${userSum} a +${rivalSum}`,
+          `You won the end! +${userSum} to +${rivalSum}`
+        );
       } else if (rivalSum > userSum) {
-        summaryMsg = `El rival ganó la ronda. +${rivalSum} a +${userSum}`;
+        summaryMsg = tx(
+          `El rival ganó la ronda. +${rivalSum} a +${userSum}`,
+          `Opponent won the end. +${rivalSum} to +${userSum}`
+        );
       } else {
-        summaryMsg = `Ronda empatada a ${userSum} puntos`;
+        summaryMsg = tx(
+          `Ronda empatada a ${userSum} puntos`,
+          `End tied at ${userSum} points`
+        );
       }
     } else {
       // Set recurve set system logic
       if (userSum > rivalSum) {
         setUserSetPoints((prev) => prev + 2);
-        summaryMsg = `¡Ganaste el Set! +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`;
+        summaryMsg = tx(
+          `¡Ganaste el Set! +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
+          `You won the Set! +2 Pts (Your end: ${userSum} vs ${rivalSum})`
+        );
       } else if (rivalSum > userSum) {
         setRivalSetPoints((prev) => prev + 2);
-        summaryMsg = `Set para el rival. +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`;
+        summaryMsg = tx(
+          `Set para el rival. +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
+          `Set goes to opponent. +2 Pts (Your end: ${userSum} vs ${rivalSum})`
+        );
       } else {
         setUserSetPoints((prev) => prev + 1);
         setRivalSetPoints((prev) => prev + 1);
-        summaryMsg = `Set empatado. +1 Pt cada uno (${userSum} vs ${rivalSum})`;
+        summaryMsg = tx(
+          `Set empatado. +1 Pt cada uno (${userSum} vs ${rivalSum})`,
+          `Set tied. +1 Pt each (${userSum} vs ${rivalSum})`
+        );
       }
     }
 
@@ -2598,7 +2744,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (matchOver) {
       if (finalWinner === "TIE") {
         setIsShootOff(true);
-        setEndSummary("¡Match empatado! Vamos a flecha de desempate (Shoot-off).");
+        setEndSummary(
+          tx(
+            "¡Match empatado! Vamos a flecha de desempate (Shoot-off).",
+            "Match tied! Advancing to single-arrow Shoot-off."
+          )
+        );
       } else {
         setWinner(finalWinner);
         setDuelFinished(true);
@@ -2633,7 +2784,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       updateDoc(docRef, {
         [isCreator ? "creatorPhoto" : "playerPhoto"]: null,
         updatedAt: Date.now()
-      }).catch(err => console.error("Error clearing photo on next end:", err));
+      }).catch(err => logger.warn("Error clearing photo on next end:", err));
     }
   };
 
@@ -2713,7 +2864,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       });
       onDuelSaved();
     } catch (e) {
-      console.error("Error saving duel session", e);
+      logger.error("Error saving duel session", e);
       onDuelSaved();
     }
   };
@@ -2721,6 +2872,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const currentRivalName = config.rival.fullName;
   const currentRivalFlag = COUNTRIES.find(c => c.code === config.rival.country)?.flag || "🇲🇽 MEX";
   const userFlag = COUNTRIES.find(c => c.code === user.country)?.flag || "🇨🇷 CRC";
+
+  const bowDivisionLabel =
+    config.bowType === "Recurve"
+      ? tx("Recurvo", "Recurve")
+      : config.bowType === "Compound"
+      ? tx("Compuesto", "Compound")
+      : config.bowType;
 
   // Confirm and go back warning if match in progress (voluntary exit mid-game in online duel triggers forfeit)
   const handleBackWithConfirm = async () => {
@@ -2735,10 +2893,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       if (isActiveOnlineMatch) {
         const confirmForfeit = await showOledConfirm(
-          "¿Seguro que deseas abandonar el duelo en línea? Se adjudicará Victoria por Abandono (W.O.) a tu oponente.",
+          tx(
+            "¿Seguro que deseas abandonar el duelo en línea? Se adjudicará Victoria por Abandono (W.O.) a tu oponente.",
+            "Are you sure you want to leave this online match? A Walkover Victory (W.O.) will be awarded to your opponent."
+          ),
           {
-            confirmLabel: "Abandonar Duelo",
-            cancelLabel: "Seguir en Arena"
+            confirmLabel: tx("Abandonar Duelo", "Forfeit Match"),
+            cancelLabel: tx("Seguir en Arena", "Stay in Arena")
           }
         );
         if (!confirmForfeit) return;
@@ -2755,14 +2916,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             webrtcOffer: null,
             webrtcAnswer: null,
             updatedAt: Date.now()
-          }).catch((err) => console.warn("Error recording voluntary forfeit:", err));
+          }).catch((err) => logger.warn("Error recording voluntary forfeit:", err));
         }
         onBack();
         return;
       }
 
       const confirmCancelWaiting = await showOledConfirm(
-        "¿Deseas cerrar esta sala en espera y volver al lobby?"
+        tx(
+          "¿Deseas cerrar esta sala en espera y volver al lobby?",
+          "Close this waiting room and return to the lobby?"
+        )
       );
       if (confirmCancelWaiting) {
         localVoluntaryForfeitRef.current = true;
@@ -2779,7 +2943,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       return;
     }
 
-    const confirmExit = await showOledConfirm("¿Seguro que quieres salir? El progreso del duelo se guardará automáticamente como borrador.");
+    const confirmExit = await showOledConfirm(
+      tx(
+        "¿Seguro que quieres salir? El progreso del duelo se guardará automáticamente como borrador.",
+        "Are you sure you want to leave? Match progress will be saved automatically as a draft."
+      )
+    );
     if (confirmExit) {
       onBack();
     }
@@ -2792,15 +2961,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         <button
           onClick={handleBackWithConfirm}
           disabled={rivalThinking}
+          aria-label={tx("Salir del duelo", "Leave match")}
           className={`w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center transition ${
             rivalThinking ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
           }`}
         >
-          <ArrowLeft size={15} />
+          <ArrowLeft size={15} className={isRtl ? "rotate-180" : ""} />
         </button>
         <div className="flex items-center gap-1.5 bg-[#0D1017] border border-white/[0.08] py-1 px-3 rounded-full">
           <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase whitespace-nowrap tabular-nums">
-            {isShootOff ? "Desempate" : `Set ${currentEnd + 1} de 5`}
+            {isShootOff
+              ? tx("Desempate", "Shoot-Off")
+              : tx(`Set ${currentEnd + 1} de 5`, `Set ${currentEnd + 1} of 5`)}
           </span>
           {isFriendDuel && (
             <span
@@ -2813,10 +2985,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               }`}
               title={
                 isP2PActive
-                  ? "Conexión Directa P2P Activa"
+                  ? tx("Conexión Directa P2P Activa", "Direct P2P Connection Active")
                   : isRivalConnected
-                  ? "Modo Relay 4G/5G Activo"
-                  : "Buscando conexión..."
+                  ? tx("Modo Relay 4G/5G Activo", "4G/5G Relay Mode Active")
+                  : tx("Buscando conexión...", "Searching for connection...")
               }
             />
           )}
@@ -2846,14 +3018,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <div className="w-12 h-12 rounded-xl bg-cyan-neon/10 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon font-black text-sm relative">
                 {user.fullName.substring(0, 2).toUpperCase()}
               </div>
-              <span className="absolute -bottom-1 -right-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{userFlag}</span>
+              <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{userFlag}</span>
             </div>
             <span className="text-[12.8px] text-white font-extrabold truncate max-w-full mt-1">
-              Tú ({config.bowType === "Recurve" ? "Recurvo" : config.bowType === "Compound" ? "Compuesto" : config.bowType})
+              {tx("Tú", "You")} ({bowDivisionLabel})
             </span>
             <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full truncate mt-0.5">
               <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3 h-3 shrink-0" />
-              <span className="truncate">{user.clubName || "Independiente"}</span>
+              <span className="truncate">{user.clubName || tx("Independiente", "Independent")}</span>
             </span>
           </div>
 
@@ -2881,7 +3053,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </div>
             )}
             <span className="text-[9.3px] text-white font-bold uppercase tracking-wider mt-1.5 whitespace-nowrap">
-              {isCompound ? "Total Pts" : "Sets"}
+              {isCompound ? tx("Total Pts", "Total Pts") : tx("Sets", "Sets")}
             </span>
           </div>
 
@@ -2891,14 +3063,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <div className="w-12 h-12 rounded-xl bg-red-rival/10 border border-red-rival/35 flex items-center justify-center text-red-rival font-black text-sm relative">
                 {currentRivalName.substring(0, 2).toUpperCase()}
               </div>
-              <span className="absolute -bottom-1 -right-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-red-rival px-1 py-0.5 rounded leading-none whitespace-nowrap">{currentRivalFlag}</span>
+              <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-red-rival px-1 py-0.5 rounded leading-none whitespace-nowrap">{currentRivalFlag}</span>
             </div>
             <span className="text-[12.8px] text-white font-extrabold truncate max-w-full mt-1">
               {currentRivalName}
             </span>
             <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full truncate mt-0.5">
               <ClubLogoIcon logo={config.rival.clubLogo || "0"} className="w-3 h-3 shrink-0" />
-              <span className="truncate">{config.rival.clubName || "Club Rival"}</span>
+              <span className="truncate">{config.rival.clubName || tx("Club Rival", "Rival Club")}</span>
             </span>
           </div>
         </div>
@@ -2907,21 +3079,30 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         {isShootOff && (
           <div className="border-t border-white/[0.03] pt-3 grid grid-cols-2 gap-4 text-center">
             <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[9.3px] text-white font-black uppercase">Tu Desempate</span>
+              <span className="text-[9.3px] text-white font-black uppercase">
+                {tx("Tu Desempate", "Your Shoot-Off")}
+              </span>
               <span className="text-xl font-black text-cyan-neon tabular-nums">
                 {userShootOffShot !== null ? userShootOffShot : "—"}
               </span>
               {userShootOffDistCm !== null && (
                 <span className="text-[10.5px] tabular-nums font-bold text-cyan-neon">
-                  a {userShootOffDistCm.toFixed(1)} cm del centro
+                  {tx(
+                    `a ${userShootOffDistCm.toFixed(1)} cm del centro`,
+                    `${userShootOffDistCm.toFixed(1)} cm from center`
+                  )}
                 </span>
               )}
             </div>
             <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[9.3px] text-white font-black uppercase">Rival Desempate</span>
+              <span className="text-[9.3px] text-white font-black uppercase">
+                {tx("Rival Desempate", "Opponent Shoot-Off")}
+              </span>
               <span className="text-xl font-black text-red-rival tabular-nums">
                 {rivalThinking ? (
-                  <span className="inline-block animate-pulse text-[11.6px] text-red-rival">Apuntando...</span>
+                  <span className="inline-block animate-pulse text-[11.6px] text-red-rival">
+                    {tx("Apuntando...", "Aiming...")}
+                  </span>
                 ) : rivalShootOffShot !== null ? (
                   rivalShootOffShot
                 ) : (
@@ -2930,7 +3111,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </span>
               {!rivalThinking && rivalShootOffDistCm !== null && (
                 <span className="text-[10.5px] tabular-nums font-bold text-red-rival">
-                  a {rivalShootOffDistCm.toFixed(1)} cm del centro
+                  {tx(
+                    `a ${rivalShootOffDistCm.toFixed(1)} cm del centro`,
+                    `${rivalShootOffDistCm.toFixed(1)} cm from center`
+                  )}
                 </span>
               )}
             </div>
@@ -2941,9 +3125,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
         {!isShootOff && (
           <div className="border-t border-white/[0.05] pt-2.5 flex flex-col gap-1.5">
             <div className="flex justify-between items-center px-1 text-[10.5px] font-black uppercase tracking-wider">
-              <span className="text-cyan-neon">Tus Flechas</span>
-              <span className="text-white tabular-nums">Flecha {Math.min(3, currentArrow + 1)} de 3</span>
-              <span className="text-red-rival">Flechas Rival</span>
+              <span className="text-cyan-neon">{tx("Tus Flechas", "Your Arrows")}</span>
+              <span className="text-white tabular-nums">
+                {tx(
+                  `Flecha ${Math.min(3, currentArrow + 1)} de 3`,
+                  `Arrow ${Math.min(3, currentArrow + 1)} of 3`
+                )}
+              </span>
+              <span className="text-red-rival">{tx("Flechas Rival", "Opponent Arrows")}</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {/* User shots */}
@@ -3003,13 +3192,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {/* Header / Subtitle */}
             <div className="flex flex-col gap-1">
               <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block animate-pulse">
-                LÍNEA DE TIRO
+                {tx("LÍNEA DE TIRO", "SHOOTING LINE")}
               </span>
               <h3 className="text-white text-base font-black uppercase tracking-wide tabular-nums">
-                Preparación de Flecha {currentArrow + 1}
+                {tx(`Preparación de Flecha ${currentArrow + 1}`, `Arrow ${currentArrow + 1} Prep`)}
               </h3>
               <p className="text-[10.5px] text-white uppercase font-bold">
-                Ambos arqueros deben reportarse listos
+                {tx("Ambos arqueros deben reportarse listos", "Both archers must report ready")}
               </p>
             </div>
 
@@ -3026,14 +3215,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
                   {user.fullName.substring(0, 2).toUpperCase()}
                   <span
-                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
+                    className={`absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
                       isUserReady ? "bg-cyan-neon" : isUserPresent ? "bg-emerald-400" : "bg-neutral-600"
                     }`}
                   />
                 </div>
-                <span className="text-[11.6px] font-bold truncate max-w-full">Tú</span>
+                <span className="text-[11.6px] font-bold truncate max-w-full">{tx("Tú", "You")}</span>
                 <span className="text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap">
-                  {isUserReady ? "Listo" : isUserPresent ? "En la línea" : "En espera"}
+                  {isUserReady
+                    ? tx("Listo", "Ready")
+                    : isUserPresent
+                    ? tx("En la línea", "On line")
+                    : tx("En espera", "Waiting")}
                 </span>
               </div>
 
@@ -3042,11 +3235,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 <div className="p-3 rounded-2xl border bg-[#0D1017] border-white/15 text-white flex flex-col items-center gap-2 transition-all duration-200">
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/15 flex items-center justify-center text-xs font-black relative">
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-white border-2 border-neutral-950" />
+                    <span className="absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full bg-white border-2 border-neutral-950" />
                   </div>
                   <span className="text-[11.6px] font-bold truncate max-w-full">{config.rival.fullName}</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white text-black font-black uppercase tracking-wider whitespace-nowrap">
-                    Desconectado
+                    {tx("Desconectado", "Disconnected")}
                   </span>
                   <button
                     type="button"
@@ -3061,20 +3254,34 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             : data.creatorConnected === true;
                           if (connected) {
                             setIsRivalConnected(true);
-                            setConnectionBanner("Oponente conectado a la arena");
+                            setConnectionBanner(
+                              tx("Oponente conectado a la arena", "Opponent connected to the arena")
+                            );
                           } else {
-                            await showOledAlert("El oponente aún no ha ingresado al duelo.");
+                            await showOledAlert(
+                              tx(
+                                "El oponente aún no ha ingresado al duelo.",
+                                "Opponent has not joined the match yet."
+                              )
+                            );
                           }
                         } else {
-                          await showOledAlert("El código del duelo no se encuentra registrado.");
+                          await showOledAlert(
+                            tx(
+                              "El código del duelo no se encuentra registrado.",
+                              "Match code is not registered."
+                            )
+                          );
                         }
                       } catch (err) {
-                        await showOledAlert("Error al verificar la conexión.");
+                        await showOledAlert(
+                          tx("Error al verificar la conexión.", "Error checking connection.")
+                        );
                       }
                     }}
                     className="mt-1 px-2.5 py-1 rounded-lg bg-white hover:bg-neutral-200 border border-white text-black font-black text-[9.3px] uppercase tracking-wider transition-all cursor-pointer"
                   >
-                    Verificar
+                    {tx("Verificar", "Check")}
                   </button>
                 </div>
               ) : (
@@ -3088,14 +3295,18 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
                     <span
-                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
+                      className={`absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
                         isRivalReady ? "bg-red-rival" : isRivalPresent ? "bg-emerald-400" : "bg-neutral-600"
                       }`}
                     />
                   </div>
                   <span className="text-[11.6px] font-bold truncate max-w-full">{config.rival.fullName}</span>
                   <span className="text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap">
-                    {isRivalReady ? "Listo" : isRivalPresent ? "En la línea" : "En espera"}
+                    {isRivalReady
+                      ? tx("Listo", "Ready")
+                      : isRivalPresent
+                      ? tx("En la línea", "On line")
+                      : tx("En espera", "Waiting")}
                   </span>
                 </div>
               )}
@@ -3105,7 +3316,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             {readyCountdown !== null ? (
               <div className="flex flex-col items-center justify-center my-2">
                 <span className="text-[11.6px] text-yellow-gold font-black tracking-widest uppercase mb-1">
-                  COMIENZO EN
+                  {tx("COMIENZO EN", "STARTING IN")}
                 </span>
                 <motion.div
                   key={readyCountdown}
@@ -3114,7 +3325,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   transition={{ type: "spring", stiffness: 400, damping: 15 }}
                   className="text-4xl font-black text-white tabular-nums"
                 >
-                  {readyCountdown > 0 ? readyCountdown : "¡TIRO!"}
+                  {readyCountdown > 0 ? readyCountdown : tx("¡TIRO!", "SHOOT!")}
                 </motion.div>
               </div>
             ) : !isUserPresent ? (
@@ -3130,7 +3341,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 }}
                 className="w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center whitespace-nowrap transition-all duration-200 bg-emerald-500 hover:bg-emerald-400 text-black active:scale-98 cursor-pointer"
               >
-                Estoy en la Línea
+                {tx("Estoy en la Línea", "I'm on the Line")}
               </button>
             ) : !isUserReady ? (
               <div className="w-full flex flex-col gap-2">
@@ -3152,17 +3363,20 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       : "bg-[#0D1017] border border-white/5 text-white cursor-not-allowed opacity-50"
                   }`}
                 >
-                  Iniciar Tirada
+                  {tx("Iniciar Tirada", "Start End")}
                 </button>
                 {!isRivalPresent && (
                   <span className="text-[10.5px] text-yellow-gold font-bold uppercase animate-pulse">
-                    Esperando a que el rival esté en la línea
+                    {tx(
+                      "Esperando a que el rival esté en la línea",
+                      "Waiting for opponent on the line"
+                    )}
                   </span>
                 )}
               </div>
             ) : (
               <div className="w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest bg-[#0D1017] border border-white/5 text-white flex items-center justify-center whitespace-nowrap">
-                Esperando al Rival...
+                {tx("Esperando al Rival...", "Waiting for Opponent...")}
               </div>
             )}
           </div>
@@ -3180,7 +3394,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 : "text-white hover:text-white"
             }`}
           >
-            Diana
+            {tx("Diana", "Target")}
           </button>
           <button
             onClick={() => setMode("KEYBOARD")}
@@ -3190,7 +3404,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 : "text-white hover:text-white"
             }`}
           >
-            Teclado
+            {tx("Teclado", "Keypad")}
           </button>
         </div>
       )}
@@ -3246,13 +3460,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
           {/* Instruction Banner when zoomed */}
           {isDianaZoomed && (
-            <div className="fixed top-12 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+            <div className="fixed top-12 inset-x-0 z-50 flex justify-center pointer-events-none px-4">
               <div className="bg-neutral-900/90 border border-cyan-neon/30 backdrop-blur-md px-4 py-2 rounded-full shadow-glow-cyan text-center">
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block leading-none">
-                  Diana Ampliada
+                  {tx("Diana Ampliada", "Zoomed Target")}
                 </span>
                 <span className="text-[10.5px] text-white mt-1 block leading-none">
-                  Arrastra o toca para precisar · Suelta para registrar
+                  {tx(
+                    "Arrastra o toca para precisar · Suelta para registrar",
+                    "Drag or touch to aim · Release to plot"
+                  )}
                 </span>
               </div>
             </div>
@@ -3260,7 +3477,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
           {/* Zoom coordinate info & value */}
           <div className="flex gap-3 items-center justify-center bg-[#0D1017] px-4 py-1.5 rounded-full border border-white/[0.08] text-[11.6px] font-bold z-10">
-            <span className="text-white">Puntuación Estimada:</span>
+            <span className="text-white">{tx("Puntuación Estimada:", "Estimated Score:")}</span>
             <span className="text-yellow-gold font-extrabold text-xs tabular-nums">
               {getCoordsFromClient(cursorPos.x, cursorPos.y)?.value || "M"} Pts
             </span>
@@ -3379,13 +3596,16 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           </div>
 
           <span className="text-[9.3px] text-white font-bold uppercase text-center mt-1 z-10">
-            Desliza sobre la diana para ampliarla · Suelta para registrar
+            {tx(
+              "Desliza sobre la diana para ampliarla · Suelta para registrar",
+              "Slide on the target to zoom · Release to plot"
+            )}
           </span>
 
           {/* Historial de Ends/Sets Scrollable */}
           <div className="w-full max-w-[320px] mx-auto flex flex-col gap-1.5 px-4 z-10 mt-1">
             <span className="text-[9.3px] font-black uppercase text-white tracking-widest text-center">
-              Historial de Sets / Ends
+              {tx("Historial de Sets / Ends", "Sets / Ends History")}
             </span>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none justify-center">
               {[0, 1, 2, 3, 4].map((idx) => {
@@ -3431,14 +3651,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           
           {/* Side-by-side match progress table */}
           <div className="w-full max-w-[320px] mx-auto overflow-x-auto overflow-y-auto border border-white/10 rounded-2xl bg-neutral-950/40 max-h-[140px] z-10 relative">
-            <table className="w-full text-left text-[12.8px] border-collapse tabular-nums">
+            <table className="w-full text-start text-[12.8px] border-collapse tabular-nums">
               <thead>
                 <tr className="bg-neutral-900/80 text-white font-bold uppercase text-[9.3px] tracking-wider border-b border-white/10 text-center">
                   <th className="py-2 px-1">Set</th>
-                  <th className="py-2 px-1">Tus Tiros</th>
-                  <th className="py-2 px-1">Tú</th>
-                  <th className="py-2 px-1">Rival</th>
-                  <th className="py-2 px-1">Tiros Rival</th>
+                  <th className="py-2 px-1">{tx("Tus Tiros", "Your Shots")}</th>
+                  <th className="py-2 px-1">{tx("Tú", "You")}</th>
+                  <th className="py-2 px-1">{tx("Rival", "Rival")}</th>
+                  <th className="py-2 px-1">{tx("Tiros Rival", "Rival Shots")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -3612,10 +3832,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               (!isShootOff && (userTiros[currentEnd]?.length ?? 0) === 0)
             }
             className="w-full h-12 rounded-2xl bg-neutral-900 border border-white/5 text-white hover:text-red-rival flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-20 disabled:cursor-not-allowed text-xs font-black uppercase tracking-wider"
-            title="Deshacer Tiro"
+            title={tx("Deshacer Tiro", "Undo Shot")}
           >
             <RotateCcw size={14} />
-            <span>Deshacer Último Tiro</span>
+            <span>{tx("Deshacer Último Tiro", "Undo Last Shot")}</span>
           </button>
         </div>
       )}
@@ -3663,7 +3883,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
       {/* VoIP Floating Controller */}
       {!duelFinished && (
-        <div className="fixed bottom-40 right-4 z-[80] flex flex-col items-end gap-2.5 pointer-events-auto">
+        <div className="fixed bottom-40 end-4 z-[80] flex flex-col items-end gap-2.5 pointer-events-auto">
           {/* Active Call UI badge/explanation */}
           <AnimatePresence>
             {callState === "ACTIVE" && (
@@ -3673,8 +3893,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 exit={{ opacity: 0, scale: 0.85, y: 5 }}
                 className="bg-[#0D1017]/95 border border-cyan-neon/25 p-2.5 rounded-xl max-w-[170px] shadow-2xl text-[10.5px] text-white leading-snug text-center mb-1 backdrop-blur tabular-nums"
               >
-                <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">VoIP Activo</span>
-                Llamada de voz en vivo establecida ({formatCallDuration(callDuration)}).
+                <span className="text-cyan-neon font-black uppercase tracking-wider block mb-0.5">
+                  {tx("VoIP Activo", "VoIP Active")}
+                </span>
+                {tx(
+                  `Llamada de voz en vivo establecida (${formatCallDuration(callDuration)}).`,
+                  `Live voice call connected (${formatCallDuration(callDuration)}).`
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -3693,10 +3918,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   }`}
                 >
                   {callState === "ACTIVE"
-                    ? `En línea · ${formatCallDuration(callDuration)}`
+                    ? tx(
+                        `En línea · ${formatCallDuration(callDuration)}`,
+                        `Live · ${formatCallDuration(callDuration)}`
+                      )
                     : callState === "DIALING"
-                    ? "Llamando..."
-                    : "Sonando..."}
+                    ? tx("Llamando...", "Calling...")
+                    : tx("Sonando...", "Ringing...")}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -3704,6 +3932,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleCallAction}
+              aria-label={tx("Llamada de voz P2P", "P2P Voice Call")}
               className={`w-12 h-12 rounded-full flex items-center justify-center border cursor-pointer shadow-xl relative overflow-hidden transition-all duration-300 ${
                 callState === "ACTIVE"
                   ? "bg-cyan-neon/10 border-cyan-neon text-cyan-neon"
@@ -3720,7 +3949,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               {/* Status active pulsing dot */}
               {callState === "ACTIVE" && (
-                <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full bg-cyan-neon animate-ping" />
+                <span className="absolute top-2.5 end-2.5 w-1.5 h-1.5 rounded-full bg-cyan-neon animate-ping" />
               )}
             </motion.button>
           </div>
@@ -3749,13 +3978,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               <div className="flex flex-col gap-1">
                 <span className="text-[11.6px] text-cyan-neon font-bold tracking-widest uppercase block">
-                  {callState === "RINGING" ? "Llamada Entrante" : "Llamando..."}
+                  {callState === "RINGING"
+                    ? tx("Llamada Entrante", "Incoming Call")
+                    : tx("Llamando...", "Calling...")}
                 </span>
                 <h3 className="text-white text-base font-black tracking-tight">
                   {config.rival.fullName}
                 </h3>
                 <p className="text-[11.6px] text-white font-medium">
-                  {callState === "RINGING" ? "Voz en directo P2P" : "Esperando respuesta..."}
+                  {callState === "RINGING"
+                    ? tx("Voz en directo P2P", "Live P2P Voice")
+                    : tx("Esperando respuesta...", "Waiting for answer...")}
                 </p>
               </div>
 
@@ -3766,13 +3999,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       onClick={declineCall}
                       className="flex-1 py-3 rounded-xl bg-white border border-white text-black hover:bg-neutral-200 font-black text-xs uppercase tracking-wider transition active:scale-95"
                     >
-                      Rechazar
+                      {tx("Rechazar", "Decline")}
                     </button>
                     <button
                       onClick={acceptCall}
                       className="flex-1 py-3 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider transition active:scale-95"
                     >
-                      Contestar
+                      {tx("Contestar", "Accept")}
                     </button>
                   </>
                 ) : (
@@ -3780,7 +4013,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     onClick={cancelCall}
                     className="w-full py-3 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider transition active:scale-95"
                   >
-                    Cancelar
+                    {tx("Cancelar", "Cancel")}
                   </button>
                 )}
               </div>
@@ -3808,10 +4041,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <div>
                   <h3 className="text-white text-xs font-black uppercase tracking-wider">
-                    Validación de Diana - Set {currentEnd + 1}
+                    {tx(
+                      `Validación de Diana - Set ${currentEnd + 1}`,
+                      `Target Verification - Set ${currentEnd + 1}`
+                    )}
                   </h3>
                   <p className="text-[9.3px] text-white uppercase tracking-widest font-bold">
-                    Revisión de Impactos del Turno
+                    {tx("Revisión de Impactos del Turno", "End Impact Verification")}
                   </p>
                 </div>
                 <span className="text-[11.6px] text-cyan-neon tabular-nums font-bold bg-cyan-neon/10 px-2 py-0.5 rounded-full border border-cyan-neon/20">
@@ -3822,7 +4058,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {validationPhase === "UPLOAD" && (
                 <div className="flex flex-col gap-3.5">
                   <p className="text-[11.6px] text-white leading-relaxed">
-                    Sube una foto de tu diana de este set para que tu rival verifique tus puntuaciones.
+                    {tx(
+                      "Sube una foto de tu diana de este set para que tu rival verifique tus puntuaciones.",
+                      "Upload a photo of your target for this set so your opponent can verify your scores."
+                    )}
                   </p>
 
                   {/* Upload box */}
@@ -3847,14 +4086,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                                   [isCreatorRoleRef.current ? "creatorPhoto" : "playerPhoto"]: base64,
                                   updatedAt: Date.now()
                                 }).catch((fsErr) =>
-                                  console.warn("Could not write fallback verification photo to Firestore:", fsErr)
+                                  logger.warn("Could not write fallback verification photo to Firestore:", fsErr)
                                 );
                               }
                             } else {
                               simulateRivalUpload();
                             }
                           } catch (err) {
-                            console.error("Error compressing image:", err);
+                            logger.error("Error compressing image:", err);
                             const url = URL.createObjectURL(file);
                             setUserPhoto(url);
                             if (!isFriendDuel) simulateRivalUpload();
@@ -3864,35 +4103,52 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     />
                     
                     {userPhoto ? (
-                      <img src={userPhoto} alt="Tu diana" className="absolute inset-0 w-full h-full object-cover" />
+                      <img
+                        src={userPhoto}
+                        alt={tx("Tu diana", "Your target")}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
                     ) : (
                       <>
-                        <span className="text-[11.6px] text-cyan-neon font-black uppercase tracking-widest">Cámara / Galería</span>
-                        <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">Tomar o subir foto</span>
-                        <span className="text-[9.3px] text-white">JPG, PNG hasta 5MB</span>
+                        <span className="text-[11.6px] text-cyan-neon font-black uppercase tracking-widest">
+                          {tx("Cámara / Galería", "Camera / Gallery")}
+                        </span>
+                        <span className="text-[11.6px] text-white font-bold uppercase tracking-wider">
+                          {tx("Tomar o subir foto", "Take or upload photo")}
+                        </span>
+                        <span className="text-[9.3px] text-white">
+                          {tx("JPG, PNG hasta 5MB", "JPG, PNG up to 5MB")}
+                        </span>
                       </>
                     )}
                   </label>
 
                   {/* Status Indicator */}
                   <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold">
-                    <span className="text-white">Tu Estado:</span>
+                    <span className="text-white">{tx("Tu Estado:", "Your Status:")}</span>
                     <span className={userPhoto ? "text-cyan-neon" : "text-yellow-gold"}>
-                      {userPhoto ? "Foto Subida" : "Pendiente de foto"}
+                      {userPhoto
+                        ? tx("Foto Subida", "Photo Uploaded")
+                        : tx("Pendiente de foto", "Pending photo")}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold tabular-nums">
-                    <span className="text-white">Estado del Rival:</span>
+                    <span className="text-white">{tx("Estado del Rival:", "Opponent Status:")}</span>
                     <span className={rivalPhoto ? "text-cyan-neon" : photoUploadCountdown === 0 ? "text-white" : "text-yellow-gold flex items-center gap-1"}>
                       {rivalPhoto ? (
-                        "Foto Subida"
+                        tx("Foto Subida", "Photo Uploaded")
                       ) : photoUploadCountdown === 0 ? (
-                        "Tiempo agotado (sin foto)"
+                        tx("Tiempo agotado (sin foto)", "Timed out (no photo)")
                       ) : (
                         <>
                           <span className="inline-block w-1.5 h-1.5 border border-yellow-gold border-t-transparent animate-spin rounded-full" />
-                          <span>Esperando rival ({photoUploadCountdown}s)...</span>
+                          <span>
+                            {tx(
+                              `Esperando rival (${photoUploadCountdown}s)...`,
+                              `Waiting for opponent (${photoUploadCountdown}s)...`
+                            )}
+                          </span>
                         </>
                       )}
                     </span>
@@ -3905,10 +4161,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   >
                     <span>
                       {userPhoto && !rivalPhoto && photoUploadCountdown === 0
-                        ? "Continuar sin Foto Rival"
-                        : "Revisar Diana Rival"}
+                        ? tx("Continuar sin Foto Rival", "Continue without Opponent Photo")
+                        : tx("Revisar Diana Rival", "Review Opponent Target")}
                     </span>
-                    <span>→</span>
+                    <span>{isRtl ? "←" : "→"}</span>
                   </button>
                 </div>
               )}
@@ -3916,7 +4172,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {validationPhase === "REVIEW" && (
                 <div className="flex flex-col gap-3.5">
                   <p className="text-[11.6px] text-white leading-relaxed [text-wrap:pretty]">
-                    Compara los impactos declarados por <span className="text-white font-bold">{config.rival.fullName}</span> en la diana virtual con su foto real.
+                    {tx(
+                      `Compara los impactos declarados por ${config.rival.fullName} en la diana virtual con su foto real.`,
+                      `Compare the impacts plotted by ${config.rival.fullName} on the virtual target against their photo.`
+                    )}
                   </p>
 
                   {/* Switcher pills - only show if the rival used TARGET mode */}
@@ -3931,7 +4190,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             : "text-white hover:text-white"
                         }`}
                       >
-                        Foto Real
+                        {tx("Foto Real", "Target Photo")}
                       </button>
                       <button
                         type="button"
@@ -3942,7 +4201,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             : "text-white hover:text-white"
                         }`}
                       >
-                        Diana Interactiva
+                        {tx("Diana Interactiva", "Virtual Target")}
                       </button>
                     </div>
                   )}
@@ -3950,19 +4209,29 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   <div className="grid grid-cols-2 gap-3 items-center">
                     <div className="flex flex-col gap-1 text-center">
                       <span className="text-[9.3px] text-white uppercase font-bold">
-                        {rivalInputMode === "TARGET" && reviewTab === "TARGET" ? "Diana Interactiva" : "Foto del Rival"}
+                        {rivalInputMode === "TARGET" && reviewTab === "TARGET"
+                          ? tx("Diana Interactiva", "Virtual Target")
+                          : tx("Foto del Rival", "Opponent Photo")}
                       </span>
                       <div className="w-full aspect-square rounded-xl bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden relative">
                         {rivalInputMode === "KEYBOARD" || reviewTab === "PHOTO" ? (
                           rivalPhoto && rivalPhoto !== "rival_done" ? (
-                            <img src={rivalPhoto} alt="Foto Campo Rival" className="w-full h-full object-cover" />
+                            <img
+                              src={rivalPhoto}
+                              alt={tx("Foto Campo Rival", "Opponent Target Photo")}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
                             <div className="w-full h-full bg-neutral-900 flex flex-col items-center justify-center text-center p-3 relative">
                               <span className="text-[11.6px] text-white font-extrabold uppercase">
-                                {isFriendDuel ? "Sin Foto del Rival" : "Foto de Campo"}
+                                {isFriendDuel
+                                  ? tx("Sin Foto del Rival", "No Opponent Photo")
+                                  : tx("Foto de Campo", "Range Photo")}
                               </span>
                               <span className="text-[9.3px] text-cyan-neon font-bold uppercase mt-1">
-                                {isFriendDuel ? "Tiempo de carga agotado" : "Duelo con Bot / Solo"}
+                                {isFriendDuel
+                                  ? tx("Tiempo de carga agotado", "Upload timed out")
+                                  : tx("Duelo con Bot / Solo", "Bot / Solo Match")}
                               </span>
                             </div>
                           )
@@ -4015,18 +4284,22 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                             </svg>
                           </div>
                         )}
-                        <span className="absolute bottom-1 right-1 text-[9.3px] bg-red-rival/80 text-white font-black px-1 py-0.2 rounded uppercase">
-                          DIANA RIVAL
+                        <span className="absolute bottom-1 end-1 text-[9.3px] bg-red-rival/80 text-white font-black px-1 py-0.2 rounded uppercase">
+                          {tx("DIANA RIVAL", "RIVAL TARGET")}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <span className="text-[9.3px] text-white uppercase font-bold">Impactos Registrados</span>
+                      <span className="text-[9.3px] text-white uppercase font-bold">
+                        {tx("Impactos Registrados", "Plotted Impacts")}
+                      </span>
                       <div className="bg-neutral-900/60 border border-white/5 p-3 rounded-xl flex flex-col gap-2 tabular-nums">
                         {(rivalTiros[currentEnd] || []).map((val, idx) => (
                           <div key={idx} className="flex justify-between items-center text-xs">
-                            <span className="text-white">Flecha {idx + 1}:</span>
+                            <span className="text-white">
+                              {tx(`Flecha ${idx + 1}:`, `Arrow ${idx + 1}:`)}
+                            </span>
                             <span className="text-white font-black">{val} Pts</span>
                           </div>
                         ))}
@@ -4040,7 +4313,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   </div>
 
                   <p className="text-[9.3px] text-yellow-gold font-bold leading-tight [text-wrap:pretty]">
-                    Las fotos de validación se eliminarán de forma segura al finalizar el duelo para ahorrar almacenamiento.
+                    {tx(
+                      "Las fotos de validación se eliminarán de forma segura al finalizar el duelo para ahorrar almacenamiento.",
+                      "Verification photos are securely deleted once the match ends to save storage."
+                    )}
                   </p>
 
                   <button
@@ -4050,7 +4326,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     }}
                     className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider cursor-pointer transition active:scale-95 flex items-center justify-center whitespace-nowrap"
                   >
-                    Aceptar y Validar
+                    {tx("Aceptar y Validar", "Accept & Verify")}
                   </button>
                 </div>
               )}
@@ -4077,7 +4353,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
             >
               <div className="absolute top-0 inset-x-0 h-1 bg-cyan-neon" />
               <h3 className="text-white text-xs font-black uppercase tracking-wider pt-2 tabular-nums">
-                Fin del Set {currentEnd + 1}
+                {tx(`Fin del Set ${currentEnd + 1}`, `End of Set ${currentEnd + 1}`)}
               </h3>
               <p className="text-xs text-white leading-relaxed px-1 [text-wrap:pretty] tabular-nums">
                 {endSummary}
@@ -4086,7 +4362,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 onClick={handleNextEnd}
                 className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer active:scale-95 transition"
               >
-                Siguiente Set
+                {tx("Siguiente Set", "Next Set")}
               </button>
             </motion.div>
           </motion.div>
@@ -4116,38 +4392,51 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               <div className="flex flex-col gap-1.5">
                 <span className="text-[11.6px] text-cyan-neon font-black uppercase tracking-widest leading-none">
-                  Fin de la Eliminatoria Online
+                  {tx("Fin de la Eliminatoria Online", "Online Match Complete")}
                 </span>
                 <h3 className="text-white text-xl font-black uppercase tracking-wide mt-1 [text-wrap:balance]">
-                  {winner === "USER" ? "¡Victoria Magistral!" : winner === "RIVAL" ? "Derrota" : "Empate Final"}
+                  {winner === "USER"
+                    ? tx("¡Victoria Magistral!", "Victory!")
+                    : winner === "RIVAL"
+                    ? tx("Derrota", "Defeat")
+                    : tx("Empate Final", "Final Tie")}
                 </h3>
                 <p className="text-[12.8px] text-white leading-relaxed px-2 mt-1 [text-wrap:pretty]">
                   {winner === "USER" 
-                    ? `Has vencido a ${config.rival.fullName} de ${config.rival.clubName}. ¡Gran desempeño!`
+                    ? tx(
+                        `Has vencido a ${config.rival.fullName} de ${config.rival.clubName}. ¡Gran desempeño!`,
+                        `You defeated ${config.rival.fullName} from ${config.rival.clubName}. Great shooting!`
+                      )
                     : winner === "RIVAL"
-                    ? `${config.rival.fullName} ha tomado la victoria. ¡Sigue entrenando para la revancha!`
-                    : "Un encuentro reñido que concluye en empate."}
+                    ? tx(
+                        `${config.rival.fullName} ha tomado la victoria. ¡Sigue entrenando para la revancha!`,
+                        `${config.rival.fullName} took the win. Keep training for the rematch!`
+                      )
+                    : tx(
+                        "Un encuentro reñido que concluye en empate.",
+                        "A hard-fought match ending in a tie."
+                      )}
                 </p>
               </div>
 
               {/* Match summary points */}
               <div className="w-full bg-neutral-900/60 rounded-2xl border border-white/5 p-4 flex flex-col gap-2 mt-1">
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.04]">
-                  <span className="text-white">Tu Puntuación Total:</span>
+                  <span className="text-white">{tx("Tu Puntuación Total:", "Your Total Score:")}</span>
                   <span className="text-cyan-neon font-black tabular-nums">
                     {userTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1 border-b border-white/[0.04]">
-                  <span className="text-white">Puntuación Rival:</span>
+                  <span className="text-white">{tx("Puntuación Rival:", "Opponent Score:")}</span>
                   <span className="text-red-rival font-black tabular-nums">
                     {rivalTiros.flat().reduce((sum: number, val) => sum + getValNumeric(val), 0)} pts
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs py-1">
-                  <span className="text-white">Volumen Sumado:</span>
+                  <span className="text-white">{tx("Volumen Sumado:", "Arrows Logged:")}</span>
                   <span className="text-yellow-gold font-black tabular-nums">
-                    +{userTiros.flat().length + (userShootOffShot !== null ? 1 : 0)} flechas
+                    +{userTiros.flat().length + (userShootOffShot !== null ? 1 : 0)} {tx("flechas", "arrows")}
                   </span>
                 </div>
               </div>
@@ -4158,13 +4447,13 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
                 >
                   <Share2 size={16} />
-                  <span>Compartir por Mensajería</span>
+                  <span>{tx("Compartir por Mensajería", "Share via Messaging")}</span>
                 </button>
                 <button
                   onClick={handleSaveAndExit}
                   className="w-full h-11 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer active:scale-98 transition"
                 >
-                  Guardar y Volver al Inicio
+                  {tx("Guardar y Volver al Inicio", "Save & Return Home")}
                 </button>
               </div>
             </motion.div>
@@ -4190,30 +4479,48 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
 
               <div className="flex flex-col gap-1">
                 <span className="text-[10.5px] text-cyan-neon font-black tracking-widest uppercase">
-                  Reglamento de la Arena
+                  {tx("Reglamento de la Arena", "Arena Rules")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide [text-wrap:balance]">
-                  Reglas Oficiales 1v1
+                  {tx("Reglas Oficiales 1v1", "Official 1v1 Rules")}
                 </h3>
               </div>
 
-              <div className="flex flex-col gap-3 text-left text-[12.8px] text-white mt-2">
+              <div className="flex flex-col gap-3 text-start text-[12.8px] text-white mt-2">
                 <div className="flex gap-2.5 items-start">
                   <span className="w-5 h-5 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] flex items-center justify-center shrink-0 mt-0.5">1</span>
                   <p className="[text-wrap:pretty]">
-                    <strong className="text-white font-bold">Tirada libre de tiempo:</strong> Guarda tu teléfono en el bolsillo, realiza tus disparos y anota tus puntuaciones directamente al llegar a la paca.
+                    <strong className="text-white font-bold">
+                      {tx("Tirada libre de tiempo:", "Self-paced shooting:")}
+                    </strong>{" "}
+                    {tx(
+                      "Guarda tu teléfono en el bolsillo, realiza tus disparos y anota tus puntuaciones directamente al llegar a la paca.",
+                      "Keep your phone in your pocket, shoot your end, and plot your arrows directly when you walk up to the target."
+                    )}
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="w-5 h-5 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] flex items-center justify-center shrink-0 mt-0.5">2</span>
                   <p className="[text-wrap:pretty]">
-                    <strong className="text-white font-bold">Validación fotográfica:</strong> Al final de cada set, ambos subirán una foto del blanco virtual para validación.
+                    <strong className="text-white font-bold">
+                      {tx("Validación fotográfica:", "Photo verification:")}
+                    </strong>{" "}
+                    {tx(
+                      "Al final de cada set, ambos subirán una foto del blanco para validación.",
+                      "At the end of each set, both archers upload a target photo for verification."
+                    )}
                   </p>
                 </div>
                 <div className="flex gap-2.5 items-start">
                   <span className="w-5 h-5 rounded-full bg-cyan-neon/15 border border-cyan-neon/30 text-cyan-neon font-black text-[11.6px] flex items-center justify-center shrink-0 mt-0.5">3</span>
                   <p className="[text-wrap:pretty]">
-                    <strong className="text-white font-bold">Limpieza automática:</strong> Las fotos de validación se eliminarán del almacenamiento al finalizar el duelo.
+                    <strong className="text-white font-bold">
+                      {tx("Limpieza automática:", "Auto cleanup:")}
+                    </strong>{" "}
+                    {tx(
+                      "Las fotos de validación se eliminarán del almacenamiento al finalizar el duelo.",
+                      "Verification photos are deleted from storage as soon as the match finishes."
+                    )}
                   </p>
                 </div>
               </div>
@@ -4222,7 +4529,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 onClick={() => setShowRules(false)}
                 className="w-full h-11 mt-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer active:scale-95 transition"
               >
-                Comprendido y Listo
+                {tx("Comprendido y Listo", "Got It · Ready")}
               </button>
             </motion.div>
           </div>
@@ -4269,19 +4576,32 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               
               <div className="flex flex-col gap-1">
                 <h3 className="text-white text-sm font-black uppercase tracking-wider">
-                  {!navigator.onLine ? "Sin Conexión a Internet" : "Pausa por Reconexión"}
+                  {!navigator.onLine
+                    ? tx("Sin Conexión a Internet", "No Internet Connection")
+                    : tx("Pausa por Reconexión", "Reconnecting")}
                 </h3>
                 <p className="text-[11.6px] text-white leading-relaxed">
                   {!navigator.onLine
-                    ? "Tu dispositivo ha perdido la conexión a internet. Restableciendo enlace..."
-                    : `Esperando a que ${config.rival.fullName} se reconecte temporalmente. No se perderá la partida.`}
+                    ? tx(
+                        "Tu dispositivo ha perdido la conexión a internet. Restableciendo enlace...",
+                        "Your device lost internet connection. Re-establishing link..."
+                      )
+                    : tx(
+                        `Esperando a que ${config.rival.fullName} se reconecte temporalmente. No se perderá la partida.`,
+                        `Waiting for ${config.rival.fullName} to reconnect. Match progress is safe.`
+                      )}
                 </p>
               </div>
 
               <div className="flex flex-col w-full gap-2.5 mt-1">
                 <div className="w-full py-2.5 rounded-xl bg-neutral-900 border border-white/5 text-cyan-neon font-bold text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-2 tabular-nums">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
-                  <span>Reconectando ({disconnectSeconds}s)...</span>
+                  <span>
+                    {tx(
+                      `Reconectando (${disconnectSeconds}s)...`,
+                      `Reconnecting (${disconnectSeconds}s)...`
+                    )}
+                  </span>
                 </div>
                 
                 {disconnectSeconds >= 30 && (
@@ -4291,7 +4611,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     }}
                     className="w-full py-2.5 rounded-xl bg-cyan-neon border border-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-95 transition"
                   >
-                    Adjudicar Victoria W.O. y Salir
+                    {tx("Adjudicar Victoria W.O. y Salir", "Claim W.O. Victory & Exit")}
                   </button>
                 )}
               </div>

@@ -1,19 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { 
-  Search, 
-  Eye, 
-  Sparkles, 
-  User, 
-  Mail, 
-  Shield, 
-  Award, 
-  Download, 
-  RefreshCw, 
-  FileSpreadsheet, 
-  UserCheck, 
-  Calendar, 
+import {
+  Search,
+  Eye,
+  Mail,
+  Shield,
+  RefreshCw,
+  FileSpreadsheet,
+  UserCheck,
+  Calendar,
   Flame,
   Target,
   Crown,
@@ -37,7 +33,7 @@ import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getLocalISODate, formatRegionalDate } from "@/lib/i18n/regionalUtils";
 
 export default function AdminUsersTab() {
-  const { language } = useLanguage();
+  const { language, t, tx } = useLanguage();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
@@ -54,11 +50,11 @@ export default function AdminUsersTab() {
 
   // Helper to format timestamps gracefully
   const formatRegistrationDate = (timestamp?: number | string) => {
-    if (!timestamp) return "Fecha no registrada";
+    if (!timestamp) return tx("Fecha no registrada", "Date not recorded");
     const num = typeof timestamp === "string" ? parseInt(timestamp, 10) : timestamp;
-    if (isNaN(num)) return "Fecha no registrada";
+    if (isNaN(num)) return tx("Fecha no registrada", "Date not recorded");
     const date = new Date(num);
-    if (isNaN(date.getTime())) return "Fecha no registrada";
+    if (isNaN(date.getTime())) return tx("Fecha no registrada", "Date not recorded");
     return formatRegionalDate(date, language, {
       day: "2-digit",
       month: "short",
@@ -86,7 +82,7 @@ export default function AdminUsersTab() {
   // Fetch first 50-user cursor page + exact server KPI counts from Firestore
   const refreshUsersFromFirestore = useCallback(async () => {
     setIsRefreshing(true);
-    setSyncMessage("Sincronizando con Firestore...");
+    setSyncMessage(tx("Sincronizando con la nube...", "Syncing with cloud..."));
     try {
       const localList = await loadLocalUsers();
 
@@ -127,22 +123,47 @@ export default function AdminUsersTab() {
 
           setUsers(finalList);
           await saveLocalSetting("simulated_users", finalList);
-          const totalLabel = countsRes ? ` de ${countsRes.totalUsers.toLocaleString()}` : "";
-          setSyncMessage(`${finalList.length}${totalLabel} arqueros sincronizados`);
+          const totalLabel = countsRes
+            ? tx(
+                ` de ${countsRes.totalUsers.toLocaleString()}`,
+                ` of ${countsRes.totalUsers.toLocaleString()}`
+              )
+            : "";
+          setSyncMessage(
+            tx(
+              `${finalList.length}${totalLabel} arqueros sincronizados`,
+              `${finalList.length}${totalLabel} archers synced`
+            )
+          );
         } else {
-          setSyncMessage(`${localList.length} arqueros locales cargados`);
+          setSyncMessage(
+            tx(
+              `${localList.length} arqueros locales cargados`,
+              `${localList.length} local archers loaded`
+            )
+          );
         }
       } else {
-        setSyncMessage(`Modo offline: ${localList.length} arqueros cargados`);
+        setSyncMessage(
+          tx(
+            `Modo offline: ${localList.length} arqueros cargados`,
+            `Offline mode: ${localList.length} archers loaded`
+          )
+        );
       }
     } catch (err) {
       console.warn("[Admin Users] Firestore fetch error:", err);
-      setSyncMessage("Error de conexión. Mostrando arqueros locales.");
+      setSyncMessage(
+        tx(
+          "Error de conexión. Mostrando arqueros locales.",
+          "Connection error. Showing local archers."
+        )
+      );
     } finally {
       setIsRefreshing(false);
       setTimeout(() => setSyncMessage(null), 4000);
     }
-  }, [loadLocalUsers]);
+  }, [loadLocalUsers, tx]);
 
   // Load next 50 users page via Firestore cursor
   const handleLoadMoreUsers = async () => {
@@ -240,7 +261,8 @@ export default function AdminUsersTab() {
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, [refreshUsersFromFirestore, loadLocalUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Helper to calculate exact age from YYYY-MM-DD birthDate
   const calculateAge = (birthDate?: string): number | null => {
@@ -262,45 +284,45 @@ export default function AdminUsersTab() {
 
   const getWACategory = (age: number | null): string => {
     if (age === null) return "N/A";
-    if (age < 15) return "Sub-15";
-    if (age < 18) return "Sub-18 (Cadete)";
-    if (age < 21) return "Sub-21 (Junior)";
-    if (age < 50) return "Mayor (Senior)";
-    return "Master (50+)";
+    if (age < 15) return "U15";
+    if (age < 18) return "U18";
+    if (age < 21) return "U21";
+    if (age < 50) return tx("Mayor (Senior)", "Senior");
+    return "50+ (Master)";
   };
 
-  // Export users to CSV / Excel using mobile-resilient download/share helper
+  // Export users to CSV using mobile-resilient download/share helper
   const handleExportCSV = async () => {
     if (users.length === 0) {
-      await showOledAlert("No hay usuarios para exportar.");
+      await showOledAlert(tx("No hay usuarios para exportar.", "No users available to export."));
       return;
     }
 
     const headers = [
       "ID",
-      "Nombre Completo",
-      "Alias / Gamertag",
-      "Correo",
-      "Mensajería",
-      "Edad",
-      "Categoría WA",
-      "Fecha de Nacimiento",
-      "Género",
-      "Ciudad",
-      "País",
-      "Club",
-      "Rol",
-      "Plan",
-      "Tipo de Arco",
-      "Marca Arco",
-      "Modelo Arco",
-      "Potencia (lbs)",
-      "Distancia Default (m)",
-      "Estatura (cm)",
-      "Peso (kg)",
-      "Ojo Dominante",
-      "Mano Dominante",
-      "Fecha de Registro"
+      tx("Nombre Completo", "Full Name"),
+      tx("Alias / Gamertag", "Handle"),
+      tx("Correo", "Email"),
+      tx("Mensajería", "Messaging"),
+      tx("Edad", "Age"),
+      tx("Categoría WA", "WA Category"),
+      tx("Fecha de Nacimiento", "Birth Date"),
+      tx("Género", "Gender"),
+      tx("Ciudad", "City"),
+      tx("País", "Country"),
+      tx("Club", "Club"),
+      tx("Rol", "Role"),
+      tx("Plan", "Plan"),
+      tx("Tipo de Arco", "Bow Type"),
+      tx("Marca Arco", "Bow Brand"),
+      tx("Modelo Arco", "Bow Model"),
+      tx("Potencia (lbs)", "Poundage (lbs)"),
+      tx("Distancia Default (m)", "Default Distance (m)"),
+      tx("Estatura (cm)", "Height (cm)"),
+      tx("Peso (kg)", "Weight (kg)"),
+      tx("Ojo Dominante", "Dominant Eye"),
+      tx("Mano Dominante", "Dominant Hand"),
+      tx("Fecha de Registro", "Registration Date")
     ];
 
     const escapeCSV = (val: any) => {
@@ -318,7 +340,13 @@ export default function AdminUsersTab() {
       const age = calculateAge(u.birthDate);
       const waCategory = getWACategory(age);
       const genderLabel =
-        u.gender === "M" ? "Masculino" : u.gender === "F" ? "Femenino" : u.gender === "O" ? "Otro" : "N/A";
+        u.gender === "M"
+          ? t("genderM")
+          : u.gender === "F"
+          ? t("genderF")
+          : u.gender === "O"
+          ? t("genderO")
+          : "N/A";
       const bowType = u.bowConfig?.type || "Barebow";
       const bowBrand = u.bowConfig?.brand || "";
       const bowModel = u.bowConfig?.model || "";
@@ -342,7 +370,7 @@ export default function AdminUsersTab() {
         escapeCSV(genderLabel),
         escapeCSV(u.city || ""),
         escapeCSV(countryName),
-        escapeCSV(u.clubName || "Independiente"),
+        escapeCSV(u.clubName || t("independentLabel")),
         escapeCSV(u.role),
         escapeCSV(u.plan),
         escapeCSV(bowType),
@@ -358,14 +386,13 @@ export default function AdminUsersTab() {
       ].join(",");
     });
 
-    // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel compatibility with special characters
     const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
     const today = getLocalISODate();
     await downloadOrShareFile({
-      filename: `suscriptores_demografia_archery101010_${today}.csv`,
+      filename: `archery101010_users_${today}.csv`,
       mimeType: "text/csv;charset=utf-8",
       data: csvContent,
-      shareTitle: "Suscriptores ARCHERY 101010"
+      shareTitle: tx("Usuarios ARCHERY 101010", "ARCHERY 101010 Users")
     });
   };
 
@@ -419,7 +446,12 @@ export default function AdminUsersTab() {
 
       setUsers((prev) => prev.map((u) => (u.uid === targetUid ? updatedProfile : u)));
       setSelectedUser((prev) => (prev?.uid === targetUid ? updatedProfile : prev));
-      setSyncMessage(`Plan actualizado a ${nextPlan} para ${userToUpdate.fullName}`);
+      setSyncMessage(
+        tx(
+          `Plan actualizado a ${nextPlan} para ${userToUpdate.fullName}`,
+          `Plan updated to ${nextPlan} for ${userToUpdate.fullName}`
+        )
+      );
       setTimeout(() => setSyncMessage(null), 3500);
     } catch (err) {
       console.error("Error toggling plan:", err);
@@ -463,7 +495,7 @@ export default function AdminUsersTab() {
   const filteredUsers = users.filter((u) => {
     const term = (searchTerm || "").toLowerCase().trim();
     const cleanNickTerm = term.replace(/^@/, "");
-    const matchesSearch = 
+    const matchesSearch =
       !term ||
       (u.fullName || "").toLowerCase().includes(term) ||
       (u.email || "").toLowerCase().includes(term) ||
@@ -474,20 +506,18 @@ export default function AdminUsersTab() {
       (u.city || "").toLowerCase().includes(term) ||
       (u.country || "").toLowerCase().includes(term);
 
-    const matchesRole = 
-      roleFilter === "ALL" || 
+    const matchesRole =
+      roleFilter === "ALL" ||
       (roleFilter === "COACH" && (u.role === "coach" || u.role === "team_admin_coach")) ||
       (roleFilter === "ARCHER" && u.role === "archer") ||
       (roleFilter === "ADMIN" && (u.role === "team_admin" || u.role === "superadmin"));
 
-    const matchesPlan = 
-      planFilter === "ALL" || 
+    const matchesPlan =
+      planFilter === "ALL" ||
       (planFilter === "PRO" && u.plan === "PRO") ||
       (planFilter === "FREE" && u.plan === "FREE");
 
-    const matchesBow = 
-      bowFilter === "ALL" ||
-      u.bowConfig?.type === bowFilter;
+    const matchesBow = bowFilter === "ALL" || u.bowConfig?.type === bowFilter;
 
     return matchesSearch && matchesRole && matchesPlan && matchesBow;
   });
@@ -511,7 +541,9 @@ export default function AdminUsersTab() {
   const totalCount = globalCounts ? Math.max(globalCounts.totalUsers, users.length) : users.length;
   const recentCount = users.filter(isRecentUser).length;
   const proCount = globalCounts ? Math.max(globalCounts.proUsers, localProCount) : localProCount;
-  const coachCount = globalCounts ? Math.max(globalCounts.coachUsers, localCoachCount) : localCoachCount;
+  const coachCount = globalCounts
+    ? Math.max(globalCounts.coachUsers, localCoachCount)
+    : localCoachCount;
 
   return (
     <div className="flex flex-col gap-5 w-full p-4 md:p-6 pb-24">
@@ -519,13 +551,16 @@ export default function AdminUsersTab() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex flex-wrap items-center gap-2">
-            <span>Arqueros Inscritos</span>
+            <span>{tx("Arqueros Inscritos", "Registered Archers")}</span>
             <span className="text-[15.8px] bg-cyan-neon/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-0.5 rounded-full font-black tabular-nums">
               {totalCount.toLocaleString()} Total
             </span>
           </h2>
           <p className="text-xs text-white">
-            Monitoreo en tiempo real ({users.length.toLocaleString()} cargados en pantalla • búsqueda global en nube).
+            {tx(
+              `Monitoreo en tiempo real (${users.length.toLocaleString()} cargados en pantalla • búsqueda global en nube).`,
+              `Real-time monitoring (${users.length.toLocaleString()} loaded on screen • global cloud search).`
+            )}
           </p>
         </div>
 
@@ -535,20 +570,20 @@ export default function AdminUsersTab() {
             onClick={refreshUsersFromFirestore}
             disabled={isRefreshing}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-white/10 hover:border-white/20 text-white hover:text-white text-xs font-bold transition cursor-pointer disabled:opacity-50"
-            title="Refrescar lista desde Firestore"
+            title={tx("Refrescar lista desde la nube", "Refresh list from cloud")}
           >
             <RefreshCw size={13} className={isRefreshing ? "animate-spin text-cyan-neon" : ""} />
-            <span>Actualizar</span>
+            <span>{tx("Actualizar", "Refresh")}</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportCSV}
             className="min-h-[38px] flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider active:scale-95 transition cursor-pointer"
-            title="Descargar tabla en formato CSV"
+            title={tx("Descargar tabla en formato CSV", "Download CSV table")}
           >
             <FileSpreadsheet size={14} aria-hidden="true" />
-            <span>Exportar Tabla CSV</span>
+            <span>{t("exportCsvBtn")}</span>
           </button>
         </div>
       </div>
@@ -570,21 +605,23 @@ export default function AdminUsersTab() {
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
             <UserCheck size={12} className="text-cyan-neon" />
-            Total Registrados
+            <span>{t("totalUsers")}</span>
           </span>
-          <span className="text-xl font-black text-white mt-1 tabular-nums">{totalCount.toLocaleString()}</span>
+          <span className="text-xl font-black text-white mt-1 tabular-nums">
+            {totalCount.toLocaleString()}
+          </span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
             <Flame size={12} className="text-yellow-gold" />
-            Nuevos (48h)
+            <span>{tx("Nuevos (48h)", "New (48h)")}</span>
           </span>
           <span className="text-xl font-black text-yellow-gold mt-1 flex items-center gap-1.5 tabular-nums">
             {recentCount}
             {recentCount > 0 && (
               <span className="text-[10.5px] px-1.5 py-0.2 rounded-full bg-orange-500/20 text-yellow-gold font-bold uppercase">
-                Reciente
+                {tx("Reciente", "Recent")}
               </span>
             )}
           </span>
@@ -593,36 +630,46 @@ export default function AdminUsersTab() {
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
             <Crown size={12} className="text-yellow-gold" />
-            Suscripciones PRO
+            <span>{t("proSubscribers")}</span>
           </span>
-          <span className="text-xl font-black text-yellow-gold mt-1 tabular-nums">{proCount.toLocaleString()}</span>
+          <span className="text-xl font-black text-yellow-gold mt-1 tabular-nums">
+            {proCount.toLocaleString()}
+          </span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
           <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
             <Shield size={12} className="text-cyan-neon" />
-            Coaches / Clubes
+            <span>{tx("Coaches / Clubes", "Coaches / Clubs")}</span>
           </span>
-          <span className="text-xl font-black text-cyan-neon mt-1 tabular-nums">{coachCount.toLocaleString()}</span>
+          <span className="text-xl font-black text-cyan-neon mt-1 tabular-nums">
+            {coachCount.toLocaleString()}
+          </span>
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search and Filters (RTL-logical spacing) */}
       <div className="flex flex-col md:flex-row gap-3 items-center sticky top-0 z-10 bg-[#0A0A0C]/95 backdrop-blur-md py-2 border-b border-white/5">
         <div className="w-full md:flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white" size={16} />
+          <Search
+            className="absolute start-3.5 top-1/2 -translate-y-1/2 text-white pointer-events-none"
+            size={16}
+          />
           <input
             type="text"
-            placeholder="Buscar en toda la nube por nombre, @apodo, correo, ID o código..."
+            placeholder={tx(
+              "Buscar en toda la nube por nombre, @apodo, correo, ID o código...",
+              "Search across cloud by name, @handle, email, ID or code..."
+            )}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-neutral-900/50 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon focus:bg-neutral-900 transition duration-200"
+            className="w-full ps-10 pe-9 py-2.5 rounded-2xl bg-neutral-900/50 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon focus:bg-neutral-900 transition duration-200"
           />
           {isSearchingCloud && (
             <Loader2
               size={14}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
-              aria-label="Buscando en la nube"
+              className="absolute end-3.5 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
+              aria-label={tx("Buscando en la nube", "Searching cloud")}
             />
           )}
         </div>
@@ -641,7 +688,13 @@ export default function AdminUsersTab() {
                     : "text-white hover:text-white"
                 }`}
               >
-                {filter === "ALL" ? "Todos" : filter === "ARCHER" ? "Arqueros" : filter === "COACH" ? "Coaches" : "Admins"}
+                {filter === "ALL"
+                  ? t("filterAll")
+                  : filter === "ARCHER"
+                  ? tx("Arqueros", "Archers")
+                  : filter === "COACH"
+                  ? tx("Coaches", "Coaches")
+                  : tx("Admins", "Admins")}
               </button>
             ))}
           </div>
@@ -658,7 +711,7 @@ export default function AdminUsersTab() {
                     : "text-white hover:text-white"
                 }`}
               >
-                {filter === "ALL" ? "Planes" : filter}
+                {filter === "ALL" ? tx("Planes", "Plans") : filter}
               </button>
             ))}
           </div>
@@ -666,10 +719,10 @@ export default function AdminUsersTab() {
           {/* Bow Filter */}
           <div className="flex max-w-full overflow-x-auto scrollbar-none bg-neutral-900/50 border border-white/10 rounded-xl p-0.5">
             {[
-              { id: "ALL", label: "Arcos" },
-              { id: "Recurve", label: "Recurvo" },
-              { id: "Compound", label: "Compuesto" },
-              { id: "Barebow", label: "Raso" }
+              { id: "ALL", label: tx("Arcos", "Bows") },
+              { id: "Recurve", label: t("bowRecurve") },
+              { id: "Compound", label: t("bowCompound") },
+              { id: "Barebow", label: tx("Raso", "Barebow") }
             ].map((b) => (
               <button
                 key={b.id}
@@ -689,9 +742,34 @@ export default function AdminUsersTab() {
 
       {/* Users view list */}
       <div className="w-full flex flex-col gap-3">
-        {filteredUsers.length === 0 ? (
+        {isRefreshing && users.length === 0 ? (
+          <div className="flex flex-col gap-2.5" role="status" aria-label={t("loading")}>
+            {[0, 1, 2, 3].map((idx) => (
+              <div
+                key={idx}
+                className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex items-center justify-between gap-3 animate-pulse"
+              >
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div className="w-12 h-12 rounded-2xl bg-[#121620] border border-white/[0.08] shrink-0" />
+                  <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    <div className="h-3.5 w-36 bg-white/10 rounded-md" />
+                    <div className="h-2.5 w-48 bg-white/[0.06] rounded-md" />
+                    <div className="h-2 w-56 bg-white/[0.04] rounded-md" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="h-6 w-14 rounded-full bg-white/[0.06]" />
+                  <div className="h-6 w-12 rounded-full bg-white/[0.06]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredUsers.length === 0 ? (
           <div className="bg-neutral-900/20 border border-white/5 rounded-3xl p-12 text-center text-white text-xs">
-            No se encontraron arqueros que coincidan con los filtros de búsqueda.
+            {tx(
+              "No se encontraron arqueros que coincidan con los filtros de búsqueda.",
+              "No archers match the current search filters."
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
@@ -700,7 +778,7 @@ export default function AdminUsersTab() {
                 COUNTRIES_MAP[u.country] ||
                 COUNTRIES.find((c) => c.code === u.country) || {
                   flag: u.country || "INT",
-                  name: u.country || "Desconocido"
+                  name: u.country || tx("Desconocido", "Unknown")
                 };
               const isRecent = isRecentUser(u);
 
@@ -716,7 +794,7 @@ export default function AdminUsersTab() {
                       <div className="w-12 h-12 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-sm">
                         {getInitials(u.fullName)}
                       </div>
-                      <span className="absolute -bottom-1 -right-1 text-sm drop-shadow-md">
+                      <span className="absolute -bottom-1 -end-1 text-sm drop-shadow-md">
                         {countryInfo.flag}
                       </span>
                     </div>
@@ -725,23 +803,28 @@ export default function AdminUsersTab() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="text-xs font-bold text-white truncate">{u.fullName}</h4>
                         {u.nickname && (
-                          <span className="text-[11.6px] text-cyan-neon tabular-nums font-semibold">
+                          <span className="text-[11.6px] text-cyan-neon tabular-nums font-semibold select-text">
                             @{u.nickname}
                           </span>
                         )}
                         {isRecent && (
                           <span className="text-[9.3px] px-1.5 py-0.2 rounded-full bg-cyan-neon/20 text-cyan-neon font-black uppercase tracking-wider animate-pulse">
-                            Nuevo
+                            {tx("Nuevo", "New")}
                           </span>
                         )}
                       </div>
 
-                      <p className="text-[11.6px] text-white truncate">{u.email}</p>
+                      <p className="text-[11.6px] text-white truncate select-text">{u.email}</p>
 
                       {/* Sub-row: Demographics, Club & Primary Bow */}
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-white flex-wrap">
                         <span className="text-yellow-gold font-bold tabular-nums">
-                          {calculateAge(u.birthDate) !== null ? `${calculateAge(u.birthDate)} años` : "Edad N/D"}
+                          {calculateAge(u.birthDate) !== null
+                            ? tx(
+                                `${calculateAge(u.birthDate)} años`,
+                                `${calculateAge(u.birthDate)} yrs`
+                              )
+                            : tx("Edad N/D", "Age N/A")}
                         </span>
                         <span>·</span>
                         <span className="text-white font-medium">
@@ -749,16 +832,20 @@ export default function AdminUsersTab() {
                         </span>
                         <span>·</span>
                         <span className="text-white font-medium">
-                          {u.city ? `${u.city}, ` : ""}{countryInfo.name}
+                          {u.city ? `${u.city}, ` : ""}
+                          {countryInfo.name}
                         </span>
                         <span>·</span>
-                        <span className="text-white font-semibold">{u.clubName || "Independiente"}</span>
-                        <span>·</span>
-                        <span className="text-cyan-neon font-medium">
-                          {u.bowConfig?.type || "Barebow"} {u.bowConfig?.poundage ? `(${u.bowConfig.poundage}#)` : ""}
+                        <span className="text-white font-semibold">
+                          {u.clubName || t("independentLabel")}
                         </span>
                         <span>·</span>
-                        <span className="text-white flex items-center gap-1">
+                        <span className="text-cyan-neon font-medium tabular-nums">
+                          {u.bowConfig?.type || "Barebow"}{" "}
+                          {u.bowConfig?.poundage ? `(${u.bowConfig.poundage}#)` : ""}
+                        </span>
+                        <span>·</span>
+                        <span className="text-white flex items-center gap-1 tabular-nums">
                           <Calendar size={10} />
                           {formatRegistrationDate(u.createdAt || u.lastActiveAt)}
                         </span>
@@ -769,51 +856,67 @@ export default function AdminUsersTab() {
                   {/* Right: Badges and Action Controls */}
                   <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t border-white/5 md:border-t-0 shrink-0">
                     {/* Role badge */}
-                    <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-bold uppercase border ${
-                      u.role === "superadmin" 
-                        ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
-                        : u.role === "coach" || u.role === "team_admin_coach"
-                        ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
-                        : "bg-neutral-500/10 text-white border-neutral-500/20"
-                    }`}>
-                      {u.role === "archer" ? "Atleta" : u.role}
+                    <span
+                      className={`text-[10.5px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                        u.role === "superadmin"
+                          ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
+                          : u.role === "coach" || u.role === "team_admin_coach"
+                          ? "bg-cyan-neon/10 text-cyan-neon border-cyan-neon/20"
+                          : "bg-neutral-500/10 text-white border-neutral-500/20"
+                      }`}
+                    >
+                      {u.role === "archer" ? t("roleAthlete") : u.role}
                     </span>
 
                     {/* Plan badge */}
-                    <span className={`text-[10.5px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
-                      u.plan === "PRO"
-                        ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/25"
-                        : "bg-white/5 text-white border-white/5"
-                    }`}>
+                    <span
+                      className={`text-[10.5px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
+                        u.plan === "PRO"
+                          ? "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/25"
+                          : "bg-white/5 text-white border-white/5"
+                      }`}
+                    >
                       {u.plan}
                     </span>
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1.5 ml-1">
+                    <div className="flex items-center gap-1.5 ms-1">
                       <button
                         type="button"
                         onClick={() => setSelectedUser(u)}
-                        aria-label={`Ver ficha completa de ${u.fullName}`}
+                        aria-label={tx(
+                          `Ver ficha completa de ${u.fullName}`,
+                          `View full profile of ${u.fullName}`
+                        )}
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white transition cursor-pointer"
-                        title="Ver Ficha Completa"
+                        title={tx("Ver Ficha Completa", "View Full Profile")}
                       >
                         <Eye size={14} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleToggleRole(u.uid)}
-                        aria-label={`Cambiar rol de ${u.fullName}`}
+                        aria-label={tx(
+                          `Cambiar rol de ${u.fullName}`,
+                          `Cycle role for ${u.fullName}`
+                        )}
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon transition cursor-pointer"
-                        title="Cambiar Rol (Atleta / Coach / Admin)"
+                        title={tx(
+                          "Cambiar Rol (Atleta / Coach / Admin)",
+                          "Cycle Role (Athlete / Coach / Admin)"
+                        )}
                       >
                         <Shield size={14} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleTogglePlan(u.uid)}
-                        aria-label={`Alternar plan de ${u.fullName}`}
+                        aria-label={tx(
+                          `Alternar plan de ${u.fullName}`,
+                          `Toggle plan for ${u.fullName}`
+                        )}
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-yellow-gold transition cursor-pointer"
-                        title="Alternar Plan (FREE / PRO)"
+                        title={tx("Alternar Plan (FREE / PRO)", "Toggle Plan (FREE / PRO)")}
                       >
                         <Crown size={14} aria-hidden="true" />
                       </button>
@@ -837,13 +940,16 @@ export default function AdminUsersTab() {
               {isLoadingMore ? (
                 <>
                   <Loader2 size={14} className="animate-spin text-cyan-neon" />
-                  <span>Cargando siguientes 50...</span>
+                  <span>{tx("Cargando siguientes 50...", "Loading next 50...")}</span>
                 </>
               ) : (
                 <>
                   <ChevronDown size={15} className="text-cyan-neon" />
                   <span className="tabular-nums">
-                    Cargar 50 más ({users.length.toLocaleString()} de {totalCount.toLocaleString()})
+                    {tx(
+                      `Cargar 50 más (${users.length.toLocaleString()} de ${totalCount.toLocaleString()})`,
+                      `Load 50 more (${users.length.toLocaleString()} of ${totalCount.toLocaleString()})`
+                    )}
                   </span>
                 </>
               )}
@@ -869,25 +975,28 @@ export default function AdminUsersTab() {
                   <div className="w-14 h-14 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon font-black text-lg">
                     {getInitials(selectedUser.fullName)}
                   </div>
-                  <span className="absolute -bottom-1 -right-1 text-[10.5px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
+                  <span className="absolute -bottom-1 -end-1 text-[10.5px] font-black uppercase bg-neutral-950 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none">
                     {COUNTRIES_MAP[selectedUser.country]?.flag || selectedUser.country || "INT"}
                   </span>
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-bold text-white truncate">{selectedUser.fullName}</h3>
+                    <h3 className="text-sm font-bold text-white truncate">
+                      {selectedUser.fullName}
+                    </h3>
                     {selectedUser.nickname && (
-                      <span className="text-[12.8px] text-cyan-neon tabular-nums font-semibold">
+                      <span className="text-[12.8px] text-cyan-neon tabular-nums font-semibold select-text">
                         @{selectedUser.nickname}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-white flex items-center gap-1 mt-0.5 truncate">
-                    <Mail size={12} />
-                    <span>{selectedUser.email}</span>
+                    <Mail size={12} className="shrink-0" />
+                    <span className="select-text truncate">{selectedUser.email}</span>
                   </p>
-                  <p className="text-[11.6px] text-cyan-neon mt-1">
-                    Inscripción: {formatRegistrationDate(selectedUser.createdAt || selectedUser.lastActiveAt)}
+                  <p className="text-[11.6px] text-cyan-neon mt-1 tabular-nums">
+                    {tx("Inscripción:", "Registered:")}{" "}
+                    {formatRegistrationDate(selectedUser.createdAt || selectedUser.lastActiveAt)}
                   </p>
                 </div>
               </div>
@@ -896,80 +1005,114 @@ export default function AdminUsersTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div className="grid grid-cols-2 gap-2.5 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">País / Ciudad</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">
+                      {tx("País / Ciudad", "Country / City")}
+                    </span>
                     <span className="text-white font-medium">
-                      {COUNTRIES_MAP[selectedUser.country]?.flag} {selectedUser.city ? `${selectedUser.city}, ` : ""}{COUNTRIES_MAP[selectedUser.country]?.name || selectedUser.country || "N/A"}
+                      {COUNTRIES_MAP[selectedUser.country]?.flag}{" "}
+                      {selectedUser.city ? `${selectedUser.city}, ` : ""}
+                      {COUNTRIES_MAP[selectedUser.country]?.name || selectedUser.country || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">Género</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">
+                      {t("gender")}
+                    </span>
                     <span className="text-white font-medium">
-                      {selectedUser.gender === "M" ? "Masculino" : selectedUser.gender === "F" ? "Femenino" : selectedUser.gender || "N/A"}
+                      {selectedUser.gender === "M"
+                        ? t("genderM")
+                        : selectedUser.gender === "F"
+                        ? t("genderF")
+                        : selectedUser.gender || "N/A"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">Edad / Nacimiento</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">
+                      {tx("Edad / Nacimiento", "Age / Birth Date")}
+                    </span>
                     <span className="text-yellow-gold font-bold tabular-nums">
                       {calculateAge(selectedUser.birthDate) !== null
-                        ? `${calculateAge(selectedUser.birthDate)} años (${getWACategory(calculateAge(selectedUser.birthDate))})`
+                        ? `${calculateAge(selectedUser.birthDate)} (${getWACategory(
+                            calculateAge(selectedUser.birthDate)
+                          )})`
                         : "N/A"}
                     </span>
-                    <span className="text-white text-[10.5px] block tabular-nums">{selectedUser.birthDate || ""}</span>
+                    <span className="text-white text-[10.5px] block tabular-nums">
+                      {selectedUser.birthDate || ""}
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">ID Usuario</span>
-                    <span className="text-white tabular-nums text-[10.5px] truncate block">{selectedUser.uid}</span>
+                  <div className="min-w-0">
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest block">
+                      {tx("ID Usuario", "User UID")}
+                    </span>
+                    <span className="text-white tabular-nums text-[10.5px] break-all block select-text">
+                      {selectedUser.uid}
+                    </span>
                   </div>
                 </div>
 
                 <div className="bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-2">
                   <h4 className="font-bold text-white text-[11.6px] uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
                     <Target size={12} />
-                    Configuración de Arco Principal
+                    <span>{t("bowConfig")}</span>
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[10.5px] text-white uppercase font-bold block">Tipo</span>
-                      <span className="text-white font-medium">{selectedUser.bowConfig?.type || "Barebow"}</span>
+                      <span className="text-[10.5px] text-white uppercase font-bold block">
+                        {t("bowType")}
+                      </span>
+                      <span className="text-white font-medium">
+                        {selectedUser.bowConfig?.type || "Barebow"}
+                      </span>
                     </div>
                     <div>
-                      <span className="text-[10.5px] text-white uppercase font-bold block">Marca / Modelo</span>
-                      <span className="text-white font-medium truncate">
+                      <span className="text-[10.5px] text-white uppercase font-bold block">
+                        {tx("Marca / Modelo", "Brand / Model")}
+                      </span>
+                      <span className="text-white font-medium truncate block">
                         {selectedUser.bowConfig?.brand || ""} {selectedUser.bowConfig?.model || ""}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10.5px] text-white uppercase font-bold block">Potencia</span>
-                      <span className="text-white font-medium tabular-nums">{selectedUser.bowConfig?.poundage || 0} lbs</span>
+                      <span className="text-[10.5px] text-white uppercase font-bold block">
+                        {t("poundage")}
+                      </span>
+                      <span className="text-white font-medium tabular-nums">
+                        {selectedUser.bowConfig?.poundage || 0} lbs
+                      </span>
                     </div>
                     <div>
-                      <span className="text-[10.5px] text-white uppercase font-bold block">Distancia Default</span>
-                      <span className="text-white font-medium tabular-nums">{selectedUser.bowConfig?.defaultDistance || 18}m</span>
+                      <span className="text-[10.5px] text-white uppercase font-bold block">
+                        {t("distance")}
+                      </span>
+                      <span className="text-white font-medium tabular-nums">
+                        {selectedUser.bowConfig?.defaultDistance || 18}m
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5">
                   <h4 className="font-bold text-white text-[11.6px] uppercase tracking-wider text-cyan-neon">
-                    Club y Contacto
+                    {tx("Club y Contacto", "Club & Contact")}
                   </h4>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <span className="text-white">Club Deportivo:</span>
-                    <span className="text-white font-bold text-right truncate">
-                      {selectedUser.clubName || "Arquero Independiente"}
+                    <span className="text-white">{tx("Club Deportivo:", "Club:")}</span>
+                    <span className="text-white font-bold text-end truncate">
+                      {selectedUser.clubName || t("independentLabel")}
                     </span>
-                    <span className="text-white">ID Club:</span>
-                    <span className="text-white font-bold text-right truncate text-[11.6px]">
-                      {selectedUser.clubId || "Ninguno"}
-                    </span>
-
-                    <span className="text-white">Teléfono / Mensajería:</span>
-                    <span className="text-white font-bold text-right truncate">
-                      {selectedUser.whatsappNumber || "No indicado"}
+                    <span className="text-white">{tx("ID Club:", "Club ID:")}</span>
+                    <span className="text-white font-bold text-end truncate text-[11.6px] select-text">
+                      {selectedUser.clubId || tx("Ninguno", "None")}
                     </span>
 
-                    <span className="text-white">Rol en la App:</span>
-                    <span className="text-cyan-neon font-bold text-right uppercase text-[11.6px]">
+                    <span className="text-white">{t("phoneMessagingLabel")}:</span>
+                    <span className="text-white font-bold text-end truncate select-text tabular-nums">
+                      {selectedUser.whatsappNumber || tx("No indicado", "Not provided")}
+                    </span>
+
+                    <span className="text-white">{tx("Rol en la App:", "App Role:")}</span>
+                    <span className="text-cyan-neon font-bold text-end uppercase text-[11.6px]">
                       {selectedUser.role}
                     </span>
                   </div>
@@ -981,7 +1124,7 @@ export default function AdminUsersTab() {
                 onClick={() => setSelectedUser(null)}
                 className="w-full py-2.5 mt-2 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase transition cursor-pointer"
               >
-                Cerrar Detalles
+                {tx("Cerrar Detalles", "Close Details")}
               </button>
             </motion.div>
           </div>

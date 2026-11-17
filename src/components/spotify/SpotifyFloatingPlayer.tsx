@@ -23,6 +23,7 @@ import {
   KeyRound
 } from "lucide-react";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   ConnectedSpotifyAccount,
   extractSpotifyUsername,
@@ -41,9 +42,11 @@ export type SpotifyEntityType = "playlist" | "album" | "track" | "artist" | "sho
 export interface SpotifyItem {
   id: string;
   name: string;
+  nameEn?: string;
   type?: SpotifyEntityType;
   creator?: string;
   description?: string;
+  descriptionEn?: string;
 }
 
 const SHARED_PLAYLISTS: SpotifyItem[] = [
@@ -51,22 +54,28 @@ const SHARED_PLAYLISTS: SpotifyItem[] = [
     id: "37i9dQZF1DWZeKCadgRdKQ",
     type: "playlist",
     name: "Focus Olímpico",
+    nameEn: "Olympic Focus",
     creator: "Coach Carlos",
-    description: "Deep Focus: instrumental y beats envolventes para máxima concentración.",
+    description: "Instrumental y ritmos envolventes para máxima concentración.",
+    descriptionEn: "Instrumental and ambient beats for peak focus."
   },
   {
     id: "37i9dQZF1DWWQRwui0ExPn",
     type: "playlist",
     name: "Ritmo & Barebow",
+    nameEn: "Rhythm & Barebow",
     creator: "Archery 101010",
-    description: "Lofi Beats: compás relajado y constante para ritmo y cadencia de tiro.",
+    description: "Compás relajado y constante para ritmo y cadencia de tiro.",
+    descriptionEn: "Steady, relaxed tempo for shooting rhythm and cadence."
   },
   {
     id: "37i9dQZF1DWXRqgorJj26U",
     type: "playlist",
     name: "Compound Energy",
+    nameEn: "Compound Energy",
     creator: "Laura Archer",
-    description: "Rock Classics: energía y potencia para eliminatorias y finales.",
+    description: "Energía y potencia para eliminatorias y finales.",
+    descriptionEn: "High energy and drive for eliminations and finals."
   }
 ];
 
@@ -76,20 +85,36 @@ const OLD_INVALID_IDS = [
   "37i9dQZF1DWZqd5JICZI01"
 ];
 
-const ENTITY_TYPE_LABELS: Record<SpotifyEntityType, string> = {
-  playlist: "Playlist",
-  album: "Álbum",
-  track: "Canción",
-  artist: "Artista",
-  show: "Podcast",
-  episode: "Episodio"
-};
-
 interface SpotifyFloatingPlayerProps {
   showSideTab?: boolean;
 }
 
 export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFloatingPlayerProps) {
+  const { language, tx } = useLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const txCurrent = (esText: string, enText: string) =>
+    languageRef.current === "es" ? esText : enText;
+
+  const getEntityTypeLabel = (type: SpotifyEntityType): string => {
+    switch (type) {
+      case "playlist":
+        return tx("Lista Musical", "Playlist");
+      case "album":
+        return tx("Álbum", "Album");
+      case "track":
+        return tx("Canción", "Track");
+      case "artist":
+        return tx("Artista", "Artist");
+      case "show":
+        return tx("Podcast", "Podcast");
+      case "episode":
+        return tx("Episodio", "Episode");
+      default:
+        return tx("Lista Musical", "Playlist");
+    }
+  };
+
   const [isOpen, setIsOpen] = useState(false);
   const [hasLoadedIframe, setHasLoadedIframe] = useState(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
@@ -104,7 +129,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   const [isEnabledByAdmin, setIsEnabledByAdmin] = useState(true);
   const [isCompactPlayer, setIsCompactPlayer] = useState(false);
 
-  // Connected Spotify Account States
+  // Connected Music Account States
   const [connectedAccount, setConnectedAccount] = useState<ConnectedSpotifyAccount | null>(null);
   const [hasNativeSessionCookie, setHasNativeSessionCookie] = useState<boolean>(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -121,7 +146,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loginPopupWatchingRef = useRef(false);
 
-  // Official Spotify App Remote (Android native): playback is controlled from ARCHERY 101010
+  // Native music remote bridge (Android native): playback is controlled from ARCHERY 101010
   type SpotifyRemoteState = {
     connected: boolean;
     appInstalled?: boolean;
@@ -149,14 +174,29 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       } else if (s.error) {
         const msg =
           s.error === "SPOTIFY_NOT_INSTALLED"
-            ? "Instala tu app de música compatible y vuelve a tocar Conectar."
+            ? txCurrent(
+                "Instala tu aplicación de música compatible y vuelve a tocar Conectar.",
+                "Install your compatible music app and tap Connect again."
+              )
             : s.error === "MISSING_CLIENT_ID"
-            ? "Falta activar la llave de conexión musical de ARCHERY 101010 (Client ID)."
+            ? txCurrent(
+                "Falta activar la llave de conexión musical de ARCHERY 101010 (Client ID).",
+                "ARCHERY 101010 music connection key (Client ID) is not configured."
+              )
             : s.error === "UserNotAuthorizedException"
-            ? "Autoriza ARCHERY 101010 en la ventana de música y vuelve a intentar."
+            ? txCurrent(
+                "Autoriza ARCHERY 101010 en la ventana de música y vuelve a intentar.",
+                "Authorize ARCHERY 101010 in the music window and try again."
+              )
             : s.error === "NotLoggedInException"
-            ? "Abre tu app de música, inicia sesión y vuelve a tocar Conectar."
-            : "No se pudo conectar con la app de música. Ábrela una vez y reintenta.";
+            ? txCurrent(
+                "Abre tu aplicación de música, inicia sesión y vuelve a tocar Conectar.",
+                "Open your music app, sign in, and tap Connect again."
+              )
+            : txCurrent(
+                "No se pudo conectar con el servicio musical. Ábrelo una vez y reintenta.",
+                "Could not connect to the music service. Open it once and try again."
+              );
         setAccountFeedback(msg);
       }
     };
@@ -169,7 +209,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     }
   }, []);
 
-  // Check Native Android Spotify Session Cookie (`sp_dc`)
+  // Check Native Android Music Session Cookie (`sp_dc`)
   const syncNativeSpotifySessionStatus = () => {
     if (typeof window === "undefined") return false;
     const bridge = (window as any).ArcherySpotifyBridge;
@@ -185,7 +225,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     return true;
   };
 
-  // Load active playlist, custom playlists, and connected Spotify account on mount
+  // Load active playlist, custom playlists, and connected music account on mount
   useEffect(() => {
     async function loadSpotifyConfig() {
       const flag = await getLocalSetting<boolean>("flag_spotify_enabled", true);
@@ -204,7 +244,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
       setActivePlaylistId(savedId);
       setActiveType(savedType || "playlist");
-      let currentCustom = Array.isArray(savedCustom) ? savedCustom : [];
+      const currentCustom = Array.isArray(savedCustom) ? savedCustom : [];
       setCustomPlaylists(currentCustom);
       if (savedAccount) {
         setConnectedAccount(savedAccount);
@@ -219,7 +259,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       if (nativeActive && !savedAccount) {
         const autoAcc: ConnectedSpotifyAccount = {
           username: "music",
-          displayName: "Cuenta Musical Vinculada",
+          displayName: txCurrent("Cuenta de Música", "Music Account"),
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -241,7 +281,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             type: "playlist",
             name: pl.name,
             creator: pl.ownerName,
-            description: pl.tracksTotal ? `${pl.tracksTotal} canciones` : pl.description
+            description: pl.tracksTotal
+              ? txCurrent(`${pl.tracksTotal} canciones`, `${pl.tracksTotal} tracks`)
+              : pl.description
           }));
 
           const existingIds = new Set(importedItems.map((i) => i.id));
@@ -258,7 +300,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
           await saveLocalSetting("spotify_active_id", importedItems[0].id);
           await saveLocalSetting("spotify_active_type", "playlist");
         }
-        setAccountFeedback("Cuenta musical sincronizada y listas importadas.");
+        setAccountFeedback(
+          txCurrent(
+            "Cuenta de música sincronizada y listas importadas.",
+            "Music account synced and playlists imported."
+          )
+        );
         setTimeout(() => setAccountFeedback(null), 4000);
       }
     }
@@ -270,7 +317,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       if (ok) {
         const autoAcc: ConnectedSpotifyAccount = {
           username: "music",
-          displayName: "Cuenta Musical Vinculada",
+          displayName: txCurrent("Cuenta de Música", "Music Account"),
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -278,7 +325,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         setConnectedAccount(autoAcc);
         await saveLocalSetting("spotify_connected_account", autoAcc);
         setIframeReloadKey((prev) => prev + 1);
-        setAccountFeedback("¡Música conectada automáticamente! Reproducción completa activada.");
+        setAccountFeedback(
+          txCurrent(
+            "¡Reproductor musical conectado! Reproducción completa activada.",
+            "Music player connected! Full playback enabled."
+          )
+        );
         setTimeout(() => setAccountFeedback(null), 4000);
       }
     };
@@ -303,7 +355,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       if (loginPopupWatchingRef.current) {
         loginPopupWatchingRef.current = false;
         setIframeReloadKey((prev) => prev + 1);
-        setAccountFeedback("Sesión musical actualizada en el reproductor.");
+        setAccountFeedback(
+          txCurrent(
+            "Sesión musical actualizada en el reproductor.",
+            "Music session updated in player."
+          )
+        );
         setTimeout(() => setAccountFeedback(null), 3500);
       }
     };
@@ -324,7 +381,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     }
   }, [isOpen, isPlaying]);
 
-  // Listen to real Spotify Embed postMessage events (playback_update / ready)
+  // Listen to embedded player postMessage events (playback_update / ready)
   useEffect(() => {
     const handleSpotifyMessage = (event: MessageEvent) => {
       if (!event.origin.includes("spotify.com")) return;
@@ -348,13 +405,13 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     return () => window.removeEventListener("message", handleSpotifyMessage);
   }, []);
 
-  // Send command to Spotify Embed IFrame
+  // Send command to Embedded Music IFrame
   const sendSpotifyCommand = (command: "toggle" | "pause" | "resume" | "play") => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ command }, "*");
       } catch (e) {
-        console.warn("Could not postMessage to Spotify iframe:", e);
+        console.warn("Could not postMessage to music iframe:", e);
       }
     }
   };
@@ -371,10 +428,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
   // Connect Music Account (User + In-App Web Session Login for full tracks)
   const handleConnectSpotifyAccount = async (openSpotifyLoginPopup: boolean) => {
-    const cleanUser = extractSpotifyUsername(usernameInput || displayNameInput || "arquero");
+    const cleanUser = extractSpotifyUsername(
+      usernameInput || displayNameInput || tx("arquero", "archer")
+    );
     const cleanDisplay =
       displayNameInput.trim() ||
-      (usernameInput.trim() ? extractSpotifyUsername(usernameInput) : "Mi Cuenta Musical");
+      (usernameInput.trim()
+        ? extractSpotifyUsername(usernameInput)
+        : tx("Cuenta de Música", "Music Account"));
 
     const newAccount: ConnectedSpotifyAccount = {
       username: cleanUser,
@@ -392,13 +453,15 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       const nativeBridge = getNativeSpotify();
       if (nativeBridge) {
         nativeBridge.connectSpotifyPlayer(oauthClientIdInput || "");
-        setAccountFeedback("Conectando con tu app de música…");
+        setAccountFeedback(
+          tx("Conectando con el servicio musical…", "Connecting to music service…")
+        );
         return;
       }
 
       loginPopupWatchingRef.current = true;
       const loginUrl =
-        "https://accounts.spotify.com/es/login?continue=" +
+        "https://accounts.spotify.com/login?continue=" +
         encodeURIComponent("https://open.spotify.com/");
       const popup = window.open(
         loginUrl,
@@ -409,12 +472,17 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         window.open(loginUrl, "_blank", "noopener,noreferrer");
       }
       setAccountFeedback(
-        "Inicia sesión en la ventana emergente. Al volver aquí, tu reproductor tendrá acceso completo."
+        tx(
+          "Inicia sesión en la ventana emergente. Al volver aquí, tu reproductor tendrá acceso completo.",
+          "Sign in inside the popup window. When you return, your music player will have full access."
+        )
       );
     } else {
       syncNativeSpotifySessionStatus();
       setIframeReloadKey((prev) => prev + 1);
-      setAccountFeedback("Cuenta musical vinculada correctamente.");
+      setAccountFeedback(
+        tx("Cuenta de música vinculada correctamente.", "Music account linked successfully.")
+      );
       setTimeout(() => setAccountFeedback(null), 3000);
     }
   };
@@ -424,7 +492,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     try {
       await startSpotifyOAuthPKCE(oauthClientIdInput);
     } catch (err: any) {
-      setAccountFeedback(err?.message || "Ingresa un Client ID válido para OAuth.");
+      setAccountFeedback(
+        err?.message || tx("Ingresa un Client ID válido para OAuth.", "Enter a valid OAuth Client ID.")
+      );
     }
   };
 
@@ -443,7 +513,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
           type: "playlist",
           name: pl.name,
           creator: pl.ownerName,
-          description: pl.tracksTotal ? `${pl.tracksTotal} canciones` : pl.description
+          description: pl.tracksTotal
+            ? tx(`${pl.tracksTotal} canciones`, `${pl.tracksTotal} tracks`)
+            : pl.description
         }));
         const existingIds = new Set(imported.map((i) => i.id));
         const merged = [
@@ -452,14 +524,24 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         ];
         setCustomPlaylists(merged);
         await saveLocalSetting("spotify_custom_lists", merged);
-        setAccountFeedback(`${imported.length} listas sincronizadas desde tu cuenta.`);
+        setAccountFeedback(
+          tx(
+            `${imported.length} listas sincronizadas desde tu cuenta.`,
+            `${imported.length} playlists synced from your account.`
+          )
+        );
         setTimeout(() => setAccountFeedback(null), 3000);
         return;
       }
     }
     // Reload embedded player to pick up active music session
     setIframeReloadKey((prev) => prev + 1);
-    setAccountFeedback("Reproductor sincronizado con tu sesión musical.");
+    setAccountFeedback(
+      tx(
+        "Reproductor sincronizado con tu sesión musical.",
+        "Player synced with your music session."
+      )
+    );
     setTimeout(() => setAccountFeedback(null), 2500);
   };
 
@@ -476,16 +558,16 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setDisplayNameInput("");
     await saveLocalSetting("spotify_connected_account", null);
     setIframeReloadKey((prev) => prev + 1);
-    setAccountFeedback("Cuenta desvinculada.");
+    setAccountFeedback(tx("Cuenta de música desvinculada.", "Music account disconnected."));
     setTimeout(() => setAccountFeedback(null), 2000);
   };
 
-  // Universal Spotify extractor: supports URLs, regional /intl-xx/, /embed/, URIs, mobile share text, and raw 22-char IDs
+  // Universal music URL extractor: supports URLs, regional /intl-xx/, /embed/, URIs, mobile share text, and raw 22-char IDs
   const extractSpotifyItem = (input: string): { id: string; type: SpotifyEntityType } | null => {
     if (!input) return null;
     const trimmed = input.trim();
 
-    // 1. Standard, regional (/intl-es/), or /embed/ Spotify URL anywhere inside the pasted text
+    // 1. Standard, regional (/intl-es/), or /embed/ URL anywhere inside the pasted text
     const urlMatch = trimmed.match(
       /spotify\.com\/(?:intl-[a-zA-Z0-9-]+\/)?(?:embed\/)?(playlist|album|track|artist|show|episode)\/([a-zA-Z0-9]{22})/i
     );
@@ -496,7 +578,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       };
     }
 
-    // 2. Spotify URI: spotify:(playlist|album|track|artist|show|episode):ID
+    // 2. URI: spotify:(playlist|album|track|artist|show|episode):ID
     const uriMatch = trimmed.match(
       /spotify:(playlist|album|track|artist|show|episode):([a-zA-Z0-9]{22})/i
     );
@@ -515,7 +597,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     return null;
   };
 
-  // Fetch official title from Spotify's public oEmbed endpoint when user doesn't specify a custom name
+  // Fetch official title from public oEmbed endpoint when user doesn't specify a custom name
   const fetchSpotifyTitle = async (type: SpotifyEntityType, id: string): Promise<string | null> => {
     try {
       const targetUrl = `https://open.spotify.com/${type}/${id}`;
@@ -556,14 +638,22 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     e.preventDefault();
     setLinkError(null);
     if (!userPlaylistUrl.trim()) {
-      setLinkError("Pega el enlace de tu lista musical para continuar.");
+      setLinkError(
+        tx(
+          "Pega el enlace de tu lista musical para continuar.",
+          "Paste your playlist link to continue."
+        )
+      );
       return;
     }
 
     const extracted = extractSpotifyItem(userPlaylistUrl);
     if (!extracted) {
       setLinkError(
-        "Enlace no reconocido. Toca Compartir → Copiar enlace en cualquier lista, álbum, canción o artista."
+        tx(
+          "Enlace no reconocido. Toca Compartir → Copiar enlace en cualquier lista, álbum, canción o artista.",
+          "Unrecognized link. Tap Share → Copy link on any playlist, album, track, or artist."
+        )
       );
       return;
     }
@@ -574,7 +664,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       const fetchedTitle = await fetchSpotifyTitle(extracted.type, extracted.id);
       cleanName =
         fetchedTitle ||
-        `${ENTITY_TYPE_LABELS[extracted.type]} (${customPlaylists.length + 1})`;
+        `${getEntityTypeLabel(extracted.type)} (${customPlaylists.length + 1})`;
     }
 
     const newItem: SpotifyItem = {
@@ -655,19 +745,27 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     SHARED_PLAYLISTS.find((p) => p.id === activePlaylistId) ||
     customPlaylists.find((p) => p.id === activePlaylistId);
 
+  const getPlaylistName = (item: SpotifyItem) =>
+    language === "es" ? item.name : item.nameEn || item.name;
+  const getPlaylistDesc = (item: SpotifyItem) =>
+    language === "es" ? item.description : item.descriptionEn || item.description;
+  const activePlaylistDisplayName = activePlaylistObj
+    ? getPlaylistName(activePlaylistObj)
+    : tx("Focus Olímpico", "Olympic Focus");
+
   return (
     <>
-      {/* 1. Music Collapsible Folding Tab on the Left Edge */}
+      {/* 1. Music Collapsible Folding Tab on the Start Edge */}
       {showSideTab && !isOpen && !isMiniBarActive && (
-        <div className="fixed left-0 top-[calc(50%+112px)] -translate-y-1/2 z-[40] scale-90 origin-left">
+        <div className="fixed start-0 top-[calc(50%+112px)] -translate-y-1/2 z-[40] scale-90 origin-left rtl:origin-right">
           <button
             type="button"
             onClick={() => {
               setHasLoadedIframe(true);
               setIsOpen(true);
             }}
-            aria-label="Abrir Música"
-            className="h-28 min-w-[36px] min-h-[36px] w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-r-2xl bg-[#12151C] border-y border-r border-[#00A8F3]/45 cursor-pointer text-white hover:border-[#00A8F3] active:scale-95 transition-all duration-200 select-none shadow-md"
+            aria-label={tx("Abrir Reproductor Musical", "Open Music Player")}
+            className="h-28 min-w-[36px] min-h-[36px] w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-e-2xl bg-[#12151C] border-y border-e border-[#00A8F3]/45 cursor-pointer text-white hover:border-[#00A8F3] active:scale-95 transition-all duration-200 select-none shadow-md"
           >
             <div className="text-[#00A8F3] flex items-center justify-center shrink-0">
               <Music size={17} aria-hidden="true" />
@@ -680,7 +778,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 textOrientation: "mixed",
               }}
             >
-              Música
+              {tx("Música", "Music")}
             </span>
           </button>
         </div>
@@ -691,23 +789,28 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[62px] left-4 right-4 z-[990] min-h-[52px] py-1.5 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.10] rounded-xl px-3 flex items-center justify-between gap-2 shadow-2xl hover:border-[#00A8F3]/45 transition-all max-w-md mx-auto"
+          className="fixed bottom-[62px] inset-x-4 z-[990] min-h-[52px] py-1.5 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.10] rounded-xl px-3 flex items-center justify-between gap-2 shadow-2xl hover:border-[#00A8F3]/45 transition-all max-w-md mx-auto"
         >
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            aria-label={`Abrir Música: ${activePlaylistObj ? activePlaylistObj.name : "Focus Olímpico"}`}
-            className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0 text-left cursor-pointer min-h-[36px]"
+            aria-label={tx(
+              `Abrir Reproductor Musical: ${activePlaylistDisplayName}`,
+              `Open Music Player: ${activePlaylistDisplayName}`
+            )}
+            className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0 text-start cursor-pointer min-h-[36px]"
           >
             <div className="w-8 h-8 rounded-full bg-[#12151C] border border-[#00A8F3]/45 flex items-center justify-center text-[#00A8F3] shrink-0">
               <Music size={14} aria-hidden="true" />
             </div>
             <div className="flex flex-col overflow-hidden min-w-0">
               <span className="text-[10.5px] text-[#00A8F3] font-black uppercase tracking-widest leading-none">
-                {isPlaying ? "Reproduciendo" : "Música Activa"}
+                {isPlaying
+                  ? tx("Reproduciendo", "Now Playing")
+                  : tx("Reproductor Musical", "Music Player")}
               </span>
               <span className="text-[12.8px] text-white font-bold truncate leading-snug mt-0.5">
-                {activePlaylistObj ? activePlaylistObj.name : "Focus Olímpico"}
+                {activePlaylistDisplayName}
               </span>
             </div>
           </button>
@@ -716,8 +819,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             <button
               type="button"
               onClick={handleTogglePlayPause}
-              aria-label={isPlaying ? "Pausar música" : "Reproducir música"}
-              title={isPlaying ? "Pausar" : "Reproducir"}
+              aria-label={
+                isPlaying
+                  ? tx("Pausar música", "Pause music")
+                  : tx("Reproducir música", "Play music")
+              }
+              title={isPlaying ? tx("Pausar", "Pause") : tx("Reproducir", "Play")}
               className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-[#00A8F3] hover:text-white hover:border-[#00A8F3]/50 flex items-center justify-center cursor-pointer transition"
             >
               {isPlaying ? (
@@ -731,11 +838,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              aria-label="Abrir panel de Música"
-              title="Abrir panel de Música"
+              aria-label={tx("Abrir Reproductor Musical", "Open Music Player")}
+              title={tx("Abrir Reproductor Musical", "Open Music Player")}
               className="min-w-[36px] min-h-[36px] text-[10.5px] bg-[#12151C] border border-white/[0.10] hover:border-[#00A8F3]/50 text-white px-3 rounded-lg uppercase font-black cursor-pointer flex items-center justify-center transition"
             >
-              Abrir
+              {tx("Abrir", "Open")}
             </button>
 
             {/* Close Button (✕) - stops player and hides mini-bar */}
@@ -748,8 +855,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
               }}
-              aria-label="Cerrar reproductor de música"
-              title="Cerrar reproductor"
+              aria-label={tx("Cerrar Reproductor Musical", "Close Music Player")}
+              title={tx("Cerrar Reproductor Musical", "Close Music Player")}
               className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-white hover:text-red-400 flex items-center justify-center cursor-pointer transition"
             >
               <X size={14} aria-hidden="true" />
@@ -770,14 +877,14 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         >
           <div
             role="dialog"
-            aria-label="Panel de Música"
+            aria-label={tx("Reproductor Musical", "Music Player")}
             className={`w-full max-w-[400px] max-h-[88vh] bg-[#06080C] border border-white/[0.10] rounded-[26px] p-4 flex flex-col gap-3.5 overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
           >
             {/* Top 101010 tricolor line */}
             <div
-              className="absolute top-0 left-12 right-12 h-[2px]"
+              className="absolute top-0 inset-x-12 h-[2px]"
               style={{
                 background:
                   "linear-gradient(90deg, transparent, #00A8F3 25%, #FF1E1E 50%, #FFE500 75%, transparent)"
@@ -797,7 +904,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <div className="inline-flex items-center gap-[5px] bg-[#12151C] border border-[#00A8F3]/45 rounded-full px-[9px] py-[3px] shrink-0">
                   <span className="w-[5px] h-[5px] rounded-full bg-[#00A8F3]" />
                   <span className="text-[9.5px] font-extrabold text-[#00A8F3] tracking-[0.08em] uppercase leading-none">
-                    MÚSICA
+                    {tx("REPRODUCTOR MUSICAL", "MUSIC PLAYER")}
                   </span>
                 </div>
               </div>
@@ -809,8 +916,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   setIsOpen(false);
                 }}
                 className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
-                title="Minimizar ventana"
-                aria-label="Cerrar ventana de música"
+                title={tx("Minimizar reproductor", "Minimize player")}
+                aria-label={tx("Cerrar Reproductor Musical", "Close Music Player")}
               >
                 <X size={15} aria-hidden="true" />
               </button>
@@ -827,7 +934,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   <iframe
                     key={`${activeType}-${activePlaylistId}-${iframeReloadKey}`}
                     ref={iframeRef}
-                    title="Reproductor de música integrado"
+                    title={tx("Reproductor Musical", "Music Player")}
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
                     height="152"
@@ -843,20 +950,25 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   className="w-full min-h-[40px] py-[11px] px-3.5 rounded-[12px] bg-[#00A8F3] hover:bg-[#19B8FF] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
                 >
                   <Play size={13} fill="currentColor" aria-hidden="true" />
-                  <span>Abrir lista completa en app de música</span>
+                  <span>
+                    {tx(
+                      "Abrir Lista Musical en Servicio Musical",
+                      "Open Playlist in Music Service"
+                    )}
+                  </span>
                 </button>
               </div>
 
               {/* 3. Clean Playlist Selector */}
               <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-extrabold tracking-[0.12em] text-[#94A3B8] uppercase pl-0.5">
-                  ELIGE TU LISTA MUSICAL
+                <span className="text-[10px] font-extrabold tracking-[0.12em] text-[#94A3B8] uppercase ps-0.5">
+                  {tx("ELIGE TU LISTA MUSICAL", "CHOOSE YOUR PLAYLIST")}
                 </span>
 
                 <div className="flex flex-col gap-[7px]">
                   {customPlaylists.map((list) => {
                     const isActive = activePlaylistId === list.id;
-                    const typeLabel = ENTITY_TYPE_LABELS[list.type || "playlist"] || "Playlist";
+                    const typeLabel = getEntityTypeLabel(list.type || "playlist");
                     return (
                       <div
                         key={list.id}
@@ -872,7 +984,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                             {list.name}
                           </span>
                           <span className="text-[10.5px] font-semibold text-[#94A3B8] truncate">
-                            {list.description || `${typeLabel} guardada`}
+                            {list.description || tx(`${typeLabel} guardada`, `Saved ${typeLabel}`)}
                           </span>
                         </div>
 
@@ -880,8 +992,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                           <button
                             type="button"
                             onClick={(e) => handleDeleteCustomPlaylist(e, list.id)}
-                            aria-label={`Eliminar lista ${list.name}`}
-                            title="Eliminar de mi lista"
+                            aria-label={tx(
+                              `Eliminar lista ${list.name}`,
+                              `Remove playlist ${list.name}`
+                            )}
+                            title={tx("Eliminar de mi lista musical", "Remove from playlists")}
                             className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border border-white/[0.10] text-white/80 hover:text-red-400 cursor-pointer transition"
                           >
                             <Trash2 size={14} aria-hidden="true" />
@@ -897,7 +1012,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                             {isActive ? (
                               <Check size={13} />
                             ) : (
-                              <Play size={11} className="fill-current pl-0.5" />
+                              <Play size={11} className="fill-current ps-0.5" />
                             )}
                           </div>
                         </div>
@@ -919,10 +1034,10 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                       >
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                           <span className="text-[12.5px] font-extrabold text-white truncate">
-                            {list.name}
+                            {getPlaylistName(list)}
                           </span>
                           <span className="text-[10.5px] font-semibold text-[#94A3B8] truncate">
-                            {list.description}
+                            {getPlaylistDesc(list)}
                           </span>
                         </div>
 
@@ -937,7 +1052,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                           {isActive ? (
                             <Check size={13} />
                           ) : (
-                            <Play size={11} className="fill-current pl-0.5" />
+                            <Play size={11} className="fill-current ps-0.5" />
                           )}
                         </div>
                       </div>
@@ -951,13 +1066,16 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    aria-label="Enlace de lista musical"
+                    aria-label={tx("Enlace de Lista Musical", "Playlist link")}
                     value={userPlaylistUrl}
                     onChange={(e) => {
                       setUserPlaylistUrl(e.target.value);
                       if (linkError) setLinkError(null);
                     }}
-                    placeholder="Pega aquí el enlace de tu lista musical…"
+                    placeholder={tx(
+                      "Pega aquí el enlace de tu Lista Musical…",
+                      "Paste your Playlist link here…"
+                    )}
                     className="flex-1 min-w-0 min-h-[38px] bg-[#0B0E14] border border-white/[0.09] focus:border-[#00A8F3] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#00A8F3]"
                   />
                   <button
@@ -965,7 +1083,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                     disabled={isSavingLink}
                     className="min-w-[36px] min-h-[38px] bg-[#12151C] border border-[#00A8F3]/45 hover:border-[#00A8F3] text-[#00A8F3] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
                   >
-                    {saveSuccess ? "✓ Listo" : isSavingLink ? "..." : "+ Agregar"}
+                    {saveSuccess
+                      ? tx("✓ Listo", "✓ Added")
+                      : isSavingLink
+                      ? "..."
+                      : tx("+ Agregar", "+ Add")}
                   </button>
                 </div>
                 {linkError && (

@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { UserProfile } from "@/lib/authService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 import { Trophy, Swords } from "lucide-react";
 
 interface CoachDuelsTabProps {
@@ -10,7 +12,12 @@ interface CoachDuelsTabProps {
   activeDuels?: any[];
 }
 
-export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: CoachDuelsTabProps) {
+export default function CoachDuelsTab({
+  athletes,
+  sessions,
+  activeDuels = []
+}: CoachDuelsTabProps) {
+  const { language, t, tx } = useLanguage();
   const [filterMode, setFilterMode] = useState<"ALL" | "LIVE" | "FINISHED">("ALL");
 
   const completedDuels = (sessions || []).filter(
@@ -28,8 +35,8 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
       .map((sd) => ({
         id: sd.id,
         creatorUid: sd.userId || sd.userUid,
-        creatorName: sd.userName || "Arquero",
-        playerName: sd.opponent || "Rival",
+        creatorName: sd.userName || t("roleAthlete"),
+        playerName: sd.opponent || tx("Rival", "Opponent"),
         bowType: sd.bowType,
         distance: sd.distance,
         status: "active",
@@ -39,9 +46,11 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
 
   // Group stats by athlete
   const getDuelsStandings = () => {
-    const standings: Record<string, { userName: string; wins: number; losses: number; ties: number; total: number }> = {};
+    const standings: Record<
+      string,
+      { userName: string; wins: number; losses: number; ties: number; total: number }
+    > = {};
 
-    // Initialize for all roster
     athletes.forEach((ath) => {
       standings[ath.uid] = {
         userName: ath.fullName,
@@ -52,13 +61,12 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
       };
     });
 
-    // Populate from completed duels
     completedDuels.forEach((d) => {
       const uid = d.userId || d.userUid;
       if (!uid) return;
       if (!standings[uid]) {
         standings[uid] = {
-          userName: d.userName || "Arquero",
+          userName: d.userName || t("roleAthlete"),
           wins: 0,
           losses: 0,
           ties: 0,
@@ -71,19 +79,22 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
       else if (d.outcome === "tie") standings[uid].ties++;
     });
 
-    return Object.values(standings)
-      .sort((a, b) => b.wins - a.wins || (b.wins / (b.total || 1)) - (a.wins / (a.total || 1)));
+    return Object.values(standings).sort(
+      (a, b) => b.wins - a.wins || b.wins / (b.total || 1) - a.wins / (a.total || 1)
+    );
   };
 
   const standings = getDuelsStandings();
 
-  const formatBowEs = (bow?: string) => {
-    if (!bow || bow === "Recurve") return "Recurvo";
-    if (bow === "Compound") return "Compuesto";
+  const formatBowLabel = (bow?: string) => {
+    if (!bow || bow === "Recurve") return t("bowRecurve");
+    if (bow === "Compound") return t("bowCompound");
+    if (bow === "Barebow") return t("bowBarebow");
     return bow;
   };
 
-  const showLiveSection = filterMode === "LIVE" || (filterMode === "ALL" && liveArenaMatches.length > 0);
+  const showLiveSection =
+    filterMode === "LIVE" || (filterMode === "ALL" && liveArenaMatches.length > 0);
   const showFinishedSection = filterMode === "ALL" || filterMode === "FINISHED";
 
   return (
@@ -91,9 +102,13 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
       {/* Compact Filter Pills: Todos | En Vivo | Finalizados */}
       <div className="grid grid-cols-3 gap-1.5 bg-[#0A0B0E] p-1 rounded-2xl border border-white/[0.08]">
         {[
-          { id: "ALL", label: "Todos", count: liveArenaMatches.length + completedDuels.length },
-          { id: "LIVE", label: "En Vivo", count: liveArenaMatches.length },
-          { id: "FINISHED", label: "Finalizados", count: completedDuels.length }
+          {
+            id: "ALL",
+            label: t("filterAll"),
+            count: liveArenaMatches.length + completedDuels.length
+          },
+          { id: "LIVE", label: tx("En Vivo", "Live"), count: liveArenaMatches.length },
+          { id: "FINISHED", label: tx("Finalizados", "Finished"), count: completedDuels.length }
         ].map((pill) => {
           const active = filterMode === pill.id;
           return (
@@ -102,9 +117,7 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
               type="button"
               onClick={() => setFilterMode(pill.id as "ALL" | "LIVE" | "FINISHED")}
               className={`py-2 px-1 sm:px-1.5 rounded-xl text-[11.5px] sm:text-[12px] font-black uppercase tracking-[-0.02em] sm:tracking-wider transition flex items-center justify-center gap-0.5 sm:gap-1 cursor-pointer tabular-nums whitespace-nowrap ${
-                active
-                  ? "bg-cyan-neon text-black"
-                  : "text-white hover:bg-white/[0.05]"
+                active ? "bg-cyan-neon text-black" : "text-white hover:bg-white/[0.05]"
               }`}
             >
               <span>{pill.label}</span>
@@ -122,16 +135,18 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 min-w-0">
               <Swords size={14} className="text-emerald-400 shrink-0" />
-              <span className="truncate">Arena de Duelos en Vivo</span>
+              <span className="truncate">
+                {tx("Arena de Duelos en Vivo", "Live Duels Arena")}
+              </span>
             </h4>
             <span className="shrink-0 whitespace-nowrap text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider tabular-nums">
-              ● {liveArenaMatches.length} EN CURSO
+              ● {liveArenaMatches.length} {tx("EN CURSO", "ACTIVE")}
             </span>
           </div>
 
           {liveArenaMatches.length === 0 ? (
             <p className="text-xs text-white text-center py-4 bg-neutral-950/50 border border-white/5 rounded-2xl">
-              No hay duelos en vivo en este momento.
+              {tx("No hay duelos en vivo en este momento.", "No live duels right now.")}
             </p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -147,15 +162,17 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                     <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-white text-xs font-black min-w-0 truncate">
-                          {match.creatorName || "Arquero"}
+                          {match.creatorName || t("roleAthlete")}
                         </span>
-                        <span className="text-[10px] text-white/60 font-bold uppercase shrink-0">vs</span>
+                        <span className="text-[10px] text-white/60 font-bold uppercase shrink-0">
+                          vs
+                        </span>
                         <span className="text-cyan-neon text-xs font-black min-w-0 truncate">
-                          {match.playerName || "Esperando rival..."}
+                          {match.playerName || tx("Esperando rival...", "Waiting for opponent...")}
                         </span>
                       </div>
                       <span className="text-[10.5px] text-white/80 tabular-nums truncate">
-                        {formatBowEs(match.bowType)}
+                        {formatBowLabel(match.bowType)}
                         {match.distance ? ` · ${match.distance}m` : ""}
                         {currentSetNum ? ` · Set ${currentSetNum}` : ""}
                       </span>
@@ -168,7 +185,7 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                           : "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
                       }`}
                     >
-                      {isWaiting ? "ESPERANDO" : "● EN VIVO"}
+                      {isWaiting ? tx("ESPERANDO", "WAITING") : `● ${tx("EN VIVO", "LIVE")}`}
                     </span>
                   </div>
                 );
@@ -184,13 +201,16 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
           <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/10 flex flex-col gap-3">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
               <Trophy size={14} className="text-cyan-neon shrink-0" />
-              <span>Tabla de Rendimiento en Duelos</span>
+              <span>{tx("Tabla de Rendimiento en Duelos", "Duels Standings")}</span>
             </h4>
 
             <div className="flex flex-col gap-2 mt-1">
               {standings.length === 0 ? (
                 <p className="text-xs text-white/75 text-center py-4">
-                  Aún no hay atletas vinculados en la tabla de duelos.
+                  {tx(
+                    "Aún no hay atletas vinculados en la tabla de duelos.",
+                    "No linked athletes in duels standings yet."
+                  )}
                 </p>
               ) : (
                 standings.map((st, idx) => {
@@ -201,18 +221,29 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                       className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/40 border border-white/[0.04]"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-[11.6px] text-white font-bold w-5 shrink-0 tabular-nums">#{idx + 1}</span>
+                        <span className="text-[11.6px] text-white font-bold w-5 shrink-0 tabular-nums">
+                          #{idx + 1}
+                        </span>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-xs font-bold leading-none truncate">{st.userName || "Arquero"}</span>
+                          <span className="text-white text-xs font-bold leading-none truncate">
+                            {st.userName || t("roleAthlete")}
+                          </span>
                           <span className="text-[9.5px] text-white mt-1 tabular-nums">
-                            {st.wins}V - {st.losses}D - {st.ties}E · Total: {st.total}
+                            {tx(
+                              `${st.wins}V - ${st.losses}D - ${st.ties}E · Total: ${st.total}`,
+                              `${st.wins}W - ${st.losses}L - ${st.ties}T · Total: ${st.total}`
+                            )}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end shrink-0 pl-2">
-                        <span className="text-xs font-black text-cyan-neon tabular-nums">{winRate}%</span>
-                        <span className="text-[9.3px] text-white uppercase">Efectividad</span>
+                      <div className="flex flex-col items-end shrink-0 ps-2">
+                        <span className="text-xs font-black text-cyan-neon tabular-nums">
+                          {winRate}%
+                        </span>
+                        <span className="text-[9.3px] text-white uppercase">
+                          {tx("Efectividad", "Win Rate")}
+                        </span>
                       </div>
                     </div>
                   );
@@ -223,18 +254,23 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
 
           {/* Historial general de duelos */}
           <div className="flex flex-col gap-2.5">
-            <span className="text-[11.6px] text-white font-black uppercase tracking-wider">Historial de la Arena</span>
+            <span className="text-[11.6px] text-white font-black uppercase tracking-wider">
+              {tx("Historial de la Arena", "Arena History")}
+            </span>
 
             {completedDuels.length === 0 ? (
               <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/20 border border-white/5 rounded-2xl">
-                No se han registrado duelos finalizados en la arena aún.
+                {tx(
+                  "No se han registrado duelos finalizados en la arena aún.",
+                  "No completed duels recorded in the arena yet."
+                )}
               </p>
             ) : (
               completedDuels.map((duel) => {
                 const duelDate = new Date(duel.timestamp);
                 const dateStr = isNaN(duelDate.getTime())
                   ? "—"
-                  : duelDate.toLocaleDateString(undefined, {
+                  : formatRegionalDate(duelDate, language, {
                       day: "numeric",
                       month: "short"
                     });
@@ -245,21 +281,31 @@ export default function CoachDuelsTab({ athletes, sessions, activeDuels = [] }: 
                   >
                     <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                       <span className="text-white text-xs font-bold leading-tight truncate">
-                        {duel.userName || "Arquero"}
+                        {duel.userName || t("roleAthlete")}
                       </span>
                       <span className="text-[10.5px] text-white truncate tabular-nums">
-                        vs <span className="text-cyan-neon font-extrabold">{duel.opponent || "Rival"}</span>{duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
+                        vs{" "}
+                        <span className="text-cyan-neon font-extrabold">
+                          {duel.opponent || tx("Rival", "Opponent")}
+                        </span>
+                        {duel.distance ? ` · ${duel.distance}m` : ""} · {dateStr}
                       </span>
                     </div>
 
-                    <span className={`shrink-0 whitespace-nowrap text-[11.8px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                      duel.outcome === "win"
-                        ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25"
+                    <span
+                      className={`shrink-0 whitespace-nowrap text-[11.8px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                        duel.outcome === "win"
+                          ? "bg-cyan-neon/15 text-cyan-neon border border-cyan-neon/25"
+                          : duel.outcome === "loss"
+                          ? "bg-white text-black border border-white"
+                          : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/25"
+                      }`}
+                    >
+                      {duel.outcome === "win"
+                        ? tx("Victoria", "Win")
                         : duel.outcome === "loss"
-                        ? "bg-white text-black border border-white"
-                        : "bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/25"
-                    }`}>
-                      {duel.outcome === "win" ? "Victoria" : duel.outcome === "loss" ? "Derrota" : "Empate"}
+                        ? tx("Derrota", "Loss")
+                        : tx("Empate", "Tie")}
                     </span>
                   </div>
                 );

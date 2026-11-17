@@ -266,15 +266,21 @@ export async function purgeAllFictitiousData(): Promise<void> {
         const cleanedPayload = sanitizeForFirestore(item.payload);
         await syncQueueStore.setItem(item.id, {
           ...item,
-          payload: cleanedPayload,
-          status: "pending",
-          attempts: 0
+          payload: cleanedPayload
         });
       }
     }
   } catch (err) {
     console.error("Error purging fictitious data:", err);
   }
+}
+
+const MAX_SYNC_QUEUE_ITEMS = 500;
+const SESSION_TOMBSTONES_KEY = "deleted_session_tombstones";
+const MAX_SESSION_TOMBSTONES = 500;
+
+function isPlainRecord(val: unknown): val is Record<string, any> {
+  return Boolean(val) && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date);
 }
 
 // Helper methods for Sync Queue
@@ -287,13 +293,46 @@ export async function getSyncQueue(): Promise<SyncItem[]> {
 }
 
 export async function addToSyncQueue(item: Omit<SyncItem, "attempts" | "status">): Promise<void> {
-  const newItem: SyncItem = {
-    ...item,
-    payload: item.payload ? sanitizeForFirestore(item.payload) : item.payload,
-    attempts: 0,
-    status: "pending"
-  };
-  await syncQueueStore.setItem(newItem.id, newItem);
+  const cleanPayload = item.payload ? sanitizeForFirestore(item.payload) : item.payload;
+  const existingQueue = await getSyncQueue();
+  const duplicate = existingQueue.find(
+    (q) =>
+      q.collection === item.collection &&
+      q.payloadId === item.payloadId &&
+      q.operation === item.operation
+  );
+
+  if (duplicate) {
+    const mergedPayload =
+      isPlainRecord(duplicate.payload) && isPlainRecord(cleanPayload)
+        ? { ...duplicate.payload, ...cleanPayload }
+        : cleanPayload;
+    await syncQueueStore.setItem(duplicate.id, {
+      ...duplicate,
+      payload: mergedPayload,
+      timestamp: item.timestamp
+    });
+  } else {
+    const newItem: SyncItem = {
+      ...item,
+      payload: cleanPayload,
+      attempts: 0,
+      status: "pending"
+    };
+    await syncQueueStore.setItem(newItem.id, newItem);
+
+    const totalCount = existingQueue.length + 1;
+    if (totalCount > MAX_SYNC_QUEUE_ITEMS) {
+      const excessCount = totalCount - MAX_SYNC_QUEUE_ITEMS;
+      const nonDeleteOldest = existingQueue.filter((q) => q.operation !== "DELETE");
+      const evictionPool =
+        nonDeleteOldest.length >= excessCount
+          ? nonDeleteOldest
+          : [...nonDeleteOldest, ...existingQueue.filter((q) => q.operation === "DELETE")];
+      const toEvict = evictionPool.slice(0, excessCount);
+      await Promise.all(toEvict.map((ev) => syncQueueStore.removeItem(ev.id)));
+    }
+  }
 
   // Notify custom event for UI indicators
   if (typeof window !== "undefined") {
@@ -320,6 +359,32 @@ export async function updateSyncItem(id: string, updates: Partial<SyncItem>): Pr
   if (item) {
     const updatedItem = { ...item, ...updates };
     await syncQueueStore.setItem(id, updatedItem);
+  }
+}
+
+export async function markSessionTombstone(sessionId: string): Promise<void> {
+  const cleanId = String(sessionId || "").trim();
+  if (!cleanId) return;
+  try {
+    const existing = await settingsStore.getItem<string[]>(SESSION_TOMBSTONES_KEY);
+    const list = Array.isArray(existing)
+      ? existing.filter((x) => typeof x === "string" && x !== cleanId)
+      : [];
+    list.push(cleanId);
+    const bounded = list.slice(-MAX_SESSION_TOMBSTONES);
+    await settingsStore.setItem(SESSION_TOMBSTONES_KEY, bounded);
+  } catch (err) {
+    console.error("Failed to record session tombstone:", err);
+  }
+}
+
+export async function getSessionTombstones(): Promise<Set<string>> {
+  try {
+    const existing = await settingsStore.getItem<string[]>(SESSION_TOMBSTONES_KEY);
+    if (!Array.isArray(existing)) return new Set<string>();
+    return new Set(existing.filter((x) => typeof x === "string" && x.length > 0));
+  } catch {
+    return new Set<string>();
   }
 }
 
@@ -353,6 +418,7 @@ export async function getLocalSession(id: string): Promise<any | null> {
 }
 
 export async function deleteLocalSession(id: string): Promise<void> {
+  await markSessionTombstone(id);
   await sessionsStore.removeItem(id);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "sessions_local" } }));

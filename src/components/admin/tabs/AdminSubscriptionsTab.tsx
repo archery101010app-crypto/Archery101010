@@ -1,9 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { CreditCard, ToggleLeft, ToggleRight, Clock, RefreshCw, Search, ChevronDown, Loader2 } from "lucide-react";
+import {
+  CreditCard,
+  ToggleLeft,
+  ToggleRight,
+  Clock,
+  RefreshCw,
+  Search,
+  ChevronDown,
+  Loader2
+} from "lucide-react";
 import { UserProfile, updateProfile } from "@/lib/authService";
-import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
+import {
+  getLocalSetting,
+  saveLocalSetting,
+  generateResilientId,
+  addToSyncQueue
+} from "@/lib/db/indexedDB";
 import {
   ADMIN_PAGE_SIZE,
   AdminGlobalCounts,
@@ -11,6 +25,7 @@ import {
   fetchAdminUsersPage,
   searchAdminUsersInCloud
 } from "@/lib/adminCloudPagination";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 interface SubscriptionLog {
@@ -27,6 +42,7 @@ interface SubscriptionLog {
 }
 
 export default function AdminSubscriptionsTab() {
+  const { t, tx } = useLanguage();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [logs, setLogs] = useState<SubscriptionLog[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -219,7 +235,9 @@ export default function AdminSubscriptionsTab() {
     });
 
     const updatedUsers = users.map((u) =>
-      u.uid === targetUid ? { ...u, plan: nextPlan, proExpiresAt: nextExpiresAt, updatedAt: now } : u
+      u.uid === targetUid
+        ? { ...u, plan: nextPlan, proExpiresAt: nextExpiresAt, updatedAt: now }
+        : u
     );
     setUsers(updatedUsers);
 
@@ -233,7 +251,7 @@ export default function AdminSubscriptionsTab() {
       expiresAt: nextExpiresAt,
       createdAt: now,
       timestamp: getLocalISODate(now),
-      reason: "Override manual por SuperAdmin"
+      reason: tx("Override manual por SuperAdmin", "Manual SuperAdmin override")
     };
 
     const updatedLogs = [newLog, ...logs];
@@ -304,12 +322,17 @@ export default function AdminSubscriptionsTab() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex flex-wrap items-center gap-2">
-            <span>Control de Suscripciones</span>
+            <span>{tx("Control de Suscripciones", "Subscriptions Control")}</span>
             <span className="text-[14px] bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/25 px-2.5 py-0.5 rounded-full font-black tabular-nums">
-              {displayProUsers.toLocaleString()} PRO
+              {displayProUsers.toLocaleString()} {t("proBadge")}
             </span>
           </h2>
-          <p className="text-xs text-white">Gestiona accesos premium y overrides de planes sincronizados en la nube.</p>
+          <p className="text-xs text-white">
+            {tx(
+              "Gestiona accesos premium y overrides de planes sincronizados en la nube.",
+              "Manage premium access and cloud-synced subscription overrides."
+            )}
+          </p>
         </div>
         <button
           type="button"
@@ -317,8 +340,11 @@ export default function AdminSubscriptionsTab() {
           disabled={syncingCloud}
           className="px-3 py-2 rounded-xl bg-[#0D1017] border border-white/10 hover:border-cyan-neon/40 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 shrink-0"
         >
-          <RefreshCw size={13} className={syncingCloud ? "animate-spin text-cyan-neon" : "text-cyan-neon"} />
-          <span>Actualizar</span>
+          <RefreshCw
+            size={13}
+            className={syncingCloud ? "animate-spin text-cyan-neon" : "text-cyan-neon"}
+          />
+          <span>{tx("Actualizar", "Refresh")}</span>
         </button>
       </div>
 
@@ -330,75 +356,124 @@ export default function AdminSubscriptionsTab() {
             <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5">
               <CreditCard size={14} className="text-cyan-neon" />
               <span className="tabular-nums">
-                Usuarios y Suscripciones ({users.length.toLocaleString()} de {displayTotalUsers.toLocaleString()})
+                {tx(
+                  `Usuarios y Suscripciones (${users.length.toLocaleString()} de ${displayTotalUsers.toLocaleString()})`,
+                  `Users & Subscriptions (${users.length.toLocaleString()} of ${displayTotalUsers.toLocaleString()})`
+                )}
               </span>
             </h3>
 
             <div className="relative w-full sm:w-72">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white" />
+              <Search
+                size={14}
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-white pointer-events-none"
+              />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar correo, nombre, @apodo o ID..."
-                className="w-full pl-8 pr-8 py-2 rounded-xl bg-neutral-900/60 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon transition"
+                placeholder={tx(
+                  "Buscar correo, nombre, @apodo o ID...",
+                  "Search email, name, @handle or ID..."
+                )}
+                className="w-full ps-9 pe-8 py-2 rounded-xl bg-neutral-900/60 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon transition"
               />
               {isSearchingCloud && (
                 <Loader2
                   size={13}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
                 />
               )}
             </div>
           </div>
 
-          <div className="flex flex-col gap-2.5">
-            {filteredUsers.map((user) => (
-              <div
-                key={user.uid}
-                className="bg-neutral-900/40 border border-white/10 rounded-2xl md:rounded-xl p-4 md:px-5 md:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg hover:border-white/15 transition-all duration-200"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                    user.plan === "PRO" 
-                      ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
-                      : "bg-white/5 text-white border border-white/5"
-                  }`}>
-                    {user.plan === "PRO" ? "★" : "☆"}
+          {syncingCloud && users.length === 0 ? (
+            <div className="flex flex-col gap-2.5" role="status" aria-label={t("loading")}>
+              {[0, 1, 2].map((idx) => (
+                <div
+                  key={idx}
+                  className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-4 flex items-center justify-between gap-3 animate-pulse"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-white/[0.06] shrink-0" />
+                    <div className="flex flex-col gap-1.5">
+                      <div className="h-3 w-28 bg-white/10 rounded" />
+                      <div className="h-2.5 w-40 bg-white/[0.06] rounded" />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white leading-tight">{user.fullName}</h4>
-                    <p className="text-[11.6px] text-white mt-0.5">{user.email}</p>
-                  </div>
+                  <div className="h-6 w-20 bg-white/[0.06] rounded-full shrink-0" />
                 </div>
-
-                <div className="flex items-center justify-between md:justify-end gap-6 pt-2.5 md:pt-0 border-t border-white/5 md:border-t-0">
-                  {/* Current Plan Display */}
-                  <div className="text-left md:text-right">
-                    <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">Plan Activo</span>
-                    <span className={`text-[11.6px] font-black ${user.plan === "PRO" ? "text-yellow-gold" : "text-white"}`}>
-                      {user.plan === "PRO" ? "COACH PRO" : "GRATUITO / FREE"}
-                    </span>
-                  </div>
-
-                  {/* Toggle Switch Override */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10.5px] text-white uppercase font-bold hidden sm:inline">PRO Override</span>
-                    <button
-                      onClick={() => handleTogglePlan(user.uid)}
-                      className="text-cyan-neon hover:text-white transition cursor-pointer"
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.uid}
+                  className="bg-neutral-900/40 border border-white/10 rounded-2xl md:rounded-xl p-4 md:px-5 md:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg hover:border-white/15 transition-all duration-200"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        user.plan === "PRO"
+                          ? "bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/20"
+                          : "bg-white/5 text-white border border-white/5"
+                      }`}
                     >
-                      {user.plan === "PRO" ? (
-                        <ToggleRight size={24} className="text-yellow-gold" />
-                      ) : (
-                        <ToggleLeft size={24} className="text-white" />
-                      )}
-                    </button>
+                      {user.plan === "PRO" ? "★" : "☆"}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-white leading-tight truncate">
+                        {user.fullName}
+                      </h4>
+                      <p className="text-[11.6px] text-white mt-0.5 truncate select-text">
+                        {user.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between md:justify-end gap-6 pt-2.5 md:pt-0 border-t border-white/5 md:border-t-0 shrink-0">
+                    {/* Current Plan Display */}
+                    <div className="text-start md:text-end">
+                      <span className="text-[9.3px] text-white uppercase font-black tracking-widest block">
+                        {tx("Plan Activo", "Active Plan")}
+                      </span>
+                      <span
+                        className={`text-[11.6px] font-black ${
+                          user.plan === "PRO" ? "text-yellow-gold" : "text-white"
+                        }`}
+                      >
+                        {user.plan === "PRO"
+                          ? "COACH PRO"
+                          : tx("GRATUITO / FREE", "FREE")}
+                      </span>
+                    </div>
+
+                    {/* Toggle Switch Override */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10.5px] text-white uppercase font-bold hidden sm:inline">
+                        {tx("PRO Override", "PRO Override")}
+                      </span>
+                      <button
+                        onClick={() => handleTogglePlan(user.uid)}
+                        aria-label={tx(
+                          `Alternar plan PRO para ${user.fullName}`,
+                          `Toggle PRO plan for ${user.fullName}`
+                        )}
+                        className="text-cyan-neon hover:text-white transition cursor-pointer"
+                      >
+                        {user.plan === "PRO" ? (
+                          <ToggleRight size={24} className="text-yellow-gold" />
+                        ) : (
+                          <ToggleLeft size={24} className="text-white" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {hasMoreUsers && (
             <div className="flex justify-center pt-1">
@@ -411,13 +486,16 @@ export default function AdminSubscriptionsTab() {
                 {isLoadingMore ? (
                   <>
                     <Loader2 size={14} className="animate-spin text-cyan-neon" />
-                    <span>Cargando siguientes 50...</span>
+                    <span>{tx("Cargando siguientes 50...", "Loading next 50...")}</span>
                   </>
                 ) : (
                   <>
                     <ChevronDown size={15} className="text-cyan-neon" />
                     <span className="tabular-nums">
-                      Cargar 50 más ({users.length.toLocaleString()} de {displayTotalUsers.toLocaleString()})
+                      {tx(
+                        `Cargar 50 más (${users.length.toLocaleString()} de ${displayTotalUsers.toLocaleString()})`,
+                        `Load 50 more (${users.length.toLocaleString()} of ${displayTotalUsers.toLocaleString()})`
+                      )}
                     </span>
                   </>
                 )}
@@ -430,25 +508,41 @@ export default function AdminSubscriptionsTab() {
         <div className="bg-neutral-900/40 border border-white/10 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col gap-4 h-max">
           <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2.5 flex items-center gap-1.5">
             <Clock size={14} className="text-cyan-neon" />
-            <span>Registro de Auditoría</span>
+            <span>{tx("Registro de Auditoría", "Audit Log")}</span>
           </h3>
 
-          <div className="flex flex-col gap-4 mt-1.5 max-h-[40vh] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-4 mt-1.5 max-h-[40vh] overflow-y-auto pe-1">
             {logs.length === 0 ? (
-              <p className="text-xs text-white italic py-4">No hay registros de cambios de suscripción.</p>
+              <p className="text-xs text-white italic py-4">
+                {tx(
+                  "No hay registros de cambios de suscripción.",
+                  "No subscription change logs yet."
+                )}
+              </p>
             ) : (
               logs.map((log) => (
-                <div key={log.id} className="relative pl-4 border-l border-white/5 flex flex-col gap-1">
-                  <div className="absolute left-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[11.6px] font-bold text-white">{log.userName}</span>
-                    <span className="text-[9.3px] text-white font-semibold tabular-nums">{log.timestamp}</span>
+                <div
+                  key={log.id}
+                  className="relative ps-4 border-s border-white/5 flex flex-col gap-1"
+                >
+                  <div className="absolute start-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-[11.6px] font-bold text-white truncate">
+                      {log.userName}
+                    </span>
+                    <span className="text-[9.3px] text-white font-semibold tabular-nums shrink-0">
+                      {log.timestamp}
+                    </span>
                   </div>
                   <p className="text-[11.6px] text-white leading-normal">
-                    Cambió de <span className="font-bold text-white">{log.previousPlan}</span> a{" "}
+                    {tx("Cambió de", "Changed from")}{" "}
+                    <span className="font-bold text-white">{log.previousPlan}</span>{" "}
+                    {tx("a", "to")}{" "}
                     <span className="font-black text-yellow-gold">{log.newPlan}</span>
                   </p>
-                  <span className="text-[10.5px] text-cyan-neon font-bold mt-0.5">{log.reason}</span>
+                  <span className="text-[10.5px] text-cyan-neon font-bold mt-0.5">
+                    {log.reason}
+                  </span>
                 </div>
               ))
             )}

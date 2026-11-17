@@ -7,6 +7,7 @@ import {
   setDoc,
   updateDoc,
   onSnapshot,
+  Timestamp,
   Unsubscribe
 } from "firebase/firestore";
 import { getSessionArrows } from "./sessionMetrics";
@@ -461,10 +462,11 @@ function buildPhoneCloudSessionFields(
       ? s.sensitivityLevel
       : getSavedSensitivityLevel();
   const now = Date.now();
+  const expiresAtMs = now + WATCH_SESSION_TTL_MS;
 
   return {
     userId: uid,
-    sessionId: String(s?.sessionId || "LIVE"),
+    sessionId: String(s?.sessionId || "LIVE").slice(0, 128),
     sessionActive: s ? s.sessionActive !== false : true,
     arrowsCount: Math.max(0, Number(s?.arrowsCount) || 0),
     totalScore: Math.max(0, Number(s?.totalScore) || 0),
@@ -480,9 +482,10 @@ function buildPhoneCloudSessionFields(
     autoDetectEnabled: s ? Boolean(s.autoDetectEnabled) : true,
     sensitivityLevel,
     bowPoundageLbs: Math.max(10, Number(s?.bowPoundageLbs) || 36),
-    practiceType: String(s?.practiceType || "Práctica"),
+    practiceType: String(s?.practiceType || "Práctica").slice(0, 60),
     updatedAt: now,
-    expiresAt: now + WATCH_SESSION_TTL_MS
+    expiresAt: expiresAtMs,
+    expireAt: Timestamp.fromMillis(expiresAtMs)
   };
 }
 
@@ -959,6 +962,53 @@ export function readStoredWatchState(): BiometricSessionSnapshot | null {
   }
 }
 
+function buildCompactCloudWatchCmd(
+  cmd: WatchCommandMessage,
+  cmdId: string,
+  now: number
+): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {
+    type: String(cmd.type || "").slice(0, 40),
+    cmdId: String(cmdId || "").slice(0, 64),
+    _ts: now
+  };
+
+  if (cmd.type === "INCREMENT_ARROW" || cmd.type === "DECREMENT_ARROW") {
+    if (typeof cmd.delta === "number") out.delta = Math.round(cmd.delta);
+    if (typeof cmd.source === "string") out.source = cmd.source.slice(0, 24);
+    if ("totalScore" in cmd && typeof cmd.totalScore === "number") {
+      out.totalScore = Math.max(0, Math.round(cmd.totalScore));
+    }
+  } else if (cmd.type === "UNDO_ARROW") {
+    if (typeof cmd.totalScore === "number") {
+      out.totalScore = Math.max(0, Math.round(cmd.totalScore));
+    }
+  } else if (cmd.type === "SET_SENSITIVITY") {
+    out.sensitivityLevel = cmd.sensitivityLevel;
+  } else if (cmd.type === "SCORE_INPUT") {
+    const val = cmd.payload?.value ?? cmd.value;
+    const tot = cmd.payload?.totalScore ?? cmd.totalScore;
+    if (val !== undefined) out.value = String(val).slice(0, 12);
+    if (typeof tot === "number") out.totalScore = Math.max(0, Math.round(tot));
+  } else if (cmd.type === "SYNC_TELEMETRY_FROM_WATCH") {
+    const st = cmd.stepsCount ?? cmd.payload?.stepsCount;
+    const dm = cmd.distanceWalkedM ?? cmd.payload?.distanceWalkedM;
+    const kc = cmd.activeKcal ?? cmd.payload?.activeKcal;
+    if (typeof st === "number") out.stepsCount = Math.max(0, Math.round(st));
+    if (typeof dm === "number") out.distanceWalkedM = Math.max(0, Math.round(dm));
+    if (typeof kc === "number") out.activeKcal = Math.max(0, Math.round(kc));
+  } else if (cmd.type === "TOGGLE_AUTO_DETECT") {
+    out.enabled = Boolean(cmd.enabled);
+    if (typeof cmd.sensitivityLevel === "number") out.sensitivityLevel = cmd.sensitivityLevel;
+  }
+
+  const bounded: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(out).slice(0, 8)) {
+    bounded[k.slice(0, 32)] = typeof v === "string" ? v.slice(0, 64) : v;
+  }
+  return bounded;
+}
+
 export function sendWatchCommand(cmd: WatchCommandMessage): void {
   if (typeof window === "undefined") return;
   watchClientCmdSeq += 1;
@@ -1011,8 +1061,8 @@ export function sendWatchCommand(cmd: WatchCommandMessage): void {
       if (typeof dm === "number") latestWatchClientDistM = Math.max(0, Math.round(dm));
     }
     updateDoc(doc(db, "watch_sessions", activeWatchClientCode), {
-      lastWatchCmd: JSON.parse(payload),
-      lastWatchCmdId: cmdId,
+      lastWatchCmd: buildCompactCloudWatchCmd(cmd, cmdId, now),
+      lastWatchCmdId: cmdId.slice(0, 64),
       lastWatchCmdSeq: watchClientCmdSeq,
       watchStepsCount: latestWatchClientSteps,
       watchDistanceM: latestWatchClientDistM,

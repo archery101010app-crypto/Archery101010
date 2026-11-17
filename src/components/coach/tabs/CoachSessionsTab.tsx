@@ -2,12 +2,38 @@
 
 import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
-import { Award, Share2, Filter, ChevronDown, ChevronUp, User, Target, Calendar, Clock, Star } from "lucide-react";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
+import {
+  Award,
+  Share2,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Target,
+  Star,
+  Search,
+  X
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DIANA_PRESETS, getDianaPresetKey } from "../../scoring/ScoringView";
-import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
-import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore, countScoredArrows } from "@/lib/scoring/sessionMetrics";
-import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles } from "@/lib/scoring/biometricsEngine";
+import {
+  calculateDispersionStats,
+  calculateDispersionAnalysis
+} from "@/lib/scoring/dispersionAnalytics";
+import {
+  isVolumeSession,
+  getSessionArrows,
+  getSessionScore,
+  getSessionMaxScore,
+  hasRealScore,
+  countScoredArrows
+} from "@/lib/scoring/sessionMetrics";
+import {
+  getSessionDistanceWalkedM,
+  getSessionActiveKcal,
+  formatKmAndMiles
+} from "@/lib/scoring/biometricsEngine";
 
 interface CoachSessionsTabProps {
   athletes: UserProfile[];
@@ -15,8 +41,10 @@ interface CoachSessionsTabProps {
 }
 
 export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTabProps) {
+  const { language, t, tx } = useLanguage();
   const [subMode, setSubMode] = useState<"SCORES" | "VOLUME">("SCORES");
   const [selectedAthleteUid, setSelectedAthleteUid] = useState<string>("ALL");
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [starRanking, setStarRanking] = useState<any[]>([]);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
 
@@ -30,14 +58,14 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             list.push(value);
           }
         });
-        
+
         list.sort((a, b) => {
           if (b.highestStarLevel !== a.highestStarLevel) {
             return b.highestStarLevel - a.highestStarLevel;
           }
           return b.highestScore - a.highestScore;
         });
-        
+
         setStarRanking(list);
       } catch (err) {
         console.error("Error loading star ranking:", err);
@@ -56,10 +84,17 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
     return getSessionArrows(s);
   };
 
-  // Only real shooting sessions (not duels)
-  const athleteSessions = sessions.filter(s => !s.isDuel && s.deletedByArcher !== true);
+  const formatBowLabel = (bow?: string) => {
+    if (!bow || bow === "Recurve") return t("bowRecurve");
+    if (bow === "Compound") return t("bowCompound");
+    if (bow === "Barebow") return t("bowBarebow");
+    return bow;
+  };
 
-  // Filtered by selected athlete and mode (SCORES vs VOLUME)
+  // Only real shooting sessions (not duels)
+  const athleteSessions = sessions.filter((s) => !s.isDuel && s.deletedByArcher !== true);
+
+  // Filtered by selected athlete, search term, and mode (SCORES vs VOLUME)
   const filteredSessions = athleteSessions
     .filter((s) => {
       const matchesAthlete =
@@ -67,6 +102,15 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         s.userId === selectedAthleteUid ||
         s.userUid === selectedAthleteUid;
       if (!matchesAthlete) return false;
+
+      if (searchTerm.trim()) {
+        const q = searchTerm.trim().toLowerCase();
+        const hay = `${s.userName || ""} ${s.format || ""} ${s.practiceType || ""} ${
+          s.distance || ""
+        }`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
       if (s.isDraft) {
         if (subMode === "SCORES") return !isVolumeSession(s);
         return true;
@@ -87,14 +131,14 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
     const weeklySess = athleteSessions.filter(
       (s) => !s.isDraft && s.timestamp >= oneWeekAgo && hasRealScore(s)
     );
-    
+
     const maxScores: Record<string, { userName: string; score: number; format: string }> = {};
-    weeklySess.forEach(s => {
+    weeklySess.forEach((s) => {
       const uid = s.userId || s.userUid;
       const sc = getSessionScore(s);
       if (!maxScores[uid] || sc > maxScores[uid].score) {
         maxScores[uid] = {
-          userName: s.userName || "Atleta",
+          userName: s.userName || t("roleAthlete"),
           score: sc,
           format: s.format || "WA 720"
         };
@@ -108,14 +152,22 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
   const ranking = getWeeklyRanking();
 
-  const handleShareWhatsApp = () => {
-    const rankingText = ranking.length > 0 
-      ? ranking.map((r, idx) => `${idx + 1}. ${r.userName} · ${r.score} pts (${r.format})`).join("\n")
-      : "No hay registros esta semana.";
+  const handleSharePodium = () => {
+    const rankingText =
+      ranking.length > 0
+        ? ranking.map((r, idx) => `${idx + 1}. ${r.userName} · ${r.score} pts (${r.format})`).join("\n")
+        : tx("No hay registros esta semana.", "No scores logged this week.");
 
-    const fullMessage = `*REPORTE DE PUNTUACIONES · 101010 THE APP*\n\n*Top Podio de la Semana:*\n${rankingText}\n\nExcelente trabajo y disciplina a todos los arqueros.\n🎯 *101010 THE APP*`;
+    const fullMessage = tx(
+      `*REPORTE DE PUNTUACIONES · 101010 THE APP*\n\n*Top Podio de la Semana:*\n${rankingText}\n\nExcelente trabajo y disciplina a todos los arqueros.\n🎯 *101010 THE APP*`,
+      `*SCORE REPORT · 101010 THE APP*\n\n*Weekly Top Podium:*\n${rankingText}\n\nGreat work and discipline from all archers.\n🎯 *101010 THE APP*`
+    );
     if (typeof window !== "undefined" && (window as any).ArcheryNativeShare?.shareWhatsAppText) {
       (window as any).ArcheryNativeShare.shareWhatsAppText(fullMessage);
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({ text: fullMessage }).catch(() => {});
       return;
     }
     const url = `whatsapp://send?text=${encodeURIComponent(fullMessage)}`;
@@ -130,14 +182,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           <div className="flex justify-between items-center gap-2">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 min-w-0 flex-1">
               <Award size={14} className="text-yellow-gold shrink-0" />
-              <span className="leading-snug">Podio de Puntuaciones de la Semana</span>
+              <span className="leading-snug">
+                {tx("Podio de Puntuaciones de la Semana", "Weekly Score Podium")}
+              </span>
             </h4>
             <button
-              onClick={handleShareWhatsApp}
+              onClick={handleSharePodium}
               className="p-2 rounded-xl bg-neutral-950 border border-white/5 text-white hover:text-white cursor-pointer transition flex items-center gap-1 text-[10.5px] font-black uppercase tracking-wider shrink-0"
             >
               <Share2 size={10} className="shrink-0" />
-              <span>Compartir</span>
+              <span>{t("share")}</span>
             </button>
           </div>
 
@@ -148,13 +202,15 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                 className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-neutral-950/60 border border-white/[0.03]"
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs tabular-nums shrink-0 ${
-                    idx === 0 
-                      ? "bg-yellow-gold text-black" 
-                      : idx === 1 
-                      ? "bg-neutral-300 text-black" 
-                      : "bg-amber-600 text-white"
-                  }`}>
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs tabular-nums shrink-0 ${
+                      idx === 0
+                        ? "bg-yellow-gold text-black"
+                        : idx === 1
+                        ? "bg-neutral-300 text-black"
+                        : "bg-amber-600 text-white"
+                    }`}
+                  >
                     {idx + 1}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
@@ -163,54 +219,87 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                 </div>
 
-                <span className="text-xs font-black text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">{rank.score} pts</span>
+                <span className="text-xs font-black text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">
+                  {rank.score} pts
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Control Filters: Selector de Alumno y Sub-pestañas Puntuaciones | Volumen */}
-      <div className="bg-neutral-900/50 p-3 rounded-2xl border border-white/5 flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
-        {/* Selector de Alumno Específico */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <User size={13} className="text-cyan-neon shrink-0" />
-          <select
-            value={selectedAthleteUid}
-            onChange={(e) => setSelectedAthleteUid(e.target.value)}
-            className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 min-w-0 truncate cursor-pointer"
-          >
-            <option value="ALL">Todos los Alumnos ({athletes.length})</option>
-            {athletes.map((a) => (
-              <option key={a.uid} value={a.uid}>
-                {a.fullName} ({a.bowConfig?.type === "Recurve" ? "Recurvo" : a.bowConfig?.type === "Compound" ? "Compuesto" : (a.bowConfig?.type || "Arco")})
-              </option>
-            ))}
-          </select>
+      {/* Control Filters: Buscador RTL + Selector de Alumno + Sub-pestañas Puntuaciones | Volumen */}
+      <div className="bg-neutral-900/50 p-3 rounded-2xl border border-white/5 flex flex-col gap-2.5">
+        <div className="relative w-full">
+          <Search
+            size={14}
+            className="absolute start-3 top-1/2 -translate-y-1/2 text-white pointer-events-none"
+          />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={tx(
+              "Buscar por alumno, formato WA o distancia...",
+              "Search by athlete, WA format or distance..."
+            )}
+            className="w-full h-9 bg-neutral-950 border border-white/10 focus:border-cyan-neon rounded-xl ps-9 pe-8 text-white text-xs outline-none transition placeholder:text-white/65"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              aria-label={tx("Limpiar búsqueda", "Clear search")}
+              className="absolute end-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-white cursor-pointer"
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
-        {/* Selector Puntuaciones | Volumen */}
-        <div className="grid grid-cols-2 sm:flex gap-1.5 shrink-0">
-          <button
-            onClick={() => setSubMode("SCORES")}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
-              subMode === "SCORES"
-                ? "bg-cyan-neon text-black font-extrabold"
-                : "bg-neutral-950 border border-white/5 text-white hover:text-white"
-            }`}
-          >
-            Puntuaciones
-          </button>
-          <button
-            onClick={() => setSubMode("VOLUME")}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
-              subMode === "VOLUME"
-                ? "bg-cyan-neon text-black font-extrabold"
-                : "bg-neutral-950 border border-white/5 text-white hover:text-white"
-            }`}
-          >
-            Volumen
-          </button>
+        <div className="flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
+          {/* Selector de Alumno Específico */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <User size={13} className="text-cyan-neon shrink-0" />
+            <select
+              value={selectedAthleteUid}
+              onChange={(e) => setSelectedAthleteUid(e.target.value)}
+              className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 min-w-0 truncate cursor-pointer"
+            >
+              <option value="ALL">
+                {tx(`Todos los Alumnos (${athletes.length})`, `All Athletes (${athletes.length})`)}
+              </option>
+              {athletes.map((a) => (
+                <option key={a.uid} value={a.uid}>
+                  {a.fullName} ({formatBowLabel(a.bowConfig?.type)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Selector Puntuaciones | Volumen */}
+          <div className="grid grid-cols-2 sm:flex gap-1.5 shrink-0">
+            <button
+              onClick={() => setSubMode("SCORES")}
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
+                subMode === "SCORES"
+                  ? "bg-cyan-neon text-black font-extrabold"
+                  : "bg-neutral-950 border border-white/5 text-white hover:text-white"
+              }`}
+            >
+              {tx("Puntuaciones", "Scores")}
+            </button>
+            <button
+              onClick={() => setSubMode("VOLUME")}
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
+                subMode === "VOLUME"
+                  ? "bg-cyan-neon text-black font-extrabold"
+                  : "bg-neutral-950 border border-white/5 text-white hover:text-white"
+              }`}
+            >
+              {t("practiceVolume")}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -219,13 +308,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         <div className="flex justify-between items-center gap-2 flex-wrap px-1">
           <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
             {subMode === "SCORES"
-              ? `Puntajes Reportados (${filteredSessions.length})`
-              : `Volumen por Sesión (${filteredSessions.length})`}
+              ? `${tx("Puntajes Reportados", "Reported Scores")} (${filteredSessions.length})`
+              : `${tx("Volumen por Sesión", "Session Volume")} (${filteredSessions.length})`}
           </span>
           <span className="text-[10.5px] text-white tabular-nums">
             {subMode === "VOLUME"
-              ? `Total: ${filteredSessions.reduce((acc, s) => acc + getLiveSafeArrows(s), 0)} flechas`
-              : "Orden cronológico más reciente"}
+              ? `Total: ${filteredSessions.reduce(
+                  (acc, s) => acc + getLiveSafeArrows(s),
+                  0
+                )} ${t("arrowsLabel")}`
+              : tx("Orden cronológico más reciente", "Most recent first")}
           </span>
         </div>
 
@@ -234,16 +326,20 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             <Target size={24} className="text-white mx-auto mb-2" />
             <p className="text-xs text-white font-bold">
               {subMode === "SCORES"
-                ? "No hay puntuaciones reportadas aún."
-                : "No hay sesiones con volumen de flechas registrado."}
+                ? tx("No hay puntuaciones reportadas aún.", "No reported scores yet.")
+                : tx(
+                    "No hay sesiones con volumen de flechas registrado.",
+                    "No sessions with logged arrow volume yet."
+                  )}
             </p>
           </div>
         ) : subMode === "VOLUME" ? (
           filteredSessions.map((sess) => {
             const sessAthlete = athletes.find(
-              (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
+              (a) =>
+                a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
             );
-            const dateStr = new Date(sess.updatedAt || sess.timestamp).toLocaleDateString(undefined, {
+            const dateStr = formatRegionalDate(sess.updatedAt || sess.timestamp, language, {
               weekday: "short",
               day: "numeric",
               month: "short"
@@ -264,24 +360,26 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-white text-xs font-bold leading-tight truncate">
-                        {sess.userName || "Alumno"}
+                        {sess.userName || t("roleAthlete")}
                       </span>
                       {sess.isDraft && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
-                          ● EN VIVO
+                          ● {tx("EN VIVO", "LIVE")}
                         </span>
                       )}
                     </div>
                     <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                      {dateStr} · {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, sessAthlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                      {dateStr} · {sess.practiceType || t("navSession")} · {sess.distance || 18}m ·{" "}
+                      {getSessionActiveKcal(sess, sessAthlete)} kcal ·{" "}
+                      {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-col text-right shrink-0">
+                <div className="flex flex-col text-end shrink-0">
                   <span className="text-base font-black text-cyan-neon leading-tight tabular-nums">
                     {totalArrows}
                   </span>
-                  <span className="text-[9.3px] text-white font-bold">flechas</span>
+                  <span className="text-[9.3px] text-white font-bold">{t("arrowsLabel")}</span>
                 </div>
               </div>
             );
@@ -289,11 +387,12 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         ) : (
           filteredSessions.map((sess) => {
             const sessAthlete = athletes.find(
-              (a) => a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
+              (a) =>
+                a.uid === sess.athleteId || a.uid === sess.userId || a.uid === sess.userUid
             );
             const isExpanded = expandedSessionId === sess.id;
             const sessTs = sess.updatedAt || sess.timestamp;
-            const dateStr = new Date(sessTs).toLocaleDateString(undefined, {
+            const dateStr = formatRegionalDate(sessTs, language, {
               weekday: "short",
               day: "numeric",
               month: "short"
@@ -305,10 +404,12 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
             const scoredArrows = sess.isDraft
               ? countScoredArrows(sess)
-              : countScoredArrows(sess) || (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
+              : countScoredArrows(sess) ||
+                (sess.endsCount && sess.arrowsPerEnd ? sess.endsCount * sess.arrowsPerEnd : 0);
             const realScore = getSessionScore(sess);
-            const avgPerArrow = scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
-            const bowTypeEs = sess.bowType === "Recurve" ? "Recurvo" : sess.bowType === "Compound" ? "Compuesto" : (sess.bowType || "Arco");
+            const avgPerArrow =
+              scoredArrows > 0 && realScore > 0 ? (realScore / scoredArrows).toFixed(1) : "—";
+            const bowTypeLabel = formatBowLabel(sess.bowType);
 
             return (
               <div
@@ -330,26 +431,32 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-white text-xs font-bold leading-tight truncate">
-                          {sess.userName || "Alumno"}
+                          {sess.userName || t("roleAthlete")}
                         </span>
                         {sess.isDraft && (
                           <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
-                            ● EN VIVO
+                            ● {tx("EN VIVO", "LIVE")}
                           </span>
                         )}
                         <span className="text-[9.3px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon px-1.5 py-0.5 rounded-full font-black uppercase shrink-0">
-                          {sess.practiceType || "Control"}
+                          {sess.practiceType || t("practiceControl")}
                         </span>
                       </div>
                       <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                        {sess.format || "WA 720"} · {sess.distance || 18}m · {bowTypeEs}
-                        {sess.isDraft ? ` · ${scoredArrows} fl. en curso` : ` · ${getSessionActiveKcal(sess, sessAthlete)} kcal · ${formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}`} · {dateStr} {timeStr}
+                        {sess.format || "WA 720"} · {sess.distance || 18}m · {bowTypeLabel}
+                        {sess.isDraft
+                          ? ` · ${scoredArrows} ${tx("fl. en curso", "arr. live")}`
+                          : ` · ${getSessionActiveKcal(sess, sessAthlete)} kcal · ${formatKmAndMiles(
+                              getSessionDistanceWalkedM(sess),
+                              false
+                            )}`}{" "}
+                        · {dateStr} {timeStr}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2.5 shrink-0">
-                    <div className="flex flex-col text-right tabular-nums">
+                    <div className="flex flex-col text-end tabular-nums">
                       <div className="flex items-baseline gap-1 justify-end">
                         <span className="text-base font-black text-cyan-neon leading-tight">
                           {realScore}
@@ -359,7 +466,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         </span>
                       </div>
                       <span className="text-[9.3px] text-yellow-gold font-bold">
-                        {avgPerArrow} pts/fl
+                        {avgPerArrow} {tx("pts/fl", "pts/arr")}
                       </span>
                     </div>
                     {isExpanded ? (
@@ -381,21 +488,27 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     >
                       <div className="flex flex-col items-center gap-2">
                         <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
-                          Diana de Impactos y Telemetría
+                          {t("impactsMap")}
                         </span>
                         <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
                           {(() => {
-                            const presetType = getDianaPresetKey(sess.bowType, sess.distance, sess.format, sess.targetType);
+                            const presetType = getDianaPresetKey(
+                              sess.bowType,
+                              sess.distance,
+                              sess.format,
+                              sess.targetType
+                            );
                             const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
-                            const disp = sess.impacts && sess.impacts.length > 0
-                              ? calculateDispersionStats(
-                                  sess.impacts,
-                                  Number(sess.distance) || 18,
-                                  sess.bowType,
-                                  sess.format,
-                                  sess.targetType
-                                )
-                              : null;
+                            const disp =
+                              sess.impacts && sess.impacts.length > 0
+                                ? calculateDispersionStats(
+                                    sess.impacts,
+                                    Number(sess.distance) || 18,
+                                    sess.bowType,
+                                    sess.format,
+                                    sess.targetType
+                                  )
+                                : null;
 
                             return (
                               <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -414,7 +527,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                   <g className="pointer-events-none">
                                     {disp.hullPolygon.length >= 3 && (
                                       <polygon
-                                        points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
+                                        points={disp.hullPolygon
+                                          .map((p) => `${p.x},${p.y}`)
+                                          .join(" ")}
                                         fill="rgba(0, 229, 255, 0.15)"
                                         stroke="#00E5FF"
                                         strokeWidth="0.45"
@@ -432,65 +547,122 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                         strokeDasharray="1.2,0.8"
                                       />
                                     )}
-                                    <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                    <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                    <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
-                                    <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
+                                    <line
+                                      x1={disp.centroidX - 2.2}
+                                      y1={disp.centroidY}
+                                      x2={disp.centroidX + 2.2}
+                                      y2={disp.centroidY}
+                                      stroke="#000000"
+                                      strokeWidth="0.9"
+                                      strokeLinecap="round"
+                                    />
+                                    <line
+                                      x1={disp.centroidX}
+                                      y1={disp.centroidY - 2.2}
+                                      x2={disp.centroidX}
+                                      y2={disp.centroidY + 2.2}
+                                      stroke="#000000"
+                                      strokeWidth="0.9"
+                                      strokeLinecap="round"
+                                    />
+                                    <line
+                                      x1={disp.centroidX - 2.0}
+                                      y1={disp.centroidY}
+                                      x2={disp.centroidX + 2.0}
+                                      y2={disp.centroidY}
+                                      stroke="#00E5FF"
+                                      strokeWidth="0.55"
+                                      strokeLinecap="round"
+                                    />
+                                    <line
+                                      x1={disp.centroidX}
+                                      y1={disp.centroidY - 2.0}
+                                      x2={disp.centroidX}
+                                      y2={disp.centroidY + 2.0}
+                                      stroke="#00E5FF"
+                                      strokeWidth="0.55"
+                                      strokeLinecap="round"
+                                    />
                                   </g>
                                 )}
-                                {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
-                                  <g key={iIdx}>
-                                    <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
-                                    <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
-                                  </g>
-                                ))}
+                                {sess.impacts &&
+                                  sess.impacts.map((imp: any, iIdx: number) => (
+                                    <g key={iIdx}>
+                                      <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
+                                      <circle
+                                        cx={imp.x}
+                                        cy={imp.y}
+                                        r="1.3"
+                                        fill="#FFF200"
+                                        stroke="black"
+                                        strokeWidth="0.3px"
+                                      />
+                                    </g>
+                                  ))}
                               </svg>
                             );
                           })()}
                         </div>
-                        {sess.impacts && sess.impacts.length > 0 && (() => {
-                          const presetType = getDianaPresetKey(sess.bowType, sess.distance, sess.format, sess.targetType);
-                          const analysis = calculateDispersionAnalysis(
-                            sess.impacts,
-                            Number(sess.distance) || 18,
-                            sess.bowType || "Recurve",
-                            presetType,
-                            sess.format,
-                            sess.targetType
-                          );
-                          if (!analysis) return null;
-                          return (
-                            <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
-                                  Análisis de Grupo y Mira
-                                </span>
-                                <span className="text-[11.6px] tabular-nums font-black text-white shrink-0">
-                                  Ø {analysis.spreadCm.toFixed(1)} cm
-                                </span>
+                        {sess.impacts &&
+                          sess.impacts.length > 0 &&
+                          (() => {
+                            const presetType = getDianaPresetKey(
+                              sess.bowType,
+                              sess.distance,
+                              sess.format,
+                              sess.targetType
+                            );
+                            const analysis = calculateDispersionAnalysis(
+                              sess.impacts,
+                              Number(sess.distance) || 18,
+                              sess.bowType || "Recurve",
+                              presetType,
+                              sess.format,
+                              sess.targetType
+                            );
+                            if (!analysis) return null;
+                            return (
+                              <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-start">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
+                                    {tx(
+                                      "Análisis de Grupo y Mira",
+                                      "Grouping & Sight Analysis"
+                                    )}
+                                  </span>
+                                  <span className="text-[11.6px] tabular-nums font-black text-white shrink-0">
+                                    Ø {analysis.spreadCm.toFixed(1)} cm
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-[11.6px]">
+                                  <span className="text-white">
+                                    {tx("Centro del grupo (+):", "Group center (+):")}
+                                  </span>
+                                  <span className="font-bold text-yellow-gold tabular-nums text-end">
+                                    {analysis.clockDirection} (
+                                    {analysis.distanceFromCenterCm.toFixed(1)} cm)
+                                  </span>
+                                </div>
+                                <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
+                                  <span>{analysis.adviceText}</span>
+                                </div>
                               </div>
-                              <div className="flex items-center justify-between gap-2 text-[11.6px]">
-                                <span className="text-white">Centro del grupo (+):</span>
-                                <span className="font-bold text-yellow-gold tabular-nums text-right">
-                                  {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
-                                </span>
-                              </div>
-                              <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
-                                <span>{analysis.adviceText}</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                            );
+                          })()}
                         {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
                         <div className="w-full grid grid-cols-2 gap-2 mt-1">
                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
+                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
+                              {t("cardCalories")}
+                            </span>
                             <span className="text-sm font-black text-white tabular-nums mt-0.5">
                               {getSessionActiveKcal(sess, sessAthlete)} kcal
                             </span>
                           </div>
                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
+                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
+                              {t("cardWalked")}
+                            </span>
                             <span className="text-sm font-black text-white tabular-nums mt-0.5">
                               {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                             </span>
@@ -502,11 +674,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {sess.ends && Array.isArray(sess.ends) && sess.ends.length > 0 && (
                         <div className="flex flex-col gap-1.5">
                           <span className="text-[10.5px] text-white font-black uppercase tracking-wider tabular-nums">
-                            Puntajes por Serie ({sess.ends.length} tandas)
+                            {tx(
+                              `Puntajes por Serie (${sess.ends.length} tandas)`,
+                              `End Breakdown (${sess.ends.length} ends)`
+                            )}
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                             {sess.ends.map((endItem: any, endIdx: number) => {
-                              const endArrows: string[] = Array.isArray(endItem.arrows) ? endItem.arrows : [];
+                              const endArrows: string[] = Array.isArray(endItem.arrows)
+                                ? endItem.arrows
+                                : [];
                               const endScore = endArrows.reduce((sum, v) => {
                                 if (v === "X" || v === "10") return sum + 10;
                                 if (v === "M") return sum;
@@ -526,7 +703,9 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                       <span
                                         key={aIdx}
                                         className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10.5px] tabular-nums shrink-0 ${
-                                          arrowVal === "X" || arrowVal === "10" || arrowVal === "9"
+                                          arrowVal === "X" ||
+                                          arrowVal === "10" ||
+                                          arrowVal === "9"
                                             ? "bg-yellow-gold text-black border border-yellow-gold"
                                             : arrowVal === "8" || arrowVal === "7"
                                             ? "bg-red-500 text-white border border-red-500/30"
@@ -539,7 +718,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                       </span>
                                     ))}
                                   </div>
-                                  <span className="text-white font-extrabold text-right text-[11.6px] tabular-nums shrink-0 whitespace-nowrap">
+                                  <span className="text-white font-extrabold text-end text-[11.6px] tabular-nums shrink-0 whitespace-nowrap">
                                     {endScore} pts
                                   </span>
                                 </div>
@@ -553,10 +732,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       {sess.sessionNote && (
                         <div className="bg-neutral-900/50 p-2.5 rounded-xl border border-white/5">
                           <span className="text-[9.3px] text-white font-black uppercase tracking-wider block mb-0.5">
-                            Nota del Alumno:
+                            {tx("Nota del Alumno:", "Athlete Note:")}
                           </span>
-                          <p className="text-[12.8px] text-white italic">
-                            "{sess.sessionNote}"
+                          <p className="text-[12.8px] text-white italic select-text">
+                            &ldquo;{sess.sessionNote}&rdquo;
                           </p>
                         </div>
                       )}
@@ -573,17 +752,20 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-3 mt-2">
         <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
           <span className="text-yellow-gold text-sm">★</span>
-          Clasificación de Estrellas 101010 del Equipo
+          <span>{tx("Clasificación de Estrellas 101010 del Equipo", "Team 101010 Stars Leaderboard")}</span>
         </h4>
 
         {starRanking.length === 0 ? (
           <div className="text-center text-[11.6px] text-white py-4 border border-dashed border-white/5 rounded-xl">
-            Aún ningún arquero del roster ha ganado una Estrella 101010 (720).
+            {tx(
+              "Aún ningún arquero del roster ha ganado una Estrella 101010 (720).",
+              "No archer on the roster has unlocked a 101010 Star (720) yet."
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
             {starRanking.map((rank, idx) => (
-              <div 
+              <div
                 key={rank.userId}
                 className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#0E0E12]/80 border border-white/5"
               >
@@ -591,10 +773,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   <span className="text-xs font-black text-white w-5 text-center tabular-nums shrink-0">
                     #{idx + 1}
                   </span>
-                  
-                  <div 
+
+                  <div
                     className="w-9 h-9 rounded-full border flex items-center justify-center text-xs font-black shrink-0"
-                    style={{ 
+                    style={{
                       borderColor: rank.starColor,
                       color: rank.starColor,
                       backgroundColor: `${rank.starColor}15`
@@ -605,14 +787,16 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
 
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-white text-xs font-extrabold truncate">{rank.userName}</span>
+                    <span className="text-white text-xs font-extrabold truncate">
+                      {rank.userName}
+                    </span>
                     <span className="text-[9.3px] text-white uppercase font-bold truncate">
-                      {rank.starName} · {rank.bowType === "Recurve" ? "Recurvo" : rank.bowType === "Compound" ? "Compuesto" : (rank.bowType || "Arco")}
+                      {rank.starName} · {formatBowLabel(rank.bowType)}
                     </span>
                   </div>
                 </div>
 
-                <div className="text-right shrink-0 tabular-nums">
+                <div className="text-end shrink-0 tabular-nums">
                   <span className="text-xs font-black text-cyan-neon block whitespace-nowrap">
                     {rank.highestScore} <span className="text-[9.3px] text-white">/ 720</span>
                   </span>

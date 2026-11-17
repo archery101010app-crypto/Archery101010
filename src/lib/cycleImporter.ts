@@ -1,7 +1,15 @@
-import * as XLSX from "xlsx";
-import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
-import { downloadOrShareFile } from "@/lib/fileDownload";
-import { getLocalISODate } from "@/lib/i18n/regionalUtils";
+import { type Macrocycle, type MacrocyclePhase, ETAPA_COLORS } from "./db/macrocycleTypes.ts";
+import { downloadOrShareFile } from "./fileDownload.ts";
+import { getLocalISODate } from "./i18n/regionalUtils.ts";
+
+let xlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
+
+async function loadXlsx() {
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = import("xlsx");
+  }
+  return xlsxModulePromise;
+}
 
 export interface ParsedDailyEntry {
   date: string; // YYYY-MM-DD
@@ -20,6 +28,7 @@ export interface ParseSpreadsheetOptions {
   referenceYear?: number;
   referenceMonth?: number; // 1..12
   preferMonthFirst?: boolean;
+  lang?: string;
 }
 
 export interface ParsedCycleResult {
@@ -420,13 +429,14 @@ export function normalizeDateString(
 }
 
 /**
- * Parses an Excel (.xlsx / .xls / .csv) ArrayBuffer using SheetJS (XLSX)
+ * Parses a spreadsheet (.xlsx / .xls / .csv) ArrayBuffer using lazy-loaded SheetJS
  * Returns the list of sheet names and a helper to extract TSV text from any sheet.
  */
-export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
+export async function parseExcelWorkbookBuffer(buffer: ArrayBuffer): Promise<{
   sheetNames: string[];
   getSheetTsv: (sheetName: string) => string;
-} {
+}> {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheetNames = workbook.SheetNames || [];
 
@@ -469,10 +479,14 @@ export function parseExcelWorkbookBuffer(buffer: ArrayBuffer): {
 }
 
 /**
- * Extracts a Google Sheets ID from any shared URL and fetches its CSV content directly.
+ * Extracts a cloud spreadsheet ID from a shared URL and fetches its CSV content directly.
  * Tries /export?format=csv first (preserves mixed numeric/text calendar grid cells) with /gviz/tq as fallback.
  */
-export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boolean; csv?: string; error?: string }> {
+export async function fetchGoogleSheetCsv(
+  sheetUrl: string,
+  lang = "es"
+): Promise<{ ok: boolean; csv?: string; error?: string }> {
+  const isEs = lang === "es";
   try {
     const trimmed = sheetUrl.trim();
     const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
@@ -510,7 +524,9 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
     if (!idMatch) {
       return {
         ok: false,
-        error: "El enlace no parece ser un documento válido de Google Sheets."
+        error: isEs
+          ? "El enlace no parece ser una hoja de cálculo en la nube válida."
+          : "The link does not appear to be a valid cloud spreadsheet URL."
       };
     }
 
@@ -538,12 +554,16 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<{ ok: boole
 
     return {
       ok: false,
-      error: "No se pudo leer la hoja. En Google Sheets toca 'Compartir' y cámbialo a 'Cualquier persona con el enlace (Lector)', o copia y pega las celdas directamente."
+      error: isEs
+        ? "No se pudo leer la hoja. En tu documento en la nube toca 'Compartir' y cámbialo a 'Cualquier persona con el enlace (Lector)', o copia y pega las celdas directamente."
+        : "Could not read the spreadsheet. Set cloud link sharing to 'Anyone with the link (Viewer)', or copy and paste the cells directly."
     };
   } catch {
     return {
       ok: false,
-      error: "No se pudo conectar con Google Sheets. Puedes copiar las celdas de tu hoja y pegarlas directamente en la pestaña 'Pegar Celdas'."
+      error: isEs
+        ? "No se pudo conectar con la hoja en la nube. Puedes copiar las celdas y pegarlas directamente."
+        : "Could not connect to the cloud spreadsheet. You can copy the cells and paste them directly."
     };
   }
 }
@@ -1641,31 +1661,70 @@ export function downloadDailySampleTemplate(): Promise<boolean> {
 }
 
 /**
- * Generates and downloads/shares a clean, 100% blank .xlsx Excel workbook with the dates of the selected month
+ * Async entry point for parsing either raw CSV/TSV text or a binary .xlsx/.xls ArrayBuffer.
+ */
+export async function parseCycleSpreadsheet(
+  input: ArrayBuffer | string,
+  defaultCycleName = "Imported Plan",
+  options?: ParseSpreadsheetOptions
+): Promise<ParsedCycleResult> {
+  const isEs = (options?.lang || "es") === "es";
+  if (typeof input === "string") {
+    return parseSpreadsheetData(input, defaultCycleName, options);
+  }
+  const { sheetNames, getSheetTsv } = await parseExcelWorkbookBuffer(input);
+  const firstSheet = sheetNames[0];
+  if (!firstSheet) {
+    const todayStr = getLocalISODate();
+    return {
+      success: false,
+      mode: "daily",
+      planName: defaultCycleName,
+      startDate: todayStr,
+      endDate: todayStr,
+      totalVolumeGoal: 0,
+      stages: [],
+      dailyEntries: [],
+      warnings: [],
+      error: isEs ? "El archivo no contiene hojas legibles." : "The file contains no readable sheets."
+    };
+  }
+  return parseSpreadsheetData(getSheetTsv(firstSheet), defaultCycleName, options);
+}
+
+/**
+ * Generates and downloads/shares a clean, 100% blank .xlsx workbook with the dates of the selected month
  * and zero pre-written or invented activities.
  */
-export function downloadFormattedExcelTemplate(year?: number, month?: number): Promise<boolean> {
+export async function downloadFormattedExcelTemplate(
+  year?: number,
+  month?: number,
+  lang = "es"
+): Promise<boolean> {
+  const XLSX = await loadXlsx();
+  const isEs = lang === "es";
   const y = year || new Date().getFullYear();
   const m = month || (new Date().getMonth() + 1); // 1..12
   const daysInMonth = new Date(y, m, 0).getDate();
-  const weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-  const monthNames = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
-  const mName = monthNames[m - 1] || "Mes";
+  const weekdayNames = isEs
+    ? ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    : ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const monthNames = isEs
+    ? [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+      ]
+    : [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+  const mName = monthNames[m - 1] || (isEs ? "Mes" : "Month");
 
   // Sheet 1: Clean Row-by-Row Date List (100% blank cells for the user to fill)
   const listAoA: string[][] = [
-    [
-      "Fecha",
-      "Día",
-      "Tarea 1",
-      "Tarea 2",
-      "Tarea 3",
-      "Flechas",
-      "Notas"
-    ]
+    isEs
+      ? ["Fecha", "Día", "Tarea 1", "Tarea 2", "Tarea 3", "Flechas", "Notas"]
+      : ["Date", "Day", "Task 1", "Task 2", "Task 3", "Arrows", "Notes"]
   ];
 
   for (let d = 1; d <= daysInMonth; d++) {
@@ -1687,12 +1746,14 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): P
     { wch: 12 },
     { wch: 34 }
   ];
-  XLSX.utils.book_append_sheet(wb, wsList, `Lista ${mName}`);
+  XLSX.utils.book_append_sheet(wb, wsList, isEs ? `Lista ${mName}` : `List ${mName}`);
 
   // Sheet 2: Visual 7-Column Monthly Calendar Grid (100% blank cells under each day number)
   const gridAoA: string[][] = [
     [`${mName.toUpperCase()} ${y}`, "", "", "", "", "", ""],
-    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    isEs
+      ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+      : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
   ];
 
   let currentDay = 1;
@@ -1716,13 +1777,13 @@ export function downloadFormattedExcelTemplate(year?: number, month?: number): P
 
   const wsGrid = XLSX.utils.aoa_to_sheet(gridAoA);
   wsGrid["!cols"] = Array.from({ length: 7 }, () => ({ wch: 24 }));
-  XLSX.utils.book_append_sheet(wb, wsGrid, `Calendario ${mName}`);
+  XLSX.utils.book_append_sheet(wb, wsGrid, isEs ? `Calendario ${mName}` : `Calendar ${mName}`);
 
   const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   return downloadOrShareFile({
     data: wbOut,
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    fileName: `Formato_Plan_${mName}_${y}_Archery101010.xlsx`
+    fileName: `${isEs ? "Formato_Plan" : "Plan_Template"}_${mName}_${y}_Archery101010.xlsx`
   });
 }
 

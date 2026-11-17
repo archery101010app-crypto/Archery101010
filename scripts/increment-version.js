@@ -94,7 +94,7 @@ const versionPayload = {
   fullVersion: newVersion,
   versionCode: vCode,
   apkUrl: `https://archery101010-c0bb4.web.app/?v=${displayVersion}`,
-  apkDownloadUrl: `https://archery101010-c0bb4.web.app/Archery101010-v${displayVersion}.apk`,
+  apkDownloadUrl: 'https://play.google.com/store/apps/details?id=com.archery101010.app',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=com.archery101010.app',
   updatedAt: new Date().toISOString()
 };

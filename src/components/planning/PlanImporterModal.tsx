@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { UserProfile } from "@/lib/authService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { LANG_TO_BCP47, toStandardLangCode } from "@/lib/i18n/regionalUtils";
 import { Macrocycle, MacrocyclePhase, ETAPA_COLORS } from "@/lib/db/macrocycleTypes";
 import {
   saveLocalMacrocycle,
@@ -63,12 +65,18 @@ interface DayRowState {
   arrows: string; // Opcional
 }
 
-const MONTH_NAMES = [
+const MONTH_NAMES_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-const WEEKDAY_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MONTH_NAMES_EN = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const WEEKDAY_SHORT_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const WEEKDAY_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function PlanImporterModal({
   isOpen,
@@ -80,6 +88,39 @@ export default function PlanImporterModal({
   athletes: propAthletes,
   preselectedAthleteIds
 }: PlanImporterModalProps) {
+  const { language, t, tx } = useLanguage();
+  const activeLocale =
+    LANG_TO_BCP47[language] || LANG_TO_BCP47[toStandardLangCode(language)] || "en-US";
+
+  const monthNames = useMemo(() => {
+    if (language === "es") return MONTH_NAMES_ES;
+    if (language === "en") return MONTH_NAMES_EN;
+    return Array.from({ length: 12 }, (_, idx) => {
+      try {
+        const raw = new Intl.DateTimeFormat(activeLocale, { month: "long" }).format(
+          new Date(2026, idx, 15, 12, 0, 0)
+        );
+        return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : MONTH_NAMES_EN[idx];
+      } catch {
+        return MONTH_NAMES_EN[idx];
+      }
+    });
+  }, [language, activeLocale]);
+
+  const weekdayShort = useMemo(() => {
+    if (language === "es") return WEEKDAY_SHORT_ES;
+    if (language === "en") return WEEKDAY_SHORT_EN;
+    return Array.from({ length: 7 }, (_, idx) => {
+      try {
+        return new Intl.DateTimeFormat(activeLocale, { weekday: "short" })
+          .format(new Date(2026, 10, 1 + idx, 12, 0, 0))
+          .replace(/\.$/, "");
+      } catch {
+        return WEEKDAY_SHORT_EN[idx];
+      }
+    });
+  }, [language, activeLocale]);
+
   const hasCoachRole =
     user.role === "coach" ||
     user.role === "team_admin_coach" ||
@@ -98,7 +139,7 @@ export default function PlanImporterModal({
   const [extraMonthEntries, setExtraMonthEntries] = useState<ParsedDailyEntry[]>([]);
   const [importedStages, setImportedStages] = useState<MacrocyclePhase[]>([]);
 
-  // Herramientas opcionales de pegado / archivo / Google Sheets
+  // Herramientas opcionales de pegado / archivo / hoja en la nube
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [pasteBoxText, setPasteBoxText] = useState("");
   const [showSheetsUrlBox, setShowSheetsUrlBox] = useState(false);
@@ -135,7 +176,7 @@ export default function PlanImporterModal({
       rows.push({
         day: d,
         dateIso,
-        weekdayShort: WEEKDAY_SHORT[dow],
+        weekdayShort: weekdayShort[dow],
         weekdayIndex: dow,
         text: "",
         arrows: ""
@@ -185,20 +226,29 @@ export default function PlanImporterModal({
         const arrowGoal = Math.max(0, parseInt(r.arrows, 10) || 0);
         const isRest =
           items.length === 1 &&
-          /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(items[0]) &&
+          /^(descanso|libre|rest|off|día libre|dia libre|rest day|day off)$/i.test(items[0]) &&
           arrowGoal === 0;
         const lowerJoined = items.join(" ").toLowerCase();
         const evType: "training" | "competition" | "meeting" | "other" = isRest
           ? "other"
-          : lowerJoined.includes("torneo") || lowerJoined.includes("competencia")
+          : lowerJoined.includes("torneo") ||
+            lowerJoined.includes("competencia") ||
+            lowerJoined.includes("tournament") ||
+            lowerJoined.includes("competition")
           ? "competition"
-          : lowerJoined.includes("reunión") || lowerJoined.includes("reunion")
+          : lowerJoined.includes("reunión") ||
+            lowerJoined.includes("reunion") ||
+            lowerJoined.includes("meeting")
           ? "meeting"
           : "training";
 
         return {
           date: r.dateIso,
-          title: items[0] || (arrowGoal > 0 ? `${arrowGoal} flechas` : "Entrenamiento"),
+          title:
+            items[0] ||
+            (arrowGoal > 0
+              ? `${arrowGoal} ${t("arrowsLabel")}`
+              : tx("Entrenamiento", "Training")),
           targetArrows: arrowGoal,
           type: evType,
           isRestDay: isRest,
@@ -206,7 +256,7 @@ export default function PlanImporterModal({
           focusPoints: [],
           dailyItems: items,
           customFields: items.map((it, idx) => ({
-            label: `Tarea ${idx + 1}`,
+            label: tx(`Tarea ${idx + 1}`, `Task ${idx + 1}`),
             value: it
           }))
         };
@@ -226,7 +276,7 @@ export default function PlanImporterModal({
     const y = now.getFullYear();
     setRefMonth(m);
     setRefYear(y);
-    setImportPlanName(`Agenda ${MONTH_NAMES[m - 1]} ${y}`);
+    setImportPlanName(`${tx("Agenda", "Schedule")} ${monthNames[m - 1]} ${y}`);
     setImportError(null);
     setStatusMessage(null);
     setShowPasteBox(false);
@@ -261,6 +311,7 @@ export default function PlanImporterModal({
       }
     }
     loadRoster();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, propAthletes, preselectedAthleteIds, isCoachUser, canonicalClubId, user.clubId, user.uid]);
 
   if (!isOpen) return null;
@@ -281,7 +332,7 @@ export default function PlanImporterModal({
     setRefYear(newYear);
     setRefMonth(newMonth);
     if (allKnownEntries.length === 0) {
-      setImportPlanName(`Agenda ${MONTH_NAMES[newMonth - 1]} ${newYear}`);
+      setImportPlanName(`${tx("Agenda", "Schedule")} ${monthNames[newMonth - 1]} ${newYear}`);
     }
     setDayRows(buildRowsWithEntries(newYear, newMonth, entriesForTarget));
     setExtraMonthEntries(entriesForOtherMonths);
@@ -293,7 +344,7 @@ export default function PlanImporterModal({
     );
   };
 
-  // Repetir el texto de un día en todos los mismos días de la semana del mes (ej. todos los Lunes)
+  // Repetir el texto de un día en todos los mismos días de la semana del mes
   const handleRepeatWeekdayInMonth = (sourceRow: DayRowState) => {
     if (!sourceRow.text.trim() && !sourceRow.arrows.trim()) return;
     setDayRows((prev) =>
@@ -304,7 +355,10 @@ export default function PlanImporterModal({
       )
     );
     setStatusMessage(
-      `Se copió el contenido del Día ${sourceRow.day} a todos los ${sourceRow.weekdayShort} del mes.`
+      tx(
+        `Se copió el contenido del Día ${sourceRow.day} a todos los ${sourceRow.weekdayShort} del mes.`,
+        `Copied Day ${sourceRow.day} to every ${sourceRow.weekdayShort} of the month.`
+      )
     );
   };
 
@@ -312,7 +366,7 @@ export default function PlanImporterModal({
     setDayRows((prev) => prev.map((r) => ({ ...r, text: "", arrows: "" })));
     setExtraMonthEntries([]);
     setImportedStages([]);
-    setStatusMessage("Se limpiaron todos los días cargados.");
+    setStatusMessage(tx("Se limpiaron todos los días cargados.", "Cleared all loaded days."));
   };
 
   const applyEntriesAcrossMonths = (
@@ -334,46 +388,56 @@ export default function PlanImporterModal({
     setExtraMonthEntries(otherEntries);
     setImportedStages(stagesToStore);
 
-    const defaultPrefix = "Agenda ";
-    if (!importPlanName.trim() || importPlanName.startsWith(defaultPrefix)) {
+    if (
+      !importPlanName.trim() ||
+      importPlanName.startsWith("Agenda ") ||
+      importPlanName.startsWith("Schedule ")
+    ) {
       if (otherEntries.length > 0) {
         const lastDateParts = sorted[sorted.length - 1].date.split("-");
         const lastMonthIdx = (parseInt(lastDateParts[1], 10) || firstMonth) - 1;
         setImportPlanName(
-          `Plan ${MONTH_NAMES[firstMonth - 1]} - ${MONTH_NAMES[lastMonthIdx]} ${firstYear}`
+          `Plan ${monthNames[firstMonth - 1]} - ${monthNames[lastMonthIdx]} ${firstYear}`
         );
       } else {
-        setImportPlanName(`Agenda ${MONTH_NAMES[firstMonth - 1]} ${firstYear}`);
+        setImportPlanName(`${tx("Agenda", "Schedule")} ${monthNames[firstMonth - 1]} ${firstYear}`);
       }
     }
 
     const extraNotice =
       otherEntries.length > 0
-        ? ` (+ ${otherEntries.length} días adicionales de otros meses listos para guardar)`
+        ? tx(
+            ` (+ ${otherEntries.length} días adicionales de otros meses listos para guardar)`,
+            ` (+ ${otherEntries.length} additional days across other months ready to save)`
+          )
         : "";
     setStatusMessage(
-      `¡Listo! Se cargaron ${activeEntries.length} días en ${MONTH_NAMES[firstMonth - 1]} ${firstYear}${extraNotice}.`
+      tx(
+        `¡Listo! Se cargaron ${activeEntries.length} días en ${monthNames[firstMonth - 1]} ${firstYear}${extraNotice}.`,
+        `Ready! Loaded ${activeEntries.length} days into ${monthNames[firstMonth - 1]} ${firstYear}${extraNotice}.`
+      )
     );
     setShowPasteBox(false);
   };
 
-  // Procesar texto pegado de Excel / Google Sheets / CSV y volcarlo en la tabla respetando multi-mes y etapas
+  // Procesar texto pegado de hoja de cálculo / CSV y volcarlo en la tabla respetando multi-mes y etapas
   const applyRawSpreadsheetTextToMonthTable = (rawText: string) => {
     setImportError(null);
     setStatusMessage(null);
 
     if (!rawText || !rawText.trim()) {
-      setImportError("El texto pegado está vacío.");
+      setImportError(tx("El texto pegado está vacío.", "Pasted text is empty."));
       return;
     }
 
     // 1. Intentar con el lector inteligente (día por día, cuadrícula de 7 columnas o rangos por etapas)
     const parsed = parseSpreadsheetData(
       rawText,
-      importPlanName || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`,
+      importPlanName || `${tx("Agenda", "Schedule")} ${monthNames[refMonth - 1]} ${refYear}`,
       {
         referenceYear: refYear,
-        referenceMonth: refMonth
+        referenceMonth: refMonth,
+        lang: language
       }
     );
 
@@ -382,7 +446,7 @@ export default function PlanImporterModal({
       return;
     }
 
-    // 1B. Soporte para CSV/Excel por Etapas (ej. Macrociclo exportado con Fecha Inicio y Fecha Fin)
+    // 1B. Soporte para CSV/.xlsx por Etapas (ej. Ciclo exportado con Fecha Inicio y Fecha Fin)
     if (parsed.success && parsed.mode === "stages" && parsed.stages.length > 0) {
       const expandedMap = new Map<string, ParsedDailyEntry>();
       let guardDays = 0;
@@ -426,7 +490,7 @@ export default function PlanImporterModal({
               notes: stage.notes || "",
               dailyItems,
               customFields: dailyItems.map((it, idx) => ({
-                label: idx === 0 ? "Etapa" : `Indicación ${idx}`,
+                label: idx === 0 ? tx("Etapa", "Stage") : tx(`Indicación ${idx}`, `Note ${idx}`),
                 value: it
               })),
               type: "training",
@@ -460,7 +524,7 @@ export default function PlanImporterModal({
       .filter((row) => row.length > 0);
 
     if (nonEmptyRows.length === 0) {
-      setImportError("No se encontraron renglones con texto.");
+      setImportError(tx("No se encontraron renglones con texto.", "No rows with text were found."));
       return;
     }
 
@@ -468,7 +532,7 @@ export default function PlanImporterModal({
     const firstCellLower = (nonEmptyRows[0][0] || "").toLowerCase();
     const dataOnlyRows =
       nonEmptyRows.length > 1 &&
-      /^(fecha|d[ií]a|date|day|nombre de la etapa|etapa|actividad|sesi[oó]n|tarea)\b/i.test(
+      /^(fecha|d[ií]a|date|day|nombre de la etapa|etapa|stage|phase|actividad|activity|sesi[oó]n|session|tarea|task)\b/i.test(
         firstCellLower
       )
         ? nonEmptyRows.slice(1)
@@ -481,7 +545,6 @@ export default function PlanImporterModal({
       prev.map((row, idx) => {
         if (idx >= dataOnlyRows.length) return row;
         const cells = [...dataOnlyRows[idx]];
-        // Si la primera celda es solo el número de día (ej. "1", "2"), la quitamos del texto
         if (cells.length > 1 && /^\d{1,2}$/.test(cells[0])) {
           cells.shift();
         }
@@ -495,7 +558,10 @@ export default function PlanImporterModal({
     );
 
     setStatusMessage(
-      `Se volcaron ${filled} renglones directamente en los días del mes. Puedes revisar o ajustar cada día abajo.`
+      tx(
+        `Se volcaron ${filled} renglones directamente en los días del mes. Puedes revisar o ajustar cada día abajo.`,
+        `Loaded ${filled} rows directly into the month days. You can review or edit each day below.`
+      )
     );
     setShowPasteBox(false);
   };
@@ -523,19 +589,33 @@ export default function PlanImporterModal({
     const isExcelBinary = /\.(xlsx|xls|ods)$/i.test(file.name);
     if (isExcelBinary) {
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
         const buffer = ev.target?.result as ArrayBuffer;
         if (buffer) {
-          const { sheetNames, getSheetTsv } = parseExcelWorkbookBuffer(buffer);
-          workbookExtractorRef.current = getSheetTsv;
-          setExcelSheets(sheetNames);
-          if (sheetNames.length > 0) {
-            const firstSheet = sheetNames[0];
-            setSelectedExcelSheet(firstSheet);
-            const tsv = getSheetTsv(firstSheet);
-            applyRawSpreadsheetTextToMonthTable(tsv);
-          } else {
-            setImportError("El archivo parece no tener hojas legibles.");
+          try {
+            const { sheetNames, getSheetTsv } = await parseExcelWorkbookBuffer(buffer);
+            workbookExtractorRef.current = getSheetTsv;
+            setExcelSheets(sheetNames);
+            if (sheetNames.length > 0) {
+              const firstSheet = sheetNames[0];
+              setSelectedExcelSheet(firstSheet);
+              const tsv = getSheetTsv(firstSheet);
+              applyRawSpreadsheetTextToMonthTable(tsv);
+            } else {
+              setImportError(
+                tx(
+                  "El archivo parece no tener hojas legibles.",
+                  "The file appears to contain no readable sheets."
+                )
+              );
+            }
+          } catch {
+            setImportError(
+              tx(
+                "No se pudo procesar el archivo .xlsx.",
+                "Could not parse the .xlsx file."
+              )
+            );
           }
         }
       };
@@ -557,15 +637,26 @@ export default function PlanImporterModal({
     setIsFetchingSheet(true);
     setImportError(null);
     try {
-      const res = await fetchGoogleSheetCsv(sheetUrlInput);
+      const res = await fetchGoogleSheetCsv(sheetUrlInput, language);
       if (res.ok && res.csv) {
         applyRawSpreadsheetTextToMonthTable(res.csv);
         setShowSheetsUrlBox(false);
       } else {
-        setImportError(res.error || "No se pudo leer el enlace de la hoja en la nube.");
+        setImportError(
+          res.error ||
+            tx(
+              "No se pudo leer el enlace de la hoja en la nube.",
+              "Could not read the cloud spreadsheet link."
+            )
+        );
       }
     } catch {
-      setImportError("Error de red al conectar con la hoja en la nube.");
+      setImportError(
+        tx(
+          "Error de red al conectar con la hoja en la nube.",
+          "Network error connecting to the cloud spreadsheet."
+        )
+      );
     } finally {
       setIsFetchingSheet(false);
     }
@@ -590,12 +681,22 @@ export default function PlanImporterModal({
 
   const handleConfirmSave = async () => {
     if (totalDaysToSave === 0) {
-      setImportError("Escribe o pega actividades en al menos un día antes de guardar.");
+      setImportError(
+        tx(
+          "Escribe o pega actividades en al menos un día antes de guardar.",
+          "Enter or paste activities on at least one day before saving."
+        )
+      );
       return;
     }
 
     if (isCoachUser && assignTarget === "selected" && selectedAthleteIds.length === 0) {
-      setImportError("Marca al menos un alumno en la lista o selecciona 'Todos los Alumnos'.");
+      setImportError(
+        tx(
+          "Marca al menos un alumno en la lista o selecciona 'Todos los Alumnos'.",
+          "Select at least one athlete from the list or choose 'All Athletes'."
+        )
+      );
       return;
     }
 
@@ -646,7 +747,7 @@ export default function PlanImporterModal({
           const mArrows = mEntries.reduce((s, e) => s + (e.targetArrows || 0), 0);
           phasesForMacro.push({
             id: `etapa-${Date.now()}-${cIdx}`,
-            name: `${MONTH_NAMES[mIdx] || mStr} ${yStr}`,
+            name: `${monthNames[mIdx] || mStr} ${yStr}`,
             startDate: mEntries[0].date,
             endDate: mEntries[mEntries.length - 1].date,
             weeklySessionGoal: 5,
@@ -662,7 +763,9 @@ export default function PlanImporterModal({
         id: macroId,
         clubId: activeClubId,
         coachId: user.uid,
-        name: importPlanName.trim() || `Agenda ${MONTH_NAMES[refMonth - 1]} ${refYear}`,
+        name:
+          importPlanName.trim() ||
+          `${tx("Agenda", "Schedule")} ${monthNames[refMonth - 1]} ${refYear}`,
         startDate,
         endDate,
         phases: phasesForMacro,
@@ -676,7 +779,10 @@ export default function PlanImporterModal({
         assignedAthleteIds: targetIdsForSave || [],
         groupName:
           isForSpecificAthletes && selectedAthleteIds.length > 1
-            ? `${selectedAthleteIds.length} alumnos seleccionados`
+            ? tx(
+                `${selectedAthleteIds.length} alumnos seleccionados`,
+                `${selectedAthleteIds.length} selected athletes`
+              )
             : undefined,
         volumeGoal: totalArrows,
         currentVolume: 0,
@@ -708,7 +814,12 @@ export default function PlanImporterModal({
       onClose();
     } catch (err) {
       console.error("Error guardando la agenda mensual:", err);
-      setImportError("Ocurrió un problema al guardar la agenda en el calendario.");
+      setImportError(
+        tx(
+          "Ocurrió un problema al guardar la agenda en el calendario.",
+          "A problem occurred while saving the schedule to the calendar."
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -721,7 +832,7 @@ export default function PlanImporterModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="w-full max-w-2xl bg-[#111318] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[94dvh]"
       >
-        {/* Encabezado Estilo Google Calendar */}
+        {/* Encabezado */}
         <div className="p-4 sm:p-5 border-b border-white/[0.06] flex items-center justify-between bg-[#0A0C10]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/30 flex items-center justify-center text-cyan-neon shrink-0">
@@ -729,17 +840,21 @@ export default function PlanImporterModal({
             </div>
             <div>
               <h3 className="text-white font-black text-base tracking-tight">
-                {titleOverride || "Planificador Mensual (Día 1 al 31)"}
+                {titleOverride ||
+                  tx("Planificador Mensual (Día 1 al 31)", "Monthly Planner (Day 1 to 31)")}
               </h3>
               <p className="text-[11.5px] text-white mt-0.5">
-                Escribe directo en cada día o pega tus renglones desde una hoja de cálculo
+                {tx(
+                  "Escribe directo en cada día o pega tus renglones desde una hoja de cálculo",
+                  "Type directly into each day or paste rows from a spreadsheet"
+                )}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar planificador"
+            aria-label={tx("Cerrar planificador", "Close planner")}
             className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition cursor-pointer shrink-0"
           >
             <X size={16} aria-hidden="true" />
@@ -754,7 +869,12 @@ export default function PlanImporterModal({
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
                   <Users size={14} className="shrink-0" />
-                  <span>¿En el calendario de quién se guardará?</span>
+                  <span>
+                    {tx(
+                      "¿En el calendario de quién se guardará?",
+                      "Whose calendar will this be saved to?"
+                    )}
+                  </span>
                 </span>
 
                 <div className="grid grid-cols-3 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-white/10">
@@ -768,7 +888,7 @@ export default function PlanImporterModal({
                     }`}
                   >
                     <User size={11} className="hidden sm:inline shrink-0" />
-                    <span>Escoger 1 o Varios</span>
+                    <span>{tx("Escoger 1 o Varios", "Pick 1 or More")}</span>
                   </button>
                   <button
                     type="button"
@@ -780,7 +900,7 @@ export default function PlanImporterModal({
                     }`}
                   >
                     <Users size={11} className="hidden sm:inline shrink-0" />
-                    <span>Todos los Alumnos</span>
+                    <span>{tx("Todos los Alumnos", "All Athletes")}</span>
                   </button>
                   <button
                     type="button"
@@ -791,7 +911,7 @@ export default function PlanImporterModal({
                         : "text-white hover:bg-white/5"
                     }`}
                   >
-                    <span>Solo Mi Calendario</span>
+                    <span>{tx("Solo Mi Calendario", "Only My Calendar")}</span>
                   </button>
                 </div>
               </div>
@@ -802,8 +922,8 @@ export default function PlanImporterModal({
                     <>
                       <div className="flex items-center justify-between text-[11px] text-white">
                         <span>
-                          Toca para marcar a <strong>1 o varios alumnos</strong> (
-                          {selectedAthleteIds.length} seleccionados):
+                          {tx("Toca para marcar", "Tap to select")} (
+                          {selectedAthleteIds.length}):
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -813,7 +933,7 @@ export default function PlanImporterModal({
                             }
                             className="text-[10.5px] text-cyan-neon font-bold hover:underline cursor-pointer"
                           >
-                            Marcar todos
+                            {tx("Marcar todos", "Select all")}
                           </button>
                           <span className="text-white">·</span>
                           <button
@@ -821,11 +941,11 @@ export default function PlanImporterModal({
                             onClick={() => setSelectedAthleteIds([])}
                             className="text-[10.5px] text-white font-bold hover:underline cursor-pointer"
                           >
-                            Limpiar
+                            {tx("Limpiar", "Clear")}
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pe-1">
                         {clubAthletes.map((ath) => {
                           const isChecked = selectedAthleteIds.includes(ath.uid);
                           return (
@@ -833,7 +953,7 @@ export default function PlanImporterModal({
                               key={ath.uid}
                               type="button"
                               onClick={() => toggleAthleteSelection(ath.uid)}
-                              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-left transition cursor-pointer ${
+                              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-start transition cursor-pointer ${
                                 isChecked
                                   ? "bg-cyan-neon/15 border-cyan-neon text-white"
                                   : "bg-neutral-950/80 border-white/10 text-white hover:border-white/25"
@@ -854,7 +974,7 @@ export default function PlanImporterModal({
                                 </span>
                               </div>
                               <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-cyan-neon shrink-0">
-                                {ath.bowConfig?.type || "Arquero"}
+                                {ath.bowConfig?.type || t("roleAthlete")}
                               </span>
                             </button>
                           );
@@ -863,7 +983,10 @@ export default function PlanImporterModal({
                     </>
                   ) : (
                     <p className="text-[11px] text-amber-400">
-                      Aún no tienes alumnos registrados en tu club. Se guardará para todo el club.
+                      {tx(
+                        "Aún no tienes alumnos registrados en tu club. Se guardará para todo el club.",
+                        "No athletes registered in your club yet. This will be saved for the entire club."
+                      )}
                     </p>
                   )}
                 </div>
@@ -871,12 +994,12 @@ export default function PlanImporterModal({
             </div>
           )}
 
-          {/* Paso 2: Selector de Mes/Año + Botones Rápidos para Pegar de Excel/Sheets */}
+          {/* Paso 2: Selector de Mes/Año + Botones Rápidos para Pegar de Hoja de Cálculo */}
           <div className="bg-[#0D1017] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-white font-black uppercase tracking-wider shrink-0">
-                  Mes:
+                  {tx("Mes:", "Month:")}
                 </span>
                 <select
                   value={refMonth}
@@ -885,8 +1008,8 @@ export default function PlanImporterModal({
                   }
                   className="flex-1 sm:flex-initial bg-neutral-950 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs font-black outline-none focus:border-cyan-neon cursor-pointer"
                 >
-                  {MONTH_NAMES.map((mName, idx) => (
-                    <option key={mName} value={idx + 1}>
+                  {monthNames.map((mName, idx) => (
+                    <option key={`${idx}-${mName}`} value={idx + 1}>
                       {mName}
                     </option>
                   ))}
@@ -922,7 +1045,7 @@ export default function PlanImporterModal({
                   className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[12px] sm:text-[12.6px] leading-tight font-black uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <ClipboardPaste size={13} className="shrink-0" aria-hidden="true" />
-                  <span>Pegar de Hoja</span>
+                  <span>{tx("Pegar de Hoja", "Paste Cells")}</span>
                 </button>
 
                 <button
@@ -931,7 +1054,7 @@ export default function PlanImporterModal({
                   className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <UploadCloud size={13} className="text-cyan-neon shrink-0" aria-hidden="true" />
-                  <span>Subir .xlsx</span>
+                  <span>{tx("Subir .xlsx / .csv", "Upload .xlsx / .csv")}</span>
                 </button>
 
                 <button
@@ -940,17 +1063,20 @@ export default function PlanImporterModal({
                   className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
                 >
                   <Link2 size={13} className="text-emerald-400 shrink-0" aria-hidden="true" />
-                  <span>Enlace de Hoja en Nube</span>
+                  <span>{tx("Enlace de Hoja en Nube", "Cloud Sheet Link")}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => downloadFormattedExcelTemplate(refYear, refMonth)}
+                  onClick={() => downloadFormattedExcelTemplate(refYear, refMonth, language)}
                   className="min-h-[38px] px-2.5 py-2 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-[12px] sm:text-[12.6px] leading-tight font-bold uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer text-center"
-                  title="Descargar hoja vacía con los días del mes"
+                  title={tx(
+                    "Descargar hoja vacía con los días del mes",
+                    "Download blank sheet with month days"
+                  )}
                 >
                   <Download size={12} className="shrink-0" aria-hidden="true" />
-                  <span>Plantilla Vacía</span>
+                  <span>{tx("Plantilla Vacía", "Blank Template")}</span>
                 </button>
               </div>
             </div>
@@ -959,7 +1085,7 @@ export default function PlanImporterModal({
             {excelSheets.length > 1 && (
               <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
                 <span className="text-[10.5px] font-black uppercase text-cyan-neon">
-                  Pestaña del Archivo:
+                  {tx("Pestaña del Archivo:", "Sheet Tab:")}
                 </span>
                 {excelSheets.map((sName) => (
                   <button
@@ -989,13 +1115,19 @@ export default function PlanImporterModal({
             {showPasteBox && (
               <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
                 <span className="text-[11px] text-white font-bold">
-                  Pega aquí las celdas copiadas de tu hoja de cálculo (pueden tener fecha o ser simplemente los renglones del mes):
+                  {tx(
+                    "Pega aquí las celdas copiadas de tu hoja de cálculo (pueden tener fecha o ser simplemente los renglones del mes):",
+                    "Paste the cells copied from your spreadsheet here (with dates or plain month rows):"
+                  )}
                 </span>
                 <textarea
                   value={pasteBoxText}
                   onChange={(e) => setPasteBoxText(e.target.value)}
                   rows={4}
-                  placeholder="Mantén presionado aquí y selecciona 'Pegar'..."
+                  placeholder={tx(
+                    "Mantén presionado aquí y selecciona 'Pegar'...",
+                    "Long-press or press Ctrl+V to paste here..."
+                  )}
                   className="bg-neutral-950 border border-cyan-neon/40 rounded-xl p-3 text-xs text-white outline-none"
                 />
                 <div className="flex justify-end gap-2">
@@ -1004,14 +1136,14 @@ export default function PlanImporterModal({
                     onClick={() => setShowPasteBox(false)}
                     className="min-h-[36px] px-3 py-1.5 rounded-xl bg-white/5 text-white text-xs font-bold cursor-pointer"
                   >
-                    Cancelar
+                    {t("cancel")}
                   </button>
                   <button
                     type="button"
                     onClick={() => applyRawSpreadsheetTextToMonthTable(pasteBoxText)}
                     className="min-h-[36px] px-3.5 py-1.5 rounded-xl bg-cyan-neon text-black text-xs font-black uppercase cursor-pointer"
                   >
-                    Pasar a la Tabla del Mes
+                    {tx("Pasar a la Tabla del Mes", "Apply to Month Table")}
                   </button>
                 </div>
               </div>
@@ -1034,7 +1166,7 @@ export default function PlanImporterModal({
                   className="px-3.5 py-1.5 rounded-xl bg-emerald-500 text-black font-black text-xs uppercase cursor-pointer disabled:opacity-40 flex items-center gap-1"
                 >
                   {isFetchingSheet ? <RefreshCw size={13} className="animate-spin" /> : null}
-                  <span>Cargar</span>
+                  <span>{tx("Cargar", "Load")}</span>
                 </button>
               </div>
             )}
@@ -1046,7 +1178,7 @@ export default function PlanImporterModal({
               <button
                 type="button"
                 onClick={() => setStatusMessage(null)}
-                aria-label="Cerrar mensaje de estado"
+                aria-label={tx("Cerrar mensaje de estado", "Dismiss status message")}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-white hover:bg-white/10 cursor-pointer shrink-0"
               >
                 <X size={14} aria-hidden="true" />
@@ -1066,12 +1198,18 @@ export default function PlanImporterModal({
             <div className="px-3.5 py-2.5 bg-white/[0.03] border-b border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon">
-                    Agenda Día por Día — {MONTH_NAMES[refMonth - 1]} {refYear} ({filledDays.length} días en este mes)
+                  <span className="text-[11px] font-black uppercase tracking-wider text-cyan-neon tabular-nums">
+                    {tx(
+                      `Agenda Día por Día — ${monthNames[refMonth - 1]} ${refYear} (${filledDays.length} días en este mes)`,
+                      `Day-by-Day Schedule — ${monthNames[refMonth - 1]} ${refYear} (${filledDays.length} days in this month)`
+                    )}
                   </span>
                   {otherMonthsCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[10.5px] font-black tabular-nums">
-                      + {otherMonthsCount} días adicionales de otros meses listos para guardar
+                      {tx(
+                        `+ ${otherMonthsCount} días adicionales de otros meses listos para guardar`,
+                        `+ ${otherMonthsCount} extra days from other months ready to save`
+                      )}
                     </span>
                   )}
                 </div>
@@ -1082,7 +1220,7 @@ export default function PlanImporterModal({
                     className="text-[10.5px] bg-white hover:bg-neutral-200 text-black font-black px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition"
                   >
                     <Trash2 size={11} />
-                    <span>Limpiar todo</span>
+                    <span>{tx("Limpiar todo", "Clear all")}</span>
                   </button>
                 )}
               </div>
@@ -1090,7 +1228,7 @@ export default function PlanImporterModal({
               {availableYearMonths.length > 1 && (
                 <div className="flex items-center gap-1.5 flex-wrap pt-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                    Meses importados:
+                    {tx("Meses importados:", "Imported months:")}
                   </span>
                   {availableYearMonths.map((ym) => {
                     const [yStr, mStr] = ym.split("-");
@@ -1111,7 +1249,7 @@ export default function PlanImporterModal({
                             : "bg-white/5 hover:bg-white/10 text-white border border-white/10"
                         }`}
                       >
-                        {MONTH_NAMES[mNum - 1]?.slice(0, 3)} {yNum} ({countInYm})
+                        {monthNames[mNum - 1]?.slice(0, 3)} {yNum} ({countInYm})
                       </button>
                     );
                   })}
@@ -1134,7 +1272,6 @@ export default function PlanImporterModal({
                         : "bg-transparent"
                     }`}
                   >
-                    {/* Fila superior en móvil (<640px): Badge Día X a la izquierda + Flechas y Copiar a la derecha; en sm: columnas 1 y 3 */}
                     <div className="flex items-center justify-between gap-2 sm:contents">
                       <div
                         className={`sm:order-1 sm:w-16 shrink-0 rounded-xl px-2.5 py-1.5 sm:px-2 sm:py-2 flex sm:block items-center gap-1.5 text-center border ${
@@ -1149,7 +1286,7 @@ export default function PlanImporterModal({
                           {row.weekdayShort}
                         </div>
                         <div className="text-xs sm:text-sm font-black tabular-nums leading-tight">
-                          Día {row.day}
+                          {tx(`Día ${row.day}`, `Day ${row.day}`)}
                         </div>
                       </div>
 
@@ -1160,16 +1297,22 @@ export default function PlanImporterModal({
                           min={0}
                           value={row.arrows}
                           onChange={(e) => updateDayRow(row.day, "arrows", e.target.value)}
-                          placeholder="Flechas"
-                          title="Meta de flechas (opcional)"
+                          placeholder={tx("Flechas", "Arrows")}
+                          title={tx("Meta de flechas (opcional)", "Arrow target (optional)")}
                           className="w-20 sm:w-16 bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-2 py-1.5 sm:py-2 text-xs text-cyan-neon font-bold text-center tabular-nums outline-none placeholder:text-white/30"
                         />
                         {hasContent && (
                           <button
                             type="button"
                             onClick={() => handleRepeatWeekdayInMonth(row)}
-                            aria-label={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
-                            title={`Copiar a todos los ${row.weekdayShort} de ${MONTH_NAMES[refMonth - 1]}`}
+                            aria-label={tx(
+                              `Copiar a todos los ${row.weekdayShort} de ${monthNames[refMonth - 1]}`,
+                              `Copy to every ${row.weekdayShort} in ${monthNames[refMonth - 1]}`
+                            )}
+                            title={tx(
+                              `Copiar a todos los ${row.weekdayShort} de ${monthNames[refMonth - 1]}`,
+                              `Copy to every ${row.weekdayShort} in ${monthNames[refMonth - 1]}`
+                            )}
                             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-cyan-neon/20 text-cyan-neon border border-white/10 transition cursor-pointer shrink-0"
                           >
                             <Copy size={13} aria-hidden="true" />
@@ -1178,13 +1321,16 @@ export default function PlanImporterModal({
                       </div>
                     </div>
 
-                    {/* Textarea de entrenamiento: 100% full-width debajo en móvil, columna central flexible en sm: */}
+                    {/* Textarea de entrenamiento */}
                     <div className="w-full sm:flex-1 sm:min-w-0 sm:order-2">
                       <textarea
                         value={row.text}
                         onChange={(e) => updateDayRow(row.day, "text", e.target.value)}
                         rows={row.text.includes("\n") ? Math.min(4, row.text.split("\n").length) : 1}
-                        placeholder="Escribe qué toca este día (usa ';' o Enter para enlistar varias tareas)..."
+                        placeholder={tx(
+                          "Escribe qué toca este día (usa ';' o Enter para enlistar varias tareas)...",
+                          "Write today's tasks (use ';' or Enter to list multiple items)..."
+                        )}
                         className="w-full bg-neutral-950/90 border border-white/10 focus:border-cyan-neon rounded-xl px-3 py-2 text-xs text-white outline-none resize-y leading-relaxed placeholder:text-white/35"
                       />
                     </div>
@@ -1202,7 +1348,7 @@ export default function PlanImporterModal({
             onClick={onClose}
             className="px-3 py-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition cursor-pointer shrink-0 whitespace-nowrap"
           >
-            Cancelar
+            {t("cancel")}
           </button>
 
           <button
@@ -1214,13 +1360,16 @@ export default function PlanImporterModal({
             {isSubmitting ? (
               <>
                 <RefreshCw size={14} className="animate-spin shrink-0" />
-                <span>Guardando en Calendario...</span>
+                <span>{tx("Guardando en Calendario...", "Saving to Calendar...")}</span>
               </>
             ) : (
               <>
                 <CheckCircle2 size={14} className="shrink-0" />
                 <span>
-                  Guardar {totalDaysToSave} {totalDaysToSave === 1 ? "Día" : "Días"} en el Calendario
+                  {tx(
+                    `Guardar ${totalDaysToSave} ${totalDaysToSave === 1 ? "Día" : "Días"} en el Calendario`,
+                    `Save ${totalDaysToSave} ${totalDaysToSave === 1 ? "Day" : "Days"} to Calendar`
+                  )}
                 </span>
               </>
             )}

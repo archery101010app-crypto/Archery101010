@@ -127,6 +127,24 @@ export default function SmartwatchMiniApp({
   });
   const [isSyncingWatch, setIsSyncingWatch] = useState<boolean>(false);
 
+  // Track page visibility so real-time listeners & IMU sensors pause cleanly when hidden
+  // and resume immediately when visible, with zero redundant polling intervals.
+  const [isPageVisible, setIsPageVisible] = useState<boolean>(() =>
+    typeof document === "undefined" ? true : document.visibilityState !== "hidden"
+  );
+  const pausedStandaloneCodeRef = useRef<string>("");
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handleVisibilityChange = () => {
+      setIsPageVisible(document.visibilityState !== "hidden");
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
   // Detect whether iOS Safari requires explicit DeviceMotionEvent.requestPermission() on tap
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -156,7 +174,7 @@ export default function SmartwatchMiniApp({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isPageVisible) return;
     const unsubConn = subscribeWatchConnectionStatus((status) => {
       setWatchConnStatus(status);
     });
@@ -170,7 +188,7 @@ export default function SmartwatchMiniApp({
       unsubConn();
       unsubCloud();
     };
-  }, [isOpen]);
+  }, [isOpen, isPageVisible]);
 
   // Phone mode: load or generate the archer's 6-digit Cloud Pairing Code
   useEffect(() => {
@@ -200,21 +218,41 @@ export default function SmartwatchMiniApp({
     };
   }, [isOpen, isStandalone]);
 
-  // Standalone /watch mode: restore saved 6-digit code if previously linked
+  // Standalone /watch mode: attach real-time Firestore onSnapshot when visible, pause cleanly when hidden
   useEffect(() => {
-    if (!isStandalone) return;
-    const saved = getActiveWatchClientPairingCode();
+    if (!isStandalone || !isPageVisible) return;
+    let cancelled = false;
+    const saved = pausedStandaloneCodeRef.current || getActiveWatchClientPairingCode();
     if (saved) {
-      setStandaloneCodeInput(saved);
+      pausedStandaloneCodeRef.current = saved;
+      setStandaloneCodeInput((prev) => prev || saved);
       connectWatchClientToPairingCode(saved).then((res) => {
-        if (!res.ok) {
+        if (cancelled) return;
+        if (res.ok) {
+          if (res.snapshot) {
+            setInternalSnapshot(res.snapshot);
+          }
+        } else {
+          pausedStandaloneCodeRef.current = "";
           setShowStandaloneLinkPanel(true);
         }
       });
     } else {
       setShowStandaloneLinkPanel(true);
     }
-  }, [isStandalone]);
+
+    return () => {
+      cancelled = true;
+      const activeCode = getActiveWatchClientPairingCode() || pausedStandaloneCodeRef.current;
+      if (activeCode) {
+        pausedStandaloneCodeRef.current = activeCode;
+        disconnectWatchClientPairingCode();
+        try {
+          localStorage.setItem("archery_watch_client_pairing_code", activeCode);
+        } catch {}
+      }
+    };
+  }, [isStandalone, isPageVisible]);
 
   // Listen to BroadcastChannel / localStorage / Cloud updates when running standalone on /watch
   useEffect(() => {
@@ -222,6 +260,7 @@ export default function SmartwatchMiniApp({
       setInternalSnapshot(liveSnapshot);
       return;
     }
+    if (!isOpen || !isPageVisible) return;
     const stored = readStoredWatchState();
     if (stored) setInternalSnapshot(stored);
 
@@ -247,7 +286,7 @@ export default function SmartwatchMiniApp({
     });
     sendWatchCommand({ type: "REQUEST_STATE" });
     return unsub;
-  }, [liveSnapshot]);
+  }, [liveSnapshot, isOpen, isPageVisible]);
 
   const triggerHaptic = useCallback((pattern: number | number[] = 45) => {
     try {
@@ -415,8 +454,8 @@ export default function SmartwatchMiniApp({
   }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
 
   useEffect(() => {
-    // Only run wrist IMU shot detection when running standalone on a watch (/watch), never on the phone preview modal
-    if (!isOpen || !isStandalone || !activeState.autoDetectEnabled) return;
+    // Only run wrist IMU shot detection when running standalone on a visible watch (/watch), never when hidden or on the phone preview modal
+    if (!isOpen || !isPageVisible || !isStandalone || !activeState.autoDetectEnabled) return;
     if (!iosMotionGranted) return;
     if (typeof window === "undefined" || !("DeviceMotionEvent" in window)) return;
 
@@ -645,6 +684,7 @@ export default function SmartwatchMiniApp({
     return () => window.removeEventListener("devicemotion", handleMotion);
   }, [
     isOpen,
+    isPageVisible,
     activeState.autoDetectEnabled,
     sensitivity,
     handleArrowDelta,
@@ -652,14 +692,27 @@ export default function SmartwatchMiniApp({
     iosMotionGranted
   ]);
 
+  const sensitivitySyncReadyRef = useRef<boolean>(false);
+  const skipNextSensitivityCmdRef = useRef<boolean>(false);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem("archery_101010_auto_sensitivity");
-      if (saved === "ALTA" || saved === "MEDIA" || saved === "BAJA") setSensitivity(saved);
+      if ((saved === "ALTA" || saved === "MEDIA" || saved === "BAJA") && saved !== sensitivity) {
+        skipNextSensitivityCmdRef.current = true;
+        setSensitivity(saved);
+      }
     } catch {}
+    sensitivitySyncReadyRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (!sensitivitySyncReadyRef.current) return;
+    if (skipNextSensitivityCmdRef.current) {
+      skipNextSensitivityCmdRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem("archery_101010_auto_sensitivity", sensitivity);
     } catch {}
@@ -712,6 +765,7 @@ export default function SmartwatchMiniApp({
     const res = await connectWatchClientToPairingCode(clean);
     setStandaloneLinking(false);
     if (res.ok) {
+      pausedStandaloneCodeRef.current = clean;
       if (res.snapshot) {
         setInternalSnapshot(res.snapshot);
       }
@@ -1316,6 +1370,7 @@ export default function SmartwatchMiniApp({
                 <button
                   type="button"
                   onClick={() => {
+                    pausedStandaloneCodeRef.current = "";
                     disconnectWatchClientPairingCode();
                     setStandaloneCodeInput("");
                   }}

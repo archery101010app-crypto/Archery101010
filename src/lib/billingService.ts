@@ -1,14 +1,6 @@
 "use client";
 
-import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
-import {
-  UserProfile,
-  updateProfile,
-  generateClubInviteCode,
-  isLinkedToExternalCoach,
-  calculateAgeFromBirthDate
-} from "@/lib/authService";
-import { getLocalISODate } from "@/lib/i18n/regionalUtils";
+import type { UserProfile } from "@/lib/authService";
 
 export interface StoreProduct {
   id: string;
@@ -64,18 +56,42 @@ export const IS_LAUNCH_PROMO_FREE = true;
 /** Monthly Coach PRO period (30 days) and Annual Coach PRO period (365 days). */
 export const COACH_PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 export const COACH_PRO_ANNUAL_PERIOD_MS = 365 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Pure testable helper to compute remaining days of Coach PRO access.
+ * Returns 0 when `proExpiresAt` is undefined, invalid, or <= `nowMs`.
+ */
+export function computeProRemainingDays(
+  proExpiresAt?: number,
+  nowMs: number = Date.now()
+): number {
+  if (typeof proExpiresAt !== "number" || !Number.isFinite(proExpiresAt)) return 0;
+  if (!Number.isFinite(nowMs) || proExpiresAt <= nowMs) return 0;
+  return Math.max(0, Math.ceil((proExpiresAt - nowMs) / DAY_MS));
+}
+
+/** Pure check for active Coach PRO access (superadmins are always PRO). */
+export function isCoachProActive(
+  user: Pick<UserProfile, "role" | "plan" | "proExpiresAt"> | null | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  if (!user) return false;
+  if (user.role === "superadmin") return true;
+  return user.plan === "PRO" && typeof user.proExpiresAt === "number" && user.proExpiresAt > nowMs;
+}
 
 /** True while the user has a non-expired PRO access (superadmins are always PRO). */
 export function isProActive(user: UserProfile | null | undefined): boolean {
-  if (!user) return false;
-  if (user.role === "superadmin") return true;
-  return user.plan === "PRO" && typeof user.proExpiresAt === "number" && user.proExpiresAt > Date.now();
+  return isCoachProActive(user);
 }
 
 /** Days left of the current PRO access (0 when inactive). */
 export function proDaysLeft(user: UserProfile | null | undefined): number {
-  if (!user || !isProActive(user) || typeof user.proExpiresAt !== "number") return 0;
-  return Math.max(0, Math.ceil((user.proExpiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+  if (!user) return 0;
+  if (user.role === "superadmin" && typeof user.proExpiresAt !== "number") return 365;
+  if (!isCoachProActive(user)) return 0;
+  return computeProRemainingDays(user.proExpiresAt);
 }
 
 /**
@@ -85,6 +101,7 @@ export function proDaysLeft(user: UserProfile | null | undefined): number {
 export async function enforceProExpiry(user: UserProfile): Promise<UserProfile> {
   if (user.role === "superadmin" || user.plan !== "PRO" || isProActive(user)) return user;
   try {
+    const { updateProfile } = await import("@/lib/authService");
     return await updateProfile(user.uid, { plan: "FREE" });
   } catch (err) {
     console.warn("Could not downgrade expired PRO plan:", err);
@@ -108,6 +125,16 @@ export async function activateCoachLaunchPromo(
   productSku: string = "coach_pro_monthly"
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
+    const [
+      { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue },
+      { updateProfile, generateClubInviteCode, isLinkedToExternalCoach, calculateAgeFromBirthDate },
+      { getLocalISODate }
+    ] = await Promise.all([
+      import("@/lib/db/indexedDB"),
+      import("@/lib/authService"),
+      import("@/lib/i18n/regionalUtils")
+    ]);
+
     if (user.role !== "superadmin" && user.birthDate && user.birthDate.trim()) {
       const age = calculateAgeFromBirthDate(user.birthDate);
       if (age === null || age < 18) {
@@ -218,6 +245,11 @@ export async function restoreCoachStorePurchases(
       message: "Inicia sesión con tu cuenta para restaurar suscripciones."
     };
   }
+
+  const [
+    { getLocalSetting },
+    { updateProfile, generateClubInviteCode, isLinkedToExternalCoach }
+  ] = await Promise.all([import("@/lib/db/indexedDB"), import("@/lib/authService")]);
 
   const now = Date.now();
   let validExpiresAt = 0;

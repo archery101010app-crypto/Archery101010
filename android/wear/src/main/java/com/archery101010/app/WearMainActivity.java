@@ -190,6 +190,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private volatile boolean isPhoneConnected = false;
     private volatile long lastPhoneSyncMs = 0L;
     private volatile long lastLocalActionTimeMs = 0L;
+    private volatile long lastActivityMs = System.currentTimeMillis();
+    private volatile long lastCloudPollMs = 0L;
+    private volatile String lastRemoteCloudSig = "";
+    private volatile String lastPhoneStateSig = "";
     private volatile long lastFinishedTimestampMs = 0L;
     private volatile String currentSessionId = "";
     private volatile String lastFinishedSessionId = "";
@@ -203,17 +207,69 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private final Runnable heartbeatRunnable = new Runnable() {
         @Override
         public void run() {
+            long now = System.currentTimeMillis();
             sendToPhone("{\"type\":\"REQUEST_STATE\"}");
             if (stepsCount > lastSyncedStepsCount) {
                 syncTelemetryToPhone();
             }
-            if (hasPairingCode && pairingCode.length() == 6) {
-                pollFirestoreCloud();
+            if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+                long cloudIntervalMs = getAdaptiveCloudPollIntervalMs(now);
+                if (lastCloudPollMs == 0L || (now - lastCloudPollMs) >= (cloudIntervalMs - 150L)) {
+                    pollFirestoreCloud();
+                }
             }
             checkPhoneNodeConnectivity();
-            heartbeatHandler.postDelayed(this, 4000L);
+            scheduleNextHeartbeat();
         }
     };
+
+    private long getAdaptiveCloudPollIntervalMs(long now) {
+        long idleMs = Math.max(0L, now - lastActivityMs);
+        boolean wearDataLayerRecent = isPhoneConnected
+                && lastPhoneSyncMs > 0L
+                && (now - lastPhoneSyncMs) < 30_000L;
+        // 3-Tier Adaptive Cloud Polling:
+        // Active (< 90s): 5,000 ms standalone, or 20,000 ms if direct Bluetooth Wear Data Layer was active in last 30s
+        // Warm Idle (90s..5m): 20,000 ms
+        // Deep Idle (>= 5m): 45,000 ms
+        if (idleMs < 90_000L) {
+            return wearDataLayerRecent ? 20_000L : 5_000L;
+        } else if (idleMs < 300_000L) {
+            return 20_000L;
+        }
+        return 45_000L;
+    }
+
+    private long getAdaptiveHeartbeatDelayMs(long now) {
+        long idleMs = Math.max(0L, now - lastActivityMs);
+        if (idleMs < 90_000L) {
+            return 5_000L;
+        } else if (idleMs < 300_000L) {
+            return 20_000L;
+        }
+        return 45_000L;
+    }
+
+    private void scheduleNextHeartbeat() {
+        long delayMs = getAdaptiveHeartbeatDelayMs(System.currentTimeMillis());
+        heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        heartbeatHandler.postDelayed(heartbeatRunnable, delayMs);
+    }
+
+    private void markUserActivity(boolean isWriteAction) {
+        long now = System.currentTimeMillis();
+        lastActivityMs = now;
+        if (isWriteAction) {
+            lastLocalActionTimeMs = now;
+        } else if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode
+                && (now - lastLocalActionTimeMs) >= 3_500L) {
+            long targetIntervalMs = getAdaptiveCloudPollIntervalMs(now);
+            if (lastCloudPollMs == 0L || (now - lastCloudPollMs) >= targetIntervalMs) {
+                pollFirestoreCloud();
+            }
+        }
+        scheduleNextHeartbeat();
+    }
 
     private WearCanvasView canvasView;
 
@@ -294,8 +350,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private void ensureSensorAndHeartbeatActive() {
         syncShotDetectionSensors();
-        heartbeatHandler.removeCallbacks(heartbeatRunnable);
-        heartbeatHandler.postDelayed(heartbeatRunnable, 4000L);
+        scheduleNextHeartbeat();
     }
 
     private void checkPhoneNodeConnectivity() {
@@ -417,9 +472,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (rootObj.has("enabled")) {
                     autoDetectEnabled = rootObj.optBoolean("enabled", autoDetectEnabled);
                 }
+                lastActivityMs = System.currentTimeMillis();
                 syncShotDetectionSensors();
                 saveState();
-                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                runOnUiThread(() -> {
+                    scheduleNextHeartbeat();
+                    if (canvasView != null) canvasView.invalidate();
+                });
                 return;
             }
             if (obj.has("sensitivityLevel")) {
@@ -434,6 +493,30 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             int incomingArrows = obj.optInt("arrowsCount", -1);
             boolean sessionActive = obj.optBoolean("sessionActive", rootObj.optBoolean("sessionActive", true));
 
+            StringBuilder phoneEndArrowsSb = new StringBuilder();
+            JSONArray phoneArr = obj.optJSONArray("currentEndArrows");
+            if (phoneArr != null) {
+                for (int i = 0; i < phoneArr.length(); i++) {
+                    if (i > 0) phoneEndArrowsSb.append(',');
+                    phoneEndArrowsSb.append(phoneArr.optString(i, ""));
+                }
+            }
+            String nextPhoneSig = (sessionActive ? "1|" : "0|") + incomingSessionId + "|"
+                    + incomingArrows + "|" + obj.optInt("totalScore", totalScore) + "|"
+                    + obj.optInt("currentEndIndex", currentEnd - 1) + "|" + phoneEndArrowsSb + "|"
+                    + obj.optInt("distanceM", distanceMeters) + "|"
+                    + (obj.optBoolean("autoDetectEnabled", autoDetectEnabled) ? "1|" : "0|")
+                    + sensitivityLevel;
+            boolean phoneStateChanged = false;
+            if (lastPhoneStateSig.isEmpty()) {
+                lastPhoneStateSig = nextPhoneSig;
+            } else if (!nextPhoneSig.equals(lastPhoneStateSig)) {
+                lastPhoneStateSig = nextPhoneSig;
+                lastActivityMs = now;
+                phoneStateChanged = true;
+            }
+            final boolean shouldRescheduleFromPhone = phoneStateChanged;
+
             if (!sessionActive) {
                 if (incomingArrows <= 0) {
                     lastFinishedSessionId = "";
@@ -441,6 +524,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if ((now - lastLocalActionTimeMs) >= 4000L || incomingArrows <= 0) {
                     resetWatchSessionCounters(true);
                     runOnUiThread(() -> {
+                        if (shouldRescheduleFromPhone) scheduleNextHeartbeat();
                         if (canvasView != null) canvasView.invalidate();
                     });
                 }
@@ -529,6 +613,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             saveState();
             runOnUiThread(() -> {
+                if (shouldRescheduleFromPhone) scheduleNextHeartbeat();
                 if (canvasView != null) canvasView.invalidate();
             });
         } catch (Exception ignored) {}
@@ -605,6 +690,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             pairingDigits[editDigitPos] = (cur + delta + 10) % 10;
         }
         isEditingCode = true;
+        markUserActivity(true);
         triggerHaptic(20);
         if (canvasView != null) canvasView.invalidate();
     }
@@ -617,6 +703,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         pairingCode = sb.toString();
         hasPairingCode = true;
         isEditingCode = false;
+        lastRemoteCloudSig = "";
+        markUserActivity(true);
         saveState();
         triggerHaptic(45);
         pollFirestoreCloud();
@@ -725,6 +813,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private void pollFirestoreCloud() {
         if (!hasPairingCode || pairingCode.length() != 6) return;
+        lastCloudPollMs = System.currentTimeMillis();
         final String code = pairingCode;
         cloudExecutor.execute(() -> {
             HttpURLConnection conn = null;
@@ -752,7 +841,49 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         JSONObject sidNode = fields.optJSONObject("sessionId");
                         String incomingSid = sidNode != null ? sidNode.optString("stringValue", "") : "";
 
+                        final int fsArrows = extractFsInt(fields, "arrowsCount", arrowCount);
+                        final int fsScore = extractFsInt(fields, "totalScore", totalScore);
+                        final int fsEnd = Math.max(1, extractFsInt(fields, "currentEnd", currentEnd));
+                        final int fsDistM = extractFsInt(fields, "distanceM", distanceMeters);
+                        final int fsPerEnd = Math.max(1, extractFsInt(fields, "arrowsPerEnd", syncedArrowsPerEnd));
+                        final int fsEnds = Math.max(1, extractFsInt(fields, "totalEnds", syncedEndsCount));
+                        JSONObject autoNode = fields.optJSONObject("autoDetectEnabled");
+                        final boolean fsAuto = autoNode != null ? autoNode.optBoolean("booleanValue", autoDetectEnabled) : autoDetectEnabled;
+                        final int fsSens = Math.max(0, Math.min(2, extractFsInt(fields, "sensitivityLevel", sensitivityLevel)));
+
+                        JSONObject arrField = fields.optJSONObject("currentEndArrows");
+                        final JSONObject arrVal = arrField != null ? arrField.optJSONObject("arrayValue") : null;
+                        final JSONArray vals = arrVal != null ? arrVal.optJSONArray("values") : null;
+                        StringBuilder endArrowsSb = new StringBuilder();
+                        if (vals != null) {
+                            for (int i = 0; i < vals.length(); i++) {
+                                JSONObject item = vals.optJSONObject(i);
+                                if (item != null && item.has("stringValue")) {
+                                    if (endArrowsSb.length() > 0) endArrowsSb.append(',');
+                                    endArrowsSb.append(item.optString("stringValue", ""));
+                                }
+                            }
+                        }
+
+                        // Detect genuine remote cloud state changes to wake Active Tier cadence
+                        String nextCloudSig = (sessionActive ? "1|" : "0|") + incomingSid + "|"
+                                + fsArrows + "|" + fsScore + "|" + fsEnd + "|" + endArrowsSb + "|"
+                                + fsDistM + "|" + fsPerEnd + "|" + fsEnds + "|"
+                                + (fsAuto ? "1|" : "0|") + fsSens;
+                        boolean cloudStateChanged = false;
+                        if (lastRemoteCloudSig.isEmpty()) {
+                            lastRemoteCloudSig = nextCloudSig;
+                        } else if (!nextCloudSig.equals(lastRemoteCloudSig)) {
+                            lastRemoteCloudSig = nextCloudSig;
+                            lastActivityMs = now;
+                            cloudStateChanged = true;
+                        }
+                        final boolean shouldRescheduleFromCloud = cloudStateChanged;
+
                         runOnUiThread(() -> {
+                            if (shouldRescheduleFromCloud) {
+                                scheduleNextHeartbeat();
+                            }
                             if (!sessionActive) {
                                 if (!recentlyTapped && (arrowCount > 0 || totalScore > 0 || stepsCount > 0)) {
                                     resetWatchSessionCounters(true);
@@ -767,12 +898,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                 currentSessionId = incomingSid;
                             }
                             if (!recentlyTapped) {
-                                arrowCount = extractFsInt(fields, "arrowsCount", arrowCount);
-                                totalScore = extractFsInt(fields, "totalScore", totalScore);
-                                currentEnd = Math.max(1, extractFsInt(fields, "currentEnd", currentEnd));
-                                JSONObject arrField = fields.optJSONObject("currentEndArrows");
-                                JSONObject arrVal = arrField != null ? arrField.optJSONObject("arrayValue") : null;
-                                JSONArray vals = arrVal != null ? arrVal.optJSONArray("values") : null;
+                                arrowCount = fsArrows;
+                                totalScore = fsScore;
+                                currentEnd = fsEnd;
                                 if (arrVal != null) {
                                     currentEndArrows.clear();
                                     if (vals != null) {
@@ -784,10 +912,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                         }
                                     }
                                 }
+                                if (autoNode != null) {
+                                    autoDetectEnabled = fsAuto;
+                                    syncShotDetectionSensors();
+                                }
+                                sensitivityLevel = fsSens;
                             }
-                            distanceMeters = extractFsInt(fields, "distanceM", distanceMeters);
-                            syncedArrowsPerEnd = Math.max(1, extractFsInt(fields, "arrowsPerEnd", syncedArrowsPerEnd));
-                            syncedEndsCount = Math.max(1, extractFsInt(fields, "totalEnds", syncedEndsCount));
+                            distanceMeters = fsDistM;
+                            syncedArrowsPerEnd = fsPerEnd;
+                            syncedEndsCount = fsEnds;
                             drawWeightLbs = Math.max(12f, (float) extractFsInt(fields, "bowPoundageLbs", Math.round(drawWeightLbs)));
                             int cloudWalk = extractFsInt(fields, "distanceWalkedM", 0);
                             if (cloudWalk > distanceWalkedM) distanceWalkedM = cloudWalk;
@@ -835,6 +968,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 wakeLock.acquire(4 * 60 * 60 * 1000L);
             } catch (Exception ignored) {}
         }
+        markUserActivity(false);
         ensureSensorAndHeartbeatActive();
         sendToPhone("{\"type\":\"REQUEST_STATE\"}");
     }
@@ -1319,7 +1453,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         }
                         if (validFollowThrough && (now - lastShotTimestamp) > shotCooldownMs) {
                             lastShotTimestamp = now;
-                            lastLocalActionTimeMs = now;
+                            markUserActivity(true);
                             arrowCount++;
                             triggerHaptic(55);
                             saveState();
@@ -1481,6 +1615,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             isEditingCode = false;
                             screenIndex = (screenIndex + 4) % 5;
                         }
+                        markUserActivity(false);
                         triggerHaptic(20);
                         invalidate();
                         return true;
@@ -1505,7 +1640,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void incrementArrowManually() {
-            lastLocalActionTimeMs = System.currentTimeMillis();
+            markUserActivity(true);
             arrowCount++;
             triggerHaptic(45);
             saveState();
@@ -1515,7 +1650,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         private void decrementArrowManually() {
             if (arrowCount > 0) {
-                lastLocalActionTimeMs = System.currentTimeMillis();
+                markUserActivity(true);
                 arrowCount--;
                 if (!currentEndArrows.isEmpty()) {
                     String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
@@ -1527,6 +1662,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 saveState();
                 sendToPhone("{\"type\":\"DECREMENT_ARROW\",\"delta\":-1,\"source\":\"watch_manual\",\"totalScore\":" + totalScore + "}");
                 invalidate();
+            } else {
+                markUserActivity(false);
             }
         }
 
@@ -1542,6 +1679,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (y > h * 0.90f) {
                 isEditingCode = false;
                 screenIndex = (screenIndex + 1) % 5;
+                markUserActivity(false);
                 triggerHaptic(20);
                 invalidate();
                 return;
@@ -1550,7 +1688,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             // Status pill cycles sensitivity & auto-detector on Screen 0:
             // AUTO · MEDIA (1) -> AUTO · BAJA (0) -> AUTO · ALTA (2) -> MODO MANUAL (off) -> AUTO · MEDIA (1)
             if (screenIndex == 0 && btnToggleDetector.contains(x, y)) {
-                lastLocalActionTimeMs = System.currentTimeMillis();
+                markUserActivity(true);
                 if (!autoDetectEnabled) {
                     autoDetectEnabled = true;
                     sensitivityLevel = 1; // MEDIA
@@ -1582,6 +1720,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 // Center Km/Kcal telemetry tap jumps to Metrics Screen (Screen 2)
                 if (btnCenterMetrics.contains(x, y)) {
+                    markUserActivity(false);
                     triggerHaptic(20);
                     screenIndex = 2;
                     invalidate();
@@ -1590,7 +1729,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             } else if (screenIndex == 1) {
                 for (int i = 0; i < 12; i++) {
                     if (scoreButtons[i].contains(x, y)) {
-                        lastLocalActionTimeMs = System.currentTimeMillis();
+                        markUserActivity(true);
                         if (currentEndArrows.size() >= syncedArrowsPerEnd) {
                             if (currentEnd < syncedEndsCount) {
                                 currentEndArrows.clear();
@@ -1614,7 +1753,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 if (btnLeftPrimary.contains(x, y)) {
                     if (!currentEndArrows.isEmpty()) {
-                        lastLocalActionTimeMs = System.currentTimeMillis();
+                        markUserActivity(true);
                         String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
                         int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
                         totalScore = Math.max(0, totalScore - pts);
@@ -1624,32 +1763,41 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         saveState();
                         sendToPhone("{\"type\":\"UNDO_ARROW\",\"totalScore\":" + totalScore + "}");
                         invalidate();
+                    } else {
+                        markUserActivity(false);
                     }
                     return;
                 }
                 if (btnRightSecondary.contains(x, y)) {
                     if (!currentEndArrows.isEmpty()) {
-                        lastLocalActionTimeMs = System.currentTimeMillis();
+                        markUserActivity(true);
                         currentEndArrows.clear();
                         currentEnd = Math.min(syncedEndsCount, currentEnd + 1);
                         triggerHaptic(45);
                         saveState();
                         sendToPhone("{\"type\":\"NEXT_END\"}");
                         invalidate();
+                    } else {
+                        markUserActivity(false);
                     }
                     return;
                 }
             } else if (screenIndex == 2) {
                 if (btnLeftPrimary.contains(x, y)) {
+                    markUserActivity(true);
                     triggerHaptic(25);
                     syncTelemetryToPhone();
                     sendToPhone("/archery101010/ping", "{\"type\":\"PING\"}", false);
                     sendToPhone("{\"type\":\"REQUEST_STATE\"}");
+                    if (hasPairingCode && pairingCode.length() == 6) {
+                        pollFirestoreCloud();
+                    }
                     invalidate();
                     return;
                 }
             } else if (screenIndex == 3) {
                 if (btnLeftPrimary.contains(x, y)) {
+                    markUserActivity(true);
                     triggerHaptic(70);
                     lastFinishedTimestampMs = System.currentTimeMillis();
                     lastFinishedSessionId = currentSessionId;
@@ -1657,6 +1805,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     resetWatchSessionCounters(true);
                     screenIndex = 0;
                     invalidate();
+                    return;
                 }
             } else if (screenIndex == 4) {
                 for (int di = 0; di < 6; di++) {
@@ -1666,6 +1815,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             adjustSelectedCodeDigit(1);
                         } else {
                             editDigitPos = di;
+                            markUserActivity(true);
                             triggerHaptic(20);
                             invalidate();
                         }
@@ -1679,6 +1829,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (btnCloudMid.contains(x, y)) {
                     isEditingCode = true;
                     editDigitPos = (editDigitPos + 1) % 6;
+                    markUserActivity(true);
                     triggerHaptic(20);
                     invalidate();
                     return;
@@ -1689,8 +1840,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 if (btnCloudSave.contains(x, y)) {
                     commitPairingDigits();
+                    return;
                 }
             }
+            markUserActivity(false);
         }
 
         private void drawCenteredText(Canvas canvas, String text, float cx, float cy) {

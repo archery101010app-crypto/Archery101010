@@ -93,7 +93,6 @@ export const translations = {
     transferBtn: "Transferir rol de Coach",
     inviteCode: "Código de Invitación del Club",
     clubWhatsApp: "Teléfono / Mensajería del Coach",
-    devMode: "DEV: Simular PRO",
     logout: "Cerrar Sesión",
 
     // Scoring
@@ -346,7 +345,6 @@ export const translations = {
     transferBtn: "Transfer Coach Role",
     inviteCode: "Club Invitation Code",
     clubWhatsApp: "Coach Phone / Messaging",
-    devMode: "DEV: Simulate PRO",
     logout: "Log Out",
 
     newSession: "New Training",

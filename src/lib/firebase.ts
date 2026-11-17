@@ -1,12 +1,23 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from "firebase/app-check";
 import { getAuth } from "firebase/auth";
-import { getFirestore, initializeFirestore, enableNetwork, disableNetwork, Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  enableNetwork,
+  disableNetwork,
+  Firestore
+} from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 
+const rawFirebaseEnv = (process.env.NEXT_PUBLIC_FIREBASE_ENV || "").trim().toLowerCase();
 const testProjectId = (process.env.NEXT_PUBLIC_FIREBASE_TEST_PROJECT_ID || "").trim();
 const testApiKey = (process.env.NEXT_PUBLIC_FIREBASE_TEST_API_KEY || "").trim();
-const hasDistinctTestConfig = Boolean(testProjectId && testApiKey);
+const hasDistinctTestConfig = Boolean(
+  testProjectId && testProjectId !== "archery101010-c0bb4" && testApiKey
+);
 
 // Configurations for different environments (dynamically mapped at runtime)
 const firebaseConfigs = {
@@ -42,25 +53,36 @@ const firebaseConfigs = {
 
 // Select configuration based on environment and current URL
 let activeConfig = firebaseConfigs.prod; // Default to production
+export let ACTIVE_ENV: "test" | "prod" | "mock" =
+  rawFirebaseEnv === "test" ? "test" : "prod";
 
 if (typeof window !== "undefined") {
   const host = window.location.hostname;
   const isLocalhost = host === "localhost" || host === "127.0.0.1";
   const isTestEnv =
-    process.env.NEXT_PUBLIC_FIREBASE_ENV === "test" ||
+    rawFirebaseEnv === "test" ||
     host.includes("archery101010-tst") ||
     host.includes("101010-tst") ||
     host.includes("tst");
 
   if (isLocalhost) {
-    if (process.env.NEXT_PUBLIC_FIREBASE_ENV === "test" && hasDistinctTestConfig) {
-      activeConfig = firebaseConfigs.test;
-      console.warn(
-        `[Firebase] TEST mode active on localhost using test project "${firebaseConfigs.test.projectId}".`
-      );
+    if (rawFirebaseEnv === "test") {
+      ACTIVE_ENV = "test";
+      if (!testProjectId || testProjectId === "archery101010-c0bb4" || !hasDistinctTestConfig) {
+        console.warn(
+          "[Firebase] Test environment variables not configured; refusing silent alias without explicit test project."
+        );
+        activeConfig = firebaseConfigs.mock;
+      } else {
+        activeConfig = firebaseConfigs.test;
+        console.warn(
+          `[Firebase] TEST mode active on localhost using test project "${firebaseConfigs.test.projectId}".`
+        );
+      }
     } else {
       const envKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
       if (envKey && !envKey.includes("mock-api-key")) {
+        ACTIVE_ENV = "prod";
         activeConfig = {
           apiKey: envKey,
           authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "archery101010-c0bb4.firebaseapp.com",
@@ -70,28 +92,37 @@ if (typeof window !== "undefined") {
           appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:757910399585:web:3cbcf50a21971cdc5b5820"
         };
       } else {
+        ACTIVE_ENV = "mock";
         activeConfig = firebaseConfigs.mock;
       }
     }
   } else if (isTestEnv) {
+    ACTIVE_ENV = "test";
     activeConfig = firebaseConfigs.test;
-    if (hasDistinctTestConfig) {
+    if (!testProjectId || testProjectId === "archery101010-c0bb4" || !hasDistinctTestConfig) {
       console.warn(
-        `[Firebase] Running in TEST mode against isolated project "${firebaseConfigs.test.projectId}".`
+        "[Firebase] Test environment variables not configured; refusing silent alias without explicit test project."
       );
     } else {
       console.warn(
-        "[Firebase] TEST host detected without NEXT_PUBLIC_FIREBASE_TEST_PROJECT_ID / NEXT_PUBLIC_FIREBASE_TEST_API_KEY — falling back safely to default Firebase config."
+        `[Firebase] Running in TEST mode against isolated project "${firebaseConfigs.test.projectId}".`
       );
     }
   } else {
     // Canonical Firebase Auth domain registered with Google OAuth redirect URIs
+    ACTIVE_ENV = "prod";
     activeConfig = firebaseConfigs.prod;
   }
 } else {
   // Server-side (SSR / Static Build) fallback
-  if (process.env.NEXT_PUBLIC_FIREBASE_ENV === "test" && hasDistinctTestConfig) {
-    activeConfig = firebaseConfigs.test;
+  if (ACTIVE_ENV === "test") {
+    if (!testProjectId || testProjectId === "archery101010-c0bb4" || !hasDistinctTestConfig) {
+      console.warn(
+        "[Firebase] Test environment variables not configured; refusing silent alias without explicit test project."
+      );
+    } else {
+      activeConfig = firebaseConfigs.test;
+    }
   } else {
     const envKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (envKey && !envKey.includes("mock-api-key")) {
@@ -108,7 +139,7 @@ if (typeof window !== "undefined") {
 }
 
 // Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
+export const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
 
 // Optional client-side Firebase App Check initialization (safe for offline & Capacitor builds)
 export let appCheck: AppCheck | null = null;
@@ -136,11 +167,32 @@ export const auth = getAuth(app);
 
 // ignoreUndefinedProperties: never reject a write because an optional field is `undefined`
 // (root cause of sessions/profiles silently failing to sync to the cloud).
+// persistentLocalCache + persistentMultipleTabManager cuts cold-start Firestore reads via resume tokens.
 function createFirestore(): Firestore {
+  if (typeof window !== "undefined") {
+    try {
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        }),
+        ignoreUndefinedProperties: true,
+        experimentalAutoDetectLongPolling: true
+      });
+    } catch {
+      try {
+        return initializeFirestore(app, {
+          ignoreUndefinedProperties: true,
+          experimentalAutoDetectLongPolling: true
+        });
+      } catch {
+        return getFirestore(app);
+      }
+    }
+  }
+
   try {
     return initializeFirestore(app, {
-      ignoreUndefinedProperties: true,
-      experimentalAutoDetectLongPolling: true,
+      ignoreUndefinedProperties: true
     });
   } catch {
     // Already initialized (hot reload) – reuse existing instance

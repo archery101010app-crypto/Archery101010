@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   UserProfile,
   isLinkedToExternalCoach,
@@ -37,12 +39,15 @@ import CoachSessionsTab from "./tabs/CoachSessionsTab";
 import CoachMacrocycleTab from "./tabs/CoachMacrocycleTab";
 import CoachDuelsTab from "./tabs/CoachDuelsTab";
 import AthleteDetailSheet from "./AthleteDetailSheet";
-import PlanImporterModal from "@/components/planning/PlanImporterModal";
 import { Macrocycle } from "@/lib/db/macrocycleTypes";
 import { SyncCycleSummary, unlinkAndPurgePlan } from "@/lib/cycleCalendarSync";
 import { activateCoachLaunchPromo } from "@/lib/billingService";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { getLocalISODate } from "@/lib/i18n/regionalUtils";
+
+const PlanImporterModal = dynamic(() => import("@/components/planning/PlanImporterModal"), {
+  ssr: false
+});
 
 interface CoachPortalViewProps {
   user: UserProfile;
@@ -83,6 +88,7 @@ function filterAndSortClubSessions(
 }
 
 export default function CoachPortalView({ user, onNavigate, onUserUpdate }: CoachPortalViewProps) {
+  const { t, tx } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>("ATHLETES");
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -92,6 +98,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
   const [showPlanImporter, setShowPlanImporter] = useState(false);
   const [importerPreselectedIds, setImporterPreselectedIds] = useState<string[]>([]);
   const [linkNotifications, setLinkNotifications] = useState<CoachLinkNotification[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(true);
 
   const handleOpenPlanImporter = (preselectedAthleteId?: string) => {
     setImporterPreselectedIds(preselectedAthleteId ? [preselectedAthleteId] : []);
@@ -109,14 +116,21 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     const recipientText =
       assignedIds.length > 0
         ? assignedIds.map((id) => athletes.find((a) => a.uid === id)?.fullName || id).join(", ")
-        : "Todos los alumnos del Club";
+        : tx("Todos los alumnos del Club", "All Club Athletes");
 
     await showOledAlert(
-      `¡Plan "${macrocycle.name}" cargado en formato literal!\n\n` +
-        `• Destinatario(s): ${recipientText}\n` +
-        `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-        `Ya está disponible en el calendario del alumno(s).`
+      tx(
+        `¡Plan "${macrocycle.name}" cargado en formato literal!\n\n` +
+          `• Destinatario(s): ${recipientText}\n` +
+          `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+          `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+          `Ya está disponible en el calendario del alumno(s).`,
+        `Plan "${macrocycle.name}" loaded!\n\n` +
+          `• Recipient(s): ${recipientText}\n` +
+          `• Scheduled days: ${summary.syncedDaysCount} (${summary.trainingDaysCount} training, ${summary.restDaysCount} rest)\n` +
+          `• Total assigned arrows: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+          `Now available on the athlete calendar(s).`
+      )
     );
   };
 
@@ -163,7 +177,6 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         }
       }
 
-      // Si en la nube el usuario ya está vinculado como alumno a un Coach externo, no tocar su perfil
       if (cloudData && isLinkedToExternalCoach(cloudData)) {
         return;
       }
@@ -221,247 +234,294 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     let unsubDuels: () => void = () => {};
 
     async function loadCoachData() {
-      await purgeAllFictitiousData();
+      if (!isCancelled) setIsRefreshing(true);
+      try {
+        await purgeAllFictitiousData();
 
-      // 0. Ensure Coach users/{uid} role & clubId are synced first so club-scoped Firestore rules pass
-      await ensureClean6DigitCode();
-      if (isCancelled) return;
+        // 0. Ensure Coach users/{uid} role & clubId are synced first so club-scoped Firestore rules pass
+        await ensureClean6DigitCode();
+        if (isCancelled) return;
 
-      // 1. Get roster of real athletes linked to this coach/club
-      const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-      let unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
+        // 1. Get roster of real athletes linked to this coach/club
+        const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+        let unlinkedIds = await getLocalSetting<string[]>(`unlinked_athletes_${activeClubId}`, []);
 
-      let clubArchers = allUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
-
-      // Pull any newly linked athletes directly from Firestore so Coach sees students immediately
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        try {
-          const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
-          const { db } = await import("@/lib/firebase");
-          const remoteAthletesMap = new Map<string, UserProfile>();
-
-          const addRemoteDoc = (docSnap: any) => {
-            const raw = docSnap.data();
-            const uid = raw?.uid || docSnap.id;
-            if (!raw || !uid || uid === user.uid) return;
-            const data = { ...raw, uid } as UserProfile;
-            if (!isFictitiousUser(data)) {
-              remoteAthletesMap.set(uid, data);
-            }
-          };
-
-          // Query 1: explicit coachId === user.uid
-          try {
-            const snapCoachId = await getDocs(
-              query(collection(db, "users"), where("coachId", "==", user.uid), limit(250))
-            );
-            snapCoachId.forEach(addRemoteDoc);
-          } catch (e) {
-            console.warn("Query users by coachId failed:", e);
-          }
-
-          // Query 2: clubId === activeClubId
-          try {
-            const snapClub = await getDocs(
-              query(collection(db, "users"), where("clubId", "==", activeClubId), limit(250))
-            );
-            snapClub.forEach(addRemoteDoc);
-          } catch (e) {
-            console.warn("Query users by activeClubId failed:", e);
-          }
-
-          // Query 3: canonicalCoachClubId if different from activeClubId
-          if (canonicalCoachClubId !== activeClubId) {
-            try {
-              const snapCanonical = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId), limit(250))
-              );
-              snapCanonical.forEach(addRemoteDoc);
-            } catch (e) {
-              console.warn("Query users by canonicalCoachClubId failed:", e);
-            }
-          }
-
-          // Query 4: legacy clubInviteCode match
-          if (user.clubInviteCode) {
-            try {
-              const snapCode = await getDocs(
-                query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode), limit(250))
-              );
-              snapCode.forEach(addRemoteDoc);
-            } catch (e) {
-              console.warn("Query users by clubInviteCode failed:", e);
-            }
-          }
-
-          // Query 5: superadmin bounded sample (full paginated directory lives in SuperAdmin panel)
-          if (user.role === "superadmin") {
-            try {
-              const snapAll = await getDocs(query(collection(db, "users"), limit(50)));
-              snapAll.forEach(addRemoteDoc);
-            } catch (e) {
-              console.warn("Query bounded users for superadmin failed:", e);
-            }
-          }
-
-          const remoteAthletes = Array.from(remoteAthletesMap.values());
-          if (remoteAthletes.length > 0) {
-            const relinkedUids = new Set(
-              remoteAthletes
-                .filter(
-                  (r) =>
-                    r.coachId === user.uid ||
-                    r.clubId === activeClubId ||
-                    r.clubId === canonicalCoachClubId
-                )
-                .map((r) => r.uid)
-            );
-            if (relinkedUids.size > 0 && unlinkedIds.some((id) => relinkedUids.has(id))) {
-              unlinkedIds = unlinkedIds.filter((id) => !relinkedUids.has(id));
-              await saveLocalSetting(`unlinked_athletes_${activeClubId}`, unlinkedIds);
-            }
-
-            const mergedMap = new Map<string, UserProfile>();
-            for (const u of allUsers) {
-              if (!isFictitiousUser(u)) mergedMap.set(u.uid, u);
-            }
-            for (const r of remoteAthletes) mergedMap.set(r.uid, r);
-            const mergedUsers = Array.from(mergedMap.values());
-            await saveLocalSetting("simulated_users", mergedUsers);
-            clubArchers = mergedUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
-          }
-        } catch (err) {
-          console.warn("Could not fetch club athletes from Firestore:", err);
+        let clubArchers = allUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
+        if (!isCancelled && clubArchers.length > 0) {
+          setAthletes(clubArchers);
         }
-      }
 
-      if (isCancelled) return;
-      setAthletes(clubArchers);
+        // Pull any newly linked athletes directly from Firestore so Coach sees students immediately
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          try {
+            const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+            const remoteAthletesMap = new Map<string, UserProfile>();
 
-      // 2. Load attendance for today (local + Firestore coach_records/ATT-<clubId>-<dateKey>)
-      const dateKey = getLocalISODate();
-      const localAttKey = `attendance_${activeClubId}_${dateKey}`;
-      const savedAttendance = await getLocalSetting<Record<string, boolean>>(localAttKey, {});
-      if (!isCancelled) {
-        setAttendance(savedAttendance);
-      }
-
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        try {
-          const { doc, getDoc } = await import("firebase/firestore");
-          const { db } = await import("@/lib/firebase");
-          const attDocId = `ATT-${activeClubId}-${dateKey}`;
-          const attSnap = await getDoc(doc(db, "coach_records", attDocId));
-          if (attSnap.exists()) {
-            const attData = attSnap.data();
-            if (Array.isArray(attData?.presentUids)) {
-              const cloudAttMap: Record<string, boolean> = {};
-              for (const uid of attData.presentUids) {
-                if (typeof uid === "string" && uid) cloudAttMap[uid] = true;
+            const addRemoteDoc = (docSnap: any) => {
+              const raw = docSnap.data();
+              const uid = raw?.uid || docSnap.id;
+              if (!raw || !uid || uid === user.uid) return;
+              const data = { ...raw, uid } as UserProfile;
+              if (!isFictitiousUser(data)) {
+                remoteAthletesMap.set(uid, data);
               }
-              await saveLocalSetting(localAttKey, cloudAttMap);
-              if (!isCancelled) {
-                setAttendance(cloudAttMap);
+            };
+
+            // Query 1: explicit coachId === user.uid
+            try {
+              const snapCoachId = await getDocs(
+                query(collection(db, "users"), where("coachId", "==", user.uid), limit(250))
+              );
+              snapCoachId.forEach(addRemoteDoc);
+            } catch (e) {
+              console.warn("Query users by coachId failed:", e);
+            }
+
+            // Query 2: clubId === activeClubId
+            try {
+              const snapClub = await getDocs(
+                query(collection(db, "users"), where("clubId", "==", activeClubId), limit(250))
+              );
+              snapClub.forEach(addRemoteDoc);
+            } catch (e) {
+              console.warn("Query users by activeClubId failed:", e);
+            }
+
+            // Query 3: canonicalCoachClubId if different from activeClubId
+            if (canonicalCoachClubId !== activeClubId) {
+              try {
+                const snapCanonical = await getDocs(
+                  query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId), limit(250))
+                );
+                snapCanonical.forEach(addRemoteDoc);
+              } catch (e) {
+                console.warn("Query users by canonicalCoachClubId failed:", e);
               }
             }
-          }
-        } catch (attErr) {
-          console.warn("Could not fetch cloud attendance:", attErr);
-        }
-      }
 
-      // 3. Query sessions strictly by clubId (permitted by firestore.rules:isCoachOfClub)
-      if (typeof navigator !== "undefined" && navigator.onLine && activeClubId) {
-        try {
-          const { collection, query, where, getDocs, onSnapshot } = await import(
-            "firebase/firestore"
-          );
-          const { db } = await import("@/lib/firebase");
-
-          const qClubSess = query(collection(db, "sessions"), where("clubId", "==", activeClubId));
-          const snapClubSess = await getDocs(qClubSess);
-          for (const d of snapClubSess.docs) {
-            const data = d.data();
-            if (data && !isFictitiousSession(data, d.id)) {
-              await saveLocalSession(d.id, { ...data, id: d.id });
+            // Query 4: legacy clubInviteCode match
+            if (user.clubInviteCode) {
+              try {
+                const snapCode = await getDocs(
+                  query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode), limit(250))
+                );
+                snapCode.forEach(addRemoteDoc);
+              } catch (e) {
+                console.warn("Query users by clubInviteCode failed:", e);
+              }
             }
-          }
 
-          // Live listener for active sessions (including isDraft: true live scoring)
-          unsubSessions();
-          unsubSessions = onSnapshot(
-            qClubSess,
-            async (snap) => {
-              let changed = false;
-              for (const change of snap.docChanges()) {
-                const data = change.doc.data();
-                if (data && !isFictitiousSession(data, change.doc.id)) {
-                  await saveLocalSession(change.doc.id, { ...data, id: change.doc.id });
-                  changed = true;
+            // Query 5: superadmin bounded sample (full paginated directory lives in SuperAdmin panel)
+            if (user.role === "superadmin") {
+              try {
+                const snapAll = await getDocs(query(collection(db, "users"), limit(50)));
+                snapAll.forEach(addRemoteDoc);
+              } catch (e) {
+                console.warn("Query bounded users for superadmin failed:", e);
+              }
+            }
+
+            const remoteAthletes = Array.from(remoteAthletesMap.values());
+            if (remoteAthletes.length > 0) {
+              const relinkedUids = new Set(
+                remoteAthletes
+                  .filter(
+                    (r) =>
+                      r.coachId === user.uid ||
+                      r.clubId === activeClubId ||
+                      r.clubId === canonicalCoachClubId
+                  )
+                  .map((r) => r.uid)
+              );
+              if (relinkedUids.size > 0 && unlinkedIds.some((id) => relinkedUids.has(id))) {
+                unlinkedIds = unlinkedIds.filter((id) => !relinkedUids.has(id));
+                await saveLocalSetting(`unlinked_athletes_${activeClubId}`, unlinkedIds);
+              }
+
+              const mergedMap = new Map<string, UserProfile>();
+              for (const u of allUsers) {
+                if (!isFictitiousUser(u)) mergedMap.set(u.uid, u);
+              }
+              for (const r of remoteAthletes) mergedMap.set(r.uid, r);
+              const mergedUsers = Array.from(mergedMap.values());
+              await saveLocalSetting("simulated_users", mergedUsers);
+              clubArchers = mergedUsers.filter((u) => isAthleteLinkedToCoach(u, unlinkedIds));
+            }
+          } catch (err) {
+            console.warn("Could not fetch club athletes from Firestore:", err);
+          }
+        }
+
+        if (isCancelled) return;
+        setAthletes(clubArchers);
+
+        // 2. Load attendance for today (local + Firestore coach_records/ATT-<clubId>-<dateKey>)
+        const dateKey = getLocalISODate();
+        const localAttKey = `attendance_${activeClubId}_${dateKey}`;
+        const savedAttendance = await getLocalSetting<Record<string, boolean>>(localAttKey, {});
+        if (!isCancelled) {
+          setAttendance(savedAttendance);
+        }
+
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          try {
+            const { doc, getDoc } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+            const attDocId = `ATT-${activeClubId}-${dateKey}`;
+            const attSnap = await getDoc(doc(db, "coach_records", attDocId));
+            if (attSnap.exists()) {
+              const attData = attSnap.data();
+              if (Array.isArray(attData?.presentUids)) {
+                const cloudAttMap: Record<string, boolean> = {};
+                for (const uid of attData.presentUids) {
+                  if (typeof uid === "string" && uid) cloudAttMap[uid] = true;
+                }
+                await saveLocalSetting(localAttKey, cloudAttMap);
+                if (!isCancelled) {
+                  setAttendance(cloudAttMap);
                 }
               }
-              if (changed && !isCancelled) {
-                const latestUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-                const latestUnlinked = await getLocalSetting<string[]>(
-                  `unlinked_athletes_${activeClubId}`,
-                  []
-                );
-                const latestArchers = latestUsers.filter((u) =>
-                  isAthleteLinkedToCoach(u, latestUnlinked)
-                );
-                const latestUids = new Set(latestArchers.map((a) => a.uid));
-                const latestSessions = await getLocalSessions();
-                setSessions(filterAndSortClubSessions(latestSessions, latestUids, activeClubId));
-              }
-            },
-            () => {}
-          );
-        } catch (err) {
-          console.warn("Could not fetch club sessions from Firestore:", err);
+            }
+          } catch (attErr) {
+            console.warn("Could not fetch cloud attendance:", attErr);
+          }
         }
-      }
 
-      const allSessions = await getLocalSessions();
-      const linkedUids = new Set(clubArchers.map((a) => a.uid));
-      if (!isCancelled) {
-        setSessions(filterAndSortClubSessions(allSessions, linkedUids, activeClubId));
-      }
+        // 3. Query sessions strictly by clubId, bounded by orderBy("timestamp", "desc"), limit(250)
+        // with fallback query(..., limit(250)) if composite index is still warming.
+        if (typeof navigator !== "undefined" && navigator.onLine && activeClubId) {
+          try {
+            const { collection, query, where, orderBy, limit, getDocs, onSnapshot } = await import(
+              "firebase/firestore"
+            );
+            const { db } = await import("@/lib/firebase");
 
-      // 4. Subscribe to live active_duels for club athletes
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        try {
-          const { collection, query, where, onSnapshot } = await import("firebase/firestore");
-          const { db } = await import("@/lib/firebase");
-          const qActiveDuels = query(
-            collection(db, "active_duels"),
-            where("status", "in", ["waiting", "active"])
-          );
-          unsubDuels();
-          unsubDuels = onSnapshot(
-            qActiveDuels,
-            (snap) => {
-              if (isCancelled) return;
-              const matches: any[] = [];
-              snap.forEach((d) => {
-                const data = d.data();
-                if (!data) return;
-                const involvesClub =
-                  linkedUids.has(data.creatorUid) ||
-                  linkedUids.has(data.playerUid) ||
-                  data.clubId === activeClubId ||
-                  data.creatorUid === user.uid ||
-                  data.playerUid === user.uid;
-                if (involvesClub) {
-                  matches.push({ ...data, id: d.id });
+            const qClubSessOrdered = query(
+              collection(db, "sessions"),
+              where("clubId", "==", activeClubId),
+              orderBy("timestamp", "desc"),
+              limit(250)
+            );
+            const qClubSessFallback = query(
+              collection(db, "sessions"),
+              where("clubId", "==", activeClubId),
+              limit(250)
+            );
+
+            let activeClubSessQuery = qClubSessOrdered;
+            let snapClubSess;
+            try {
+              snapClubSess = await getDocs(qClubSessOrdered);
+            } catch {
+              activeClubSessQuery = qClubSessFallback;
+              snapClubSess = await getDocs(qClubSessFallback);
+            }
+
+            for (const d of snapClubSess.docs) {
+              const data = d.data();
+              if (data && !isFictitiousSession(data, d.id)) {
+                await saveLocalSession(d.id, { ...data, id: d.id });
+              }
+            }
+
+            // Live listener for active sessions (including isDraft: true live scoring)
+            unsubSessions();
+            const attachClubSessionsListener = (
+              targetQuery: typeof qClubSessOrdered,
+              allowFallback: boolean
+            ) => {
+              unsubSessions = onSnapshot(
+                targetQuery,
+                async (snap) => {
+                  let changed = false;
+                  for (const change of snap.docChanges()) {
+                    const data = change.doc.data();
+                    if (data && !isFictitiousSession(data, change.doc.id)) {
+                      await saveLocalSession(change.doc.id, { ...data, id: change.doc.id });
+                      changed = true;
+                    }
+                  }
+                  if (changed && !isCancelled) {
+                    const latestUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                    const latestUnlinked = await getLocalSetting<string[]>(
+                      `unlinked_athletes_${activeClubId}`,
+                      []
+                    );
+                    const latestArchers = latestUsers.filter((u) =>
+                      isAthleteLinkedToCoach(u, latestUnlinked)
+                    );
+                    const latestUids = new Set(latestArchers.map((a) => a.uid));
+                    const latestSessions = await getLocalSessions();
+                    setSessions(filterAndSortClubSessions(latestSessions, latestUids, activeClubId));
+                  }
+                },
+                () => {
+                  if (allowFallback && !isCancelled) {
+                    unsubSessions();
+                    attachClubSessionsListener(qClubSessFallback, false);
+                  }
                 }
-              });
-              matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-              setActiveDuels(matches);
-            },
-            () => {}
-          );
-        } catch (duelErr) {
-          console.warn("Could not subscribe to active_duels:", duelErr);
+              );
+            };
+            attachClubSessionsListener(
+              activeClubSessQuery,
+              activeClubSessQuery === qClubSessOrdered
+            );
+          } catch (err) {
+            console.warn("Could not fetch club sessions from Firestore:", err);
+          }
+        }
+
+        const allSessions = await getLocalSessions();
+        const linkedUids = new Set(clubArchers.map((a) => a.uid));
+        if (!isCancelled) {
+          setSessions(filterAndSortClubSessions(allSessions, linkedUids, activeClubId));
+        }
+
+        // 4. Subscribe to waiting active_duels (bounded to 50 and compliant with Firestore security rules)
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          try {
+            const { collection, query, where, limit, onSnapshot } = await import(
+              "firebase/firestore"
+            );
+            const { db } = await import("@/lib/firebase");
+            const qActiveDuels = query(
+              collection(db, "active_duels"),
+              where("status", "==", "waiting"),
+              limit(50)
+            );
+            unsubDuels();
+            unsubDuels = onSnapshot(
+              qActiveDuels,
+              (snap) => {
+                if (isCancelled) return;
+                const matches: any[] = [];
+                snap.forEach((d) => {
+                  const data = d.data();
+                  if (!data) return;
+                  const involvesClub =
+                    linkedUids.has(data.creatorUid) ||
+                    linkedUids.has(data.playerUid) ||
+                    data.clubId === activeClubId ||
+                    data.creatorUid === user.uid ||
+                    data.playerUid === user.uid;
+                  if (involvesClub) {
+                    matches.push({ ...data, id: d.id });
+                  }
+                });
+                matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                setActiveDuels(matches);
+              },
+              () => {}
+            );
+          } catch (duelErr) {
+            console.warn("Could not subscribe to active_duels:", duelErr);
+          }
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsRefreshing(false);
         }
       }
     }
@@ -622,33 +682,34 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       }
     } catch (err) {
       console.error("Error unlinking athlete:", err);
-      await showOledAlert("No se pudo desvincular al alumno. Inténtalo de nuevo.");
+      await showOledAlert(
+        tx(
+          "No se pudo desvincular al alumno. Inténtalo de nuevo.",
+          "Could not unlink the athlete. Please try again."
+        )
+      );
     }
   };
 
   // Create new athlete profile callback
   const handleCreateAthlete = async (newAthlete: UserProfile) => {
     try {
-      // Ensure Coach users/{uid} role & clubId are synced in Firestore BEFORE inserting athlete
       await ensureClean6DigitCode();
 
       const athleteWithClub: UserProfile = {
         ...newAthlete,
         clubId: activeClubId,
         coachId: user.uid,
-        coachName: user.fullName || "Entrenador",
+        coachName: user.fullName || t("roleCoach"),
         coachEmail: user.email || ""
       };
 
-      // 1. Save to local simulated_users
       const allUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
       const updatedList = [athleteWithClub, ...allUsers];
       await saveLocalSetting("simulated_users", updatedList);
 
-      // 2. Update state
       setAthletes((prev) => [athleteWithClub, ...prev]);
 
-      // 3. Queue sync INSERT for cloud sync
       try {
         const { addToSyncQueue, generateResilientId } = await import("@/lib/db/indexedDB");
         const { runSync } = await import("@/lib/db/syncManager");
@@ -666,11 +727,16 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       }
 
       await showOledAlert(
-        `¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`
+        tx(
+          `¡Perfil de ${athleteWithClub.fullName} creado con éxito! Ya puedes ver su ficha y recibir sus resultados.`,
+          `Profile for ${athleteWithClub.fullName} created! You can now view their card and receive their scores.`
+        )
       );
     } catch (err) {
       console.error("Error creating athlete:", err);
-      await showOledAlert("Error al guardar el perfil del alumno.");
+      await showOledAlert(
+        tx("Error al guardar el perfil del alumno.", "Error saving athlete profile.")
+      );
     }
   };
 
@@ -733,7 +799,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       const res = await activateCoachLaunchPromo(user);
       if (res.success && res.updatedUser) {
         if (onUserUpdate) onUserUpdate(res.updatedUser);
-        await showOledAlert("¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.");
+        await showOledAlert(
+          tx(
+            "¡Coach PRO activado gratis por 30 días! Renuévalo sin costo cada mes.",
+            "Coach PRO activated free for 30 days! Renew at no cost each month."
+          )
+        );
       }
     } catch (e) {
       console.error(e);
@@ -774,7 +845,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         setSessions(filterAndSortClubSessions(list, linkedUids, activeClubId));
         runSync();
 
-        await showOledAlert("Sesión restituida correctamente. Se ha notificado al arquero.");
+        await showOledAlert(
+          tx(
+            "Sesión restituida correctamente. Se ha notificado al arquero.",
+            "Session restored. The archer has been notified."
+          )
+        );
       }
     } catch (err) {
       console.error("Error restoring session:", err);
@@ -797,7 +873,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
             </div>
             <h2 className="text-white text-[16px] sm:text-[17.5px] font-black uppercase tracking-wide truncate min-w-0">
-              Coach {user.fullName || "Director"}
+              {t("roleCoach")} {user.fullName || t("navDirector")}
             </h2>
           </div>
           <button
@@ -806,7 +882,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             className="text-[10px] bg-yellow-gold/10 hover:bg-yellow-gold/20 text-yellow-gold font-black uppercase px-2.5 py-1 rounded-full border border-yellow-gold/30 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition"
           >
             <ShieldCheck size={11} />
-            <span>PRO</span>
+            <span>{t("proBadge")}</span>
           </button>
         </div>
 
@@ -814,9 +890,9 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         <div className="flex items-center justify-between gap-2 bg-[#06080C] px-3 py-2 rounded-xl border border-white/[0.07]">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[11px] text-white uppercase font-bold tracking-wider whitespace-nowrap">
-              Código Alumnos
+              {tx("Código Alumnos", "Student Code")}
             </span>
-            <span className="text-[15px] tabular-nums font-black text-cyan-neon tracking-widest select-all whitespace-nowrap">
+            <span className="text-[15px] tabular-nums font-black text-cyan-neon tracking-widest select-text whitespace-nowrap">
               {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                 ? user.clubInviteCode
                 : "······"}
@@ -830,26 +906,37 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                     ? user.clubInviteCode
                     : "";
                 if (!codeToCopy) {
-                  await showOledAlert("Tu código se está generando. Espera unos segundos e inténtalo de nuevo.");
+                  await showOledAlert(
+                    tx(
+                      "Tu código se está generando. Espera unos segundos e inténtalo de nuevo.",
+                      "Your invite code is being generated. Please wait a moment and try again."
+                    )
+                  );
                   return;
                 }
                 if (navigator.clipboard) {
                   navigator.clipboard.writeText(codeToCopy);
                   await showOledAlert(
-                    `Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`
+                    tx(
+                      `Código "${codeToCopy}" copiado al portapapeles. Compártelo con tus alumnos para que se vinculen contigo.`,
+                      `Code "${codeToCopy}" copied to clipboard. Share it with your athletes so they can link with you.`
+                    )
                   );
                 }
               }}
               className="h-8 px-2.5 bg-[#121620] hover:bg-white/[0.08] border border-white/10 rounded-lg text-cyan-neon text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
-              title="Copiar código para alumnos"
+              title={tx("Copiar código para alumnos", "Copy student invite code")}
             >
               <Share2 size={12} />
-              <span>Copiar</span>
+              <span>{tx("Copiar", "Copy")}</span>
             </button>
             <button
               onClick={async () => {
                 const confirmed = await showOledConfirm(
-                  "¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?"
+                  tx(
+                    "¿Deseas borrar el código actual y generar uno nuevo de 6 dígitos para tus alumnos?",
+                    "Generate a new 6-digit invite code for your athletes and replace the current one?"
+                  )
                 );
                 if (confirmed) {
                   try {
@@ -863,14 +950,22 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       isClubCreator: true
                     });
                     if (onUserUpdate) onUserUpdate(updated);
-                    await showOledAlert(`Nuevo código de 6 dígitos generado: ${freshCode}`);
+                    await showOledAlert(
+                      tx(
+                        `Nuevo código de 6 dígitos generado: ${freshCode}`,
+                        `New 6-digit invite code generated: ${freshCode}`
+                      )
+                    );
                   } catch (err) {
                     console.error("Error al regenerar código:", err);
                   }
                 }
               }}
               className="w-8 h-8 bg-[#121620] hover:bg-white/[0.08] border border-white/10 rounded-lg text-white hover:text-yellow-gold flex items-center justify-center transition cursor-pointer shrink-0"
-              title="Borrar y generar nuevo código de 6 dígitos"
+              title={tx(
+                "Borrar y generar nuevo código de 6 dígitos",
+                "Generate a new 6-digit invite code"
+              )}
             >
               <RefreshCw size={13} />
             </button>
@@ -915,10 +1010,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       </div>
                       <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                         <span className="text-xs sm:text-[12.6px] font-black uppercase tracking-wider text-white leading-snug">
-                          ¡Nuevo Alumno Vinculado!
+                          {tx("¡Nuevo Alumno Vinculado!", "New Linked Athlete!")}
                         </span>
                         <span className="text-[13.5px] font-bold uppercase tracking-wide text-white truncate">
-                          {notif.athleteName || "Arquero"}
+                          {notif.athleteName || t("roleAthlete")}
                         </span>
                       </div>
                     </div>
@@ -926,7 +1021,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       type="button"
                       onClick={dismissNotif}
                       className="sm:hidden p-1.5 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition shrink-0"
-                      title="Descartar aviso"
+                      title={tx("Descartar aviso", "Dismiss notice")}
                     >
                       <X size={15} />
                     </button>
@@ -946,13 +1041,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                       }}
                       className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs sm:text-[12.6px] uppercase tracking-wider cursor-pointer transition text-center"
                     >
-                      Ver Ficha
+                      {tx("Ver Ficha", "View Profile")}
                     </button>
                     <button
                       type="button"
                       onClick={dismissNotif}
                       className="hidden sm:flex p-2 rounded-xl bg-[#111620] border border-white/10 text-white hover:bg-white/10 cursor-pointer transition items-center justify-center"
-                      title="Descartar aviso"
+                      title={tx("Descartar aviso", "Dismiss notice")}
                     >
                       <X size={16} />
                     </button>
@@ -967,11 +1062,11 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       {/* Tabs Panel Switcher: ALUMNOS | RESULTADOS | RESUMEN | PLANES | DUELOS */}
       <div className="grid grid-cols-5 bg-[#0A0C10] border border-white/[0.09] rounded-2xl p-1 shrink-0 gap-1">
         {[
-          { id: "ATHLETES", label: "Alumnos", icon: Users },
-          { id: "SESSIONS", label: "Resultados", icon: Award },
-          { id: "OVERVIEW", label: "Resumen", icon: LayoutDashboard },
-          { id: "MACROCYCLES", label: "Planes", icon: Calendar },
-          { id: "DUELS", label: "Duelos", icon: Swords }
+          { id: "ATHLETES", label: tx("Alumnos", "Athletes"), icon: Users },
+          { id: "SESSIONS", label: t("navResults"), icon: Award },
+          { id: "OVERVIEW", label: tx("Resumen", "Overview"), icon: LayoutDashboard },
+          { id: "MACROCYCLES", label: tx("Planes", "Plans"), icon: Calendar },
+          { id: "DUELS", label: tx("Duelos", "Duels"), icon: Swords }
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -986,15 +1081,36 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               }`}
             >
               <Icon size={15} className={active ? "text-cyan-neon" : "text-white"} />
-              <span className="whitespace-nowrap leading-none">{tab.label}</span>
+              <span className="whitespace-nowrap leading-none truncate max-w-full">{tab.label}</span>
             </button>
           );
         })}
       </div>
 
+      {/* Subtle Matte OLED Loading Skeleton when initial roster is syncing */}
+      {isRefreshing && athletes.length === 0 && activeTab === "ATHLETES" && (
+        <div className="flex flex-col gap-2.5" role="status" aria-label={t("loading")}>
+          {[0, 1, 2].map((idx) => (
+            <div
+              key={idx}
+              className="bg-[#0D1017] px-3.5 py-3.5 rounded-2xl border border-white/[0.08] flex items-center justify-between gap-3 animate-pulse"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/[0.08] shrink-0" />
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <div className="h-3.5 w-32 bg-white/10 rounded-md" />
+                  <div className="h-2.5 w-48 bg-white/[0.06] rounded-md" />
+                </div>
+              </div>
+              <div className="h-8 w-16 rounded-xl bg-white/[0.06] shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Tab Body */}
       <div className="flex-1">
-        {activeTab === "ATHLETES" && (
+        {activeTab === "ATHLETES" && !(isRefreshing && athletes.length === 0) && (
           <CoachAthletesTab
             athletes={athletes}
             onViewAthlete={setSelectedAthlete}
@@ -1060,17 +1176,22 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         )}
       </AnimatePresence>
 
-      {/* Direct Plan Importer Modal (from Athletes tab or Athlete Detail Sheet) */}
-      <PlanImporterModal
-        isOpen={showPlanImporter}
-        onClose={() => setShowPlanImporter(false)}
-        user={user}
-        coachViewMode={true}
-        athletes={athletes}
-        preselectedAthleteIds={importerPreselectedIds}
-        onSuccess={handlePlanImportSuccess}
-        titleOverride="Cargar Plan al Calendario del Alumno"
-      />
+      {/* Direct Plan Importer Modal (lazy-loaded on demand) */}
+      {showPlanImporter && (
+        <PlanImporterModal
+          isOpen={showPlanImporter}
+          onClose={() => setShowPlanImporter(false)}
+          user={user}
+          coachViewMode={true}
+          athletes={athletes}
+          preselectedAthleteIds={importerPreselectedIds}
+          onSuccess={handlePlanImportSuccess}
+          titleOverride={tx(
+            "Cargar Plan al Calendario del Alumno",
+            "Load Plan to Athlete Calendar"
+          )}
+        />
+      )}
     </div>
   );
 }

@@ -8,9 +8,18 @@ import {
   subscribeOledDialog,
 } from "@/lib/oledDialog";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 export default function OledDialogHost() {
+  const { language } = useLanguage();
   const [dialog, setDialog] = useState<OledDialogRequest | null>(null);
+
+  const activeLang =
+    language ||
+    (typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null) ||
+    "es";
+  const isSpanish = activeLang.trim().toLowerCase().startsWith("es");
+  const tx = (esText: string, enText: string) => (isSpanish ? esText : enText);
 
   useEffect(() => {
     return subscribeOledDialog(setDialog);
@@ -58,7 +67,9 @@ export default function OledDialogHost() {
                 className="h-3.5 w-auto object-contain"
               />
               <span className="text-[11.5px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full bg-[#12151C] border border-white/10">
-                {dialog.kind === "confirm" ? "Confirmación" : "Aviso"}
+                {dialog.kind === "confirm"
+                  ? tx("Confirmación", "Confirmation")
+                  : tx("Aviso", "Notice")}
               </span>
             </div>
 
@@ -73,14 +84,14 @@ export default function OledDialogHost() {
                   onClick={() => resolveActiveOledDialog(false)}
                   className="w-full py-2.5 px-3 rounded-2xl bg-[#12151C] border border-white/15 text-white font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-white/10 transition"
                 >
-                  {dialog.cancelLabel || "Cancelar"}
+                  {dialog.cancelLabel || tx("Cancelar", "Cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={() => resolveActiveOledDialog(true)}
                   className="w-full py-2.5 px-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition"
                 >
-                  {dialog.confirmLabel || "Confirmar"}
+                  {dialog.confirmLabel || tx("Aceptar", "OK")}
                 </button>
               </div>
             ) : (
@@ -89,7 +100,7 @@ export default function OledDialogHost() {
                 onClick={() => resolveActiveOledDialog(true)}
                 className="w-full py-2.5 px-4 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition mt-1"
               >
-                {dialog.confirmLabel || "Entendido"}
+                {dialog.confirmLabel || tx("Aceptar", "OK")}
               </button>
             )}
           </motion.div>

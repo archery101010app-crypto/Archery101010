@@ -47,8 +47,11 @@ play-service-account.json
 *.der
 *.jks
 *.keystore
+*.apk
+*.aab
 android/keystore.properties
 /ios/App/App/public/
 /android/app/src/main/assets/public/
 /garmin-ciq/tools/
 /releases/
+/scratch/

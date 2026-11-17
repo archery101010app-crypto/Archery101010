@@ -2,18 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/authService";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  X, 
-  User, 
-  History, 
-  Trophy, 
-  LineChart, 
+import {
+  X,
+  User,
+  History,
+  LineChart,
   MessageSquare,
   Award,
   ChevronDown,
   ChevronUp,
-  Plus,
   Send,
   Target,
   FileSpreadsheet,
@@ -22,12 +22,23 @@ import {
   Star
 } from "lucide-react";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
-import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
-import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
-import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
-import { getSessionDistanceWalkedM, getSessionActiveKcal, formatKmAndMiles } from "@/lib/scoring/biometricsEngine";
+import {
+  calculateDispersionStats,
+  calculateDispersionAnalysis
+} from "@/lib/scoring/dispersionAnalytics";
+import {
+  getSessionArrows,
+  getSessionScore,
+  getSessionMaxScore,
+  hasRealScore
+} from "@/lib/scoring/sessionMetrics";
+import {
+  getSessionDistanceWalkedM,
+  getSessionActiveKcal,
+  formatKmAndMiles
+} from "@/lib/scoring/biometricsEngine";
 
 interface AthleteDetailSheetProps {
   athlete: UserProfile | null;
@@ -52,10 +63,11 @@ export default function AthleteDetailSheet({
   onOpenPlanImporter,
   onUnlinkAthlete
 }: AthleteDetailSheetProps) {
+  const { language, t, tx } = useLanguage();
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-  
+
   // Coach notes state
   const [notes, setNotes] = useState<Array<{ id: string; date: number; content: string }>>([]);
   const [newNoteText, setNewNoteText] = useState("");
@@ -66,7 +78,9 @@ export default function AthleteDetailSheet({
     const athleteUid = athlete.uid;
     async function loadCoachNotes() {
       const key = `coach_notes_${athleteUid}`;
-      const savedNotes = await getLocalSetting<Array<{ id: string; date: number; content: string }>>(key, []);
+      const savedNotes = await getLocalSetting<
+        Array<{ id: string; date: number; content: string }>
+      >(key, []);
       let resolvedNotes = Array.isArray(savedNotes) ? savedNotes : [];
       setNotes(resolvedNotes);
 
@@ -91,7 +105,9 @@ export default function AthleteDetailSheet({
               for (const cn of cloudNotesRaw) {
                 if (cn && cn.id && cn.content) byId.set(cn.id, cn);
               }
-              resolvedNotes = Array.from(byId.values()).sort((a, b) => (b.date || 0) - (a.date || 0));
+              resolvedNotes = Array.from(byId.values()).sort(
+                (a, b) => (b.date || 0) - (a.date || 0)
+              );
               setNotes(resolvedNotes);
               await saveLocalSetting(key, resolvedNotes);
             }
@@ -112,14 +128,20 @@ export default function AthleteDetailSheet({
     }
     loadCoachNotes();
     loadAthleteStar();
-    setActiveTab("PERFIL"); // reset to profile tab on open
+    setActiveTab("PERFIL");
     setExpandedSessionId(null);
     setShowUnlinkConfirm(false);
   }, [athlete, coachUid]);
 
   if (!athlete) return null;
 
-  // Live active draft check (last 6h) vs completed historical sessions (never let empty drafts skew averages/PBs)
+  const formatBowLabel = (type?: string) => {
+    if (type === "Recurve") return t("bowRecurve");
+    if (type === "Compound") return t("bowCompound");
+    if (type === "Barebow") return t("bowBarebow");
+    return type || "—";
+  };
+
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
   const liveAthleteSession = sessions.find(
     (s) =>
@@ -130,7 +152,9 @@ export default function AthleteDetailSheet({
   );
 
   // Filter athlete sessions (only completed shooting sessions, no duels/drafts)
-  const athleteSessions = sessions.filter(s => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && !s.isDraft);
+  const athleteSessions = sessions.filter(
+    (s) => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel && !s.isDraft
+  );
   // Sessions with real points (volume sessions never count as score)
   const scoredSessions = athleteSessions.filter((s) => hasRealScore(s));
 
@@ -196,8 +220,8 @@ export default function AthleteDetailSheet({
   // Rebuild PBs
   const getPBs = () => {
     const pbs: Record<string, { score: number; maxScore: number; date: number }> = {};
-    scoredSessions.forEach(s => {
-      const format = s.format || "Libre";
+    scoredSessions.forEach((s) => {
+      const format = s.format || tx("Libre", "Free");
       if (!pbs[format] || s.score > pbs[format].score) {
         pbs[format] = {
           score: s.score,
@@ -235,15 +259,15 @@ export default function AthleteDetailSheet({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar ficha del atleta"
-          className="absolute top-3.5 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-neutral-900 border border-white/5 text-white hover:bg-neutral-800 transition cursor-pointer"
+          aria-label={tx("Cerrar ficha del atleta", "Close athlete profile")}
+          className="absolute top-3.5 end-4 w-9 h-9 flex items-center justify-center rounded-full bg-neutral-900 border border-white/5 text-white hover:bg-neutral-800 transition cursor-pointer"
         >
           <X size={16} aria-hidden="true" />
         </button>
 
         {/* Athlete Overview Card */}
         <div className="px-5 pb-3.5 pt-1 flex flex-col gap-3 shrink-0 border-b border-white/[0.06]">
-          <div className="flex items-center gap-3.5 pr-9">
+          <div className="flex items-center gap-3.5 pe-9">
             <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon uppercase shrink-0">
               {athlete.fullName.substring(0, 2)}
             </div>
@@ -253,18 +277,19 @@ export default function AthleteDetailSheet({
                   {athlete.fullName}
                 </h3>
                 {athlete.nickname && (
-                  <span className="text-[10.5px] text-cyan-neon font-bold truncate">
+                  <span className="text-[10.5px] text-cyan-neon font-bold truncate select-text">
                     @{athlete.nickname}
                   </span>
                 )}
                 {liveAthleteSession && (
                   <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-black uppercase tracking-wider shrink-0">
-                    ● EN VIVO
+                    ● {tx("EN VIVO", "LIVE")}
                   </span>
                 )}
               </div>
               <p className="text-[11.6px] text-white/85 leading-snug mt-0.5 truncate">
-                {athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "Barebow")} · {athlete.gender === "M" ? "Masculino" : "Femenino"}
+                {formatBowLabel(athlete.bowConfig?.type || "Barebow")} ·{" "}
+                {athlete.gender === "M" ? t("genderM") : t("genderF")}
               </p>
             </div>
           </div>
@@ -278,7 +303,9 @@ export default function AthleteDetailSheet({
                   className="flex-1 min-w-0 py-2.5 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-98"
                 >
                   <FileSpreadsheet size={13} className="shrink-0" aria-hidden="true" />
-                  <span className="truncate">Cargar Plan Mensual</span>
+                  <span className="truncate">
+                    {tx("Cargar Plan Mensual", "Import Monthly Plan")}
+                  </span>
                 </button>
               )}
               {onUnlinkAthlete && (
@@ -286,10 +313,10 @@ export default function AthleteDetailSheet({
                   type="button"
                   onClick={() => setShowUnlinkConfirm(true)}
                   className="shrink-0 py-2.5 px-3 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
-                  title="Desvincular alumno"
+                  title={tx("Desvincular alumno", "Unlink athlete")}
                 >
                   <UserMinus size={13} className="shrink-0" />
-                  <span>Desvincular</span>
+                  <span>{tx("Desvincular", "Unlink")}</span>
                 </button>
               )}
             </div>
@@ -299,13 +326,13 @@ export default function AthleteDetailSheet({
         {/* Tabs navigation list */}
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]">
           {[
-            { id: "PERFIL", label: "Perfil", icon: User },
-            { id: "SESIONES", label: "Puntajes", icon: History },
-            { id: "VOLUMEN", label: "Volumen", icon: Target },
-            { id: "RECORDS", label: "Récords", icon: Award },
-            { id: "TENDENCIAS", label: "Tendencias", icon: LineChart },
-            { id: "NOTAS", label: "Notas", icon: MessageSquare }
-          ].map(tab => {
+            { id: "PERFIL", label: t("navProfile"), icon: User },
+            { id: "SESIONES", label: tx("Puntajes", "Scores"), icon: History },
+            { id: "VOLUMEN", label: t("practiceVolume"), icon: Target },
+            { id: "RECORDS", label: tx("Récords", "Records"), icon: Award },
+            { id: "TENDENCIAS", label: tx("Tendencias", "Trends"), icon: LineChart },
+            { id: "NOTAS", label: tx("Notas", "Notes"), icon: MessageSquare }
+          ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
@@ -315,7 +342,7 @@ export default function AthleteDetailSheet({
                   const nextTab = tab.id as SubTab;
                   setActiveTab(nextTab);
                   if (nextTab === "SESIONES") {
-                    const firstScored = scoredSessions.find(s => s.deletedByArcher !== true);
+                    const firstScored = scoredSessions.find((s) => s.deletedByArcher !== true);
                     setExpandedSessionId(firstScored ? firstScored.id : null);
                   }
                 }}
@@ -326,7 +353,9 @@ export default function AthleteDetailSheet({
                 }`}
               >
                 <Icon size={12} className="shrink-0" />
-                <span className="whitespace-nowrap leading-none">{tab.label}</span>
+                <span className="whitespace-nowrap leading-none truncate max-w-full">
+                  {tab.label}
+                </span>
               </button>
             );
           })}
@@ -340,14 +369,14 @@ export default function AthleteDetailSheet({
               {/* World Archery Stars */}
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
                 <span className="text-[11.6px] text-yellow-gold font-black tracking-wider uppercase flex items-center gap-1">
-                  Estrellas 101010 720
+                  {t("starsShelfTitle")}
                 </span>
                 {maxStar ? (
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2.5 bg-neutral-950/40 p-2.5 rounded-xl border border-white/5">
-                      <div 
+                      <div
                         className="w-10 h-10 rounded-full border flex items-center justify-center text-lg font-black shrink-0"
-                        style={{ 
+                        style={{
                           borderColor: maxStar.starColor,
                           color: maxStar.starColor,
                           backgroundColor: `${maxStar.starColor}15`
@@ -360,7 +389,7 @@ export default function AthleteDetailSheet({
                           {maxStar.starName}
                         </span>
                         <span className="text-[9.3px] text-white mt-0.5 font-bold tabular-nums">
-                          Récord 720: {maxStar.highestScore} pts
+                          {t("recordLabel")} 720: {maxStar.highestScore} pts
                         </span>
                       </div>
                     </div>
@@ -370,31 +399,38 @@ export default function AthleteDetailSheet({
                       const bow = maxStar.bowType;
                       const tiers = bow === "Compound" ? COMPOUND_STARS : RECURVE_STARS;
                       const currentLevel = maxStar.highestStarLevel;
-                      
+
                       if (currentLevel >= 8) {
                         return (
                           <div className="bg-cyan-brand/10 border border-cyan-neon/20 p-2 rounded-xl text-[10.5px] text-center text-cyan-neon font-black uppercase">
-                            Estrella Máxima Alcanzada
+                            {t("maxStarAchieved")}
                           </div>
                         );
                       }
-                      
+
                       const nextStar = tiers[currentLevel];
                       const prevMin = tiers[currentLevel - 1].minScore;
                       const highestScore = maxStar.highestScore;
                       const targetMin = nextStar.minScore;
-                      const percent = Math.min(100, Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100));
-                      
+                      const percent = Math.min(
+                        100,
+                        Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100)
+                      );
+
                       return (
                         <div className="flex flex-col gap-1 mt-0.5">
                           <div className="flex justify-between text-[9.3px] text-white font-black uppercase">
-                            <span>Siguiente Meta: {nextStar.name}</span>
-                            <span className="text-white tabular-nums">{highestScore} / {targetMin} pts</span>
+                            <span>
+                              {t("nextLabel")} {nextStar.name}
+                            </span>
+                            <span className="text-white tabular-nums">
+                              {highestScore} / {targetMin} pts
+                            </span>
                           </div>
                           <div className="w-full h-2 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
-                            <div 
+                            <div
                               className="h-full rounded-full"
-                              style={{ 
+                              style={{
                                 width: `${percent}%`,
                                 backgroundColor: nextStar.color
                               }}
@@ -406,71 +442,111 @@ export default function AthleteDetailSheet({
                   </div>
                 ) : (
                   <div className="text-center bg-neutral-950/40 p-3.5 rounded-xl border border-dashed border-white/10 text-[10.5px] text-white font-bold uppercase">
-                    Sin estrellas 101010 ganadas
+                    {tx("Sin estrellas 101010 ganadas", "No 101010 stars unlocked yet")}
                   </div>
                 )}
               </div>
 
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
-                <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase">Configuración de Arco</span>
+                <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase">
+                  {t("bowConfig")}
+                </span>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[10.5px] text-white block">Tipo de Arco</span>
-                    <span className="text-white text-xs font-bold">{athlete.bowConfig?.type === "Recurve" ? "Recurvo" : athlete.bowConfig?.type === "Compound" ? "Compuesto" : (athlete.bowConfig?.type || "—")}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10.5px] text-white block">Orientación</span>
-                    <span className="text-cyan-neon text-xs font-bold">
-                      {(athlete.bowConfig?.hand === "LH" || athlete.physicalData?.dominantHand === "L") ? "Zurdo (LH)" : "Diestro (RH)"}
+                    <span className="text-[10.5px] text-white block">{t("bowType")}</span>
+                    <span className="text-white text-xs font-bold">
+                      {formatBowLabel(athlete.bowConfig?.type)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white block">Libraje (lbs)</span>
-                    <span className="text-white text-xs font-bold tabular-nums">{athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}</span>
+                    <span className="text-[10.5px] text-white block">
+                      {tx("Orientación", "Handedness")}
+                    </span>
+                    <span className="text-cyan-neon text-xs font-bold">
+                      {athlete.bowConfig?.hand === "LH" ||
+                      athlete.physicalData?.dominantHand === "L"
+                        ? tx("Zurdo (LH)", "Left-handed (LH)")
+                        : tx("Diestro (RH)", "Right-handed (RH)")}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10.5px] text-white block">Apertura</span>
-                    <span className="text-white text-xs font-bold tabular-nums">{athlete.bowConfig?.drawLength ? `${athlete.bowConfig.drawLength}"` : "—"}</span>
+                    <span className="text-[10.5px] text-white block">{t("poundage")}</span>
+                    <span className="text-white text-xs font-bold tabular-nums">
+                      {athlete.bowConfig?.poundage ? `${athlete.bowConfig.poundage} lbs` : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10.5px] text-white block">
+                      {tx("Apertura", "Draw Length")}
+                    </span>
+                    <span className="text-white text-xs font-bold tabular-nums">
+                      {athlete.bowConfig?.drawLength ? `${athlete.bowConfig.drawLength}"` : "—"}
+                    </span>
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[10.5px] text-white block">Marca</span>
-                    <span className="text-white text-xs font-bold truncate block">{athlete.bowConfig?.brand || "—"}</span>
+                    <span className="text-[10.5px] text-white block">{t("bowBrand")}</span>
+                    <span className="text-white text-xs font-bold truncate block">
+                      {athlete.bowConfig?.brand || "—"}
+                    </span>
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[10.5px] text-white block">Modelo</span>
-                    <span className="text-white text-xs font-bold truncate block">{athlete.bowConfig?.model || "—"}</span>
+                    <span className="text-[10.5px] text-white block">{t("bowModel")}</span>
+                    <span className="text-white text-xs font-bold truncate block">
+                      {athlete.bowConfig?.model || "—"}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {athlete.physicalData && (athlete.physicalData.height > 0 || athlete.physicalData.weight > 0) && (
-                <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
-                  <span className="text-[11.6px] text-yellow-gold font-black tracking-wider uppercase">Datos Físicos</span>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-[10.5px] text-white block">Estatura</span>
-                      <span className="text-white text-xs font-bold tabular-nums">{athlete.physicalData?.height || "—"} cm</span>
-                    </div>
-                    <div>
-                      <span className="text-[10.5px] text-white block">Peso</span>
-                      <span className="text-white text-xs font-bold tabular-nums">{athlete.physicalData?.weight || "—"} kg</span>
+              {athlete.physicalData &&
+                (athlete.physicalData.height > 0 || athlete.physicalData.weight > 0) && (
+                  <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
+                    <span className="text-[11.6px] text-yellow-gold font-black tracking-wider uppercase">
+                      {t("physicalData")}
+                    </span>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[10.5px] text-white block">{t("height")}</span>
+                        <span className="text-white text-xs font-bold tabular-nums">
+                          {athlete.physicalData?.height || "—"} cm
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10.5px] text-white block">{t("weight")}</span>
+                        <span className="text-white text-xs font-bold tabular-nums">
+                          {athlete.physicalData?.weight || "—"} kg
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-2">
-                <span className="text-[11.6px] text-white font-black tracking-wider uppercase">Información de Contacto</span>
+                <span className="text-[11.6px] text-white font-black tracking-wider uppercase">
+                  {tx("Información de Contacto", "Contact Information")}
+                </span>
                 <div className="min-w-0">
-                  <span className="text-[10.5px] text-white block">Correo Electrónico</span>
-                  <span className="text-white text-xs font-medium break-all">{athlete.email}</span>
+                  <span className="text-[10.5px] text-white block">{t("emailPlaceholder")}</span>
+                  <span className="text-white text-xs font-medium break-all select-text">
+                    {athlete.email?.endsWith("@placeholder.local")
+                      ? tx("Sin correo registrado", "No email provided")
+                      : athlete.email}
+                  </span>
                 </div>
                 {athlete.whatsappNumber && (
                   <div className="mt-1">
-                    <span className="text-[10.5px] text-white block">Mensajería</span>
-                    <span className="text-white text-xs font-medium tabular-nums">{athlete.whatsappNumber}</span>
+                    <span className="text-[10.5px] text-white block">{t("messagingLabel")}</span>
+                    <span className="text-white text-xs font-medium tabular-nums select-text">
+                      {athlete.whatsappNumber}
+                    </span>
                   </div>
                 )}
+                <div className="mt-1 min-w-0">
+                  <span className="text-[10.5px] text-white block">{tx("ID Atleta", "Athlete ID")}</span>
+                  <span className="text-white/80 text-[11px] font-medium tabular-nums break-all select-text">
+                    {athlete.uid}
+                  </span>
+                </div>
               </div>
 
               {onUnlinkAthlete && (
@@ -478,10 +554,13 @@ export default function AthleteDetailSheet({
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[11.6px] text-white font-black tracking-wider uppercase flex items-center gap-1.5">
                       <UserMinus size={13} />
-                      <span>Vinculación con el Coach</span>
+                      <span>{tx("Vinculación con el Coach", "Coach Link")}</span>
                     </span>
                     <p className="text-[10.8px] text-white/75 leading-relaxed">
-                      Retira a este atleta de tu lista de alumnos activos. Sus puntuaciones personales no se borrarán de su cuenta.
+                      {tx(
+                        "Retira a este atleta de tu lista de alumnos activos. Sus puntuaciones personales no se borrarán de su cuenta.",
+                        "Remove this athlete from your active roster. Their personal scores will remain intact on their account."
+                      )}
                     </p>
                   </div>
                   <button
@@ -490,516 +569,686 @@ export default function AthleteDetailSheet({
                     className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
                   >
                     <UserMinus size={14} className="shrink-0" />
-                    <span>Desvincular Alumno</span>
+                    <span>{tx("Desvincular Alumno", "Unlink Athlete")}</span>
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 2: PUNTUACIONES (SOLO PUNTAJES REPORTADOS Y DIANA CON TELEMETRÍA) */}
+          {/* TAB 2: PUNTUACIONES */}
           {activeTab === "SESIONES" && (
             <div className="flex flex-col gap-4">
-              {/* Puntajes Reportados Activos */}
               <div className="flex flex-col gap-3">
-                <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Puntajes Reportados</span>
-                {scoredSessions.filter(s => s.deletedByArcher !== true).length === 0 ? (
+                <span className="text-[10.5px] text-white font-black uppercase tracking-wider ps-1">
+                  {tx("Puntajes Reportados", "Reported Scores")}
+                </span>
+                {scoredSessions.filter((s) => s.deletedByArcher !== true).length === 0 ? (
                   <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
-                    Este atleta no tiene puntuaciones reportadas aún.
+                    {tx(
+                      "Este atleta no tiene puntuaciones reportadas aún.",
+                      "This athlete has no reported scores yet."
+                    )}
                   </p>
                 ) : (
-                  scoredSessions.filter(s => s.deletedByArcher !== true).map((sess) => {
-                    const isExpanded = expandedSessionId === sess.id;
-                    const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short"
-                    });
+                  scoredSessions
+                    .filter((s) => s.deletedByArcher !== true)
+                    .map((sess) => {
+                      const isExpanded = expandedSessionId === sess.id;
+                      const dateStr = formatRegionalDate(sess.timestamp, language, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short"
+                      });
 
-                    return (
-                      <div
-                        key={sess.id}
-                        className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300"
-                      >
+                      return (
                         <div
-                          onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                          className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/60 transition"
+                          key={sess.id}
+                          className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300"
                         >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase truncate">{sess.practiceType} · {sess.format}</span>
-                            <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">{dateStr} · {sess.distance}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}</span>
-                          </div>
-                          <div className="flex items-center gap-2.5 shrink-0">
-                            <div className="flex flex-col text-right tabular-nums">
-                              <span className="text-sm font-black text-cyan-neon">{getSessionScore(sess)}</span>
-                              <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
+                          <div
+                            onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
+                            className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/60 transition"
+                          >
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
+                                {sess.practiceType} · {sess.format}
+                              </span>
+                              <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                                {dateStr} · {sess.distance}m ·{" "}
+                                {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
+                                {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                              </span>
                             </div>
-                            {isExpanded ? <ChevronUp size={14} className="text-white shrink-0" /> : <ChevronDown size={14} className="text-white shrink-0" />}
-                          </div>
-                        </div>
-
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0 }}
-                              animate={{ height: "auto" }}
-                              exit={{ height: 0 }}
-                              className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
-                            >
-                              <div className="p-4 flex flex-col gap-4">
-                                <div className="flex flex-col items-center gap-2">
-                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos y Telemetría</span>
-                                  <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
-                                    {(() => {
-                                      const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
-                                      const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
-                                      const disp = sess.impacts && sess.impacts.length > 0
-                                        ? calculateDispersionStats(
-                                            sess.impacts,
-                                            Number(sess.distance) || 18,
-                                            sess.bowType || athlete.bowConfig?.type,
-                                            sess.format,
-                                            sess.targetType
-                                          )
-                                        : null;
-                                      
-                                      return (
-                                        <svg viewBox="0 0 100 100" className="w-full h-full">
-                                          {presetRings.map((ring, index) => (
-                                            <circle
-                                              key={index}
-                                              cx="50"
-                                              cy="50"
-                                              r={ring.r}
-                                              fill={ring.fill}
-                                              stroke={ring.stroke}
-                                              strokeWidth={0.1}
-                                            />
-                                          ))}
-                                          {disp && (
-                                            <g className="pointer-events-none">
-                                              {disp.hullPolygon.length >= 3 && (
-                                                <polygon
-                                                  points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
-                                                  fill="rgba(0, 229, 255, 0.15)"
-                                                  stroke="#00E5FF"
-                                                  strokeWidth="0.45"
-                                                  strokeDasharray="1.2,0.8"
-                                                />
-                                              )}
-                                              {disp.hullPolygon.length === 2 && (
-                                                <line
-                                                  x1={disp.hullPolygon[0].x}
-                                                  y1={disp.hullPolygon[0].y}
-                                                  x2={disp.hullPolygon[1].x}
-                                                  y2={disp.hullPolygon[1].y}
-                                                  stroke="#00E5FF"
-                                                  strokeWidth="0.45"
-                                                  strokeDasharray="1.2,0.8"
-                                                />
-                                              )}
-                                              <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                              <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
-                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
-                                            </g>
-                                          )}
-                                          {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
-                                            <g key={iIdx}>
-                                              <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
-                                              <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
-                                            </g>
-                                          ))}
-                                        </svg>
-                                      );
-                                    })()}
-                                  </div>
-                                  {sess.impacts && sess.impacts.length > 0 && (() => {
-                                    const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
-                                    const analysis = calculateDispersionAnalysis(
-                                      sess.impacts,
-                                      Number(sess.distance) || 18,
-                                      sess.bowType || athlete.bowConfig?.type || "Recurve",
-                                      presetType,
-                                      sess.format,
-                                      sess.targetType
-                                    );
-                                    if (!analysis) return null;
-                                    return (
-                                      <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
-                                            Análisis de Grupo y Mira
-                                          </span>
-                                          <span className="text-[11.6px] tabular-nums font-black text-white">
-                                            Ø {analysis.spreadCm.toFixed(1)} cm
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-[11.6px]">
-                                          <span className="text-white">Centro del grupo (+):</span>
-                                          <span className="font-bold text-yellow-gold tabular-nums">
-                                            {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
-                                          </span>
-                                        </div>
-                                        <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
-                                          <span>{analysis.adviceText}</span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                  {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
-                                  <div className="w-full grid grid-cols-2 gap-2 mt-1">
-                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
-                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                        {getSessionActiveKcal(sess, athlete)} kcal
-                                      </span>
-                                    </div>
-                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
-                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                        {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {sess.ends && (
-                                  <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
-                                    <div className="flex flex-col gap-1">
-                                      {sess.ends.map((end: any, idx: number) => (
-                                        <div key={idx} className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-black tabular-nums shrink-0">{String(idx + 1).padStart(2, "0")}</span>
-                                          <div className="flex gap-1 flex-wrap justify-end">
-                                            {end.arrows.map((arr: string, aIdx: number) => (
-                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0">
-                                                {arr || "—"}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {sess.sessionNote && (
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Comentarios del Arquero</span>
-                                    <div className="p-3 bg-neutral-900/50 rounded-xl border border-white/5 text-[12.8px] text-white italic">
-                                      "{sess.sessionNote}"
-                                    </div>
-                                  </div>
-                                )}
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              <div className="flex flex-col text-end tabular-nums">
+                                <span className="text-sm font-black text-cyan-neon">
+                                  {getSessionScore(sess)}
+                                </span>
+                                <span className="text-[9.3px] text-white">
+                                  / {getSessionMaxScore(sess)} pts
+                                </span>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })
+                              {isExpanded ? (
+                                <ChevronUp size={14} className="text-white shrink-0" />
+                              ) : (
+                                <ChevronDown size={14} className="text-white shrink-0" />
+                              )}
+                            </div>
+                          </div>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0 }}
+                                animate={{ height: "auto" }}
+                                exit={{ height: 0 }}
+                                className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
+                              >
+                                <div className="p-4 flex flex-col gap-4">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                                      {t("impactsMap")}
+                                    </span>
+                                    <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                      {(() => {
+                                        const presetType = getDianaPresetKey(
+                                          sess.bowType || athlete.bowConfig?.type,
+                                          sess.distance,
+                                          sess.format,
+                                          sess.targetType
+                                        );
+                                        const presetRings =
+                                          DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                                        const disp =
+                                          sess.impacts && sess.impacts.length > 0
+                                            ? calculateDispersionStats(
+                                                sess.impacts,
+                                                Number(sess.distance) || 18,
+                                                sess.bowType || athlete.bowConfig?.type,
+                                                sess.format,
+                                                sess.targetType
+                                              )
+                                            : null;
+
+                                        return (
+                                          <svg viewBox="0 0 100 100" className="w-full h-full">
+                                            {presetRings.map((ring, index) => (
+                                              <circle
+                                                key={index}
+                                                cx="50"
+                                                cy="50"
+                                                r={ring.r}
+                                                fill={ring.fill}
+                                                stroke={ring.stroke}
+                                                strokeWidth={0.1}
+                                              />
+                                            ))}
+                                            {disp && (
+                                              <g className="pointer-events-none">
+                                                {disp.hullPolygon.length >= 3 && (
+                                                  <polygon
+                                                    points={disp.hullPolygon
+                                                      .map((p) => `${p.x},${p.y}`)
+                                                      .join(" ")}
+                                                    fill="rgba(0, 229, 255, 0.15)"
+                                                    stroke="#00E5FF"
+                                                    strokeWidth="0.45"
+                                                    strokeDasharray="1.2,0.8"
+                                                  />
+                                                )}
+                                                {disp.hullPolygon.length === 2 && (
+                                                  <line
+                                                    x1={disp.hullPolygon[0].x}
+                                                    y1={disp.hullPolygon[0].y}
+                                                    x2={disp.hullPolygon[1].x}
+                                                    y2={disp.hullPolygon[1].y}
+                                                    stroke="#00E5FF"
+                                                    strokeWidth="0.45"
+                                                    strokeDasharray="1.2,0.8"
+                                                  />
+                                                )}
+                                                <line
+                                                  x1={disp.centroidX - 2.2}
+                                                  y1={disp.centroidY}
+                                                  x2={disp.centroidX + 2.2}
+                                                  y2={disp.centroidY}
+                                                  stroke="#000000"
+                                                  strokeWidth="0.9"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX}
+                                                  y1={disp.centroidY - 2.2}
+                                                  x2={disp.centroidX}
+                                                  y2={disp.centroidY + 2.2}
+                                                  stroke="#000000"
+                                                  strokeWidth="0.9"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX - 2.0}
+                                                  y1={disp.centroidY}
+                                                  x2={disp.centroidX + 2.0}
+                                                  y2={disp.centroidY}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.55"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX}
+                                                  y1={disp.centroidY - 2.0}
+                                                  x2={disp.centroidX}
+                                                  y2={disp.centroidY + 2.0}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.55"
+                                                  strokeLinecap="round"
+                                                />
+                                              </g>
+                                            )}
+                                            {sess.impacts &&
+                                              sess.impacts.map((imp: any, iIdx: number) => (
+                                                <g key={iIdx}>
+                                                  <circle
+                                                    cx={imp.x}
+                                                    cy={imp.y}
+                                                    r="2"
+                                                    fill="rgba(0,0,0,0.5)"
+                                                  />
+                                                  <circle
+                                                    cx={imp.x}
+                                                    cy={imp.y}
+                                                    r="1.3"
+                                                    fill="#FFF200"
+                                                    stroke="black"
+                                                    strokeWidth="0.3px"
+                                                  />
+                                                </g>
+                                              ))}
+                                          </svg>
+                                        );
+                                      })()}
+                                    </div>
+                                    {sess.impacts &&
+                                      sess.impacts.length > 0 &&
+                                      (() => {
+                                        const presetType = getDianaPresetKey(
+                                          sess.bowType || athlete.bowConfig?.type,
+                                          sess.distance,
+                                          sess.format,
+                                          sess.targetType
+                                        );
+                                        const analysis = calculateDispersionAnalysis(
+                                          sess.impacts,
+                                          Number(sess.distance) || 18,
+                                          sess.bowType || athlete.bowConfig?.type || "Recurve",
+                                          presetType,
+                                          sess.format,
+                                          sess.targetType
+                                        );
+                                        if (!analysis) return null;
+                                        return (
+                                          <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-start">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
+                                                {tx(
+                                                  "Análisis de Grupo y Mira",
+                                                  "Grouping & Sight Analysis"
+                                                )}
+                                              </span>
+                                              <span className="text-[11.6px] tabular-nums font-black text-white">
+                                                Ø {analysis.spreadCm.toFixed(1)} cm
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-[11.6px]">
+                                              <span className="text-white">
+                                                {tx("Centro del grupo (+):", "Group center (+):")}
+                                              </span>
+                                              <span className="font-bold text-yellow-gold tabular-nums">
+                                                {analysis.clockDirection} (
+                                                {analysis.distanceFromCenterCm.toFixed(1)} cm)
+                                              </span>
+                                            </div>
+                                            <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
+                                              <span>{analysis.adviceText}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    {/* KCAL y DISTANCIA RECORRIDA */}
+                                    <div className="w-full grid grid-cols-2 gap-2 mt-1">
+                                      <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                        <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
+                                          {t("cardCalories")}
+                                        </span>
+                                        <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                          {getSessionActiveKcal(sess, athlete)} kcal
+                                        </span>
+                                      </div>
+                                      <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
+                                        <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
+                                          {t("cardWalked")}
+                                        </span>
+                                        <span className="text-sm font-black text-white tabular-nums mt-0.5">
+                                          {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {sess.ends && (
+                                    <div className="flex flex-col gap-1.5">
+                                      <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                                        {tx("Puntajes por Tanda", "End Scores")}
+                                      </span>
+                                      <div className="flex flex-col gap-1">
+                                        {sess.ends.map((end: any, idx: number) => (
+                                          <div
+                                            key={idx}
+                                            className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]"
+                                          >
+                                            <span className="text-white font-black tabular-nums shrink-0">
+                                              {String(idx + 1).padStart(2, "0")}
+                                            </span>
+                                            <div className="flex gap-1 flex-wrap justify-end">
+                                              {end.arrows.map((arr: string, aIdx: number) => (
+                                                <span
+                                                  key={aIdx}
+                                                  className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0"
+                                                >
+                                                  {arr || "—"}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {sess.sessionNote && (
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                                        {tx("Comentarios del Arquero", "Archer Comments")}
+                                      </span>
+                                      <div className="p-3 bg-neutral-900/50 rounded-xl border border-white/5 text-[12.8px] text-white italic select-text">
+                                        &ldquo;{sess.sessionNote}&rdquo;
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })
                 )}
               </div>
 
               {/* Puntuaciones Eliminadas por el Arquero */}
-              {scoredSessions.filter(s => s.deletedByArcher === true).length > 0 && (
+              {scoredSessions.filter((s) => s.deletedByArcher === true).length > 0 && (
                 <div className="flex flex-col gap-3 mt-2 border-t border-white/[0.05] pt-4">
-                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1">Puntuaciones Eliminadas por el Arquero</span>
-                  {scoredSessions.filter(s => s.deletedByArcher === true).map((sess) => {
-                    const isExpanded = expandedSessionId === sess.id;
-                    const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short"
-                    });
+                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider ps-1">
+                    {tx("Puntuaciones Eliminadas por el Arquero", "Scores Deleted by Archer")}
+                  </span>
+                  {scoredSessions
+                    .filter((s) => s.deletedByArcher === true)
+                    .map((sess) => {
+                      const isExpanded = expandedSessionId === sess.id;
+                      const dateStr = formatRegionalDate(sess.timestamp, language, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short"
+                      });
 
-                    return (
-                      <div
-                        key={sess.id}
-                        className="bg-neutral-950/40 rounded-2xl border border-white/15 overflow-hidden transition-all duration-305"
-                      >
+                      return (
                         <div
-                          onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
-                          className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/30 transition"
+                          key={sess.id}
+                          className="bg-neutral-950/40 rounded-2xl border border-white/15 overflow-hidden transition-all duration-305"
                         >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
-                              <span className="truncate">{sess.practiceType} · {sess.format}</span>
-                              <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5 shrink-0">ELIMINADA</span>
-                            </span>
-                            <span className="text-[10.5px] text-white mt-0.5 tabular-nums">{dateStr} · {sess.distance}m</span>
-                          </div>
-                          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                            <div className="flex flex-col text-right tabular-nums">
-                              <span className="text-sm font-black text-white">{getSessionScore(sess)}</span>
-                              <span className="text-[9.3px] text-white">/ {getSessionMaxScore(sess)} pts</span>
+                          <div
+                            onClick={() => setExpandedSessionId(isExpanded ? null : sess.id)}
+                            className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/30 transition"
+                          >
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
+                                <span className="truncate">
+                                  {sess.practiceType} · {sess.format}
+                                </span>
+                                <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5 shrink-0">
+                                  {tx("ELIMINADA", "DELETED")}
+                                </span>
+                              </span>
+                              <span className="text-[10.5px] text-white mt-0.5 tabular-nums">
+                                {dateStr} · {sess.distance}m
+                              </span>
                             </div>
-                            {onRestoreSession && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRestoreSession(sess.id);
-                                }}
-                                className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition shrink-0"
-                              >
-                                Restituir
-                              </button>
-                            )}
-                            {isExpanded ? <ChevronUp size={14} className="text-white shrink-0" /> : <ChevronDown size={14} className="text-white shrink-0" />}
-                          </div>
-                        </div>
-
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0 }}
-                              animate={{ height: "auto" }}
-                              exit={{ height: 0 }}
-                              className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
-                            >
-                              <div className="p-4 flex flex-col gap-4">
-                                <div className="flex flex-col items-center gap-2">
-                                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Diana de Impactos y Telemetría</span>
-                                  <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
-                                    {(() => {
-                                      const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
-                                      const presetRings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
-                                      const disp = sess.impacts && sess.impacts.length > 0
-                                        ? calculateDispersionStats(
-                                            sess.impacts,
-                                            Number(sess.distance) || 18,
-                                            sess.bowType || athlete.bowConfig?.type,
-                                            sess.format,
-                                            sess.targetType
-                                          )
-                                        : null;
-                                      
-                                      return (
-                                        <svg viewBox="0 0 100 100" className="w-full h-full">
-                                          {presetRings.map((ring, index) => (
-                                            <circle
-                                              key={index}
-                                              cx="50"
-                                              cy="50"
-                                              r={ring.r}
-                                              fill={ring.fill}
-                                              stroke={ring.stroke}
-                                              strokeWidth={0.1}
-                                            />
-                                          ))}
-                                          {disp && (
-                                            <g className="pointer-events-none">
-                                              {disp.hullPolygon.length >= 3 && (
-                                                <polygon
-                                                  points={disp.hullPolygon.map(p => `${p.x},${p.y}`).join(" ")}
-                                                  fill="rgba(0, 229, 255, 0.15)"
-                                                  stroke="#00E5FF"
-                                                  strokeWidth="0.45"
-                                                  strokeDasharray="1.2,0.8"
-                                                />
-                                              )}
-                                              {disp.hullPolygon.length === 2 && (
-                                                <line
-                                                  x1={disp.hullPolygon[0].x}
-                                                  y1={disp.hullPolygon[0].y}
-                                                  x2={disp.hullPolygon[1].x}
-                                                  y2={disp.hullPolygon[1].y}
-                                                  stroke="#00E5FF"
-                                                  strokeWidth="0.45"
-                                                  strokeDasharray="1.2,0.8"
-                                                />
-                                              )}
-                                              <line x1={disp.centroidX - 2.2} y1={disp.centroidY} x2={disp.centroidX + 2.2} y2={disp.centroidY} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.2} x2={disp.centroidX} y2={disp.centroidY + 2.2} stroke="#000000" strokeWidth="0.9" strokeLinecap="round" />
-                                              <line x1={disp.centroidX - 2.0} y1={disp.centroidY} x2={disp.centroidX + 2.0} y2={disp.centroidY} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
-                                              <line x1={disp.centroidX} y1={disp.centroidY - 2.0} x2={disp.centroidX} y2={disp.centroidY + 2.0} stroke="#00E5FF" strokeWidth="0.55" strokeLinecap="round" />
-                                            </g>
-                                          )}
-                                          {sess.impacts && sess.impacts.map((imp: any, iIdx: number) => (
-                                            <g key={iIdx}>
-                                              <circle cx={imp.x} cy={imp.y} r="2" fill="rgba(0,0,0,0.5)" />
-                                              <circle cx={imp.x} cy={imp.y} r="1.3" fill="#FFF200" stroke="black" strokeWidth="0.3px" />
-                                            </g>
-                                          ))}
-                                        </svg>
-                                      );
-                                    })()}
-                                  </div>
-                                  {sess.impacts && sess.impacts.length > 0 && (() => {
-                                    const presetType = getDianaPresetKey(sess.bowType || athlete.bowConfig?.type, sess.distance, sess.format, sess.targetType);
-                                    const analysis = calculateDispersionAnalysis(
-                                      sess.impacts,
-                                      Number(sess.distance) || 18,
-                                      sess.bowType || athlete.bowConfig?.type || "Recurve",
-                                      presetType,
-                                      sess.format,
-                                      sess.targetType
-                                    );
-                                    if (!analysis) return null;
-                                    return (
-                                      <div className="w-full mt-2 bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1.5 text-left">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10.5px] font-black uppercase text-cyan-neon tracking-wider">
-                                            Análisis de Grupo y Mira
-                                          </span>
-                                          <span className="text-[11.6px] tabular-nums font-black text-white">
-                                            Ø {analysis.spreadCm.toFixed(1)} cm
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-[11.6px]">
-                                          <span className="text-white">Centro del grupo (+):</span>
-                                          <span className="font-bold text-yellow-gold tabular-nums">
-                                            {analysis.clockDirection} ({analysis.distanceFromCenterCm.toFixed(1)} cm)
-                                          </span>
-                                        </div>
-                                        <div className="text-[11.6px] text-white leading-snug bg-neutral-950/70 border border-white/5 rounded-xl p-2 mt-0.5">
-                                          <span>{analysis.adviceText}</span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                  {/* KCAL y DISTANCIA RECORRIDA para el Coach */}
-                                  <div className="w-full grid grid-cols-2 gap-2 mt-1">
-                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">KCAL</span>
-                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                        {getSessionActiveKcal(sess, athlete)} kcal
-                                      </span>
-                                    </div>
-                                    <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider">DISTANCIA RECORRIDA</span>
-                                      <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                        {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {sess.ends && (
-                                  <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">Puntajes por End</span>
-                                    <div className="flex flex-col gap-1">
-                                      {sess.ends.map((end: any, idx: number) => (
-                                        <div key={idx} className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]">
-                                          <span className="text-white font-black tabular-nums shrink-0">{String(idx + 1).padStart(2, "0")}</span>
-                                          <div className="flex gap-1 flex-wrap justify-end">
-                                            {end.arrows.map((arr: string, aIdx: number) => (
-                                              <span key={aIdx} className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0">
-                                                {arr || "—"}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                              <div className="flex flex-col text-end tabular-nums">
+                                <span className="text-sm font-black text-white">
+                                  {getSessionScore(sess)}
+                                </span>
+                                <span className="text-[9.3px] text-white">
+                                  / {getSessionMaxScore(sess)} pts
+                                </span>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
+                              {onRestoreSession && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRestoreSession(sess.id);
+                                  }}
+                                  className="px-2 py-1 bg-cyan-neon/10 border border-cyan-neon/20 hover:border-cyan-neon text-cyan-neon rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition shrink-0"
+                                >
+                                  {tx("Restituir", "Restore")}
+                                </button>
+                              )}
+                              {isExpanded ? (
+                                <ChevronUp size={14} className="text-white shrink-0" />
+                              ) : (
+                                <ChevronDown size={14} className="text-white shrink-0" />
+                              )}
+                            </div>
+                          </div>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0 }}
+                                animate={{ height: "auto" }}
+                                exit={{ height: 0 }}
+                                className="overflow-hidden border-t border-white/[0.03] bg-neutral-950/40"
+                              >
+                                <div className="p-4 flex flex-col gap-4">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                                      {t("impactsMap")}
+                                    </span>
+                                    <div className="w-[212px] h-[212px] rounded-full border border-white/5 bg-black flex items-center justify-center shadow-lg relative p-2">
+                                      {(() => {
+                                        const presetType = getDianaPresetKey(
+                                          sess.bowType || athlete.bowConfig?.type,
+                                          sess.distance,
+                                          sess.format,
+                                          sess.targetType
+                                        );
+                                        const presetRings =
+                                          DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+                                        const disp =
+                                          sess.impacts && sess.impacts.length > 0
+                                            ? calculateDispersionStats(
+                                                sess.impacts,
+                                                Number(sess.distance) || 18,
+                                                sess.bowType || athlete.bowConfig?.type,
+                                                sess.format,
+                                                sess.targetType
+                                              )
+                                            : null;
+
+                                        return (
+                                          <svg viewBox="0 0 100 100" className="w-full h-full">
+                                            {presetRings.map((ring, index) => (
+                                              <circle
+                                                key={index}
+                                                cx="50"
+                                                cy="50"
+                                                r={ring.r}
+                                                fill={ring.fill}
+                                                stroke={ring.stroke}
+                                                strokeWidth={0.1}
+                                              />
+                                            ))}
+                                            {disp && (
+                                              <g className="pointer-events-none">
+                                                {disp.hullPolygon.length >= 3 && (
+                                                  <polygon
+                                                    points={disp.hullPolygon
+                                                      .map((p) => `${p.x},${p.y}`)
+                                                      .join(" ")}
+                                                    fill="rgba(0, 229, 255, 0.15)"
+                                                    stroke="#00E5FF"
+                                                    strokeWidth="0.45"
+                                                    strokeDasharray="1.2,0.8"
+                                                  />
+                                                )}
+                                                {disp.hullPolygon.length === 2 && (
+                                                  <line
+                                                    x1={disp.hullPolygon[0].x}
+                                                    y1={disp.hullPolygon[0].y}
+                                                    x2={disp.hullPolygon[1].x}
+                                                    y2={disp.hullPolygon[1].y}
+                                                    stroke="#00E5FF"
+                                                    strokeWidth="0.45"
+                                                    strokeDasharray="1.2,0.8"
+                                                  />
+                                                )}
+                                                <line
+                                                  x1={disp.centroidX - 2.2}
+                                                  y1={disp.centroidY}
+                                                  x2={disp.centroidX + 2.2}
+                                                  y2={disp.centroidY}
+                                                  stroke="#000000"
+                                                  strokeWidth="0.9"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX}
+                                                  y1={disp.centroidY - 2.2}
+                                                  x2={disp.centroidX}
+                                                  y2={disp.centroidY + 2.2}
+                                                  stroke="#000000"
+                                                  strokeWidth="0.9"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX - 2.0}
+                                                  y1={disp.centroidY}
+                                                  x2={disp.centroidX + 2.0}
+                                                  y2={disp.centroidY}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.55"
+                                                  strokeLinecap="round"
+                                                />
+                                                <line
+                                                  x1={disp.centroidX}
+                                                  y1={disp.centroidY - 2.0}
+                                                  x2={disp.centroidX}
+                                                  y2={disp.centroidY + 2.0}
+                                                  stroke="#00E5FF"
+                                                  strokeWidth="0.55"
+                                                  strokeLinecap="round"
+                                                />
+                                              </g>
+                                            )}
+                                            {sess.impacts &&
+                                              sess.impacts.map((imp: any, iIdx: number) => (
+                                                <g key={iIdx}>
+                                                  <circle
+                                                    cx={imp.x}
+                                                    cy={imp.y}
+                                                    r="2"
+                                                    fill="rgba(0,0,0,0.5)"
+                                                  />
+                                                  <circle
+                                                    cx={imp.x}
+                                                    cy={imp.y}
+                                                    r="1.3"
+                                                    fill="#FFF200"
+                                                    stroke="black"
+                                                    strokeWidth="0.3px"
+                                                  />
+                                                </g>
+                                              ))}
+                                          </svg>
+                                        );
+                                      })()}
+                                    </div>
+                                  </div>
+
+                                  {sess.ends && (
+                                    <div className="flex flex-col gap-1.5">
+                                      <span className="text-[10.5px] text-white font-black uppercase tracking-wider">
+                                        {tx("Puntajes por Tanda", "End Scores")}
+                                      </span>
+                                      <div className="flex flex-col gap-1">
+                                        {sess.ends.map((end: any, idx: number) => (
+                                          <div
+                                            key={idx}
+                                            className="flex justify-between items-center gap-2 text-[11.6px] bg-neutral-900/30 px-3 py-1.5 rounded-lg border border-white/[0.02]"
+                                          >
+                                            <span className="text-white font-black tabular-nums shrink-0">
+                                              {String(idx + 1).padStart(2, "0")}
+                                            </span>
+                                            <div className="flex gap-1 flex-wrap justify-end">
+                                              {end.arrows.map((arr: string, aIdx: number) => (
+                                                <span
+                                                  key={aIdx}
+                                                  className="w-5 h-5 rounded bg-neutral-950 border border-white/5 flex items-center justify-center font-extrabold text-[10.5px] text-white tabular-nums shrink-0"
+                                                >
+                                                  {arr || "—"}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 2.5: VOLUMEN (SOLO NÚMERO TOTAL DE FLECHAS POR SESIÓN INCLUYENDO LAS DE PUNTAJES) */}
-          {activeTab === "VOLUMEN" && (() => {
-            const volumeList = athleteSessions.filter(
-              (s) => s.deletedByArcher !== true && getSessionArrows(s) > 0
-            );
-            const totalArrowsAll = volumeList.reduce((acc, s) => acc + getSessionArrows(s), 0);
+          {/* TAB 2.5: VOLUMEN */}
+          {activeTab === "VOLUMEN" &&
+            (() => {
+              const volumeList = athleteSessions.filter(
+                (s) => s.deletedByArcher !== true && getSessionArrows(s) > 0
+              );
+              const totalArrowsAll = volumeList.reduce(
+                (acc, s) => acc + getSessionArrows(s),
+                0
+              );
 
-            return (
-              <div className="flex flex-col gap-4">
-                <div className="bg-neutral-900/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
-                      Volumen Total Acumulado
-                    </span>
-                    <span className="text-[11.6px] text-white mt-0.5">
-                      Incluye sesiones de volumen y de puntajes
-                    </span>
+              return (
+                <div className="flex flex-col gap-4">
+                  <div className="bg-neutral-900/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-wider">
+                        {t("totalVolume")}
+                      </span>
+                      <span className="text-[11.6px] text-white mt-0.5">
+                        {tx(
+                          "Incluye sesiones de volumen y de puntajes",
+                          "Includes both volume and scored sessions"
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex flex-col text-end">
+                      <span className="text-2xl font-black text-cyan-neon tabular-nums">
+                        {totalArrowsAll}
+                      </span>
+                      <span className="text-[9.3px] text-white font-bold uppercase">
+                        {t("arrowsLabel")}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col text-right">
-                    <span className="text-2xl font-black text-cyan-neon tabular-nums">
-                      {totalArrowsAll}
+
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10.5px] text-white font-black uppercase tracking-wider ps-1 tabular-nums">
+                      {tx(
+                        `Flechas Tiradas por Sesión (${volumeList.length})`,
+                        `Arrows Shot per Session (${volumeList.length})`
+                      )}
                     </span>
-                    <span className="text-[9.3px] text-white font-bold uppercase">
-                      flechas totales
-                    </span>
+                    {volumeList.length === 0 ? (
+                      <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
+                        {tx(
+                          "Este atleta aún no tiene flechas registradas.",
+                          "This athlete has not logged any arrows yet."
+                        )}
+                      </p>
+                    ) : (
+                      volumeList.map((sess) => {
+                        const dateStr = formatRegionalDate(sess.timestamp, language, {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short"
+                        });
+                        const arrowsCount = getSessionArrows(sess);
+
+                        return (
+                          <div
+                            key={sess.id}
+                            className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center gap-2"
+                          >
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
+                                {dateStr}
+                              </span>
+                              <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                                {sess.practiceType || t("navSession")} · {sess.distance || 18}m ·{" "}
+                                {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
+                                {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                              </span>
+                            </div>
+                            <div className="flex flex-col text-end shrink-0">
+                              <span className="text-base font-black text-cyan-neon tabular-nums">
+                                {arrowsCount}
+                              </span>
+                              <span className="text-[9.3px] text-white font-bold">
+                                {t("arrowsLabel")}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
-
-                <div className="flex flex-col gap-2.5">
-                  <span className="text-[10.5px] text-white font-black uppercase tracking-wider pl-1 tabular-nums">
-                    Flechas Tiradas por Sesión ({volumeList.length})
-                  </span>
-                  {volumeList.length === 0 ? (
-                    <p className="text-[12.8px] text-white text-center py-6 bg-neutral-900/10 border border-white/5 rounded-2xl">
-                      Este atleta aún no tiene flechas registradas.
-                    </p>
-                  ) : (
-                    volumeList.map((sess) => {
-                      const dateStr = new Date(sess.timestamp).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short"
-                      });
-                      const arrowsCount = getSessionArrows(sess);
-
-                      return (
-                        <div
-                          key={sess.id}
-                          className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center gap-2"
-                        >
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
-                              {dateStr}
-                            </span>
-                            <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                              {sess.practiceType || "Sesión"} · {sess.distance || 18}m · {getSessionActiveKcal(sess, athlete)} kcal · {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
-                            </span>
-                          </div>
-                          <div className="flex flex-col text-right shrink-0">
-                            <span className="text-base font-black text-cyan-neon tabular-nums">
-                              {arrowsCount}
-                            </span>
-                            <span className="text-[9.3px] text-white font-bold">
-                              flechas
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
           {/* TAB 3: RECORDS */}
           {activeTab === "RECORDS" && (
             <div className="flex flex-col gap-3">
               {Object.keys(pbs).length === 0 ? (
-                <p className="text-[12.8px] text-white text-center py-6">Aún no hay mejores marcas registradas.</p>
+                <p className="text-[12.8px] text-white text-center py-6">
+                  {tx(
+                    "Aún no hay mejores marcas registradas.",
+                    "No personal best records logged yet."
+                  )}
+                </p>
               ) : (
                 Object.entries(pbs).map(([format, record]) => (
-                  <div key={format} className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-2">
+                  <div
+                    key={format}
+                    className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-2"
+                  >
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-[11.6px] text-white uppercase font-black tracking-wider">Ronda WA</span>
+                      <span className="text-[11.6px] text-white uppercase font-black tracking-wider">
+                        {t("personalBest")}
+                      </span>
                       <span className="text-white text-base font-extrabold truncate">{format}</span>
                       <span className="text-[10.5px] text-yellow-gold mt-1 tabular-nums">
-                        Establecido el {new Date(record.date).toLocaleDateString()}
+                        {formatRegionalDate(record.date, language, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })}
                       </span>
                     </div>
                     <div className="flex flex-col items-end shrink-0 tabular-nums">
                       <span className="text-2xl font-black text-cyan-neon">{record.score}</span>
-                      <span className="text-[9.3px] text-white">sobre {record.maxScore}</span>
+                      <span className="text-[9.3px] text-white">/ {record.maxScore}</span>
                     </div>
                   </div>
                 ))
@@ -1011,49 +1260,82 @@ export default function AthleteDetailSheet({
           {activeTab === "TENDENCIAS" && (
             <div className="flex flex-col gap-4">
               <div className="bg-neutral-900/40 p-4 rounded-2xl border border-white/5 flex flex-col gap-3">
-                <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase">Progresión de Rendimiento</span>
-                
+                <span className="text-[11.6px] text-cyan-neon font-black tracking-wider uppercase">
+                  {tx("Progresión de Rendimiento", "Performance Progression")}
+                </span>
+
                 {scoredSessions.length < 2 ? (
                   <p className="text-[12.8px] text-white text-center py-6">
-                    Se necesitan al menos 2 sesiones de control para calcular la tendencia de rendimiento.
+                    {tx(
+                      "Se necesitan al menos 2 sesiones de control para calcular la tendencia de rendimiento.",
+                      "At least 2 scored sessions are required to calculate a performance trend."
+                    )}
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
                     <div className="w-full h-32 relative">
-                      {/* Simple SVG Chart */}
                       <svg viewBox="0 0 100 40" className="w-full h-full">
                         <path
-                          d={`M 5,35 ${scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
-                            const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
-                            const x = 5 + idx * step;
-                            const pct = getSessionMaxScore(s) > 0 ? getSessionScore(s) / getSessionMaxScore(s) : 0;
-                            const y = 38 - pct * 30; // mapping 0.5-1.0 to 38-8
-                            return `L ${x},${y}`;
-                          }).join(" ")}`}
+                          d={`M 5,35 ${scoredSessions
+                            .slice(0, 6)
+                            .reverse()
+                            .map((s, idx, arr) => {
+                              const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
+                              const x = 5 + idx * step;
+                              const pct =
+                                getSessionMaxScore(s) > 0
+                                  ? getSessionScore(s) / getSessionMaxScore(s)
+                                  : 0;
+                              const y = 38 - pct * 30;
+                              return `L ${x},${y}`;
+                            })
+                            .join(" ")}`}
                           fill="none"
                           stroke="#00E5FF"
                           strokeWidth="1.5"
                           strokeLinecap="round"
                         />
-                        {scoredSessions.slice(0, 6).reverse().map((s, idx, arr) => {
-                          const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
-                          const x = 5 + idx * step;
-                          const labelX = Math.max(8, Math.min(92, x));
-                          const pct = getSessionMaxScore(s) > 0 ? getSessionScore(s) / getSessionMaxScore(s) : 0;
-                          const y = 38 - pct * 30;
-                          return (
-                            <g key={idx}>
-                              <circle cx={x} cy={y} r="1.5" className="fill-cyan-neon stroke-black stroke-[0.4px]" />
-                              <text x={labelX} y={y - 2.5} fontSize="3" fontWeight="bold" fill="white" textAnchor="middle" className="tabular-nums">
-                                {getSessionScore(s)}
-                              </text>
-                            </g>
-                          );
-                        })}
+                        {scoredSessions
+                          .slice(0, 6)
+                          .reverse()
+                          .map((s, idx, arr) => {
+                            const step = arr.length > 1 ? 90 / (arr.length - 1) : 90;
+                            const x = 5 + idx * step;
+                            const labelX = Math.max(8, Math.min(92, x));
+                            const pct =
+                              getSessionMaxScore(s) > 0
+                                ? getSessionScore(s) / getSessionMaxScore(s)
+                                : 0;
+                            const y = 38 - pct * 30;
+                            return (
+                              <g key={idx}>
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r="1.5"
+                                  className="fill-cyan-neon stroke-black stroke-[0.4px]"
+                                />
+                                <text
+                                  x={labelX}
+                                  y={y - 2.5}
+                                  fontSize="3"
+                                  fontWeight="bold"
+                                  fill="white"
+                                  textAnchor="middle"
+                                  className="tabular-nums"
+                                >
+                                  {getSessionScore(s)}
+                                </text>
+                              </g>
+                            );
+                          })}
                       </svg>
                     </div>
                     <span className="text-[9.3px] text-white uppercase font-black text-center mt-1 tabular-nums">
-                      Últimos 6 entrenamientos · Escala de puntuación
+                      {tx(
+                        "Últimos 6 entrenamientos · Escala de puntuación",
+                        "Last 6 sessions · Score progression"
+                      )}
                     </span>
                   </div>
                 )}
@@ -1062,18 +1344,25 @@ export default function AthleteDetailSheet({
               {/* Progress Summary Cards */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
-                  <span className="text-[9.3px] text-white uppercase block">Puntaje Promedio</span>
+                  <span className="text-[9.3px] text-white uppercase block">
+                    {tx("Puntaje Promedio", "Average Score")}
+                  </span>
                   <span className="text-base font-black text-white tabular-nums">
                     {scoredSessions.length > 0
-                      ? Math.round(scoredSessions.reduce((acc, s) => acc + getSessionScore(s), 0) / scoredSessions.length)
+                      ? Math.round(
+                          scoredSessions.reduce((acc, s) => acc + getSessionScore(s), 0) /
+                            scoredSessions.length
+                        )
                       : "—"}
                   </span>
                 </div>
                 <div className="bg-neutral-900/60 p-3 rounded-xl border border-white/5">
-                  <span className="text-[9.3px] text-white uppercase block">Puntaje Máximo</span>
+                  <span className="text-[9.3px] text-white uppercase block">
+                    {tx("Puntaje Máximo", "Highest Score")}
+                  </span>
                   <span className="text-base font-black text-yellow-gold tabular-nums">
                     {scoredSessions.length > 0
-                      ? Math.max(...scoredSessions.map(s => getSessionScore(s)))
+                      ? Math.max(...scoredSessions.map((s) => getSessionScore(s)))
                       : "—"}
                   </span>
                 </div>
@@ -1090,12 +1379,15 @@ export default function AthleteDetailSheet({
                   type="text"
                   value={newNoteText}
                   onChange={(e) => setNewNoteText(e.target.value)}
-                  placeholder="Añadir una observación de técnica..."
-                  className="flex-1 min-w-0 bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white focus:ring-1 focus:ring-cyan-neon/30"
+                  placeholder={tx(
+                    "Añadir una observación de técnica...",
+                    "Add a technical coaching note..."
+                  )}
+                  className="flex-1 min-w-0 bg-neutral-950 border border-white/10 focus:border-cyan-neon text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/65 focus:ring-1 focus:ring-cyan-neon/30"
                 />
                 <button
                   type="submit"
-                  aria-label="Enviar nota"
+                  aria-label={tx("Guardar nota", "Save note")}
                   className="w-10 h-10 rounded-xl bg-cyan-neon hover:bg-cyan-brand text-black flex items-center justify-center transition cursor-pointer shrink-0"
                 >
                   <Send size={15} aria-hidden="true" />
@@ -1106,11 +1398,14 @@ export default function AthleteDetailSheet({
               <div className="flex flex-col gap-2.5 mt-1">
                 {notes.length === 0 ? (
                   <p className="text-[12.8px] text-white text-center py-6">
-                    No has añadido notas a este atleta. Tus anotaciones son privadas y te ayudan a estructurar su ciclo.
+                    {tx(
+                      "No has añadido notas a este atleta. Tus anotaciones son privadas y te ayudan a estructurar su ciclo.",
+                      "No coaching notes added for this athlete yet. Your notes are private and help structure their training cycle."
+                    )}
                   </p>
                 ) : (
                   notes.map((note) => {
-                    const noteDate = new Date(note.date).toLocaleDateString(undefined, {
+                    const noteDate = formatRegionalDate(note.date, language, {
                       day: "numeric",
                       month: "short",
                       hour: "2-digit",
@@ -1122,7 +1417,7 @@ export default function AthleteDetailSheet({
                         key={note.id}
                         className="bg-neutral-900/50 p-3 rounded-xl border border-white/5 flex flex-col gap-1.5"
                       >
-                        <p className="text-white text-xs font-medium leading-relaxed break-words">
+                        <p className="text-white text-xs font-medium leading-relaxed break-words select-text">
                           {note.content}
                         </p>
                         <span className="text-[9.3px] text-white self-end font-bold uppercase tabular-nums">
@@ -1158,7 +1453,7 @@ export default function AthleteDetailSheet({
                   </div>
                   <div className="flex flex-col min-w-0">
                     <h4 className="text-white text-sm font-black uppercase tracking-wider">
-                      ¿Desvincular Alumno?
+                      {tx("¿Desvincular Alumno?", "Unlink Athlete?")}
                     </h4>
                     <span className="text-xs text-cyan-neon font-bold truncate">
                       {athlete.fullName}
@@ -1167,7 +1462,10 @@ export default function AthleteDetailSheet({
                 </div>
 
                 <p className="text-xs text-white/85 leading-relaxed">
-                  El alumno saldrá de tu lista de atletas del club y dejará de recibir planes de entrenamiento asignados. Si lo deseas, podrá volver a vincularse usando tu código de 6 dígitos.
+                  {tx(
+                    "El alumno saldrá de tu lista de atletas del club y dejará de recibir planes de entrenamiento asignados. Si lo deseas, podrá volver a vincularse usando tu código de 6 dígitos.",
+                    "The athlete will be removed from your club roster and will stop receiving assigned training plans. They can re-link anytime using your 6-digit invite code."
+                  )}
                 </p>
 
                 <div className="flex items-center gap-2.5 pt-1">
@@ -1176,7 +1474,7 @@ export default function AthleteDetailSheet({
                     onClick={() => setShowUnlinkConfirm(false)}
                     className="flex-1 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-white/10 text-white font-extrabold text-xs uppercase tracking-wider transition cursor-pointer"
                   >
-                    Cancelar
+                    {t("cancel")}
                   </button>
                   <button
                     type="button"
@@ -1189,7 +1487,7 @@ export default function AthleteDetailSheet({
                     className="flex-1 py-2.5 rounded-xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-lg"
                   >
                     <UserMinus size={14} />
-                    <span>Sí, Desvincular</span>
+                    <span>{tx("Sí, Desvincular", "Yes, Unlink")}</span>
                   </button>
                 </div>
               </motion.div>

@@ -1,15 +1,30 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Edit2, Play, Pause, Copy, Calendar, Sparkles, X, ArrowLeft, ArrowRight, RefreshCw } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Play,
+  Pause,
+  Copy,
+  Calendar,
+  Sparkles,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  RefreshCw
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdCampaign, AdSlide } from "@/lib/db/adTypes";
 import { adCampaignsStore, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
 import { seedDemoAdCampaigns } from "@/lib/adManager";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
 export default function AdminCampaignsTab() {
+  const { t, tx } = useLanguage();
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [step, setStep] = useState(1);
@@ -45,7 +60,9 @@ export default function AdminCampaignsTab() {
         const val = await adCampaignsStore.getItem<AdCampaign>(key);
         if (val) list.push(val);
       }
-      setCampaigns(list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
+      setCampaigns(
+        list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      );
     }
     loadCampaigns();
 
@@ -65,7 +82,9 @@ export default function AdminCampaignsTab() {
     setEditingCampaignId(null);
     setName("");
     setType("popup");
-    setSlides([{ id: "slide-1", imageUrl: "", title: "", subtitle: "", linkUrl: "", backgroundColor: "" }]);
+    setSlides([
+      { id: "slide-1", imageUrl: "", title: "", subtitle: "", linkUrl: "", backgroundColor: "" }
+    ]);
     setStartDate(getLocalISODate());
     setEndDate(getLocalISODate(Date.now() + 90 * 24 * 60 * 60 * 1000));
     setShowOnAppOpen(true);
@@ -154,9 +173,14 @@ export default function AdminCampaignsTab() {
 
     const campaignId = editingCampaignId || generateResilientId("AD");
     const nowStr = new Date().toISOString();
-    const existing = editingCampaignId ? campaigns.find((c) => c.id === editingCampaignId) : undefined;
+    const existing = editingCampaignId
+      ? campaigns.find((c) => c.id === editingCampaignId)
+      : undefined;
     const prevImp = existing
-      ? Math.max(Number((existing as any).impressions) || 0, Number(existing.totalImpressions) || 0)
+      ? Math.max(
+          Number((existing as any).impressions) || 0,
+          Number(existing.totalImpressions) || 0
+        )
       : 0;
     const prevClk = existing
       ? Math.max(Number((existing as any).clicks) || 0, Number(existing.totalClicks) || 0)
@@ -169,7 +193,9 @@ export default function AdminCampaignsTab() {
       status: existing?.status || "active",
       slides: slides.map((s) => ({
         ...s,
-        imageUrl: s.imageUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"
+        imageUrl:
+          s.imageUrl ||
+          "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"
       })),
       startDate,
       endDate,
@@ -208,13 +234,23 @@ export default function AdminCampaignsTab() {
       const val = await adCampaignsStore.getItem<AdCampaign>(key);
       if (val) list.push(val);
     }
-    setCampaigns(list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
+    setCampaigns(
+      list.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    );
 
     setShowCreateModal(false);
   };
 
   const handleDeleteCampaign = async (id: string) => {
-    if (!(await showOledConfirm("¿Estás seguro de que deseas eliminar esta campaña?"))) return;
+    if (
+      !(await showOledConfirm(
+        tx(
+          "¿Estás seguro de que deseas eliminar esta campaña?",
+          "Are you sure you want to delete this campaign?"
+        )
+      ))
+    )
+      return;
 
     await adCampaignsStore.removeItem(id);
 
@@ -249,9 +285,7 @@ export default function AdminCampaignsTab() {
       timestamp: Date.now()
     });
 
-    setCampaigns(
-      campaigns.map((c) => (c.id === campaign.id ? updated : c))
-    );
+    setCampaigns(campaigns.map((c) => (c.id === campaign.id ? updated : c)));
   };
 
   const handleDuplicateCampaign = async (campaign: AdCampaign) => {
@@ -260,7 +294,7 @@ export default function AdminCampaignsTab() {
     const duplicated: AdCampaign & { impressions?: number; clicks?: number } = {
       ...campaign,
       id: duplicatedId,
-      name: `${campaign.name} (Copia)`,
+      name: `${campaign.name} (${tx("Copia", "Copy")})`,
       status: "paused",
       impressions: 0,
       clicks: 0,
@@ -289,29 +323,48 @@ export default function AdminCampaignsTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 w-full border-b border-white/5 pb-4">
         <div>
-          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Campañas de Publicidad</h2>
-          <p className="text-xs text-white">Crea y administra anuncios de patrocinadores para cuentas gratuitas y PRO.</p>
+          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">
+            {tx("Campañas de Publicidad", "Ad Campaigns")}
+          </h2>
+          <p className="text-xs text-white">
+            {tx(
+              "Crea y administra anuncios de patrocinadores para cuentas gratuitas y PRO.",
+              "Create and manage sponsor placements for FREE and PRO accounts."
+            )}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
           <button
             onClick={async () => {
-              if (await showOledConfirm("¿Estás seguro de que deseas reiniciar el historial de visualizaciones de anuncios en este dispositivo? Esto limpiará el registro local de límites diarios y frecuencias para que vuelvas a ver los popups y notificaciones de inmediato.")) {
+              if (
+                await showOledConfirm(
+                  tx(
+                    "¿Deseas reiniciar el historial local de visualizaciones de anuncios en este dispositivo?",
+                    "Reset local ad impression frequency limits on this device?"
+                  )
+                )
+              ) {
                 const { adImpressionsStore } = await import("@/lib/db/indexedDB");
                 await adImpressionsStore.clear();
-                await showOledAlert("¡Historial de visualizaciones e impresiones de anuncios limpiado con éxito!");
+                await showOledAlert(
+                  tx(
+                    "¡Historial de visualizaciones e impresiones limpiado con éxito!",
+                    "Local ad impressions history cleared!"
+                  )
+                );
               }
             }}
             className="py-2.5 px-4 bg-white hover:bg-neutral-200 text-black border border-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition"
           >
             <RefreshCw size={14} />
-            <span>Limpiar Impresiones</span>
+            <span>{tx("Limpiar Impresiones", "Reset Impressions")}</span>
           </button>
           <button
             onClick={handleOpenCreateModal}
             className="py-2.5 px-4 bg-cyan-neon text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-1.5 cursor-pointer transition hover:scale-102"
           >
             <Plus size={14} />
-            <span>Nueva Campaña</span>
+            <span>{tx("Nueva Campaña", "New Campaign")}</span>
           </button>
         </div>
       </div>
@@ -334,39 +387,57 @@ export default function AdminCampaignsTab() {
               className="bg-neutral-900/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition-all duration-300 shadow-xl relative"
             >
               {/* Status indicator */}
-              <div className="absolute top-4 right-4">
-                <span className={`text-[10.5px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
-                  camp.status === "active"
-                    ? "bg-green-500/10 text-green-400 border-green-500/20"
-                    : "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20"
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${camp.status === "active" ? "bg-green-400" : "bg-yellow-gold"}`} />
-                  {camp.status === "active" ? "Activa" : "Pausada"}
+              <div className="absolute top-4 end-4">
+                <span
+                  className={`text-[10.5px] px-2 py-0.5 rounded-full font-black border flex items-center gap-1.5 uppercase ${
+                    camp.status === "active"
+                      ? "bg-green-500/10 text-green-400 border-green-500/20"
+                      : "bg-yellow-gold/10 text-yellow-gold border-yellow-gold/20"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      camp.status === "active" ? "bg-green-400" : "bg-yellow-gold"
+                    }`}
+                  />
+                  {camp.status === "active" ? t("active") : tx("Pausada", "Paused")}
                 </span>
               </div>
 
               <div>
                 {/* Type Badge */}
                 <span className="text-[9.3px] font-black uppercase tracking-widest text-cyan-neon bg-cyan-brand/20 px-2 py-0.5 rounded-md border border-cyan-neon/10">
-                  {camp.type === "popup" ? "Popup Modal" : camp.type === "banner_widget" ? "Banner Widget" : "Barra Notificación"}
+                  {camp.type === "popup"
+                    ? tx("Popup Modal", "Popup Modal")
+                    : camp.type === "banner_widget"
+                    ? tx("Banner Widget", "Banner Widget")
+                    : tx("Barra Notificación", "Notification Bar")}
                 </span>
 
-                <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">{camp.name}</h3>
-                
+                <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">
+                  {camp.name}
+                </h3>
+
                 {/* Dates */}
                 <div className="flex items-center gap-1 text-[11.6px] text-white mt-1 tabular-nums">
                   <Calendar size={12} />
-                  <span>{camp.startDate} al {camp.endDate}</span>
+                  <span>
+                    {camp.startDate} — {camp.endDate}
+                  </span>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2 bg-neutral-950/40 border border-white/5 rounded-xl p-2.5 mt-4 tabular-nums">
                   <div>
-                    <span className="text-[9.3px] text-white uppercase font-bold block">Impresiones</span>
+                    <span className="text-[9.3px] text-white uppercase font-bold block">
+                      {tx("Impresiones", "Impressions")}
+                    </span>
                     <span className="text-xs font-black text-white">{impCount}</span>
                   </div>
                   <div>
-                    <span className="text-[9.3px] text-white uppercase font-bold block">Clics</span>
+                    <span className="text-[9.3px] text-white uppercase font-bold block">
+                      {tx("Clics", "Clicks")}
+                    </span>
                     <span className="text-xs font-black text-white">{clkCount}</span>
                   </div>
                   <div>
@@ -380,41 +451,54 @@ export default function AdminCampaignsTab() {
                 {/* Config Details */}
                 <div className="mt-3.5 bg-neutral-950/20 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[11.6px]">
                   <div className="flex justify-between items-center text-white">
-                    <span>Frecuencia:</span>
+                    <span>{tx("Frecuencia:", "Frequency:")}</span>
                     <span className="font-bold text-white tabular-nums">
-                      {camp.frequencyMinutes > 0 ? `${camp.frequencyMinutes} min` : "Al abrir app"}
+                      {camp.frequencyMinutes > 0
+                        ? `${camp.frequencyMinutes} min`
+                        : tx("Al abrir app", "On app open")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-white">
-                    <span>Límite diario:</span>
-                    <span className="font-bold text-white tabular-nums">{camp.maxImpressionsPerDay} imp</span>
+                    <span>{tx("Límite diario:", "Daily limit:")}</span>
+                    <span className="font-bold text-white tabular-nums">
+                      {camp.maxImpressionsPerDay} imp
+                    </span>
                   </div>
                   {camp.type === "popup" && (
                     <div className="flex justify-between items-center text-white">
-                      <span>Mostrar al abrir:</span>
-                      <span className="font-bold text-white">{camp.showOnAppOpen ? "Sí" : "No"}</span>
+                      <span>{tx("Mostrar al abrir:", "Show on open:")}</span>
+                      <span className="font-bold text-white">
+                        {camp.showOnAppOpen ? tx("Sí", "Yes") : tx("No", "No")}
+                      </span>
                     </div>
                   )}
                   {camp.type === "banner_widget" && (
                     <div className="flex justify-between items-center text-white">
-                      <span>Transición:</span>
-                      <span className="font-bold text-white tabular-nums">{camp.slideIntervalSeconds || 5} s</span>
+                      <span>{tx("Transición:", "Transition:")}</span>
+                      <span className="font-bold text-white tabular-nums">
+                        {camp.slideIntervalSeconds || 5} s
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between items-start text-white">
-                    <span>Pantallas:</span>
-                    <span className="font-bold text-white text-[10.5px] max-w-[65%] text-right truncate" title={camp.targetScreens.join(", ")}>
+                    <span>{tx("Pantallas:", "Screens:")}</span>
+                    <span
+                      className="font-bold text-white text-[10.5px] max-w-[65%] text-end truncate"
+                      title={camp.targetScreens.join(", ")}
+                    >
                       {camp.targetScreens.join(", ")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-white">
-                    <span>Roles:</span>
+                    <span>{tx("Roles:", "Roles:")}</span>
                     <span className="font-bold text-white uppercase text-[10.5px]">
-                      {camp.targetRoles.map((r) => (r === "archer" ? "Arq" : "Coach")).join(", ")}
+                      {camp.targetRoles
+                        .map((r) => (r === "archer" ? t("roleAthlete") : t("roleCoach")))
+                        .join(", ")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-white">
-                    <span>Planes:</span>
+                    <span>{tx("Planes:", "Plans:")}</span>
                     <span className="font-bold text-white uppercase text-[10.5px]">
                       {(camp.targetPlans || ["FREE"]).join(", ")}
                     </span>
@@ -427,30 +511,40 @@ export default function AdminCampaignsTab() {
                 <button
                   onClick={() => handleToggleStatus(camp)}
                   className={`p-2 rounded-xl text-white hover:text-white transition cursor-pointer flex items-center justify-center border border-white/5 ${
-                    camp.status === "active" ? "bg-yellow-gold/10 hover:bg-yellow-gold/20" : "bg-green-500/10 hover:bg-green-500/20"
+                    camp.status === "active"
+                      ? "bg-yellow-gold/10 hover:bg-yellow-gold/20"
+                      : "bg-green-500/10 hover:bg-green-500/20"
                   }`}
-                  title={camp.status === "active" ? "Pausar Campaña" : "Reanudar Campaña"}
+                  title={
+                    camp.status === "active"
+                      ? tx("Pausar Campaña", "Pause Campaign")
+                      : tx("Reanudar Campaña", "Resume Campaign")
+                  }
                 >
-                  {camp.status === "active" ? <Pause size={12} /> : <Play size={12} fill="white" />}
+                  {camp.status === "active" ? (
+                    <Pause size={12} />
+                  ) : (
+                    <Play size={12} fill="white" />
+                  )}
                 </button>
                 <button
                   onClick={() => handleOpenEditModal(camp)}
                   className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
-                  title="Editar"
+                  title={tx("Editar", "Edit")}
                 >
                   <Edit2 size={12} />
                 </button>
                 <button
                   onClick={() => handleDuplicateCampaign(camp)}
                   className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white hover:text-white border border-white/5 transition cursor-pointer"
-                  title="Duplicar"
+                  title={tx("Duplicar", "Duplicate")}
                 >
                   <Copy size={12} />
                 </button>
                 <button
                   onClick={() => handleDeleteCampaign(camp.id)}
                   className="p-2 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition cursor-pointer"
-                  title="Eliminar"
+                  title={t("delete")}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -475,12 +569,17 @@ export default function AdminCampaignsTab() {
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                    {editingCampaignId ? "Editar Campaña" : "Crear Campaña"}
+                    {editingCampaignId
+                      ? tx("Editar Campaña", "Edit Campaign")
+                      : tx("Crear Campaña", "Create Campaign")}
                   </h3>
-                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5 tabular-nums">Paso {step} de 5</span>
+                  <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block mt-0.5 tabular-nums">
+                    {tx(`Paso ${step} de 5`, `Step ${step} of 5`)}
+                  </span>
                 </div>
                 <button
                   onClick={() => setShowCreateModal(false)}
+                  aria-label={t("cancel")}
                   className="p-1 rounded-full text-white hover:text-white hover:bg-white/5 transition cursor-pointer"
                 >
                   <X size={16} />
@@ -491,10 +590,12 @@ export default function AdminCampaignsTab() {
               {step === 1 && (
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Nombre de la Campaña</label>
+                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      {tx("Nombre de la Campaña", "Campaign Name")}
+                    </label>
                     <input
                       type="text"
-                      placeholder="Ej. Campaña Temporada 101010 2026"
+                      placeholder={tx("Ej. Campaña Temporada 101010", "e.g. 101010 Season Campaign")}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon"
@@ -502,24 +603,42 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2.5">
-                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Formato de Anuncio</label>
+                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      {tx("Formato de Anuncio", "Ad Format")}
+                    </label>
                     <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       {[
-                        { id: "popup", label: "Popup Modal", desc: "Pantalla completa al abrir la app" },
-                        { id: "banner_widget", label: "Banner Widget", desc: "Debajo del Header, dinámico" },
-                        { id: "notification_bar", label: "Barra Superior", desc: "Mensaje marquesina delgada" }
-                      ].map((t) => (
+                        {
+                          id: "popup",
+                          label: tx("Popup Modal", "Popup Modal"),
+                          desc: tx("Pantalla al abrir la app", "Modal on app launch")
+                        },
+                        {
+                          id: "banner_widget",
+                          label: tx("Banner Widget", "Banner Widget"),
+                          desc: tx("Debajo del encabezado", "Below header banner")
+                        },
+                        {
+                          id: "notification_bar",
+                          label: tx("Barra Superior", "Top Pill Bar"),
+                          desc: tx("Mensaje compacto superior", "Slim top announcement")
+                        }
+                      ].map((opt) => (
                         <div
-                          key={t.id}
-                          onClick={() => setType(t.id as any)}
+                          key={opt.id}
+                          onClick={() => setType(opt.id as any)}
                           className={`border rounded-2xl py-3 px-2 cursor-pointer flex flex-col justify-between text-center transition-all min-w-0 ${
-                            type === t.id
+                            type === opt.id
                               ? "bg-cyan-brand/20 border-cyan-neon"
                               : "bg-neutral-900/40 border-white/10 hover:border-white/20"
                           }`}
                         >
-                          <span className="text-[12px] sm:text-[13px] font-black text-white block leading-tight uppercase break-words">{t.label}</span>
-                          <span className="text-[9.3px] text-white font-medium block leading-tight mt-2">{t.desc}</span>
+                          <span className="text-[12px] sm:text-[13px] font-black text-white block leading-tight uppercase break-words">
+                            {opt.label}
+                          </span>
+                          <span className="text-[9.3px] text-white font-medium block leading-tight mt-2">
+                            {opt.desc}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -529,74 +648,97 @@ export default function AdminCampaignsTab() {
 
               {/* STEP 2: SLIDES EDITOR */}
               {step === 2 && (
-                <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-3 py-2 max-h-[50vh] overflow-y-auto pe-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Edición de Slides ({slides.length})</span>
+                    <span className="text-[10.5px] text-white uppercase font-black tracking-widest tabular-nums">
+                      {tx(`Edición de Slides (${slides.length})`, `Slides Editor (${slides.length})`)}
+                    </span>
                     <button
                       type="button"
                       onClick={handleAddSlide}
-                      className="text-[10.5px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold"
+                      className="text-[10.5px] bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-1 rounded-lg font-bold cursor-pointer"
                     >
-                      + Agregar Slide
+                      {tx("+ Agregar Slide", "+ Add Slide")}
                     </button>
                   </div>
 
                   {slides.map((slide, idx) => (
-                    <div key={slide.id} className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-2 relative">
+                    <div
+                      key={slide.id}
+                      className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-2 relative"
+                    >
                       {slides.length > 1 && (
                         <button
                           onClick={() => handleRemoveSlide(slide.id)}
-                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black transition"
-                          title="Eliminar Slide"
+                          className="absolute top-2 end-2 p-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black transition cursor-pointer"
+                          title={tx("Eliminar Slide", "Remove Slide")}
                         >
                           <Trash2 size={12} />
                         </button>
                       )}
 
-                      <span className="text-[9.3px] font-black text-white uppercase">Slide #{idx + 1}</span>
+                      <span className="text-[9.3px] font-black text-white uppercase tabular-nums">
+                        Slide #{idx + 1}
+                      </span>
 
                       <div className="grid grid-cols-2 gap-2">
                         {type !== "notification_bar" && (
                           <div className="flex flex-col gap-0.5">
-                            <label className="text-[9.3px] text-white uppercase font-bold">URL Imagen</label>
+                            <label className="text-[9.3px] text-white uppercase font-bold">
+                              {tx("URL Imagen", "Image URL")}
+                            </label>
                             <input
                               type="text"
                               placeholder="https://..."
                               value={slide.imageUrl}
-                              onChange={(e) => handleUpdateSlideField(slide.id, "imageUrl", e.target.value)}
+                              onChange={(e) =>
+                                handleUpdateSlideField(slide.id, "imageUrl", e.target.value)
+                              }
                               className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                             />
                           </div>
                         )}
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[9.3px] text-white uppercase font-bold">Enlace de Destino</label>
+                          <label className="text-[9.3px] text-white uppercase font-bold">
+                            {tx("Enlace de Destino", "Target URL")}
+                          </label>
                           <input
                             type="text"
                             placeholder="https://..."
                             value={slide.linkUrl}
-                            onChange={(e) => handleUpdateSlideField(slide.id, "linkUrl", e.target.value)}
+                            onChange={(e) =>
+                              handleUpdateSlideField(slide.id, "linkUrl", e.target.value)
+                            }
                             className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                           />
                         </div>
                         {type !== "notification_bar" && (
                           <>
                             <div className="flex flex-col gap-0.5">
-                              <label className="text-[9.3px] text-white uppercase font-bold">Título</label>
+                              <label className="text-[9.3px] text-white uppercase font-bold">
+                                {tx("Título", "Title")}
+                              </label>
                               <input
                                 type="text"
-                                placeholder="Título superpuesto"
+                                placeholder={tx("Título superpuesto", "Overlay title")}
                                 value={slide.title}
-                                onChange={(e) => handleUpdateSlideField(slide.id, "title", e.target.value)}
+                                onChange={(e) =>
+                                  handleUpdateSlideField(slide.id, "title", e.target.value)
+                                }
                                 className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                               />
                             </div>
                             <div className="flex flex-col gap-0.5">
-                              <label className="text-[9.3px] text-white uppercase font-bold">Subtítulo</label>
+                              <label className="text-[9.3px] text-white uppercase font-bold">
+                                {tx("Subtítulo", "Subtitle")}
+                              </label>
                               <input
                                 type="text"
-                                placeholder="Subtítulo secundario"
+                                placeholder={tx("Subtítulo secundario", "Secondary subtitle")}
                                 value={slide.subtitle}
-                                onChange={(e) => handleUpdateSlideField(slide.id, "subtitle", e.target.value)}
+                                onChange={(e) =>
+                                  handleUpdateSlideField(slide.id, "subtitle", e.target.value)
+                                }
                                 className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                               />
                             </div>
@@ -604,23 +746,34 @@ export default function AdminCampaignsTab() {
                         )}
                         {type === "notification_bar" && (
                           <div className="col-span-2 flex flex-col gap-0.5">
-                            <label className="text-[9.3px] text-white uppercase font-bold">Texto de la Barra</label>
+                            <label className="text-[9.3px] text-white uppercase font-bold">
+                              {tx("Texto de la Barra", "Bar Text")}
+                            </label>
                             <input
                               type="text"
-                              placeholder="Ej. Evento Especial de Tiro con Arco..."
+                              placeholder={tx(
+                                "Ej. Torneo Especial de Tiro con Arco...",
+                                "e.g. Special Archery Tournament..."
+                              )}
                               value={slide.title}
-                              onChange={(e) => handleUpdateSlideField(slide.id, "title", e.target.value)}
+                              onChange={(e) =>
+                                handleUpdateSlideField(slide.id, "title", e.target.value)
+                              }
                               className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                             />
                           </div>
                         )}
                         <div className="flex flex-col gap-0.5">
-                          <label className="text-[9.3px] text-white uppercase font-bold">Color de Fondo (Opcional)</label>
+                          <label className="text-[9.3px] text-white uppercase font-bold">
+                            {tx("Color de Fondo (Opcional)", "Background Color (Optional)")}
+                          </label>
                           <input
                             type="text"
-                            placeholder="Ej. #00BFFF"
+                            placeholder="#00BFFF"
                             value={slide.backgroundColor}
-                            onChange={(e) => handleUpdateSlideField(slide.id, "backgroundColor", e.target.value)}
+                            onChange={(e) =>
+                              handleUpdateSlideField(slide.id, "backgroundColor", e.target.value)
+                            }
                             className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11.6px] outline-none"
                           />
                         </div>
@@ -635,68 +788,83 @@ export default function AdminCampaignsTab() {
                 <div className="flex flex-col gap-3 py-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1 min-w-0">
-                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Inicio</label>
+                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                        {tx("Fecha Inicio", "Start Date")}
+                      </label>
                       <input
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon tabular-nums"
                       />
                     </div>
                     <div className="flex flex-col gap-1 min-w-0">
-                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Fecha Fin</label>
+                      <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                        {tx("Fecha Fin", "End Date")}
+                      </label>
                       <input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon"
+                        className="min-w-0 w-full bg-neutral-900 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs outline-none focus:border-cyan-neon tabular-nums"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 bg-neutral-950/40 p-4 border border-white/5 rounded-2xl mt-1">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10.5px] text-white uppercase font-bold">Max Impresiones Diario</label>
+                      <label className="text-[10.5px] text-white uppercase font-bold">
+                        {tx("Max Impresiones Diario", "Max Daily Impressions")}
+                      </label>
                       <input
                         type="number"
                         value={maxImpressionsPerDay}
                         onChange={(e) => setMaxImpressionsPerDay(Number(e.target.value))}
-                        className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                        className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none tabular-nums"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10.5px] text-white uppercase font-bold">Frecuencia (Minutos)</label>
+                      <label className="text-[10.5px] text-white uppercase font-bold">
+                        {tx("Frecuencia (Minutos)", "Frequency (Minutes)")}
+                      </label>
                       <input
                         type="number"
                         value={frequencyMinutes}
                         onChange={(e) => setFrequencyMinutes(Number(e.target.value))}
-                        className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
-                        placeholder="0 = Solo abrir app"
+                        className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none tabular-nums"
+                        placeholder={tx("0 = Solo abrir app", "0 = App open only")}
                       />
                     </div>
                     {(type === "banner_widget" || type === "notification_bar") && (
                       <div className="flex flex-col gap-1 col-span-2">
-                        <label className="text-[10.5px] text-white uppercase font-bold">Intervalo de Transición (Segundos)</label>
+                        <label className="text-[10.5px] text-white uppercase font-bold">
+                          {tx("Intervalo de Transición (Segundos)", "Slide Interval (Seconds)")}
+                        </label>
                         <input
                           type="number"
                           value={slideIntervalSeconds}
                           onChange={(e) => setSlideIntervalSeconds(Number(e.target.value))}
-                          className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                          className="bg-neutral-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none tabular-nums"
                         />
                       </div>
                     )}
-                    
-                    <div className="flex justify-between items-center col-span-2 bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[11.6px] mt-1">
-                      <span className="text-white">¿Probando en tiempo real? Configura valores para testeo:</span>
+
+                    <div className="flex justify-between items-center gap-2 col-span-2 bg-cyan-brand/10 border border-cyan-neon/20 p-2.5 rounded-xl text-[11.6px] mt-1">
+                      <span className="text-white">
+                        {tx(
+                          "¿Probando en tiempo real? Configura valores para testeo:",
+                          "Testing live? Apply instant preview settings:"
+                        )}
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
                           setFrequencyMinutes(0);
                           setMaxImpressionsPerDay(999);
                         }}
-                        className="px-2.5 py-1 bg-cyan-neon text-black font-black uppercase rounded-lg hover:scale-102 transition cursor-pointer text-[10.5px]"
+                        className="px-2.5 py-1 bg-cyan-neon text-black font-black uppercase rounded-lg hover:scale-102 transition cursor-pointer text-[10.5px] shrink-0"
                       >
-                        Valores de Prueba
+                        {tx("Valores de Prueba", "Test Values")}
                       </button>
                     </div>
                   </div>
@@ -704,8 +872,12 @@ export default function AdminCampaignsTab() {
                   {type === "popup" && (
                     <div className="flex items-center justify-between bg-neutral-950/40 p-3.5 border border-white/5 rounded-2xl">
                       <div>
-                        <span className="text-xs font-bold text-white block">Mostrar al abrir app</span>
-                        <span className="text-[10.5px] text-white block">Desplegar en el inicio de sesión.</span>
+                        <span className="text-xs font-bold text-white block">
+                          {tx("Mostrar al abrir app", "Show on app open")}
+                        </span>
+                        <span className="text-[10.5px] text-white block">
+                          {tx("Desplegar al iniciar sesión.", "Display on session start.")}
+                        </span>
                       </div>
                       <input
                         type="checkbox"
@@ -718,18 +890,20 @@ export default function AdminCampaignsTab() {
 
                   {type === "notification_bar" && (
                     <div className="flex flex-col gap-3 bg-neutral-950/40 p-4 border border-white/5 rounded-2xl">
-                      <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block">Estilo de Píldora Superior</span>
+                      <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block">
+                        {tx("Estilo de Píldora Superior", "Top Pill Style")}
+                      </span>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { id: "solid", label: "Sólido" },
-                          { id: "glass", label: "Cristal" },
-                          { id: "gradient", label: "Gradiente" }
+                          { id: "solid", label: tx("Sólido", "Solid") },
+                          { id: "glass", label: tx("Cristal", "Glass") },
+                          { id: "gradient", label: tx("Titanio", "Titanium") }
                         ].map((style) => (
                           <button
                             key={style.id}
                             type="button"
                             onClick={() => setPillStyle(style.id as any)}
-                            className={`py-1.5 rounded-lg border text-[11.6px] font-bold transition ${
+                            className={`py-1.5 rounded-lg border text-[11.6px] font-bold transition cursor-pointer ${
                               pillStyle === style.id
                                 ? "bg-cyan-brand/10 border-cyan-neon text-white"
                                 : "bg-neutral-900 border-white/5 text-white"
@@ -742,24 +916,28 @@ export default function AdminCampaignsTab() {
 
                       <div className="grid grid-cols-2 gap-2 mt-1">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[10.5px] text-white uppercase font-bold">Tamaño de Fuente</label>
+                          <label className="text-[10.5px] text-white uppercase font-bold">
+                            {tx("Tamaño de Fuente", "Font Size")}
+                          </label>
                           <select
                             value={fontSize}
                             onChange={(e) => setFontSize(e.target.value as any)}
                             className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs outline-none"
                           >
-                            <option value="small">Pequeño (9px)</option>
-                            <option value="medium">Mediano (11px)</option>
-                            <option value="large">Grande (13px)</option>
+                            <option value="small">{tx("Pequeño (9px)", "Small (9px)")}</option>
+                            <option value="medium">{tx("Mediano (11px)", "Medium (11px)")}</option>
+                            <option value="large">{tx("Grande (13px)", "Large (13px)")}</option>
                           </select>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <label className="text-[10.5px] text-white uppercase font-bold">Altura (px)</label>
+                          <label className="text-[10.5px] text-white uppercase font-bold">
+                            {tx("Altura (px)", "Height (px)")}
+                          </label>
                           <input
                             type="number"
                             value={customHeight}
                             onChange={(e) => setCustomHeight(Number(e.target.value))}
-                            className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs outline-none"
+                            className="bg-neutral-900 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs outline-none tabular-nums"
                             min={24}
                             max={60}
                           />
@@ -774,7 +952,9 @@ export default function AdminCampaignsTab() {
               {step === 4 && (
                 <div className="flex flex-col gap-4 py-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Pantallas Autorizadas</label>
+                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      {tx("Pantallas Autorizadas", "Authorized Screens")}
+                    </label>
                     <div className="grid grid-cols-2 gap-2 bg-neutral-950/40 p-3 rounded-2xl border border-white/5">
                       {["HOME", "TARGET", "HISTORY", "CALENDAR", "PROFILE"].map((screen) => (
                         <div
@@ -799,7 +979,9 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Roles Destinatarios</label>
+                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      {tx("Roles Destinatarios", "Target Roles")}
+                    </label>
                     <div className="flex gap-3 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                       {["archer", "coach"].map((role) => (
                         <div
@@ -811,7 +993,9 @@ export default function AdminCampaignsTab() {
                               : "bg-neutral-900 border-white/5 text-white"
                           }`}
                         >
-                          <span className="text-xs font-bold uppercase">{role === "archer" ? "Arquero" : "Coach"}</span>
+                          <span className="text-xs font-bold uppercase">
+                            {role === "archer" ? t("roleAthlete") : t("roleCoach")}
+                          </span>
                           <input
                             type="checkbox"
                             checked={targetRoles.includes(role as any)}
@@ -824,7 +1008,9 @@ export default function AdminCampaignsTab() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">Planes de Suscripción Objetivos</label>
+                    <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                      {tx("Planes de Suscripción Objetivos", "Target Subscription Plans")}
+                    </label>
                     <div className="flex gap-3 bg-neutral-950/40 p-3.5 rounded-2xl border border-white/5">
                       {["FREE", "PRO"].map((plan) => {
                         const active = targetPlans.includes(plan as any);
@@ -844,7 +1030,11 @@ export default function AdminCampaignsTab() {
                                 : "bg-neutral-900 border-white/5 text-white"
                             }`}
                           >
-                            <span className="text-xs font-bold uppercase">{plan === "FREE" ? "Gratuito (FREE)" : "Premium (PRO)"}</span>
+                            <span className="text-xs font-bold uppercase">
+                              {plan === "FREE"
+                                ? tx("Gratuito (FREE)", "Free (FREE)")
+                                : tx("Premium (PRO)", "Premium (PRO)")}
+                            </span>
                             <input
                               type="checkbox"
                               checked={active}
@@ -862,20 +1052,34 @@ export default function AdminCampaignsTab() {
               {/* STEP 5: PREVIEW */}
               {step === 5 && (
                 <div className="flex flex-col gap-3 py-2">
-                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest">Vista Previa del Anuncio</span>
-                  
+                  <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
+                    {tx("Vista Previa del Anuncio", "Ad Preview")}
+                  </span>
+
                   <div className="border border-white/10 rounded-3xl p-4 bg-neutral-950/80 aspect-video flex items-center justify-center relative overflow-hidden">
                     {/* Mockup for Popup */}
                     {type === "popup" && (
                       <div className="w-4/5 aspect-[4/5] bg-[#0E0E12] border border-white/15 rounded-2xl relative shadow-2xl flex flex-col justify-between overflow-hidden">
-                        <div className="absolute top-2 right-2 text-[8.1px] bg-black/60 px-1.5 py-0.5 rounded text-white">Cerrar en 3s</div>
-                        <div 
-                          className="flex-1 bg-cover bg-center" 
-                          style={{ backgroundImage: `url(${slides[0]?.imageUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"})` }} 
+                        <div className="absolute top-2 end-2 text-[8.1px] bg-black/60 px-1.5 py-0.5 rounded text-white tabular-nums">
+                          {tx("Cerrar en 3s", "Close in 3s")}
+                        </div>
+                        <div
+                          className="flex-1 bg-cover bg-center"
+                          style={{
+                            backgroundImage: `url(${
+                              slides[0]?.imageUrl ||
+                              "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop"
+                            })`
+                          }}
                         />
                         <div className="p-3 bg-[#0F0F12] border-t border-white/5">
-                          <h4 className="text-[11.6px] font-black text-white">{slides[0]?.title || "Título del Anuncio"}</h4>
-                          <p className="text-[9.3px] text-white">{slides[0]?.subtitle || "Subtítulo secundario..."}</p>
+                          <h4 className="text-[11.6px] font-black text-white">
+                            {slides[0]?.title || tx("Título del Anuncio", "Ad Title")}
+                          </h4>
+                          <p className="text-[9.3px] text-white">
+                            {slides[0]?.subtitle ||
+                              tx("Subtítulo secundario...", "Secondary subtitle...")}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -883,13 +1087,22 @@ export default function AdminCampaignsTab() {
                     {/* Mockup for Banner Widget */}
                     {type === "banner_widget" && (
                       <div className="w-full h-14 bg-[#0E0E12] border border-cyan-neon/30 rounded-xl relative flex items-center justify-between px-3 overflow-hidden">
-                        <div 
-                          className="absolute inset-0 bg-cover bg-center opacity-40" 
-                          style={{ backgroundImage: `url(${slides[0]?.imageUrl || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop"})` }} 
+                        <div
+                          className="absolute inset-0 bg-cover bg-center opacity-40"
+                          style={{
+                            backgroundImage: `url(${
+                              slides[0]?.imageUrl ||
+                              "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop"
+                            })`
+                          }}
                         />
                         <div className="relative z-10 flex flex-col justify-center max-w-[80%]">
-                          <span className="text-[7px] font-black text-cyan-neon tracking-widest block uppercase">Patrocinador</span>
-                          <span className="text-[10.5px] font-bold text-white truncate">{slides[0]?.title || "Título del Banner"}</span>
+                          <span className="text-[7px] font-black text-cyan-neon tracking-widest block uppercase">
+                            {tx("Patrocinador", "Sponsor")}
+                          </span>
+                          <span className="text-[10.5px] font-bold text-white truncate">
+                            {slides[0]?.title || tx("Título del Banner", "Banner Title")}
+                          </span>
                         </div>
                         <span className="text-[8.1px] text-white">✕</span>
                       </div>
@@ -897,19 +1110,34 @@ export default function AdminCampaignsTab() {
 
                     {/* Mockup for Notification Bar */}
                     {type === "notification_bar" && (
-                      <div 
+                      <div
                         style={{
                           height: `${customHeight}px`,
-                          fontSize: fontSize === "small" ? "8px" : fontSize === "large" ? "12px" : "10px",
-                          ...(pillStyle === "gradient" 
-                            ? { backgroundImage: "linear-gradient(135deg, #06080C 0%, #12151C 100%)", border: "1px solid rgba(0, 168, 243, 0.45)", color: "#FFFFFF" } 
+                          fontSize:
+                            fontSize === "small" ? "8px" : fontSize === "large" ? "12px" : "10px",
+                          ...(pillStyle === "gradient"
+                            ? {
+                                backgroundImage:
+                                  "linear-gradient(135deg, #06080C 0%, #12151C 100%)",
+                                border: "1px solid rgba(0, 168, 243, 0.45)",
+                                color: "#FFFFFF"
+                              }
                             : pillStyle === "glass"
-                              ? { backgroundColor: "rgba(10, 10, 12, 0.75)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }
-                              : { backgroundColor: slides[0]?.backgroundColor || "#00BFFF", color: "#000" })
+                            ? {
+                                backgroundColor: "rgba(10, 10, 12, 0.75)",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                color: "#fff"
+                              }
+                            : {
+                                backgroundColor: slides[0]?.backgroundColor || "#00BFFF",
+                                color: "#000"
+                              })
                         }}
                         className="w-full max-w-xs rounded-full relative flex items-center justify-between px-3 overflow-hidden font-black text-center"
                       >
-                        <span className="truncate">{slides[0]?.title || "Notificación de Alerta de Publicidad..."}</span>
+                        <span className="truncate">
+                          {slides[0]?.title || tx("Aviso patrocinado...", "Sponsored notice...")}
+                        </span>
                         <span className="text-[9.3px] opacity-60">✕</span>
                       </div>
                     )}
@@ -925,16 +1153,16 @@ export default function AdminCampaignsTab() {
                     onClick={() => setStep(step - 1)}
                     className="flex-1 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase flex items-center justify-center gap-1 cursor-pointer border border-white/5"
                   >
-                    <ArrowLeft size={14} />
-                    <span>Atrás</span>
+                    <ArrowLeft size={14} className="rtl:rotate-180" />
+                    <span>{t("prev")}</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-2.5 rounded-2xl bg-transparent border border-white/5 text-white hover:text-white font-bold text-xs uppercase"
+                    className="flex-1 py-2.5 rounded-2xl bg-transparent border border-white/5 text-white hover:text-white font-bold text-xs uppercase cursor-pointer"
                   >
-                    Cancelar
+                    {t("cancel")}
                   </button>
                 )}
 
@@ -944,8 +1172,8 @@ export default function AdminCampaignsTab() {
                     onClick={() => setStep(step + 1)}
                     className="flex-1 py-2.5 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    <span>Siguiente</span>
-                    <ArrowRight size={14} />
+                    <span>{t("next")}</span>
+                    <ArrowRight size={14} className="rtl:rotate-180" />
                   </button>
                 ) : (
                   <button
@@ -954,7 +1182,7 @@ export default function AdminCampaignsTab() {
                     className="flex-1 py-2.5 rounded-2xl bg-green-500 text-white font-black text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Sparkles size={14} />
-                    <span>Guardar Campaña</span>
+                    <span>{tx("Guardar Campaña", "Save Campaign")}</span>
                   </button>
                 )}
               </div>

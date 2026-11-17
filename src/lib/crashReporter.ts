@@ -1,7 +1,7 @@
 "use client";
 
 import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, Timestamp } from "firebase/firestore";
 
 export interface CrashLogEntry {
   id: string;
@@ -17,6 +17,7 @@ export interface CrashLogEntry {
 const CRASH_LOGS_STORAGE_KEY = "archery_crash_logs";
 const MAX_REPORTS_PER_SESSION = 5;
 const MAX_LOCAL_LOGS = 20;
+const ERROR_LOG_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day native Firestore TTL
 
 let sessionReportCount = 0;
 let globalHandlersInitialized = false;
@@ -81,7 +82,7 @@ export async function reportClientError(error: unknown, section: string = "globa
       id: errId,
       userId: auth.currentUser?.uid || null,
       section: (section || "global").slice(0, 80),
-      message: (message || "Unknown error").slice(0, 500),
+      message: (message || "Unknown error").trim().slice(0, 500) || "Unknown error",
       ...(stack ? { stack: stack.slice(0, 2000) } : {}),
       url: (window.location?.href || "").slice(0, 300),
       userAgent: (typeof navigator !== "undefined" ? navigator.userAgent || "" : "").slice(0, 250),
@@ -97,7 +98,10 @@ export async function reportClientError(error: unknown, section: string = "globa
     }
 
     if (auth.currentUser && (typeof navigator === "undefined" || navigator.onLine)) {
-      await setDoc(doc(db, "client_error_logs", errId), entry).catch(() => {});
+      await setDoc(doc(db, "client_error_logs", errId), {
+        ...entry,
+        expireAt: Timestamp.fromMillis(now + ERROR_LOG_TTL_MS)
+      }).catch(() => {});
     }
   } catch {
     // Telemetry must never throw or cascade into secondary crashes

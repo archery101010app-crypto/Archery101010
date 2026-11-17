@@ -30,6 +30,7 @@ service cloud.firestore {
     //   - clubLogo: string (optional, 0-2048 chars)
     //   - clubCountry: string (optional, 0-10 chars)
     //   - clubInviteCode: string (optional, 0-50 chars)
+    //   - joinedWithInviteCode: string (optional, 0-20 chars, archer 6-digit invite proof)
     //   - isClubCreator: bool (optional)
     //   - whatsappNumber: string (optional, 0-30 chars)
     //   - fcmToken: string (optional, 0-512 chars)
@@ -40,6 +41,21 @@ service cloud.firestore {
     //   - createdAt: number / timestamp (optional)
     //   - lastActiveAt: number / timestamp (optional)
     //   - updatedAt: number / timestamp (optional)
+    //
+    // Collection: users_public
+    // Document ID: {userId} (user's Firebase Auth UID; PII-free directory for duel lobby & online presence)
+    // Fields:
+    //   - uid: string (optional/if present must match userId) [Immutable]
+    //   - fullName: string or null (optional, 0-100 chars)
+    //   - nickname: string or null (optional, 0-50 chars)
+    //   - country: string or null (optional, 0-10 chars)
+    //   - bowType: string or null (optional, 0-30 chars)
+    //   - clubId: string or null (optional, 0-100 chars)
+    //   - clubName: string or null (optional, 0-100 chars)
+    //   - clubInviteCode: string or null (optional, 0-20 chars)
+    //   - role: string or null (optional: 'archer' | 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
+    //   - lastActiveAt: number / timestamp / string (optional)
+    //   - updatedAt: number / timestamp / string (optional)
     //
     // Collection: sessions
     // Document ID: {sessionId} (e.g., "SES-timestamp-random")
@@ -278,14 +294,16 @@ service cloud.firestore {
     //   - caloriesBurnedKcal: number (optional, 0-100000)
     //   - sensitivityLevel: number (optional, 0-10)
     //   - bowPoundageLbs: number (optional, 0-200)
-    //   - lastWatchCmd: string / map (optional, bounded)
+    //   - lastWatchCmd: string (<= 120 chars) / map (<= 10 keys, whitelisted & bounded)
     //   - lastWatchCmdId: string (optional, 0-128 chars)
     //   - lastWatchCmdSeq: number (optional, 0-1000000000)
     //   - watchStepsCount: number (optional, 0-1000000)
     //   - watchDistanceM: number (optional, 0-1000000)
     //   - watchSource: string (optional, 0-60 chars)
+    //   - watchDeviceId: string (optional, 0-80 chars)
     //   - updatedAt: number / timestamp (optional)
-    //   - expiresAt: number / timestamp (optional; <= 72h on create, enforced on get/update when set)
+    //   - expiresAt: number / timestamp (required, non-null; <= 72h on create/owner-renew; missing => expired)
+    //   - expireAt: timestamp (optional, native Firestore TTL auto-deletion timestamp)
     //
     // Collection: subscription_audit_logs
     // Document ID: {logId} (e.g., "SUB-timestamp-random", 1-100 chars)
@@ -315,6 +333,7 @@ service cloud.firestore {
     //   - platform: string (optional, 0-40 chars)
     //   - createdAt: number / timestamp / string (optional)
     //   - updatedAt: number / timestamp / string (optional)
+    //   - expireAt: timestamp (optional, native Firestore TTL auto-deletion timestamp)
     //
     // ===============================================================
 
@@ -367,9 +386,13 @@ service cloud.firestore {
       return getUserData().get('clubId', null);
     }
 
-    // Coach that owns / belongs to the given non-empty club
+    // Coach that owns / belongs to the given non-empty club (or caller's own canonical CLB-<uid>)
     function isCoachOfClub(clubId) {
-      return clubId != null && clubId is string && clubId != '' && isCoach() && requesterClubId() == clubId;
+      return clubId != null && clubId is string && clubId != '' && isCoach() && (
+        requesterClubId() == clubId ||
+        clubId == 'CLB-' + request.auth.uid ||
+        clubId == 'CLB-' + request.auth.uid.replace('USR-', '')
+      );
     }
 
     // Coach of a specific linked athlete (by direct coachId or shared clubId)
@@ -469,6 +492,7 @@ service cloud.firestore {
         validOptionalString(data, 'clubLogo', 0, 2048) &&
         validOptionalString(data, 'clubCountry', 0, 10) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
+        validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
         validOptionalBool(data, 'isClubCreator') &&
         validOptionalString(data, 'whatsappNumber', 0, 30) &&
         validOptionalString(data, 'fcmToken', 0, 512) &&
@@ -514,7 +538,7 @@ service cloud.firestore {
     // Coach partial unlink update (clears link fields safely even on incomplete legacy athlete profiles)
     function isValidCoachUnlinkUpdate(data) {
       return data.diff(resource.data).affectedKeys().hasOnly([
-          'clubId', 'clubName', 'clubLogo', 'clubInviteCode',
+          'clubId', 'clubName', 'clubLogo', 'clubInviteCode', 'joinedWithInviteCode',
           'coachId', 'coachName', 'coachEmail', 'isClubCreator', 'role', 'updatedAt'
         ]) &&
         (data.get('clubId', null) == null || data.get('clubId', '') == '') &&
@@ -524,6 +548,7 @@ service cloud.firestore {
         validOptionalString(data, 'clubName', 0, 100) &&
         validOptionalString(data, 'clubLogo', 0, 2048) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
+        validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
         validOptionalString(data, 'coachName', 0, 100) &&
         validOptionalString(data, 'coachEmail', 0, 128) &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
@@ -535,6 +560,136 @@ service cloud.firestore {
         (data.get('plan', null) == null || data.plan in ['FREE', 'PRO']) &&
         validOptionalDateOrTimestamp(data, 'proExpiresAt') &&
         (data.get('role', null) == null || data.role in ['archer', 'coach', 'team_admin', 'team_admin_coach', 'superadmin']) &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Anti self-escalation (enforced on BOTH create and update):
+    // An owner can only hold a coach/team_admin role when not linked to an external coach
+    // and when clubId is null/empty or their own canonical CLB-<uid>.
+    function isNotSelfEscalatingCoachClub(data, userId) {
+      let clubId = data.get('clubId', null);
+      return data.role == 'archer' || !isOwner(userId) || isSuperAdmin() || (
+        (data.get('coachId', null) == null || data.get('coachId', '') == '') &&
+        (
+          clubId == null ||
+          clubId == '' ||
+          clubId == 'CLB-' + userId ||
+          clubId == 'CLB-' + userId.replace('USR-', '')
+        )
+      );
+    }
+
+    // Verifies that targetCoachUid exists, holds the submitted 6-digit clubInviteCode, and owns clubId
+    function isCoachInviteMatchForUid(targetCoachUid, clubId, code) {
+      let coachExists = exists(/databases/$(database)/documents/users/$(targetCoachUid));
+      let coachData = coachExists
+        ? get(/databases/$(database)/documents/users/$(targetCoachUid)).data
+        : {};
+      return coachExists &&
+        coachData.get('clubInviteCode', '') == code &&
+        (clubId == null || clubId == '' ||
+         clubId == coachData.get('clubId', '') ||
+         clubId == 'CLB-' + targetCoachUid ||
+         clubId == 'CLB-' + targetCoachUid.replace('USR-', ''));
+    }
+
+    // Resolves the 6-digit invite proof submitted by an archer (prefers joinedWithInviteCode, falls back to clubInviteCode)
+    function resolveSubmittedInviteCode(data) {
+      let joinedCode = data.get('joinedWithInviteCode', '');
+      let legacyCode = data.get('clubInviteCode', '');
+      return (joinedCode is string && joinedCode != '')
+        ? joinedCode
+        : (legacyCode is string ? legacyCode : '');
+    }
+
+    // Requires proof of the coach's 6-digit clubInviteCode when an archer joins a club/coach
+    function isValidVerifiedCoachInvite(clubId, coachId, code, userId) {
+      let hasValidCode = code is string && code.matches('^[0-9]{6}$');
+      let hasCoachUid = coachId is string && coachId.size() > 0 && coachId != userId;
+      let coachMatches = hasCoachUid && isCoachInviteMatchForUid(coachId, clubId, code);
+      let derivedCoachUid = (clubId is string && clubId.matches('^CLB-.+'))
+        ? clubId.replace('CLB-', '')
+        : '';
+      let derivedMatches = derivedCoachUid != '' &&
+        derivedCoachUid != userId &&
+        (!hasCoachUid || coachId == derivedCoachUid || coachId == 'USR-' + derivedCoachUid) &&
+        isCoachInviteMatchForUid(derivedCoachUid, clubId, code);
+      return hasValidCode && (coachMatches || derivedMatches);
+    }
+
+    function isValidArcherClubJoinOnCreate(data, userId) {
+      let newClubId = data.get('clubId', null);
+      let newCoachId = data.get('coachId', null);
+      let hasNewClub = newClubId is string && newClubId != '';
+      let hasNewCoach = newCoachId is string && newCoachId != '';
+      return !isOwner(userId) || isSuperAdmin() || data.get('role', '') != 'archer' ||
+        (!hasNewClub && !hasNewCoach) ||
+        isValidVerifiedCoachInvite(newClubId, newCoachId, resolveSubmittedInviteCode(data), userId);
+    }
+
+    function isValidArcherClubJoinOnUpdate(data, oldData, userId) {
+      let newClubId = data.get('clubId', null);
+      let oldClubId = oldData.get('clubId', null);
+      let newCoachId = data.get('coachId', null);
+      let oldCoachId = oldData.get('coachId', null);
+      let clubChangedToNew = newClubId is string && newClubId != '' && newClubId != oldClubId &&
+        !(oldCoachId is string && oldCoachId != '' &&
+          (newClubId == 'CLB-' + oldCoachId || newClubId == 'CLB-' + oldCoachId.replace('USR-', '')));
+      let coachChangedToNew = newCoachId is string && newCoachId != '' && newCoachId != oldCoachId &&
+        !(oldClubId is string && oldClubId != '' &&
+          (oldClubId == 'CLB-' + newCoachId || oldClubId == 'CLB-' + newCoachId.replace('USR-', '')));
+      return !isOwner(userId) || isSuperAdmin() || data.get('role', '') != 'archer' ||
+        (!clubChangedToNew && !coachChangedToNew) ||
+        isValidVerifiedCoachInvite(newClubId, newCoachId, resolveSubmittedInviteCode(data), userId);
+    }
+
+    // Strict PII-protected read authorization for private users/{userId} documents:
+    // 1) Owner (by UID or verified auth email fallback)
+    // 2) SuperAdmin
+    // 3) Coach of the athlete (by shared clubId, canonical CLB-<coachUid>, direct coachId, or legacy invite code)
+    // 4) Fellow member of the caller's own non-empty clubId
+    // 5) Coach / Team Admin profile lookup
+    function isCallerAuthorizedForClubOrCoachRead(data) {
+      let caller = getUserData();
+      let callerClubId = caller.get('clubId', null);
+      let docClubId = data.get('clubId', null);
+      let callerIsCoach = request.auth.token.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'] ||
+        caller.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'];
+      return (callerClubId is string && callerClubId != '' && docClubId == callerClubId) ||
+        (callerIsCoach && docClubId is string &&
+          (docClubId == 'CLB-' + request.auth.uid || docClubId == 'CLB-' + request.auth.uid.replace('USR-', ''))) ||
+        (data.get('coachId', null) == request.auth.uid && (callerIsCoach || caller.get('isClubCreator', false) == true)) ||
+        (callerIsCoach && caller.get('clubInviteCode', '') != '' &&
+          data.get('clubInviteCode', '') == caller.get('clubInviteCode', '__none__'));
+    }
+
+    function canReadPrivateUserDoc(userId, data) {
+      return isOwner(userId) ||
+        data.get('uid', '') == request.auth.uid ||
+        (request.auth.token.get('email', '') != '' &&
+          data.get('email', '') == request.auth.token.get('email', '__none__')) ||
+        isSuperAdmin() ||
+        data.get('role', '') in ['coach', 'team_admin', 'team_admin_coach'] ||
+        isCallerAuthorizedForClubOrCoachRead(data);
+    }
+
+    // Validator for PII-free users_public/{userId} directory documents (enforced on BOTH create and update)
+    function isValidUserPublic(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'fullName', 'nickname', 'country', 'bowType',
+          'clubId', 'clubName', 'clubInviteCode', 'role', 'lastActiveAt', 'updatedAt'
+        ]) &&
+        data.get('uid', userId) == userId &&
+        validOptionalString(data, 'fullName', 0, 100) &&
+        validOptionalString(data, 'nickname', 0, 50) &&
+        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'bowType', 0, 30) &&
+        validOptionalString(data, 'clubId', 0, 100) &&
+        validOptionalString(data, 'clubName', 0, 100) &&
+        validOptionalString(data, 'clubInviteCode', 0, 20) &&
+        (data.get('role', null) == null ||
+          data.role in ['archer', 'coach', 'team_admin', 'team_admin_coach', 'superadmin']) &&
+        validOptionalDateOrTimestamp(data, 'lastActiveAt') &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
@@ -784,14 +939,81 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
+    function isValidWatchCmdPayload(p) {
+      return p == null || (
+        p is map &&
+        p.keys().size() <= 5 &&
+        p.keys().hasOnly(['value', 'totalScore', 'stepsCount', 'distanceWalkedM', 'activeKcal']) &&
+        (p.get('value', null) == null ||
+          (p.value is string && p.value.size() <= 40) ||
+          (p.value is number && p.value >= -100000 && p.value <= 100000)) &&
+        validOptionalNumber(p, 'totalScore', 0, 100000) &&
+        validOptionalNumber(p, 'stepsCount', 0, 1000000) &&
+        validOptionalNumber(p, 'distanceWalkedM', 0, 1000000) &&
+        validOptionalNumber(p, 'activeKcal', 0, 100000)
+      );
+    }
+
+    function isValidWatchCmd(cmd) {
+      return cmd == null ||
+        (cmd is string && cmd.size() <= 120) ||
+        (
+          cmd is map &&
+          cmd.keys().size() <= 10 &&
+          cmd.keys().hasOnly([
+            'type', 'value', 'id', 'cmdId', '_cmdId',
+            'seq', 'cmdSeq', '_cmdSeq', 'ts', '_ts',
+            'delta', 'source', 'totalScore', 'enabled', 'sensitivityLevel',
+            'stepsCount', 'distanceWalkedM', 'activeKcal', 'payload'
+          ]) &&
+          validOptionalString(cmd, 'type', 1, 40) &&
+          (cmd.get('value', null) == null ||
+            (cmd.value is string && cmd.value.size() <= 40) ||
+            (cmd.value is number && cmd.value >= -100000 && cmd.value <= 100000)) &&
+          validOptionalString(cmd, 'id', 0, 80) &&
+          validOptionalString(cmd, 'cmdId', 0, 80) &&
+          validOptionalString(cmd, '_cmdId', 0, 80) &&
+          validOptionalNumber(cmd, 'seq', 0, 1000000000) &&
+          validOptionalNumber(cmd, 'cmdSeq', 0, 1000000000) &&
+          validOptionalNumber(cmd, '_cmdSeq', 0, 1000000000) &&
+          validOptionalNumber(cmd, 'ts', 0, 9999999999999) &&
+          validOptionalNumber(cmd, '_ts', 0, 9999999999999) &&
+          validOptionalNumber(cmd, 'delta', -20, 20) &&
+          validOptionalString(cmd, 'source', 0, 40) &&
+          validOptionalNumber(cmd, 'totalScore', 0, 100000) &&
+          validOptionalBool(cmd, 'enabled') &&
+          validOptionalNumber(cmd, 'sensitivityLevel', 0, 10) &&
+          validOptionalNumber(cmd, 'stepsCount', 0, 1000000) &&
+          validOptionalNumber(cmd, 'distanceWalkedM', 0, 1000000) &&
+          validOptionalNumber(cmd, 'activeKcal', 0, 100000) &&
+          isValidWatchCmdPayload(cmd.get('payload', null))
+        );
+    }
+
     function isValidWatchSession(data, pairingCode) {
-      let cmd = data.get('lastWatchCmd', null);
+      let exp = data.get('expiresAt', null);
+      let ttl = data.get('expireAt', null);
       return pairingCode.matches('^[0-9]{6}$') &&
-        data.keys().hasAll(['userId']) &&
-        data.keys().size() <= 30 &&
+        data.keys().hasAll(['userId', 'expiresAt']) &&
+        data.keys().size() <= 35 &&
+        data.keys().hasOnly([
+          'pairingCode', 'userId', 'sessionId', 'sessionActive', 'gpsActive',
+          'autoDetectEnabled', 'watchConnected', 'practiceType', 'bowType',
+          'arrowsCount', 'totalScore', 'roundScoreMax', 'currentEnd', 'totalEnds',
+          'endsCount', 'completedEnds', 'currentEndIndex', 'arrowsPerEnd',
+          'distanceM', 'gpsDistanceM', 'stepsCount', 'distanceWalkedM',
+          'caloriesBurnedKcal', 'activeKcal', 'sensitivityLevel', 'bowPoundageLbs',
+          'currentEndArrows', 'lastWatchCmd', 'lastWatchCmdId', 'lastWatchCmdSeq',
+          'watchStepsCount', 'watchDistanceM', 'watchCaloriesKcal', 'watchSource',
+          'watchDeviceId', 'lastShotTimestamp', 'createdAt', 'updatedAt',
+          'expiresAt', 'expireAt'
+        ]) &&
         (data.get('pairingCode', null) == null ||
           (data.pairingCode is string && data.pairingCode == pairingCode)) &&
         validString(data.userId, 1, 128) &&
+        exp != null &&
+        validOptionalNumberOrTimestamp(data, 'expiresAt') &&
+        (ttl == null || ttl is timestamp) &&
         validOptionalNumber(data, 'arrowsCount', 0, 10000) &&
         validOptionalNumber(data, 'totalScore', 0, 100000) &&
         validOptionalNumber(data, 'roundScoreMax', 0, 100000) &&
@@ -816,7 +1038,6 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'lastShotTimestamp') &&
         validOptionalDateOrTimestamp(data, 'createdAt') &&
         validOptionalDateOrTimestamp(data, 'updatedAt') &&
-        validOptionalDateOrTimestamp(data, 'expiresAt') &&
         validOptionalString(data, 'sessionId', 0, 128) &&
         validOptionalBool(data, 'sessionActive') &&
         validOptionalBool(data, 'gpsActive') &&
@@ -825,31 +1046,46 @@ service cloud.firestore {
         validOptionalString(data, 'practiceType', 0, 60) &&
         validOptionalString(data, 'bowType', 0, 40) &&
         validOptionalList(data, 'currentEndArrows', 30) &&
-        (cmd == null ||
-          (cmd is string && cmd.size() <= 256) ||
-          (cmd is map && cmd.keys().size() <= 15)) &&
+        isValidWatchCmd(data.get('lastWatchCmd', null)) &&
         validOptionalString(data, 'lastWatchCmdId', 0, 128) &&
-        validOptionalString(data, 'watchSource', 0, 60);
+        validOptionalString(data, 'watchSource', 0, 60) &&
+        validOptionalString(data, 'watchDeviceId', 0, 80);
     }
 
     function isWatchSessionNotExpired(data) {
       let exp = data.get('expiresAt', null);
-      return exp == null ||
+      return exp != null && (
         (exp is number && exp > request.time.toMillis()) ||
-        (exp is timestamp && exp > request.time);
+        (exp is timestamp && exp > request.time)
+      );
     }
 
     function isValidWatchSessionExpiresAt(data) {
       let exp = data.get('expiresAt', null);
-      return exp == null ||
-        (exp is number &&
-          exp > request.time.toMillis() &&
-          exp <= request.time.toMillis() + 72 * 60 * 60 * 1000);
+      let ttl = data.get('expireAt', null);
+      return exp != null &&
+        (
+          (exp is number &&
+            exp > request.time.toMillis() &&
+            exp <= request.time.toMillis() + 72 * 60 * 60 * 1000) ||
+          (exp is timestamp &&
+            exp > request.time &&
+            exp <= request.time + duration.value(72, 'h'))
+        ) &&
+        (ttl == null ||
+          (ttl is timestamp &&
+            (isSuperAdmin() || ttl <= request.time + duration.value(72, 'h'))));
     }
 
     function isValidClientErrorLog(data, errId) {
+      let ttl = data.get('expireAt', null);
       return data.keys().hasAll(['id', 'userId', 'message']) &&
-        data.keys().size() <= 12 &&
+        data.keys().size() <= 15 &&
+        data.keys().hasOnly([
+          'id', 'userId', 'message', 'stack', 'componentStack',
+          'section', 'version', 'platform', 'userAgent', 'url',
+          'role', 'createdAt', 'updatedAt', 'expireAt'
+        ]) &&
         validString(errId, 1, 100) &&
         validString(data.id, 1, 100) &&
         data.id == errId &&
@@ -864,7 +1100,8 @@ service cloud.firestore {
         validOptionalString(data, 'url', 0, 500) &&
         validOptionalString(data, 'role', 0, 40) &&
         validOptionalDateOrTimestamp(data, 'createdAt') &&
-        validOptionalDateOrTimestamp(data, 'updatedAt');
+        validOptionalDateOrTimestamp(data, 'updatedAt') &&
+        (ttl == null || ttl is timestamp);
     }
 
     function isValidAuditExpiresAt(data) {
@@ -917,15 +1154,36 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
-    // 1. Users Collection
+    // 1. Users Collection (Private PII-containing profiles)
     match /users/{userId} {
-      // Authenticated users can get individual profiles; bounded list queries (limit <= 300) prevent full-collection scraping
-      allow get: if isAuthenticated();
-      allow list: if isSuperAdmin() || (isAuthenticated() && request.query.limit != null && request.query.limit <= 300);
+      // Strictly protect PII (email, whatsappNumber, birthDate, fcmToken, physicalData):
+      // - get: owner (including non-existent bootstrap check), matching auth email, superadmin,
+      //        coach/club fellow member, or coach/team_admin profile lookup.
+      // - list: superadmin, or bounded query (limit <= 300) matching the 5 strict cases above
+      //         OR tight 6-digit invite-code lookup (limit <= 15 && non-empty clubInviteCode).
+      allow get: if isAuthenticated() && (
+        isOwner(userId) ||
+        isSuperAdmin() ||
+        (resource != null && canReadPrivateUserDoc(userId, resource.data))
+      );
+
+      allow list: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          request.query.limit != null &&
+          request.query.limit <= 300 &&
+          (
+            canReadPrivateUserDoc(userId, resource.data) ||
+            (request.query.limit <= 15 &&
+             resource.data.get('clubInviteCode', '') is string &&
+             resource.data.get('clubInviteCode', '') != '')
+          )
+        )
+      );
 
       // Users can create their own document (full profile or minimal initial presence/auth bootstrap);
       // coaches can create athlete ('archer') profiles for THEIR club; superadmins can create any profile.
-      // Privilege escalation to 'superadmin' is strictly prohibited for non-superadmins.
+      // Enforces BOTH anti-self-escalation AND verified 6-digit clubInviteCode when an archer joins a club.
       allow create: if isAuthenticated() &&
         (request.resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
         (
@@ -933,6 +1191,8 @@ service cloud.firestore {
             request.resource.data.uid == userId &&
             (isOwner(userId) || isSuperAdmin() ||
               (request.resource.data.role == 'archer' && isCoachOfClub(request.resource.data.get('clubId', null)))) &&
+            isNotSelfEscalatingCoachClub(request.resource.data, userId) &&
+            isValidArcherClubJoinOnCreate(request.resource.data, userId) &&
             isValidUser(request.resource.data)
           ) ||
           (
@@ -946,7 +1206,8 @@ service cloud.firestore {
       // 2) Coach partial unlink update on linked or legacy invite-code-matched athletes
       // 3) SuperAdmin partial plan / proExpiresAt / role patch
       // 4) Full validated profile update by owner, athlete's club coach, or superadmin
-      // Non-superadmins can NEVER set role == 'superadmin' or tamper with an existing superadmin profile.
+      // Non-superadmins can NEVER set role == 'superadmin', tamper with an existing superadmin profile,
+      // self-escalate to coach of another club, or join a club without a verified 6-digit clubInviteCode.
       allow update: if isAuthenticated() &&
         (request.resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
         (resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
@@ -961,20 +1222,33 @@ service cloud.firestore {
               (request.resource.data.role == 'archer' &&
                 ((resource.data.get('coachId', null) == request.auth.uid && isCoach()) ||
                  isCoachOfClub(resource.data.get('clubId', null))))) &&
-            // Anti self-escalation: an owner can only hold a coach/admin role when not linked to an external coach
-            // and when clubId is null/empty or their own canonical CLB-<uid>.
-            (request.resource.data.role == 'archer' || !isOwner(userId) || isSuperAdmin() ||
-              (request.resource.data.get('coachId', null) == null && (
-                request.resource.data.get('clubId', null) == null ||
-                request.resource.data.get('clubId', '') == '' ||
-                request.resource.data.get('clubId', '') == 'CLB-' + userId ||
-                request.resource.data.get('clubId', '') == 'CLB-' + userId.replace('USR-', '')
-              ))) &&
+            isNotSelfEscalatingCoachClub(request.resource.data, userId) &&
+            isValidArcherClubJoinOnUpdate(request.resource.data, resource.data, userId) &&
             isValidUser(request.resource.data)
           )
         );
 
       // Users can delete their own profile; superadmins can delete any profile
+      allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
+    }
+
+    // 1b. Users Public Directory Collection (PII-free online duel lobby & athlete presence)
+    match /users_public/{userId} {
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() &&
+        (isSuperAdmin() || (request.query.limit != null && request.query.limit <= 150));
+
+      allow create: if isAuthenticated() &&
+        (isOwner(userId) || isSuperAdmin()) &&
+        (request.resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
+        isValidUserPublic(request.resource.data, userId);
+
+      allow update: if isAuthenticated() &&
+        (isOwner(userId) || isSuperAdmin()) &&
+        (request.resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
+        (resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
+        isValidUserPublic(request.resource.data, userId);
+
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
     }
 
@@ -1307,14 +1581,20 @@ service cloud.firestore {
       // Strictly forbid listing/enumerating active 6-digit pairing codes
       allow list: if false;
 
-      // Exact 6-digit code lookup allowed when non-existent (collision check) or not expired
-      // (session owner or superadmin may also inspect their own expired doc to rotate/renew it)
-      allow get: if pairingCode.matches('^[0-9]{6}$') &&
-        (resource == null ||
-         isWatchSessionNotExpired(resource.data) ||
-         (isAuthenticated() && (resource.data.userId == request.auth.uid || isSuperAdmin())));
+      // Exact 6-digit code lookup:
+      // - Unauthenticated watches may ONLY get existing, non-expired sessions (prevents existence probing on missing codes).
+      // - Authenticated users may check non-existent codes (collision check on generation), read active sessions,
+      //   or inspect their own expired doc (or superadmin) to rotate/renew it.
+      allow get: if pairingCode.matches('^[0-9]{6}$') && (
+        (resource != null && isWatchSessionNotExpired(resource.data)) ||
+        (isAuthenticated() && (
+          resource == null ||
+          resource.data.userId == request.auth.uid ||
+          isSuperAdmin()
+        ))
+      );
 
-      // Only the authenticated session owner can create a 6-digit pairing session (expiresAt capped at <= 72h)
+      // Only the authenticated session owner can create a 6-digit pairing session (expiresAt required & capped at <= 72h)
       allow create: if isAuthenticated() &&
         pairingCode.matches('^[0-9]{6}$') &&
         request.resource.data.userId == request.auth.uid &&
@@ -1322,14 +1602,15 @@ service cloud.firestore {
         isValidWatchSession(request.resource.data, pairingCode);
 
       // Paired watch or phone owner can push bounded state/command updates; userId is immutable.
-      // Non-owner watch clients require an active non-expired session and cannot modify expiresAt;
-      // the authenticated owner (or superadmin) can renew/update with a valid expiresAt (<= 72h).
+      // Non-owner watch clients require an active non-expired session and cannot modify expiresAt or native TTL expireAt;
+      // the authenticated owner (or superadmin) can renew/update with a valid expiresAt / expireAt (<= 72h).
       allow update: if pairingCode.matches('^[0-9]{6}$') &&
         request.resource.data.userId == resource.data.userId &&
         isValidWatchSession(request.resource.data, pairingCode) &&
         (
           (isWatchSessionNotExpired(resource.data) &&
-           request.resource.data.get('expiresAt', null) == resource.data.get('expiresAt', null)) ||
+           request.resource.data.get('expiresAt', null) == resource.data.get('expiresAt', null) &&
+           request.resource.data.get('expireAt', null) == resource.data.get('expireAt', null)) ||
           (isAuthenticated() &&
            (resource.data.userId == request.auth.uid || isSuperAdmin()) &&
            isValidWatchSessionExpiresAt(request.resource.data))

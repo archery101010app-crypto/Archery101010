@@ -2,13 +2,21 @@
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 interface IntroScreenProps {
   onComplete: () => void;
 }
 
 export default function IntroScreen({ onComplete }: IntroScreenProps) {
+  const { language } = useLanguage();
   const [isExiting, setIsExiting] = useState(false);
+
+  const activeLang =
+    language ||
+    (typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null) ||
+    "es";
+  const isSpanish = activeLang.trim().toLowerCase().startsWith("es");
 
   useEffect(() => {
     // Show the branding animation for 6 seconds, then trigger exit transition
@@ -35,9 +43,10 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
       {/* Skip Button */}
       <button
         onClick={handleSkip}
-        className="intro-skip-btn absolute top-6 right-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[10.5px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
+        aria-label={isSpanish ? "Saltar introducción" : "Skip intro"}
+        className="intro-skip-btn absolute top-6 end-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[10.5px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
       >
-        Saltar
+        {isSpanish ? "Saltar" : "Skip"}
       </button>
 
       {/* Top spacing placeholder */}

@@ -83,6 +83,30 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  private isSpanishPreferred(): boolean {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = localStorage.getItem("preferred_language");
+      if (saved) {
+        return saved.trim().toLowerCase().startsWith("es");
+      }
+      const docLang = typeof document !== "undefined" ? document.documentElement.lang : "";
+      if (docLang) {
+        return docLang.trim().toLowerCase().startsWith("es");
+      }
+      if (typeof navigator !== "undefined" && navigator.language) {
+        return navigator.language.trim().toLowerCase().startsWith("es");
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+    return true;
+  }
+
+  private tx(esText: string, enText: string): string {
+    return this.isSpanishPreferred() ? esText : enText;
+  }
+
   public render() {
     if (this.state.hasError) {
       // Sub-view / module boundary: inline Matte OLED recovery card without wiping caches or killing the app
@@ -98,20 +122,26 @@ export default class ErrorBoundary extends Component<Props, State> {
               <div className="w-9 h-9 rounded-xl bg-[#12151C] border border-white/[0.10] flex items-center justify-center text-cyan-neon shrink-0">
                 <ShieldAlert size={18} />
               </div>
-              <div className="text-left">
+              <div className="text-start">
                 <h3 className="text-white text-sm font-black tracking-tight">
                   {this.props.sectionName
-                    ? `Pausa temporal en ${this.props.sectionName}`
-                    : "Error puntual en este módulo"}
+                    ? this.tx(
+                        `Pausa temporal en ${this.props.sectionName}`,
+                        `Something went wrong in ${this.props.sectionName}`
+                      )
+                    : this.tx("Algo salió mal", "Something went wrong")}
                 </h3>
                 <p className="text-[11.5px] text-white leading-snug">
-                  Tus datos locales siguen protegidos. Reintenta cargar el módulo.
+                  {this.tx(
+                    "Tus datos locales siguen protegidos. Reintenta cargar esta sección.",
+                    "Your local data remains safe. Try reloading this section."
+                  )}
                 </p>
               </div>
             </div>
 
             {!this.props.compact && this.state.error && (
-              <div className="w-full bg-[#020305] border border-white/[0.08] rounded-2xl px-3 py-2 text-[11px] font-sans tabular-nums text-left max-h-[72px] overflow-y-auto">
+              <div className="w-full bg-[#020305] border border-white/[0.08] rounded-2xl px-3 py-2 text-[11px] font-sans tabular-nums text-start select-text max-h-[72px] overflow-y-auto">
                 <span className="text-white break-all">
                   {this.state.error.message || this.state.error.toString()}
                 </span>
@@ -124,7 +154,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               className="w-full sm:w-auto px-5 h-10 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-[0.98] transition flex items-center justify-center gap-2"
             >
               <RotateCcw size={14} />
-              <span>Reintentar módulo</span>
+              <span>{this.tx("Recargar sección", "Reload Section")}</span>
             </button>
           </div>
         );
@@ -141,17 +171,24 @@ export default class ErrorBoundary extends Component<Props, State> {
             {/* Typography Description */}
             <div className="text-center flex flex-col gap-1">
               <h2 className="text-white text-[17.6px] font-black tracking-tight">
-                Error de visualización
+                {this.tx("Algo salió mal", "Something went wrong")}
               </h2>
               <p className="text-xs text-white leading-relaxed px-2 mt-1">
-                Ocurrió un problema inesperado al cargar esta vista. Puedes reintentar, recargar la página o regresar al inicio.
+                {this.tx(
+                  "Ocurrió un problema inesperado al cargar esta vista. Puedes recargar la sección, actualizar la aplicación o regresar al inicio.",
+                  "An unexpected problem occurred while loading this view. You can reload the section, refresh the app, or return home."
+                )}
               </p>
             </div>
 
             {/* Debug Code Block */}
-            <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[11.6px] tabular-nums text-left max-h-[110px] overflow-y-auto scrollbar-thin">
-              <span className="inline-block w-fit px-2 py-0.5 rounded bg-white text-black font-black text-[10px] uppercase">Detalle técnico:</span>
-              <span className="text-white break-all">{this.state.error?.toString() || "Error desconocido"}</span>
+            <div className="w-full bg-[#0D1017] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-1 text-[11.6px] tabular-nums text-start select-text max-h-[110px] overflow-y-auto scrollbar-thin">
+              <span className="inline-block w-fit px-2 py-0.5 rounded bg-white text-black font-black text-[10px] uppercase">
+                {this.tx("Detalle técnico:", "Technical details:")}
+              </span>
+              <span className="text-white break-all">
+                {this.state.error?.toString() || this.tx("Error desconocido", "Unknown error")}
+              </span>
             </div>
 
             {/* Control CTAs */}
@@ -162,7 +199,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 className="w-full h-11 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-widest rounded-2xl cursor-pointer active:scale-[0.99] transition flex items-center justify-center gap-2"
               >
                 <RotateCcw size={14} />
-                <span>Reintentar módulo</span>
+                <span>{this.tx("Recargar sección", "Reload Section")}</span>
               </button>
 
               <button
@@ -171,7 +208,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 className="w-full h-11 bg-[#12151C] border border-white/[0.10] text-white font-black text-xs uppercase tracking-widest rounded-2xl cursor-pointer active:scale-[0.99] transition flex items-center justify-center gap-2"
               >
                 <RefreshCw size={14} />
-                <span>Recargar aplicación</span>
+                <span>{this.tx("Recargar aplicación", "Reload App")}</span>
               </button>
               
               <button
@@ -180,7 +217,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 className="w-full h-11 bg-[#0D1017] border border-white/[0.08] text-white hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl cursor-pointer transition flex items-center justify-center gap-2"
               >
                 <Home size={14} />
-                <span>Volver al Inicio</span>
+                <span>{this.tx("Volver al Inicio", "Back to Home")}</span>
               </button>
             </div>
           </div>
