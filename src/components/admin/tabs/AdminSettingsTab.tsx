@@ -319,16 +319,16 @@ export default function AdminSettingsTab() {
               </button>
             </div>
 
-            {/* Ambient Music Flag */}
+            {/* Spotify Player Flag */}
             <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
               <div>
                 <span className="text-xs font-bold text-white block">
-                  {tx("Música de Competencia", "Competition Audio")}
+                  {tx("Reproductor Spotify", "Spotify Player")}
                 </span>
                 <span className="text-[10.5px] text-white block">
                   {tx(
-                    "Mostrar reproductor de audio ambiental en sesiones de tiro.",
-                    "Display ambient competition audio player during shooting sessions."
+                    "Mostrar reproductor de Spotify en sesiones de tiro y barra inferior.",
+                    "Display Spotify player during shooting sessions and in the bottom bar."
                   )}
                 </span>
               </div>

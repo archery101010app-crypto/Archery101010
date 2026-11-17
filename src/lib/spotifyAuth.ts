@@ -232,7 +232,7 @@ export async function handleSpotifyOAuthCallbackIfPresent(): Promise<{
 
     const account: ConnectedSpotifyAccount = {
       username: profile.id || "",
-      displayName: profile.display_name || profile.id || "Cuenta Musical",
+      displayName: profile.display_name || profile.id || "Usuario Spotify",
       email: profile.email,
       avatarUrl: profile.images?.[0]?.url,
       product: profile.product || "premium",
@@ -303,7 +303,7 @@ export async function fetchUserSpotifyPlaylists(accessToken?: string): Promise<S
         id: item.id,
         name: item.name,
         description: item.description || "",
-        ownerName: item.owner?.display_name || item.owner?.id || "Lista Musical",
+        ownerName: item.owner?.display_name || item.owner?.id || "Spotify",
         imageUrl: item.images?.[0]?.url,
         tracksTotal: item.tracks?.total || 0
       }));

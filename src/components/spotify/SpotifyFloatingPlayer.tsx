@@ -175,27 +175,27 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         const msg =
           s.error === "SPOTIFY_NOT_INSTALLED"
             ? txCurrent(
-                "Instala tu aplicación de música compatible y vuelve a tocar Conectar.",
-                "Install your compatible music app and tap Connect again."
+                "Instala la app de Spotify (se abrió la tienda) y vuelve a tocar Conectar.",
+                "Install the Spotify app and tap Connect again."
               )
             : s.error === "MISSING_CLIENT_ID"
             ? txCurrent(
-                "Falta activar la llave de conexión musical de ARCHERY 101010 (Client ID).",
-                "ARCHERY 101010 music connection key (Client ID) is not configured."
+                "Falta activar la llave de Spotify de ARCHERY 101010 (Client ID).",
+                "ARCHERY 101010 Spotify key (Client ID) is not configured."
               )
             : s.error === "UserNotAuthorizedException"
             ? txCurrent(
-                "Autoriza ARCHERY 101010 en la ventana de música y vuelve a intentar.",
-                "Authorize ARCHERY 101010 in the music window and try again."
+                "Autoriza ARCHERY 101010 en la ventana de Spotify y vuelve a intentar.",
+                "Authorize ARCHERY 101010 in the Spotify window and try again."
               )
             : s.error === "NotLoggedInException"
             ? txCurrent(
-                "Abre tu aplicación de música, inicia sesión y vuelve a tocar Conectar.",
-                "Open your music app, sign in, and tap Connect again."
+                "Abre la app de Spotify, inicia sesión y vuelve a tocar Conectar.",
+                "Open the Spotify app, sign in, and tap Connect again."
               )
             : txCurrent(
-                "No se pudo conectar con el servicio musical. Ábrelo una vez y reintenta.",
-                "Could not connect to the music service. Open it once and try again."
+                "No se pudo conectar con Spotify. Abre la app de Spotify una vez y reintenta.",
+                "Could not connect to Spotify. Open the Spotify app once and try again."
               );
         setAccountFeedback(msg);
       }
@@ -258,8 +258,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       const nativeActive = syncNativeSpotifySessionStatus();
       if (nativeActive && !savedAccount) {
         const autoAcc: ConnectedSpotifyAccount = {
-          username: "music",
-          displayName: txCurrent("Cuenta de Música", "Music Account"),
+          username: "spotify",
+          displayName: txCurrent("Cuenta de Spotify", "Spotify Account"),
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -302,8 +302,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         }
         setAccountFeedback(
           txCurrent(
-            "Cuenta de música sincronizada y listas importadas.",
-            "Music account synced and playlists imported."
+            "Cuenta de Spotify sincronizada y listas importadas.",
+            "Spotify account synced and playlists imported."
           )
         );
         setTimeout(() => setAccountFeedback(null), 4000);
@@ -316,8 +316,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       setHasNativeSessionCookie(ok);
       if (ok) {
         const autoAcc: ConnectedSpotifyAccount = {
-          username: "music",
-          displayName: txCurrent("Cuenta de Música", "Music Account"),
+          username: "spotify",
+          displayName: txCurrent("Cuenta de Spotify", "Spotify Account"),
           product: "premium",
           authMode: "session",
           connectedAt: new Date().toISOString()
@@ -327,8 +327,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         setIframeReloadKey((prev) => prev + 1);
         setAccountFeedback(
           txCurrent(
-            "¡Reproductor musical conectado! Reproducción completa activada.",
-            "Music player connected! Full playback enabled."
+            "¡Spotify conectado! Reproducción completa activada.",
+            "Spotify connected! Full playback enabled."
           )
         );
         setTimeout(() => setAccountFeedback(null), 4000);
@@ -435,7 +435,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       displayNameInput.trim() ||
       (usernameInput.trim()
         ? extractSpotifyUsername(usernameInput)
-        : tx("Cuenta de Música", "Music Account"));
+        : tx("Cuenta de Spotify", "Spotify Account"));
 
     const newAccount: ConnectedSpotifyAccount = {
       username: cleanUser,
@@ -454,7 +454,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       if (nativeBridge) {
         nativeBridge.connectSpotifyPlayer(oauthClientIdInput || "");
         setAccountFeedback(
-          tx("Conectando con el servicio musical…", "Connecting to music service…")
+          tx("Conectando con Spotify…", "Connecting to Spotify…")
         );
         return;
       }
@@ -465,7 +465,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         encodeURIComponent("https://open.spotify.com/");
       const popup = window.open(
         loginUrl,
-        "MusicAccountLogin",
+        "SpotifyAccountLogin",
         "width=460,height=680,menubar=no,toolbar=no,location=yes,status=no"
       );
       if (!popup) {
@@ -473,15 +473,15 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
       }
       setAccountFeedback(
         tx(
-          "Inicia sesión en la ventana emergente. Al volver aquí, tu reproductor tendrá acceso completo.",
-          "Sign in inside the popup window. When you return, your music player will have full access."
+          "Inicia sesión en Spotify en la ventana emergente. Al volver aquí, tu reproductor tendrá acceso completo.",
+          "Sign in to Spotify inside the popup window. When you return, your player will have full access."
         )
       );
     } else {
       syncNativeSpotifySessionStatus();
       setIframeReloadKey((prev) => prev + 1);
       setAccountFeedback(
-        tx("Cuenta de música vinculada correctamente.", "Music account linked successfully.")
+        tx("Cuenta de Spotify vinculada correctamente.", "Spotify account linked successfully.")
       );
       setTimeout(() => setAccountFeedback(null), 3000);
     }
@@ -534,12 +534,12 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         return;
       }
     }
-    // Reload embedded player to pick up active music session
+    // Reload embedded player to pick up active Spotify session
     setIframeReloadKey((prev) => prev + 1);
     setAccountFeedback(
       tx(
-        "Reproductor sincronizado con tu sesión musical.",
-        "Player synced with your music session."
+        "Reproductor sincronizado con tu sesión de Spotify.",
+        "Player synced with your Spotify session."
       )
     );
     setTimeout(() => setAccountFeedback(null), 2500);
@@ -558,7 +558,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     setDisplayNameInput("");
     await saveLocalSetting("spotify_connected_account", null);
     setIframeReloadKey((prev) => prev + 1);
-    setAccountFeedback(tx("Cuenta de música desvinculada.", "Music account disconnected."));
+    setAccountFeedback(tx("Cuenta de Spotify desvinculada.", "Spotify account disconnected."));
     setTimeout(() => setAccountFeedback(null), 2000);
   };
 
@@ -640,8 +640,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     if (!userPlaylistUrl.trim()) {
       setLinkError(
         tx(
-          "Pega el enlace de tu lista musical para continuar.",
-          "Paste your playlist link to continue."
+          "Pega el enlace de tu playlist de Spotify para continuar.",
+          "Paste your Spotify playlist link to continue."
         )
       );
       return;
@@ -651,8 +651,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
     if (!extracted) {
       setLinkError(
         tx(
-          "Enlace no reconocido. Toca Compartir → Copiar enlace en cualquier lista, álbum, canción o artista.",
-          "Unrecognized link. Tap Share → Copy link on any playlist, album, track, or artist."
+          "Enlace no reconocido. En Spotify toca Compartir → Copiar enlace en cualquier playlist, álbum, canción o artista.",
+          "Unrecognized link. In Spotify tap Share → Copy link on any playlist, album, track, or artist."
         )
       );
       return;
@@ -755,7 +755,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
 
   return (
     <>
-      {/* 1. Music Collapsible Folding Tab on the Start Edge */}
+      {/* 1. Spotify Collapsible Folding Tab on the Start Edge */}
       {showSideTab && !isOpen && !isMiniBarActive && (
         <div className="fixed start-0 top-[calc(50%+112px)] -translate-y-1/2 z-[40] scale-90 origin-left rtl:origin-right">
           <button
@@ -764,21 +764,23 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
               setHasLoadedIframe(true);
               setIsOpen(true);
             }}
-            aria-label={tx("Abrir Reproductor Musical", "Open Music Player")}
-            className="h-28 min-w-[36px] min-h-[36px] w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-e-2xl bg-[#12151C] border-y border-e border-[#00A8F3]/45 cursor-pointer text-white hover:border-[#00A8F3] active:scale-95 transition-all duration-200 select-none shadow-md"
+            aria-label={tx("Abrir Spotify", "Open Spotify")}
+            className="h-28 min-w-[36px] min-h-[36px] w-9 flex flex-col items-center justify-between pt-2.5 pb-3 px-1 rounded-e-2xl bg-[#1DB954] border-y border-e border-black/20 cursor-pointer text-black hover:brightness-105 active:scale-95 transition-all duration-200 select-none shadow-md"
           >
-            <div className="text-[#00A8F3] flex items-center justify-center shrink-0">
-              <Music size={17} aria-hidden="true" />
+            <div className="text-black flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              </svg>
             </div>
             <span
-              className="text-[13.6px] font-bold text-white select-none tracking-[-0.02em] leading-none"
+              className="text-[13.6px] font-bold text-black select-none tracking-[-0.02em] leading-none"
               style={{
                 fontFamily: "'Outfit', sans-serif",
                 writingMode: "vertical-rl",
                 textOrientation: "mixed",
               }}
             >
-              {tx("Música", "Music")}
+              Spotify
             </span>
           </button>
         </div>
@@ -789,25 +791,27 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[62px] inset-x-4 z-[990] min-h-[52px] py-1.5 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.10] rounded-xl px-3 flex items-center justify-between gap-2 shadow-2xl hover:border-[#00A8F3]/45 transition-all max-w-md mx-auto"
+          className="fixed bottom-[62px] inset-x-4 z-[990] min-h-[52px] py-1.5 bg-[#0D1017]/95 backdrop-blur-md border border-white/[0.10] rounded-xl px-3 flex items-center justify-between gap-2 shadow-2xl hover:border-[#1DB954]/45 transition-all max-w-md mx-auto"
         >
           <button
             type="button"
             onClick={() => setIsOpen(true)}
             aria-label={tx(
-              `Abrir Reproductor Musical: ${activePlaylistDisplayName}`,
-              `Open Music Player: ${activePlaylistDisplayName}`
+              `Abrir Spotify: ${activePlaylistDisplayName}`,
+              `Open Spotify: ${activePlaylistDisplayName}`
             )}
             className="flex items-center gap-2.5 overflow-hidden flex-1 min-w-0 text-start cursor-pointer min-h-[36px]"
           >
-            <div className="w-8 h-8 rounded-full bg-[#12151C] border border-[#00A8F3]/45 flex items-center justify-center text-[#00A8F3] shrink-0">
-              <Music size={14} aria-hidden="true" />
+            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-black shrink-0">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              </svg>
             </div>
             <div className="flex flex-col overflow-hidden min-w-0">
-              <span className="text-[10.5px] text-[#00A8F3] font-black uppercase tracking-widest leading-none">
+              <span className="text-[10.5px] text-[#1DB954] font-black uppercase tracking-widest leading-none">
                 {isPlaying
                   ? tx("Reproduciendo", "Now Playing")
-                  : tx("Reproductor Musical", "Music Player")}
+                  : tx("Spotify Activo", "Spotify Active")}
               </span>
               <span className="text-[12.8px] text-white font-bold truncate leading-snug mt-0.5">
                 {activePlaylistDisplayName}
@@ -821,11 +825,11 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
               onClick={handleTogglePlayPause}
               aria-label={
                 isPlaying
-                  ? tx("Pausar música", "Pause music")
-                  : tx("Reproducir música", "Play music")
+                  ? tx("Pausar Spotify", "Pause Spotify")
+                  : tx("Reproducir Spotify", "Play Spotify")
               }
               title={isPlaying ? tx("Pausar", "Pause") : tx("Reproducir", "Play")}
-              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-[#00A8F3] hover:text-white hover:border-[#00A8F3]/50 flex items-center justify-center cursor-pointer transition"
+              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#141923] border border-white/[0.10] text-[#1DB954] hover:text-white hover:border-[#1DB954]/50 flex items-center justify-center cursor-pointer transition"
             >
               {isPlaying ? (
                 <Pause size={14} fill="currentColor" aria-hidden="true" />
@@ -838,9 +842,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              aria-label={tx("Abrir Reproductor Musical", "Open Music Player")}
-              title={tx("Abrir Reproductor Musical", "Open Music Player")}
-              className="min-w-[36px] min-h-[36px] text-[10.5px] bg-[#12151C] border border-white/[0.10] hover:border-[#00A8F3]/50 text-white px-3 rounded-lg uppercase font-black cursor-pointer flex items-center justify-center transition"
+              aria-label={tx("Abrir panel de Spotify", "Open Spotify panel")}
+              title={tx("Abrir panel de Spotify", "Open Spotify panel")}
+              className="min-w-[36px] min-h-[36px] text-[10.5px] bg-[#141923] border border-white/[0.10] hover:border-[#1DB954]/50 text-white px-3 rounded-lg uppercase font-black cursor-pointer flex items-center justify-center transition"
             >
               {tx("Abrir", "Open")}
             </button>
@@ -855,9 +859,9 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 setIsMiniBarActive(false);
                 setIsPlaying(false);
               }}
-              aria-label={tx("Cerrar Reproductor Musical", "Close Music Player")}
-              title={tx("Cerrar Reproductor Musical", "Close Music Player")}
-              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.10] text-white hover:text-red-400 flex items-center justify-center cursor-pointer transition"
+              aria-label={tx("Cerrar Spotify", "Close Spotify")}
+              title={tx("Cerrar Spotify", "Close Spotify")}
+              className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#141923] border border-white/[0.10] text-white hover:text-red-400 flex items-center justify-center cursor-pointer transition"
             >
               <X size={14} aria-hidden="true" />
             </button>
@@ -865,7 +869,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         </motion.div>
       )}
 
-      {/* 2. Persistent Clean Music Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
+      {/* 2. Persistent Clean Spotify Panel (Kept mounted once opened so audio NEVER stops when minimized) */}
       {(hasLoadedIframe || isOpen || isMiniBarActive) && (
         <div
           className={`fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-3.5 transition-all duration-200 ${
@@ -877,7 +881,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
         >
           <div
             role="dialog"
-            aria-label={tx("Reproductor Musical", "Music Player")}
+            aria-label="Spotify"
             className={`w-full max-w-[400px] max-h-[88vh] bg-[#06080C] border border-white/[0.10] rounded-[26px] p-4 flex flex-col gap-3.5 overflow-hidden relative shadow-2xl transition-transform duration-200 ${
               isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
             }`}
@@ -901,10 +905,10 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   className="h-[13px] w-auto object-contain shrink-0 select-none pointer-events-none"
                   draggable={false}
                 />
-                <div className="inline-flex items-center gap-[5px] bg-[#12151C] border border-[#00A8F3]/45 rounded-full px-[9px] py-[3px] shrink-0">
-                  <span className="w-[5px] h-[5px] rounded-full bg-[#00A8F3]" />
-                  <span className="text-[9.5px] font-extrabold text-[#00A8F3] tracking-[0.08em] uppercase leading-none">
-                    {tx("REPRODUCTOR MUSICAL", "MUSIC PLAYER")}
+                <div className="inline-flex items-center gap-[5px] bg-[#071910] border border-[#1DB954]/45 rounded-full px-[9px] py-[3px] shrink-0">
+                  <span className="w-[5px] h-[5px] rounded-full bg-[#1DB954]" />
+                  <span className="text-[9.5px] font-extrabold text-[#1DB954] tracking-[0.08em] uppercase leading-none">
+                    SPOTIFY
                   </span>
                 </div>
               </div>
@@ -916,8 +920,8 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   setIsOpen(false);
                 }}
                 className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-[#12151C] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
-                title={tx("Minimizar reproductor", "Minimize player")}
-                aria-label={tx("Cerrar Reproductor Musical", "Close Music Player")}
+                title={tx("Cerrar ventana", "Close window")}
+                aria-label={tx("Cerrar Spotify", "Close Spotify")}
               >
                 <X size={15} aria-hidden="true" />
               </button>
@@ -934,7 +938,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                   <iframe
                     key={`${activeType}-${activePlaylistId}-${iframeReloadKey}`}
                     ref={iframeRef}
-                    title={tx("Reproductor Musical", "Music Player")}
+                    title="Spotify"
                     src={`https://open.spotify.com/embed/${activeType}/${activePlaylistId}?utm_source=generator&theme=0`}
                     width="100%"
                     height="152"
@@ -947,13 +951,13 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <button
                   type="button"
                   onClick={handleOpenInNativeSpotify}
-                  className="w-full min-h-[40px] py-[11px] px-3.5 rounded-[12px] bg-[#00A8F3] hover:bg-[#19B8FF] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
+                  className="w-full min-h-[40px] py-[11px] px-3.5 rounded-[12px] bg-[#1DB954] hover:bg-[#1ED760] text-[#020305] font-black text-[11.5px] uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
                 >
                   <Play size={13} fill="currentColor" aria-hidden="true" />
                   <span>
                     {tx(
-                      "Abrir Lista Musical en Servicio Musical",
-                      "Open Playlist in Music Service"
+                      "Abrir canciones completas en Spotify",
+                      "Open full songs in Spotify"
                     )}
                   </span>
                 </button>
@@ -962,7 +966,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
               {/* 3. Clean Playlist Selector */}
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] font-extrabold tracking-[0.12em] text-[#94A3B8] uppercase ps-0.5">
-                  {tx("ELIGE TU LISTA MUSICAL", "CHOOSE YOUR PLAYLIST")}
+                  {tx("ELIGE TU PLAYLIST", "CHOOSE YOUR PLAYLIST")}
                 </span>
 
                 <div className="flex flex-col gap-[7px]">
@@ -975,7 +979,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         onClick={() => handleSelectPlaylist(list)}
                         className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#00A8F3]/[0.08] border-[#00A8F3]/50"
+                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
                             : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
@@ -996,7 +1000,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                               `Eliminar lista ${list.name}`,
                               `Remove playlist ${list.name}`
                             )}
-                            title={tx("Eliminar de mi lista musical", "Remove from playlists")}
+                            title={tx("Eliminar de mi lista", "Remove from playlists")}
                             className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border border-white/[0.10] text-white/80 hover:text-red-400 cursor-pointer transition"
                           >
                             <Trash2 size={14} aria-hidden="true" />
@@ -1005,7 +1009,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                             aria-hidden="true"
                             className={`w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border ${
                               isActive
-                                ? "border-[#00A8F3]/55 text-[#00A8F3]"
+                                ? "border-[#1DB954]/55 text-[#1DB954]"
                                 : "border-white/[0.10] text-white"
                             }`}
                           >
@@ -1028,7 +1032,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                         onClick={() => handleSelectPlaylist(list)}
                         className={`px-3 py-2.5 rounded-[14px] border transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                           isActive
-                            ? "bg-[#00A8F3]/[0.08] border-[#00A8F3]/50"
+                            ? "bg-[#1DB954]/[0.08] border-[#1DB954]/50"
                             : "bg-[#0B0E14] border-white/[0.07] hover:border-white/15"
                         }`}
                       >
@@ -1045,7 +1049,7 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                           aria-hidden="true"
                           className={`w-9 h-9 rounded-full flex items-center justify-center bg-[#12151C] border shrink-0 ${
                             isActive
-                              ? "border-[#00A8F3]/55 text-[#00A8F3]"
+                              ? "border-[#1DB954]/55 text-[#1DB954]"
                               : "border-white/[0.10] text-white"
                           }`}
                         >
@@ -1066,22 +1070,22 @@ export default function SpotifyFloatingPlayer({ showSideTab = false }: SpotifyFl
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    aria-label={tx("Enlace de Lista Musical", "Playlist link")}
+                    aria-label={tx("Enlace de Spotify", "Spotify link")}
                     value={userPlaylistUrl}
                     onChange={(e) => {
                       setUserPlaylistUrl(e.target.value);
                       if (linkError) setLinkError(null);
                     }}
                     placeholder={tx(
-                      "Pega aquí el enlace de tu Lista Musical…",
-                      "Paste your Playlist link here…"
+                      "Pega aquí un enlace de Spotify…",
+                      "Paste a Spotify link here…"
                     )}
-                    className="flex-1 min-w-0 min-h-[38px] bg-[#0B0E14] border border-white/[0.09] focus:border-[#00A8F3] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#00A8F3]"
+                    className="flex-1 min-w-0 min-h-[38px] bg-[#0B0E14] border border-white/[0.09] focus:border-[#1DB954] text-white placeholder:text-[#94A3B8] text-[11.5px] font-semibold px-3 py-2.5 rounded-[12px] outline-none transition caret-[#1DB954]"
                   />
                   <button
                     type="submit"
                     disabled={isSavingLink}
-                    className="min-w-[36px] min-h-[38px] bg-[#12151C] border border-[#00A8F3]/45 hover:border-[#00A8F3] text-[#00A8F3] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
+                    className="min-w-[36px] min-h-[38px] bg-[#12151C] border border-[#1DB954]/45 hover:border-[#1DB954] text-[#1DB954] rounded-[12px] px-3.5 py-2.5 text-[11px] font-extrabold tracking-[0.05em] uppercase whitespace-nowrap cursor-pointer active:scale-95 transition disabled:opacity-50"
                   >
                     {saveSuccess
                       ? tx("✓ Listo", "✓ Added")

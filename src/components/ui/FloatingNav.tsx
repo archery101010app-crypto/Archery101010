@@ -6,23 +6,17 @@ import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 
-function MusicNavIcon({ size = 21, className = "" }: { size?: number; className?: string }) {
+function SpotifyNavIcon({ size = 21, className = "" }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.1"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="currentColor"
       aria-hidden="true"
       className={className}
     >
-      <path d="M9 18V5l12-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="18" cy="16" r="3" />
+      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.495 17.307a.75.75 0 0 1-1.032.248c-2.825-1.726-6.38-2.116-10.57-1.16a.75.75 0 1 1-.336-1.462c4.582-1.045 8.528-.601 11.69 1.342a.75.75 0 0 1 .248 1.032zm1.467-3.26a.938.938 0 0 1-1.29.31c-3.235-1.988-8.166-2.564-11.993-1.401a.938.938 0 1 1-.547-1.794c4.372-1.328 9.803-.687 13.52 1.595a.938.938 0 0 1 .31 1.29zm.126-3.411c-3.878-2.302-10.28-2.515-13.99-1.388a1.125 1.125 0 1 1-.655-2.154c4.27-1.297 11.332-1.046 15.807 1.61a1.125 1.125 0 0 1-1.162 1.932z" />
     </svg>
   );
 }
@@ -47,7 +41,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "HOME" as Screen, icon: Users, label: t("navDirector") },
         { id: "HISTORY" as Screen, icon: History, label: t("navResults") },
         { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
-        { id: "MUSIC" as any, icon: MusicNavIcon, label: t("musicNav"), isAction: true },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ]
     : [
@@ -55,7 +49,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "TARGET" as Screen, icon: Target, label: t("navSession") },
         { id: "HISTORY" as Screen, icon: History, label: t("navHistory") },
         { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
-        { id: "MUSIC" as any, icon: MusicNavIcon, label: t("musicNav"), isAction: true },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ];
 
@@ -63,12 +57,12 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
     navItems.push({ id: "ADMIN" as Screen, icon: Shield, label: "Admin" });
   }
 
-  const uniqueItems = navItems.filter((item, idx, arr) => 
-    arr.findIndex(i => i.label === item.label) === idx
+  const uniqueItems = navItems.filter((item, idx, arr) =>
+    arr.findIndex((i) => i.label === item.label) === idx
   );
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#07090E]/98 backdrop-blur-xl border-t border-white/[0.09] shadow-[0_-10px_28px_rgba(0,0,0,0.9)]">
+    <nav className="fixed bottom-0 inset-x-0 z-40 w-full bg-[#07090E]/98 backdrop-blur-xl border-t border-white/[0.09] shadow-[0_-10px_28px_rgba(0,0,0,0.9)]">
       <div className="w-full max-w-[430px] mx-auto px-0.5 sm:px-3 py-1.5 flex items-center justify-around gap-0.5">
         {uniqueItems.map((item) => {
           const Icon = item.icon;
