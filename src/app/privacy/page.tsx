@@ -259,9 +259,9 @@ export default function PrivacyPolicyPage() {
                 <h2>4. Permiso Opcional de Micrófono (Audio Local y Voz en Duelos)</h2>
               </div>
               <p className="text-white text-xs sm:text-sm leading-relaxed">
-                El acceso al micrófono del dispositivo es estrictamente opcional y solo se activa por acción expresa del usuario en dos herramientas puntuales:
+                El acceso al micrófono del dispositivo es estrictamente opcional y solo se activa por acción expresa del usuario en tres herramientas puntuales:
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">
                   <strong className="text-white flex items-center gap-1.5">
                     <Activity size={14} className="text-yellow-gold shrink-0" />
@@ -269,6 +269,15 @@ export default function PrivacyPolicyPage() {
                   </strong>
                   <p className="text-white leading-relaxed">
                     Analiza localmente en memoria la onda acústica del disparo y el impacto en el parapeto para estimar la velocidad de la flecha (FPS / m/s). El audio se descarta en tiempo real en tu teléfono y nunca se sube a ningún servidor.
+                  </p>
+                </div>
+                <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">
+                  <strong className="text-white flex items-center gap-1.5">
+                    <Activity size={14} className="text-cyan-neon shrink-0" />
+                    <span>Conteo Doble Llave en Reloj Inteligente</span>
+                  </strong>
+                  <p className="text-white leading-relaxed">
+                    En relojes inteligentes compatibles con micrófono, cuando el usuario activa opcionalmente el auto-conteo, detecta en memoria volátil el chasquido agudo de la cuerda sincronizado con el acelerómetro. Jamás se graba, almacena ni transmite audio.
                   </p>
                 </div>
                 <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">
@@ -528,9 +537,9 @@ export default function PrivacyPolicyPage() {
                 <h2>4. Optional Microphone Permission (On-Device Audio &amp; Live Duels)</h2>
               </div>
               <p className="text-white text-xs sm:text-sm leading-relaxed">
-                Microphone access is strictly optional and only activates upon explicit user action inside two dedicated features:
+                Microphone access is strictly optional and only activates upon explicit user action inside three dedicated features:
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">
                   <strong className="text-white flex items-center gap-1.5">
                     <Activity size={14} className="text-yellow-gold shrink-0" />
@@ -538,6 +547,15 @@ export default function PrivacyPolicyPage() {
                   </strong>
                   <p className="text-white leading-relaxed">
                     Analyzes transient shot release and target impact sound waves locally in volatile memory to estimate arrow speed (FPS / m/s). Raw audio is discarded in real time on your device and is never uploaded to any server.
+                  </p>
+                </div>
+                <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">
+                  <strong className="text-white flex items-center gap-1.5">
+                    <Activity size={14} className="text-cyan-neon shrink-0" />
+                    <span>Dual-Key Smartwatch Shot Detection</span>
+                  </strong>
+                  <p className="text-white leading-relaxed">
+                    On compatible smartwatches with a microphone, when optional auto-counting is enabled, analyzes transient bowstring release peaks locally in volatile memory alongside wrist motion. Audio is never recorded, saved, or transmitted.
                   </p>
                 </div>
                 <div className="bg-[#12151C] p-4 rounded-2xl border border-white/[0.08] flex flex-col gap-1.5">

@@ -434,8 +434,11 @@ export default function SmartwatchMiniApp({
     Date.now() - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
   const isWatchConnected = hasNativeWatchAppConnected || hasCloudWatchLinked;
 
-  // 7-Gate Biomechanical Wrist Release Detector (DeviceMotion — Standalone /watch only)
+  // Dual-Key Biomechanical + High-Frequency Acoustic String-Snap Detector (Standalone /watch only)
   const lastShotRef = useRef<number>(0);
+  const lastAcousticSnapRef = useRef<number>(0);
+  const micActiveRef = useRef<boolean>(false);
+  const [micDeniedNotice, setMicDeniedNotice] = useState(false);
   const motionBufRef = useRef<
     Array<{ t: number; ax: number; ay: number; az: number; mag: number; lin: number; gyro: number }>
   >([]);
@@ -452,6 +455,136 @@ export default function SmartwatchMiniApp({
     sumGyro: number;
     gyroN: number;
   }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
+
+  // Real-time Web Audio High-Pass (>1.8 kHz) Bowstring Snap Analyzer (100% volatile on-device, never recorded)
+  useEffect(() => {
+    if (!isOpen || !isPageVisible || !isStandalone || !activeState.autoDetectEnabled) {
+      micActiveRef.current = false;
+      lastAcousticSnapRef.current = 0;
+      return;
+    }
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      micActiveRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let audioCtx: AudioContext | null = null;
+    let rafTimer: number | null = null;
+
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        audioCtx = new AudioCtx();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const highpass = audioCtx.createBiquadFilter();
+        highpass.type = "highpass";
+        highpass.frequency.value = 1800;
+        highpass.Q.value = 0.707;
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(highpass);
+        highpass.connect(analyser);
+
+        const samples = new Float32Array(analyser.fftSize);
+        let noiseFloor = 0.0035;
+        let warmup = 0;
+        let inCandidate = false;
+        let candidateStart = 0;
+        let candidatePeak = 0;
+        let sustainedFrames = 0;
+        let waitQuiet = false;
+
+        micActiveRef.current = true;
+        setMicDeniedNotice(false);
+
+        const snrMult = sensitivity === "BAJA" ? 4.6 : sensitivity === "ALTA" ? 2.8 : 3.6;
+        const minRms = sensitivity === "BAJA" ? 0.0042 : sensitivity === "ALTA" ? 0.0019 : 0.0028;
+        const crestMin = sensitivity === "BAJA" ? 2.2 : sensitivity === "ALTA" ? 1.82 : 2.0;
+
+        rafTimer = window.setInterval(() => {
+          analyser.getFloatTimeDomainData(samples);
+          let sumSq = 0;
+          let maxAbs = 0;
+          for (let i = 0; i < samples.length; i++) {
+            const v = Math.abs(samples[i]);
+            if (v > maxAbs) maxAbs = v;
+            sumSq += samples[i] * samples[i];
+          }
+          const hfRms = Math.sqrt(sumSq / samples.length);
+          const now = Date.now();
+
+          if (warmup < 8) {
+            const clamped = Math.max(0.0008, Math.min(0.08, hfRms));
+            noiseFloor = warmup === 0 ? clamped : 0.75 * noiseFloor + 0.25 * clamped;
+            warmup++;
+            return;
+          }
+
+          if (waitQuiet) {
+            if (hfRms < Math.max(minRms * 0.85, noiseFloor * 1.75)) {
+              waitQuiet = false;
+            } else {
+              noiseFloor = Math.max(0.0008, Math.min(0.1, 0.985 * noiseFloor + 0.015 * hfRms));
+              return;
+            }
+          }
+
+          if (!inCandidate) {
+            if (hfRms >= Math.max(minRms, noiseFloor * snrMult) && maxAbs >= hfRms * crestMin) {
+              inCandidate = true;
+              candidateStart = now;
+              candidatePeak = hfRms;
+              sustainedFrames = 1;
+            } else if (hfRms < noiseFloor * 2.1) {
+              noiseFloor = Math.max(0.0008, Math.min(0.1, 0.965 * noiseFloor + 0.035 * hfRms));
+            }
+          } else {
+            if (hfRms > candidatePeak) candidatePeak = hfRms;
+            if (hfRms > candidatePeak * 0.52) {
+              sustainedFrames++;
+              if (sustainedFrames > 6) {
+                inCandidate = false;
+                waitQuiet = true;
+              }
+            } else {
+              lastAcousticSnapRef.current = candidateStart;
+              inCandidate = false;
+            }
+          }
+        }, 15);
+      } catch {
+        micActiveRef.current = false;
+        setMicDeniedNotice(true);
+        if (onToggleAutoDetect) onToggleAutoDetect(false);
+        else {
+          sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
+          setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
+        }
+        window.setTimeout(() => setMicDeniedNotice(false), 4500);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      micActiveRef.current = false;
+      if (rafTimer !== null) window.clearInterval(rafTimer);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      if (audioCtx) audioCtx.close().catch(() => {});
+    };
+  }, [isOpen, isPageVisible, isStandalone, activeState.autoDetectEnabled, sensitivity, onToggleAutoDetect]);
 
   useEffect(() => {
     // Only run wrist IMU shot detection when running standalone on a visible watch (/watch), never when hidden or on the phone preview modal
@@ -579,8 +712,12 @@ export default function SmartwatchMiniApp({
                 validFollow = false;
               }
             }
-            if (validFollow && now - lastShotRef.current > cfg.cooldown) {
+            const snapDeltaMs = Math.abs(lastAcousticSnapRef.current - pending.startMs);
+            const hasAcousticKey =
+              micActiveRef.current && lastAcousticSnapRef.current > 0 && snapDeltaMs <= 145;
+            if (validFollow && hasAcousticKey && now - lastShotRef.current > cfg.cooldown) {
               lastShotRef.current = now;
+              lastAcousticSnapRef.current = 0;
               handleArrowDelta(1, "watch_auto");
             }
           }
@@ -948,10 +1085,12 @@ export default function SmartwatchMiniApp({
           <>
             <WatchBrandHeader
               pillText={
-                justDetectedShot
+                micDeniedNotice
+                  ? tx("PERMITE MICRÓFONO", "ALLOW MICROPHONE")
+                  : justDetectedShot
                   ? tx("SUELTA DETECTADA · +1", "SHOT DETECTED · +1")
                   : activeState.autoDetectEnabled
-                  ? `${tx("AUTO TIRO", "AUTO SHOT")} · ${sensitivityDisplay}`
+                  ? `AUTO 2K · ${sensitivityDisplay}`
                   : tx("MODO MANUAL", "MANUAL MODE")
               }
               pillColor={justDetectedShot ? "yellow" : "cyan"}

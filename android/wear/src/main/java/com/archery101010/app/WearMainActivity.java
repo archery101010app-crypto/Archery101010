@@ -1,8 +1,10 @@
 package com.archery101010.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -14,6 +16,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -99,6 +104,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private static final String PREFS_NAME = "archery_101010_wear_prefs";
+    private static final int REQ_MIC_AUTO_SHOT = 1010;
+    private static final int SENSOR_RATE_100HZ_US = 10_000; // 100 Hz (10,000 us) — no HIGH_SAMPLING_RATE permission needed
+    private static final int AUDIO_SAMPLE_RATE_HZ = 16_000;
+    private static final int AUDIO_FRAME_SAMPLES = 160; // 10 ms real-time transient frame
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
@@ -106,6 +115,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
+
+    // Dual-Key Real-Time Acoustic String-Snap DSP state (100% on-device volatile memory, never recorded/saved)
+    private volatile boolean isAcousticAnalyzerRunning = false;
+    private Thread acousticAnalyzerThread = null;
+    private volatile long lastVerifiedAcousticSnapMs = 0L;
+    private volatile long micDeniedNoticeUntilMs = 0L;
 
     private int screenIndex = 0; // 0..4
     private int arrowCount = 0;
@@ -124,8 +139,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private float latestGyroRadS = -1f;
     private long lastGyroSampleMs = 0L;
 
-    // 7-Gate 3D Biomechanical Ring Buffer (~10s at SENSOR_DELAY_GAME)
-    private static final int MOTION_BUF = 512;
+    // 7-Gate 3D Biomechanical Ring Buffer (~10.2s at 100 Hz)
+    private static final int MOTION_BUF = 1024;
     private final long[] motionT = new long[MOTION_BUF];
     private final float[] motionAx = new float[MOTION_BUF];
     private final float[] motionAy = new float[MOTION_BUF];
@@ -325,20 +340,206 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
     }
 
+    private boolean hasMicPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_MIC_AUTO_SHOT) {
+            boolean granted = grantResults != null
+                    && grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted && autoDetectEnabled) {
+                micDeniedNoticeUntilMs = 0L;
+                syncShotDetectionSensors();
+            } else {
+                // Dual-Key requires both wrist IMU and real-time string-snap audio; never fall back to motion-only
+                autoDetectEnabled = false;
+                micDeniedNoticeUntilMs = System.currentTimeMillis() + 4500L;
+                syncShotDetectionSensors();
+                saveState();
+                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":false,\"sensitivityLevel\":" + sensitivityLevel + "}");
+            }
+            if (canvasView != null) canvasView.invalidate();
+        }
+    }
+
+    private synchronized void startAcousticSnapAnalyzer() {
+        if (isAcousticAnalyzerRunning || !hasMicPermission()) return;
+        isAcousticAnalyzerRunning = true;
+        acousticAnalyzerThread = new Thread(() -> {
+            AudioRecord recorder = null;
+            try {
+                int minBuf = AudioRecord.getMinBufferSize(
+                        AUDIO_SAMPLE_RATE_HZ,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                );
+                if (minBuf <= 0) {
+                    isAcousticAnalyzerRunning = false;
+                    return;
+                }
+                int bufferSizeBytes = Math.max(minBuf * 2, AUDIO_FRAME_SAMPLES * 8);
+                // VOICE_RECOGNITION disables speech AGC/noise-suppression so <25ms bowstring snaps are never attenuated
+                try {
+                    recorder = new AudioRecord(
+                            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                            AUDIO_SAMPLE_RATE_HZ,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            bufferSizeBytes
+                    );
+                } catch (Exception ignored) {}
+                if (recorder == null || recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                    if (recorder != null) {
+                        try { recorder.release(); } catch (Exception ignored) {}
+                    }
+                    recorder = new AudioRecord(
+                            MediaRecorder.AudioSource.MIC,
+                            AUDIO_SAMPLE_RATE_HZ,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            bufferSizeBytes
+                    );
+                }
+                if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                    recorder.release();
+                    isAcousticAnalyzerRunning = false;
+                    return;
+                }
+
+                recorder.startRecording();
+                short[] pcm = new short[AUDIO_FRAME_SAMPLES];
+                float prevSample = 0f;
+                double noiseFloorRms = 45.0;
+                int warmupFrames = 0;
+
+                boolean inCandidate = false;
+                long candidateStartMs = 0L;
+                double candidatePeakRms = 0.0;
+                int candidateSustainedFrames = 0;
+                boolean waitQuietReset = false;
+
+                while (isAcousticAnalyzerRunning && !Thread.currentThread().isInterrupted()) {
+                    int read = recorder.read(pcm, 0, AUDIO_FRAME_SAMPLES);
+                    if (read <= 0) continue;
+
+                    double sumSq = 0.0;
+                    double maxAbs = 0.0;
+                    for (int i = 0; i < read; i++) {
+                        float s = pcm[i];
+                        // First-order high-pass pre-emphasis (>1.6 kHz) strips voices, footsteps, wind & bass music
+                        float hp = s - (0.88f * prevSample);
+                        prevSample = s;
+                        double absHp = Math.abs(hp);
+                        if (absHp > maxAbs) maxAbs = absHp;
+                        sumSq += (double) hp * (double) hp;
+                        pcm[i] = 0; // Immediately zero volatile sample
+                    }
+
+                    double hfRms = Math.sqrt(sumSq / read);
+                    long frameNow = System.currentTimeMillis();
+
+                    if (warmupFrames < 8) {
+                        noiseFloorRms = (warmupFrames == 0)
+                                ? Math.max(20.0, Math.min(2200.0, hfRms))
+                                : (0.75 * noiseFloorRms + 0.25 * Math.max(20.0, Math.min(2200.0, hfRms)));
+                        warmupFrames++;
+                        continue;
+                    }
+
+                    int sens = sensitivityLevel;
+                    double snrMult = (sens == 0) ? 4.6 : ((sens == 2) ? 2.8 : 3.6);
+                    double minAbsRms = (sens == 0) ? 120.0 : ((sens == 2) ? 56.0 : 84.0);
+                    double crestMin = (sens == 0) ? 2.20 : ((sens == 2) ? 1.82 : 2.00);
+
+                    if (waitQuietReset) {
+                        if (hfRms < Math.max(minAbsRms * 0.85, noiseFloorRms * 1.75)) {
+                            waitQuietReset = false;
+                        } else {
+                            noiseFloorRms = Math.max(20.0, Math.min(2800.0, 0.985 * noiseFloorRms + 0.015 * hfRms));
+                            continue;
+                        }
+                    }
+
+                    if (!inCandidate) {
+                        double triggerRms = Math.max(minAbsRms, noiseFloorRms * snrMult);
+                        if (hfRms >= triggerRms && maxAbs >= (hfRms * crestMin)) {
+                            inCandidate = true;
+                            candidateStartMs = frameNow;
+                            candidatePeakRms = hfRms;
+                            candidateSustainedFrames = 1;
+                        } else if (hfRms < noiseFloorRms * 2.1) {
+                            noiseFloorRms = Math.max(20.0, Math.min(2800.0, 0.965 * noiseFloorRms + 0.035 * hfRms));
+                        }
+                    } else {
+                        if (hfRms > candidatePeakRms) {
+                            candidatePeakRms = hfRms;
+                        }
+                        if (hfRms > candidatePeakRms * 0.52) {
+                            candidateSustainedFrames++;
+                            // Reject sustained sounds (> 90ms: shouting, whistles, wind gusts, music)
+                            if (candidateSustainedFrames > 9) {
+                                inCandidate = false;
+                                waitQuietReset = true;
+                            }
+                        } else {
+                            // Crisp < 90ms percussive decay confirmed -> valid bowstring / release snap!
+                            lastVerifiedAcousticSnapMs = candidateStartMs;
+                            inCandidate = false;
+                        }
+                    }
+                }
+            } catch (SecurityException | IllegalStateException ignored) {
+            } finally {
+                if (recorder != null) {
+                    try { recorder.stop(); } catch (Exception ignored) {}
+                    try { recorder.release(); } catch (Exception ignored) {}
+                }
+                isAcousticAnalyzerRunning = false;
+            }
+        }, "ArcheryDualKeyAudioDSP");
+        acousticAnalyzerThread.setDaemon(true);
+        acousticAnalyzerThread.start();
+    }
+
+    private synchronized void stopAcousticSnapAnalyzer() {
+        isAcousticAnalyzerRunning = false;
+        lastVerifiedAcousticSnapMs = 0L;
+        if (acousticAnalyzerThread != null) {
+            try {
+                acousticAnalyzerThread.interrupt();
+            } catch (Exception ignored) {}
+            acousticAnalyzerThread = null;
+        }
+    }
+
     private synchronized void syncShotDetectionSensors() {
         if (sensorManager == null) return;
         if (autoDetectEnabled) {
+            if (!hasMicPermission()) {
+                stopAcousticSnapAnalyzer();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC_AUTO_SHOT);
+                }
+                return;
+            }
             if (!isSensorRegistered && accelerometer != null) {
                 try {
-                    sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                    sensorManager.registerListener(this, accelerometer, SENSOR_RATE_100HZ_US);
                     if (gyroscope != null) {
-                        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+                        sensorManager.registerListener(this, gyroscope, SENSOR_RATE_100HZ_US);
                     }
                     isSensorRegistered = true;
                 } catch (Exception ignored) {}
             }
+            startAcousticSnapAnalyzer();
         } else {
             pendingShotActive = false;
+            stopAcousticSnapAnalyzer();
             if (isSensorRegistered) {
                 try {
                     sensorManager.unregisterListener(this);
@@ -985,6 +1186,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             activeInstanceRef = new WeakReference<>(null);
         }
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
+        stopAcousticSnapAnalyzer();
         if (sensorManager != null && isSensorRegistered) {
             try {
                 sensorManager.unregisterListener(this);
@@ -1303,7 +1505,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
         double forearmVerticalRatio = Math.abs(meanAx) / gNorm;
         double perpGravity = Math.sqrt(meanAy * meanAy + meanAz * meanAz);
-        if (forearmVerticalRatio > 0.68 || perpGravity < 6.8) {
+        // Supports both extended Bow Wrist and anchored Draw/Release Wrist while rejecting arm hanging straight down
+        if (forearmVerticalRatio > 0.76 || perpGravity < 6.1) {
             return false;
         }
 
@@ -1451,8 +1654,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                 validFollowThrough = false;
                             }
                         }
-                        if (validFollowThrough && (now - lastShotTimestamp) > shotCooldownMs) {
+                        // Dual-Key Coincidence Gate:
+                        // Key 1 = 100 Hz Biomechanical Aim/Anchor + Sharp Release Impulse + Clean Follow-Through
+                        // Key 2 = Synchronized High-Frequency Percussive String-Snap on Watch Microphone (±140ms)
+                        long snapDeltaMs = Math.abs(lastVerifiedAcousticSnapMs - pendingShotStartMs);
+                        boolean hasAcousticKey = isAcousticAnalyzerRunning
+                                && lastVerifiedAcousticSnapMs > 0L
+                                && snapDeltaMs <= 140L;
+                        if (validFollowThrough && hasAcousticKey && (now - lastShotTimestamp) > shotCooldownMs) {
                             lastShotTimestamp = now;
+                            lastVerifiedAcousticSnapMs = 0L;
                             markUserActivity(true);
                             arrowCount++;
                             triggerHaptic(55);
@@ -2026,13 +2237,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     ? tr("BAJA", "LOW")
                     : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"));
             String pillLabel;
-            if (!autoDetectEnabled) {
+            if (now < micDeniedNoticeUntilMs) {
+                pillLabel = tr("PERMITE MICRÓFONO", "ALLOW MICROPHONE");
+                postInvalidateDelayed(Math.max(250L, (micDeniedNoticeUntilMs - now) + 60L));
+            } else if (!autoDetectEnabled) {
                 pillLabel = isSyncedNow ? tr("MODO MANUAL · LIVE", "MANUAL MODE · LIVE") : tr("MODO MANUAL", "MANUAL MODE");
             } else if (isWalkingPaused) {
                 pillLabel = tr("PAUSA · CAMINANDO", "PAUSED · WALKING");
                 postInvalidateDelayed(Math.max(250L, (walkingLockUntilMs - now) + 60L));
             } else {
-                pillLabel = tr("AUTO-TIRO · ", "AUTO SHOT · ") + sensLabel + (isSyncedNow ? " · LIVE" : "");
+                pillLabel = tr("AUTO 2K · ", "AUTO 2K · ") + sensLabel + (isSyncedNow ? " · LIVE" : "");
             }
             drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, isWalkingPaused);
 

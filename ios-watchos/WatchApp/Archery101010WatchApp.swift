@@ -2,6 +2,7 @@ import SwiftUI
 import Foundation
 import WatchConnectivity
 import CoreMotion
+import AVFoundation
 import WatchKit
 
 /// ARCHERY 101010 — Official WatchOS Companion App (`watchOS 10+`)
@@ -77,6 +78,18 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     private let motionManager = CMMotionManager()
     private let pedometer = CMPedometer()
+    private let audioEngine = AVAudioEngine()
+    private var isAcousticTapInstalled: Bool = false
+    private var lastVerifiedAcousticSnapMs: Int64 = 0
+    @Published var micDeniedNotice: Bool = false
+    private var audioPrevSample: Float = 0.0
+    private var audioNoiseFloorRms: Double = 0.0035
+    private var audioWarmupFrames: Int = 0
+    private var audioInCandidate: Bool = false
+    private var audioCandidateStartMs: Int64 = 0
+    private var audioCandidatePeakRms: Double = 0.0
+    private var audioSustainedFrames: Int = 0
+    private var audioWaitQuietReset: Bool = false
     private var hasHardwarePedometer: Bool = false
     private var currentSessionId: String = ""
     private var lastShotTimeMs: Int64 = 0
@@ -349,6 +362,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     var currentStatusPillLabel: String {
         let syncedNow = isPhoneConnected || isCloudSynced
+        if micDeniedNotice {
+            return tr("PERMITE MICRÓFONO", "ALLOW MICROPHONE")
+        }
         if !autoDetectEnabled {
             return syncedNow ? tr("MANUAL · CONECTADO", "MANUAL · SYNCED") : tr("MODO MANUAL", "MANUAL MODE")
         }
@@ -358,7 +374,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         let sens = (sensitivityLevel == 0)
             ? tr("BAJA", "LOW")
             : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"))
-        return syncedNow ? "AUTO · \(sens) · SYNC" : "\(tr("AUTO TIRO", "AUTO SHOT")) · \(sens)"
+        return syncedNow ? "AUTO 2K · \(sens) · SYNC" : "AUTO 2K · \(sens)"
     }
 
     private func startSensors() {
@@ -366,10 +382,132 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         syncShotDetectionMotionSensors()
     }
 
+    private func stopAcousticSnapEngine() {
+        if isAcousticTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            isAcousticTapInstalled = false
+        }
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        lastVerifiedAcousticSnapMs = 0
+        audioInCandidate = false
+    }
+
+    private func startAcousticSnapEngineIfPermitted() {
+        guard autoDetectEnabled, !isAcousticTapInstalled else { return }
+        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard granted else {
+                    self.autoDetectEnabled = false
+                    self.micDeniedNotice = true
+                    UserDefaults.standard.set(false, forKey: "autoDetectEnabled_v2")
+                    self.syncShotDetectionMotionSensors()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
+                        self.micDeniedNotice = false
+                    }
+                    return
+                }
+                guard self.autoDetectEnabled, !self.isAcousticTapInstalled else { return }
+                do {
+                    let session = AVAudioSession.sharedInstance()
+                    try session.setCategory(.record, mode: .measurement, options: [])
+                    try session.setActive(true)
+                    let inputNode = self.audioEngine.inputNode
+                    let fmt = inputNode.outputFormat(forBus: 0)
+                    guard fmt.sampleRate > 0 else { return }
+                    self.audioWarmupFrames = 0
+                    self.audioNoiseFloorRms = 0.0035
+                    self.audioPrevSample = 0.0
+                    self.audioInCandidate = false
+                    self.audioWaitQuietReset = false
+
+                    inputNode.installTap(onBus: 0, bufferSize: 256, format: fmt) { [weak self] buffer, _ in
+                        guard let self = self,
+                              let ch = buffer.floatChannelData?[0] else { return }
+                        let count = Int(buffer.frameLength)
+                        guard count > 0 else { return }
+                        var sumSq: Double = 0.0
+                        var maxAbs: Double = 0.0
+                        var prev = self.audioPrevSample
+                        for i in 0..<count {
+                            let s = ch[i]
+                            // High-pass differentiator (>1.6 kHz) isolates crisp bowstring snap
+                            let hp = s - (0.88 * prev)
+                            prev = s
+                            let a = Double(abs(hp))
+                            if a > maxAbs { maxAbs = a }
+                            sumSq += Double(hp) * Double(hp)
+                        }
+                        self.audioPrevSample = prev
+                        let hfRms = sqrt(sumSq / Double(count))
+                        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+
+                        if self.audioWarmupFrames < 8 {
+                            let clamped = max(0.0008, min(0.08, hfRms))
+                            self.audioNoiseFloorRms = (self.audioWarmupFrames == 0)
+                                ? clamped
+                                : (0.75 * self.audioNoiseFloorRms + 0.25 * clamped)
+                            self.audioWarmupFrames += 1
+                            return
+                        }
+
+                        let sens = self.sensitivityLevel
+                        let snrMult = (sens == 0) ? 4.6 : ((sens == 2) ? 2.8 : 3.6)
+                        let minRms = (sens == 0) ? 0.0042 : ((sens == 2) ? 0.0019 : 0.0028)
+                        let crestMin = (sens == 0) ? 2.20 : ((sens == 2) ? 1.82 : 2.00)
+
+                        if self.audioWaitQuietReset {
+                            if hfRms < max(minRms * 0.85, self.audioNoiseFloorRms * 1.75) {
+                                self.audioWaitQuietReset = false
+                            } else {
+                                self.audioNoiseFloorRms = max(0.0008, min(0.10, 0.985 * self.audioNoiseFloorRms + 0.015 * hfRms))
+                                return
+                            }
+                        }
+
+                        if !self.audioInCandidate {
+                            let trigger = max(minRms, self.audioNoiseFloorRms * snrMult)
+                            if hfRms >= trigger && maxAbs >= (hfRms * crestMin) {
+                                self.audioInCandidate = true
+                                self.audioCandidateStartMs = nowMs
+                                self.audioCandidatePeakRms = hfRms
+                                self.audioSustainedFrames = 1
+                            } else if hfRms < self.audioNoiseFloorRms * 2.1 {
+                                self.audioNoiseFloorRms = max(0.0008, min(0.10, 0.965 * self.audioNoiseFloorRms + 0.035 * hfRms))
+                            }
+                        } else {
+                            if hfRms > self.audioCandidatePeakRms {
+                                self.audioCandidatePeakRms = hfRms
+                            }
+                            if hfRms > self.audioCandidatePeakRms * 0.52 {
+                                self.audioSustainedFrames += 1
+                                if self.audioSustainedFrames > 8 {
+                                    self.audioInCandidate = false
+                                    self.audioWaitQuietReset = true
+                                }
+                            } else {
+                                self.lastVerifiedAcousticSnapMs = self.audioCandidateStartMs
+                                self.audioInCandidate = false
+                            }
+                        }
+                    }
+                    self.isAcousticTapInstalled = true
+                    try self.audioEngine.start()
+                    self.startInertial100HzSensors()
+                } catch {
+                    self.stopAcousticSnapEngine()
+                }
+            }
+        }
+    }
+
     private func syncShotDetectionMotionSensors() {
         guard autoDetectEnabled else {
             pendingShotActive = false
             isWalkingPaused = false
+            stopAcousticSnapEngine()
             if motionManager.isGyroActive {
                 motionManager.stopGyroUpdates()
             }
@@ -380,8 +518,14 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             return
         }
 
+        startAcousticSnapEngineIfPermitted()
+    }
+
+    private func startInertial100HzSensors() {
+        guard autoDetectEnabled else { return }
+
         if motionManager.isGyroAvailable && !motionManager.isGyroActive {
-            motionManager.gyroUpdateInterval = 0.025
+            motionManager.gyroUpdateInterval = 0.01 // 100 Hz
             motionManager.startGyroUpdates(to: .main) { [weak self] data, _ in
                 guard let self = self, let rot = data?.rotationRate else { return }
                 self.latestGyroRad = sqrt(rot.x * rot.x + rot.y * rot.y + rot.z * rot.z)
@@ -390,7 +534,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         }
 
         if motionManager.isAccelerometerAvailable && !motionManager.isAccelerometerActive {
-            motionManager.accelerometerUpdateInterval = 0.025 // 40 Hz
+            motionManager.accelerometerUpdateInterval = 0.01 // 100 Hz
             motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
                 guard let self = self, let acc = data?.acceleration else { return }
                 let magG = sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z)
@@ -483,8 +627,16 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                                     validFollow = false
                                 }
                             }
-                            if validFollow && (nowMs - self.lastShotTimeMs) > cooldownMs {
+                            // Dual-Key Coincidence Gate:
+                            // Key 1 = 100 Hz Biomechanical Aim/Anchor + Release Impulse + Clean Follow-Through
+                            // Key 2 = Synchronized High-Frequency Percussive String-Snap on Watch Microphone (±140ms)
+                            let snapDeltaMs = abs(self.lastVerifiedAcousticSnapMs - self.pendingShotStartMs)
+                            let hasAcousticKey = self.isAcousticTapInstalled
+                                && self.lastVerifiedAcousticSnapMs > 0
+                                && snapDeltaMs <= 140
+                            if validFollow && hasAcousticKey && (nowMs - self.lastShotTimeMs) > cooldownMs {
                                 self.lastShotTimeMs = nowMs
+                                self.lastVerifiedAcousticSnapMs = 0
                                 self.incrementArrow(delta: 1, source: "watch_auto")
                             }
                         }
@@ -527,8 +679,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     linG: linearG,
                     gyroRad: activeGyro
                 ))
-                if self.motionBuf.count > 240 {
-                    self.motionBuf.removeFirst(self.motionBuf.count - 240)
+                if self.motionBuf.count > 600 {
+                    self.motionBuf.removeFirst(self.motionBuf.count - 600)
                 }
             }
         }

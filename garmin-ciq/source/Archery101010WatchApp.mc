@@ -337,11 +337,10 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function syncHighFreqAccelerometer() as Void {
-        if (autoDetectEnabled) {
-            registerHighFreqAccelerometer();
-        } else {
-            unregisterHighFreqAccelerometer();
-        }
+        // Garmin Connect IQ has no microphone API for Dual-Key string-snap verification;
+        // keep arrow counting 100% deterministic Manual Mode (zero false positives, max battery life).
+        autoDetectEnabled = false;
+        unregisterHighFreqAccelerometer();
     }
 
     (:typecheck(false))
@@ -370,12 +369,7 @@ class Archery101010WatchView extends WatchUi.View {
             if (sc != null && sc instanceof Lang.Number && sc >= 0) { stepsCount = sc; }
             var dw = Application.Storage.getValue("distanceWalkedM");
             if (dw != null && dw instanceof Lang.Number && dw >= 0) { distanceWalkedM = dw; }
-            var ad = Application.Storage.getValue("autoDetect_v2");
-            if (ad != null && ad instanceof Lang.Boolean) {
-                autoDetectEnabled = ad;
-            } else {
-                autoDetectEnabled = false;
-            }
+            autoDetectEnabled = false;
             var sl = Application.Storage.getValue("sensitivityLevel");
             if (sl != null && sl instanceof Lang.Number) { sensitivityLevel = sl; }
             var ea = Application.Storage.getValue("currentEndArrows");
@@ -696,24 +690,10 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function cycleSensitivityMode() as Void {
-        mLastLocalActionMs = System.getTimer();
-        markUserActivity(true);
-        if (!autoDetectEnabled) {
-            autoDetectEnabled = true;
-            sensitivityLevel = 1; // MEDIA
-        } else if (sensitivityLevel == 1) {
-            sensitivityLevel = 0; // BAJA
-        } else if (sensitivityLevel == 0) {
-            sensitivityLevel = 2; // ALTA
-        } else {
-            autoDetectEnabled = false; // MODO MANUAL
-        }
+        // Garmin uses 100% Manual Mode (Connect IQ does not expose real-time microphone audio for Dual-Key)
+        autoDetectEnabled = false;
         syncHighFreqAccelerometer();
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(60, 40)]);
-        }
-        saveStateToStorage();
-        syncWithPhoneApp("TOGGLE_AUTO_DETECT", null);
+        markUserActivity(false);
         WatchUi.requestUpdate();
     }
 
@@ -844,7 +824,7 @@ class Archery101010WatchView extends WatchUi.View {
                 activeKcal = data["activeKcal"].toNumber();
             }
             if (data.hasKey("autoDetectEnabled") && data["autoDetectEnabled"] != null) {
-                autoDetectEnabled = bleAuto;
+                autoDetectEnabled = false;
                 syncHighFreqAccelerometer();
             }
             saveStateToStorage();
@@ -1283,7 +1263,7 @@ class Archery101010WatchView extends WatchUi.View {
             arrowsPerEnd = fsPerEnd;
             endsCount = fsTotalEnds;
             bowPoundageLbs = extractFsInt(fields, "bowPoundageLbs", bowPoundageLbs);
-            autoDetectEnabled = fsAuto;
+            autoDetectEnabled = false;
             sensitivityLevel = fsSens;
             syncHighFreqAccelerometer();
 

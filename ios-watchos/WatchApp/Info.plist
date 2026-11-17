@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleDisplayName</key>
+    <string>Archery 101010</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>2.119</string>
+    <key>CFBundleVersion</key>
+    <string>151900</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>ARCHERY 101010 analiza localmente en tiempo real el chasquido acústico de la cuerda junto con el acelerómetro (Doble Llave) para contar tus flechas automáticamente. El audio nunca se graba, almacena ni envía.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>ARCHERY 101010 utiliza los sensores de movimiento para detectar la postura de tiro, distancia caminada y energía activa.</string>
+</dict>
+</plist>
