@@ -210,6 +210,9 @@ export function isFictitiousSession(s: any, key?: string): boolean {
 
 export async function purgeAllFictitiousData(): Promise<void> {
   try {
+    // Clean up retired legacy theme setting if present
+    await settingsStore.removeItem("app_theme").catch(() => {});
+
     // 1. Purge fictitious users from simulated_users
     const users = await settingsStore.getItem<any[]>("simulated_users");
     if (Array.isArray(users)) {

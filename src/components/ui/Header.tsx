@@ -1,10 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useSync } from "@/hooks/useSync";
 import { UserProfile, isLinkedToExternalCoach } from "@/lib/authService";
-import { Sun, Moon } from "lucide-react";
-import { motion } from "framer-motion";
 import { APP_VERSION } from "@/lib/version";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 
@@ -18,35 +16,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
   // Keep background sync hook active silently without showing any technical Wi-Fi/badge icon
   useSync();
   const { t } = useLanguage();
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const linkedToCoach = isLinkedToExternalCoach(user);
-
-  useEffect(() => {
-    async function loadTheme() {
-      const { getLocalSetting } = await import("@/lib/db/indexedDB");
-      const savedTheme = await getLocalSetting<"dark" | "light">("app_theme", "dark");
-      setTheme(savedTheme);
-      if (savedTheme === "light") {
-        document.documentElement.classList.add("light-contrast");
-      } else {
-        document.documentElement.classList.remove("light-contrast");
-      }
-    }
-    loadTheme();
-  }, []);
-
-  const handleToggleTheme = async () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    const { saveLocalSetting } = await import("@/lib/db/indexedDB");
-    await saveLocalSetting("app_theme", nextTheme);
-    
-    if (nextTheme === "light") {
-      document.documentElement.classList.add("light-contrast");
-    } else {
-      document.documentElement.classList.remove("light-contrast");
-    }
-  };
 
   return (
     <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between z-40 max-w-full">
@@ -67,7 +37,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
         </div>
       </div>
 
-      {/* View Switcher, Theme Selector & Sync Wifi Button */}
+      {/* View Switcher (Athlete / Coach PRO) */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Coach View Switcher Toggle (hidden when user is linked as an athlete to a Coach) */}
         {user && onToggleCoachViewMode && !linkedToCoach && (
@@ -101,20 +71,6 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             </button>
           </div>
         )}
-
-
-
-        {/* Contrast Toggle Button */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.9 }}
-          onClick={handleToggleTheme}
-          className="w-9.5 h-9.5 min-w-[38px] min-h-[38px] flex items-center justify-center rounded-full bg-neutral-900/60 border border-gray-border hover:border-cyan-brand/30 cursor-pointer text-white hover:text-white transition-all duration-200 shrink-0"
-          title={theme === "dark" ? "Fondo Claro" : "Fondo Oscuro"}
-          aria-label={theme === "dark" ? "Cambiar a fondo claro" : "Cambiar a fondo oscuro"}
-        >
-          {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-        </motion.button>
       </div>
     </header>
   );

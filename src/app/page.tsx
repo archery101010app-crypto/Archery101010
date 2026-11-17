@@ -1230,27 +1230,10 @@ export default function Home() {
     };
   }, []);
 
-  // Load persistent theme contrast from IndexedDB on mount
+  // Ensure pure OLED dark mode and natural OS font scaling on mount
   useEffect(() => {
-    async function loadTheme() {
-      try {
-        const { getLocalSetting } = await import("@/lib/db/indexedDB");
-        const root = document.documentElement;
-        root.style.fontSize = ""; // Reset custom font scaling to let OS/browser handle text naturally
-
-        // Apply theme contrast
-        const savedTheme = await getLocalSetting<string>("app_theme", "dark");
-        if (savedTheme === "light") {
-          root.classList.add("light-contrast");
-        } else {
-          root.classList.remove("light-contrast");
-        }
-      } catch (e) {
-        console.error("Error loading theme settings", e);
-      }
-    }
-    loadTheme();
-  }, [user?.uid]);
+    document.documentElement.style.fontSize = "";
+  }, []);
 
   // Offline-first storage (IndexedDB + Firestore sync) persists changes immediately;
   // never block reloads or in-app updates with browser beforeunload confirmation dialogs.

@@ -102,57 +102,57 @@ body {
 }
 
 /* --- Outdoor Sunlight High-Contrast Solid White Text (OLED Mode) --- */
-html:not(.light-contrast) .text-gray-dim,
-html:not(.light-contrast) [class*="text-gray-dim"],
-html:not(.light-contrast) [class*="text-white/"],
-html:not(.light-contrast) [class*="text-zinc-100"],
-html:not(.light-contrast) [class*="text-zinc-200"],
-html:not(.light-contrast) [class*="text-zinc-300"],
-html:not(.light-contrast) [class*="text-zinc-400"],
-html:not(.light-contrast) [class*="text-zinc-500"],
-html:not(.light-contrast) [class*="text-zinc-600"],
-html:not(.light-contrast) [class*="text-zinc-700"],
-html:not(.light-contrast) [class*="text-slate-100"],
-html:not(.light-contrast) [class*="text-slate-200"],
-html:not(.light-contrast) [class*="text-slate-300"],
-html:not(.light-contrast) [class*="text-slate-400"],
-html:not(.light-contrast) [class*="text-slate-500"],
-html:not(.light-contrast) [class*="text-slate-600"],
-html:not(.light-contrast) [class*="text-slate-700"],
-html:not(.light-contrast) [class*="text-neutral-100"],
-html:not(.light-contrast) [class*="text-neutral-200"],
-html:not(.light-contrast) [class*="text-neutral-300"],
-html:not(.light-contrast) [class*="text-neutral-400"],
-html:not(.light-contrast) [class*="text-neutral-500"],
-html:not(.light-contrast) [class*="text-neutral-600"],
-html:not(.light-contrast) [class*="text-neutral-700"],
-html:not(.light-contrast) [class*="text-gray-100"],
-html:not(.light-contrast) [class*="text-gray-200"],
-html:not(.light-contrast) [class*="text-gray-300"],
-html:not(.light-contrast) [class*="text-gray-400"],
-html:not(.light-contrast) [class*="text-gray-500"],
-html:not(.light-contrast) [class*="text-gray-600"],
-html:not(.light-contrast) [class*="text-gray-700"],
-html:not(.light-contrast) [class*="text-stone-100"],
-html:not(.light-contrast) [class*="text-stone-200"],
-html:not(.light-contrast) [class*="text-stone-300"],
-html:not(.light-contrast) [class*="text-stone-400"],
-html:not(.light-contrast) [class*="text-stone-500"],
-html:not(.light-contrast) [class*="text-stone-600"],
-html:not(.light-contrast) [class*="text-stone-700"] {
+html .text-gray-dim,
+html [class*="text-gray-dim"],
+html [class*="text-white/"],
+html [class*="text-zinc-100"],
+html [class*="text-zinc-200"],
+html [class*="text-zinc-300"],
+html [class*="text-zinc-400"],
+html [class*="text-zinc-500"],
+html [class*="text-zinc-600"],
+html [class*="text-zinc-700"],
+html [class*="text-slate-100"],
+html [class*="text-slate-200"],
+html [class*="text-slate-300"],
+html [class*="text-slate-400"],
+html [class*="text-slate-500"],
+html [class*="text-slate-600"],
+html [class*="text-slate-700"],
+html [class*="text-neutral-100"],
+html [class*="text-neutral-200"],
+html [class*="text-neutral-300"],
+html [class*="text-neutral-400"],
+html [class*="text-neutral-500"],
+html [class*="text-neutral-600"],
+html [class*="text-neutral-700"],
+html [class*="text-gray-100"],
+html [class*="text-gray-200"],
+html [class*="text-gray-300"],
+html [class*="text-gray-400"],
+html [class*="text-gray-500"],
+html [class*="text-gray-600"],
+html [class*="text-gray-700"],
+html [class*="text-stone-100"],
+html [class*="text-stone-200"],
+html [class*="text-stone-300"],
+html [class*="text-stone-400"],
+html [class*="text-stone-500"],
+html [class*="text-stone-600"],
+html [class*="text-stone-700"] {
   color: #ffffff !important;
 }
 
 /* Exception: Intro screen Skip ("Saltar") button stays dimmed white until hovered */
-html:not(.light-contrast) .intro-skip-btn {
+html .intro-skip-btn {
   color: rgba(255, 255, 255, 0.4) !important;
 }
-html:not(.light-contrast) .intro-skip-btn:hover {
+html .intro-skip-btn:hover {
   color: #ffffff !important;
 }
 
-html:not(.light-contrast) input::placeholder,
-html:not(.light-contrast) textarea::placeholder {
+html input::placeholder,
+html textarea::placeholder {
   color: rgba(255, 255, 255, 0.55) !important;
   opacity: 0.48 !important;
 }
@@ -253,121 +253,6 @@ html:not(.light-contrast) textarea::placeholder {
   background: #000000 !important;
 }
 
-/* --- Light Contrast / White Background Mode Overrides --- */
-.light-contrast {
-  color-scheme: light;
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
-
-.light-contrast body,
-.light-contrast .iphone-frame,
-.light-contrast .bg-black-oled,
-.light-contrast .bg-black {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
-}
-
-.light-contrast .ambient-bg {
-  background: radial-gradient(circle at 20% 30%, rgba(0, 154, 216, 0.06) 0%, transparent 40%),
-              radial-gradient(circle at 80% 70%, rgba(255, 229, 0, 0.04) 0%, transparent 45%),
-              #f8fafc !important;
-}
-
-/* Wildcard background overrides for Tailwind backgrounds (cards, sections, panels, tables) */
-.light-contrast [class*="bg-neutral-"],
-.light-contrast [class*="bg-zinc-"],
-.light-contrast [class*="bg-slate-"],
-.light-contrast [class*="bg-stone-"],
-.light-contrast [class*="bg-gray-"],
-.light-contrast [class*="bg-black/"],
-.light-contrast [class*="bg-white/"],
-.light-contrast .bg-neutral-900\/80 {
-  background-color: #ffffff !important;
-  border-color: rgba(15, 23, 42, 0.18) !important;
-  color: #0f172a !important;
-}
-
-/* Text overrides - force maximum contrast */
-.light-contrast text,
-.light-contrast [class*="text-white"],
-.light-contrast [class*="text-slate-300"],
-.light-contrast [class*="text-slate-400"],
-.light-contrast [class*="text-zinc-"],
-.light-contrast [class*="text-neutral-"],
-.light-contrast [class*="text-gray-dim"],
-.light-contrast [class*="text-gray-400"],
-.light-contrast [class*="text-gray-300"],
-.light-contrast [class*="text-gray-200"],
-.light-contrast .text-gray-dim,
-.light-contrast .text-white\/80,
-.light-contrast .text-white\/70,
-.light-contrast .text-white\/60 {
-  color: #0f172a !important;
-}
-
-.light-contrast text {
-  fill: #0f172a !important;
-}
-
-/* Secondary descriptions, timestamps, subtitles text */
-.light-contrast [class*="text-white/50"],
-.light-contrast [class*="text-white/40"],
-.light-contrast [class*="text-white/30"],
-.light-contrast [class*="text-white/20"],
-.light-contrast [class*="text-slate-400"],
-.light-contrast [class*="text-zinc-400"],
-.light-contrast [class*="text-neutral-400"],
-.light-contrast .text-white\/40,
-.light-contrast .text-white\/50,
-.light-contrast .text-gray-dim {
-  color: #334155 !important; /* Slate 700 - high contrast secondary */
-}
-
-/* Border overrides - maximum visibility */
-.light-contrast [class*="border-white"],
-.light-contrast [class*="border-neutral-"],
-.light-contrast [class*="border-zinc-"],
-.light-contrast [class*="border-slate-"],
-.light-contrast [class*="border-gray-"],
-.light-contrast .border-white\/10,
-.light-contrast .border-white\/5,
-.light-contrast .border-white\/15,
-.light-contrast .border-gray-border\/40,
-.light-contrast .border-gray-border {
-  border-color: rgba(15, 23, 42, 0.22) !important;
-}
-
-/* Maintain dark OLED theme for the Header to preserve the branding! */
-.light-contrast header,
-.light-contrast header * {
-  background-color: transparent;
-  color: #ffffff !important;
-}
-.light-contrast header {
-  background-color: rgba(0, 0, 0, 0.95) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-.light-contrast header .text-white\/40 {
-  color: #ffffff !important;
-}
-.light-contrast header .text-white\/50 {
-  color: #ffffff !important;
-}
-.light-contrast header .bg-neutral-950 {
-  background-color: #0a0a0a !important;
-}
-.light-contrast header .bg-neutral-900\/60 {
-  background-color: rgba(23, 23, 23, 0.6) !important;
-}
-.light-contrast header .border-gray-border {
-  border-color: rgba(255, 255, 255, 0.15) !important;
-}
-.light-contrast header .bg-cyan-neon {
-  background-color: #00BFFF !important;
-  color: #000000 !important;
-}
-
 /* --- Google Translate custom styles to hide clunky top banners & maintain premium SaaS look --- */
 .skiptranslate,
 iframe.skiptranslate,
@@ -384,15 +269,4 @@ body {
 .goog-text-highlight {
   background-color: transparent !important;
   box-shadow: none !important;
-}
-
-/* Preserve 101010 branding colors on light theme in header */
-.light-contrast .brand-logo-101010 .text-cyan-neon {
-  color: var(--color-cyan-neon) !important;
-}
-.light-contrast .brand-logo-101010 .text-red-rival {
-  color: var(--color-red-rival) !important;
-}
-.light-contrast .brand-logo-101010 .text-yellow-gold {
-  color: var(--color-yellow-gold) !important;
 }
