@@ -132,3 +132,40 @@ describe("Archery 101010 — Biometrics Telemetry & COPPA Age Gate Formulas", ()
     assert.equal(computeExactAge("1998-04-20", "2026-11-16"), 28);
   });
 });
+
+describe("Archery 101010 — Cloud Scalability Guard (Zero Unbounded Collection Reads)", () => {
+  it("never calls getDocs(collection(...)) or onSnapshot(collection(...)) without query/limit", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    function walk(dir: string): string[] {
+      const out: string[] = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          out.push(...walk(full));
+        } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+          out.push(full);
+        }
+      }
+      return out;
+    }
+
+    const srcRoot = path.resolve(process.cwd(), "src");
+    const offenders: string[] = [];
+    const unboundedRegex = /\b(?:getDocs|onSnapshot)\(\s*collection\s*\(/;
+
+    for (const file of walk(srcRoot)) {
+      const content = fs.readFileSync(file, "utf8");
+      if (unboundedRegex.test(content)) {
+        offenders.push(path.relative(srcRoot, file));
+      }
+    }
+
+    assert.deepEqual(
+      offenders,
+      [],
+      `Found unbounded Firestore collection reads without limit() in: ${offenders.join(", ")}`
+    );
+  });
+});

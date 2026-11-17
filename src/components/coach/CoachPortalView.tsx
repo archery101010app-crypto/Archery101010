@@ -235,7 +235,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       // Pull any newly linked athletes directly from Firestore so Coach sees students immediately
       if (typeof navigator !== "undefined" && navigator.onLine) {
         try {
-          const { collection, query, where, getDocs } = await import("firebase/firestore");
+          const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
           const { db } = await import("@/lib/firebase");
           const remoteAthletesMap = new Map<string, UserProfile>();
 
@@ -252,7 +252,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           // Query 1: explicit coachId === user.uid
           try {
             const snapCoachId = await getDocs(
-              query(collection(db, "users"), where("coachId", "==", user.uid))
+              query(collection(db, "users"), where("coachId", "==", user.uid), limit(250))
             );
             snapCoachId.forEach(addRemoteDoc);
           } catch (e) {
@@ -262,7 +262,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           // Query 2: clubId === activeClubId
           try {
             const snapClub = await getDocs(
-              query(collection(db, "users"), where("clubId", "==", activeClubId))
+              query(collection(db, "users"), where("clubId", "==", activeClubId), limit(250))
             );
             snapClub.forEach(addRemoteDoc);
           } catch (e) {
@@ -273,7 +273,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           if (canonicalCoachClubId !== activeClubId) {
             try {
               const snapCanonical = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId))
+                query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId), limit(250))
               );
               snapCanonical.forEach(addRemoteDoc);
             } catch (e) {
@@ -285,7 +285,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           if (user.clubInviteCode) {
             try {
               const snapCode = await getDocs(
-                query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode))
+                query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode), limit(250))
               );
               snapCode.forEach(addRemoteDoc);
             } catch (e) {
@@ -293,13 +293,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             }
           }
 
-          // Query 5: superadmin sees all linked athletes across the platform
+          // Query 5: superadmin bounded sample (full paginated directory lives in SuperAdmin panel)
           if (user.role === "superadmin") {
             try {
-              const snapAll = await getDocs(collection(db, "users"));
+              const snapAll = await getDocs(query(collection(db, "users"), limit(50)));
               snapAll.forEach(addRemoteDoc);
             } catch (e) {
-              console.warn("Query all users for superadmin failed:", e);
+              console.warn("Query bounded users for superadmin failed:", e);
             }
           }
 

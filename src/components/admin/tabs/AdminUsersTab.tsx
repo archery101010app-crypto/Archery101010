@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Search, 
   Eye, 
@@ -16,7 +16,9 @@ import {
   Calendar, 
   Flame,
   Target,
-  Crown
+  Crown,
+  ChevronDown,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
@@ -24,6 +26,13 @@ import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db
 import { COUNTRIES, COUNTRIES_MAP } from "@/lib/countries";
 import { downloadOrShareFile } from "@/lib/fileDownload";
 import { showOledAlert } from "@/lib/oledDialog";
+import {
+  ADMIN_PAGE_SIZE,
+  AdminGlobalCounts,
+  fetchAdminGlobalCounts,
+  fetchAdminUsersPage,
+  searchAdminUsersInCloud
+} from "@/lib/adminCloudPagination";
 
 export default function AdminUsersTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -33,7 +42,12 @@ export default function AdminUsersTab() {
   const [bowFilter, setBowFilter] = useState<string>("ALL");
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isSearchingCloud, setIsSearchingCloud] = useState(false);
+  const [hasMoreUsers, setHasMoreUsers] = useState(false);
+  const [globalCounts, setGlobalCounts] = useState<AdminGlobalCounts | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const nextCursorRef = useRef<any>(null);
 
   // Helper to format timestamps gracefully
   const formatRegistrationDate = (timestamp?: number | string) => {
@@ -66,7 +80,7 @@ export default function AdminUsersTab() {
     return list;
   }, []);
 
-  // Fetch from Firestore collection "users" and merge
+  // Fetch first 50-user cursor page + exact server KPI counts from Firestore
   const refreshUsersFromFirestore = useCallback(async () => {
     setIsRefreshing(true);
     setSyncMessage("Sincronizando con Firestore...");
@@ -74,38 +88,34 @@ export default function AdminUsersTab() {
       const localList = await loadLocalUsers();
 
       if (typeof navigator !== "undefined" && navigator.onLine) {
-        const { collection, getDocs } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
+        const [pageRes, countsRes] = await Promise.all([
+          fetchAdminUsersPage(null, ADMIN_PAGE_SIZE),
+          fetchAdminGlobalCounts()
+        ]);
 
-        const querySnapshot = await getDocs(collection(db, "users"));
-        const remoteUsers: UserProfile[] = [];
+        nextCursorRef.current = pageRes.lastCursor;
+        setHasMoreUsers(pageRes.hasMore);
+        if (countsRes) {
+          setGlobalCounts(countsRes);
+        }
 
-        querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data() as UserProfile;
-          if (data && (data.uid || data.email)) {
-            remoteUsers.push(data);
-          }
-        });
-
+        const remoteUsers = pageRes.users;
         if (remoteUsers.length > 0) {
-          // Merge remote users with local users, remote taking precedence
           const mergedMap = new Map<string, UserProfile>();
-          
-          // Seed with local list
+
           localList.forEach((u) => {
             const key = u.uid || (u.email || "").toLowerCase();
-            mergedMap.set(key, u);
+            if (key && key !== "USR-GUEST-OFFLINE") mergedMap.set(key, u);
           });
 
-          // Overwrite/insert with remote users
           remoteUsers.forEach((u) => {
             const key = u.uid || (u.email || "").toLowerCase();
+            if (!key || key === "USR-GUEST-OFFLINE") return;
             const existing = mergedMap.get(key);
             mergedMap.set(key, { ...existing, ...u });
           });
 
           const finalList = Array.from(mergedMap.values());
-          // Sort by registration date descending (newest first)
           finalList.sort((a, b) => {
             const timeA = a.createdAt || a.lastActiveAt || 0;
             const timeB = b.createdAt || b.lastActiveAt || 0;
@@ -114,7 +124,8 @@ export default function AdminUsersTab() {
 
           setUsers(finalList);
           await saveLocalSetting("simulated_users", finalList);
-          setSyncMessage(`${finalList.length} arqueros sincronizados`);
+          const totalLabel = countsRes ? ` de ${countsRes.totalUsers.toLocaleString()}` : "";
+          setSyncMessage(`${finalList.length}${totalLabel} arqueros sincronizados`);
         } else {
           setSyncMessage(`${localList.length} arqueros locales cargados`);
         }
@@ -129,6 +140,89 @@ export default function AdminUsersTab() {
       setTimeout(() => setSyncMessage(null), 4000);
     }
   }, [loadLocalUsers]);
+
+  // Load next 50 users page via Firestore cursor
+  const handleLoadMoreUsers = async () => {
+    if (isLoadingMore || !hasMoreUsers) return;
+    setIsLoadingMore(true);
+    try {
+      const pageRes = await fetchAdminUsersPage(nextCursorRef.current, ADMIN_PAGE_SIZE);
+      nextCursorRef.current = pageRes.lastCursor;
+      setHasMoreUsers(pageRes.hasMore);
+
+      if (pageRes.users.length > 0) {
+        setUsers((prev) => {
+          const mergedMap = new Map<string, UserProfile>();
+          prev.forEach((u) => {
+            const key = u.uid || (u.email || "").toLowerCase();
+            if (key) mergedMap.set(key, u);
+          });
+          pageRes.users.forEach((u) => {
+            const key = u.uid || (u.email || "").toLowerCase();
+            if (!key) return;
+            const existing = mergedMap.get(key);
+            mergedMap.set(key, { ...existing, ...u });
+          });
+          const next = Array.from(mergedMap.values()).sort((a, b) => {
+            const timeA = a.createdAt || a.lastActiveAt || 0;
+            const timeB = b.createdAt || b.lastActiveAt || 0;
+            return timeB - timeA;
+          });
+          saveLocalSetting("simulated_users", next).catch(() => {});
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn("[Admin Users] Load more error:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Direct Cloud Search across 100,000+ accounts when typing >= 2 chars
+  useEffect(() => {
+    const clean = searchTerm.trim();
+    if (clean.length < 2 || (typeof navigator !== "undefined" && !navigator.onLine)) {
+      setIsSearchingCloud(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingCloud(true);
+    const timer = setTimeout(async () => {
+      try {
+        const cloudMatches = await searchAdminUsersInCloud(clean);
+        if (cancelled || cloudMatches.length === 0) return;
+        setUsers((prev) => {
+          const mergedMap = new Map<string, UserProfile>();
+          prev.forEach((u) => {
+            const key = u.uid || (u.email || "").toLowerCase();
+            if (key) mergedMap.set(key, u);
+          });
+          cloudMatches.forEach((u) => {
+            const key = u.uid || (u.email || "").toLowerCase();
+            if (!key) return;
+            const existing = mergedMap.get(key);
+            mergedMap.set(key, { ...existing, ...u });
+          });
+          return Array.from(mergedMap.values()).sort((a, b) => {
+            const timeA = a.createdAt || a.lastActiveAt || 0;
+            const timeB = b.createdAt || b.lastActiveAt || 0;
+            return timeB - timeA;
+          });
+        });
+      } catch (err) {
+        console.warn("[Admin Users] Cloud search error:", err);
+      } finally {
+        if (!cancelled) setIsSearchingCloud(false);
+      }
+    }, 380);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   useEffect(() => {
     refreshUsersFromFirestore();
@@ -364,11 +458,15 @@ export default function AdminUsersTab() {
   };
 
   const filteredUsers = users.filter((u) => {
-    const term = (searchTerm || "").toLowerCase();
+    const term = (searchTerm || "").toLowerCase().trim();
+    const cleanNickTerm = term.replace(/^@/, "");
     const matchesSearch = 
+      !term ||
       (u.fullName || "").toLowerCase().includes(term) ||
       (u.email || "").toLowerCase().includes(term) ||
-      (u.nickname || "").toLowerCase().includes(term) ||
+      (u.nickname || "").toLowerCase().includes(cleanNickTerm) ||
+      (u.uid || "").toLowerCase().includes(term) ||
+      (u.clubInviteCode || "").toLowerCase().includes(term) ||
       (u.clubName || "").toLowerCase().includes(term) ||
       (u.city || "").toLowerCase().includes(term) ||
       (u.country || "").toLowerCase().includes(term);
@@ -402,11 +500,15 @@ export default function AdminUsersTab() {
       .toUpperCase();
   };
 
-  // KPIs
-  const totalCount = users.length;
+  // KPIs (exact global Firestore server counts when available, fallback to loaded page)
+  const localProCount = users.filter((u) => u.plan === "PRO").length;
+  const localCoachCount = users.filter(
+    (u) => u.role === "coach" || u.role === "team_admin" || u.role === "team_admin_coach"
+  ).length;
+  const totalCount = globalCounts ? Math.max(globalCounts.totalUsers, users.length) : users.length;
   const recentCount = users.filter(isRecentUser).length;
-  const proCount = users.filter((u) => u.plan === "PRO").length;
-  const coachCount = users.filter((u) => u.role === "coach" || u.role === "team_admin_coach").length;
+  const proCount = globalCounts ? Math.max(globalCounts.proUsers, localProCount) : localProCount;
+  const coachCount = globalCounts ? Math.max(globalCounts.coachUsers, localCoachCount) : localCoachCount;
 
   return (
     <div className="flex flex-col gap-5 w-full p-4 md:p-6 pb-24">
@@ -416,11 +518,11 @@ export default function AdminUsersTab() {
           <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex flex-wrap items-center gap-2">
             <span>Arqueros Inscritos</span>
             <span className="text-[15.8px] bg-cyan-neon/10 text-cyan-neon border border-cyan-neon/20 px-2.5 py-0.5 rounded-full font-black tabular-nums">
-              {totalCount} Total
+              {totalCount.toLocaleString()} Total
             </span>
           </h2>
           <p className="text-xs text-white">
-            Monitoreo en tiempo real de nuevos registros y base deportiva.
+            Monitoreo en tiempo real ({users.length.toLocaleString()} cargados en pantalla • búsqueda global en nube).
           </p>
         </div>
 
@@ -467,7 +569,7 @@ export default function AdminUsersTab() {
             <UserCheck size={12} className="text-cyan-neon" />
             Total Registrados
           </span>
-          <span className="text-xl font-black text-white mt-1 tabular-nums">{totalCount}</span>
+          <span className="text-xl font-black text-white mt-1 tabular-nums">{totalCount.toLocaleString()}</span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
@@ -490,7 +592,7 @@ export default function AdminUsersTab() {
             <Crown size={12} className="text-yellow-gold" />
             Suscripciones PRO
           </span>
-          <span className="text-xl font-black text-yellow-gold mt-1 tabular-nums">{proCount}</span>
+          <span className="text-xl font-black text-yellow-gold mt-1 tabular-nums">{proCount.toLocaleString()}</span>
         </div>
 
         <div className="bg-neutral-900/60 border border-white/5 rounded-2xl p-3 flex flex-col">
@@ -498,7 +600,7 @@ export default function AdminUsersTab() {
             <Shield size={12} className="text-cyan-neon" />
             Coaches / Clubes
           </span>
-          <span className="text-xl font-black text-cyan-neon mt-1 tabular-nums">{coachCount}</span>
+          <span className="text-xl font-black text-cyan-neon mt-1 tabular-nums">{coachCount.toLocaleString()}</span>
         </div>
       </div>
 
@@ -508,11 +610,18 @@ export default function AdminUsersTab() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white" size={16} />
           <input
             type="text"
-            placeholder="Buscar por nombre, @apodo, correo, país o club..."
+            placeholder="Buscar en toda la nube por nombre, @apodo, correo, ID o código..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-neutral-900/50 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon focus:bg-neutral-900 transition duration-200"
+            className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-neutral-900/50 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon focus:bg-neutral-900 transition duration-200"
           />
+          {isSearchingCloud && (
+            <Loader2
+              size={14}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
+              aria-label="Buscando en la nube"
+            />
+          )}
         </div>
 
         {/* Filters bar */}
@@ -710,6 +819,32 @@ export default function AdminUsersTab() {
                 </motion.div>
               );
             })}
+          </div>
+        )}
+
+        {/* Cursor Pagination Button (50 per page) */}
+        {hasMoreUsers && (
+          <div className="flex justify-center pt-2">
+            <button
+              type="button"
+              onClick={handleLoadMoreUsers}
+              disabled={isLoadingMore}
+              className="min-h-[42px] px-5 py-2.5 rounded-2xl bg-[#0D1017] hover:bg-neutral-900 border border-white/15 hover:border-cyan-neon/40 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 size={14} className="animate-spin text-cyan-neon" />
+                  <span>Cargando siguientes 50...</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={15} className="text-cyan-neon" />
+                  <span className="tabular-nums">
+                    Cargar 50 más ({users.length.toLocaleString()} de {totalCount.toLocaleString()})
+                  </span>
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>

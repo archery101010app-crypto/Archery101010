@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { getLocalSetting, getLocalSessions, getSyncQueue, adCampaignsStore } from "@/lib/db/indexedDB";
 import { COUNTRIES_MAP as COUNTRIES } from "@/lib/countries";
+import { fetchAdminGlobalCounts, fetchAdminUsersPage, AdminGlobalCounts } from "@/lib/adminCloudPagination";
 
 interface RealActivityItem {
   id: string;
@@ -40,39 +41,43 @@ export default function AdminDashboardTab() {
   const [syncQueueCount, setSyncQueueCount] = useState<number>(0);
   const [campaignsCount, setCampaignsCount] = useState<number>(0);
   const [recentActivities, setRecentActivities] = useState<RealActivityItem[]>([]);
+  const [globalCounts, setGlobalCounts] = useState<AdminGlobalCounts | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const loadRealData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Load real registered users from IndexedDB
+      // 1. Load cached users from IndexedDB + bounded 50 recent users & server counts from Firestore
       let userList = await getLocalSetting<UserProfile[]>("simulated_users", []);
 
-      // If online, fetch real users from Firestore and merge
       if (typeof navigator !== "undefined") {
         setIsOnline(navigator.onLine);
         if (navigator.onLine) {
           try {
-            const { collection, getDocs } = await import("firebase/firestore");
-            const { db } = await import("@/lib/firebase");
-            const snap = await getDocs(collection(db, "users"));
-            const remoteMap = new Map<string, UserProfile>();
-            snap.forEach((docSnap) => {
-              const u = docSnap.data() as UserProfile;
-              if (u && (u.uid || u.email)) {
-                remoteMap.set(u.uid || u.email, u);
-              }
-            });
-            // Merge
-            userList.forEach((u) => {
-              if (u.uid && !remoteMap.has(u.uid)) {
-                remoteMap.set(u.uid, u);
-              }
-            });
-            userList = Array.from(remoteMap.values());
+            const [pageRes, countsRes] = await Promise.all([
+              fetchAdminUsersPage(null, 50),
+              fetchAdminGlobalCounts()
+            ]);
+            if (countsRes) {
+              setGlobalCounts(countsRes);
+            }
+            if (pageRes.users.length > 0) {
+              const remoteMap = new Map<string, UserProfile>();
+              pageRes.users.forEach((u) => {
+                if (u && (u.uid || u.email)) {
+                  remoteMap.set(u.uid || u.email, u);
+                }
+              });
+              userList.forEach((u) => {
+                if (u.uid && !remoteMap.has(u.uid)) {
+                  remoteMap.set(u.uid, u);
+                }
+              });
+              userList = Array.from(remoteMap.values());
+            }
           } catch (err) {
-            console.warn("Could not fetch remote users, using local cache:", err);
+            console.warn("Could not fetch remote users sample, using local cache:", err);
           }
         }
       }
@@ -320,12 +325,16 @@ export default function AdminDashboardTab() {
     users.length > 0 ? Math.round(totalGlobalArrows / users.length) : 0;
 
   const proUsers = users.filter((u) => u.plan === "PRO");
+  const displayTotalUsers = globalCounts ? Math.max(globalCounts.totalUsers, users.length) : users.length;
+  const displayProUsers = globalCounts ? Math.max(globalCounts.proUsers, proUsers.length) : proUsers.length;
+  const displayCoaches = globalCounts ? Math.max(globalCounts.coachUsers, coachesCount) : coachesCount;
+  const displaySessions = globalCounts ? Math.max(globalCounts.totalSessions, sessions.length) : sessions.length;
 
   const kpis = [
     {
       title: "Arqueros Registrados",
-      value: users.length.toString(),
-      subtitle: `${coachesCount} Coaches • ${uniqueClubsCount} Clubes activos`,
+      value: displayTotalUsers.toLocaleString(),
+      subtitle: `${displayCoaches} Coaches • ${uniqueClubsCount} Clubes activos`,
       icon: Users,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"
@@ -340,8 +349,8 @@ export default function AdminDashboardTab() {
     },
     {
       title: "Cuentas PRO",
-      value: proUsers.length.toString(),
-      subtitle: `${proUsers.length} de ${users.length} usuarios con plan PRO`,
+      value: displayProUsers.toLocaleString(),
+      subtitle: `${displayProUsers} de ${displayTotalUsers} usuarios con plan PRO`,
       icon: CreditCard,
       colorClass: "text-yellow-gold bg-yellow-gold/10 border-yellow-gold/20",
       textColor: "text-yellow-400"
@@ -349,7 +358,7 @@ export default function AdminDashboardTab() {
     {
       title: "Flechas Globales",
       value: totalGlobalArrows.toLocaleString(),
-      subtitle: `${sessions.length} sesiones • ~${avgArrowsPerArcher.toLocaleString()} fl./arquero`,
+      subtitle: `${displaySessions} sesiones • ~${avgArrowsPerArcher.toLocaleString()} fl./arquero`,
       icon: Target,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"

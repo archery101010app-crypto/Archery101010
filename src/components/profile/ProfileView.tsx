@@ -225,7 +225,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         if (!resolved && typeof navigator !== "undefined" && navigator.onLine) {
           try {
-            const { doc, getDoc, collection, query, where, getDocs } = await import("firebase/firestore");
+            const { doc, getDoc, collection, query, where, limit, getDocs } = await import("firebase/firestore");
             const { db } = await import("@/lib/firebase");
 
             const candidateCoachUid =
@@ -246,7 +246,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             }
 
             if (!resolved && user.clubId) {
-              const qClub = query(collection(db, "users"), where("clubId", "==", user.clubId));
+              const qClub = query(collection(db, "users"), where("clubId", "==", user.clubId), limit(100));
               const snapClub = await getDocs(qClub);
               const remoteList: UserProfile[] = [];
               snapClub.forEach((d) => {
@@ -355,7 +355,7 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
 
         if (typeof navigator !== "undefined" && navigator.onLine) {
           try {
-            const { collection, query, where, getDocs } = await import("firebase/firestore");
+            const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
             const { db } = await import("@/lib/firebase");
 
             const addDocSnap = (d: any) => {
@@ -369,14 +369,14 @@ export default function ProfileView({ user, onBack, onLogout, onProfileUpdated, 
             };
 
             const [snapByCoach, snapByClub] = await Promise.all([
-              getDocs(query(collection(db, "users"), where("coachId", "==", user.uid))).catch(() => null),
-              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId))).catch(() => null)
+              getDocs(query(collection(db, "users"), where("coachId", "==", user.uid), limit(250))).catch(() => null),
+              getDocs(query(collection(db, "users"), where("clubId", "==", canonicalClubId), limit(250))).catch(() => null)
             ]);
             snapByCoach?.forEach(addDocSnap);
             snapByClub?.forEach(addDocSnap);
 
             if (user.role === "superadmin") {
-              const snapAll = await getDocs(collection(db, "users")).catch(() => null);
+              const snapAll = await getDocs(query(collection(db, "users"), limit(50))).catch(() => null);
               snapAll?.forEach(addDocSnap);
             }
 

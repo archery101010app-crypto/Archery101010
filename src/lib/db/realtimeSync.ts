@@ -390,7 +390,10 @@ export function startRealtimeSync(
   attachUserDocListener("self", currentUserUid);
 
   if (isSuperAdmin) {
-    attachUsersQueryListener("superadmin", query(collection(db, "users"), limit(250)));
+    attachUsersQueryListener(
+      "superadmin",
+      query(collection(db, "users"), orderBy("createdAt", "desc"), limit(50))
+    );
   } else if (isCoachRole) {
     attachUsersQueryListener(
       "coach_club",

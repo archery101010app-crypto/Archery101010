@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { CreditCard, ToggleLeft, ToggleRight, Clock, RefreshCw } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { CreditCard, ToggleLeft, ToggleRight, Clock, RefreshCw, Search, ChevronDown, Loader2 } from "lucide-react";
 import { UserProfile, updateProfile } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue } from "@/lib/db/indexedDB";
+import {
+  ADMIN_PAGE_SIZE,
+  AdminGlobalCounts,
+  fetchAdminGlobalCounts,
+  fetchAdminUsersPage,
+  searchAdminUsersInCloud
+} from "@/lib/adminCloudPagination";
 
 interface SubscriptionLog {
   id: string;
@@ -21,7 +28,13 @@ interface SubscriptionLog {
 export default function AdminSubscriptionsTab() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [logs, setLogs] = useState<SubscriptionLog[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [isSearchingCloud, setIsSearchingCloud] = useState<boolean>(false);
+  const [hasMoreUsers, setHasMoreUsers] = useState<boolean>(false);
+  const [globalCounts, setGlobalCounts] = useState<AdminGlobalCounts | null>(null);
+  const nextCursorRef = useRef<any>(null);
 
   const loadData = useCallback(async () => {
     const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
@@ -35,25 +48,43 @@ export default function AdminSubscriptionsTab() {
 
     setSyncingCloud(true);
     try {
-      const { collection, getDocs } = await import("firebase/firestore");
+      const { collection, getDocs, query, orderBy, limit } = await import("firebase/firestore");
       const { db, auth } = await import("@/lib/firebase");
       if (!auth.currentUser) return;
 
-      const [usersSnap, logsSnap] = await Promise.all([
-        getDocs(collection(db, "users")).catch(() => null),
-        getDocs(collection(db, "subscription_audit_logs")).catch(() => null)
+      const fetchLogsBounded = async () => {
+        try {
+          return await getDocs(
+            query(collection(db, "subscription_audit_logs"), orderBy("createdAt", "desc"), limit(50))
+          );
+        } catch {
+          return await getDocs(query(collection(db, "subscription_audit_logs"), limit(50))).catch(
+            () => null
+          );
+        }
+      };
+
+      const [pageRes, countsRes, logsSnap] = await Promise.all([
+        fetchAdminUsersPage(null, ADMIN_PAGE_SIZE),
+        fetchAdminGlobalCounts(),
+        fetchLogsBounded()
       ]);
 
-      if (usersSnap && !usersSnap.empty) {
+      nextCursorRef.current = pageRes.lastCursor;
+      setHasMoreUsers(pageRes.hasMore);
+      if (countsRes) {
+        setGlobalCounts(countsRes);
+      }
+
+      if (pageRes.users.length > 0) {
         const mergedUsersMap = new Map<string, UserProfile>();
         for (const u of localUsers) {
           if (u?.uid && u.uid !== "USR-GUEST-OFFLINE") {
             mergedUsersMap.set(u.uid, u);
           }
         }
-        usersSnap.forEach((d) => {
-          const data = d.data() as UserProfile;
-          const uid = data?.uid || d.id;
+        pageRes.users.forEach((data) => {
+          const uid = data?.uid;
           if (!uid || uid === "USR-GUEST-OFFLINE") return;
           const prev = mergedUsersMap.get(uid);
           const remoteTs = Number(data?.updatedAt || data?.createdAt || 0);
@@ -94,6 +125,72 @@ export default function AdminSubscriptionsTab() {
       setSyncingCloud(false);
     }
   }, []);
+
+  const handleLoadMoreUsers = async () => {
+    if (isLoadingMore || !hasMoreUsers) return;
+    setIsLoadingMore(true);
+    try {
+      const pageRes = await fetchAdminUsersPage(nextCursorRef.current, ADMIN_PAGE_SIZE);
+      nextCursorRef.current = pageRes.lastCursor;
+      setHasMoreUsers(pageRes.hasMore);
+      if (pageRes.users.length > 0) {
+        setUsers((prev) => {
+          const map = new Map<string, UserProfile>();
+          prev.forEach((u) => {
+            if (u.uid) map.set(u.uid, u);
+          });
+          pageRes.users.forEach((u) => {
+            if (u.uid) map.set(u.uid, { ...map.get(u.uid), ...u });
+          });
+          const next = Array.from(map.values()).sort(
+            (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+          );
+          saveLocalSetting("simulated_users", next).catch(() => {});
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn("Could not load more subscription users:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    const clean = searchTerm.trim();
+    if (clean.length < 2 || (typeof navigator !== "undefined" && !navigator.onLine)) {
+      setIsSearchingCloud(false);
+      return;
+    }
+    let cancelled = false;
+    setIsSearchingCloud(true);
+    const timer = setTimeout(async () => {
+      try {
+        const cloudMatches = await searchAdminUsersInCloud(clean);
+        if (cancelled || cloudMatches.length === 0) return;
+        setUsers((prev) => {
+          const map = new Map<string, UserProfile>();
+          prev.forEach((u) => {
+            if (u.uid) map.set(u.uid, u);
+          });
+          cloudMatches.forEach((u) => {
+            if (u.uid) map.set(u.uid, { ...map.get(u.uid), ...u });
+          });
+          return Array.from(map.values()).sort(
+            (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+          );
+        });
+      } catch (err) {
+        console.warn("Cloud search error in AdminSubscriptionsTab:", err);
+      } finally {
+        if (!cancelled) setIsSearchingCloud(false);
+      }
+    }, 380);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   useEffect(() => {
     loadData();
@@ -181,12 +278,36 @@ export default function AdminSubscriptionsTab() {
     }
   };
 
+  const filteredUsers = users.filter((u) => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+    const cleanNick = term.replace(/^@/, "");
+    return (
+      (u.fullName || "").toLowerCase().includes(term) ||
+      (u.email || "").toLowerCase().includes(term) ||
+      (u.nickname || "").toLowerCase().includes(cleanNick) ||
+      (u.uid || "").toLowerCase().includes(term)
+    );
+  });
+
+  const displayTotalUsers = globalCounts
+    ? Math.max(globalCounts.totalUsers, users.length)
+    : users.length;
+  const displayProUsers = globalCounts
+    ? Math.max(globalCounts.proUsers, users.filter((u) => u.plan === "PRO").length)
+    : users.filter((u) => u.plan === "PRO").length;
+
   return (
     <div className="flex flex-col gap-6 w-full p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider">Control de Suscripciones</h2>
+          <h2 className="text-[22px] md:text-[26.4px] font-black text-white uppercase tracking-wider flex flex-wrap items-center gap-2">
+            <span>Control de Suscripciones</span>
+            <span className="text-[14px] bg-yellow-gold/10 text-yellow-gold border border-yellow-gold/25 px-2.5 py-0.5 rounded-full font-black tabular-nums">
+              {displayProUsers.toLocaleString()} PRO
+            </span>
+          </h2>
           <p className="text-xs text-white">Gestiona accesos premium y overrides de planes sincronizados en la nube.</p>
         </div>
         <button
@@ -204,13 +325,34 @@ export default function AdminSubscriptionsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
         {/* User subscriptions list */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <h3 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2.5 flex items-center gap-1.5">
-            <CreditCard size={14} className="text-cyan-neon" />
-            <span>Usuarios y Suscripciones ({users.length})</span>
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-white/5 pb-3">
+            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5">
+              <CreditCard size={14} className="text-cyan-neon" />
+              <span className="tabular-nums">
+                Usuarios y Suscripciones ({users.length.toLocaleString()} de {displayTotalUsers.toLocaleString()})
+              </span>
+            </h3>
+
+            <div className="relative w-full sm:w-72">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar correo, nombre, @apodo o ID..."
+                className="w-full pl-8 pr-8 py-2 rounded-xl bg-neutral-900/60 border border-white/10 text-white text-xs outline-none focus:border-cyan-neon transition"
+              />
+              {isSearchingCloud && (
+                <Loader2
+                  size={13}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-neon animate-spin"
+                />
+              )}
+            </div>
+          </div>
 
           <div className="flex flex-col gap-2.5">
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <div
                 key={user.uid}
                 className="bg-neutral-900/40 border border-white/10 rounded-2xl md:rounded-xl p-4 md:px-5 md:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg hover:border-white/15 transition-all duration-200"
@@ -256,6 +398,31 @@ export default function AdminSubscriptionsTab() {
               </div>
             ))}
           </div>
+
+          {hasMoreUsers && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={handleLoadMoreUsers}
+                disabled={isLoadingMore}
+                className="min-h-[40px] px-4 py-2 rounded-2xl bg-[#0D1017] hover:bg-neutral-900 border border-white/15 hover:border-cyan-neon/40 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-cyan-neon" />
+                    <span>Cargando siguientes 50...</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={15} className="text-cyan-neon" />
+                    <span className="tabular-nums">
+                      Cargar 50 más ({users.length.toLocaleString()} de {displayTotalUsers.toLocaleString()})
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Change logs timeline audit */}
