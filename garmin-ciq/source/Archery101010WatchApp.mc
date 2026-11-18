@@ -31,6 +31,11 @@ class Archery101010WatchApp extends Application.AppBase {
 
     function onStart(state) {
         Position.enableLocationEvents(Position.LOCATION_CONTINUOUS, method(:onPosition));
+        if (Sensor has :setEnabledSensors) {
+            try {
+                Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE] as Lang.Array<Sensor.SensorType>);
+            } catch (ex) {}
+        }
         // Connect IQ Companion Listener Hygiene (#12):
         // Direct Connect IQ BLE PhoneAppMessages are an optional local fast-path ONLY when paired
         // with a native Connect IQ companion SDK integration; 6-digit Cloud Sync over HTTPS
@@ -46,6 +51,11 @@ class Archery101010WatchApp extends Application.AppBase {
 
     function onStop(state) {
         Position.enableLocationEvents(Position.LOCATION_DISABLE, method(:onPosition));
+        if (Sensor has :setEnabledSensors) {
+            try {
+                Sensor.setEnabledSensors([] as Lang.Array<Sensor.SensorType>);
+            } catch (ex) {}
+        }
         if (Sensor has :unregisterSensorDataListener) {
             try {
                 Sensor.unregisterSensorDataListener();
@@ -90,6 +100,9 @@ class Archery101010WatchView extends WatchUi.View {
     public var gpsDistanceM = 0.0;
     public var distanceWalkedM = 0;
     public var activeKcal = 0;
+    public var heartRateBpm = 0;
+    public var avgHeartRateBpm = 0;
+    public var maxHeartRateBpm = 0;
     public var autoDetectEnabled = false;
     public var sensitivityLevel = 1; // 0: BAJA, 1: MEDIA, 2: ALTA
     public var selectedScoreIdx = 0; // 0..11
@@ -155,6 +168,10 @@ class Archery101010WatchView extends WatchUi.View {
     private var mLastRemoteStateSig = "";
     private var mLastBleStateSig = "";
     private var mLastTelemetryPushSteps = 0;
+    private var mHrSum = 0;
+    private var mHrSamples = 0;
+    private var mLastHrSampleMs = 0;
+    private var mLastHrPushMs = 0;
     private var mSensorTimer = null;
 
     // Official Good Times + Geometric 101010 BrandLogo & Bundled Outfit Athletic Fonts
@@ -467,6 +484,11 @@ class Archery101010WatchView extends WatchUi.View {
         gpsDistanceM = 0.0;
         distanceWalkedM = 0;
         activeKcal = 0;
+        heartRateBpm = 0;
+        avgHeartRateBpm = 0;
+        maxHeartRateBpm = 0;
+        mHrSum = 0;
+        mHrSamples = 0;
         mStartElapsedDistM = null;
         mLastLat = null;
         mLastLon = null;
@@ -735,6 +757,32 @@ class Archery101010WatchView extends WatchUi.View {
                     mLastObservedSteps = curMonSteps;
                 }
             }
+        }
+
+        // Sample optical heart rate every ~2.0s (Sensor permission already active)
+        if (now < mLastHrSampleMs || (now - mLastHrSampleMs) >= 2000) {
+            mLastHrSampleMs = now;
+            try {
+                var hrInfo = Sensor.getInfo();
+                if (hrInfo != null && (hrInfo has :heartRate) && hrInfo.heartRate != null) {
+                    var curHr = hrInfo.heartRate.toNumber();
+                    if (curHr >= 35 && curHr <= 240) {
+                        heartRateBpm = curHr;
+                        mHrSum = mHrSum + curHr;
+                        mHrSamples = mHrSamples + 1;
+                        avgHeartRateBpm = (mHrSum / mHrSamples).toNumber();
+                        if (curHr > maxHeartRateBpm) {
+                            maxHeartRateBpm = curHr;
+                        }
+                        if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+                            if (now < mLastHrPushMs || (now - mLastHrPushMs) >= 20000) {
+                                mLastHrPushMs = now;
+                                syncWithFirestoreCloud("SYNC_TELEMETRY_FROM_WATCH", null);
+                            }
+                        }
+                    }
+                }
+            } catch (ex) {}
         }
 
         // 3-Tier Adaptive Cloud Polling (8s Active <90s | 20s Warm Idle 90s..5m | 45s Deep Idle >=5m)
@@ -1074,6 +1122,11 @@ class Archery101010WatchView extends WatchUi.View {
             cmdFields["stepsCount"] = { "integerValue" => stepsCount.toString() };
             cmdFields["distanceWalkedM"] = { "integerValue" => distanceWalkedM.toString() };
             cmdFields["activeKcal"] = { "integerValue" => activeKcal.toString() };
+            if (avgHeartRateBpm >= 35) {
+                cmdFields["heartRateBpm"] = { "integerValue" => heartRateBpm.toString() };
+                cmdFields["avgHeartRateBpm"] = { "integerValue" => avgHeartRateBpm.toString() };
+                cmdFields["maxHeartRateBpm"] = { "integerValue" => maxHeartRateBpm.toString() };
+            }
         }
 
         var docFields = {
@@ -1082,6 +1135,9 @@ class Archery101010WatchView extends WatchUi.View {
             "lastWatchCmdSeq" => { "integerValue" => mCmdSeq.toString() },
             "watchStepsCount" => { "integerValue" => stepsCount.toString() },
             "watchDistanceM" => { "integerValue" => distanceWalkedM.toString() },
+            "watchHeartRateBpm" => { "integerValue" => heartRateBpm.toString() },
+            "watchAvgHeartRateBpm" => { "integerValue" => avgHeartRateBpm.toString() },
+            "watchMaxHeartRateBpm" => { "integerValue" => maxHeartRateBpm.toString() },
             "watchSource" => { "stringValue" => "GARMIN_CIQ" },
             "updatedAt" => { "integerValue" => epochMsStr }
         };
@@ -1089,7 +1145,7 @@ class Archery101010WatchView extends WatchUi.View {
         var url =
             "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" +
             pairingCode +
-            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchHeartRateBpm&updateMask.fieldPaths=watchAvgHeartRateBpm&updateMask.fieldPaths=watchMaxHeartRateBpm&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
 
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,

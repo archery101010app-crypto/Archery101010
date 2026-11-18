@@ -294,6 +294,20 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const stepsCountRef = useRef<number>(
     Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0
   );
+  const [avgHeartRateBpm, setAvgHeartRateBpm] = useState<number>(
+    () => Number(config?.avgHeartRateBpm) || Number(config?.biometrics?.avgHeartRateBpm) || 0
+  );
+  const [maxHeartRateBpm, setMaxHeartRateBpm] = useState<number>(
+    () => Number(config?.maxHeartRateBpm) || Number(config?.biometrics?.maxHeartRateBpm) || 0
+  );
+  const hrSumRef = useRef<number>(0);
+  const hrSamplesCountRef = useRef<number>(0);
+  const avgHeartRateRef = useRef<number>(
+    Number(config?.avgHeartRateBpm) || Number(config?.biometrics?.avgHeartRateBpm) || 0
+  );
+  const maxHeartRateRef = useRef<number>(
+    Number(config?.maxHeartRateBpm) || Number(config?.biometrics?.maxHeartRateBpm) || 0
+  );
   const lastStepTimeRef = useRef<number>(0);
   const isClosingSessionRef = useRef<boolean>(false);
 
@@ -741,10 +755,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         stepsCount: stepsCountRef.current,
         activeKcal,
         bowPoundageLbs,
+        ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+        ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {}),
         biometrics: {
           activeKcal,
           distanceWalkedM,
-          stepsCount: stepsCountRef.current
+          stepsCount: stepsCountRef.current,
+          ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+          ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {})
         },
         ends: ends.slice(0, 100),
         sessionNote: sessionNote || "",
@@ -1039,6 +1057,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         activeKcal,
         distanceWalkedM,
         bowPoundageLbs,
+        ...(avgHeartRateBpm >= 30 ? { avgHeartRateBpm } : {}),
+        ...(maxHeartRateBpm >= 30 ? { maxHeartRateBpm } : {}),
         lang: language,
         unitSystem
       });
@@ -1299,10 +1319,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       stepsCount: stepsCountRef.current,
       activeKcal,
       bowPoundageLbs,
+      ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+      ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {}),
       biometrics: {
         activeKcal,
         distanceWalkedM,
-        stepsCount: stepsCountRef.current
+        stepsCount: stepsCountRef.current,
+        ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+        ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {})
       },
       ends: ends.slice(0, 100),
       sessionNote: sessionNote || "",
@@ -1452,10 +1476,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       gpsDistanceM: Math.round(gpsDistanceM),
       activeKcal: recalculatedKcal,
       bowPoundageLbs,
+      ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+      ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {}),
       biometrics: {
         activeKcal: recalculatedKcal,
         distanceWalkedM,
-        stepsCount: stepsCountRef.current
+        stepsCount: stepsCountRef.current,
+        ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+        ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {})
       },
       blockStats: {
         b1Score: scoreB1,
@@ -1610,10 +1638,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       gpsDistanceM: Math.round(gpsDistanceM),
       activeKcal: recalculatedKcal,
       bowPoundageLbs,
+      ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+      ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {}),
       biometrics: {
         activeKcal: recalculatedKcal,
         distanceWalkedM,
-        stepsCount: stepsCountRef.current
+        stepsCount: stepsCountRef.current,
+        ...(avgHeartRateRef.current >= 30 ? { avgHeartRateBpm: avgHeartRateRef.current } : {}),
+        ...(maxHeartRateRef.current >= 30 ? { maxHeartRateBpm: maxHeartRateRef.current } : {})
       }
     };
     if (blockStats) {
@@ -1777,6 +1809,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         activeKcal,
         distanceWalkedM,
         bowPoundageLbs,
+        ...(avgHeartRateBpm >= 30 ? { avgHeartRateBpm } : {}),
+        ...(maxHeartRateBpm >= 30 ? { maxHeartRateBpm } : {}),
         lang: language,
         unitSystem
       });
@@ -1962,6 +1996,28 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const nextDistM = Math.max(gpsDistanceAccumRef.current, incomingDist, stepDistM);
       gpsDistanceAccumRef.current = nextDistM;
       setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+
+      const rawHr = Number(msg.payload?.heartRateBpm ?? msg.heartRateBpm) || 0;
+      const rawAvgHr = Number(msg.payload?.avgHeartRateBpm ?? msg.avgHeartRateBpm) || 0;
+      const rawMaxHr = Number(msg.payload?.maxHeartRateBpm ?? msg.maxHeartRateBpm) || 0;
+      if (rawAvgHr >= 30 && rawAvgHr <= 250) {
+        avgHeartRateRef.current = Math.round(rawAvgHr);
+        setAvgHeartRateBpm(avgHeartRateRef.current);
+      } else if (rawHr >= 30 && rawHr <= 250) {
+        hrSumRef.current += rawHr;
+        hrSamplesCountRef.current += 1;
+        avgHeartRateRef.current = Math.round(hrSumRef.current / hrSamplesCountRef.current);
+        setAvgHeartRateBpm(avgHeartRateRef.current);
+      }
+      const candidateMax = Math.max(
+        rawMaxHr >= 30 && rawMaxHr <= 250 ? Math.round(rawMaxHr) : 0,
+        rawHr >= 30 && rawHr <= 250 ? Math.round(rawHr) : 0,
+        avgHeartRateRef.current
+      );
+      if (candidateMax >= 30 && candidateMax > maxHeartRateRef.current) {
+        maxHeartRateRef.current = candidateMax;
+        setMaxHeartRateBpm(candidateMax);
+      }
     } else if (msg.type === "TOGGLE_AUTO_DETECT") {
       setAutoDetectEnabled(Boolean(msg.enabled));
     } else if (msg.type === "FINISH_SESSION_FROM_WATCH") {

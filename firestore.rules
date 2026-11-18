@@ -77,6 +77,14 @@ service cloud.firestore {
     //   - sessionNote: string (optional, 0-2000 chars)
     //   - impacts: list (optional, max 500 items)
     //   - totalArrowsVolume: number (optional, 0-10000)
+    //   - distanceWalkedM: number (optional, 0-1000000)
+    //   - gpsDistanceM: number (optional, 0-1000000)
+    //   - stepsCount: number (optional, 0-1000000)
+    //   - activeKcal: number (optional, 0-100000)
+    //   - bowPoundageLbs: number (optional, 0-200)
+    //   - avgHeartRateBpm: number (optional, 0-260)
+    //   - maxHeartRateBpm: number (optional, 0-260)
+    //   - biometrics: map (optional)
     //   - blockStats: map (optional)
     //   - deletedByArcher: bool (optional)
     //   - restoredByCoach: bool (optional)
@@ -294,11 +302,15 @@ service cloud.firestore {
     //   - caloriesBurnedKcal: number (optional, 0-100000)
     //   - sensitivityLevel: number (optional, 0-10)
     //   - bowPoundageLbs: number (optional, 0-200)
-    //   - lastWatchCmd: string (<= 120 chars) / map (<= 10 keys, whitelisted & bounded)
+    //   - lastWatchCmd: string (<= 120 chars) / map (<= 14 keys, whitelisted & bounded)
     //   - lastWatchCmdId: string (optional, 0-128 chars)
     //   - lastWatchCmdSeq: number (optional, 0-1000000000)
     //   - watchStepsCount: number (optional, 0-1000000)
     //   - watchDistanceM: number (optional, 0-1000000)
+    //   - watchCaloriesKcal: number (optional, 0-100000)
+    //   - watchHeartRateBpm: number (optional, 0-260)
+    //   - watchAvgHeartRateBpm: number (optional, 0-260)
+    //   - watchMaxHeartRateBpm: number (optional, 0-260)
     //   - watchSource: string (optional, 0-60 chars)
     //   - watchDeviceId: string (optional, 0-80 chars)
     //   - updatedAt: number / timestamp (optional)
@@ -712,6 +724,14 @@ service cloud.firestore {
         validOptionalString(data, 'sessionNote', 0, 2000) &&
         validOptionalList(data, 'impacts', 500) &&
         validOptionalNumber(data, 'totalArrowsVolume', 0, 10000) &&
+        validOptionalNumber(data, 'distanceWalkedM', 0, 1000000) &&
+        validOptionalNumber(data, 'gpsDistanceM', 0, 1000000) &&
+        validOptionalNumber(data, 'stepsCount', 0, 1000000) &&
+        validOptionalNumber(data, 'activeKcal', 0, 100000) &&
+        validOptionalNumber(data, 'bowPoundageLbs', 0, 200) &&
+        validOptionalNumber(data, 'avgHeartRateBpm', 0, 260) &&
+        validOptionalNumber(data, 'maxHeartRateBpm', 0, 260) &&
+        validOptionalMap(data, 'biometrics') &&
         validOptionalMap(data, 'blockStats') &&
         validOptionalBool(data, 'deletedByArcher') &&
         validOptionalBool(data, 'restoredByCoach') &&
@@ -942,15 +962,21 @@ service cloud.firestore {
     function isValidWatchCmdPayload(p) {
       return p == null || (
         p is map &&
-        p.keys().size() <= 5 &&
-        p.keys().hasOnly(['value', 'totalScore', 'stepsCount', 'distanceWalkedM', 'activeKcal']) &&
+        p.keys().size() <= 8 &&
+        p.keys().hasOnly([
+          'value', 'totalScore', 'stepsCount', 'distanceWalkedM', 'activeKcal',
+          'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm'
+        ]) &&
         (p.get('value', null) == null ||
           (p.value is string && p.value.size() <= 40) ||
           (p.value is number && p.value >= -100000 && p.value <= 100000)) &&
         validOptionalNumber(p, 'totalScore', 0, 100000) &&
         validOptionalNumber(p, 'stepsCount', 0, 1000000) &&
         validOptionalNumber(p, 'distanceWalkedM', 0, 1000000) &&
-        validOptionalNumber(p, 'activeKcal', 0, 100000)
+        validOptionalNumber(p, 'activeKcal', 0, 100000) &&
+        validOptionalNumber(p, 'heartRateBpm', 0, 260) &&
+        validOptionalNumber(p, 'avgHeartRateBpm', 0, 260) &&
+        validOptionalNumber(p, 'maxHeartRateBpm', 0, 260)
       );
     }
 
@@ -959,12 +985,13 @@ service cloud.firestore {
         (cmd is string && cmd.size() <= 120) ||
         (
           cmd is map &&
-          cmd.keys().size() <= 10 &&
+          cmd.keys().size() <= 14 &&
           cmd.keys().hasOnly([
             'type', 'value', 'id', 'cmdId', '_cmdId',
             'seq', 'cmdSeq', '_cmdSeq', 'ts', '_ts',
             'delta', 'source', 'totalScore', 'enabled', 'sensitivityLevel',
-            'stepsCount', 'distanceWalkedM', 'activeKcal', 'payload'
+            'stepsCount', 'distanceWalkedM', 'activeKcal',
+            'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm', 'payload'
           ]) &&
           validOptionalString(cmd, 'type', 1, 40) &&
           (cmd.get('value', null) == null ||
@@ -986,6 +1013,9 @@ service cloud.firestore {
           validOptionalNumber(cmd, 'stepsCount', 0, 1000000) &&
           validOptionalNumber(cmd, 'distanceWalkedM', 0, 1000000) &&
           validOptionalNumber(cmd, 'activeKcal', 0, 100000) &&
+          validOptionalNumber(cmd, 'heartRateBpm', 0, 260) &&
+          validOptionalNumber(cmd, 'avgHeartRateBpm', 0, 260) &&
+          validOptionalNumber(cmd, 'maxHeartRateBpm', 0, 260) &&
           isValidWatchCmdPayload(cmd.get('payload', null))
         );
     }
@@ -995,7 +1025,7 @@ service cloud.firestore {
       let ttl = data.get('expireAt', null);
       return pairingCode.matches('^[0-9]{6}$') &&
         data.keys().hasAll(['userId', 'expiresAt']) &&
-        data.keys().size() <= 35 &&
+        data.keys().size() <= 40 &&
         data.keys().hasOnly([
           'pairingCode', 'userId', 'sessionId', 'sessionActive', 'gpsActive',
           'autoDetectEnabled', 'watchConnected', 'practiceType', 'bowType',
@@ -1004,9 +1034,10 @@ service cloud.firestore {
           'distanceM', 'gpsDistanceM', 'stepsCount', 'distanceWalkedM',
           'caloriesBurnedKcal', 'activeKcal', 'sensitivityLevel', 'bowPoundageLbs',
           'currentEndArrows', 'lastWatchCmd', 'lastWatchCmdId', 'lastWatchCmdSeq',
-          'watchStepsCount', 'watchDistanceM', 'watchCaloriesKcal', 'watchSource',
-          'watchDeviceId', 'lastShotTimestamp', 'createdAt', 'updatedAt',
-          'expiresAt', 'expireAt'
+          'watchStepsCount', 'watchDistanceM', 'watchCaloriesKcal',
+          'watchHeartRateBpm', 'watchAvgHeartRateBpm', 'watchMaxHeartRateBpm',
+          'watchSource', 'watchDeviceId', 'lastShotTimestamp', 'createdAt',
+          'updatedAt', 'expiresAt', 'expireAt'
         ]) &&
         (data.get('pairingCode', null) == null ||
           (data.pairingCode is string && data.pairingCode == pairingCode)) &&
@@ -1035,6 +1066,9 @@ service cloud.firestore {
         validOptionalNumber(data, 'watchStepsCount', 0, 1000000) &&
         validOptionalNumber(data, 'watchDistanceM', 0, 1000000) &&
         validOptionalNumber(data, 'watchCaloriesKcal', 0, 100000) &&
+        validOptionalNumber(data, 'watchHeartRateBpm', 0, 260) &&
+        validOptionalNumber(data, 'watchAvgHeartRateBpm', 0, 260) &&
+        validOptionalNumber(data, 'watchMaxHeartRateBpm', 0, 260) &&
         validOptionalDateOrTimestamp(data, 'lastShotTimestamp') &&
         validOptionalDateOrTimestamp(data, 'createdAt') &&
         validOptionalDateOrTimestamp(data, 'updatedAt') &&

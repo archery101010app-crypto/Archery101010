@@ -47,3 +47,33 @@ export function getSessionMaxScore(s: any): number {
 export function hasRealScore(s: any): boolean {
   return !isVolumeSession(s) && getSessionScore(s) > 0 && getSessionMaxScore(s) > 0;
 }
+
+/**
+ * Extracts optional average and max heart rate (BPM) recorded by a smartwatch during a session.
+ * Returns empty object when no watch heart rate was recorded so UI never renders empty placeholders.
+ */
+export function getSessionHeartRateStats(session: any): {
+  avgHeartRateBpm?: number;
+  maxHeartRateBpm?: number;
+} {
+  if (!session) return {};
+  const rawAvg =
+    typeof session.avgHeartRateBpm === "number" && session.avgHeartRateBpm > 0
+      ? session.avgHeartRateBpm
+      : typeof session.biometrics?.avgHeartRateBpm === "number" && session.biometrics.avgHeartRateBpm > 0
+      ? session.biometrics.avgHeartRateBpm
+      : 0;
+  if (rawAvg < 30 || rawAvg > 250) return {};
+
+  const avgHeartRateBpm = Math.round(rawAvg);
+  const rawMax =
+    typeof session.maxHeartRateBpm === "number" && session.maxHeartRateBpm > 0
+      ? session.maxHeartRateBpm
+      : typeof session.biometrics?.maxHeartRateBpm === "number" && session.biometrics.maxHeartRateBpm > 0
+      ? session.biometrics.maxHeartRateBpm
+      : 0;
+  const maxHeartRateBpm =
+    rawMax >= avgHeartRateBpm && rawMax <= 250 ? Math.round(rawMax) : undefined;
+
+  return maxHeartRateBpm ? { avgHeartRateBpm, maxHeartRateBpm } : { avgHeartRateBpm };
+}

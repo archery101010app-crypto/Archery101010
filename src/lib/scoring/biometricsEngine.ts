@@ -10,7 +10,8 @@ import {
   Timestamp,
   Unsubscribe
 } from "firebase/firestore";
-import { getSessionArrows } from "./sessionMetrics";
+import { getSessionArrows, getSessionHeartRateStats } from "./sessionMetrics";
+export { getSessionHeartRateStats };
 
 export interface BiometricSessionSnapshot {
   sessionId: string;
@@ -28,6 +29,9 @@ export interface BiometricSessionSnapshot {
   distanceWalkedM: number;
   gpsActive: boolean;
   activeKcal: number;
+  heartRateBpm?: number;
+  avgHeartRateBpm?: number;
+  maxHeartRateBpm?: number;
   bowPoundageLbs: number;
   practiceType: string;
   bowType: string;
@@ -57,10 +61,20 @@ export type WatchCommandMessage =
   | { type: "NEXT_END" }
   | {
       type: "SYNC_TELEMETRY_FROM_WATCH";
-      payload?: { stepsCount?: number; distanceWalkedM?: number; activeKcal?: number };
+      payload?: {
+        stepsCount?: number;
+        distanceWalkedM?: number;
+        activeKcal?: number;
+        heartRateBpm?: number;
+        avgHeartRateBpm?: number;
+        maxHeartRateBpm?: number;
+      };
       stepsCount?: number;
       distanceWalkedM?: number;
       activeKcal?: number;
+      heartRateBpm?: number;
+      avgHeartRateBpm?: number;
+      maxHeartRateBpm?: number;
     }
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean; sensitivityLevel?: 0 | 1 | 2 }
   | { type: "FINISH_SESSION_FROM_WATCH" }
@@ -319,6 +333,8 @@ let lastPushedPhoneArrowsCount = 0;
 const seenCloudCmdIds = new Set<string>();
 let lastCloudTelemetrySteps = 0;
 let lastCloudTelemetryDistM = 0;
+let lastCloudTelemetryAvgHr = 0;
+let lastCloudTelemetryMaxHr = 0;
 
 // Standalone /watch client Cloud Sync state
 let activeWatchClientCode = "";
@@ -581,23 +597,54 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         typeof data.watchStepsCount === "number" ? Math.max(0, Math.round(data.watchStepsCount)) : -1;
       const incomingDistM =
         typeof data.watchDistanceM === "number" ? Math.max(0, Math.round(data.watchDistanceM)) : -1;
+      const incomingHrBpm =
+        typeof data.watchHeartRateBpm === "number" ? Math.max(0, Math.round(data.watchHeartRateBpm)) : 0;
+      const incomingAvgHr =
+        typeof data.watchAvgHeartRateBpm === "number"
+          ? Math.max(0, Math.round(data.watchAvgHeartRateBpm))
+          : incomingHrBpm;
+      const incomingMaxHr =
+        typeof data.watchMaxHeartRateBpm === "number"
+          ? Math.max(0, Math.round(data.watchMaxHeartRateBpm))
+          : incomingHrBpm;
 
       if (incomingSteps === 0 && incomingDistM === 0 && data.sessionActive === false) {
         lastCloudTelemetrySteps = 0;
         lastCloudTelemetryDistM = 0;
+        lastCloudTelemetryAvgHr = 0;
+        lastCloudTelemetryMaxHr = 0;
       } else if (
         (incomingSteps > lastCloudTelemetrySteps && incomingSteps > 0) ||
-        (incomingDistM > lastCloudTelemetryDistM && incomingDistM > 0)
+        (incomingDistM > lastCloudTelemetryDistM && incomingDistM > 0) ||
+        (incomingAvgHr >= 30 &&
+          incomingAvgHr <= 250 &&
+          (incomingAvgHr !== lastCloudTelemetryAvgHr || incomingMaxHr > lastCloudTelemetryMaxHr))
       ) {
         if (incomingSteps > lastCloudTelemetrySteps) lastCloudTelemetrySteps = incomingSteps;
         if (incomingDistM > lastCloudTelemetryDistM) lastCloudTelemetryDistM = incomingDistM;
+        if (incomingAvgHr >= 30 && incomingAvgHr <= 250) {
+          lastCloudTelemetryAvgHr = incomingAvgHr;
+        }
+        if (incomingMaxHr >= 30 && incomingMaxHr <= 250 && incomingMaxHr > lastCloudTelemetryMaxHr) {
+          lastCloudTelemetryMaxHr = incomingMaxHr;
+        }
+        const hrPatch =
+          lastCloudTelemetryAvgHr >= 30
+            ? {
+                heartRateBpm: incomingHrBpm >= 30 ? incomingHrBpm : lastCloudTelemetryAvgHr,
+                avgHeartRateBpm: lastCloudTelemetryAvgHr,
+                maxHeartRateBpm: Math.max(lastCloudTelemetryAvgHr, lastCloudTelemetryMaxHr)
+              }
+            : {};
         dispatchWatchCommandInternal({
           type: "SYNC_TELEMETRY_FROM_WATCH",
           stepsCount: lastCloudTelemetrySteps,
           distanceWalkedM: lastCloudTelemetryDistM,
+          ...hrPatch,
           payload: {
             stepsCount: lastCloudTelemetrySteps,
-            distanceWalkedM: lastCloudTelemetryDistM
+            distanceWalkedM: lastCloudTelemetryDistM,
+            ...hrPatch
           }
         });
         notifyCloudPairingStatus({
@@ -695,8 +742,13 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
   if (snapshot.sessionActive === false) {
     fields.watchStepsCount = 0;
     fields.watchDistanceM = 0;
+    fields.watchHeartRateBpm = 0;
+    fields.watchAvgHeartRateBpm = 0;
+    fields.watchMaxHeartRateBpm = 0;
     lastCloudTelemetrySteps = 0;
     lastCloudTelemetryDistM = 0;
+    lastCloudTelemetryAvgHr = 0;
+    lastCloudTelemetryMaxHr = 0;
   }
 
   setDoc(doc(db, "watch_sessions", code), fields, { merge: true })

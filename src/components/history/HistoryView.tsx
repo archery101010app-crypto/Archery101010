@@ -16,7 +16,12 @@ import { Filter, Target, Trash2, ArrowLeft, Share2, FileText, ChevronRight, Came
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
 import { calculateDispersionStats, calculateDispersionAnalysis } from "@/lib/scoring/dispersionAnalytics";
 import { shareTargetShotChart, shareScorecardWhatsAppNative, ShareTargetResult } from "@/lib/scoring/targetImageGenerator";
-import { getSessionDistanceWalkedM, getSessionActiveKcal, parseBowPoundageLbs } from "@/lib/scoring/biometricsEngine";
+import {
+  getSessionDistanceWalkedM,
+  getSessionActiveKcal,
+  getSessionHeartRateStats,
+  parseBowPoundageLbs
+} from "@/lib/scoring/biometricsEngine";
 import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
@@ -157,6 +162,7 @@ export default function HistoryView({
         activeKcal: getSessionActiveKcal(session, user),
         distanceWalkedM: getSessionDistanceWalkedM(session),
         bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs),
+        ...getSessionHeartRateStats(session),
         lang: language,
         unitSystem
       });
@@ -199,6 +205,7 @@ export default function HistoryView({
         activeKcal: getSessionActiveKcal(session, user),
         distanceWalkedM: getSessionDistanceWalkedM(session),
         bowPoundageLbs: parseBowPoundageLbs(user, session.bowPoundageLbs),
+        ...getSessionHeartRateStats(session),
         lang: language,
         unitSystem
       });

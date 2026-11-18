@@ -41,6 +41,8 @@ export interface TargetShotChartParams {
   activeKcal?: number;
   distanceWalkedM?: number;
   bowPoundageLbs?: number;
+  avgHeartRateBpm?: number;
+  maxHeartRateBpm?: number;
   themeMode?: TelemetryCardThemeMode;
   backgroundPhotoUrl?: string | null;
   lang?: string;
@@ -87,6 +89,38 @@ const OFFICIAL_BADGE_BY_LANG: Record<string, string> = {
   ru: "ОФИЦ. ТЕЛЕМЕТРИЯ",
   cs: "OFICIÁLNÍ TELEMETRIE",
   ar: "القياس الرسمي"
+};
+
+const HEART_RATE_LABEL_BY_LANG: Record<string, string> = {
+  es: "PULSACIONES",
+  en: "HEART RATE",
+  ko: "심박수",
+  ja: "心拍数",
+  fr: "PULSATIONS",
+  de: "PULS",
+  pt: "PULSAÇÕES",
+  it: "PULSAZIONI",
+  "zh-CN": "心率",
+  iw: "דופק",
+  ru: "ПУЛЬС",
+  cs: "PULZ",
+  ar: "النبض"
+};
+
+const MAX_SHORT_LABEL_BY_LANG: Record<string, string> = {
+  es: "MÁX",
+  en: "MAX",
+  ko: "최대",
+  ja: "最大",
+  fr: "MAX",
+  de: "MAX",
+  pt: "MÁX",
+  it: "MAX",
+  "zh-CN": "最高",
+  iw: "מקס׳",
+  ru: "МАКС",
+  cs: "MAX",
+  ar: "أقصى"
 };
 
 declare global {
@@ -519,13 +553,28 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 
   ctx.textBaseline = "alphabetic";
 
-  // 5. Official Brand Lockup ("ARCHERY 101010" + centered below "THE APP") positioned at y=1343
+  // 5. Official Brand Lockup ("ARCHERY 101010" + centered below "THE APP")
+  // Shifts cleanly from y=1343 (without heart rate) to y=1290 (with heart rate) so there are zero empty gaps
+  const safeAvgBpm =
+    typeof params.avgHeartRateBpm === "number" &&
+    params.avgHeartRateBpm >= 30 &&
+    params.avgHeartRateBpm <= 250
+      ? Math.round(params.avgHeartRateBpm)
+      : 0;
+  const safeMaxBpm =
+    typeof params.maxHeartRateBpm === "number" &&
+    params.maxHeartRateBpm >= safeAvgBpm &&
+    params.maxHeartRateBpm <= 250
+      ? Math.round(params.maxHeartRateBpm)
+      : 0;
+  const hasHeartRate = safeAvgBpm > 0;
+
   const [brandFullImg, wmImg] = await Promise.all([
     loadImageAsset("/images/brand_logo_full.png?v=281"),
     loadImageAsset("/images/101010-the-app-watermark.png?v=281")
   ]);
 
-  const brandTopY = 1343;
+  const brandTopY = hasHeartRate ? 1290 : 1343;
   if (brandFullImg) {
     ctx.save();
     if (!isBlackMode) {
@@ -562,6 +611,73 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.restore();
   } else {
     drawFallbackArchery101010TheApp(ctx, 540, brandTopY);
+  }
+
+  // 5b. Adaptive PULSACIONES Bar (ONLY drawn when real watch heart rate exists; zero empty boxes otherwise)
+  if (hasHeartRate) {
+    const hrX = 54;
+    const hrY = 1530;
+    const hrW = 972;
+    const hrH = 124;
+
+    ctx.fillStyle = boxFillStyle;
+    ctx.strokeStyle = boxStrokeStyle;
+    ctx.lineWidth = 1.5;
+    drawRoundedRect(ctx, hrX, hrY, hrW, hrH, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Matte glass icon container + pure white ECG waveform polyline (zero red, zero grey)
+    const iconBoxSize = 62;
+    const iconBoxX = hrX + 32;
+    const iconBoxY = hrY + (hrH - iconBoxSize) / 2;
+    ctx.fillStyle = isBlackMode ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.08)";
+    ctx.strokeStyle = isBlackMode ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.24)";
+    ctx.lineWidth = 1.5;
+    drawRoundedRect(ctx, iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.save();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 3.6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const icx = iconBoxX + iconBoxSize / 2;
+    const icy = iconBoxY + iconBoxSize / 2;
+    ctx.beginPath();
+    ctx.moveTo(icx - 17, icy);
+    ctx.lineTo(icx - 9, icy);
+    ctx.lineTo(icx - 4, icy - 14);
+    ctx.lineTo(icx + 4, icy + 14);
+    ctx.lineTo(icx + 9, icy);
+    ctx.lineTo(icx + 17, icy);
+    ctx.stroke();
+    ctx.restore();
+
+    const hrLabel =
+      HEART_RATE_LABEL_BY_LANG[resolvedLang] ||
+      (resolvedLang.toLowerCase().startsWith("es") ? "PULSACIONES" : "HEART RATE");
+    const maxShort =
+      MAX_SHORT_LABEL_BY_LANG[resolvedLang] ||
+      (resolvedLang.toLowerCase().startsWith("es") ? "MÁX" : "MAX");
+    const hrValueStr =
+      safeMaxBpm > safeAvgBpm
+        ? `${safeAvgBpm} BPM • ${maxShort} ${safeMaxBpm}`
+        : `${safeAvgBpm} BPM`;
+
+    ctx.save();
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "left";
+    ctx.font = `800 24px ${appFont}`;
+    ctx.fillText(hrLabel, iconBoxX + iconBoxSize + 24, hrY + hrH / 2 + 1, 410);
+
+    ctx.textAlign = "right";
+    ctx.font = `900 30px ${appFont}`;
+    ctx.fillText(hrValueStr, hrX + hrW - 36, hrY + hrH / 2 + 1, 440);
+    ctx.restore();
+    ctx.textBaseline = "alphabetic";
   }
 
   // 6. Bottom 4 Harmonious & Centered KPI Stat Boxes (PROMEDIO | PRECISIÓN | KCAL | DISTANCIA)
@@ -763,15 +879,40 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
   const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
 
   const archerFallback = tCard(resolvedLang, "roleAthlete");
+  const capAvgBpm =
+    typeof params.avgHeartRateBpm === "number" &&
+    params.avgHeartRateBpm >= 30 &&
+    params.avgHeartRateBpm <= 250
+      ? Math.round(params.avgHeartRateBpm)
+      : 0;
+  const capMaxBpm =
+    typeof params.maxHeartRateBpm === "number" &&
+    params.maxHeartRateBpm >= capAvgBpm &&
+    params.maxHeartRateBpm <= 250
+      ? Math.round(params.maxHeartRateBpm)
+      : 0;
+  const hrCaptionLineEs =
+    capAvgBpm > 0
+      ? `\n• *Pulsaciones:* ${capAvgBpm} BPM${capMaxBpm > capAvgBpm ? ` · Máx ${capMaxBpm}` : ""}`
+      : "";
+  const hrCaptionLineEn =
+    capAvgBpm > 0
+      ? `\n• *${HEART_RATE_LABEL_BY_LANG[resolvedLang] || "Heart Rate"}:* ${capAvgBpm} BPM${
+          capMaxBpm > capAvgBpm ? ` · ${MAX_SHORT_LABEL_BY_LANG[resolvedLang] || "Max"} ${capMaxBpm}` : ""
+        }`
+      : "";
+
   const captionText = isSpanish
     ? `🎯 *ARCHERY 101010 THE APP*\n` +
       `• *Arquero:* ${params.archerName || "Arquero"}\n` +
       `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
-      `• *Precisión:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}`
+      `• *Precisión:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}` +
+      hrCaptionLineEs
     : `🎯 *ARCHERY 101010 THE APP*\n` +
       `• *${archerFallback}:* ${params.archerName || archerFallback}\n` +
       `• *${tCard(resolvedLang, "cardScore")}:* ${params.score} / ${effectiveMax} pts\n` +
-      `• *10s / Xs:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}`;
+      `• *10s / Xs:* ${params.tensCount} 10s | ${params.xsCount} Xs · ${displayShootDist}` +
+      hrCaptionLineEn;
 
   return {
     sharedNatively: false,
@@ -833,6 +974,28 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     typeof params.distanceWalkedM === "number" && params.distanceWalkedM > 0
       ? formatWalkedDistanceRegional(params.distanceWalkedM, resolvedUnitSystem)
       : "";
+  const scAvgBpm =
+    typeof params.avgHeartRateBpm === "number" &&
+    params.avgHeartRateBpm >= 30 &&
+    params.avgHeartRateBpm <= 250
+      ? Math.round(params.avgHeartRateBpm)
+      : 0;
+  const scMaxBpm =
+    typeof params.maxHeartRateBpm === "number" &&
+    params.maxHeartRateBpm >= scAvgBpm &&
+    params.maxHeartRateBpm <= 250
+      ? Math.round(params.maxHeartRateBpm)
+      : 0;
+  const hrScorecardLineEs =
+    scAvgBpm > 0
+      ? `• *Pulsaciones:* ${scAvgBpm} BPM${scMaxBpm > scAvgBpm ? ` · Máx ${scMaxBpm}` : ""}\n`
+      : "";
+  const hrScorecardLineIntl =
+    scAvgBpm > 0
+      ? `• *${HEART_RATE_LABEL_BY_LANG[resolvedLang] || "Heart Rate"}:* ${scAvgBpm} BPM${
+          scMaxBpm > scAvgBpm ? ` · ${MAX_SHORT_LABEL_BY_LANG[resolvedLang] || "Max"} ${scMaxBpm}` : ""
+        }\n`
+      : "";
 
   const endsDetail = ends
     .map((e, idx) => {
@@ -856,6 +1019,7 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
       `• *Modalidad:* ${displayFormat} · ${displayShootDist}\n` +
       `• *Flechas Tiradas:* ${totalArrows}\n` +
       (walkedStr ? `• *Recorrido:* ${walkedStr}\n` : "") +
+      hrScorecardLineEs +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `*PUNTUACIÓN TOTAL:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
       `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +
@@ -871,6 +1035,7 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
       `• *${tCard(resolvedLang, "sessionFormat")}:* ${displayFormat} · ${displayShootDist}\n` +
       `• *${tCard(resolvedLang, "cardArrows")}:* ${totalArrows}\n` +
       (walkedStr ? `• *${tCard(resolvedLang, "cardWalked")}:* ${walkedStr}\n` : "") +
+      hrScorecardLineIntl +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `*${tCard(resolvedLang, "cardScore")}:* *${score}* / ${effectiveMaxScore} pts (*${pct}%*)\n` +
       `• *10s:* ${tensCount} | *Xs:* ${xsCount}\n` +

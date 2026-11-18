@@ -425,4 +425,28 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(verJson.version, APP_VERSION);
     assert.equal(appVerJson.version, APP_VERSION);
   });
+
+  it("extracts adaptive smartwatch heart rate stats cleanly without empty placeholders when absent", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { getSessionHeartRateStats } = await import("../src/lib/scoring/sessionMetrics.ts");
+
+    assert.deepEqual(getSessionHeartRateStats(null), {});
+    assert.deepEqual(getSessionHeartRateStats({ score: 342 }), {});
+    assert.deepEqual(getSessionHeartRateStats({ avgHeartRateBpm: 0 }), {});
+    assert.deepEqual(
+      getSessionHeartRateStats({ biometrics: { avgHeartRateBpm: 114, maxHeartRateBpm: 131 } }),
+      { avgHeartRateBpm: 114, maxHeartRateBpm: 131 }
+    );
+
+    const cardGenSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/targetImageGenerator.ts"),
+      "utf8"
+    );
+    assert.ok(cardGenSrc.includes('es: "PULSACIONES"'), "Shareable card must use PULSACIONES in Spanish");
+    assert.ok(
+      cardGenSrc.includes("const brandTopY = hasHeartRate ? 1290 : 1343;"),
+      "Shareable card must shift layout only when heart rate exists"
+    );
+  });
 });
