@@ -405,6 +405,20 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     );
     assert.equal(bannerSrc.includes("exitApp("), false, "AppUpdateBanner must not rely on exitApp on remote OTA origins");
     assert.equal(bannerSrc.includes("window.open("), false, "AppUpdateBanner must never open external browser tabs");
+    assert.equal(
+      /location\.(replace|assign|href\s*=)/.test(bannerSrc),
+      false,
+      "AppUpdateBanner must never mutate window.location URL (triggers Capacitor shouldOverrideUrlLoading -> Chrome in legacy APKs)"
+    );
+    assert.equal(
+      bannerSrc.includes("fixed inset-0"),
+      false,
+      "AppUpdateBanner must never render a full-screen blocking modal that can freeze app startup"
+    );
+    assert.ok(
+      bannerSrc.includes("window.location.reload()"),
+      "AppUpdateBanner must use in-place window.location.reload() (PAGE_TRANSITION_RELOAD)"
+    );
 
     const verJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/version.json"), "utf8"));
     const appVerJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/app-version.json"), "utf8"));

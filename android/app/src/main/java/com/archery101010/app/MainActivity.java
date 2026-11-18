@@ -499,7 +499,10 @@ public class MainActivity extends BridgeActivity {
                                 host.equals("127.0.0.1") ||
                                 host.equals("archery101010-c0bb4.web.app") ||
                                 host.equals("archery101010-c0bb4.firebaseapp.com") ||
-                                host.equals("accounts.google.com");
+                                host.equals("accounts.google.com") ||
+                                host.endsWith(".google.com") ||
+                                host.endsWith(".googleusercontent.com") ||
+                                host.equals("accounts.youtube.com");
 
                             if (request.isForMainFrame()) {
                                 if (isTrustedAppOrAuthHost) {
@@ -633,7 +636,7 @@ public class MainActivity extends BridgeActivity {
                         java.util.Map<String, String> otaHeaders = new java.util.HashMap<>();
                         otaHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
                         otaHeaders.put("Pragma", "no-cache");
-                        wv.loadUrl("https://archery101010-c0bb4.web.app/?ota=" + System.currentTimeMillis() + "&skipIntro=1", otaHeaders);
+                        wv.loadUrl("https://archery101010-c0bb4.web.app/", otaHeaders);
                     }
                 } catch (Exception ignored) {}
             });
