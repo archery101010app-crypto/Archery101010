@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.125";
+const CACHE_NAME = "archery-101010-cache-v2.126";
 
 // Install event - pre-warm offline root shell bypassing HTTP disk cache
 self.addEventListener("install", (event) => {
@@ -52,6 +52,7 @@ self.addEventListener("fetch", (event) => {
 
   // Never cache or intercept live version manifests, SW scripts, or Firebase Auth redirect handlers
   if (
+    url.pathname === "/ota-version.json" ||
     url.pathname === "/version.json" ||
     url.pathname === "/app-version.json" ||
     url.pathname === "/sw.js" ||

@@ -1,9 +1,8 @@
 {
-  "version": "2.125",
-  "fullVersion": "2.125.0",
-  "versionCode": 52500,
-  "apkUrl": "https://archery101010-c0bb4.web.app/?v=2.125",
-  "apkDownloadUrl": "https://play.google.com/store/apps/details?id=com.archery101010.app",
-  "playStoreUrl": "https://play.google.com/store/apps/details?id=com.archery101010.app",
-  "updatedAt": "2026-11-19T21:17:39.754Z"
+  "version": "0.0.0",
+  "latestVersion": "2.126",
+  "fullVersion": "2.126.0",
+  "versionCode": 52600,
+  "legacyDisabled": true,
+  "updatedAt": "2026-11-19T22:15:22.361Z"
 }

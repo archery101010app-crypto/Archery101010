@@ -419,17 +419,32 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       bannerSrc.includes("window.location.reload()"),
       "AppUpdateBanner must use in-place window.location.reload() for standard web/PWA"
     );
-    const legacyGuardIdx = bannerSrc.indexOf("if (Boolean(winAny.ArcheryNativeAuth))");
+    const legacyGuardIdx = bannerSrc.indexOf("if (isNativeAndroidWebView || Boolean(winAny.ArcheryNativeAuth))");
     const webReloadIdx = bannerSrc.indexOf("window.location.reload();");
     assert.ok(
       legacyGuardIdx > 0 && legacyGuardIdx < webReloadIdx,
-      "AppUpdateBanner must return early for legacy Android shells (< v2.107) BEFORE window.location.reload() so Capacitor Bridge.launchIntent never opens Chrome"
+      "AppUpdateBanner must return early for legacy Android shells (< v2.110) BEFORE window.location.reload() so Capacitor Bridge.launchIntent never opens Chrome"
+    );
+    assert.ok(
+      bannerSrc.includes('"/ota-version.json"'),
+      "AppUpdateBanner must read /ota-version.json rather than legacy /version.json"
     );
 
+    const otaVerJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/ota-version.json"), "utf8"));
     const verJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/version.json"), "utf8"));
     const appVerJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/app-version.json"), "utf8"));
-    assert.equal(verJson.version, APP_VERSION);
-    assert.equal(appVerJson.version, APP_VERSION);
+    assert.equal(otaVerJson.version, APP_VERSION, "ota-version.json must match APP_VERSION");
+    assert.equal(
+      verJson.version,
+      "0.0.0",
+      "Legacy public/version.json must remain 0.0.0 so pre-v2.110 APKs never trigger external Chrome jumps"
+    );
+    assert.equal(
+      appVerJson.version,
+      "0.0.0",
+      "Legacy public/app-version.json must remain 0.0.0 so pre-v2.110 APKs never trigger external Chrome jumps"
+    );
+    assert.equal(verJson.latestVersion, APP_VERSION);
   });
 
   it("extracts adaptive smartwatch heart rate stats cleanly without empty placeholders when absent", async () => {

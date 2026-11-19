@@ -86,18 +86,28 @@ if (fs.existsSync(garminManifestPath)) {
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }
 
-// 6. Write public/version.json and public/app-version.json for automatic in-app update detection
+// 6. Write public/ota-version.json for modern in-app OTA (v2.126+) and neutralize legacy
+// public/version.json + public/app-version.json ("0.0.0") so older installed APKs (< v2.110,
+// before @Keep reloadInAppOta & allowNavigation) NEVER display a banner that jumps to Chrome.
+const otaVersionJsonPath = path.join(__dirname, '../public/ota-version.json');
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
-const versionPayload = {
+const nowIso = new Date().toISOString();
+const otaPayload = {
   version: displayVersion,
   fullVersion: newVersion,
   versionCode: vCode,
-  apkUrl: `https://archery101010-c0bb4.web.app/?v=${displayVersion}`,
-  apkDownloadUrl: 'https://play.google.com/store/apps/details?id=com.archery101010.app',
-  playStoreUrl: 'https://play.google.com/store/apps/details?id=com.archery101010.app',
-  updatedAt: new Date().toISOString()
+  updatedAt: nowIso
 };
-fs.writeFileSync(appVersionJsonPath, JSON.stringify(versionPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(versionJsonPath, JSON.stringify(versionPayload, null, 2) + '\n', 'utf8');
-console.log(`Updated public/version.json for v${displayVersion} (versionCode ${vCode})`);
+const legacyNeutralPayload = {
+  version: '0.0.0',
+  latestVersion: displayVersion,
+  fullVersion: newVersion,
+  versionCode: vCode,
+  legacyDisabled: true,
+  updatedAt: nowIso
+};
+fs.writeFileSync(otaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
+fs.writeFileSync(appVersionJsonPath, JSON.stringify(legacyNeutralPayload, null, 2) + '\n', 'utf8');
+fs.writeFileSync(versionJsonPath, JSON.stringify(legacyNeutralPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and neutralized legacy public/version.json`);
