@@ -20,7 +20,7 @@ export interface EndSummaryItem {
   note?: string;
 }
 
-export type TelemetryCardThemeMode = "black" | "photo" | "transparent";
+export type TelemetryCardThemeMode = "black" | "photo";
 
 export interface TargetShotChartParams {
   impacts: ShotImpactData[];
@@ -313,9 +313,9 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       : impacts.length;
   const effectiveMaxScore = totalArrowsCount > 0 ? totalArrowsCount * 10 : maxScore;
 
-  const isBlackMode = themeMode === "black";
   const isPhotoMode = themeMode === "photo";
-  const isTransparentMode = themeMode === "transparent";
+  const isBlackMode = !isPhotoMode;
+  const isTransparentMode = false;
 
   // 1. Background Layer based on selected themeMode
   if (isBlackMode) {

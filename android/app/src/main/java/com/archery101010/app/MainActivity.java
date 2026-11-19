@@ -139,44 +139,31 @@ public class MainActivity extends BridgeActivity {
         @Override
         public void onLocationChanged(Location loc) {
             if (!isSessionTrackingActive || loc == null) return;
-            if (loc.hasAccuracy() && loc.getAccuracy() > 35f) {
+            // Strict satellite-grade accuracy gate (<= 14m) so indoor Wi-Fi/cell triangulation bounce never adds phantom meters
+            if (!loc.hasAccuracy() || loc.getAccuracy() > 14f) {
                 return;
             }
             long now = System.currentTimeMillis();
-            boolean isHighAccuracyFix =
-                "gps".equalsIgnoreCase(loc.getProvider()) ||
-                (loc.hasAccuracy() && loc.getAccuracy() <= 18f);
-            if (isHighAccuracyFix) {
-                lastHighAccuracyGpsTimeMs = now;
-            } else if (
-                lastHighAccuracyGpsTimeMs > 0L &&
-                (now - lastHighAccuracyGpsTimeMs) <= 20000L &&
-                "network".equalsIgnoreCase(loc.getProvider()) &&
-                (!loc.hasAccuracy() || loc.getAccuracy() > 20f)
-            ) {
-                // Ignore coarse cell/Wi-Fi network jump while satellite/high-accuracy GPS was active recently
-                return;
-            }
-
             if (lastValidGpsLocation != null) {
                 float deltaM = loc.distanceTo(lastValidGpsLocation);
-                long dtMs = Math.max(1L, now - lastGpsFixTimeMs);
+                long dtMs = Math.max(500L, now - lastGpsFixTimeMs);
                 float speedMs = (deltaM * 1000f) / dtMs;
-                if (deltaM > 50f || speedMs > 8.5f) {
-                    // Update anchor on coarse-to-fine GPS jump or signal recovery so it never freezes permanently
+                if (deltaM > 60f || speedMs > 5.5f) {
                     lastValidGpsLocation = loc;
                     lastGpsFixTimeMs = now;
                     hasGpsFix = true;
                     return;
                 }
-                float minDeltaM = Math.max(1.5f, loc.hasAccuracy() ? loc.getAccuracy() * 0.22f : 1.5f);
+                float minDeltaM = Math.max(8.0f, loc.getAccuracy() * 1.25f);
                 if (deltaM >= minDeltaM) {
-                    accumulatedGpsDistanceM += deltaM;
-                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                    if (speedMs >= 0.55f) {
+                        accumulatedGpsDistanceM += deltaM;
+                        sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                        emitLocationSnapshot();
+                    }
                     lastValidGpsLocation = loc;
                     lastGpsFixTimeMs = now;
                     hasGpsFix = true;
-                    emitLocationSnapshot();
                 }
             } else {
                 lastValidGpsLocation = loc;
@@ -197,7 +184,13 @@ public class MainActivity extends BridgeActivity {
     };
 
     private final SensorEventListener nativeStepSensorListener = new SensorEventListener() {
-        private double smoothedMag = 9.81;
+        private double gravityMag = 9.81;
+        private double smoothLin = 0.0;
+        private boolean armedForPeak = true;
+        private boolean peakSeen = false;
+        private final long[] candidateTimes = new long[6];
+        private int candidateCount = 0;
+        private boolean rhythmicActive = false;
 
         @Override
         public void onSensorChanged(SensorEvent event) {
@@ -206,15 +199,63 @@ public class MainActivity extends BridgeActivity {
             float ay = event.values[1];
             float az = event.values[2];
             double mag = Math.sqrt(ax * ax + ay * ay + az * az);
-            double dynamicLinear = mag - smoothedMag;
-            smoothedMag = 0.96 * smoothedMag + 0.04 * mag;
+            gravityMag = 0.94 * gravityMag + 0.06 * mag;
+            smoothLin = 0.65 * smoothLin + 0.35 * (mag - gravityMag);
             long now = System.currentTimeMillis();
-            // Real walking step waveform detection (zero health permissions required)
-            if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && (now - lastStepDetectedTimeMs) >= 350L) {
-                lastStepDetectedTimeMs = now;
-                accumulatedSteps += 1;
-                sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
-                emitLocationSnapshot();
+
+            long lastMs = candidateCount > 0 ? candidateTimes[(candidateCount - 1) % 6] : 0L;
+            if (lastMs > 0L && (now - lastMs) > 1500L) {
+                candidateCount = 0;
+                rhythmicActive = false;
+                peakSeen = false;
+                armedForPeak = true;
+            }
+
+            if (armedForPeak && smoothLin >= 1.85) {
+                peakSeen = true;
+                armedForPeak = false;
+            } else if (peakSeen && smoothLin <= -0.80) {
+                peakSeen = false;
+                armedForPeak = true;
+                if (lastMs > 0L) {
+                    long dt = now - lastMs;
+                    if (dt < 360L) return;
+                    if (dt > 950L) {
+                        candidateTimes[0] = now;
+                        candidateCount = 1;
+                        rhythmicActive = false;
+                        return;
+                    }
+                }
+                candidateTimes[candidateCount % 6] = now;
+                candidateCount++;
+                if (rhythmicActive) {
+                    lastStepDetectedTimeMs = now;
+                    accumulatedSteps += 1;
+                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                    emitLocationSnapshot();
+                    return;
+                }
+                if (candidateCount >= 6) {
+                    double sumIv = 0.0;
+                    long[] ivs = new long[5];
+                    for (int i = 0; i < 5; i++) {
+                        long tB = candidateTimes[(candidateCount - 1 - i) % 6];
+                        long tA = candidateTimes[(candidateCount - 2 - i) % 6];
+                        ivs[i] = tB - tA;
+                        if (ivs[i] < 360L || ivs[i] > 950L) return;
+                        sumIv += ivs[i];
+                    }
+                    double meanIv = sumIv / 5.0;
+                    for (int i = 0; i < 5; i++) {
+                        if (Math.abs(ivs[i] - meanIv) > meanIv * 0.24) return;
+                    }
+                    rhythmicActive = true;
+                    lastStepDetectedTimeMs = now;
+                    accumulatedSteps += 6;
+                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                    emitLocationSnapshot();
+                }
             }
         }
 

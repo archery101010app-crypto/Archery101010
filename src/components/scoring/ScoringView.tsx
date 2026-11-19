@@ -29,6 +29,13 @@ import {
   publishWatchState,
   subscribeWatchMessages
 } from "@/lib/scoring/biometricsEngine";
+import {
+  createGaitDetectorState,
+  createGpsAnchorState,
+  notifyScreenInteraction,
+  processAccelerometerSample,
+  processGpsCoordinateFix
+} from "@/lib/scoring/walkingTracker";
 import SmartwatchMiniApp from "@/components/watch/SmartwatchMiniApp";
 import StravaShareModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
@@ -323,76 +330,47 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Live Session GPS + Real Walking Movement Tracker (starts on "Comenzar entrenamiento", stops when session ends)
+  // Live Session GPS + Real Bipedal Walking Gait Tracker (0m when seated/tapping, real meters only when walking)
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Ensure any legacy APK's naive single-spike native sensor listener is stopped so screen taps never count as steps
+    stopNativeLocationTracking();
+    (window as any).__onNativeMovementUpdate = undefined;
+    (window as any).__onNativeLocationUpdate = undefined;
 
     const initialMeters = Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0;
     const initialSteps = Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0;
     gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, initialMeters);
     stepsCountRef.current = Math.max(stepsCountRef.current, initialSteps);
-    const hasNativeBridge = Boolean((window as any).ArcheryLocationNativeBridge?.startSessionTracking);
 
-    // 1. Register callback from Native Android LocationManager + Accelerometer Step Fusion
-    const handleNativeLocationUpdate = (meters: number, isGpsLocked: boolean, nativeSteps?: number) => {
-      if (typeof nativeSteps === "number" && !isNaN(nativeSteps)) {
-        stepsCountRef.current = Math.max(stepsCountRef.current, nativeSteps);
-      }
-      if (typeof meters === "number" && !isNaN(meters)) {
-        gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, meters);
-      }
-      const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
-      const effectiveDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
-      setGpsDistanceM((curr) => Math.max(curr, effectiveDistM));
-      setGpsActive(Boolean(isGpsLocked));
-    };
-    (window as any).__onNativeMovementUpdate = handleNativeLocationUpdate;
-    (window as any).__onNativeLocationUpdate = handleNativeLocationUpdate;
-
-    if (hasNativeBridge) {
-      try {
-        (window as any).ArcheryLocationNativeBridge.startSessionTracking(initialMeters);
-      } catch (e) {
-        console.warn("Native session location bridge start error:", e);
-      }
-    }
-
-    // 2. Also run Web Geolocation + Web DeviceMotion step cadence for web/PWA browsers
+    const gaitState = createGaitDetectorState(stepsCountRef.current);
+    const gpsAnchor = createGpsAnchorState(gpsDistanceAccumRef.current);
     let watchId: number | null = null;
-    let smoothedMag = 9.81;
 
-    if (!hasNativeBridge && typeof navigator !== "undefined" && "geolocation" in navigator) {
+    const handleScreenTouch = () => {
+      notifyScreenInteraction(gaitState, Date.now());
+    };
+    window.addEventListener("pointerdown", handleScreenTouch, { passive: true });
+    window.addEventListener("touchstart", handleScreenTouch, { passive: true });
+
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
       try {
         watchId = navigator.geolocation.watchPosition(
           (pos) => {
             const { latitude, longitude, accuracy } = pos.coords;
-            if (typeof accuracy === "number" && accuracy > 35) {
-              return;
-            }
-            setGpsActive(true);
-            const now = Date.now();
-            const prev = lastGpsCoordRef.current;
-            if (prev) {
-              const delta = calculateHaversineMeters(prev.lat, prev.lon, latitude, longitude);
-              const dtSec = Math.max(0.3, (now - prev.time) / 1000);
-              const speed = delta / dtSec;
-              if (delta > 50 || speed > 8.5) {
-                lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
-                return;
-              }
-              const minDelta = Math.max(1.5, (accuracy || 6) * 0.22);
-              if (delta >= minDelta) {
-                gpsDistanceAccumRef.current += delta;
-                const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
-                const nextDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
-                setGpsDistanceM((curr) => Math.max(curr, nextDistM));
-                lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
-              }
-            } else {
-              lastGpsCoordRef.current = { lat: latitude, lon: longitude, time: now };
+            const res = processGpsCoordinateFix(gpsAnchor, latitude, longitude, accuracy, Date.now());
+            setGpsActive(res.hasSatelliteLock);
+            if (res.accumulatedMeters > gpsDistanceAccumRef.current) {
+              gpsDistanceAccumRef.current = res.accumulatedMeters;
+              const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
+              const nextDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
+              setGpsDistanceM((curr) => Math.max(curr, nextDistM));
             }
           },
-          () => {},
+          () => {
+            setGpsActive(false);
+          },
           {
             enableHighAccuracy: true,
             maximumAge: 1000,
@@ -403,32 +381,32 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
 
     const handleMotion = (ev: DeviceMotionEvent) => {
-      if (hasNativeBridge) return; // Native bridge already handles accelerometer + GPS fusion
       const acc = ev.accelerationIncludingGravity;
       if (!acc) return;
-      const ax = acc.x || 0;
-      const ay = acc.y || 0;
-      const az = acc.z || 0;
-      const mag = Math.sqrt(ax * ax + ay * ay + az * az);
-      const dynamicLinear = mag - smoothedMag;
-      smoothedMag = 0.96 * smoothedMag + 0.04 * mag;
-      const now = Date.now();
-      if (dynamicLinear >= 1.15 && dynamicLinear <= 14.0 && now - lastStepTimeRef.current > 350) {
-        lastStepTimeRef.current = now;
-        stepsCountRef.current += 1;
-        const estFromSteps = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
+      const prevSteps = stepsCountRef.current;
+      const nextSteps = processAccelerometerSample(
+        gaitState,
+        acc.x || 0,
+        acc.y || 0,
+        acc.z || 0,
+        Date.now()
+      );
+      if (nextSteps > prevSteps) {
+        stepsCountRef.current = nextSteps;
+        const estFromSteps = estimateDistanceFromSteps(nextSteps, user.physicalData?.height);
         const nextDistM = Math.max(gpsDistanceAccumRef.current, estFromSteps);
         setGpsDistanceM((curr) => Math.max(curr, nextDistM));
       }
     };
 
-    if (!hasNativeBridge && "DeviceMotionEvent" in window) {
+    if ("DeviceMotionEvent" in window) {
       window.addEventListener("devicemotion", handleMotion);
     }
 
-    // Stop measuring immediately when the training session ends or exits
     return () => {
       stopNativeLocationTracking();
+      window.removeEventListener("pointerdown", handleScreenTouch);
+      window.removeEventListener("touchstart", handleScreenTouch);
       if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
         try {
           navigator.geolocation.clearWatch(watchId);

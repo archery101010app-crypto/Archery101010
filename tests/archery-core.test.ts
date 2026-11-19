@@ -448,5 +448,60 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       cardGenSrc.includes("const brandTopY = hasHeartRate ? 1290 : 1343;"),
       "Shareable card must shift layout only when heart rate exists"
     );
+
+    const shareModalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/StravaShareModal.tsx"),
+      "utf8"
+    );
+    assert.equal(
+      shareModalSrc.includes('"transparent"'),
+      false,
+      "StravaShareModal must not offer the removed Transparent mode"
+    );
+  });
+
+  it("records 0 meters when seated/tapping or under indoor GPS jitter, and real meters on continuous walking", async () => {
+    const {
+      createGaitDetectorState,
+      createGpsAnchorState,
+      notifyScreenInteraction,
+      processAccelerometerSample,
+      processGpsCoordinateFix
+    } = await import("../src/lib/scoring/walkingTracker.ts");
+
+    // 1. Seated test: 40 finger taps + hand tilts while scoring arrows -> MUST equal 0 steps
+    const seatedState = createGaitDetectorState(0);
+    let t = 1_000_000;
+    for (let tap = 0; tap < 40; tap++) {
+      notifyScreenInteraction(seatedState, t);
+      processAccelerometerSample(seatedState, 0.5, 1.2, 11.4, t + 18); // tap jolt
+      processAccelerometerSample(seatedState, -0.3, 0.8, 9.5, t + 40);
+      // Even 2.5s later, an isolated chair shift / hand tilt (1-2 impulses) must NOT count
+      processAccelerometerSample(seatedState, 1.4, 2.1, 12.2, t + 2600);
+      processAccelerometerSample(seatedState, 0.1, 0.4, 8.2, t + 2800);
+      t += 3500;
+    }
+    assert.equal(seatedState.creditedSteps, 0, "Seated taps and tilts must yield 0 steps");
+
+    // 2. Indoor GPS jitter: accuracy 24m bouncing 12m back and forth -> MUST equal 0m
+    const indoorGps = createGpsAnchorState(0);
+    processGpsCoordinateFix(indoorGps, 9.935, -84.091, 24, 1000);
+    processGpsCoordinateFix(indoorGps, 9.93511, -84.091, 24, 6000);
+    processGpsCoordinateFix(indoorGps, 9.93499, -84.091, 10, 45000); // slow <0.55 m/s drift
+    assert.equal(indoorGps.accumulatedMeters, 0, "Indoor coarse GPS and slow stationary drift must yield 0m");
+
+    // 3. Real downrange walk: 20 rhythmic sinusoidal footsteps at 560ms cadence -> MUST count real steps
+    const walkState = createGaitDetectorState(0);
+    let wt = 2_000_000;
+    for (let step = 0; step < 20; step++) {
+      // Simulate 560ms sinusoidal walking wave sampled every 20ms (28 samples per step)
+      for (let s = 0; s < 28; s++) {
+        const phase = (s / 28) * Math.PI * 2;
+        const az = 9.81 + Math.sin(phase) * 3.4;
+        processAccelerometerSample(walkState, 0, 0, az, wt + s * 20);
+      }
+      wt += 560;
+    }
+    assert.ok(walkState.creditedSteps >= 18 && walkState.creditedSteps <= 21, `Expected ~20 real steps, got ${walkState.creditedSteps}`);
   });
 });

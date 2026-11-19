@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, MessageCircle, X, Camera, ImagePlus, Circle, Layers, RefreshCw } from "lucide-react";
+import { Share2, MessageCircle, X, Camera, ImagePlus, Circle, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   ShareTargetResult,
@@ -15,7 +15,7 @@ interface StravaShareModalProps {
   onClose: () => void;
 }
 
-type ActiveButtonTab = "black" | "transparent" | "upload" | "camera";
+type ActiveButtonTab = "black" | "upload" | "camera";
 
 export default function StravaShareModal({ shareResult, onClose }: StravaShareModalProps) {
   const { language, unitSystem, t, tx } = useLanguage();
@@ -70,12 +70,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
       try {
         const isPhotoDesign =
           (activeTab === "upload" || activeTab === "camera") && Boolean(currentPhotoUrl);
-        const resolvedThemeMode =
-          activeTab === "transparent"
-            ? "transparent"
-            : isPhotoDesign
-            ? "photo"
-            : "black";
+        const resolvedThemeMode = isPhotoDesign ? "photo" : "black";
 
         const canvas = await renderTargetShotChartCanvas({
           ...shareResult.params,
@@ -153,7 +148,6 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
 
   const getModeSuffix = () => {
     const isEs = language === "es";
-    if (activeTab === "transparent") return isEs ? "-Transparente" : "-Transparent";
     if (activeTab === "upload") return isEs ? "-Foto" : "-Photo";
     if (activeTab === "camera") return isEs ? "-Camara" : "-Camera";
     return "";
@@ -169,7 +163,6 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
     const { fileName, captionText } = shareResult;
     const outFileName = fileName.replace(/\.png$/i, `${getModeSuffix()}.png`);
 
-    // 1. Universal Native OS Share (Android Chooser / iOS & Mobile Web Share Sheet: KakaoTalk, LINE, iMessage, Telegram, etc.)
     if (typeof window !== "undefined" && window.ArcheryNativeShare?.shareImage) {
       try {
         window.ArcheryNativeShare.shareImage(
@@ -266,9 +259,9 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
             </button>
           </div>
 
-          {/* 4-Mode Selector Bar: Fondo Negro | Transparente | Galería | Cámara */}
+          {/* 3-Mode Selector Bar: Fondo Negro | Galería | Cámara */}
           <div className="w-full flex flex-col gap-1.5 my-1 shrink-0">
-            <div className="grid grid-cols-2 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
+            <div className="grid grid-cols-3 gap-1.5 bg-[#0A0E17] p-1.5 rounded-2xl border border-white/12">
               <button
                 type="button"
                 onClick={() => setActiveTab("black")}
@@ -278,21 +271,8 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                     : "bg-transparent text-white/75 hover:text-white"
                 }`}
               >
-                <Circle size={10} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
+                <Circle size={9.5} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
                 <span className="truncate">{tx("Fondo Negro", "Black OLED")}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("transparent")}
-                className={`h-9 px-1.5 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap min-w-0 ${
-                  activeTab === "transparent"
-                    ? "bg-white text-[#04060A] shadow-sm"
-                    : "bg-transparent text-white/75 hover:text-white"
-                }`}
-              >
-                <Layers size={11.5} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">{tx("Transparente", "Transparent")}</span>
               </button>
 
               <button
@@ -338,23 +318,12 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            style={
-              activeTab === "transparent"
-                ? {
-                    backgroundImage:
-                      "linear-gradient(45deg, #11151D 25%, transparent 25%), linear-gradient(-45deg, #11151D 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #11151D 75%), linear-gradient(-45deg, transparent 75%, #11151D 75%)",
-                    backgroundSize: "18px 18px",
-                    backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0",
-                    backgroundColor: "#080A0F"
-                  }
-                : undefined
-            }
             className="relative w-fit max-w-[290px] sm:max-w-[315px] mx-auto my-1 rounded-3xl overflow-hidden border border-white/15 bg-[#05070B] shadow-[0_16px_48px_rgba(0,0,0,0.85)] shrink-0"
           >
             <img
               src={currentDataUrl}
               alt="ARCHERY 101010 THE APP"
-              className={`max-h-[42dvh] w-auto mx-auto object-contain block select-none transition-opacity duration-150 ${
+              className={`max-h-[46dvh] w-auto mx-auto object-contain block select-none transition-opacity duration-150 ${
                 isRendering ? "opacity-60" : "opacity-100"
               }`}
             />
