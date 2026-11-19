@@ -329,7 +329,7 @@ export default function HistoryView({
     link.setAttribute("download", fileName);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 

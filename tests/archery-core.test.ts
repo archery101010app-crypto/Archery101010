@@ -542,4 +542,103 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       "Bow Configuration section must not reference height or weight labels"
     );
   });
+
+  it("shields React Fiber removeChild and insertBefore from browser auto-translate <font> DOM mutations", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { applyDomMutationPatch } = await import("../src/lib/domMutationGuard.ts");
+
+    class MockNode {
+      nodeName: string;
+      parentNode: MockNode | null = null;
+      childNodes: MockNode[] = [];
+      constructor(nodeName: string) {
+        this.nodeName = nodeName;
+      }
+      appendChild<T extends MockNode>(child: T): T {
+        if (child.parentNode) {
+          child.parentNode.removeChild(child);
+        }
+        child.parentNode = this;
+        this.childNodes.push(child);
+        return child;
+      }
+      removeChild<T extends MockNode>(child: T): T {
+        const idx = this.childNodes.indexOf(child);
+        if (idx === -1 || child.parentNode !== this) {
+          const err = new Error(
+            "NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node."
+          );
+          err.name = "NotFoundError";
+          throw err;
+        }
+        this.childNodes.splice(idx, 1);
+        child.parentNode = null;
+        return child;
+      }
+      insertBefore<T extends MockNode>(newNode: T, refNode: MockNode | null): T {
+        if (refNode === null) {
+          return this.appendChild(newNode);
+        }
+        const idx = this.childNodes.indexOf(refNode);
+        if (idx === -1 || refNode.parentNode !== this) {
+          const err = new Error(
+            "NotFoundError: Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node."
+          );
+          err.name = "NotFoundError";
+          throw err;
+        }
+        if (newNode.parentNode) {
+          newNode.parentNode.removeChild(newNode);
+        }
+        newNode.parentNode = this;
+        this.childNodes.splice(idx, 0, newNode);
+        return newNode;
+      }
+    }
+
+    applyDomMutationPatch(MockNode.prototype as any);
+
+    // Simulate Chrome / Google Translate wrapping a React text node in <font><font>text</font></font>
+    const div = new MockNode("DIV");
+    const outerFont = new MockNode("FONT");
+    const innerFont = new MockNode("FONT");
+    const reactText = new MockNode("#text");
+    const trailingSpan = new MockNode("SPAN");
+
+    div.appendChild(outerFont);
+    outerFont.appendChild(innerFont);
+    innerFont.appendChild(reactText);
+    div.appendChild(trailingSpan);
+
+    // 1. React calls div.insertBefore(badge, reactText) while reactText is trapped inside <font>
+    const badge = new MockNode("SPAN");
+    div.insertBefore(badge, reactText);
+    assert.deepEqual(
+      div.childNodes,
+      [badge, outerFont, trailingSpan],
+      "insertBefore must locate the outer <font> wrapper and insert right before it without throwing"
+    );
+
+    // 2. React calls div.removeChild(reactText) -> must remove reactText AND prune empty <font> wrappers
+    const removed = div.removeChild(reactText);
+    assert.equal(removed, reactText);
+    assert.equal(reactText.parentNode, null);
+    assert.deepEqual(
+      div.childNodes,
+      [badge, trailingSpan],
+      "removeChild must remove the reparented node and clean up empty <font> wrappers"
+    );
+
+    // 3. Removing an already-detached node must be a safe no-op rather than throwing NotFoundError
+    const detached = new MockNode("#text");
+    assert.equal(div.removeChild(detached), detached);
+
+    // 4. Verify RootLayout enforces translate="no", notranslate, google: "notranslate", and inline pre-hydration script
+    const layoutSrc = fs.readFileSync(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
+    assert.ok(layoutSrc.includes('translate="no"'), 'RootLayout must set translate="no"');
+    assert.ok(layoutSrc.includes("notranslate"), "RootLayout must include notranslate class");
+    assert.ok(layoutSrc.includes('google: "notranslate"'), "RootLayout metadata must block Google auto-translate");
+    assert.ok(layoutSrc.includes("DOM_MUTATION_GUARD_INLINE_SCRIPT"), "RootLayout must inject pre-hydration DOM guard");
+  });
 });

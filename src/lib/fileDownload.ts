@@ -86,7 +86,7 @@ export async function downloadOrShareFile(options: {
     link.click();
     setTimeout(() => {
       try {
-        document.body.removeChild(link);
+        link.remove();
         URL.revokeObjectURL(url);
       } catch {
         // ignore cleanup error

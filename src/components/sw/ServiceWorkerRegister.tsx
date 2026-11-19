@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { installDomMutationGuard } from "@/lib/domMutationGuard";
+
+if (typeof window !== "undefined") {
+  installDomMutationGuard();
+}
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
+    installDomMutationGuard();
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       let activeRegistration: ServiceWorkerRegistration | null = null;
 

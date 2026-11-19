@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Archery 101010"
+  },
+  other: {
+    google: "notranslate"
   }
 };
 
@@ -42,6 +45,7 @@ export const viewport: Viewport = {
 import ServiceWorkerRegister from "@/components/sw/ServiceWorkerRegister";
 import { LanguageProvider } from "@/lib/contexts/LanguageContext";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
+import { DOM_MUTATION_GUARD_INLINE_SCRIPT } from "@/lib/domMutationGuard";
 
 export default function RootLayout({
   children,
@@ -49,8 +53,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="h-full antialiased dark overflow-x-hidden w-full max-w-full" style={{ colorScheme: "dark" }}>
-      <body className="h-full bg-black-oled text-white flex flex-col font-sans select-none overflow-x-hidden w-full max-w-full">
+    <html
+      lang="es"
+      translate="no"
+      suppressHydrationWarning
+      className="notranslate h-full antialiased dark overflow-x-hidden w-full max-w-full"
+      style={{ colorScheme: "dark" }}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: DOM_MUTATION_GUARD_INLINE_SCRIPT }} />
+      </head>
+      <body
+        translate="no"
+        suppressHydrationWarning
+        className="notranslate h-full bg-black-oled text-white flex flex-col font-sans select-none overflow-x-hidden w-full max-w-full"
+      >
         <ServiceWorkerRegister />
         <LanguageProvider>
           <ErrorBoundary>

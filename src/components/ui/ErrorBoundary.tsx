@@ -3,6 +3,11 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { ShieldAlert, RefreshCw, Home, RotateCcw } from "lucide-react";
 import { reportClientError, initGlobalCrashHandlers } from "@/lib/crashReporter";
+import { installDomMutationGuard } from "@/lib/domMutationGuard";
+
+if (typeof window !== "undefined") {
+  installDomMutationGuard();
+}
 
 interface Props {
   children: ReactNode;
@@ -17,6 +22,8 @@ interface State {
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
+  private lastDomAutoRetryAt = 0;
+
   public state: State = {
     hasError: false,
     error: null,
@@ -24,6 +31,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   public componentDidMount() {
+    installDomMutationGuard();
     initGlobalCrashHandlers();
   }
 
@@ -32,12 +40,22 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const msg = `${error?.name || ""} ${error?.message || ""} ${error?.toString?.() || ""}`;
+    if (msg.includes("removeChild") || msg.includes("insertBefore")) {
+      installDomMutationGuard();
+      const now = Date.now();
+      if (now - this.lastDomAutoRetryAt > 3000) {
+        this.lastDomAutoRetryAt = now;
+        this.setState({ hasError: false, error: null, errorInfo: null });
+        return;
+      }
+    }
+
     console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
     this.setState({ errorInfo });
     reportClientError(error, this.props.sectionName || "root");
 
     const isSubView = Boolean(this.props.sectionName || this.props.compact);
-    const msg = error?.toString() || "";
     if (
       !isSubView &&
       typeof window !== "undefined" &&
@@ -73,12 +91,30 @@ export default class ErrorBoundary extends Component<Props, State> {
       } catch {
         // ignore
       }
+      const winAny = window as any;
+      if (winAny.ArcheryNativeAuth && typeof winAny.ArcheryNativeAuth.reloadInAppOta === "function") {
+        winAny.ArcheryNativeAuth.reloadInAppOta();
+        return;
+      }
+      if (winAny.ArcheryNativeAuth) {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+        return;
+      }
       window.location.href = `${window.location.origin}/?v=${Date.now()}`;
     }
   };
 
   private handleReset = () => {
     if (typeof window !== "undefined") {
+      const winAny = window as any;
+      if (winAny.ArcheryNativeAuth && typeof winAny.ArcheryNativeAuth.reloadInAppOta === "function") {
+        winAny.ArcheryNativeAuth.reloadInAppOta();
+        return;
+      }
+      if (winAny.ArcheryNativeAuth) {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+        return;
+      }
       window.location.href = window.location.origin;
     }
   };
@@ -161,7 +197,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-black-oled text-white relative overflow-hidden">
+        <div
+          translate="no"
+          className="notranslate min-h-screen w-full flex flex-col items-center justify-center p-6 bg-black-oled text-white relative overflow-hidden"
+        >
           {/* Clean Editorial Alert Box */}
           <div className="w-full max-w-sm bg-[#0B0D12] border border-white/[0.08] rounded-3xl p-6 flex flex-col items-center gap-5 shadow-2xl relative z-10">
             <div className="w-12 h-12 rounded-2xl bg-white border border-white flex items-center justify-center text-black">

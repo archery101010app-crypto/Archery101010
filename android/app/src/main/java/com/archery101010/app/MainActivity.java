@@ -432,6 +432,12 @@ public class MainActivity extends BridgeActivity {
                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
                     if (url != null && (url.startsWith("https://localhost") || url.startsWith("https://archery101010-c0bb4.web.app"))) {
                         isWebWatchListenerReady = false;
+                        try {
+                            view.evaluateJavascript(
+                                "(function(){try{if(typeof Node==='function'&&Node.prototype&&!Node.prototype.__archeryDomPatched){var r=Node.prototype.removeChild,i=Node.prototype.insertBefore;Node.prototype.removeChild=function(c){if(c&&c.parentNode!==this){var p=c.parentNode;if(p){var out=r.call(p,c),cur=p;while(cur&&cur!==this&&cur.nodeName==='FONT'&&cur.childNodes.length===0&&cur.parentNode){var np=cur.parentNode;r.call(np,cur);cur=np;}return out;}return c;}return r.call(this,c);};Node.prototype.insertBefore=function(n,ref){if(ref&&ref.parentNode!==this){var a=ref.parentNode;while(a&&a.parentNode!==this){a=a.parentNode;}if(a&&a.parentNode===this){return i.call(this,n,a);}return i.call(this,n,null);}return i.call(this,n,ref);};Object.defineProperty(Node.prototype,'__archeryDomPatched',{value:true,configurable:true});}}catch(e){}})();",
+                                null
+                            );
+                        } catch (Exception ignored) {}
                     }
                     super.onPageStarted(view, url, favicon);
                 }
