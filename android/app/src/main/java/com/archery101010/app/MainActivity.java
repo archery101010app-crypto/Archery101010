@@ -485,6 +485,10 @@ public class MainActivity extends BridgeActivity {
                                 new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8))
                             );
                         }
+                        // Let Chromium's native HTTP/3 stack fetch remote OTA assets directly without WebViewLocalServer proxy
+                        if (host.equals("archery101010-c0bb4.web.app")) {
+                            return null;
+                        }
                     }
                     return super.shouldInterceptRequest(view, request);
                 }
@@ -677,7 +681,7 @@ public class MainActivity extends BridgeActivity {
                         java.util.Map<String, String> otaHeaders = new java.util.HashMap<>();
                         otaHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
                         otaHeaders.put("Pragma", "no-cache");
-                        wv.loadUrl("https://archery101010-c0bb4.web.app/", otaHeaders);
+                        wv.loadUrl("https://archery101010-c0bb4.web.app/?ota=" + System.currentTimeMillis(), otaHeaders);
                     }
                 } catch (Exception ignored) {}
             });

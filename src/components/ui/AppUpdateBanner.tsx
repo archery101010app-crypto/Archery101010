@@ -151,7 +151,15 @@ export default function AppUpdateBanner() {
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [legacyReadyNotice, setLegacyReadyNotice] = useState(false);
   const updatingRef = useRef(false);
+
+  const isLegacyAndroidShellNow = (): boolean => {
+    if (typeof window === "undefined") return false;
+    const winAny = window as unknown as WinUpdateBridge;
+    const canReloadNatively = typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function";
+    return Boolean(winAny.ArcheryNativeAuth) && !canReloadNatively;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -196,6 +204,11 @@ export default function AppUpdateBanner() {
         ) {
           setDismissed(false);
           setRemoteInfo(data);
+          // On pre-v2.107 Android shells (which lack reloadInAppOta), pre-purge SW & HTTP cache
+          // silently in the background so closing & reopening the app loads the new version with zero Chrome jump.
+          if (isLegacyAndroidShell) {
+            void purgeServiceWorkersAndCachesBounded();
+          }
         } else {
           setRemoteInfo(null);
         }
@@ -256,19 +269,30 @@ export default function AppUpdateBanner() {
     }, RELOAD_FAILSAFE_RESET_MS);
 
     // 1. Modern Android native shell (v2.107+): Java WebView.clearCache(true) + WebView.loadUrl()
+    // Executes 100% inside the native WebView via PageTransition.FROM_API (never opens external browser).
     if (typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function") {
       winAny.ArcheryNativeAuth.reloadInAppOta();
       return;
     }
 
-    // 2. Legacy Android native shell (< v2.107) on remote OTA origin & Web/PWA:
-    // CRITICAL: Always use window.location.reload() (Chromium ui::PAGE_TRANSITION_RELOAD).
-    // PAGE_TRANSITION_RELOAD NEVER invokes WebViewClient.shouldOverrideUrlLoading() in Android WebView,
-    // guaranteeing 0% chance of Capacitor launching an external browser Intent!
+    // 2. Legacy Android native shell (< v2.107, before reloadInAppOta & allowNavigation existed):
+    // NEVER call window.location.reload() here! In pre-v2.107 APKs, ANY renderer-initiated navigation
+    // invokes Capacitor Bridge.launchIntent() and opens Chrome externally. Instead, caches are now purged
+    // in-place so closing & reopening the app boots straight into the new version via Java onCreate loadUrl().
+    if (Boolean(winAny.ArcheryNativeAuth)) {
+      updatingRef.current = false;
+      setIsUpdating(false);
+      setLegacyReadyNotice(true);
+      return;
+    }
+
+    // 3. Standard Web Browser / Installed PWA: safe in-place reload
     window.location.reload();
   }, [remoteInfo]);
 
   if (!remoteInfo || dismissed) return null;
+
+  const legacyShell = isLegacyAndroidShellNow();
 
   return (
     <div className="w-full max-w-md mx-auto px-3 pt-2 z-50 shrink-0">
@@ -279,32 +303,56 @@ export default function AppUpdateBanner() {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
-              {tx(
-                `Nueva versión disponible · v${remoteInfo.version}`,
-                `New version available · v${remoteInfo.version}`
-              )}
+              {legacyShell && legacyReadyNotice
+                ? tx(
+                    `v${remoteInfo.version} lista · Cierra y reabre la app`,
+                    `v${remoteInfo.version} ready · Close & reopen app`
+                  )
+                : tx(
+                    `Nueva versión disponible · v${remoteInfo.version}`,
+                    `New version available · v${remoteInfo.version}`
+                  )}
             </span>
             <span className="text-[10.5px] text-[#8E96A4] truncate tabular-nums">
-              {tx(
-                `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
-                `Instant one-tap update (current v${APP_VERSION})`
-              )}
+              {legacyShell
+                ? tx(
+                    `Desliza para cerrar la app y ábrela (o instala APK v${remoteInfo.version})`,
+                    `Swipe-close and reopen the app (or install v${remoteInfo.version} APK)`
+                  )
+                : tx(
+                    `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
+                    `Instant one-tap update (current v${APP_VERSION})`
+                  )}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => void handleUpdateNow()}
-            disabled={isUpdating}
-            className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95"
-          >
-            <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
-            <span>
-              {isUpdating ? tx("Actualizando...", "Updating...") : tx("Actualizar", "Update")}
-            </span>
-          </button>
+          {legacyShell && legacyReadyNotice ? (
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-extrabold text-[11px] uppercase tracking-wider transition cursor-pointer active:scale-95"
+            >
+              {tx("OK", "OK")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleUpdateNow()}
+              disabled={isUpdating}
+              className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+            >
+              <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
+              <span>
+                {isUpdating
+                  ? tx("Preparando...", "Preparing...")
+                  : legacyShell
+                  ? tx("Preparar", "Prepare")
+                  : tx("Actualizar", "Update")}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDismiss}
