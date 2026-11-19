@@ -160,7 +160,7 @@ export default function ProfileView({
   );
 
   useEffect(() => {
-    if (!editPersonal && !editBow) {
+    if (!editPersonal) {
       const h = user.physicalData?.height && user.physicalData.height > 0 ? user.physicalData.height : 0;
       const w = user.physicalData?.weight && user.physicalData.weight > 0 ? user.physicalData.weight : 0;
       if (h > 0) {
@@ -181,7 +181,7 @@ export default function ProfileView({
         setWeightLbs("");
       }
     }
-  }, [user.physicalData, editPersonal, editBow]);
+  }, [user.physicalData, editPersonal]);
 
   // Multi-Bow Configuration State (Arco #1, Arco #2, Arco #3)
   const parseInitialBows = (u: UserProfile): EditableBowConfig[] => {
@@ -766,15 +766,14 @@ export default function ProfileView({
       });
 
       const primaryBow = cleanedBows[0];
-      const { height: parsedHeight, weight: parsedWeight } = resolveCanonicalBiometrics();
 
       const updated = await updateProfile(user.uid, {
         unitSystem,
         bowConfig: primaryBow,
         bows: cleanedBows,
         physicalData: {
-          height: parsedHeight,
-          weight: parsedWeight,
+          height: user.physicalData?.height || 0,
+          weight: user.physicalData?.weight || 0,
           dominantEye: user.physicalData?.dominantEye || (primaryBow.hand === "LH" ? "L" : "R"),
           dominantHand: primaryBow.hand === "LH" ? "L" : "R"
         }
@@ -1310,9 +1309,6 @@ export default function ProfileView({
 
         {editBow ? (
           <div className="flex flex-col gap-4">
-            <div className="bg-neutral-950/80 border border-white/10 rounded-2xl p-4">
-              {renderBiometricEditInputs()}
-            </div>
             {bowsList.map((bow, idx) => {
               const bowNumber = idx + 1;
               const isPrimary = idx === 0;

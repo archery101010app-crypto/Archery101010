@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.122</string>
+    <string>2.123</string>
     <key>CFBundleVersion</key>
-    <string>152200</string>
+    <string>152300</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>ARCHERY 101010 analiza localmente en tiempo real el chasquido acústico de la cuerda junto con el acelerómetro (Doble Llave) para contar tus flechas automáticamente. El audio nunca se graba, almacena ni envía.</string>
     <key>NSMotionUsageDescription</key>

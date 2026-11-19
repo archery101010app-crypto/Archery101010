@@ -600,7 +600,7 @@ export default function ProfileCompletionModal({
             </div>
           )}
 
-          {/* Unit System & Bow / Biometrics Section */}
+          {/* Unit System & Personal Biometrics (Height / Weight) */}
           <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10.5px] font-black uppercase tracking-wider text-white">
@@ -629,82 +629,6 @@ export default function ProfileCompletionModal({
                 >
                   {tx("Imperial", "Imperial")}
                 </button>
-              </div>
-            </div>
-
-            {/* Bow Type & Default Distance */}
-            <div className="grid grid-cols-3 gap-1.5">
-              {(["Recurve", "Compound", "Barebow"] as const).map((bType) => {
-                const label =
-                  bType === "Recurve"
-                    ? t("bowRecurve")
-                    : bType === "Compound"
-                    ? t("bowCompound")
-                    : t("bowBarebow");
-                return (
-                  <button
-                    key={bType}
-                    type="button"
-                    onClick={() => handleBowTypeChange(bType)}
-                    className={`h-8 px-1 rounded-lg border text-[11px] font-black uppercase truncate transition cursor-pointer ${
-                      bowType === bType
-                        ? "bg-cyan-neon text-black border-cyan-neon"
-                        : "bg-[#090B0F] text-white border-white/10 hover:border-white/25"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-4 gap-1.5">
-              {distanceOptions.map((opt) => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => {
-                    setManualDistanceOverride(true);
-                    setDefaultDistance(opt.meters);
-                  }}
-                  className={`h-8 rounded-lg border text-[11px] font-black tabular-nums transition cursor-pointer ${
-                    defaultDistance === opt.meters
-                      ? "bg-cyan-neon text-black border-cyan-neon"
-                      : "bg-[#090B0F] text-white border-white/10 hover:border-white/25"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Poundage & Draw Length */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
-                  {t("poundage")}
-                </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={poundageRaw}
-                  onChange={(e) => setPoundageRaw(e.target.value)}
-                  placeholder={tx("Ej. 38,5", "e.g. 38.5")}
-                  className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
-                  {tx("Apertura (in)", "Draw length (in)")}
-                </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={drawLengthRaw}
-                  onChange={(e) => setDrawLengthRaw(e.target.value)}
-                  placeholder={tx("Ej. 28,5", "e.g. 28.5")}
-                  className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
-                />
               </div>
             </div>
 
@@ -781,6 +705,89 @@ export default function ProfileCompletionModal({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Bow Configuration Only */}
+          <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 flex flex-col gap-2.5">
+            <span className="text-[10.5px] font-black uppercase tracking-wider text-white">
+              {t("bowConfig")}
+            </span>
+
+            {/* Bow Type & Default Distance */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {(["Recurve", "Compound", "Barebow"] as const).map((bType) => {
+                const label =
+                  bType === "Recurve"
+                    ? t("bowRecurve")
+                    : bType === "Compound"
+                    ? t("bowCompound")
+                    : t("bowBarebow");
+                return (
+                  <button
+                    key={bType}
+                    type="button"
+                    onClick={() => handleBowTypeChange(bType)}
+                    className={`h-8 px-1 rounded-lg border text-[11px] font-black uppercase truncate transition cursor-pointer ${
+                      bowType === bType
+                        ? "bg-cyan-neon text-black border-cyan-neon"
+                        : "bg-[#090B0F] text-white border-white/10 hover:border-white/25"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5">
+              {distanceOptions.map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => {
+                    setManualDistanceOverride(true);
+                    setDefaultDistance(opt.meters);
+                  }}
+                  className={`h-8 rounded-lg border text-[11px] font-black tabular-nums transition cursor-pointer ${
+                    defaultDistance === opt.meters
+                      ? "bg-cyan-neon text-black border-cyan-neon"
+                      : "bg-[#090B0F] text-white border-white/10 hover:border-white/25"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Poundage & Draw Length */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
+                  {t("poundage")}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={poundageRaw}
+                  onChange={(e) => setPoundageRaw(e.target.value)}
+                  placeholder={tx("Ej. 38,5", "e.g. 38.5")}
+                  className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
+                  {tx("Apertura (in)", "Draw length (in)")}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={drawLengthRaw}
+                  onChange={(e) => setDrawLengthRaw(e.target.value)}
+                  placeholder={tx("Ej. 28,5", "e.g. 28.5")}
+                  className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
+                />
+              </div>
+            </div>
           </div>
 
           <button

@@ -504,4 +504,36 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     }
     assert.ok(walkState.creditedSteps >= 18 && walkState.creditedSteps <= 21, `Expected ~20 real steps, got ${walkState.creditedSteps}`);
   });
+
+  it("keeps height and weight exclusively inside Personal Data and never inside Bow Configuration", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const profileSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/profile/ProfileView.tsx"),
+      "utf8"
+    );
+
+    const personalIdx = profileSrc.indexOf("SECTION 1: Personal Data");
+    const bowIdx = profileSrc.indexOf("SECTION 2: Bow configuration");
+    const notifIdx = profileSrc.indexOf("SECTION 4: Preferences Notifications");
+    assert.ok(personalIdx > 0 && bowIdx > personalIdx && notifIdx > bowIdx);
+
+    const personalSection = profileSrc.slice(personalIdx, bowIdx);
+    const bowSection = profileSrc.slice(bowIdx, notifIdx);
+
+    assert.ok(
+      personalSection.includes("renderBiometricEditInputs()"),
+      "Personal Data section must include height and weight edit inputs"
+    );
+    assert.equal(
+      bowSection.includes("renderBiometricEditInputs()"),
+      false,
+      "Bow Configuration section must NEVER display height or weight inputs"
+    );
+    assert.equal(
+      bowSection.includes('t("height")') || bowSection.includes('t("weight")'),
+      false,
+      "Bow Configuration section must not reference height or weight labels"
+    );
+  });
 });
