@@ -163,18 +163,18 @@ export default function AnalysisCalibrationModal({
         dir="ltr"
         className="w-full bg-[#020305] border border-white/[0.11] rounded-[26px] p-4 sm:p-5 flex flex-col gap-3.5 select-none font-sans"
       >
-        {/* Top Row: Editorial Kicker + Signature 101010 Tri-Color Bar + Close */}
+        {/* Top Row: Editorial Header Kicker + Signature 101010 Tri-Color Bar + Close */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-[3px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-[3px] shrink-0">
               <span className="w-[10px] h-[4px] rounded-full bg-[#00BFFF]" />
               <span className="w-[10px] h-[4px] rounded-full bg-[#FF1E1E]" />
               <span className="w-[10px] h-[4px] rounded-full bg-[#FFE500]" />
             </div>
-            <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-white">
+            <span className="text-[14.2px] min-[380px]:text-[15.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none whitespace-nowrap">
               {tx("Calibración única", "One-time calibration")}
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-[#0D1119] border border-white/[0.12] text-[11.5px] font-bold text-white tabular-nums">
+            <span className="h-[24px] px-2 rounded-full bg-[#0D1119] border border-white/[0.14] text-[12px] font-bold text-white tracking-wide inline-flex items-center justify-center tabular-nums shrink-0 leading-none">
               20 S
             </span>
           </div>
