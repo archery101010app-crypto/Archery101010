@@ -234,7 +234,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           >
             {t("bleHrTitle")}
           </h2>
-          <p className="text-[12px] font-medium text-white leading-snug">
+          <p className="text-[13px] font-medium text-white leading-snug">
             {t("bleHrSubtitle")}
           </p>
         </div>
