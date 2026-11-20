@@ -89,6 +89,7 @@ service cloud.firestore {
     //   - deletedByArcher: bool (optional)
     //   - restoredByCoach: bool (optional)
     //   - isVolumeOnly: bool (optional)
+    //   - isAnalysisSession: bool (optional)
     //   - isDraft: bool (optional)
     //   - singleBlockSaved: bool (optional)
     //   - updatedAt: number / timestamp (optional)
@@ -289,6 +290,8 @@ service cloud.firestore {
     //   - sessionId: string (optional, 0-128 chars)
     //   - sessionActive: bool (optional)
     //   - autoDetectEnabled: bool (optional)
+    //   - analysisMode: bool (optional)
+    //   - analysisCalibrationJson: string (optional, 0-1000 chars)
     //   - practiceType: string (optional, 0-60 chars)
     //   - bowType: string (optional, 0-40 chars)
     //   - arrowsCount: number (optional, 0-10000)
@@ -302,7 +305,7 @@ service cloud.firestore {
     //   - caloriesBurnedKcal: number (optional, 0-100000)
     //   - sensitivityLevel: number (optional, 0-10)
     //   - bowPoundageLbs: number (optional, 0-200)
-    //   - lastWatchCmd: string (<= 120 chars) / map (<= 14 keys, whitelisted & bounded)
+    //   - lastWatchCmd: string (<= 120 chars) / map (<= 15 keys, whitelisted & bounded, incl. analysisShotJson <= 3500 chars)
     //   - lastWatchCmdId: string (optional, 0-128 chars)
     //   - lastWatchCmdSeq: number (optional, 0-1000000000)
     //   - watchStepsCount: number (optional, 0-1000000)
@@ -736,6 +739,7 @@ service cloud.firestore {
         validOptionalBool(data, 'deletedByArcher') &&
         validOptionalBool(data, 'restoredByCoach') &&
         validOptionalBool(data, 'isVolumeOnly') &&
+        validOptionalBool(data, 'isAnalysisSession') &&
         validOptionalBool(data, 'isDraft') &&
         validOptionalBool(data, 'singleBlockSaved') &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
@@ -985,13 +989,14 @@ service cloud.firestore {
         (cmd is string && cmd.size() <= 120) ||
         (
           cmd is map &&
-          cmd.keys().size() <= 14 &&
+          cmd.keys().size() <= 15 &&
           cmd.keys().hasOnly([
             'type', 'value', 'id', 'cmdId', '_cmdId',
             'seq', 'cmdSeq', '_cmdSeq', 'ts', '_ts',
             'delta', 'source', 'totalScore', 'enabled', 'sensitivityLevel',
             'stepsCount', 'distanceWalkedM', 'activeKcal',
-            'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm', 'payload'
+            'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm',
+            'analysisShotJson', 'payload'
           ]) &&
           validOptionalString(cmd, 'type', 1, 40) &&
           (cmd.get('value', null) == null ||
@@ -1016,6 +1021,7 @@ service cloud.firestore {
           validOptionalNumber(cmd, 'heartRateBpm', 0, 260) &&
           validOptionalNumber(cmd, 'avgHeartRateBpm', 0, 260) &&
           validOptionalNumber(cmd, 'maxHeartRateBpm', 0, 260) &&
+          validOptionalString(cmd, 'analysisShotJson', 0, 3500) &&
           isValidWatchCmdPayload(cmd.get('payload', null))
         );
     }
@@ -1025,10 +1031,11 @@ service cloud.firestore {
       let ttl = data.get('expireAt', null);
       return pairingCode.matches('^[0-9]{6}$') &&
         data.keys().hasAll(['userId', 'expiresAt']) &&
-        data.keys().size() <= 40 &&
+        data.keys().size() <= 42 &&
         data.keys().hasOnly([
           'pairingCode', 'userId', 'sessionId', 'sessionActive', 'gpsActive',
-          'autoDetectEnabled', 'watchConnected', 'practiceType', 'bowType',
+          'autoDetectEnabled', 'watchConnected', 'analysisMode', 'analysisCalibrationJson',
+          'practiceType', 'bowType',
           'arrowsCount', 'totalScore', 'roundScoreMax', 'currentEnd', 'totalEnds',
           'endsCount', 'completedEnds', 'currentEndIndex', 'arrowsPerEnd',
           'distanceM', 'gpsDistanceM', 'stepsCount', 'distanceWalkedM',
@@ -1077,6 +1084,8 @@ service cloud.firestore {
         validOptionalBool(data, 'gpsActive') &&
         validOptionalBool(data, 'autoDetectEnabled') &&
         validOptionalBool(data, 'watchConnected') &&
+        validOptionalBool(data, 'analysisMode') &&
+        validOptionalString(data, 'analysisCalibrationJson', 0, 1000) &&
         validOptionalString(data, 'practiceType', 0, 60) &&
         validOptionalString(data, 'bowType', 0, 40) &&
         validOptionalList(data, 'currentEndArrows', 30) &&

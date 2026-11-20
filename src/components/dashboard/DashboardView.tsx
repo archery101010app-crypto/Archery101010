@@ -43,12 +43,12 @@ import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import CoachPortalView from "../coach/CoachPortalView";
 import { getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
+type Screen = "HOME" | "TARGET" | "ANALYSIS" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA";
 
 interface DashboardViewProps {
   user: UserProfile;
   coachViewMode?: boolean;
-  onNavigate: (screen: Screen, tab?: "SESSIONS" | "VOLUME") => void;
+  onNavigate: (screen: Screen, tab?: "SESSIONS" | "VOLUME" | "ANALYSIS") => void;
   onUserUpdate?: (updated: UserProfile) => void;
 }
 

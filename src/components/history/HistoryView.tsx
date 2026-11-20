@@ -24,11 +24,12 @@ import {
 } from "@/lib/scoring/biometricsEngine";
 import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
+import { AnalysisHistoryListSection } from "../analysis/AnalysisInspectorShared";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 interface HistoryViewProps {
   user: UserProfile;
-  initialTab?: "SESSIONS" | "VOLUME";
+  initialTab?: "SESSIONS" | "VOLUME" | "ANALYSIS";
   coachViewMode?: boolean;
   onBack: () => void;
 }
@@ -73,6 +74,7 @@ export default function HistoryView({
     if (practiceType === "Control") return t("practiceControl");
     if (practiceType === "Práctica") return t("practicePractice");
     if (practiceType === "Volumen") return t("practiceVolume");
+    if (practiceType === "Análisis") return t("navAnalysis");
     return practiceType || "";
   };
 
@@ -94,7 +96,13 @@ export default function HistoryView({
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
   
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"SESSIONS" | "VOLUME">(initialTab || "SESSIONS");
+  const [activeTab, setActiveTab] = useState<"SESSIONS" | "VOLUME" | "ANALYSIS">(initialTab || "SESSIONS");
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   
   // Filter States
   const [dateFilter, setDateFilter] = useState<"7DAYS" | "MONTH" | "ALL">("ALL");
@@ -708,29 +716,40 @@ export default function HistoryView({
           </div>
         </div>
 
-        {/* Full-width centered 2-column switcher: Puntuaciones / Volumen */}
-        <div className="grid grid-cols-2 gap-1.5 bg-[#0D1017] p-1.5 rounded-2xl border border-white/[0.08]">
+        {/* Full-width centered 3-column switcher: Puntuaciones / Volumen / Análisis */}
+        <div className="grid grid-cols-3 gap-1.5 bg-[#0D1017] p-1.5 rounded-2xl border border-white/[0.08]">
           <button
             type="button"
             onClick={() => setActiveTab("SESSIONS")}
-            className={`h-9 px-3 rounded-xl text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "SESSIONS"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            {t("practiceControl")}
+            <span className="truncate">{t("practiceControl")}</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("VOLUME")}
-            className={`h-9 px-3 rounded-xl text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "VOLUME"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            {t("practiceVolume")}
+            <span className="truncate">{t("practiceVolume")}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("ANALYSIS")}
+            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+              activeTab === "ANALYSIS"
+                ? "bg-cyan-neon text-black shadow-sm"
+                : "text-white/80 hover:text-white hover:bg-white/[0.04]"
+            }`}
+          >
+            <span className="truncate">{t("navAnalysis")}</span>
           </button>
         </div>
       </div>
@@ -914,7 +933,7 @@ export default function HistoryView({
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === "VOLUME" ? (
         /* VOLUME TAB VIEW */
         <div className="flex-1 flex flex-col gap-4">
           
@@ -1046,6 +1065,14 @@ export default function HistoryView({
           </div>
 
         </div>
+      ) : null}
+
+      {activeTab === "ANALYSIS" && (
+        <AnalysisHistoryListSection
+          sessions={sessions}
+          isCoachResultsView={isCoachResultsView}
+          onDeleteSession={(id) => setConfirmDeleteId(id)}
+        />
       )}
 
       {/* DETAILED EXPANDED SESSION MODAL (Full screen overlay) */}

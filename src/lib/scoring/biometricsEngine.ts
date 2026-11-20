@@ -37,6 +37,8 @@ export interface BiometricSessionSnapshot {
   bowType: string;
   autoDetectEnabled: boolean;
   sensitivityLevel?: 0 | 1 | 2;
+  analysisMode?: boolean;
+  analysisCalibrationJson?: string;
   lastShotTimestamp?: number;
   updatedAt: number;
 }
@@ -77,6 +79,8 @@ export type WatchCommandMessage =
       maxHeartRateBpm?: number;
     }
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean; sensitivityLevel?: 0 | 1 | 2 }
+  | { type: "ANALYSIS_SHOT"; analysisShotJson: string; heartRateBpm?: number }
+  | { type: "ANALYSIS_MANUAL_CAPTURE" }
   | { type: "FINISH_SESSION_FROM_WATCH" }
   | { type: "REQUEST_STATE" };
 
@@ -499,6 +503,10 @@ function buildPhoneCloudSessionFields(
     sensitivityLevel,
     bowPoundageLbs: Math.max(10, Number(s?.bowPoundageLbs) || 36),
     practiceType: String(s?.practiceType || "Práctica").slice(0, 60),
+    analysisMode: Boolean(s?.analysisMode || s?.practiceType === "Análisis"),
+    ...(typeof s?.analysisCalibrationJson === "string"
+      ? { analysisCalibrationJson: s.analysisCalibrationJson.slice(0, 950) }
+      : {}),
     updatedAt: now,
     expiresAt: expiresAtMs,
     expireAt: Timestamp.fromMillis(expiresAtMs)
@@ -864,8 +872,12 @@ function mapCloudDocToSnapshot(data: Record<string, any>): BiometricSessionSnaps
     activeKcal: Math.max(0, Math.round(Number(data.caloriesBurnedKcal) || 0)),
     bowPoundageLbs: Math.max(10, Number(data.bowPoundageLbs) || 36),
     practiceType: String(data.practiceType || "Práctica"),
-    bowType: "Compound",
+    bowType: String(data.bowType || "Compound"),
     autoDetectEnabled: data.autoDetectEnabled !== false,
+    analysisMode: Boolean(data.analysisMode || data.practiceType === "Análisis"),
+    ...(typeof data.analysisCalibrationJson === "string"
+      ? { analysisCalibrationJson: data.analysisCalibrationJson }
+      : {}),
     sensitivityLevel:
       data.sensitivityLevel === 0 || data.sensitivityLevel === 1 || data.sensitivityLevel === 2
         ? data.sensitivityLevel
@@ -1052,11 +1064,19 @@ function buildCompactCloudWatchCmd(
   } else if (cmd.type === "TOGGLE_AUTO_DETECT") {
     out.enabled = Boolean(cmd.enabled);
     if (typeof cmd.sensitivityLevel === "number") out.sensitivityLevel = cmd.sensitivityLevel;
+  } else if (cmd.type === "ANALYSIS_SHOT") {
+    if (typeof cmd.analysisShotJson === "string") {
+      out.analysisShotJson = cmd.analysisShotJson.slice(0, 3400);
+    }
+    if (typeof cmd.heartRateBpm === "number" && cmd.heartRateBpm >= 30 && cmd.heartRateBpm <= 250) {
+      out.heartRateBpm = Math.round(cmd.heartRateBpm);
+    }
   }
 
   const bounded: Record<string, string | number | boolean> = {};
   for (const [k, v] of Object.entries(out).slice(0, 8)) {
-    bounded[k.slice(0, 32)] = typeof v === "string" ? v.slice(0, 64) : v;
+    const maxLen = k === "analysisShotJson" ? 3400 : 64;
+    bounded[k.slice(0, 32)] = typeof v === "string" ? v.slice(0, maxLen) : v;
   }
   return bounded;
 }

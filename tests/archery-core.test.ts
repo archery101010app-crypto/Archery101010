@@ -2,12 +2,20 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   isVolumeSession,
+  isAnalysisOnlySession,
   countScoredArrows,
   getSessionArrows,
   getSessionScore,
   getSessionMaxScore,
   hasRealScore
 } from "../src/lib/scoring/sessionMetrics.ts";
+import {
+  analyzeImuShotWindow,
+  evaluateNormalizedTargetImpact,
+  encodeCompactShotAnalysis,
+  decodeCompactShotAnalysis,
+  computeAnalysisSessionSummary
+} from "../src/lib/scoring/shotAnalysisEngine.ts";
 
 describe("Archery 101010 — Core Session Metrics & Volume Neutralization", () => {
   it("neutralizes points on pure Volume sessions so tally clicks never inflate score", () => {
@@ -720,5 +728,91 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       false,
       "bleHeartRateService.ts must NEVER contain third-party brand names"
     );
+  });
+
+  it("reconstructs Preparatory + Aiming biomechanics, encodes compact watch payloads, and isolates Análisis from competitive scores", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    // 1. Build a realistic 6.0s wrist IMU stream (1.8s preparatory lift -> 4.2s steady aiming hold -> release)
+    const releaseTs = 100_000;
+    const samples = [];
+    for (let ms = -6000; ms <= -20; ms += 25) {
+      const t = releaseTs + ms;
+      const inPrep = ms < -4200;
+      const prog = inPrep ? (ms + 6000) / 1800 : 1;
+      const ay = inPrep ? (1 - prog) * -1.35 : Math.sin(ms * 0.012) * 0.05;
+      const az = 9.75 + (inPrep ? (1 - prog) * 1.15 : Math.cos(ms * 0.015) * 0.04);
+      const ax = 0.35;
+      const gy = inPrep ? -0.18 * (1 - prog) : Math.cos(ms * 0.02) * 0.012;
+      const gz = inPrep ? 0.22 * (1 - prog) : Math.sin(ms * 0.02) * 0.012;
+      samples.push({ t, ax, ay, az, gx: 0, gy, gz });
+    }
+
+    const shot = analyzeImuShotWindow({
+      samples,
+      releaseTimestampMs: releaseTs,
+      shotNumber: 1,
+      distanceM: 18,
+      bowType: "Barebow",
+      bowWrist: "LEFT",
+      heartRateBpm: 114
+    });
+
+    assert.ok(shot, "analyzeImuShotWindow must return a valid shot record");
+    assert.equal(shot.shotNumber, 1);
+    assert.equal(shot.heartRateBpm, 114);
+    assert.ok(shot.prepSeconds >= 0.8 && shot.prepSeconds <= 3.5);
+    assert.ok(shot.aimSeconds >= 2.5 && shot.aimSeconds <= 5.5);
+    assert.ok(shot.stabilityPct >= 75 && shot.stabilityPct <= 100);
+    assert.ok(shot.prepPoints.length >= 2);
+    assert.ok(shot.aimPoints.length >= 2);
+
+    // 2. Evaluate target impact rings & compact watch wire encoding (< 1.5 KB)
+    const xImpact = evaluateNormalizedTargetImpact(0.02, -0.02);
+    assert.equal(xImpact.ringNumber, 10);
+    assert.equal(xImpact.scoreLabel, "10 · X");
+
+    const redImpact = evaluateNormalizedTargetImpact(0.34, 0);
+    assert.equal(redImpact.ringNumber, 7);
+
+    const encoded = encodeCompactShotAnalysis(shot);
+    assert.ok(encoded.length > 40 && encoded.length < 1500);
+    const decoded = decodeCompactShotAnalysis(encoded);
+    assert.ok(decoded);
+    assert.equal(decoded.shotNumber, 1);
+    assert.equal(decoded.heartRateBpm, 114);
+    assert.equal(decoded.stabilityPct, shot.stabilityPct);
+
+    const summary = computeAnalysisSessionSummary([shot]);
+    assert.equal(summary.shotsCount, 1);
+    assert.equal(summary.avgHeartRateBpm, 114);
+
+    // 3. Ensure Análisis sessions never pollute competitive scores while counting arrow volume
+    const analysisSession = {
+      id: "SES-ANA-1",
+      practiceType: "Análisis",
+      isAnalysisSession: true,
+      score: 0,
+      maxScore: 0,
+      totalArrowsVolume: 12,
+      biometrics: { isAnalysisSession: true, analysisShots: [shot] }
+    };
+    assert.equal(isAnalysisOnlySession(analysisSession), true);
+    assert.equal(hasRealScore(analysisSession), false);
+    assert.equal(getSessionArrows(analysisSession), 12);
+
+    // 4. Brand hygiene across all Análisis files
+    const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|fitbit|suunto)\b/i;
+    for (const rel of [
+      "src/lib/scoring/shotAnalysisEngine.ts",
+      "src/components/analysis/AnalysisDianaSvg.tsx",
+      "src/components/analysis/AnalysisCalibrationModal.tsx",
+      "src/components/analysis/AnalysisInspectorShared.tsx",
+      "src/components/analysis/AnalysisView.tsx"
+    ]) {
+      const content = fs.readFileSync(path.resolve(process.cwd(), rel), "utf8");
+      assert.equal(forbiddenBrands.test(content), false, `${rel} must never mention third-party brands`);
+    }
   });
 });

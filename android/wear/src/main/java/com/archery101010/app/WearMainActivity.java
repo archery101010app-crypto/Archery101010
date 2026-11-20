@@ -9,7 +9,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.hardware.Sensor;
@@ -137,6 +139,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     // Latest hardware gyroscope angular rate (rad/s) time-aligned into the 3D motion buffer
     private float latestGyroRadS = -1f;
+    private float latestGyroY = 0f;
+    private float latestGyroZ = 0f;
     private long lastGyroSampleMs = 0L;
 
     // 7-Gate 3D Biomechanical Ring Buffer (~10.2s at 100 Hz)
@@ -145,11 +149,32 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private final float[] motionAx = new float[MOTION_BUF];
     private final float[] motionAy = new float[MOTION_BUF];
     private final float[] motionAz = new float[MOTION_BUF];
+    private final float[] motionGy = new float[MOTION_BUF];
+    private final float[] motionGz = new float[MOTION_BUF];
     private final double[] motionMag = new double[MOTION_BUF];
     private final double[] motionLin = new double[MOTION_BUF];
     private final float[] motionGyro = new float[MOTION_BUF];
     private int motionIdx = 0;
     private int motionCount = 0;
+
+    // Biomechanical Analysis mode state (2-Screen Diana + Shot Metrics)
+    private boolean analysisMode = false;
+    private int analysisPage = 0; // 0 = Diana, 1 = Datos
+    private String syncedBowType = "Barebow";
+    private String syncedBowWrist = "LEFT";
+    private int syncedHeartRateBpm = 0;
+    private int lastAnalysisShotNum = 0;
+    private float lastPrepSec = 0f;
+    private float lastAimSec = 0f;
+    private float lastSwayCm = 0f;
+    private int lastStabilityPct = 0;
+    private int lastShotHrBpm = 0;
+    private float[] lastPrepX = new float[0];
+    private float[] lastPrepY = new float[0];
+    private float[] lastAimX = new float[0];
+    private float[] lastAimY = new float[0];
+    private float lastRelX = 0f;
+    private float lastRelY = 0f;
 
     // Post-release 220ms follow-through verification state (eliminates target arrow yanks & arm flings)
     private boolean pendingShotActive = false;
@@ -519,14 +544,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private synchronized void syncShotDetectionSensors() {
         if (sensorManager == null) return;
-        if (autoDetectEnabled) {
-            if (!hasMicPermission()) {
-                stopAcousticSnapAnalyzer();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC_AUTO_SHOT);
-                }
-                return;
-            }
+        if (autoDetectEnabled || analysisMode) {
             if (!isSensorRegistered && accelerometer != null) {
                 try {
                     sensorManager.registerListener(this, accelerometer, SENSOR_RATE_100HZ_US);
@@ -536,7 +554,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     isSensorRegistered = true;
                 } catch (Exception ignored) {}
             }
-            startAcousticSnapAnalyzer();
+            if (autoDetectEnabled) {
+                if (!hasMicPermission()) {
+                    stopAcousticSnapAnalyzer();
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !analysisMode) {
+                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC_AUTO_SHOT);
+                    }
+                    return;
+                }
+                startAcousticSnapAnalyzer();
+            } else {
+                stopAcousticSnapAnalyzer();
+            }
         } else {
             pendingShotActive = false;
             stopAcousticSnapAnalyzer();
@@ -666,6 +695,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             // Sensitivity chosen on the phone (BAJA / MEDIA / ALTA) must drive the watch detector too
             String rootType = rootObj.optString("type", "");
+            if ("ANALYSIS_MANUAL_CAPTURE".equals(rootType)) {
+                emitWearAnalysisShot(System.currentTimeMillis(), "watch_manual");
+                return;
+            }
             if ("SET_SENSITIVITY".equals(rootType) || "TOGGLE_AUTO_DETECT".equals(rootType)) {
                 if (rootObj.has("sensitivityLevel")) {
                     sensitivityLevel = Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", sensitivityLevel)));
@@ -804,6 +837,34 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             if (obj.has("distanceM")) {
                 distanceMeters = obj.optInt("distanceM", distanceMeters);
+            }
+            if (obj.has("bowType")) {
+                String bt = obj.optString("bowType", syncedBowType);
+                if (!bt.isEmpty()) syncedBowType = bt;
+            }
+            if (obj.has("heartRateBpm")) {
+                syncedHeartRateBpm = obj.optInt("heartRateBpm", 0);
+            }
+            if (obj.has("analysisCalibrationJson")) {
+                try {
+                    JSONObject cal = new JSONObject(obj.optString("analysisCalibrationJson", "{}"));
+                    String bw = cal.optString("bowWrist", syncedBowWrist);
+                    if ("LEFT".equals(bw) || "RIGHT".equals(bw)) syncedBowWrist = bw;
+                } catch (Exception ignored) {}
+            }
+            if (obj.has("analysisMode") || obj.has("practiceType")) {
+                boolean nextAnalysis = obj.optBoolean("analysisMode", "Análisis".equals(obj.optString("practiceType", "")));
+                if (nextAnalysis != analysisMode) {
+                    analysisMode = nextAnalysis;
+                    syncShotDetectionSensors();
+                }
+            }
+            if (incomingArrows == 0) {
+                lastAnalysisShotNum = 0;
+                lastPrepX = new float[0];
+                lastPrepY = new float[0];
+                lastAimX = new float[0];
+                lastAimY = new float[0];
             }
             if (obj.has("bowPoundageLbs")) {
                 drawWeightLbs = (float) obj.optDouble("bowPoundageLbs", drawWeightLbs);
@@ -960,6 +1021,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     cmdFields.put("stepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
                     cmdFields.put("distanceWalkedM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
                     cmdFields.put("activeKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
+                } else if ("ANALYSIS_SHOT".equals(eventType)) {
+                    String shotJson = src.optString("analysisShotJson", "");
+                    if (!shotJson.isEmpty()) {
+                        cmdFields.put("analysisShotJson", new JSONObject().put("stringValue", shotJson));
+                    }
+                    int shotHr = src.optInt("heartRateBpm", 0);
+                    if (shotHr >= 30 && shotHr <= 245) {
+                        cmdFields.put("heartRateBpm", new JSONObject().put("integerValue", String.valueOf(shotHr)));
+                    }
                 }
 
                 JSONObject docFields = new JSONObject();
@@ -1051,6 +1121,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         JSONObject autoNode = fields.optJSONObject("autoDetectEnabled");
                         final boolean fsAuto = autoNode != null ? autoNode.optBoolean("booleanValue", autoDetectEnabled) : autoDetectEnabled;
                         final int fsSens = Math.max(0, Math.min(2, extractFsInt(fields, "sensitivityLevel", sensitivityLevel)));
+                        JSONObject amNode = fields.optJSONObject("analysisMode");
+                        JSONObject ptNode = fields.optJSONObject("practiceType");
+                        final boolean fsAnalysis = amNode != null
+                                ? amNode.optBoolean("booleanValue", false)
+                                : (ptNode != null && "Análisis".equals(ptNode.optString("stringValue", "")));
+                        JSONObject btNode = fields.optJSONObject("bowType");
+                        final String fsBowType = btNode != null ? btNode.optString("stringValue", syncedBowType) : syncedBowType;
+                        final int fsHr = extractFsInt(fields, "heartRateBpm", 0);
 
                         JSONObject arrField = fields.optJSONObject("currentEndArrows");
                         final JSONObject arrVal = arrField != null ? arrField.optJSONObject("arrayValue") : null;
@@ -1122,6 +1200,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             distanceMeters = fsDistM;
                             syncedArrowsPerEnd = fsPerEnd;
                             syncedEndsCount = fsEnds;
+                            if (!fsBowType.isEmpty()) syncedBowType = fsBowType;
+                            if (fsHr >= 30 && fsHr <= 245) syncedHeartRateBpm = fsHr;
+                            if (fsAnalysis != analysisMode) {
+                                analysisMode = fsAnalysis;
+                                syncShotDetectionSensors();
+                            }
+                            if (fsArrows == 0) {
+                                lastAnalysisShotNum = 0;
+                                lastPrepX = new float[0];
+                                lastPrepY = new float[0];
+                                lastAimX = new float[0];
+                                lastAimY = new float[0];
+                            }
                             drawWeightLbs = Math.max(12f, (float) extractFsInt(fields, "bowPoundageLbs", Math.round(drawWeightLbs)));
                             int cloudWalk = extractFsInt(fields, "distanceWalkedM", 0);
                             if (cloudWalk > distanceWalkedM) distanceWalkedM = cloudWalk;
@@ -1595,6 +1686,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float wy = event.values[1];
             float wz = event.values[2];
             latestGyroRadS = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
+            latestGyroY = wy;
+            latestGyroZ = wz;
             lastGyroSampleMs = now;
             return;
         }
@@ -1661,15 +1754,20 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         boolean hasAcousticKey = isAcousticAnalyzerRunning
                                 && lastVerifiedAcousticSnapMs > 0L
                                 && snapDeltaMs <= 140L;
-                        if (validFollowThrough && hasAcousticKey && (now - lastShotTimestamp) > shotCooldownMs) {
+                        boolean acousticOk = hasAcousticKey || (analysisMode && !isAcousticAnalyzerRunning);
+                        if (validFollowThrough && acousticOk && (now - lastShotTimestamp) > shotCooldownMs) {
                             lastShotTimestamp = now;
                             lastVerifiedAcousticSnapMs = 0L;
-                            markUserActivity(true);
-                            arrowCount++;
-                            triggerHaptic(55);
-                            saveState();
-                            sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
-                            if (canvasView != null) canvasView.invalidate();
+                            if (analysisMode) {
+                                emitWearAnalysisShot(pendingShotStartMs, "watch_auto");
+                            } else {
+                                markUserActivity(true);
+                                arrowCount++;
+                                triggerHaptic(55);
+                                saveState();
+                                sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
+                                if (canvasView != null) canvasView.invalidate();
+                            }
                         }
                     }
                 }
@@ -1710,12 +1808,234 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             motionAx[motionIdx] = ax;
             motionAy[motionIdx] = ay;
             motionAz[motionIdx] = az;
+            motionGy[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroY : 0f;
+            motionGz[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroZ : 0f;
             motionMag[motionIdx] = mag;
             motionLin[motionIdx] = linearMag;
             motionGyro[motionIdx] = activeGyro;
             motionIdx = (motionIdx + 1) % MOTION_BUF;
             if (motionCount < MOTION_BUF) motionCount++;
         }
+    }
+
+    private void emitWearAnalysisShot(long releaseMs, String source) {
+        if (motionCount < 14) return;
+        try {
+            long winStart = releaseMs - 10_000L;
+            long winEnd = releaseMs - 15L;
+            int count = 0;
+            for (int i = 0; i < motionCount; i++) {
+                int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+                long t = motionT[idx];
+                if (t < winStart) break;
+                if (t <= winEnd) count++;
+            }
+            if (count < 10) return;
+
+            long[] ts = new long[count];
+            float[] axArr = new float[count];
+            float[] ayArr = new float[count];
+            float[] azArr = new float[count];
+            float[] gyArr = new float[count];
+            float[] gzArr = new float[count];
+            int k = count - 1;
+            for (int i = 0; i < motionCount && k >= 0; i++) {
+                int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+                long t = motionT[idx];
+                if (t < winStart) break;
+                if (t <= winEnd) {
+                    ts[k] = t;
+                    axArr[k] = motionAx[idx];
+                    ayArr[k] = motionAy[idx];
+                    azArr[k] = motionAz[idx];
+                    gyArr[k] = motionGy[idx];
+                    gzArr[k] = motionGz[idx];
+                    k--;
+                }
+            }
+
+            double refAx = 0.0, refAy = 0.0, refAz = 0.0;
+            int refN = 0;
+            for (int i = 0; i < count; i++) {
+                if (ts[i] >= releaseMs - 700L && ts[i] <= releaseMs - 100L) {
+                    refAx += axArr[i];
+                    refAy += ayArr[i];
+                    refAz += azArr[i];
+                    refN++;
+                }
+            }
+            if (refN < 4) {
+                refAx = 0.0; refAy = 0.0; refAz = 0.0; refN = 0;
+                for (int i = Math.max(0, count - 8); i < count; i++) {
+                    refAx += axArr[i]; refAy += ayArr[i]; refAz += azArr[i]; refN++;
+                }
+            }
+            refAx /= Math.max(1, refN);
+            refAy /= Math.max(1, refN);
+            refAz /= Math.max(1, refN);
+            double refNorm = Math.max(4.0, Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz));
+
+            float wristSign = "RIGHT".equals(syncedBowWrist) ? -1f : 1f;
+            double faceRadiusCm = (distanceMeters <= 25) ? 20.0 : ((distanceMeters <= 55) ? 40.0 : 61.0);
+            double distCm = Math.max(1000.0, distanceMeters * 100.0);
+
+            float[] ptX = new float[count];
+            float[] ptY = new float[count];
+            double[] energy = new double[count];
+            double sAx = axArr[0], sAy = ayArr[0], sAz = azArr[0];
+            double gYaw = 0.0, gPitch = 0.0;
+
+            for (int i = 0; i < count; i++) {
+                double dt = (i > 0) ? Math.max(0.002, Math.min(0.12, (ts[i] - ts[i - 1]) / 1000.0)) : 0.02;
+                sAx = 0.82 * sAx + 0.18 * axArr[i];
+                sAy = 0.82 * sAy + 0.18 * ayArr[i];
+                sAz = 0.82 * sAz + 0.18 * azArr[i];
+
+                double tiltH = ((sAy - refAy) / refNorm) * wristSign * 0.28;
+                double tiltV = ((sAz - refAz) / refNorm) * 0.28;
+                gYaw = 0.94 * (gYaw + gzArr[i] * dt * wristSign) + 0.06 * tiltH;
+                gPitch = 0.94 * (gPitch + gyArr[i] * dt) + 0.06 * tiltV;
+
+                double xCm = Math.tan(gYaw) * distCm;
+                double yCm = Math.tan(gPitch) * distCm;
+                ptX[i] = (float) Math.max(-0.92, Math.min(0.92, xCm / faceRadiusCm));
+                ptY[i] = (float) Math.max(-0.92, Math.min(0.92, yCm / faceRadiusCm));
+                double lin = Math.abs(Math.sqrt(axArr[i] * axArr[i] + ayArr[i] * ayArr[i] + azArr[i] * azArr[i]) - SensorManager.GRAVITY_EARTH);
+                energy[i] = lin + Math.hypot(gyArr[i], gzArr[i]) * 2.2;
+            }
+
+            // Detect settle index (transition from Preparatory to Aiming)
+            int settleIdx = Math.max(1, (int) (count * 0.32));
+            for (int i = count - 1; i >= 1; i--) {
+                double radial = Math.hypot(ptX[i] - ptX[count - 1], ptY[i] - ptY[count - 1]);
+                if (radial > 0.24 || energy[i] > 1.85) {
+                    settleIdx = Math.min(count - 2, i + 1);
+                    break;
+                }
+            }
+            int prepStartIdx = 0;
+            for (int i = settleIdx; i >= 0; i--) {
+                if (ts[settleIdx] - ts[i] > 3200L) {
+                    prepStartIdx = i;
+                    break;
+                }
+            }
+
+            float prepSec = Math.max(0.3f, Math.min(12.0f, Math.round(((ts[settleIdx] - ts[prepStartIdx]) / 100f)) / 10f));
+            float aimSec = Math.max(0.4f, Math.min(18.0f, Math.round(((ts[count - 1] - ts[settleIdx]) / 100f)) / 10f));
+
+            double meanAimX = 0.0, meanAimY = 0.0;
+            int aimN = Math.max(1, count - settleIdx);
+            for (int i = settleIdx; i < count; i++) {
+                meanAimX += ptX[i];
+                meanAimY += ptY[i];
+            }
+            meanAimX /= aimN;
+            meanAimY /= aimN;
+
+            double sumSqRad = 0.0;
+            for (int i = settleIdx; i < count; i++) {
+                double dx = (ptX[i] - meanAimX) * faceRadiusCm;
+                double dy = (ptY[i] - meanAimY) * faceRadiusCm;
+                sumSqRad += dx * dx + dy * dy;
+            }
+            float swayCm = Math.max(0.2f, Math.min(25.0f, Math.round((float) Math.sqrt(sumSqRad / aimN) * 10f) / 10f));
+            int stabPct = Math.max(35, Math.min(99, (int) Math.round(100.0 - (swayCm / Math.max(8.0, faceRadiusCm * 0.36)) * 42.0)));
+
+            int preRelIdx = count - 1;
+            for (int i = count - 1; i >= 0; i--) {
+                if (ts[count - 1] - ts[i] >= 480L) {
+                    preRelIdx = i;
+                    break;
+                }
+            }
+            float relJumpCm = Math.max(0.1f, Math.min(20.0f, Math.round((float) (Math.hypot(ptX[count - 1] - ptX[preRelIdx], ptY[count - 1] - ptY[preRelIdx]) * faceRadiusCm) * 10f) / 10f));
+
+            int prepOutN = Math.min(10, Math.max(2, settleIdx - prepStartIdx + 1));
+            float[] pX = new float[prepOutN];
+            float[] pY = new float[prepOutN];
+            JSONArray pJson = new JSONArray();
+            for (int j = 0; j < prepOutN; j++) {
+                int idx = prepStartIdx + Math.round(((float) j / Math.max(1, prepOutN - 1)) * (settleIdx - prepStartIdx));
+                idx = Math.max(0, Math.min(count - 1, idx));
+                pX[j] = Math.round(ptX[idx] * 1000f) / 1000f;
+                pY[j] = Math.round(ptY[idx] * 1000f) / 1000f;
+                JSONArray pair = new JSONArray();
+                pair.put(pX[j]);
+                pair.put(pY[j]);
+                pJson.put(pair);
+            }
+
+            int aimOutN = Math.min(22, Math.max(2, count - settleIdx));
+            float[] aX = new float[aimOutN];
+            float[] aY = new float[aimOutN];
+            JSONArray aJson = new JSONArray();
+            for (int j = 0; j < aimOutN; j++) {
+                int idx = settleIdx + Math.round(((float) j / Math.max(1, aimOutN - 1)) * (count - 1 - settleIdx));
+                idx = Math.max(0, Math.min(count - 1, idx));
+                aX[j] = Math.round(ptX[idx] * 1000f) / 1000f;
+                aY[j] = Math.round(ptY[idx] * 1000f) / 1000f;
+                JSONArray pair = new JSONArray();
+                pair.put(aX[j]);
+                pair.put(aY[j]);
+                aJson.put(pair);
+            }
+
+            float rX = aX[aimOutN - 1];
+            float rY = aY[aimOutN - 1];
+            JSONArray rJson = new JSONArray();
+            rJson.put(rX);
+            rJson.put(rY);
+
+            markUserActivity(true);
+            arrowCount++;
+            int shotNum = arrowCount;
+            lastAnalysisShotNum = shotNum;
+            lastPrepSec = prepSec;
+            lastAimSec = aimSec;
+            lastSwayCm = swayCm;
+            lastStabilityPct = stabPct;
+            lastShotHrBpm = (syncedHeartRateBpm >= 30 && syncedHeartRateBpm <= 245) ? syncedHeartRateBpm : 0;
+            lastPrepX = pX;
+            lastPrepY = pY;
+            lastAimX = aX;
+            lastAimY = aY;
+            lastRelX = rX;
+            lastRelY = rY;
+
+            JSONObject compact = new JSONObject();
+            compact.put("id", "SHOT-" + releaseMs + "-" + shotNum);
+            compact.put("n", shotNum);
+            compact.put("ts", releaseMs);
+            compact.put("d", distanceMeters);
+            compact.put("bowType", syncedBowType);
+            compact.put("prepSec", prepSec);
+            compact.put("aimSec", aimSec);
+            compact.put("stab", stabPct);
+            compact.put("swayCm", swayCm);
+            compact.put("relCm", relJumpCm);
+            if (lastShotHrBpm > 0) {
+                compact.put("bpm", lastShotHrBpm);
+            }
+            compact.put("p", pJson);
+            compact.put("a", aJson);
+            compact.put("r", rJson);
+
+            JSONObject cmd = new JSONObject();
+            cmd.put("type", "ANALYSIS_SHOT");
+            cmd.put("source", source);
+            cmd.put("analysisShotJson", compact.toString());
+            if (lastShotHrBpm > 0) {
+                cmd.put("heartRateBpm", lastShotHrBpm);
+            }
+
+            triggerHaptic(55);
+            saveState();
+            sendToPhone(cmd.toString());
+            runOnUiThread(() -> {
+                if (canvasView != null) canvasView.invalidate();
+            });
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -1819,7 +2139,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     float dx = e2.getX() - e1.getX();
                     float dy = e2.getY() - e1.getY();
                     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-                        if (dx < 0) {
+                        if (analysisMode) {
+                            analysisPage = (analysisPage == 0) ? 1 : 0;
+                        } else if (dx < 0) {
                             isEditingCode = false;
                             screenIndex = (screenIndex + 1) % 5;
                         } else {
@@ -1885,6 +2207,28 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 } catch (Exception ignored) {}
             }
             int h = getHeight();
+
+            if (analysisMode) {
+                if (y > h * 0.88f) {
+                    analysisPage = (analysisPage == 0) ? 1 : 0;
+                    markUserActivity(false);
+                    triggerHaptic(20);
+                    invalidate();
+                    return;
+                }
+                if (analysisPage == 0 && btnToggleDetector.contains(x, y)) {
+                    if (!autoDetectEnabled) {
+                        emitWearAnalysisShot(System.currentTimeMillis(), "watch_manual");
+                    } else {
+                        analysisPage = 1;
+                        triggerHaptic(20);
+                        invalidate();
+                    }
+                    return;
+                }
+                markUserActivity(false);
+                return;
+            }
 
             // Bottom page indicator tap switches screen
             if (y > h * 0.90f) {
@@ -2196,6 +2540,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             paint.setAlpha(255);
 
+            if (analysisMode) {
+                if (analysisPage == 0) {
+                    drawAnalysisDianaScreen(canvas, cx, cy, h, scale, isRound);
+                } else {
+                    drawAnalysisMetricsScreen(canvas, cx, h, scale, isRound, wMult);
+                }
+                float dotY = h - 13.5f * scale;
+                float dotGap = 4.5f * scale;
+                float activeW = 11.0f * scale;
+                float inactiveW = 3.6f * scale;
+                float dotH = 3.6f * scale;
+                float totalDotsW = activeW + inactiveW + dotGap;
+                float curX = cx - totalDotsW / 2f;
+                for (int i = 0; i < 2; i++) {
+                    float itemW = (i == analysisPage) ? activeW : inactiveW;
+                    rect.set(curX, dotY - dotH / 2f, curX + itemW, dotY + dotH / 2f);
+                    paint.setColor(i == analysisPage ? Color.parseColor("#00BFFF") : Color.parseColor("#38FFFFFF"));
+                    canvas.drawRoundRect(rect, dotH / 2f, dotH / 2f, paint);
+                    curX += itemW + dotGap;
+                }
+                return;
+            }
+
             if (screenIndex == 0) {
                 drawCounterScreen(canvas, cx, scale, isRound, wMult);
             } else if (screenIndex == 1) {
@@ -2224,6 +2591,275 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawRoundRect(rect, dotH / 2f, dotH / 2f, paint);
                 curX += itemW + dotGap;
             }
+        }
+
+        private void drawAnalysisDianaScreen(Canvas canvas, float cx, float cy, int h, float scale, boolean isRound) {
+            int targetLogoW = Math.round((isRound ? 98f : 108f) * scale);
+            Bitmap logo = getSupersampledLogo(targetLogoW);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha(255);
+            if (logo != null) {
+                canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(18f * scale), paint);
+            }
+
+            // Dead-center High-Contrast Outdoor Brand-Line Diana
+            float outerR = 76f * scale;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#020306"));
+            canvas.drawCircle(cx, cy, outerR, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.9f * scale);
+            paint.setColor(Color.parseColor("#E0FFFFFF"));
+            canvas.drawCircle(cx, cy, outerR, paint);
+
+            // Broken cardinal axis lines
+            paint.setStrokeWidth(0.9f * scale);
+            paint.setColor(Color.parseColor("#33FFFFFF"));
+            float coreGap = outerR * 0.24f;
+            canvas.drawLine(cx, cy - outerR, cx, cy - coreGap, paint);
+            canvas.drawLine(cx, cy + coreGap, cx, cy + outerR, paint);
+            canvas.drawLine(cx - outerR, cy, cx - coreGap, cy, paint);
+            canvas.drawLine(cx + coreGap, cy, cx + outerR, cy, paint);
+
+            // White & Platinum Outer Rings (2, 3, 4)
+            paint.setStrokeWidth(1.2f * scale);
+            paint.setColor(Color.parseColor("#85FFFFFF"));
+            canvas.drawCircle(cx, cy, outerR * 0.9f, paint);
+            paint.setStrokeWidth(1.4f * scale);
+            paint.setColor(Color.parseColor("#AEB8C4D8"));
+            canvas.drawCircle(cx, cy, outerR * 0.8f, paint);
+            paint.setStrokeWidth(1.1f * scale);
+            paint.setColor(Color.parseColor("#7A9AA8C0"));
+            canvas.drawCircle(cx, cy, outerR * 0.7f, paint);
+
+            // Cyan Rings (#00BFFF — 5, 6)
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#0D00BFFF"));
+            canvas.drawCircle(cx, cy, outerR * 0.6f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.9f * scale);
+            paint.setColor(Color.parseColor("#00BFFF"));
+            canvas.drawCircle(cx, cy, outerR * 0.6f, paint);
+            paint.setStrokeWidth(1.25f * scale);
+            paint.setColor(Color.parseColor("#B800BFFF"));
+            canvas.drawCircle(cx, cy, outerR * 0.5f, paint);
+
+            // Red Rings (#FF1E1E — 7, 8)
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#10FF1E1E"));
+            canvas.drawCircle(cx, cy, outerR * 0.4f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2.0f * scale);
+            paint.setColor(Color.parseColor("#FF1E1E"));
+            canvas.drawCircle(cx, cy, outerR * 0.4f, paint);
+            paint.setStrokeWidth(1.3f * scale);
+            paint.setColor(Color.parseColor("#BCFF1E1E"));
+            canvas.drawCircle(cx, cy, outerR * 0.3f, paint);
+
+            // Yellow Rings (#FFE500 — 9, 10) + Crosshair
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#17FFE500"));
+            canvas.drawCircle(cx, cy, outerR * 0.2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2.15f * scale);
+            paint.setColor(Color.parseColor("#FFE500"));
+            canvas.drawCircle(cx, cy, outerR * 0.2f, paint);
+            paint.setStrokeWidth(1.4f * scale);
+            paint.setColor(Color.parseColor("#EBFFE500"));
+            canvas.drawCircle(cx, cy, outerR * 0.1f, paint);
+            paint.setStrokeWidth(1.15f * scale);
+            canvas.drawLine(cx - 2.6f * scale, cy, cx + 2.6f * scale, cy, paint);
+            canvas.drawLine(cx, cy - 2.6f * scale, cx, cy + 2.6f * scale, paint);
+
+            // Draw Shot Trajectory if captured
+            if (lastAnalysisShotNum > 0 && lastAimX.length >= 2) {
+                paint.setStrokeCap(Paint.Cap.ROUND);
+                paint.setStrokeJoin(Paint.Join.ROUND);
+
+                if (lastPrepX.length >= 2) {
+                    Path prepPath = new Path();
+                    prepPath.moveTo(cx + lastPrepX[0] * outerR, cy + lastPrepY[0] * outerR);
+                    for (int i = 1; i < lastPrepX.length; i++) {
+                        prepPath.lineTo(cx + lastPrepX[i] * outerR, cy + lastPrepY[i] * outerR);
+                    }
+                    paint.setPathEffect(null);
+                    paint.setStrokeWidth(4.0f * scale);
+                    paint.setColor(Color.parseColor("#020306"));
+                    canvas.drawPath(prepPath, paint);
+
+                    paint.setPathEffect(new DashPathEffect(new float[]{3.0f * scale, 3.2f * scale}, 0f));
+                    paint.setStrokeWidth(1.9f * scale);
+                    paint.setColor(Color.parseColor("#EBFFFFFF"));
+                    canvas.drawPath(prepPath, paint);
+                    paint.setPathEffect(null);
+                }
+
+                Path aimPath = new Path();
+                aimPath.moveTo(cx + lastAimX[0] * outerR, cy + lastAimY[0] * outerR);
+                for (int i = 1; i < lastAimX.length; i++) {
+                    aimPath.lineTo(cx + lastAimX[i] * outerR, cy + lastAimY[i] * outerR);
+                }
+                paint.setStrokeWidth(4.6f * scale);
+                paint.setColor(Color.parseColor("#020306"));
+                canvas.drawPath(aimPath, paint);
+
+                paint.setStrokeWidth(2.5f * scale);
+                paint.setColor(Color.parseColor("#00BFFF"));
+                canvas.drawPath(aimPath, paint);
+
+                float rx = cx + lastRelX * outerR;
+                float ry = cy + lastRelY * outerR;
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.WHITE);
+                canvas.drawCircle(rx, ry, 4.0f * scale, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1.6f * scale);
+                paint.setColor(Color.parseColor("#020306"));
+                canvas.drawCircle(rx, ry, 4.0f * scale, paint);
+            }
+
+            // Bottom status pill above pager dots
+            int shotNum = Math.max(lastAnalysisShotNum, arrowCount);
+            String pillText = shotNum > 0
+                    ? (tr("ANÁLISIS · TIRO ", "ANALYSIS · SHOT ") + shotNum + " · " + distanceMeters + "M")
+                    : (!autoDetectEnabled
+                        ? (tr("CAPTURAR TIRO · ", "CAPTURE SHOT · ") + distanceMeters + "M")
+                        : (tr("ANÁLISIS · LISTO · ", "ANALYSIS · READY · ") + distanceMeters + "M"));
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(6.8f * scale);
+            float textW = paint.measureText(pillText);
+            float pillW = Math.max(108f * scale, textW + 22f * scale);
+            float pillH = 15.5f * scale;
+            float pillTop = h - 35.5f * scale;
+            btnToggleDetector.set(cx - pillW / 2f, pillTop, cx + pillW / 2f, pillTop + pillH);
+            paint.setColor(Color.parseColor("#080B10"));
+            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor(Color.parseColor("#24FFFFFF"));
+            canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            float dotR = 2.0f * scale;
+            float startX = cx - (dotR * 2f + 4.2f * scale + textW) / 2f;
+            paint.setColor(Color.parseColor("#00BFFF"));
+            canvas.drawCircle(startX + dotR, btnToggleDetector.centerY(), dotR, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextAlign(Paint.Align.LEFT);
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            canvas.drawText(pillText, startX + dotR * 2f + 4.2f * scale, btnToggleDetector.centerY() - (fm.ascent + fm.descent) / 2f, paint);
+        }
+
+        private void drawAnalysisMetricsScreen(Canvas canvas, float cx, int h, float scale, boolean isRound, float wMult) {
+            int shotNum = Math.max(lastAnalysisShotNum, arrowCount);
+            String pill = shotNum > 0
+                    ? (tr("DATOS · TIRO ", "DATA · SHOT ") + shotNum)
+                    : tr("DATOS · EN ESPERA", "DATA · STANDBY");
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pill, false);
+
+            float cardW = 166f * scale * wMult;
+            float left = cx - cardW / 2f;
+            float right = cx + cardW / 2f;
+
+            // Row 1: Estabilidad
+            float r1Top = 74f * scale;
+            float r1H = 36f * scale;
+            rect.set(left, r1Top, right, r1Top + r1H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#0A0D14"));
+            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1f * scale);
+            paint.setColor(Color.parseColor("#1AFFFFFF"));
+            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(7.2f * scale);
+            paint.setColor(Color.WHITE);
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText(tr("ESTABILIDAD", "STABILITY"), left + 10f * scale, r1Top + 14.5f * scale, paint);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(7.0f * scale);
+            canvas.drawText(lastAnalysisShotNum > 0 ? String.format(Locale.US, "±%.1f cm", lastSwayCm) : "—", left + 10f * scale, r1Top + 26.5f * scale, paint);
+
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(15.5f * scale);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText(lastAnalysisShotNum > 0 ? (lastStabilityPct + "%") : "—", right - 10f * scale, r1Top + 24f * scale, paint);
+
+            // Row 2: Preparatorio | Apuntado
+            float r2Top = r1Top + r1H + 5f * scale;
+            float r2H = 41f * scale;
+            float gap = 5f * scale;
+            float halfW = (cardW - gap) / 2f;
+
+            for (int col = 0; col < 2; col++) {
+                float cL = (col == 0) ? left : (left + halfW + gap);
+                rect.set(cL, r2Top, cL + halfW, r2Top + r2H);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.parseColor("#0A0D14"));
+                canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1f * scale);
+                paint.setColor(Color.parseColor("#1AFFFFFF"));
+                canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setTypeface(outfitExtraBold);
+                paint.setTextSize(6.5f * scale);
+                paint.setColor(col == 0 ? Color.WHITE : Color.parseColor("#00BFFF"));
+                paint.setTextAlign(Paint.Align.LEFT);
+                canvas.drawText(col == 0 ? tr("PREPARATORIO", "PREPARATORY") : tr("APUNTADO", "AIMING"), cL + 8f * scale, r2Top + 14f * scale, paint);
+
+                paint.setColor(Color.WHITE);
+                paint.setTextSize(15f * scale);
+                String valStr = lastAnalysisShotNum > 0
+                        ? String.format(Locale.US, "%.1fs", col == 0 ? lastPrepSec : lastAimSec)
+                        : "—";
+                canvas.drawText(valStr, cL + 8f * scale, r2Top + 33f * scale, paint);
+            }
+
+            // Row 3: Pulsaciones
+            float r3Top = r2Top + r2H + 5f * scale;
+            float r3H = 36f * scale;
+            rect.set(left, r3Top, right, r3Top + r3H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.parseColor("#0A0D14"));
+            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1f * scale);
+            paint.setColor(Color.parseColor("#1AFFFFFF"));
+            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(7.2f * scale);
+            paint.setColor(Color.WHITE);
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText(tr("PULSACIONES", "HEART RATE"), left + 10f * scale, r3Top + 14.5f * scale, paint);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(7.0f * scale);
+            canvas.drawText(tr("En disparo", "At release"), left + 10f * scale, r3Top + 26.5f * scale, paint);
+
+            int dispHr = lastShotHrBpm > 0 ? lastShotHrBpm : syncedHeartRateBpm;
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(15.0f * scale);
+            paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText(dispHr >= 30 ? (dispHr + " BPM") : "—", right - 10f * scale, r3Top + 24f * scale, paint);
+
+            // Footer above dots
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(6.5f * scale);
+            paint.setColor(Color.WHITE);
+            String bowDisp = "Recurve".equals(syncedBowType)
+                    ? tr("RECURVO", "RECURVE")
+                    : ("Compound".equals(syncedBowType) ? tr("COMPUESTO", "COMPOUND") : "BAREBOW");
+            drawCenteredText(canvas, distanceMeters + "M · " + bowDisp, cx, h - 25f * scale);
         }
 
         /**

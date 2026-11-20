@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Home, Target, History, Calendar, User, Users, Shield } from "lucide-react";
+import { Home, Target, Activity, History, Calendar, User, Users, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserProfile } from "@/lib/authService";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
@@ -21,7 +21,7 @@ function SpotifyNavIcon({ size = 21, className = "" }: { size?: number; classNam
   );
 }
 
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
+type Screen = "HOME" | "TARGET" | "ANALYSIS" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 interface FloatingNavProps {
   activeScreen: Screen;
@@ -47,6 +47,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
     : [
         { id: "HOME" as Screen, icon: Home, label: t("navHome") },
         { id: "TARGET" as Screen, icon: Target, label: t("navSession") },
+        { id: "ANALYSIS" as Screen, icon: Activity, label: t("navAnalysis") },
         { id: "HISTORY" as Screen, icon: History, label: t("navHistory") },
         { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
         { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
@@ -95,7 +96,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
               {/* Icon wrapper */}
               <div className="relative flex items-center justify-center">
                 <Icon
-                  size={21}
+                  size={isCoach ? 21 : 20}
                   className={`transition-colors duration-200 relative z-10 ${
                     isActive
                       ? "text-cyan-neon"
@@ -106,7 +107,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
 
               {/* Label indicator */}
               <span
-                className={`text-[11px] sm:text-[12px] font-bold tracking-[-0.02em] leading-tight mt-1 transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                className={`${isCoach ? "text-[11px] sm:text-[12px]" : "text-[10px] sm:text-[11.5px]"} font-bold tracking-[-0.02em] leading-tight mt-1 transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

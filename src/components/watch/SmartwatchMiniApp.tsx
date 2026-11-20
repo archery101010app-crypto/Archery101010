@@ -31,6 +31,14 @@ import {
   getBleHeartRateStatus,
   subscribeBleHeartRate
 } from "@/lib/scoring/bleHeartRateService";
+import AnalysisDianaSvg from "@/components/analysis/AnalysisDianaSvg";
+import {
+  AnalysisCalibrationProfile,
+  AnalysisShotRecord,
+  analyzeImuShotWindow,
+  decodeCompactShotAnalysis,
+  encodeCompactShotAnalysis
+} from "@/lib/scoring/shotAnalysisEngine";
 
 interface SmartwatchMiniAppProps {
   isOpen?: boolean;
@@ -68,6 +76,9 @@ export default function SmartwatchMiniApp({
 
   // 0: Contador, 1: Puntos (X..M), 2: Métricas, 3: Auto-Tiro, 4: Resumen
   const [screenIdx, setScreenIdx] = useState<number>(0);
+  const [analysisPage, setAnalysisPage] = useState<0 | 1>(0);
+  const [lastAnalysisShot, setLastAnalysisShot] = useState<AnalysisShotRecord | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
   const [watchShape, setWatchShape] = useState<"ROUND" | "SQUARE">("ROUND");
   const [sensitivity, setSensitivity] = useState<"ALTA" | "MEDIA" | "BAJA">("MEDIA");
   const [justDetectedShot, setJustDetectedShot] = useState<boolean>(false);
@@ -126,6 +137,15 @@ export default function SmartwatchMiniApp({
   });
 
   const activeState = liveSnapshot || internalSnapshot;
+  const isAnalysisWatchMode = Boolean(
+    activeState.analysisMode || activeState.practiceType === "Análisis"
+  );
+
+  useEffect(() => {
+    if ((activeState.arrowsCount || 0) === 0) {
+      setLastAnalysisShot(null);
+    }
+  }, [activeState.arrowsCount, activeState.sessionId]);
 
   const [watchConnStatus, setWatchConnStatus] = useState<WatchConnectionStatus>({
     isNativeAndroid: false,
@@ -294,11 +314,16 @@ export default function SmartwatchMiniApp({
         } else {
           setInternalSnapshot(msg.payload);
         }
+      } else if (msg.type === "ANALYSIS_MANUAL_CAPTURE" && isStandalone) {
+        emitAnalysisShotRef.current(Date.now(), "watch_manual");
+      } else if (msg.type === "ANALYSIS_SHOT" && msg.analysisShotJson) {
+        const decoded = decodeCompactShotAnalysis(msg.analysisShotJson);
+        if (decoded) setLastAnalysisShot(decoded);
       }
     });
     sendWatchCommand({ type: "REQUEST_STATE" });
     return unsub;
-  }, [liveSnapshot, isOpen, isPageVisible]);
+  }, [liveSnapshot, isOpen, isPageVisible, isStandalone]);
 
   const triggerHaptic = useCallback((pattern: number | number[] = 45) => {
     try {
@@ -452,7 +477,18 @@ export default function SmartwatchMiniApp({
   const micActiveRef = useRef<boolean>(false);
   const [micDeniedNotice, setMicDeniedNotice] = useState(false);
   const motionBufRef = useRef<
-    Array<{ t: number; ax: number; ay: number; az: number; mag: number; lin: number; gyro: number }>
+    Array<{
+      t: number;
+      ax: number;
+      ay: number;
+      az: number;
+      gx?: number;
+      gy?: number;
+      gz?: number;
+      mag: number;
+      lin: number;
+      gyro: number;
+    }>
   >([]);
   const peakTimesRef = useRef<number[]>([]);
   const walkLockUntilRef = useRef<number>(0);
@@ -467,6 +503,76 @@ export default function SmartwatchMiniApp({
     sumGyro: number;
     gyroN: number;
   }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
+
+  const emitAnalysisShotRef = useRef<
+    (releaseTs: number, source: "watch_auto" | "watch_manual") => void
+  >(() => {});
+
+  emitAnalysisShotRef.current = (
+    releaseTs: number,
+    source: "watch_auto" | "watch_manual"
+  ) => {
+    let calibration: AnalysisCalibrationProfile = {
+      bowType:
+        activeState.bowType === "Compound" ||
+        activeState.bowType === "Recurve" ||
+        activeState.bowType === "Barebow"
+          ? activeState.bowType
+          : "Barebow",
+      bowWrist: "LEFT",
+      distanceM: activeState.distanceM || 18,
+      zeroGravityVec: [0, 0, 9.81],
+      calibratedAt: Date.now()
+    };
+    if (activeState.analysisCalibrationJson) {
+      try {
+        const parsed = JSON.parse(activeState.analysisCalibrationJson);
+        if (parsed && Array.isArray(parsed.zeroGravityVec) && parsed.zeroGravityVec.length === 3) {
+          calibration = parsed as AnalysisCalibrationProfile;
+        }
+      } catch {}
+    }
+
+    const liveHr =
+      bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+        ? bleHrStatus.currentBpm
+        : activeState.heartRateBpm && activeState.heartRateBpm >= 30
+        ? activeState.heartRateBpm
+        : undefined;
+
+    const nextShotNum = Math.max(1, (activeState.arrowsCount || 0) + 1);
+    const analyzed = analyzeImuShotWindow({
+      samples: motionBufRef.current,
+      releaseTimestampMs: releaseTs,
+      shotNumber: nextShotNum,
+      distanceM: calibration.distanceM || activeState.distanceM || 18,
+      bowType: calibration.bowType || "Barebow",
+      bowWrist: calibration.bowWrist || "LEFT",
+      heartRateBpm: liveHr
+    });
+
+    if (!analyzed) return;
+
+    triggerHaptic([45, 35, 65]);
+    setLastAnalysisShot(analyzed);
+    setJustDetectedShot(true);
+    window.setTimeout(() => setJustDetectedShot(false), 3200);
+
+    sendWatchCommand({
+      type: "ANALYSIS_SHOT",
+      analysisShotJson: encodeCompactShotAnalysis(analyzed),
+      ...(liveHr ? { heartRateBpm: liveHr } : {})
+    });
+
+    if (!liveSnapshot) {
+      setInternalSnapshot((prev) => ({
+        ...prev,
+        arrowsCount: Math.max(prev.arrowsCount + 1, analyzed.shotNumber),
+        lastShotTimestamp: releaseTs,
+        updatedAt: Date.now()
+      }));
+    }
+  };
 
   // Real-time Web Audio High-Pass (>1.8 kHz) Bowstring Snap Analyzer (100% volatile on-device, never recorded)
   useEffect(() => {
@@ -579,13 +685,15 @@ export default function SmartwatchMiniApp({
         }, 15);
       } catch {
         micActiveRef.current = false;
-        setMicDeniedNotice(true);
-        if (onToggleAutoDetect) onToggleAutoDetect(false);
-        else {
-          sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
-          setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
+        if (!isAnalysisWatchMode) {
+          setMicDeniedNotice(true);
+          if (onToggleAutoDetect) onToggleAutoDetect(false);
+          else {
+            sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
+            setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
+          }
+          window.setTimeout(() => setMicDeniedNotice(false), 4500);
         }
-        window.setTimeout(() => setMicDeniedNotice(false), 4500);
       }
     })();
 
@@ -596,11 +704,18 @@ export default function SmartwatchMiniApp({
       if (stream) stream.getTracks().forEach((t) => t.stop());
       if (audioCtx) audioCtx.close().catch(() => {});
     };
-  }, [isOpen, isPageVisible, isStandalone, activeState.autoDetectEnabled, sensitivity, onToggleAutoDetect]);
+  }, [isOpen, isPageVisible, isStandalone, activeState.autoDetectEnabled, isAnalysisWatchMode, sensitivity, onToggleAutoDetect]);
 
   useEffect(() => {
-    // Only run wrist IMU shot detection when running standalone on a visible watch (/watch), never when hidden or on the phone preview modal
-    if (!isOpen || !isPageVisible || !isStandalone || !activeState.autoDetectEnabled) return;
+    // Run wrist IMU capture on standalone watch (/watch) when autoDetect OR Análisis mode is active
+    if (
+      !isOpen ||
+      !isPageVisible ||
+      !isStandalone ||
+      (!activeState.autoDetectEnabled && !isAnalysisWatchMode)
+    ) {
+      return;
+    }
     if (!iosMotionGranted) return;
     if (typeof window === "undefined" || !("DeviceMotionEvent" in window)) return;
 
@@ -656,12 +771,15 @@ export default function SmartwatchMiniApp({
       const now = Date.now();
 
       let gyroRad = -1;
+      let gx = 0;
+      let gy = 0;
+      let gz = 0;
       if (event.rotationRate) {
         const degToRad = Math.PI / 180;
-        const wx = (event.rotationRate.alpha || 0) * degToRad;
-        const wy = (event.rotationRate.beta || 0) * degToRad;
-        const wz = (event.rotationRate.gamma || 0) * degToRad;
-        gyroRad = Math.sqrt(wx * wx + wy * wy + wz * wz);
+        gx = (event.rotationRate.alpha || 0) * degToRad;
+        gy = (event.rotationRate.beta || 0) * degToRad;
+        gz = (event.rotationRate.gamma || 0) * degToRad;
+        gyroRad = Math.sqrt(gx * gx + gy * gy + gz * gz);
       }
 
       setWristImpulseLevel(Math.min(100, Math.round((lin / cfg.threshold) * 100)));
@@ -727,14 +845,29 @@ export default function SmartwatchMiniApp({
             const snapDeltaMs = Math.abs(lastAcousticSnapRef.current - pending.startMs);
             const hasAcousticKey =
               micActiveRef.current && lastAcousticSnapRef.current > 0 && snapDeltaMs <= 145;
-            if (validFollow && hasAcousticKey && now - lastShotRef.current > cfg.cooldown) {
+            const acousticGateOk = hasAcousticKey || (isAnalysisWatchMode && !micActiveRef.current);
+            if (
+              activeState.autoDetectEnabled &&
+              validFollow &&
+              acousticGateOk &&
+              now - lastShotRef.current > cfg.cooldown
+            ) {
               lastShotRef.current = now;
               lastAcousticSnapRef.current = 0;
-              handleArrowDelta(1, "watch_auto");
+              if (isAnalysisWatchMode) {
+                emitAnalysisShotRef.current(pending.startMs, "watch_auto");
+              } else {
+                handleArrowDelta(1, "watch_auto");
+              }
             }
           }
         }
-      } else if (!isWalkingBlocked && lin >= cfg.threshold && now - lastShotRef.current > cfg.cooldown) {
+      } else if (
+        activeState.autoDetectEnabled &&
+        !isWalkingBlocked &&
+        lin >= cfg.threshold &&
+        now - lastShotRef.current > cfg.cooldown
+      ) {
         // Gate 6: Sharp release jerk check
         let maxJump = 0;
         for (let k = 1; k <= 3 && buf.length - k >= 0; k++) {
@@ -825,8 +958,8 @@ export default function SmartwatchMiniApp({
         }
       }
 
-      buf.push({ t: now, ax, ay, az, mag, lin, gyro: gyroRad });
-      while (buf.length && now - buf[0].t > 5500) buf.shift();
+      buf.push({ t: now, ax, ay, az, gx, gy, gz, mag, lin, gyro: gyroRad });
+      while (buf.length && now - buf[0].t > 9000) buf.shift();
     };
 
     window.addEventListener("devicemotion", handleMotion, { passive: true });
@@ -835,6 +968,7 @@ export default function SmartwatchMiniApp({
     isOpen,
     isPageVisible,
     activeState.autoDetectEnabled,
+    isAnalysisWatchMode,
     sensitivity,
     handleArrowDelta,
     isStandalone,
@@ -1072,14 +1206,264 @@ export default function SmartwatchMiniApp({
     </div>
   );
 
-  const WatchFaceContent = () => (
-    <div
-      dir="ltr"
-      onWheel={handleWheel}
-      className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none transition-all ${
-        isSquare ? "rounded-[48px]" : "rounded-full"
-      }`}
-    >
+  const handleWatchTouchStart = (e: React.TouchEvent) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+    }
+  };
+
+  const handleWatchTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || !e.changedTouches || e.changedTouches.length === 0) {
+      return;
+    }
+    const dx = e.changedTouches[0].clientX - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(dx) < 34) return;
+    triggerHaptic(15);
+    if (isAnalysisWatchMode) {
+      setAnalysisPage((prev) => (prev === 0 ? 1 : 0));
+    } else if (dx < 0) {
+      setScreenIdx((prev) => (prev + 1) % 5);
+    } else {
+      setScreenIdx((prev) => (prev + 4) % 5);
+    }
+  };
+
+  const watchBowLabel =
+    activeState.bowType === "Recurve"
+      ? t("bowRecurve")
+      : activeState.bowType === "Compound"
+      ? t("bowCompound")
+      : t("bowBarebow");
+  const liveAnalysisHr =
+    lastAnalysisShot?.heartRateBpm ||
+    (bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+      ? bleHrStatus.currentBpm
+      : undefined) ||
+    activeState.heartRateBpm;
+
+  const WatchFaceContent = () => {
+    if (isAnalysisWatchMode) {
+      const shotNum = lastAnalysisShot?.shotNumber || activeState.arrowsCount || 0;
+      return (
+        <div
+          dir="ltr"
+          onTouchStart={handleWatchTouchStart}
+          onTouchEnd={handleWatchTouchEnd}
+          className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-between ${
+            analysisPage === 0 ? "pt-[21px] pb-[11px] px-[14px]" : "pt-[19px] pb-[12px] px-[16px]"
+          } overflow-hidden select-none transition-all ${
+            isSquare ? "rounded-[48px]" : "rounded-full"
+          }`}
+        >
+          <div
+            className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
+              isSquare ? "rounded-[44px]" : "rounded-full"
+            }`}
+          />
+
+          {analysisPage === 0 ? (
+            <>
+              <div className="flex flex-col items-center z-10 shrink-0">
+                <img
+                  src="/images/brand_logo_header.png"
+                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                  alt="ARCHERY 101010"
+                  className="h-[10px] w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                  draggable={false}
+                />
+              </div>
+
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[192px] h-[192px] flex items-center justify-center pointer-events-none z-[5]">
+                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={192} compactWatchMode />
+              </div>
+
+              <div className="flex flex-col items-center gap-[5px] z-10 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isStandalone && !activeState.autoDetectEnabled) {
+                      emitAnalysisShotRef.current(Date.now(), "watch_manual");
+                    } else {
+                      triggerHaptic(15);
+                      setAnalysisPage(1);
+                    }
+                  }}
+                  className="inline-flex items-center gap-[5px] bg-[#080B10] border border-white/[0.13] rounded-full px-[10px] py-[2.5px] text-[8.5px] font-extrabold tracking-[0.08em] text-white uppercase whitespace-nowrap tabular-nums cursor-pointer active:scale-95 transition"
+                >
+                  <span
+                    className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                      justDetectedShot ? "bg-[#FFE500]" : "bg-[#00BFFF]"
+                    }`}
+                  />
+                  <span>
+                    {shotNum > 0
+                      ? `${t("navAnalysis")} · ${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
+                      : !activeState.autoDetectEnabled && isStandalone
+                      ? `${tx("Capturar Tiro", "Capture Shot")} · ${activeState.distanceM}m`
+                      : `${t("navAnalysis")} · ${tx("Listo", "Ready")} · ${activeState.distanceM}m`}
+                  </span>
+                </button>
+
+                <div className="flex items-center gap-[5px]">
+                  {[0, 1].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic(15);
+                        setAnalysisPage(idx as 0 | 1);
+                      }}
+                      aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
+                      className={`h-[4px] rounded-full transition-all cursor-pointer ${
+                        analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
+                <img
+                  src="/images/brand_logo_header.png"
+                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                  alt="ARCHERY 101010"
+                  className="h-[9.5px] w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                  draggable={false}
+                />
+                <div className="inline-flex items-center gap-[5px] bg-[#080B10] border border-white/[0.13] rounded-full px-[10px] py-[2px] text-[8.3px] font-extrabold tracking-[0.08em] text-white uppercase whitespace-nowrap tabular-nums">
+                  <span className="w-[5px] h-[5px] rounded-full bg-[#00BFFF] shrink-0" />
+                  <span>
+                    {shotNum > 0
+                      ? `${tx("Datos · Tiro", "Data · Shot")} ${shotNum}`
+                      : tx("Datos · En Espera", "Data · Standby")}
+                  </span>
+                </div>
+              </div>
+
+              <div className="w-[200px] flex flex-col gap-[5.5px] z-10">
+                <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
+                  <div className="flex flex-col gap-[0.5px]">
+                    <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
+                      {tx("Estabilidad", "Stability")}
+                    </span>
+                    <span className="text-[8.3px] font-semibold text-white tabular-nums">
+                      {lastAnalysisShot ? `±${lastAnalysisShot.swayRadiusCm.toFixed(1)} cm` : "—"}
+                    </span>
+                  </div>
+                  <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                    {lastAnalysisShot ? (
+                      <>
+                        {lastAnalysisShot.stabilityPct}
+                        <span className="text-[10.5px] font-bold ml-[2px]">%</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-[5.5px]">
+                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between">
+                    <div className="flex items-center gap-[4.5px]">
+                      <span className="w-[9px] h-0 border-t-2 border-dashed border-white shrink-0" />
+                      <span className="text-[7.5px] font-black tracking-[0.04em] text-white uppercase whitespace-nowrap">
+                        {tx("Preparatorio", "Preparatory")}
+                      </span>
+                    </div>
+                    <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                      {lastAnalysisShot ? (
+                        <>
+                          {lastAnalysisShot.prepSeconds.toFixed(1)}
+                          <span className="text-[10.5px] font-bold ml-[2px]">s</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between">
+                    <div className="flex items-center gap-[4.5px]">
+                      <span className="w-[9px] h-[2.5px] rounded-full bg-[#00BFFF] shrink-0" />
+                      <span className="text-[7.5px] font-black tracking-[0.04em] text-white uppercase whitespace-nowrap">
+                        {tx("Apuntado", "Aiming")}
+                      </span>
+                    </div>
+                    <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                      {lastAnalysisShot ? (
+                        <>
+                          {lastAnalysisShot.aimSeconds.toFixed(1)}
+                          <span className="text-[10.5px] font-bold ml-[2px]">s</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
+                  <div className="flex flex-col gap-[0.5px]">
+                    <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
+                      {tx("Pulsaciones", "Heart Rate")}
+                    </span>
+                    <span className="text-[8.3px] font-semibold text-white">
+                      {tx("En disparo", "At release")}
+                    </span>
+                  </div>
+                  <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                    {liveAnalysisHr ? (
+                      <>
+                        {liveAnalysisHr}
+                        <span className="text-[10.5px] font-bold ml-[2px]">BPM</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
+                <span className="text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums">
+                  {activeState.distanceM}m · {watchBowLabel}
+                </span>
+                <div className="flex items-center gap-[5px]">
+                  {[0, 1].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic(15);
+                        setAnalysisPage(idx as 0 | 1);
+                      }}
+                      aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
+                      className={`h-[4px] rounded-full transition-all cursor-pointer ${
+                        analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        dir="ltr"
+        onWheel={handleWheel}
+        onTouchStart={handleWatchTouchStart}
+        onTouchEnd={handleWatchTouchEnd}
+        className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none transition-all ${
+          isSquare ? "rounded-[48px]" : "rounded-full"
+        }`}
+      >
       {/* Subtle 1px inner safe ring */}
       <div
         className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
@@ -1450,6 +1834,7 @@ export default function SmartwatchMiniApp({
       </div>
     </div>
   );
+  };
 
   // If opened directly on a Smartwatch / Secondary Device browser (/watch)
   if (isStandalone) {

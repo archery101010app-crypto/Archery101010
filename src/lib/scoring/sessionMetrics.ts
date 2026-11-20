@@ -12,6 +12,15 @@ export function isVolumeSession(s: any): boolean {
   return s.isVolumeOnly === true || s.practiceType === "Volumen";
 }
 
+export function isAnalysisOnlySession(s: any): boolean {
+  if (!s) return false;
+  return (
+    s.isAnalysisSession === true ||
+    s.practiceType === "Análisis" ||
+    s.biometrics?.isAnalysisSession === true
+  );
+}
+
 export function countScoredArrows(s: any): number {
   if (!s || !Array.isArray(s.ends)) return 0;
   return s.ends.reduce(
@@ -43,9 +52,9 @@ export function getSessionMaxScore(s: any): number {
   return Number(s.maxScore) || 0;
 }
 
-/** True when the session carries real points to rank/compare (not volume, not empty). */
+/** True when the session carries real points to rank/compare (not volume, not analysis, not empty). */
 export function hasRealScore(s: any): boolean {
-  return !isVolumeSession(s) && getSessionScore(s) > 0 && getSessionMaxScore(s) > 0;
+  return !isVolumeSession(s) && !isAnalysisOnlySession(s) && getSessionScore(s) > 0 && getSessionMaxScore(s) > 0;
 }
 
 /**

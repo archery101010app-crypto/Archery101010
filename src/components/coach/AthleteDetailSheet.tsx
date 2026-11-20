@@ -9,6 +9,7 @@ import {
   X,
   User,
   History,
+  Activity,
   LineChart,
   MessageSquare,
   Award,
@@ -21,6 +22,7 @@ import {
   AlertTriangle,
   Star
 } from "lucide-react";
+import { CoachAthleteAnalysisInspector } from "../analysis/AnalysisInspectorShared";
 import { getLocalSetting, saveLocalSetting } from "@/lib/db/indexedDB";
 import { RECURVE_STARS, COMPOUND_STARS } from "@/lib/starsManager";
 import { DIANA_PRESETS, getDianaPresetKey } from "../scoring/ScoringView";
@@ -52,7 +54,7 @@ interface AthleteDetailSheetProps {
   onUnlinkAthlete?: (athlete: UserProfile) => void;
 }
 
-type SubTab = "PERFIL" | "SESIONES" | "VOLUMEN" | "RECORDS" | "TENDENCIAS" | "NOTAS";
+type SubTab = "PERFIL" | "SESIONES" | "VOLUMEN" | "ANALISIS" | "RECORDS" | "TENDENCIAS" | "NOTAS";
 
 export default function AthleteDetailSheet({
   athlete,
@@ -325,11 +327,12 @@ export default function AthleteDetailSheet({
         </div>
 
         {/* Tabs navigation list */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]">
+        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]">
           {[
             { id: "PERFIL", label: t("navProfile"), icon: User },
             { id: "SESIONES", label: tx("Puntajes", "Scores"), icon: History },
             { id: "VOLUMEN", label: t("practiceVolume"), icon: Target },
+            { id: "ANALISIS", label: t("navAnalysis"), icon: Activity },
             { id: "RECORDS", label: tx("Récords", "Records"), icon: Award },
             { id: "TENDENCIAS", label: tx("Tendencias", "Trends"), icon: LineChart },
             { id: "NOTAS", label: tx("Notas", "Notes"), icon: MessageSquare }
@@ -1245,6 +1248,19 @@ export default function AthleteDetailSheet({
                 </div>
               );
             })()}
+
+          {/* TAB: ANÁLISIS BIOMECÁNICO */}
+          {activeTab === "ANALISIS" && (
+            <CoachAthleteAnalysisInspector
+              athleteFirstName={athlete.fullName?.trim().split(/\s+/)[0] || athlete.fullName}
+              sessions={sessions.filter(
+                (s) => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel
+              )}
+              noteText={newNoteText}
+              onNoteTextChange={setNewNoteText}
+              onSendNote={handleAddNote}
+            />
+          )}
 
           {/* TAB 3: RECORDS */}
           {activeTab === "RECORDS" && (

@@ -35,6 +35,10 @@ const ScoringView = dynamic(() => import("@/components/scoring/ScoringView"), {
   ssr: false,
   loading: ViewLoadingFallback
 });
+const AnalysisView = dynamic(() => import("@/components/analysis/AnalysisView"), {
+  ssr: false,
+  loading: ViewLoadingFallback
+});
 const HistoryView = dynamic(() => import("@/components/history/HistoryView"), {
   ssr: false,
   loading: ViewLoadingFallback
@@ -89,7 +93,7 @@ import { startRealtimeSync, stopRealtimeSync, syncPublicUserPresence } from "@/l
 import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation/backNavigation";
 
 // Screens that the authenticated user can access
-type Screen = "HOME" | "TARGET" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
+type Screen = "HOME" | "TARGET" | "ANALYSIS" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 
 export default function Home() {
@@ -99,7 +103,7 @@ export default function Home() {
   const [coachViewMode, setCoachViewMode] = useState(false);
   const [sessionConfig, setSessionConfig] = useState<any | null>(null);
   const [duelConfig, setDuelConfig] = useState<any | null>(null);
-  const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME">("SESSIONS");
+  const [initialHistoryTab, setInitialHistoryTab] = useState<"SESSIONS" | "VOLUME" | "ANALYSIS">("SESSIONS");
   const [loading, setLoading] = useState(true);
   const [unlockedStar, setUnlockedStar] = useState<any | null>(null);
   const [showIntro, setShowIntro] = useState(() => {
@@ -1241,6 +1245,7 @@ export default function Home() {
     if (typeof window !== "undefined") {
       (window as unknown as { __archeryBusySession?: boolean }).__archeryBusySession =
         (currentScreen === "TARGET" && Boolean(sessionConfig)) ||
+        currentScreen === "ANALYSIS" ||
         currentScreen === "MATCHPLAY_ARENA";
     }
   }, [currentScreen, sessionConfig]);
@@ -1510,7 +1515,7 @@ export default function Home() {
             <ErrorBoundary sectionName="Portal de Entrenador">
               <CoachPortalView
                 user={user}
-                onNavigate={(screen: Screen, tab?: "SESSIONS" | "VOLUME") => {
+                onNavigate={(screen: Screen, tab?: "SESSIONS" | "VOLUME" | "ANALYSIS") => {
                   if (tab) setInitialHistoryTab(tab);
                   else setInitialHistoryTab("SESSIONS");
                   setCurrentScreen(screen);
@@ -1560,6 +1565,17 @@ export default function Home() {
               />
             </ErrorBoundary>
           )
+        )}
+        {currentScreen === "ANALYSIS" && (
+          <ErrorBoundary sectionName="Análisis">
+            <AnalysisView
+              user={user}
+              onNavigateHistoryAnalysis={() => {
+                setInitialHistoryTab("ANALYSIS");
+                setCurrentScreen("HISTORY");
+              }}
+            />
+          </ErrorBoundary>
         )}
         {currentScreen === "MATCHPLAY_LOBBY" && (
           <ErrorBoundary sectionName="Lobby de Eliminatorias">
@@ -1641,8 +1657,8 @@ export default function Home() {
       <FloatingNav
         activeScreen={currentScreen}
         onScreenChange={(screen) => {
-          // Block coaches from personal scoring sheets and duels while in coach mode
-          if (coachViewMode && (screen === "TARGET" || screen === "MATCHPLAY_LOBBY" || screen === "MATCHPLAY_ARENA")) {
+          // Block coaches from personal scoring sheets, analysis, and duels while in coach mode
+          if (coachViewMode && (screen === "TARGET" || screen === "ANALYSIS" || screen === "MATCHPLAY_LOBBY" || screen === "MATCHPLAY_ARENA")) {
             setCurrentScreen("HOME");
             return;
           }

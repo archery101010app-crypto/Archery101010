@@ -23,6 +23,7 @@ import {
 } from "@/lib/scoring/dispersionAnalytics";
 import {
   isVolumeSession,
+  isAnalysisOnlySession,
   getSessionArrows,
   getSessionScore,
   getSessionMaxScore,
@@ -113,7 +114,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       }
 
       if (s.isDraft) {
-        if (subMode === "SCORES") return !isVolumeSession(s);
+        if (subMode === "SCORES") return !isVolumeSession(s) && !isAnalysisOnlySession(s);
         return true;
       }
       if (subMode === "SCORES") {
