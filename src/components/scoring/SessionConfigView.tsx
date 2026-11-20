@@ -216,12 +216,12 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
       {/* Configuration Form wrapper */}
       <div className="flex-1 flex flex-col gap-4">
-        {/* Bluetooth Heart Rate Sensor Quick Connect Bar (directly below Configuration, above Practice Type) */}
-        <div className="bg-[#0B0E14] border border-white/[0.10] rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+        {/* Heart Rate Quick Connect Bar (directly below Configuration, above Practice Type) */}
+        <div className="bg-[#0B0E14] border border-white/[0.11] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-3">
+          <div className="flex flex-col justify-center min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
               <span
-                className={`w-2 h-2 rounded-full shrink-0 ${
+                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                   bleHrStatus.state === "connected"
                     ? "bg-[#00C853]"
                     : bleHrStatus.state === "scanning" || bleHrStatus.state === "connecting"
@@ -229,25 +229,25 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "bg-[#6E7785]"
                 }`}
               />
-              <span className="text-[12.6px] min-[390px]:text-[14.3px] sm:text-[15.2px] font-extrabold text-white uppercase tracking-[-0.01em] leading-tight whitespace-nowrap truncate">
+              <span className="text-[16px] min-[390px]:text-[16.7px] sm:text-[17.5px] font-bold text-white uppercase tracking-wider leading-none whitespace-nowrap truncate">
                 {t("bleHrTitle")}
               </span>
             </div>
-            <span className="text-[11.2px] min-[390px]:text-[12.6px] sm:text-[13.5px] font-medium text-white tracking-[-0.01em] leading-snug mt-0.5 tabular-nums truncate">
-              {bleHrStatus.state === "connected"
-                ? `${
-                    bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
-                  }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`
-                : t("bleHrSubtitle")}
-            </span>
+            {bleHrStatus.state === "connected" && (
+              <span className="text-[13px] font-semibold text-white leading-snug mt-1 tabular-nums truncate pl-4.5">
+                {`${
+                  bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
+                }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}
+              </span>
+            )}
           </div>
 
           <button
             type="button"
             onClick={() => setShowBleHrModal(true)}
-            className={`min-h-[36px] px-2.5 rounded-lg font-black text-[12.7px] uppercase tracking-[0.03em] shrink-0 cursor-pointer transition active:scale-95 tabular-nums ${
+            className={`min-h-[42px] px-4 rounded-xl font-bold text-[14px] min-[390px]:text-[14.8px] uppercase tracking-[0.04em] shrink-0 cursor-pointer transition active:scale-95 tabular-nums ${
               bleHrStatus.state === "connected"
-                ? "bg-[#051810] border border-[#00C853]/55 text-white"
+                ? "bg-[#051810] border border-[#00C853]/65 text-white"
                 : "bg-[#101006] border border-[#FFE500] text-white hover:bg-[#181808]"
             }`}
           >

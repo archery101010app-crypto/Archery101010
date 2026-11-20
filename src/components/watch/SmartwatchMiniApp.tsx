@@ -2146,24 +2146,24 @@ export default function SmartwatchMiniApp({
             </div>
           )}
 
-          {/* Universal Bluetooth Heart Rate Sensor Bar (Bands, Straps & Optical Sensors) */}
-          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
+          {/* Universal Bluetooth Heart Rate Bar */}
+          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-[7.9px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap flex items-center gap-1">
+              <div className="text-[11px] font-bold tracking-[0.08em] text-white uppercase whitespace-nowrap flex items-center gap-1.5">
                 <span
-                  className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                  className={`w-[6px] h-[6px] rounded-full shrink-0 ${
                     bleHrStatus.state === "connected" ? "bg-[#00C853]" : "bg-[#00BFFF]"
                   }`}
                 />
                 <span>{t("bleHrTitle")}</span>
               </div>
-              <div className="text-[9px] font-bold text-white truncate tabular-nums">
-                {bleHrStatus.state === "connected"
-                  ? `${
-                      bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
-                    }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`
-                  : t("bleHrSubtitle")}
-              </div>
+              {bleHrStatus.state === "connected" && (
+                <div className="text-[10px] font-semibold text-white truncate tabular-nums mt-0.5">
+                  {`${
+                    bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
+                  }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}
+                </div>
+              )}
             </div>
             <button
               type="button"
