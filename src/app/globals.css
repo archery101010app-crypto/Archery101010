@@ -253,6 +253,18 @@ html textarea::placeholder {
   background: #000000 !important;
 }
 
+/* --- Native HTML <dialog> modal scroll containment (Modern Web Guidance) --- */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.90);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 /* --- Google Translate custom styles to hide clunky top banners & maintain premium SaaS look --- */
 .skiptranslate,
 iframe.skiptranslate,

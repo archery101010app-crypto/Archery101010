@@ -242,6 +242,8 @@ export default function HistoryView({
           "Xs",
           "Kcal",
           "Recorrido",
+          "BPM Promedio",
+          "BPM Máx",
           "Notas"
         ]
       : [
@@ -259,6 +261,8 @@ export default function HistoryView({
           "Xs",
           "Kcal",
           "Walked Distance",
+          "Avg BPM",
+          "Max BPM",
           "Notes"
         ];
 
@@ -281,6 +285,7 @@ export default function HistoryView({
         (acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length,
         0
       );
+      const hrStats = getSessionHeartRateStats(s);
       return [
         formatRegionalDate(s.timestamp, language),
         getSessionAthleteName(s),
@@ -296,6 +301,8 @@ export default function HistoryView({
         xs,
         getSessionActiveKcal(s, user),
         formatWalkedDistanceRegional(getSessionDistanceWalkedM(s), unitSystem),
+        hrStats.avgHeartRateBpm ?? "",
+        hrStats.maxHeartRateBpm ?? "",
         s.sessionNote || ""
       ];
     });
@@ -886,6 +893,10 @@ export default function HistoryView({
                       </span>
                       <span className="text-[10.5px] font-bold text-white tabular-nums truncate">
                         {getSessionActiveKcal(session, user)} kcal · {formatWalkedDistanceRegional(getSessionDistanceWalkedM(session), unitSystem)}
+                        {(() => {
+                          const hr = getSessionHeartRateStats(session);
+                          return hr.avgHeartRateBpm ? ` · ${hr.avgHeartRateBpm} BPM` : "";
+                        })()}
                       </span>
                     </div>
 
@@ -1015,6 +1026,10 @@ export default function HistoryView({
                         <span className="text-[10.5px] text-white tabular-nums">{getLocalizedPracticeName(s.practiceType)} · {getSessionShootingDistLabel(s)}</span>
                         <span className="text-[10px] font-bold text-white tabular-nums">
                           {getSessionActiveKcal(s, user)} kcal · {formatWalkedDistanceRegional(getSessionDistanceWalkedM(s), unitSystem)}
+                          {(() => {
+                            const hr = getSessionHeartRateStats(s);
+                            return hr.avgHeartRateBpm ? ` · ${hr.avgHeartRateBpm} BPM` : "";
+                          })()}
                         </span>
                       </div>
                       <div className="text-right">
@@ -1158,25 +1173,45 @@ export default function HistoryView({
               </div>
             </div>
 
-            {/* Biometric Summary: Kcal + Distancia Recorrida */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
-                <span className="text-[10px] text-white uppercase font-black tracking-wider block">
-                  KCAL
-                </span>
-                <span className="text-base font-black text-white mt-0.5 block tabular-nums">
-                  {getSessionActiveKcal(selectedSession, user)} kcal
-                </span>
-              </div>
-              <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
-                <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
-                  {t("cardWalked")}
-                </span>
-                <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
-                  {formatWalkedDistanceRegional(getSessionDistanceWalkedM(selectedSession), unitSystem)}
-                </span>
-              </div>
-            </div>
+            {/* Biometric Summary: Kcal + Distancia Recorrida + Pulsaciones (cuando existe) */}
+            {(() => {
+              const hr = getSessionHeartRateStats(selectedSession);
+              return (
+                <div className={`grid ${hr.avgHeartRateBpm ? "grid-cols-3" : "grid-cols-2"} gap-2.5`}>
+                  <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
+                    <span className="text-[10px] text-white uppercase font-black tracking-wider block">
+                      KCAL
+                    </span>
+                    <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                      {getSessionActiveKcal(selectedSession, user)} kcal
+                    </span>
+                  </div>
+                  <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
+                    <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
+                      {t("cardWalked")}
+                    </span>
+                    <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                      {formatWalkedDistanceRegional(getSessionDistanceWalkedM(selectedSession), unitSystem)}
+                    </span>
+                  </div>
+                  {hr.avgHeartRateBpm && (
+                    <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
+                      <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
+                        {t("cardHeartRate")}
+                      </span>
+                      <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                        {hr.avgHeartRateBpm} BPM
+                      </span>
+                      {hr.maxHeartRateBpm && (
+                        <span className="text-[9.5px] font-bold text-yellow-gold tabular-nums block truncate">
+                          {tx("Máx", "Max")} {hr.maxHeartRateBpm}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Bloques y Fatiga report (para WA600/720 en Historial) */}
             {selectedSession.blockStats && (

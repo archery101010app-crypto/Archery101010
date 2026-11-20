@@ -32,7 +32,8 @@ import {
   getSessionArrows,
   getSessionScore,
   getSessionMaxScore,
-  hasRealScore
+  hasRealScore,
+  getSessionHeartRateStats
 } from "@/lib/scoring/sessionMetrics";
 import {
   getSessionDistanceWalkedM,
@@ -618,6 +619,10 @@ export default function AthleteDetailSheet({
                                 {dateStr} · {sess.distance}m ·{" "}
                                 {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
                                 {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                {(() => {
+                                  const hr = getSessionHeartRateStats(sess);
+                                  return hr.avgHeartRateBpm ? ` · ${hr.avgHeartRateBpm} BPM` : "";
+                                })()}
                               </span>
                             </div>
                             <div className="flex items-center gap-2.5 shrink-0">
@@ -815,25 +820,45 @@ export default function AthleteDetailSheet({
                                           </div>
                                         );
                                       })()}
-                                    {/* KCAL y DISTANCIA RECORRIDA */}
-                                    <div className="w-full grid grid-cols-2 gap-2 mt-1">
-                                      <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                        <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
-                                          {t("cardCalories")}
-                                        </span>
-                                        <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                          {getSessionActiveKcal(sess, athlete)} kcal
-                                        </span>
-                                      </div>
-                                      <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col">
-                                        <span className="text-[9.5px] font-black uppercase text-white tracking-wider">
-                                          {t("cardWalked")}
-                                        </span>
-                                        <span className="text-sm font-black text-white tabular-nums mt-0.5">
-                                          {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
-                                        </span>
-                                      </div>
-                                    </div>
+                                    {/* KCAL, DISTANCIA RECORRIDA y PULSACIONES */}
+                                    {(() => {
+                                      const hr = getSessionHeartRateStats(sess);
+                                      return (
+                                        <div className={`w-full grid ${hr.avgHeartRateBpm ? "grid-cols-3" : "grid-cols-2"} gap-2 mt-1`}>
+                                          <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
+                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                              {t("cardCalories")}
+                                            </span>
+                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                              {getSessionActiveKcal(sess, athlete)} kcal
+                                            </span>
+                                          </div>
+                                          <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
+                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                              {t("cardWalked")}
+                                            </span>
+                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                              {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                            </span>
+                                          </div>
+                                          {hr.avgHeartRateBpm && (
+                                            <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
+                                              <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                                {t("cardHeartRate")}
+                                              </span>
+                                              <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                                {hr.avgHeartRateBpm} BPM
+                                              </span>
+                                              {hr.maxHeartRateBpm && (
+                                                <span className="text-[9px] font-bold text-yellow-gold tabular-nums truncate">
+                                                  {tx("Máx", "Max")} {hr.maxHeartRateBpm}
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
 
                                   {sess.ends && (
@@ -1198,6 +1223,10 @@ export default function AthleteDetailSheet({
                                 {sess.practiceType || t("navSession")} · {sess.distance || 18}m ·{" "}
                                 {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
                                 {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
+                                {(() => {
+                                  const hr = getSessionHeartRateStats(sess);
+                                  return hr.avgHeartRateBpm ? ` · ${hr.avgHeartRateBpm} BPM` : "";
+                                })()}
                               </span>
                             </div>
                             <div className="flex flex-col text-end shrink-0">

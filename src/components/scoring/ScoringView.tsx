@@ -37,6 +37,14 @@ import {
   processGpsCoordinateFix
 } from "@/lib/scoring/walkingTracker";
 import SmartwatchMiniApp from "@/components/watch/SmartwatchMiniApp";
+import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
+import {
+  BleHeartRateStatus,
+  getBleHeartRateStatus,
+  resetBleHeartRateSessionStats,
+  subscribeBleHeartRate,
+  tryAutoReconnectBleHeartRate
+} from "@/lib/scoring/bleHeartRateService";
 import StravaShareModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -292,6 +300,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [gpsActive, setGpsActive] = useState<boolean>(false);
   const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean>(false);
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
+  const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
+  const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
+  const lastBleSampleAtRef = useRef<number>(0);
   const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
   const watchFinishedSessionRef = useRef<boolean>(false);
   const lastGpsCoordRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
@@ -317,6 +328,40 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   );
   const lastStepTimeRef = useRef<number>(0);
   const isClosingSessionRef = useRef<boolean>(false);
+
+  // Live Bluetooth Heart Rate Sensor (0x180D / 0x2A37) subscription + session avg/max integration
+  useEffect(() => {
+    const seedAvg = avgHeartRateRef.current;
+    const seedMax = maxHeartRateRef.current;
+    if (seedAvg >= 30 && hrSamplesCountRef.current === 0) {
+      hrSumRef.current = seedAvg;
+      hrSamplesCountRef.current = 1;
+    }
+    resetBleHeartRateSessionStats(seedAvg, seedMax);
+    tryAutoReconnectBleHeartRate();
+
+    return subscribeBleHeartRate((next) => {
+      setBleHrStatus(next);
+      if (
+        next.state === "connected" &&
+        next.currentBpm >= 30 &&
+        next.currentBpm <= 245 &&
+        next.lastSampleAt > lastBleSampleAtRef.current
+      ) {
+        lastBleSampleAtRef.current = next.lastSampleAt;
+        hrSumRef.current += next.currentBpm;
+        hrSamplesCountRef.current += 1;
+        const computedAvg = Math.round(hrSumRef.current / hrSamplesCountRef.current);
+        avgHeartRateRef.current = computedAvg;
+        setAvgHeartRateBpm(computedAvg);
+        const computedMax = Math.max(maxHeartRateRef.current, next.currentBpm, computedAvg);
+        if (computedMax > maxHeartRateRef.current) {
+          maxHeartRateRef.current = computedMax;
+          setMaxHeartRateBpm(computedMax);
+        }
+      }
+    });
+  }, []);
 
   const stopNativeLocationTracking = () => {
     try {
@@ -642,6 +687,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       distanceWalkedM,
       gpsActive,
       activeKcal,
+      ...(bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+        ? { heartRateBpm: bleHrStatus.currentBpm }
+        : avgHeartRateBpm >= 30
+        ? { heartRateBpm: avgHeartRateBpm }
+        : {}),
+      ...(avgHeartRateBpm >= 30 ? { avgHeartRateBpm } : {}),
+      ...(maxHeartRateBpm >= 30 ? { maxHeartRateBpm } : {}),
       bowPoundageLbs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || user.bowConfig?.type || "Recurve",
@@ -666,6 +718,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     distanceWalkedM,
     gpsActive,
     activeKcal,
+    bleHrStatus.state,
+    bleHrStatus.currentBpm,
+    avgHeartRateBpm,
+    maxHeartRateBpm,
     bowPoundageLbs,
     config.practiceType,
     config.bowType,
@@ -2200,8 +2256,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         </div>
       )}
 
-      {/* Biometric Telemetry Bar: Distancia Recorrida (GPS + Respaldo) + Kcal + Smartwatch Mini-App */}
-      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-3 sm:px-3.5 py-2.5 sm:py-3 flex items-center justify-between gap-2 relative overflow-hidden">
+      {/* Biometric Telemetry Bar: Distancia Recorrida + Kcal + Pulso Bluetooth + Smartwatch */}
+      <div className="bg-[#080B10] border border-white/[0.10] rounded-2xl px-2.5 sm:px-3.5 py-2.5 sm:py-3 flex items-center justify-between gap-1.5 sm:gap-2 relative overflow-hidden">
         <div
           className="absolute top-0 left-12 right-12 h-[2px]"
           style={{
@@ -2209,9 +2265,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               "linear-gradient(90deg, transparent, #00A8F3 25%, #FF0000 50%, #FFF200 75%, transparent)"
           }}
         />
-        <div className="flex items-center justify-around gap-1.5 sm:gap-2 min-w-0 flex-1">
-          <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-1.5 sm:pr-2 border-r border-white/10">
-            <span className="text-[11.5px] sm:text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
+        <div className="flex items-center justify-around gap-1 sm:gap-2 min-w-0 flex-1">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 flex-1 pr-1 sm:pr-2 border-r border-white/10">
+            <span className="text-[10.5px] sm:text-[12px] font-black uppercase tracking-tight sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   gpsActive
@@ -2222,28 +2278,57 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <span className="sm:hidden">{t("cardDistance")}</span>
               <span className="hidden sm:inline">{t("cardWalked")}</span>
             </span>
-            <span className="text-[15.5px] sm:text-[17.5px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
+            <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
               {formatWalkedDistanceRegional(distanceWalkedM, unitSystem)}
             </span>
           </div>
 
-          <div className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2">
-            <span className="text-[11.5px] sm:text-[12.5px] font-black uppercase tracking-tight sm:tracking-wider text-white leading-tight whitespace-nowrap">
+          <div className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2 border-r border-white/10">
+            <span className="text-[10.5px] sm:text-[12px] font-black uppercase tracking-tight sm:tracking-wider text-white leading-tight whitespace-nowrap">
               KCAL
             </span>
-            <span className="text-[15.5px] sm:text-[17.5px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
-              {activeKcal} <span className="text-[13.8px] sm:text-[14.5px] font-black text-white">kcal</span>
+            <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
+              {activeKcal} <span className="text-[12px] sm:text-[14px] font-black text-white">kcal</span>
             </span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsBleHrModalOpen(true)}
+            aria-label={t("bleHrTitle")}
+            className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2 cursor-pointer active:scale-95 transition"
+          >
+            <span className="text-[10.5px] sm:text-[12px] font-black uppercase tracking-tight sm:tracking-wider text-white flex items-center justify-center gap-1 leading-tight whitespace-nowrap">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  bleHrStatus.state === "connected"
+                    ? "bg-[#00C853]"
+                    : avgHeartRateBpm >= 30
+                    ? "bg-[#FF1E1E]"
+                    : "bg-[#6E7785]"
+                }`}
+              />
+              <span>{tx("PULSO", "BPM")}</span>
+            </span>
+            <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
+              {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+                ? `${bleHrStatus.currentBpm} BPM`
+                : avgHeartRateBpm >= 30
+                ? `${avgHeartRateBpm} BPM`
+                : tx("Pulso BT", "BT HR")}
+            </span>
+          </button>
         </div>
 
         <button
           type="button"
           onClick={() => setIsWatchModalOpen(true)}
-          className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[13px] sm:text-[14px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer active:scale-95 transition"
+          aria-label="Smartwatch"
+          className="px-2 sm:px-3 py-2 rounded-xl bg-[#FFF200] hover:brightness-105 text-black font-black text-[12px] sm:text-[13.5px] uppercase tracking-tight sm:tracking-wider flex items-center justify-center gap-1 sm:gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
         >
-          <Watch size={15} className="shrink-0" />
-          <span>Smartwatch</span>
+          <Watch size={14} aria-hidden="true" className="shrink-0" />
+          <span className="hidden min-[390px]:inline">Smartwatch</span>
+          <span className="min-[390px]:hidden">{tx("Reloj", "Watch")}</span>
         </button>
       </div>
 
@@ -3566,6 +3651,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           setIsWatchModalOpen(false);
           setIsFinishing(true);
         }}
+      />
+
+      {/* Open Bluetooth Heart Rate Sensor Modal */}
+      <BleHeartRateModal
+        isOpen={isBleHrModalOpen}
+        onClose={() => setIsBleHrModalOpen(false)}
       />
 
       {/* Strava-Style Share Preview Modal */}

@@ -656,4 +656,69 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(layoutSrc.includes('google: "notranslate"'), "RootLayout metadata must block Google auto-translate");
     assert.ok(layoutSrc.includes("DOM_MUTATION_GUARD_INLINE_SCRIPT"), "RootLayout must inject pre-hydration DOM guard");
   });
+
+  it("parses standard BLE Heart Rate 0x2A37 packets accurately and enforces zero third-party brand names in UI", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const {
+      parseHeartRateMeasurement,
+      BleHeartRateSessionTracker
+    } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. UINT8 BPM + Sensor Contact Detected (flags = 0x06 -> bit0=0, bits1..2=3) + RR-Interval (flags |= 0x10 -> 0x16)
+    // RR = 820 / 1024s = 800.78ms -> 801ms (820 = 0x0334 -> LE [0x34, 0x03])
+    const pktUint8 = parseHeartRateMeasurement(new Uint8Array([0x16, 114, 0x34, 0x03]));
+    assert.ok(pktUint8);
+    assert.equal(pktUint8.bpm, 114);
+    assert.equal(pktUint8.isUint16, false);
+    assert.equal(pktUint8.contactDetected, true);
+    assert.equal(pktUint8.validPhysiological, true);
+    assert.deepEqual(pktUint8.rrIntervalsMs, [801]);
+
+    // 2. UINT16 Little-Endian BPM (flags = 0x01) -> 182 BPM ([0xB6, 0x00])
+    const pktUint16 = parseHeartRateMeasurement(new Uint8Array([0x01, 0xb6, 0x00]));
+    assert.ok(pktUint16);
+    assert.equal(pktUint16.bpm, 182);
+    assert.equal(pktUint16.isUint16, true);
+    assert.equal(pktUint16.validPhysiological, true);
+
+    // 3. Sensor off-skin (contact bits = 2 -> flags = 0x04) or 0 BPM -> must mark validPhysiological = false
+    const pktOffSkin = parseHeartRateMeasurement(new Uint8Array([0x04, 95]));
+    assert.ok(pktOffSkin);
+    assert.equal(pktOffSkin.contactDetected, false);
+    assert.equal(pktOffSkin.validPhysiological, false);
+
+    // 4. Session tracker computes accurate rolling average and peak while rejecting off-skin / out-of-range noise
+    const tracker = new BleHeartRateSessionTracker();
+    assert.equal(tracker.recordSample(0, null, 1000), false);
+    assert.equal(tracker.recordSample(110, false, 1500), false);
+    assert.equal(tracker.recordSample(108, true, 2000), true);
+    assert.equal(tracker.recordSample(114, true, 3000), true);
+    assert.equal(tracker.recordSample(126, true, 4000), true);
+    const snap = tracker.getSnapshot();
+    assert.equal(snap.currentBpm, 126);
+    assert.equal(snap.avgHeartRateBpm, 116); // (108 + 114 + 126) / 3 = 116
+    assert.equal(snap.maxHeartRateBpm, 126);
+
+    // 5. Verify zero third-party brand names in BleHeartRateModal.tsx and bleHeartRateService.ts
+    const modalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/watch/BleHeartRateModal.tsx"),
+      "utf8"
+    );
+    const serviceSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/bleHeartRateService.ts"),
+      "utf8"
+    );
+    const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|fitbit|suunto)\b/i;
+    assert.equal(
+      forbiddenBrands.test(modalSrc),
+      false,
+      "BleHeartRateModal.tsx must NEVER contain third-party brand names"
+    );
+    assert.equal(
+      forbiddenBrands.test(serviceSrc),
+      false,
+      "bleHeartRateService.ts must NEVER contain third-party brand names"
+    );
+  });
 });

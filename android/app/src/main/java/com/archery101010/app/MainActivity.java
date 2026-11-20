@@ -1,6 +1,21 @@
 package com.archery101010.app;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanRecord;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
@@ -17,8 +32,11 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.ExifInterface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelUuid;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.CookieManager;
@@ -70,10 +88,14 @@ import java.io.FileOutputStream;
 import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -96,9 +118,12 @@ public class MainActivity extends BridgeActivity {
         "757910399585-q71dprgcodk5s2t67965gdfusr1lv441.apps.googleusercontent.com";
     private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
     private static final String SPOTIFY_PREFS = "archery_spotify_prefs";
+    private static final String BLE_HR_PREFS = "archery_ble_hr_prefs";
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
+    private ActivityResultLauncher<String[]> blePermissionLauncher;
+    private ActivityResultLauncher<Intent> bleEnableLauncher;
     private ActivityResultLauncher<String> audioPermissionLauncher;
     private ActivityResultLauncher<Intent> cameraCaptureLauncher;
     private PermissionRequest pendingWebAudioPermissionRequest = null;
@@ -298,6 +323,42 @@ public class MainActivity extends BridgeActivity {
             }
         );
 
+        blePermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            result -> {
+                if (hasBlePermissionsInternal()) {
+                    if (pendingBleActionAfterPermission == 2 && pendingBleConnectAddress != null) {
+                        String addr = pendingBleConnectAddress;
+                        String name = pendingBleConnectName;
+                        pendingBleActionAfterPermission = 0;
+                        connectBleHrDeviceInternal(addr, name, false);
+                    } else {
+                        pendingBleActionAfterPermission = 0;
+                        startBleHrScanInternal();
+                    }
+                } else {
+                    pendingBleActionAfterPermission = 0;
+                    bleHrState = "error";
+                    bleHrErrorCode = "PERMISSION_DENIED";
+                    emitBleHrStatusToWebView(null);
+                }
+            }
+        );
+
+        bleEnableLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                BluetoothAdapter adapter = getBleAdapterInternal();
+                if (adapter != null && adapter.isEnabled()) {
+                    startBleHrScanInternal();
+                } else {
+                    bleHrState = "error";
+                    bleHrErrorCode = "BLUETOOTH_OFF";
+                    emitBleHrStatusToWebView(null);
+                }
+            }
+        );
+
         cameraCaptureLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -352,6 +413,7 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcheryWatchNativeBridge(), "ArcheryWatchNativeBridge");
             webView.addJavascriptInterface(new ArcheryLocationNativeBridge(), "ArcheryLocationNativeBridge");
             webView.addJavascriptInterface(new ArcherySpotifyBridge(), "ArcherySpotifyBridge");
+            webView.addJavascriptInterface(new ArcheryBleHeartRateBridge(), "ArcheryBleHeartRateBridge");
             initWearableListener();
 
             if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
@@ -1928,6 +1990,646 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    // ───────────── Standard Bluetooth Low Energy (BLE) Heart Rate Sensor Bridge (0x180D / 0x2A37) ─────────────
+    private static final UUID BLE_HR_SERVICE_UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb");
+    private static final UUID BLE_HR_MEASUREMENT_UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb");
+    private static final UUID BLE_CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private static final UUID BLE_BATTERY_SERVICE_UUID = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb");
+    private static final UUID BLE_BATTERY_LEVEL_UUID = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb");
+
+    private final Handler bleMainHandler = new Handler(Looper.getMainLooper());
+    private volatile BluetoothGatt activeBleGatt = null;
+    private volatile boolean isBleScanning = false;
+    private volatile boolean bleUserRequestedDisconnect = false;
+    private volatile boolean bleConnectedOnce = false;
+    private volatile int pendingBleActionAfterPermission = 0; // 1 = scan, 2 = connect
+    private volatile String pendingBleConnectAddress = null;
+    private volatile String pendingBleConnectName = null;
+    private volatile String bleHrState = "disconnected";
+    private volatile String bleHrDeviceId = "";
+    private volatile String bleHrDeviceName = "";
+    private volatile String bleHrErrorCode = "";
+    private volatile Integer bleBatteryPct = null;
+
+    private static class BleDiscoveredEntry {
+        String id;
+        String name;
+        int rssi;
+        boolean hasHrService;
+        boolean isBondedOrConnected;
+    }
+
+    private final Map<String, BleDiscoveredEntry> discoveredBleDevices =
+        Collections.synchronizedMap(new LinkedHashMap<>());
+
+    private final Runnable stopBleScanTimeoutRunnable = () -> {
+        stopBleHrScanInternal();
+        if ("scanning".equals(bleHrState)) {
+            bleHrState = activeBleGatt != null && bleConnectedOnce ? "connected" : "disconnected";
+            emitBleHrStatusToWebView(null);
+        }
+    };
+
+    private BluetoothManager getBleManagerInternal() {
+        try {
+            return (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private BluetoothAdapter getBleAdapterInternal() {
+        BluetoothManager mgr = getBleManagerInternal();
+        return mgr != null ? mgr.getAdapter() : null;
+    }
+
+    private boolean hasBlePermissionsInternal() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        }
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestBlePermissionsInternal(int nextAction) {
+        pendingBleActionAfterPermission = nextAction;
+        if (blePermissionLauncher == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            blePermissionLauncher.launch(new String[]{
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            });
+        } else {
+            blePermissionLauncher.launch(new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            });
+        }
+    }
+
+    private JSONArray buildBleDevicesJsonArray() {
+        List<BleDiscoveredEntry> snapshot;
+        synchronized (discoveredBleDevices) {
+            snapshot = new ArrayList<>(discoveredBleDevices.values());
+        }
+        Collections.sort(snapshot, (a, b) -> {
+            if (a.hasHrService != b.hasHrService) return a.hasHrService ? -1 : 1;
+            if (a.isBondedOrConnected != b.isBondedOrConnected) return a.isBondedOrConnected ? -1 : 1;
+            return Integer.compare(b.rssi, a.rssi);
+        });
+        JSONArray arr = new JSONArray();
+        for (BleDiscoveredEntry item : snapshot) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("id", item.id);
+                o.put("name", item.name);
+                o.put("rssi", item.rssi);
+                o.put("hasHrService", item.hasHrService);
+                o.put("isBondedOrConnected", item.isBondedOrConnected);
+                arr.put(o);
+            } catch (Exception ignored) {}
+        }
+        return arr;
+    }
+
+    private JSONObject buildBleHrStatusJsonObject(byte[] rawHrBytes) {
+        JSONObject obj = new JSONObject();
+        try {
+            obj.put("state", bleHrState);
+            obj.put("deviceId", bleHrDeviceId != null ? bleHrDeviceId : "");
+            obj.put("deviceName", bleHrDeviceName != null ? bleHrDeviceName : "");
+            obj.put("errorCode", bleHrErrorCode != null ? bleHrErrorCode : "");
+            if (bleBatteryPct != null) {
+                obj.put("batteryPct", bleBatteryPct);
+            } else {
+                obj.put("batteryPct", JSONObject.NULL);
+            }
+            obj.put("devices", buildBleDevicesJsonArray());
+            if (rawHrBytes != null && rawHrBytes.length >= 2) {
+                JSONArray bytesArr = new JSONArray();
+                for (byte b : rawHrBytes) {
+                    bytesArr.put(b & 0xFF);
+                }
+                obj.put("rawBytes", bytesArr);
+            }
+        } catch (Exception ignored) {}
+        return obj;
+    }
+
+    private void emitBleHrStatusToWebView(final byte[] rawHrBytes) {
+        final String jsonStr = buildBleHrStatusJsonObject(rawHrBytes).toString();
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String js = "if (window.__onNativeBleHrUpdate) { window.__onNativeBleHrUpdate(" + jsonStr + "); }";
+                getBridge().getWebView().evaluateJavascript(js, null);
+            }
+        });
+    }
+
+    private void emitBleHrDevicesToWebView() {
+        final String arrStr = buildBleDevicesJsonArray().toString();
+        runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                String js = "if (window.__onNativeBleHrDevices) { window.__onNativeBleHrDevices(" + arrStr + "); }";
+                getBridge().getWebView().evaluateJavascript(js, null);
+            }
+        });
+    }
+
+    @SuppressLint("MissingPermission")
+    private final ScanCallback bleHrScanCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(int callbackType, ScanResult result) {
+            if (result == null || result.getDevice() == null) return;
+            BluetoothDevice dev = result.getDevice();
+            String addr = dev.getAddress();
+            if (addr == null || addr.isEmpty()) return;
+
+            boolean advertisesHr = false;
+            String scanName = null;
+            ScanRecord record = result.getScanRecord();
+            if (record != null) {
+                scanName = record.getDeviceName();
+                List<ParcelUuid> uuids = record.getServiceUuids();
+                if (uuids != null) {
+                    for (ParcelUuid pu : uuids) {
+                        if (pu != null && BLE_HR_SERVICE_UUID.equals(pu.getUuid())) {
+                            advertisesHr = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            String devName = null;
+            try {
+                devName = dev.getName();
+            } catch (Exception ignored) {}
+            String cleanName = (devName != null && !devName.trim().isEmpty())
+                ? devName.trim()
+                : (scanName != null && !scanName.trim().isEmpty() ? scanName.trim() : "");
+
+            // Show devices advertising 0x180D (even if unnamed) plus named nearby BLE wearables
+            if (!advertisesHr && cleanName.isEmpty()) return;
+
+            synchronized (discoveredBleDevices) {
+                BleDiscoveredEntry existing = discoveredBleDevices.get(addr);
+                if (existing == null) {
+                    existing = new BleDiscoveredEntry();
+                    existing.id = addr;
+                    existing.name = cleanName.isEmpty() ? "Sensor Bluetooth" : cleanName;
+                    existing.rssi = result.getRssi();
+                    existing.hasHrService = advertisesHr;
+                    existing.isBondedOrConnected = false;
+                    discoveredBleDevices.put(addr, existing);
+                } else {
+                    if (!cleanName.isEmpty()) existing.name = cleanName;
+                    existing.rssi = result.getRssi();
+                    if (advertisesHr) existing.hasHrService = true;
+                }
+            }
+            emitBleHrDevicesToWebView();
+        }
+
+        @Override
+        public void onScanFailed(int errorCode) {
+            isBleScanning = false;
+            emitBleHrDevicesToWebView();
+        }
+    };
+
+    @SuppressLint("MissingPermission")
+    private void populateConnectedAndBondedBleDevices() {
+        if (!hasBlePermissionsInternal()) return;
+        BluetoothManager mgr = getBleManagerInternal();
+        BluetoothAdapter adapter = mgr != null ? mgr.getAdapter() : null;
+        if (mgr != null) {
+            try {
+                List<BluetoothDevice> gattConnected = mgr.getConnectedDevices(BluetoothProfile.GATT);
+                if (gattConnected != null) {
+                    for (BluetoothDevice dev : gattConnected) {
+                        if (dev == null || dev.getAddress() == null) continue;
+                        String name = dev.getName();
+                        if (name == null || name.trim().isEmpty()) continue;
+                        BleDiscoveredEntry entry = new BleDiscoveredEntry();
+                        entry.id = dev.getAddress();
+                        entry.name = name.trim();
+                        entry.rssi = -45;
+                        entry.hasHrService = false;
+                        entry.isBondedOrConnected = true;
+                        discoveredBleDevices.put(entry.id, entry);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (adapter != null) {
+            try {
+                Set<BluetoothDevice> bonded = adapter.getBondedDevices();
+                if (bonded != null) {
+                    for (BluetoothDevice dev : bonded) {
+                        if (dev == null || dev.getAddress() == null) continue;
+                        int type = dev.getType();
+                        if (type != BluetoothDevice.DEVICE_TYPE_LE &&
+                            type != BluetoothDevice.DEVICE_TYPE_DUAL &&
+                            type != BluetoothDevice.DEVICE_TYPE_UNKNOWN) {
+                            continue;
+                        }
+                        String name = dev.getName();
+                        if (name == null || name.trim().isEmpty()) continue;
+                        synchronized (discoveredBleDevices) {
+                            if (!discoveredBleDevices.containsKey(dev.getAddress())) {
+                                BleDiscoveredEntry entry = new BleDiscoveredEntry();
+                                entry.id = dev.getAddress();
+                                entry.name = name.trim();
+                                entry.rssi = -55;
+                                entry.hasHrService = false;
+                                entry.isBondedOrConnected = true;
+                                discoveredBleDevices.put(entry.id, entry);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void startBleHrScanInternal() {
+        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            bleHrState = "unsupported";
+            bleHrErrorCode = "BLE_UNSUPPORTED";
+            emitBleHrStatusToWebView(null);
+            return;
+        }
+        if (!hasBlePermissionsInternal()) {
+            requestBlePermissionsInternal(1);
+            return;
+        }
+        BluetoothAdapter adapter = getBleAdapterInternal();
+        if (adapter == null) {
+            bleHrState = "unsupported";
+            bleHrErrorCode = "BLE_UNSUPPORTED";
+            emitBleHrStatusToWebView(null);
+            return;
+        }
+        if (!adapter.isEnabled()) {
+            if (bleEnableLauncher != null) {
+                try {
+                    bleEnableLauncher.launch(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));
+                    return;
+                } catch (Exception ignored) {}
+            }
+            bleHrState = "error";
+            bleHrErrorCode = "BLUETOOTH_OFF";
+            emitBleHrStatusToWebView(null);
+            return;
+        }
+
+        stopBleHrScanInternal();
+        discoveredBleDevices.clear();
+        populateConnectedAndBondedBleDevices();
+
+        bleHrErrorCode = "";
+        if (!"connected".equals(bleHrState)) {
+            bleHrState = "scanning";
+        }
+        emitBleHrStatusToWebView(null);
+
+        try {
+            BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
+            if (scanner != null) {
+                ScanSettings settings = new ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build();
+                isBleScanning = true;
+                scanner.startScan(null, settings, bleHrScanCallback);
+                bleMainHandler.removeCallbacks(stopBleScanTimeoutRunnable);
+                bleMainHandler.postDelayed(stopBleScanTimeoutRunnable, 12000L);
+            }
+        } catch (Exception e) {
+            isBleScanning = false;
+            emitBleHrStatusToWebView(null);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void stopBleHrScanInternal() {
+        bleMainHandler.removeCallbacks(stopBleScanTimeoutRunnable);
+        if (!isBleScanning) return;
+        isBleScanning = false;
+        try {
+            BluetoothAdapter adapter = getBleAdapterInternal();
+            if (adapter != null && adapter.isEnabled() && hasBlePermissionsInternal()) {
+                BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
+                if (scanner != null) {
+                    scanner.stopScan(bleHrScanCallback);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @SuppressLint("MissingPermission")
+    @SuppressWarnings("deprecation")
+    private boolean enableCccdNotifications(BluetoothGatt gatt, BluetoothGattCharacteristic hrChar) {
+        gatt.setCharacteristicNotification(hrChar, true);
+        BluetoothGattDescriptor cccd = hrChar.getDescriptor(BLE_CCCD_UUID);
+        if (cccd == null) return true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            int res = gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            return res == 0; // BluetoothStatusCodes.SUCCESS
+        } else {
+            cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            return gatt.writeDescriptor(cccd);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private final BluetoothGattCallback bleHrGattCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                bleHrErrorCode = "";
+                try {
+                    gatt.discoverServices();
+                } catch (Exception e) {
+                    bleHrState = "error";
+                    bleHrErrorCode = "CONNECT_FAILED";
+                    emitBleHrStatusToWebView(null);
+                }
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                try {
+                    gatt.close();
+                } catch (Exception ignored) {}
+                if (activeBleGatt == gatt) {
+                    activeBleGatt = null;
+                }
+                if (!bleUserRequestedDisconnect && bleConnectedOnce && bleHrDeviceId != null && !bleHrDeviceId.isEmpty()) {
+                    bleHrState = "reconnecting";
+                    emitBleHrStatusToWebView(null);
+                    final String reconnectAddr = bleHrDeviceId;
+                    final String reconnectName = bleHrDeviceName;
+                    bleMainHandler.postDelayed(() -> {
+                        if (!bleUserRequestedDisconnect && activeBleGatt == null) {
+                            connectBleHrDeviceInternal(reconnectAddr, reconnectName, true);
+                        }
+                    }, 2200L);
+                } else {
+                    if (!"error".equals(bleHrState)) {
+                        bleHrState = "disconnected";
+                    }
+                    emitBleHrStatusToWebView(null);
+                }
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                bleHrState = "error";
+                bleHrErrorCode = "CONNECT_FAILED";
+                try {
+                    gatt.disconnect();
+                    gatt.close();
+                } catch (Exception ignored) {}
+                if (activeBleGatt == gatt) activeBleGatt = null;
+                emitBleHrStatusToWebView(null);
+                return;
+            }
+
+            BluetoothGattService hrService = gatt.getService(BLE_HR_SERVICE_UUID);
+            BluetoothGattCharacteristic hrChar = hrService != null
+                ? hrService.getCharacteristic(BLE_HR_MEASUREMENT_UUID)
+                : null;
+
+            if (hrService == null || hrChar == null) {
+                bleUserRequestedDisconnect = true;
+                bleConnectedOnce = false;
+                bleHrState = "error";
+                bleHrErrorCode = "HR_BROADCAST_NOT_ENABLED";
+                try {
+                    gatt.disconnect();
+                    gatt.close();
+                } catch (Exception ignored) {}
+                if (activeBleGatt == gatt) activeBleGatt = null;
+                emitBleHrStatusToWebView(null);
+                return;
+            }
+
+            enableCccdNotifications(gatt, hrChar);
+            bleConnectedOnce = true;
+            bleHrState = "connected";
+            bleHrErrorCode = "";
+            try {
+                String liveName = gatt.getDevice() != null ? gatt.getDevice().getName() : null;
+                if (liveName != null && !liveName.trim().isEmpty()) {
+                    bleHrDeviceName = liveName.trim();
+                }
+                getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString("saved_address", bleHrDeviceId)
+                    .putString("saved_name", bleHrDeviceName)
+                    .apply();
+            } catch (Exception ignored) {}
+            emitBleHrStatusToWebView(null);
+        }
+
+        @Override
+        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            // Read optional Battery Level (0x180F -> 0x2A19) only AFTER CCCD descriptor write completes
+            try {
+                BluetoothGattService battService = gatt.getService(BLE_BATTERY_SERVICE_UUID);
+                if (battService != null) {
+                    BluetoothGattCharacteristic battChar = battService.getCharacteristic(BLE_BATTERY_LEVEL_UUID);
+                    if (battChar != null) {
+                        gatt.readCharacteristic(battChar);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
+            if (characteristic != null && BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid()) && value != null) {
+                emitBleHrStatusToWebView(value);
+            }
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && characteristic != null) {
+                if (BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid())) {
+                    byte[] val = characteristic.getValue();
+                    if (val != null) {
+                        emitBleHrStatusToWebView(val);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null &&
+                BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid()) && value != null && value.length >= 1) {
+                int pct = value[0] & 0xFF;
+                if (pct >= 0 && pct <= 100) {
+                    bleBatteryPct = pct;
+                    emitBleHrStatusToWebView(null);
+                }
+            }
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && status == BluetoothGatt.GATT_SUCCESS &&
+                characteristic != null && BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid())) {
+                byte[] val = characteristic.getValue();
+                if (val != null && val.length >= 1) {
+                    int pct = val[0] & 0xFF;
+                    if (pct >= 0 && pct <= 100) {
+                        bleBatteryPct = pct;
+                        emitBleHrStatusToWebView(null);
+                    }
+                }
+            }
+        }
+    };
+
+    @SuppressLint("MissingPermission")
+    private void connectBleHrDeviceInternal(String address, String name, boolean autoConnect) {
+        if (address == null || address.trim().isEmpty()) return;
+        final String cleanAddr = address.trim();
+        final String cleanName = (name != null && !name.trim().isEmpty()) ? name.trim() : "Sensor Bluetooth";
+
+        if (!hasBlePermissionsInternal()) {
+            pendingBleConnectAddress = cleanAddr;
+            pendingBleConnectName = cleanName;
+            requestBlePermissionsInternal(2);
+            return;
+        }
+
+        BluetoothAdapter adapter = getBleAdapterInternal();
+        if (adapter == null || !adapter.isEnabled()) {
+            bleHrState = "error";
+            bleHrErrorCode = "BLUETOOTH_OFF";
+            emitBleHrStatusToWebView(null);
+            return;
+        }
+
+        stopBleHrScanInternal();
+        bleUserRequestedDisconnect = false;
+        bleHrDeviceId = cleanAddr;
+        bleHrDeviceName = cleanName;
+        bleHrErrorCode = "";
+        bleHrState = autoConnect ? "reconnecting" : "connecting";
+        emitBleHrStatusToWebView(null);
+
+        try {
+            if (activeBleGatt != null) {
+                try {
+                    activeBleGatt.disconnect();
+                    activeBleGatt.close();
+                } catch (Exception ignored) {}
+                activeBleGatt = null;
+            }
+            BluetoothDevice device = adapter.getRemoteDevice(cleanAddr);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                activeBleGatt = device.connectGatt(this, autoConnect, bleHrGattCallback, BluetoothDevice.TRANSPORT_LE);
+            } else {
+                activeBleGatt = device.connectGatt(this, autoConnect, bleHrGattCallback);
+            }
+        } catch (Exception e) {
+            bleHrState = "error";
+            bleHrErrorCode = "CONNECT_FAILED";
+            emitBleHrStatusToWebView(null);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void disconnectBleHrDeviceInternal(boolean forgetSaved) {
+        bleUserRequestedDisconnect = true;
+        bleConnectedOnce = false;
+        stopBleHrScanInternal();
+        if (activeBleGatt != null) {
+            try {
+                activeBleGatt.disconnect();
+                activeBleGatt.close();
+            } catch (Exception ignored) {}
+            activeBleGatt = null;
+        }
+        bleBatteryPct = null;
+        bleHrErrorCode = "";
+        bleHrState = "disconnected";
+        if (forgetSaved) {
+            bleHrDeviceId = "";
+            bleHrDeviceName = "";
+            try {
+                getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).edit().clear().apply();
+            } catch (Exception ignored) {}
+        }
+        emitBleHrStatusToWebView(null);
+    }
+
+    @Keep
+    public class ArcheryBleHeartRateBridge {
+        @Keep
+        @JavascriptInterface
+        public void startScan() {
+            runOnUiThread(() -> startBleHrScanInternal());
+        }
+
+        @Keep
+        @JavascriptInterface
+        public void stopScan() {
+            runOnUiThread(() -> stopBleHrScanInternal());
+        }
+
+        @Keep
+        @JavascriptInterface
+        public void connectDevice(final String address, final String name) {
+            runOnUiThread(() -> connectBleHrDeviceInternal(address, name, false));
+        }
+
+        @Keep
+        @JavascriptInterface
+        public void disconnectDevice(final boolean forgetSaved) {
+            runOnUiThread(() -> disconnectBleHrDeviceInternal(forgetSaved));
+        }
+
+        @Keep
+        @JavascriptInterface
+        public void tryAutoReconnectSaved() {
+            runOnUiThread(() -> {
+                if ("connected".equals(bleHrState) || "connecting".equals(bleHrState)) return;
+                if (!hasBlePermissionsInternal()) return;
+                BluetoothAdapter adapter = getBleAdapterInternal();
+                if (adapter == null || !adapter.isEnabled()) return;
+                String savedAddr = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_address", "");
+                String savedName = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_name", "");
+                if (savedAddr != null && !savedAddr.isEmpty()) {
+                    connectBleHrDeviceInternal(savedAddr, savedName, true);
+                }
+            });
+        }
+
+        @Keep
+        @JavascriptInterface
+        public String getStatusJson() {
+            try {
+                if ((bleHrDeviceId == null || bleHrDeviceId.isEmpty())) {
+                    String savedAddr = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_address", "");
+                    String savedName = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_name", "");
+                    if (savedAddr != null && !savedAddr.isEmpty()) {
+                        bleHrDeviceId = savedAddr;
+                        bleHrDeviceName = savedName != null ? savedName : "";
+                    }
+                }
+            } catch (Exception ignored) {}
+            return buildBleHrStatusJsonObject(null).toString();
+        }
+    }
+
     @Override
     public void onResume() {
         super.onResume();
@@ -1942,6 +2644,15 @@ public class MainActivity extends BridgeActivity {
             activeInstanceRef = new WeakReference<>(null);
         }
         isSessionTrackingActive = false;
+        try {
+            bleUserRequestedDisconnect = true;
+            stopBleHrScanInternal();
+            if (activeBleGatt != null) {
+                activeBleGatt.disconnect();
+                activeBleGatt.close();
+                activeBleGatt = null;
+            }
+        } catch (Exception ignored) {}
         try {
             if (spotifyRemote != null) {
                 SpotifyAppRemote.disconnect(spotifyRemote); // music keeps playing in the Spotify engine

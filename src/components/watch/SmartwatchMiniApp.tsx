@@ -25,6 +25,12 @@ import {
   getActiveWatchClientPairingCode,
   subscribeCloudWatchPairingStatus
 } from "@/lib/scoring/biometricsEngine";
+import BleHeartRateModal from "./BleHeartRateModal";
+import {
+  BleHeartRateStatus,
+  getBleHeartRateStatus,
+  subscribeBleHeartRate
+} from "@/lib/scoring/bleHeartRateService";
 
 interface SmartwatchMiniAppProps {
   isOpen?: boolean;
@@ -57,7 +63,7 @@ export default function SmartwatchMiniApp({
   onFinishAndSendToCoach
 }: SmartwatchMiniAppProps) {
   const isStandalone = Boolean(standaloneWatchScreen || standalone);
-  const { language, unitSystem, tx } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   const isSpanish = language === "es";
 
   // 0: Contador, 1: Puntos (X..M), 2: Métricas, 3: Auto-Tiro, 4: Resumen
@@ -84,6 +90,12 @@ export default function SmartwatchMiniApp({
   const [standaloneLinking, setStandaloneLinking] = useState<boolean>(false);
   const [standaloneLinkError, setStandaloneLinkError] = useState<string>("");
   const [showStandaloneLinkPanel, setShowStandaloneLinkPanel] = useState<boolean>(false);
+  const [showBleHrModal, setShowBleHrModal] = useState<boolean>(false);
+  const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
+
+  useEffect(() => {
+    return subscribeBleHeartRate((next) => setBleHrStatus(next));
+  }, []);
 
   const [internalSnapshot, setInternalSnapshot] = useState<BiometricSessionSnapshot>(() => {
     return (
@@ -1284,8 +1296,12 @@ export default function SmartwatchMiniApp({
                     <span className="text-[9.5px] font-bold text-[#8E96A4]">kcal</span>
                   </div>
                 </div>
-                <span className="text-[7px] font-extrabold text-[#FFE500] border border-[#FFE500]/50 bg-[#101008] px-1.5 py-0.5 rounded uppercase shrink-0">
-                  {tx("ACTIVA", "ACTIVE")}
+                <span className="text-[7px] font-extrabold text-[#FFE500] border border-[#FFE500]/50 bg-[#101008] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
+                  {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+                    ? `${bleHrStatus.currentBpm} BPM`
+                    : activeState.heartRateBpm && activeState.heartRateBpm >= 30
+                    ? `${activeState.heartRateBpm} BPM`
+                    : tx("ACTIVA", "ACTIVE")}
                 </span>
               </div>
             </div>
@@ -1708,6 +1724,40 @@ export default function SmartwatchMiniApp({
             </div>
           )}
 
+          {/* Universal Bluetooth Heart Rate Sensor Bar (Bands, Straps & Optical Sensors) */}
+          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap flex items-center gap-1">
+                <span
+                  className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                    bleHrStatus.state === "connected" ? "bg-[#00C853]" : "bg-[#00BFFF]"
+                  }`}
+                />
+                <span>{t("bleHrTitle")}</span>
+              </div>
+              <div className="text-[9px] font-bold text-white truncate tabular-nums">
+                {bleHrStatus.state === "connected"
+                  ? `${
+                      bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
+                    }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`
+                  : t("bleHrSubtitle")}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowBleHrModal(true)}
+              className={`rounded-[9px] px-2.5 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.06em] shrink-0 cursor-pointer active:scale-95 transition tabular-nums ${
+                bleHrStatus.state === "connected"
+                  ? "bg-[#051810] border border-[#00C853]/55 text-white"
+                  : "bg-[#061523] border border-[#00A8F3]/60 text-white"
+              }`}
+            >
+              {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+                ? `${bleHrStatus.currentBpm} BPM`
+                : t("bleHrConnect")}
+            </button>
+          </div>
+
           {showInstallOnWatch && (
             <button
               type="button"
@@ -1796,6 +1846,11 @@ export default function SmartwatchMiniApp({
             ))}
           </div>
         </div>
+
+        <BleHeartRateModal
+          isOpen={showBleHrModal}
+          onClose={() => setShowBleHrModal(false)}
+        />
       </motion.div>
     </AnimatePresence>
   );

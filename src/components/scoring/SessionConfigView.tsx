@@ -6,6 +6,13 @@ import { getLocalSessions, deleteLocalSession, saveLocalSetting } from "@/lib/db
 import { showOledConfirm } from "@/lib/oledDialog";
 import { ArrowLeft, Trash2, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
+import {
+  BleHeartRateStatus,
+  getBleHeartRateStatus,
+  subscribeBleHeartRate,
+  tryAutoReconnectBleHeartRate
+} from "@/lib/scoring/bleHeartRateService";
 
 interface SessionConfigViewProps {
   user: UserProfile;
@@ -23,6 +30,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [showPracticeInfoModal, setShowPracticeInfoModal] = useState(false);
   const [practiceInfoType, setPracticeInfoType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [dontShowAgainPractice, setDontShowAgainPractice] = useState(false);
+  const [showBleHrModal, setShowBleHrModal] = useState(false);
+  const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
+
+  useEffect(() => {
+    tryAutoReconnectBleHeartRate();
+    return subscribeBleHeartRate((next) => setBleHrStatus(next));
+  }, []);
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<string>("Libre");
@@ -436,15 +450,61 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           </motion.div>
         )}
 
+        {/* Bluetooth Heart Rate Sensor Quick Connect Bar */}
+        <div className="bg-[#0B0E14] border border-white/[0.10] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2.5">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  bleHrStatus.state === "connected"
+                    ? "bg-[#00C853]"
+                    : bleHrStatus.state === "scanning" || bleHrStatus.state === "connecting"
+                    ? "bg-[#00BFFF]"
+                    : "bg-[#6E7785]"
+                }`}
+              />
+              <span className="text-[13.2px] font-extrabold text-white uppercase tracking-wide truncate">
+                {t("bleHrTitle")}
+              </span>
+            </div>
+            <span className="text-[11.5px] font-medium text-white truncate mt-0.5 tabular-nums">
+              {bleHrStatus.state === "connected"
+                ? `${
+                    bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
+                  }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`
+                : t("bleHrSubtitle")}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowBleHrModal(true)}
+            className={`min-h-[36px] px-3 rounded-lg font-black text-[11.5px] uppercase tracking-wider shrink-0 cursor-pointer transition active:scale-95 tabular-nums ${
+              bleHrStatus.state === "connected"
+                ? "bg-[#051810] border border-[#00C853]/55 text-white"
+                : "bg-[#081320] border border-[#00BFFF]/50 text-white hover:border-[#00BFFF]"
+            }`}
+          >
+            {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+              ? `${bleHrStatus.currentBpm} BPM`
+              : t("bleHrConnect")}
+          </button>
+        </div>
+
         {/* Start button */}
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.7px] tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+          className="w-full py-4 mt-1 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.7px] tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
         >
           <span>{t("startSessionBtn")}</span>
         </motion.button>
       </div>
+
+      <BleHeartRateModal
+        isOpen={showBleHrModal}
+        onClose={() => setShowBleHrModal(false)}
+      />
 
       {/* MODAL: Practice Info Explanation */}
       <AnimatePresence>
