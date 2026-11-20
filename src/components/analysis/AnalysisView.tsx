@@ -636,14 +636,14 @@ export default function AnalysisView({
   // ============================================================================
   if (!isWatchConnected && shots.length === 0) {
     return (
-      <div className="flex flex-col gap-3.5 py-2 w-full max-w-full overflow-x-hidden">
+      <div className="flex flex-col gap-3.5 py-2 w-full max-w-full overflow-x-hidden font-sans">
         {/* Top Context Header */}
         <div className="flex items-center justify-between gap-2 px-0.5">
           <div className="flex flex-col gap-0.5 min-w-0">
-            <h1 className="text-[22px] font-black uppercase tracking-tight text-white leading-tight">
+            <h1 className="text-[21.5px] sm:text-[23.8px] font-black uppercase tracking-wide text-white leading-tight">
               {tx("Análisis", "Analysis")}
             </h1>
-            <div className="flex items-center gap-1.5 text-[12.5px] font-bold text-white">
+            <div className="flex items-center gap-1.5 text-[14px] font-semibold text-white">
               <span className="w-2 h-2 rounded-full border-2 border-white/70 shrink-0" />
               <span>{tx("Sin reloj conectado", "No watch connected")}</span>
             </div>
@@ -652,16 +652,16 @@ export default function AnalysisView({
           <button
             type="button"
             onClick={() => setIsCalibrationOpen(true)}
-            className="h-[34px] px-3 rounded-[11px] bg-[#0D1017] border border-white/[0.10] text-[12.5px] font-extrabold text-white flex items-center gap-1.5 shrink-0 cursor-pointer tabular-nums"
+            className="h-[38px] px-3.5 rounded-[12px] bg-[#0D1017] border border-white/[0.12] text-[15px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer tabular-nums"
           >
             <span>
               {getBowLabel(calibration.bowType)} · {calibration.distanceM}m
             </span>
-            <ChevronDown size={13} aria-hidden="true" />
+            <ChevronDown size={15} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Hero Connect Watch Card (Exact Approved `analisis-sin-reloj-4k.png` Design) */}
+        {/* Hero Connect Watch Card (+15% instruction copy, unified Outfit typography) */}
         <section className="bg-[#0B0E15] border border-white/[0.10] rounded-[28px] px-4 py-5 flex flex-col items-center text-center gap-4">
           <div className="w-[156px] h-[156px] flex items-center justify-center">
             <svg width="156" height="156" viewBox="0 0 164 164" aria-hidden="true">
@@ -724,11 +724,11 @@ export default function AnalysisView({
             </svg>
           </div>
 
-          <div className="flex flex-col gap-1.5 max-w-[332px]">
-            <h2 className="text-[20.5px] font-black text-white tracking-tight leading-tight">
+          <div className="flex flex-col gap-1.5 max-w-[356px]">
+            <h2 className="text-[21.5px] font-bold text-white tracking-normal leading-tight">
               {tx("Conecta tu reloj inteligente", "Connect your smartwatch")}
             </h2>
-            <p className="text-[13.5px] font-medium text-white leading-snug">
+            <p className="text-[15.5px] font-normal text-white leading-snug">
               {tx(
                 "Colócalo en la muñeca que sostiene el arco para medir trazo en diana, tiempos y pulsaciones reales en cada flecha.",
                 "Wear it on your bow wrist to measure target trace, phase timing, and live heart rate on every arrow."
@@ -737,27 +737,27 @@ export default function AnalysisView({
           </div>
 
           <div className="w-full grid grid-cols-3 gap-1.5">
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#00BFFF]">
+            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
+              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
                 {tx("Paso 1", "Step 1")}
               </span>
-              <span className="text-[11.5px] font-extrabold text-white whitespace-nowrap">
+              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
                 {tx("Abre en reloj", "Open watch")}
               </span>
             </div>
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#00BFFF]">
+            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
+              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
                 {tx("Paso 2", "Step 2")}
               </span>
-              <span className="text-[11.5px] font-extrabold text-white whitespace-nowrap">
+              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
                 {tx("Vincula código", "Link code")}
               </span>
             </div>
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#00BFFF]">
+            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
+              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
                 {tx("Paso 3", "Step 3")}
               </span>
-              <span className="text-[11.5px] font-extrabold text-white whitespace-nowrap">
+              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
                 {tx("Tira normal", "Shoot normal")}
               </span>
             </div>
@@ -766,7 +766,7 @@ export default function AnalysisView({
           <button
             type="button"
             onClick={() => setIsWatchModalOpen(true)}
-            className="w-full min-h-[48px] rounded-[15px] bg-white hover:bg-neutral-100 text-black font-black text-[14.5px] flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
+            className="w-full min-h-[50px] rounded-[15px] bg-white hover:bg-neutral-100 text-black font-bold text-[16.5px] tracking-wide flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
           >
             {tx("Vincular reloj inteligente", "Link smartwatch")}
           </button>
@@ -775,20 +775,20 @@ export default function AnalysisView({
         {/* Saved Past Analyses Card (Accessible Offline Without Watch) */}
         <section className="bg-[#0D1017] border border-white/[0.08] rounded-[22px] p-3.5 flex flex-col gap-2">
           <div className="flex items-center justify-between px-0.5">
-            <span className="text-[11px] font-black uppercase tracking-[0.09em] text-white">
+            <span className="text-[12.6px] font-bold uppercase tracking-wider text-white">
               {tx("Sesiones guardadas", "Saved sessions")}
             </span>
             <button
               type="button"
               onClick={onNavigateHistoryAnalysis}
-              className="text-[11.5px] font-extrabold text-[#00BFFF] cursor-pointer"
+              className="text-[13.2px] font-bold text-[#00BFFF] cursor-pointer"
             >
               {tx("Ver historial →", "View history →")}
             </button>
           </div>
 
           {savedPastSessions.length === 0 ? (
-            <div className="bg-[#07090E] border border-white/[0.07] rounded-[14px] px-3 py-3.5 text-center text-[12px] font-medium text-white">
+            <div className="bg-[#07090E] border border-white/[0.07] rounded-[14px] px-3 py-3.5 text-center text-[13.8px] font-normal text-white leading-snug">
               {tx(
                 "Aún no tienes sesiones de análisis guardadas.",
                 "You don't have saved analysis sessions yet."
@@ -846,17 +846,17 @@ export default function AnalysisView({
   // STATE B: LIVE CONNECTED ANALYSIS VIEW (Exact Approved `analisis-app-fases-4k.png`)
   // ============================================================================
   return (
-    <div className="flex flex-col gap-3 py-2 w-full max-w-full overflow-x-hidden">
+    <div className="flex flex-col gap-3 py-2 w-full max-w-full overflow-x-hidden font-sans">
       {/* Top Context & Hardware Controls Bar */}
       <div className="flex items-center justify-between gap-2 px-0.5">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <h1 className="text-[22px] font-black uppercase tracking-tight text-white leading-tight">
+          <h1 className="text-[21.5px] sm:text-[23.8px] font-black uppercase tracking-wide text-white leading-tight">
             {tx("Análisis", "Analysis")}
           </h1>
           <button
             type="button"
             onClick={() => setIsWatchModalOpen(true)}
-            className="flex items-center gap-1.5 text-[12.5px] font-semibold text-white cursor-pointer text-left"
+            className="flex items-center gap-1.5 text-[14px] font-semibold text-white cursor-pointer text-left"
           >
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -948,11 +948,11 @@ export default function AnalysisView({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="h-[30px] px-2.5 rounded-[9px] bg-[#121621] border border-white/[0.10] text-[11.5px] font-extrabold text-white flex items-center tabular-nums">
+            <span className="h-[34px] px-3 rounded-[9px] bg-[#121621] border border-white/[0.10] text-[13.8px] font-bold text-white flex items-center tabular-nums">
               {calibration.distanceM}m
             </span>
             {activeShot?.markedImpact && (
-              <span className="h-[30px] px-2.5 rounded-[9px] bg-[#FFE500] text-black text-[12.5px] font-black flex items-center justify-center tabular-nums">
+              <span className="h-[34px] px-3 rounded-[9px] bg-[#FFE500] text-black text-[13.8px] font-extrabold flex items-center justify-center tabular-nums">
                 {activeShot.markedImpact.scoreLabel}
               </span>
             )}
@@ -1172,7 +1172,7 @@ export default function AnalysisView({
         </div>
 
         {shots.length === 0 ? (
-          <div className="bg-[#080A0F] border border-white/[0.07] rounded-[14px] px-3 py-4 text-center text-[12px] font-medium text-white">
+          <div className="bg-[#080A0F] border border-white/[0.07] rounded-[14px] px-3 py-4 text-center text-[13.8px] font-normal text-white leading-snug">
             {tx(
               "Dispara tu primera flecha con el reloj en la muñeca del arco para registrar trazo, tiempos y estabilidad.",
               "Shoot your first arrow with the watch on your bow wrist to record trace, timing, and stability."

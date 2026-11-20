@@ -45,6 +45,7 @@
   --shadow-glow-red: none;
   --shadow-glow-green: none;
 
+  --font-sans: 'Outfit', sans-serif;
   --font-family-logo: 'Good Times', 'Outfit', sans-serif;
   
   --animate-fab-pulse: fabPulse 2.4s ease-in-out infinite;
@@ -99,6 +100,14 @@ body {
   margin: 0;
   padding: 0;
   overscroll-behavior-y: contain;
+}
+
+dialog,
+button,
+input,
+select,
+textarea {
+  font-family: 'Outfit', sans-serif;
 }
 
 /* --- Outdoor Sunlight High-Contrast Solid White Text (OLED Mode) --- */

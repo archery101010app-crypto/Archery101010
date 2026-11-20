@@ -868,12 +868,17 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       "firestore.rules must allow coaches to update linked athlete sessions"
     );
 
-    // 4. Zero third-party bow brand defaults in authService.ts
+    // 4. Zero third-party bow brand defaults in authService.ts + unified Outfit font-sans in globals.css
     const authSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/authService.ts"), "utf8");
     assert.equal(
       /\b(Hoyt|Satori)\b/i.test(authSrc),
       false,
       "authService.ts must not inject third-party bow brand defaults"
+    );
+    const globalsCss = fs.readFileSync(path.resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    assert.ok(
+      globalsCss.includes("--font-sans: 'Outfit', sans-serif;"),
+      "globals.css @theme must map --font-sans to Outfit across the entire app"
     );
   });
 });

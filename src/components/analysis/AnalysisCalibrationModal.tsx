@@ -157,11 +157,11 @@ export default function AnalysisCalibrationModal({
       ref={dialogRef}
       {...({ closedby: "any" } as any)}
       aria-labelledby={titleId}
-      className="m-auto w-[calc(100vw-20px)] max-w-[404px] max-h-[94dvh] p-0 bg-transparent border-0 text-white overflow-y-auto overscroll-contain outline-none open:block"
+      className="m-auto w-[calc(100vw-16px)] max-w-[412px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
     >
       <div
         dir="ltr"
-        className="w-full bg-[#020305] border border-white/[0.11] rounded-[26px] p-4 sm:p-5 flex flex-col gap-4 select-none"
+        className="w-full bg-[#020305] border border-white/[0.11] rounded-[26px] p-4 sm:p-5 flex flex-col gap-3.5 select-none font-sans"
       >
         {/* Top Row: Editorial Kicker + Signature 101010 Tri-Color Bar + Close */}
         <div className="flex items-center justify-between gap-2">
@@ -171,10 +171,10 @@ export default function AnalysisCalibrationModal({
               <span className="w-[10px] h-[4px] rounded-full bg-[#FF1E1E]" />
               <span className="w-[10px] h-[4px] rounded-full bg-[#FFE500]" />
             </div>
-            <span className="text-[10.5px] font-black uppercase tracking-[0.12em] text-white">
+            <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-white">
               {tx("Calibración única", "One-time calibration")}
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-[#0D1119] border border-white/[0.12] text-[10px] font-extrabold text-white tabular-nums">
+            <span className="px-2 py-0.5 rounded-full bg-[#0D1119] border border-white/[0.12] text-[11.5px] font-bold text-white tabular-nums">
               20 S
             </span>
           </div>
@@ -183,21 +183,21 @@ export default function AnalysisCalibrationModal({
             type="button"
             onClick={handleClose}
             aria-label={tx("Cerrar ajuste", "Close calibration")}
-            className="min-w-[34px] min-h-[34px] w-[34px] h-[34px] rounded-full bg-[#10131B] border border-white/[0.11] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
+            className="min-w-[36px] min-h-[36px] w-[36px] h-[36px] rounded-full bg-[#10131B] border border-white/[0.11] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
           >
-            <X size={15} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Title & Subtitle */}
+        {/* Title & Subtitle (+15% instruction copy, unified Outfit typography) */}
         <div className="flex flex-col gap-1">
           <h2
             id={titleId}
-            className="text-[22px] font-black text-white tracking-tight leading-tight"
+            className="text-[22.5px] font-bold text-white tracking-normal leading-tight"
           >
             {tx("Ajuste inicial del sensor", "Initial sensor setup")}
           </h2>
-          <p className="text-[13px] font-medium text-white leading-snug">
+          <p className="text-[15px] font-normal text-white leading-snug">
             {tx(
               "Personaliza el reloj con tu postura real de tiro para que cada flecha se mida con exactitud.",
               "Personalize your watch to your real shooting stance so every arrow is measured accurately."
@@ -205,29 +205,32 @@ export default function AnalysisCalibrationModal({
           </p>
         </div>
 
-        {/* Brushed Matte-Titanium Settings Group */}
+        {/* Brushed Matte-Titanium Settings Group (+20% size on Arco, Muñeca del arco & Distancia) */}
         <section className="bg-[#0B0E15] border border-white/[0.09] rounded-[20px] p-3 flex flex-col gap-2.5">
           {/* Arco */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-extrabold text-white shrink-0">
+            <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
               {tx("Arco", "Bow")}
             </span>
             <div className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
               {(["Barebow", "Recurve", "Compound"] as const).map((b) => {
-                const label =
+                const rawLabel =
                   b === "Recurve"
                     ? t("bowRecurve")
                     : b === "Compound"
                     ? t("bowCompound")
                     : t("bowBarebow");
+                const label = rawLabel.replace(/\s*\([^)]*\)/g, "").trim() || rawLabel;
                 const isSelected = bowType === b;
                 return (
                   <button
                     key={b}
                     type="button"
                     onClick={() => setBowType(b)}
-                    className={`min-h-[30px] px-2.5 rounded-[9px] text-[11.5px] font-extrabold transition cursor-pointer whitespace-nowrap ${
-                      isSelected ? "bg-white text-black font-black" : "text-white hover:bg-white/5"
+                    className={`min-h-[35px] px-2.5 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] transition cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? "bg-white text-black font-extrabold"
+                        : "text-white font-semibold hover:bg-white/5"
                     }`}
                   >
                     {label}
@@ -241,7 +244,7 @@ export default function AnalysisCalibrationModal({
 
           {/* Muñeca del arco */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-extrabold text-white shrink-0">
+            <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
               {tx("Muñeca del arco", "Bow wrist")}
             </span>
             <div className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
@@ -255,8 +258,10 @@ export default function AnalysisCalibrationModal({
                     key={w.id}
                     type="button"
                     onClick={() => setBowWrist(w.id)}
-                    className={`min-h-[30px] px-3 rounded-[9px] text-[11.5px] font-extrabold transition cursor-pointer whitespace-nowrap ${
-                      isSelected ? "bg-white text-black font-black" : "text-white hover:bg-white/5"
+                    className={`min-h-[35px] px-3 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] transition cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? "bg-white text-black font-extrabold"
+                        : "text-white font-semibold hover:bg-white/5"
                     }`}
                   >
                     {w.label}
@@ -270,7 +275,7 @@ export default function AnalysisCalibrationModal({
 
           {/* Distancia */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-extrabold text-white shrink-0">
+            <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
               {t("distance")}
             </span>
             <div className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
@@ -281,8 +286,10 @@ export default function AnalysisCalibrationModal({
                     key={d}
                     type="button"
                     onClick={() => setDistanceM(d)}
-                    className={`min-h-[30px] px-2 rounded-[9px] text-[11.5px] font-extrabold tabular-nums transition cursor-pointer whitespace-nowrap ${
-                      isSelected ? "bg-white text-black font-black" : "text-white hover:bg-white/5"
+                    className={`min-h-[35px] px-2 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] tabular-nums transition cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? "bg-white text-black font-extrabold"
+                        : "text-white font-semibold hover:bg-white/5"
                     }`}
                   >
                     {d}m
@@ -293,19 +300,19 @@ export default function AnalysisCalibrationModal({
           </div>
         </section>
 
-        {/* Pure Architectural Numerals 01 / 02 / 03 (Zero Decorative Icons) */}
+        {/* Pure Architectural Numerals 01 / 02 / 03 (+15% instructions size, Outfit font) */}
         <section className="flex flex-col gap-2">
           <div className="bg-[#090C12] border border-white/[0.08] rounded-[16px] px-3 py-2.5 flex items-center gap-3">
-            <span className="w-[3px] h-[34px] rounded-full bg-[#00BFFF] shrink-0" />
-            <span className="font-sans text-[17px] font-black text-[#00BFFF] tabular-nums shrink-0">
+            <span className="w-[3px] h-[38px] rounded-full bg-[#00BFFF] shrink-0" />
+            <span className="font-sans text-[19.5px] font-extrabold text-[#00BFFF] tabular-nums shrink-0">
               01
             </span>
-            <span className="w-[1px] h-[28px] bg-white/[0.08] shrink-0" />
+            <span className="w-[1px] h-[32px] bg-white/[0.08] shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <h3 className="text-[13px] font-extrabold text-white leading-tight">
+              <h3 className="text-[15px] font-bold text-white leading-tight">
                 {tx("Ajusta firme la correa", "Fasten the strap snugly")}
               </h3>
-              <p className="text-[11.5px] font-normal text-white leading-snug">
+              <p className="text-[13.2px] font-normal text-white leading-snug">
                 {tx(
                   "En la mano que sostiene el arco, un dedo detrás del hueso para evitar rebote al soltar.",
                   "On your bow hand, one finger behind the wrist bone to prevent bounce at release."
@@ -315,16 +322,16 @@ export default function AnalysisCalibrationModal({
           </div>
 
           <div className="bg-[#090C12] border border-white/[0.08] rounded-[16px] px-3 py-2.5 flex items-center gap-3">
-            <span className="w-[3px] h-[34px] rounded-full bg-[#FF1E1E] shrink-0" />
-            <span className="font-sans text-[17px] font-black text-[#FF1E1E] tabular-nums shrink-0">
+            <span className="w-[3px] h-[38px] rounded-full bg-[#FF1E1E] shrink-0" />
+            <span className="font-sans text-[19.5px] font-extrabold text-[#FF1E1E] tabular-nums shrink-0">
               02
             </span>
-            <span className="w-[1px] h-[28px] bg-white/[0.08] shrink-0" />
+            <span className="w-[1px] h-[32px] bg-white/[0.08] shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <h3 className="text-[13px] font-extrabold text-white leading-tight">
+              <h3 className="text-[15px] font-bold text-white leading-tight">
                 {tx("Apoya el brazo 3 segundos", "Rest your arm for 3 seconds")}
               </h3>
-              <p className="text-[11.5px] font-normal text-white leading-snug">
+              <p className="text-[13.2px] font-normal text-white leading-snug">
                 {tx(
                   "Descansa la mano sin moverte para fijar el punto cero hasta sentir una vibración corta.",
                   "Hold your hand steady to lock the zero point until you feel a short vibration."
@@ -334,16 +341,16 @@ export default function AnalysisCalibrationModal({
           </div>
 
           <div className="bg-[#090C12] border border-white/[0.08] rounded-[16px] px-3 py-2.5 flex items-center gap-3">
-            <span className="w-[3px] h-[34px] rounded-full bg-[#FFE500] shrink-0" />
-            <span className="font-sans text-[17px] font-black text-[#FFE500] tabular-nums shrink-0">
+            <span className="w-[3px] h-[38px] rounded-full bg-[#FFE500] shrink-0" />
+            <span className="font-sans text-[19.5px] font-extrabold text-[#FFE500] tabular-nums shrink-0">
               03
             </span>
-            <span className="w-[1px] h-[28px] bg-white/[0.08] shrink-0" />
+            <span className="w-[1px] h-[32px] bg-white/[0.08] shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <h3 className="text-[13px] font-extrabold text-white leading-tight">
+              <h3 className="text-[15px] font-bold text-white leading-tight">
                 {tx("Dispara 1 flecha normal", "Shoot 1 normal arrow")}
               </h3>
-              <p className="text-[11.5px] font-normal text-white leading-snug">
+              <p className="text-[13.2px] font-normal text-white leading-snug">
                 {tx(
                   "Tira como siempre sin tocar el teléfono; al soltar queda registrada tu postura y ritmo.",
                   "Shoot naturally without touching your phone; your stance and timing register on release."
@@ -355,17 +362,17 @@ export default function AnalysisCalibrationModal({
 
         {/* Primary CTA */}
         <div className="flex flex-col items-center gap-2 pt-0.5">
-          <span className="text-[11px] font-semibold text-white text-center">
+          <span className="text-[12px] min-[380px]:text-[12.7px] font-medium text-white text-center leading-snug whitespace-nowrap">
             {tx(
-              "Se guarda en tu perfil · Solo recalibras si cambias de arco",
-              "Saved to your profile · Only recalibrate if you switch bows"
+              "Se guarda en tu perfil · Recalibra si cambias de arco",
+              "Saved to your profile · Recalibrate if you switch bows"
             )}
           </span>
           <button
             type="button"
             onClick={handleStartZeroing}
             disabled={countdownSec !== null}
-            className="w-full min-h-[50px] rounded-[16px] bg-white hover:bg-neutral-100 text-black font-black text-[15.5px] tracking-tight flex items-center justify-center cursor-pointer active:scale-[0.99] transition tabular-nums disabled:opacity-90"
+            className="w-full min-h-[50px] rounded-[16px] bg-white hover:bg-neutral-100 text-black font-bold text-[16.5px] tracking-wide flex items-center justify-center cursor-pointer active:scale-[0.99] transition tabular-nums disabled:opacity-90"
           >
             {countdownSec !== null
               ? tx(`Fijando punto cero · ${countdownSec} s...`, `Locking zero point · ${countdownSec} s...`)
