@@ -252,7 +252,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
         <div className="flex flex-col gap-1">
           <h2
             id={titleId}
-            className="text-[22px] font-bold text-white tracking-normal leading-tight"
+            className="text-[23.1px] font-bold text-white tracking-normal leading-tight"
           >
             {t("bleHrTitle")}
           </h2>

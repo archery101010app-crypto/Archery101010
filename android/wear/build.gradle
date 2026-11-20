@@ -15,8 +15,8 @@ android {
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Wear OS form-factor versionCode offset (+100000 over mobile versionCode)
-        versionCode 153500
-        versionName "2.135"
+        versionCode 153600
+        versionName "2.136"
     }
 
     signingConfigs {

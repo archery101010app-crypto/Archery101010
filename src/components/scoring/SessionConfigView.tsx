@@ -229,7 +229,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "bg-[#6E7785]"
                 }`}
               />
-              <span className="text-[12px] min-[390px]:text-[13.6px] sm:text-[14.5px] font-extrabold text-white uppercase tracking-[-0.02em] leading-tight whitespace-nowrap truncate">
+              <span className="text-[12.6px] min-[390px]:text-[14.3px] sm:text-[15.2px] font-extrabold text-white uppercase tracking-[-0.01em] leading-tight whitespace-nowrap truncate">
                 {t("bleHrTitle")}
               </span>
             </div>

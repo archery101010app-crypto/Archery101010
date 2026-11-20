@@ -2149,7 +2149,7 @@ export default function SmartwatchMiniApp({
           {/* Universal Bluetooth Heart Rate Sensor Bar (Bands, Straps & Optical Sensors) */}
           <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap flex items-center gap-1">
+              <div className="text-[7.9px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap flex items-center gap-1">
                 <span
                   className={`w-[5px] h-[5px] rounded-full shrink-0 ${
                     bleHrStatus.state === "connected" ? "bg-[#00C853]" : "bg-[#00BFFF]"

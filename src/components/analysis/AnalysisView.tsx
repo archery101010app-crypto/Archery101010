@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, MessageSquare, Play, Plus, RotateCcw, Save, Settings } from "lucide-react";
+import { MessageSquare, Play, Plus, RotateCcw, Save, Settings } from "lucide-react";
 import { UserProfile } from "@/lib/authService";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -51,7 +51,8 @@ import {
   decodeCompactShotAnalysis,
   extractAnalysisShots,
   isAnalysisSession,
-  loadSavedAnalysisCalibration
+  loadSavedAnalysisCalibration,
+  saveAnalysisCalibration
 } from "@/lib/scoring/shotAnalysisEngine";
 import AnalysisDianaSvg from "./AnalysisDianaSvg";
 import AnalysisCalibrationModal from "./AnalysisCalibrationModal";
@@ -83,20 +84,50 @@ export default function AnalysisView({
   const defaultWrist = user?.physicalData?.dominantHand === "L" ? "RIGHT" : "LEFT";
 
   const [calibration, setCalibration] = useState<AnalysisCalibrationProfile>(() => {
-    return (
-      loadSavedAnalysisCalibration(
-        defaultBowType,
-        defaultDistanceM,
-        user?.physicalData?.dominantHand
-      ) || {
-        bowType: defaultBowType,
-        bowWrist: defaultWrist,
-        distanceM: defaultDistanceM,
-        zeroGravityVec: [0, 0, 9.81],
-        calibratedAt: 0
-      }
+    const saved = loadSavedAnalysisCalibration(
+      defaultBowType,
+      defaultDistanceM,
+      user?.physicalData?.dominantHand
     );
+    if (saved) {
+      return {
+        ...saved,
+        bowType: defaultBowType
+      };
+    }
+    return {
+      bowType: defaultBowType,
+      bowWrist: defaultWrist,
+      distanceM: defaultDistanceM,
+      zeroGravityVec: [0, 0, 9.81],
+      calibratedAt: 0
+    };
   });
+
+  // Always keep the bow type synchronized with the bow configured in the archer's Profile
+  useEffect(() => {
+    setCalibration((prev) => {
+      const nextDist = prev.calibratedAt === 0 ? defaultDistanceM : prev.distanceM;
+      const nextWrist = prev.calibratedAt === 0 ? defaultWrist : prev.bowWrist;
+      if (
+        prev.bowType === defaultBowType &&
+        prev.distanceM === nextDist &&
+        prev.bowWrist === nextWrist
+      ) {
+        return prev;
+      }
+      const next = {
+        ...prev,
+        bowType: defaultBowType,
+        distanceM: nextDist,
+        bowWrist: nextWrist
+      };
+      if (prev.calibratedAt > 0) {
+        saveAnalysisCalibration(next);
+      }
+      return next;
+    });
+  }, [defaultBowType, defaultDistanceM, defaultWrist]);
 
   const [captureMode, setCaptureMode] = useState<"AUTO" | "MANUAL">("AUTO");
   const [shots, setShots] = useState<AnalysisShotRecord[]>([]);
@@ -652,134 +683,211 @@ export default function AnalysisView({
           <button
             type="button"
             onClick={() => setIsCalibrationOpen(true)}
-            className="h-[38px] px-3.5 rounded-[12px] bg-[#0D1017] border border-white/[0.12] text-[15px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer tabular-nums"
+            aria-label={tx("Ajuste del sensor", "Sensor calibration")}
+            className="h-[38px] px-3.5 rounded-[12px] bg-[#0D1017] border border-white/[0.12] text-[15px] font-bold text-white flex items-center gap-2 shrink-0 cursor-pointer tabular-nums"
           >
             <span>
               {getBowLabel(calibration.bowType)} · {calibration.distanceM}m
             </span>
-            <ChevronDown size={15} aria-hidden="true" />
+            <Settings size={14} className="text-white/80 shrink-0" aria-hidden="true" />
           </button>
         </div>
 
         {/* Hero Connect Watch Card (+15% instruction copy, unified Outfit typography) */}
         <section className="bg-[#0B0E15] border border-white/[0.10] rounded-[28px] px-4 py-5 flex flex-col items-center text-center gap-4">
-          {/* Official ARCHERY 101010 Smartwatch Screen 1 Live Preview Sphere */}
+          {/* Rectangular Black Titanium Smartwatch Hardware Preview */}
           <div
             onClick={() => setIsWatchModalOpen(true)}
             role="img"
             aria-label={tx("Vista previa de Análisis en reloj inteligente", "Smartwatch Analysis preview")}
-            className="relative w-[224px] h-[224px] rounded-full bg-[#12151C] border-2 border-[#232936] flex items-center justify-center shrink-0 cursor-pointer select-none"
+            className="relative w-[206px] h-[250px] flex items-center justify-center shrink-0 cursor-pointer select-none"
           >
-            {/* Titanium Side Crown */}
+            {/* Top & Bottom Brushed Titanium Strap Lugs */}
             <span
               aria-hidden="true"
-              className="absolute -right-[6px] top-1/2 -translate-y-1/2 w-[5px] h-[28px] rounded-r-[4px] bg-[#1C212D] border border-l-0 border-[#30384A]"
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[108px] h-[18px] rounded-t-[8px] border-t border-x border-white/[0.14]"
+              style={{
+                background:
+                  "linear-gradient(90deg, #0D1016 0%, #1F2531 20%, #141821 50%, #1F2531 80%, #0D1016 100%)"
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[108px] h-[18px] rounded-b-[8px] border-b border-x border-white/[0.14]"
+              style={{
+                background:
+                  "linear-gradient(90deg, #0D1016 0%, #1F2531 20%, #141821 50%, #1F2531 80%, #0D1016 100%)"
+              }}
             />
 
-            {/* Circular Pure OLED Watch Face */}
-            <div className="relative w-[206px] h-[206px] rounded-full bg-[#020305] border border-white/[0.10] pt-[16px] pb-[11px] px-3 flex flex-col items-center justify-between overflow-hidden">
-              {/* Chord-Safe Official Brand Logo */}
-              <img
-                src="/images/brand_logo_header.png"
-                srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-                alt="ARCHERY 101010"
-                className="w-[82px] h-auto object-contain shrink-0 z-10 pointer-events-none [image-rendering:-webkit-optimize-contrast]"
-                draggable={false}
-              />
+            {/* Left Speaker Vents & Action Button */}
+            <div
+              aria-hidden="true"
+              className="absolute left-[8px] top-[76px] flex flex-col gap-[3.5px] z-[2]"
+            >
+              <span className="w-[2.5px] h-[9px] rounded-full bg-[#080A0F] border border-white/[0.15]" />
+              <span className="w-[2.5px] h-[9px] rounded-full bg-[#080A0F] border border-white/[0.15]" />
+              <span className="w-[2.5px] h-[9px] rounded-full bg-[#080A0F] border border-white/[0.15]" />
+            </div>
+            <span
+              aria-hidden="true"
+              className="absolute left-[6.5px] bottom-[76px] w-[5px] h-[29px] rounded-l-[3px] border border-r-0 border-white/[0.22] z-[2]"
+              style={{
+                background: "linear-gradient(180deg, #FF5500 0%, #D93800 50%, #9E2800 100%)"
+              }}
+            />
 
-              {/* Dead-Center 10-Ring Brand-Line Diana & Shot Trace */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <svg width="132" height="132" viewBox="0 0 190 190" aria-hidden="true">
-                  <circle
-                    cx="95"
-                    cy="95"
-                    r="91"
-                    fill="#020306"
-                    stroke="rgba(255,255,255,0.88)"
-                    strokeWidth="2.1"
-                  />
-                  <line x1="95" y1="4" x2="95" y2="73" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
-                  <line x1="95" y1="117" x2="95" y2="186" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
-                  <line x1="4" y1="95" x2="73" y2="95" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
-                  <line x1="117" y1="95" x2="186" y2="95" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
-
-                  <line x1="95" y1="4" x2="95" y2="9.5" stroke="#FFFFFF" strokeWidth="1.8" />
-                  <line x1="95" y1="180.5" x2="95" y2="186" stroke="#FFFFFF" strokeWidth="1.8" />
-                  <line x1="4" y1="95" x2="9.5" y2="95" stroke="#FFFFFF" strokeWidth="1.8" />
-                  <line x1="180.5" y1="95" x2="186" y2="95" stroke="#FFFFFF" strokeWidth="1.8" />
-
-                  <circle cx="95" cy="95" r="81.9" fill="none" stroke="rgba(255,255,255,0.52)" strokeWidth="1.4" />
-                  <circle cx="95" cy="95" r="72.8" fill="none" stroke="#B8C4D8" strokeOpacity="0.68" strokeWidth="1.65" />
-                  <circle cx="95" cy="95" r="63.7" fill="none" stroke="#9AA8C0" strokeOpacity="0.48" strokeWidth="1.3" />
-
-                  <circle cx="95" cy="95" r="54.6" fill="rgba(0,191,255,0.05)" stroke="#00BFFF" strokeWidth="2.25" />
-                  <circle cx="95" cy="95" r="45.5" fill="none" stroke="#00BFFF" strokeOpacity="0.72" strokeWidth="1.45" />
-
-                  <circle cx="95" cy="95" r="36.4" fill="rgba(255,30,30,0.06)" stroke="#FF1E1E" strokeWidth="2.35" />
-                  <circle cx="95" cy="95" r="27.3" fill="none" stroke="#FF1E1E" strokeOpacity="0.74" strokeWidth="1.5" />
-
-                  <circle cx="95" cy="95" r="18.2" fill="rgba(255,229,0,0.09)" stroke="#FFE500" strokeWidth="2.55" />
-                  <circle cx="95" cy="95" r="9.1" fill="none" stroke="#FFE500" strokeOpacity="0.92" strokeWidth="1.65" />
-
-                  <line x1="92.0" y1="95" x2="98.0" y2="95" stroke="#FFE500" strokeWidth="1.35" />
-                  <line x1="95" y1="92.0" x2="95" y2="98.0" stroke="#FFE500" strokeWidth="1.35" />
-
-                  <path
-                    d="M 43 143 C 60 123, 71 106, 83 100"
-                    fill="none"
-                    stroke="#020306"
-                    strokeWidth="4.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M 43 143 C 60 123, 71 106, 83 100"
-                    fill="none"
-                    stroke="#FFFFFF"
-                    strokeOpacity="0.92"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeDasharray="3.4 3.6"
-                  />
-
-                  <path
-                    d="M 83 100 C 89 96, 100 88, 97 98 C 94 104, 89 93, 93 91 C 98 90, 97 95, 95 93"
-                    fill="none"
-                    stroke="#020306"
-                    strokeWidth="5.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M 83 100 C 89 96, 100 88, 97 98 C 94 104, 89 93, 93 91 C 98 90, 97 95, 95 93"
-                    fill="none"
-                    stroke="#00BFFF"
-                    strokeWidth="3.0"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-
-                  <circle cx="95" cy="93" r="4.8" fill="#FFFFFF" stroke="#020306" strokeWidth="2.0" />
-                </svg>
+            {/* Right Crown Guard + Ridged Crown + Side Button */}
+            <span
+              aria-hidden="true"
+              className="absolute right-[6.5px] top-[54px] w-[9px] h-[110px] rounded-r-[8px] border border-l-0 border-white/[0.16] z-[2]"
+              style={{
+                background: "linear-gradient(180deg, #1E232E 0%, #141820 50%, #0E1117 100%)"
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute right-[2px] top-[66px] w-[10px] h-[38px] rounded-[4px] border border-white/[0.26] flex items-center justify-center overflow-hidden z-[3]"
+              style={{
+                background: "linear-gradient(180deg, #323948 0%, #1B202B 50%, #2C3342 100%)"
+              }}
+            >
+              <span className="absolute left-[1px] top-[3px] bottom-[3px] w-[1.5px] rounded-full bg-[#FF4500]" />
+              <div className="flex flex-col gap-[3px] w-full pl-[3.5px]">
+                <span className="block h-[2px] w-full bg-white/25 rounded-[0.5px]" />
+                <span className="block h-[2px] w-full bg-white/25 rounded-[0.5px]" />
+                <span className="block h-[2px] w-full bg-white/25 rounded-[0.5px]" />
+                <span className="block h-[2px] w-full bg-white/25 rounded-[0.5px]" />
+                <span className="block h-[2px] w-full bg-white/25 rounded-[0.5px]" />
               </div>
+            </div>
+            <span
+              aria-hidden="true"
+              className="absolute right-[8px] top-[114px] w-[2.5px] h-[2.5px] rounded-full bg-[#050608] border border-white/20 z-[3]"
+            />
+            <span
+              aria-hidden="true"
+              className="absolute right-[4.5px] top-[124px] w-[5px] h-[29px] rounded-r-[3px] border border-l-0 border-white/[0.22] z-[3]"
+              style={{
+                background: "linear-gradient(180deg, #2B3240 0%, #171B24 50%, #252B38 100%)"
+              }}
+            />
 
-              {/* Chord-Safe Watch Footer Pill + Pagination Dots */}
-              <div className="flex flex-col items-center gap-[3.5px] z-10 shrink-0">
-                <div className="inline-flex items-center gap-1 rounded-full bg-[#080B10] border border-white/[0.14] px-[7px] py-[2px] text-[6.7px] font-extrabold uppercase tracking-[0.05em] text-white whitespace-nowrap tabular-nums leading-none">
-                  <span className="w-[4px] h-[4px] rounded-full bg-[#00BFFF] shrink-0" />
-                  <span>
-                    {tx(
-                      `Análisis · Tiro 1 · ${calibration.distanceM}m`,
-                      `Analysis · Shot 1 · ${calibration.distanceM}m`
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center gap-[3.5px]" aria-hidden="true">
-                  <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                  <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                  <span className="w-[9px] h-[3px] rounded-full bg-[#00BFFF]" />
-                  <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                  <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                  <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+            {/* Main Squircle Titanium Case */}
+            <div
+              className="relative w-[184px] h-[224px] rounded-[42px] p-[6px] border border-white/[0.16] flex items-center justify-center z-[4]"
+              style={{
+                background: "linear-gradient(145deg, #2A303D 0%, #151922 45%, #0D1016 100%)"
+              }}
+            >
+              {/* Inner Matte Bezel */}
+              <div className="w-full h-full rounded-[37px] bg-[#06080C] p-[4px] border border-white/[0.10] flex items-center justify-center">
+                {/* Pure OLED Squircle Display */}
+                <div className="relative w-full h-full rounded-[33px] bg-[#020305] border border-white/[0.09] pt-[10px] pb-[9px] px-2.5 flex flex-col items-center justify-between overflow-hidden">
+                  {/* Official Brand Logo */}
+                  <img
+                    src="/images/brand_logo_header.png"
+                    srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                    alt="ARCHERY 101010"
+                    className="w-[92px] h-auto object-contain shrink-0 z-10 pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                    draggable={false}
+                  />
+
+                  {/* Dead-Center 10-Ring Brand-Line Diana & Shot Trace */}
+                  <div className="flex-1 flex items-center justify-center pointer-events-none">
+                    <svg width="128" height="128" viewBox="0 0 190 190" aria-hidden="true">
+                      <circle
+                        cx="95"
+                        cy="95"
+                        r="91"
+                        fill="#020306"
+                        stroke="rgba(255,255,255,0.88)"
+                        strokeWidth="2.1"
+                      />
+                      <line x1="95" y1="4" x2="95" y2="73" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
+                      <line x1="95" y1="117" x2="95" y2="186" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
+                      <line x1="4" y1="95" x2="73" y2="95" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
+                      <line x1="117" y1="95" x2="186" y2="95" stroke="rgba(255,255,255,0.20)" strokeWidth="1.05" />
+
+                      <line x1="95" y1="4" x2="95" y2="9.5" stroke="#FFFFFF" strokeWidth="1.8" />
+                      <line x1="95" y1="180.5" x2="95" y2="186" stroke="#FFFFFF" strokeWidth="1.8" />
+                      <line x1="4" y1="95" x2="9.5" y2="95" stroke="#FFFFFF" strokeWidth="1.8" />
+                      <line x1="180.5" y1="95" x2="186" y2="95" stroke="#FFFFFF" strokeWidth="1.8" />
+
+                      <circle cx="95" cy="95" r="81.9" fill="none" stroke="rgba(255,255,255,0.52)" strokeWidth="1.4" />
+                      <circle cx="95" cy="95" r="72.8" fill="none" stroke="#B8C4D8" strokeOpacity="0.68" strokeWidth="1.65" />
+                      <circle cx="95" cy="95" r="63.7" fill="none" stroke="#9AA8C0" strokeOpacity="0.48" strokeWidth="1.3" />
+
+                      <circle cx="95" cy="95" r="54.6" fill="rgba(0,191,255,0.05)" stroke="#00BFFF" strokeWidth="2.25" />
+                      <circle cx="95" cy="95" r="45.5" fill="none" stroke="#00BFFF" strokeOpacity="0.72" strokeWidth="1.45" />
+
+                      <circle cx="95" cy="95" r="36.4" fill="rgba(255,30,30,0.06)" stroke="#FF1E1E" strokeWidth="2.35" />
+                      <circle cx="95" cy="95" r="27.3" fill="none" stroke="#FF1E1E" strokeOpacity="0.74" strokeWidth="1.5" />
+
+                      <circle cx="95" cy="95" r="18.2" fill="rgba(255,229,0,0.09)" stroke="#FFE500" strokeWidth="2.55" />
+                      <circle cx="95" cy="95" r="9.1" fill="none" stroke="#FFE500" strokeOpacity="0.92" strokeWidth="1.65" />
+
+                      <line x1="92.0" y1="95" x2="98.0" y2="95" stroke="#FFE500" strokeWidth="1.35" />
+                      <line x1="95" y1="92.0" x2="95" y2="98.0" stroke="#FFE500" strokeWidth="1.35" />
+
+                      <path
+                        d="M 43 143 C 60 123, 71 106, 83 100"
+                        fill="none"
+                        stroke="#020306"
+                        strokeWidth="4.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M 43 143 C 60 123, 71 106, 83 100"
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeOpacity="0.92"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeDasharray="3.4 3.6"
+                      />
+
+                      <path
+                        d="M 83 100 C 89 96, 100 88, 97 98 C 94 104, 89 93, 93 91 C 98 90, 97 95, 95 93"
+                        fill="none"
+                        stroke="#020306"
+                        strokeWidth="5.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M 83 100 C 89 96, 100 88, 97 98 C 94 104, 89 93, 93 91 C 98 90, 97 95, 95 93"
+                        fill="none"
+                        stroke="#00BFFF"
+                        strokeWidth="3.0"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+
+                      <circle cx="95" cy="93" r="4.8" fill="#FFFFFF" stroke="#020306" strokeWidth="2.0" />
+                    </svg>
+                  </div>
+
+                  {/* Watch Footer Pill + Pagination Dots */}
+                  <div className="flex flex-col items-center gap-[3.5px] z-10 shrink-0">
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#080B10] border border-white/[0.14] px-2 py-[2.5px] text-[7.2px] font-extrabold uppercase tracking-[0.06em] text-white whitespace-nowrap tabular-nums leading-none">
+                      <span className="w-[4px] h-[4px] rounded-full bg-[#00BFFF] shrink-0" />
+                      <span>
+                        {tx(
+                          `Análisis · Tiro 1 · ${calibration.distanceM}m`,
+                          `Analysis · Shot 1 · ${calibration.distanceM}m`
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-[3.5px]" aria-hidden="true">
+                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+                      <span className="w-[9px] h-[3px] rounded-full bg-[#00BFFF]" />
+                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

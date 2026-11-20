@@ -205,43 +205,8 @@ export default function AnalysisCalibrationModal({
           </p>
         </div>
 
-        {/* Brushed Matte-Titanium Settings Group (+20% size on Arco, Muñeca del arco & Distancia) */}
+        {/* Brushed Matte-Titanium Settings Group (Bow synced automatically from Profile) */}
         <section className="bg-[#0B0E15] border border-white/[0.09] rounded-[20px] p-3 flex flex-col gap-2.5">
-          {/* Arco */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
-              {tx("Arco", "Bow")}
-            </span>
-            <div className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
-              {(["Barebow", "Recurve", "Compound"] as const).map((b) => {
-                const rawLabel =
-                  b === "Recurve"
-                    ? t("bowRecurve")
-                    : b === "Compound"
-                    ? t("bowCompound")
-                    : t("bowBarebow");
-                const label = rawLabel.replace(/\s*\([^)]*\)/g, "").trim() || rawLabel;
-                const isSelected = bowType === b;
-                return (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => setBowType(b)}
-                    className={`min-h-[35px] px-2.5 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] transition cursor-pointer whitespace-nowrap ${
-                      isSelected
-                        ? "bg-white text-black font-extrabold"
-                        : "text-white font-semibold hover:bg-white/5"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="h-[1px] bg-white/[0.06]" />
-
           {/* Muñeca del arco */}
           <div className="flex items-center justify-between gap-2">
             <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
@@ -364,8 +329,8 @@ export default function AnalysisCalibrationModal({
         <div className="flex flex-col items-center gap-2 pt-0.5">
           <span className="text-[12px] min-[380px]:text-[12.7px] font-medium text-white text-center leading-snug whitespace-nowrap">
             {tx(
-              "Se guarda en tu perfil · Recalibra si cambias de arco",
-              "Saved to your profile · Recalibrate if you switch bows"
+              "Usa automáticamente el arco configurado en tu perfil",
+              "Automatically uses the bow configured in your profile"
             )}
           </span>
           <button
