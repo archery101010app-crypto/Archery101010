@@ -1,15 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { RefreshCw, Download, X, Sparkles } from "lucide-react";
+import { RefreshCw, X, Sparkles } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 interface RemoteVersionInfo {
   version: string;
   versionCode?: number;
-  apkUrl?: string;
-  apkDownloadUrl?: string;
   updatedAt?: string;
 }
 
@@ -27,7 +25,6 @@ type WinUpdateBridge = {
 
 const REMOTE_WEB_ORIGIN = "https://archery101010-c0bb4.web.app";
 const OTA_MANIFEST_PATH = "/ota-version.json";
-const APK_DOWNLOAD_URL = `${REMOTE_WEB_ORIGIN}/download-apk`;
 const ATTEMPTED_VER_LOCAL_KEY = "archery_attempted_update_meta";
 const LOOP_GUARD_MS = 60 * 1000;
 const CLEANUP_TIMEOUT_MS = 2200;
@@ -54,10 +51,9 @@ function isNewerVersion(remoteVer: string, localVer: string): boolean {
 function detectNativeAndroidShellState(): {
   isNativeAndroidWebView: boolean;
   canReloadNatively: boolean;
-  isAndroidDevice: boolean;
 } {
   if (typeof window === "undefined") {
-    return { isNativeAndroidWebView: false, canReloadNatively: false, isAndroidDevice: false };
+    return { isNativeAndroidWebView: false, canReloadNatively: false };
   }
   const winAny = window as unknown as WinUpdateBridge;
   const canReloadNatively = typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function";
@@ -67,8 +63,7 @@ function detectNativeAndroidShellState(): {
     Boolean(winAny.ArcheryNativeAuth) ||
     Boolean(winAny.Capacitor?.isNativePlatform?.()) ||
     /;\s*wv\)|Capacitor/i.test(ua);
-  const isAndroidDevice = isNativeAndroidWebView || /Android/i.test(ua);
-  return { isNativeAndroidWebView, canReloadNatively, isAndroidDevice };
+  return { isNativeAndroidWebView, canReloadNatively };
 }
 
 function wasRecentlyAttempted(ver: string): boolean {
@@ -109,19 +104,13 @@ function clearAttemptedIfCurrent(): void {
   }
 }
 
-function checkAndStripOtaQueryParams(): boolean {
-  if (typeof window === "undefined") return false;
-  let hadLegacyApkJumpParams = false;
+function stripOtaQueryParams(): void {
+  if (typeof window === "undefined") return;
   try {
     const curUrl = new URL(window.location.href);
-    const hasV = curUrl.searchParams.has("v");
-    const hasT = curUrl.searchParams.has("t");
-    if (hasV && hasT) {
-      hadLegacyApkJumpParams = true;
-    }
     if (
-      hasV ||
-      hasT ||
+      curUrl.searchParams.has("v") ||
+      curUrl.searchParams.has("t") ||
       curUrl.searchParams.has("ota") ||
       curUrl.searchParams.has("skipIntro")
     ) {
@@ -136,7 +125,6 @@ function checkAndStripOtaQueryParams(): boolean {
   } catch {
     // Ignore URL cleanup errors
   }
-  return hadLegacyApkJumpParams;
 }
 
 async function purgeServiceWorkersAndCachesBounded(): Promise<void> {
@@ -184,7 +172,6 @@ async function purgeServiceWorkersAndCachesBounded(): Promise<void> {
 export default function AppUpdateBanner() {
   const { tx } = useLanguage();
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
-  const [legacyApkUpgradeNotice, setLegacyApkUpgradeNotice] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const updatingRef = useRef(false);
@@ -192,14 +179,7 @@ export default function AppUpdateBanner() {
   useEffect(() => {
     let mounted = true;
     clearAttemptedIfCurrent();
-    const hadLegacyJump = checkAndStripOtaQueryParams();
-    const { canReloadNatively, isAndroidDevice } = detectNativeAndroidShellState();
-
-    // If an older Android APK (< v2.110, e.g. v2.100) redirected here with ?v=...&t=...,
-    // surface a 1-tap APK installer banner so the user updates their installed app cleanly.
-    if (hadLegacyJump && !canReloadNatively && isAndroidDevice) {
-      setLegacyApkUpgradeNotice(true);
-    }
+    stripOtaQueryParams();
 
     async function checkRemoteVersion() {
       if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.onLine) {
@@ -217,7 +197,15 @@ export default function AppUpdateBanner() {
 
       const isBundledLocalhost =
         window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const shellState = detectNativeAndroidShellState();
+      const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
+
+      // Legacy Android shells (< v2.110): keep 100% inside the app, never surface external web jumps
+      if (isNativeAndroidWebView && !canReloadNatively) {
+        if (!isBundledLocalhost) {
+          void purgeServiceWorkersAndCachesBounded();
+        }
+        return;
+      }
 
       try {
         const versionEndpoint = isBundledLocalhost
@@ -233,10 +221,6 @@ export default function AppUpdateBanner() {
           isNewerVersion(data.version, APP_VERSION) &&
           !wasRecentlyAttempted(data.version)
         ) {
-          // On legacy Android WebView shells (< v2.110), also pre-purge SW caches silently
-          if (shellState.isNativeAndroidWebView && !shellState.canReloadNatively && !isBundledLocalhost) {
-            void purgeServiceWorkersAndCachesBounded();
-          }
           setDismissed(false);
           setRemoteInfo(data);
         } else {
@@ -270,7 +254,6 @@ export default function AppUpdateBanner() {
     if (remoteInfo?.version) {
       markVersionAttempted(remoteInfo.version);
     }
-    setLegacyApkUpgradeNotice(false);
     setDismissed(true);
   }, [isUpdating, remoteInfo]);
 
@@ -292,7 +275,7 @@ export default function AppUpdateBanner() {
       // Ignore sessionStorage errors
     }
 
-    checkAndStripOtaQueryParams();
+    stripOtaQueryParams();
     await purgeServiceWorkersAndCachesBounded();
 
     setTimeout(() => {
@@ -300,7 +283,7 @@ export default function AppUpdateBanner() {
       setIsUpdating(false);
     }, RELOAD_FAILSAFE_RESET_MS);
 
-    // 1. Modern Android native shell (v2.110+): Java WebView.clearCache(true) + WebView.loadUrl()
+    // 1. Modern Android native shell (v2.110+): 100% in-app Java WebView reload
     if (canReloadNatively && winAny.ArcheryNativeAuth?.reloadInAppOta) {
       winAny.ArcheryNativeAuth.reloadInAppOta();
       return;
@@ -321,64 +304,11 @@ export default function AppUpdateBanner() {
   const winBusy =
     typeof window !== "undefined" &&
     Boolean((window as unknown as WinUpdateBridge).__archeryBusySession);
-  if (winBusy || dismissed) {
-    return null;
-  }
-
-  // Case A: User arrived in Android browser from a legacy (< v2.107, e.g. v2.100) APK jump
-  if (!remoteInfo && legacyApkUpgradeNotice) {
-    return (
-      <div className="w-full max-w-md mx-auto px-3 pt-2 z-50 shrink-0">
-        <div className="bg-[#06080C] border border-[#FFE500]/55 rounded-2xl p-3 flex items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-8 h-8 rounded-xl bg-[#121106] border border-[#FFE500]/45 flex items-center justify-center text-[#FFE500] shrink-0">
-              <Download size={15} />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
-                {tx(`App Android v${APP_VERSION} lista`, `Android App v${APP_VERSION} ready`)}
-              </span>
-              <span className="text-[10.5px] text-white truncate">
-                {tx(
-                  "Instala el paquete para actualizar tu app instalada",
-                  "Install the package to update your installed app"
-                )}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <a
-              href={APK_DOWNLOAD_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setLegacyApkUpgradeNotice(false)}
-              className="px-3 py-1.5 rounded-xl bg-[#FFE500] hover:bg-[#ffe933] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
-            >
-              <Download size={12} />
-              <span>{tx("Instalar APK", "Install APK")}</span>
-            </a>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              className="p-1.5 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
-              title={tx("Cerrar aviso", "Dismiss")}
-              aria-label={tx("Cerrar aviso", "Dismiss")}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!remoteInfo) {
-    return null;
-  }
-
   const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
-  const isLegacyApkShell = isNativeAndroidWebView && !canReloadNatively;
+
+  if (winBusy || dismissed || !remoteInfo || (isNativeAndroidWebView && !canReloadNatively)) {
+    return null;
+  }
 
   return (
     <div className="w-full max-w-md mx-auto px-3 pt-2 z-50 shrink-0">
@@ -395,50 +325,26 @@ export default function AppUpdateBanner() {
               )}
             </span>
             <span className="text-[10.5px] text-white truncate tabular-nums">
-              {isLegacyApkShell
-                ? tx(
-                    `Descarga directa para actualizar desde v${APP_VERSION}`,
-                    `Direct download to update from v${APP_VERSION}`
-                  )
-                : tx(
-                    `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
-                    `Instant one-tap update (current v${APP_VERSION})`
-                  )}
+              {tx(
+                `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
+                `Instant one-tap update (current v${APP_VERSION})`
+              )}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {isLegacyApkShell ? (
-            <a
-              href={remoteInfo.apkDownloadUrl || APK_DOWNLOAD_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                markVersionAttempted(remoteInfo.version);
-                void purgeServiceWorkersAndCachesBounded();
-                setDismissed(true);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
-            >
-              <Download size={12} />
-              <span>{tx("Actualizar APK", "Update APK")}</span>
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleUpdateNow()}
-              disabled={isUpdating}
-              className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
-            >
-              <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
-              <span>
-                {isUpdating
-                  ? tx("Actualizando...", "Updating...")
-                  : tx("Actualizar", "Update")}
-              </span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => void handleUpdateNow()}
+            disabled={isUpdating}
+            className="px-3 py-1.5 rounded-xl bg-[#00A8F3] hover:bg-[#19b5fa] text-black font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
+          >
+            <RefreshCw size={12} className={isUpdating ? "animate-spin" : ""} />
+            <span>
+              {isUpdating ? tx("Actualizando...", "Updating...") : tx("Actualizar", "Update")}
+            </span>
+          </button>
           <button
             type="button"
             onClick={handleDismiss}

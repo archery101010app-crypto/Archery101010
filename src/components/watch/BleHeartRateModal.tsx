@@ -27,10 +27,14 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
   const titleId = useId();
 
   const [status, setStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
+  const [tappedUnsupported, setTappedUnsupported] = useState(false);
 
   useEffect(() => {
     return subscribeBleHeartRate((next) => {
       setStatus(next);
+      if (next.supported) {
+        setTappedUnsupported(false);
+      }
     });
   }, []);
 
@@ -41,13 +45,13 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
     const handleNativeClose = () => {
       dialog.returnValue = "";
+      setTappedUnsupported(false);
       stopBleHeartRateScan();
       onCloseRef.current();
     };
 
     dialog.addEventListener("close", handleNativeClose);
 
-    // Fallback for browsers without native <dialog closedby="any"> support
     let removeLightDismissFallback: (() => void) | null = null;
     if (
       typeof HTMLDialogElement !== "undefined" &&
@@ -80,12 +84,12 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     if (!dialog) return;
 
     if (isOpen) {
+      setTappedUnsupported(false);
       if (!dialog.open) {
         try {
           dialog.showModal();
         } catch {}
       }
-      // On native Android, start discovery automatically when opened if not yet connected
       const current = getBleHeartRateStatus();
       if (
         current.transport === "native_android" &&
@@ -112,6 +116,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
   }, [isOpen]);
 
   const handleCloseClick = () => {
+    setTappedUnsupported(false);
     stopBleHeartRateScan();
     if (dialogRef.current?.open) {
       dialogRef.current.close();
@@ -125,14 +130,8 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
   const isExplicitConnecting = status.state === "connecting";
   const isReconnecting = status.state === "reconnecting";
   const isConnecting = isExplicitConnecting || isReconnecting;
-  const isOutdatedAndroidShell =
-    !status.supported &&
-    typeof window !== "undefined" &&
-    Boolean((window as any).ArcheryNativeAuth || (window as any).Capacitor?.isNativePlatform?.());
 
-  const statusBadgeText = !status.supported
-    ? tx("ACTUALIZAR APP", "UPDATE APP")
-    : isConnected
+  const statusBadgeText = isConnected
     ? tx("EN VIVO", "LIVE")
     : isConnecting
     ? tx("CONECTANDO", "CONNECTING")
@@ -141,23 +140,18 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     : tx("EN ESPERA", "STANDBY");
 
   const errorBannerMessage = (() => {
-    if (isOutdatedAndroidShell) {
+    if (!status.supported) {
+      if (!tappedUnsupported) return "";
       return tx(
-        "Instala la actualización más reciente del APK de Android para activar la conexión Bluetooth directa con tu sensor de pulso.",
-        "Install the latest Android APK update to enable direct Bluetooth connection with your heart rate sensor."
+        "Activa el Bluetooth de tu teléfono y asegúrate de tener la última actualización de la tienda para conectar tu sensor.",
+        "Turn on Bluetooth on your phone and make sure your app is updated from the store to connect your sensor."
       );
     }
-    if (!status.supported || status.errorCode === "BLE_UNSUPPORTED") {
-      return tx(
-        "Este navegador no admite Bluetooth directo. Usa la aplicación instalada en Android o un navegador compatible con Bluetooth Web.",
-        "This browser does not support direct Bluetooth. Use the installed Android app or a Web Bluetooth browser."
-      );
-    }
-    if (!status.errorCode) return "";
+    if (!status.errorCode || status.errorCode === "BLE_UNSUPPORTED") return "";
     if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
       return tx(
-        "Este dispositivo está cerca pero aún no transmite pulso. Activa «Transmitir frecuencia cardíaca» en los ajustes de tu pulsera o banda y vuelve a conectar.",
-        "This device is nearby but not broadcasting heart rate yet. Enable Heart Rate Broadcast in your band or strap settings and reconnect."
+        "Activa «Transmitir frecuencia cardíaca» en los ajustes de tu pulsera o banda y vuelve a conectar.",
+        "Turn on Heart Rate Broadcast in your band or strap settings and reconnect."
       );
     }
     if (status.errorCode === "BLUETOOTH_OFF") {
@@ -168,21 +162,29 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     }
     if (status.errorCode === "LOCATION_SERVICES_OFF") {
       return tx(
-        "En Android 10/11 activa la Ubicación del teléfono para que el sistema permita escanear sensores Bluetooth cercanos.",
-        "On Android 10/11 turn on system Location so Android permits scanning nearby Bluetooth sensors."
+        "Activa la Ubicación del teléfono para detectar sensores Bluetooth cercanos.",
+        "Turn on system Location to detect nearby Bluetooth sensors."
       );
     }
     if (status.errorCode === "PERMISSION_DENIED") {
       return tx(
-        "Autoriza el permiso de dispositivos cercanos / ubicación Bluetooth para vincular tu sensor.",
-        "Allow Nearby Devices / Bluetooth permission to pair your sensor."
+        "Autoriza el permiso de dispositivos cercanos para vincular tu sensor.",
+        "Allow Nearby Devices permission to pair your sensor."
       );
     }
     return tx(
-      "No fue posible conectar con el sensor. Verifica que esté encendido y transmitiendo pulso.",
-      "Could not connect to the sensor. Make sure it is powered on and broadcasting heart rate."
+      "No se pudo conectar. Verifica que tu sensor esté encendido y transmitiendo pulso.",
+      "Could not connect. Make sure your sensor is on and broadcasting heart rate."
     );
   })();
+
+  const handleScanOrPairClick = () => {
+    if (!status.supported) {
+      setTappedUnsupported(true);
+      return;
+    }
+    startBleHeartRateScanOrRequest();
+  };
 
   return (
     <dialog
@@ -281,7 +283,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
           <div className="grid grid-cols-[1.05fr_1fr_1fr] gap-2.5 items-center pt-0.5">
             <div className="flex items-baseline gap-1.5">
-              <span className="font-sans text-[42px] font-extrabold leading-none text-white tabular-nums">
+              <span className="font-sans text-[44px] font-extrabold leading-none text-white tabular-nums">
                 {isConnected && status.currentBpm >= 30 ? status.currentBpm : "—"}
               </span>
               <span className="text-[14px] font-extrabold uppercase tracking-wider text-[#FF1E1E]">
@@ -289,20 +291,20 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               </span>
             </div>
 
-            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[60px]">
-              <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-white block">
+            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]">
+              <span className="text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block">
                 {tx("PROMEDIO", "AVERAGE")}
               </span>
-              <span className="text-[17.5px] font-extrabold text-white tabular-nums leading-tight block">
+              <span className="text-[18px] font-extrabold text-white tabular-nums leading-tight block">
                 {status.avgHeartRateBpm >= 30 ? status.avgHeartRateBpm : "—"}
               </span>
             </div>
 
-            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[60px]">
-              <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-white block">
+            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]">
+              <span className="text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block">
                 {tx("MÁXIMO", "PEAK")}
               </span>
-              <span className="text-[17.5px] font-extrabold text-[#FFE500] tabular-nums leading-tight block">
+              <span className="text-[18px] font-extrabold text-[#FFE500] tabular-nums leading-tight block">
                 {status.maxHeartRateBpm >= 30 ? status.maxHeartRateBpm : "—"}
               </span>
             </div>
@@ -318,56 +320,11 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           )}
         </div>
 
-        {/* Architectural 01 · 02 Instructions (High-Contrast Sunlight Scale) */}
-        {!isConnected && (
-          <div className="bg-[#090C12] border border-white/[0.13] rounded-[22px] p-4 flex flex-col gap-3.5">
-            <div className="flex items-center gap-3">
-              <span className="w-[3.5px] h-[40px] rounded-full bg-[#00BFFF] shrink-0" />
-              <span className="font-sans text-[20px] font-extrabold text-[#00BFFF] tabular-nums shrink-0">
-                01
-              </span>
-              <span className="w-[1px] h-[34px] bg-white/[0.10] shrink-0" />
-              <div className="flex flex-col gap-1 min-w-0">
-                <span className="text-[14.5px] font-bold uppercase tracking-[0.03em] text-white leading-tight">
-                  {tx("Activa transmitir pulso", "Enable heart rate broadcast")}
-                </span>
-                <span className="text-[14px] font-normal text-white leading-snug">
-                  {tx(
-                    "En los ajustes de tu pulsera deportiva o banda, activa la opción de transmitir frecuencia cardíaca por Bluetooth.",
-                    "In your fitness band or strap settings, turn on Bluetooth heart rate broadcasting."
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div className="h-[1px] bg-white/[0.09]" />
-
-            <div className="flex items-center gap-3">
-              <span className="w-[3.5px] h-[40px] rounded-full bg-[#FFE500] shrink-0" />
-              <span className="font-sans text-[20px] font-extrabold text-[#FFE500] tabular-nums shrink-0">
-                02
-              </span>
-              <span className="w-[1px] h-[34px] bg-white/[0.10] shrink-0" />
-              <div className="flex flex-col gap-1 min-w-0">
-                <span className="text-[14.5px] font-bold uppercase tracking-[0.03em] text-white leading-tight">
-                  {tx("Vincula en un toque", "Pair in one tap")}
-                </span>
-                <span className="text-[14px] font-normal text-white leading-snug">
-                  {tx(
-                    "Elige tu sensor abajo. Se conectará automáticamente en tus próximas sesiones sin aplicaciones adicionales.",
-                    "Select your sensor below. It will auto-connect in future sessions with no extra apps."
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Actionable Status / Error Notice */}
+        {/* Actionable In-App Status Notice */}
         {errorBannerMessage && (
           <div
             role="alert"
-            className="bg-[#151205] border border-[#FFE500]/65 rounded-2xl px-4 py-3 text-[14px] font-medium text-white leading-snug"
+            className="bg-[#0B1018] border border-white/[0.16] rounded-2xl px-4 py-3 text-[14px] font-medium text-white leading-snug"
           >
             {errorBannerMessage}
           </div>
@@ -378,7 +335,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-0.5">
               <span className="text-[13px] font-bold uppercase tracking-[0.06em] text-white">
-                {tx("SENSORES DETECTADOS", "DETECTED SENSORS")}
+                {tx("SENSORES CERCANOS", "NEARBY SENSORS")}
               </span>
               <span className="text-[13px] font-bold text-[#00BFFF] tabular-nums">
                 {isScanning
@@ -395,12 +352,12 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                       "Scanning for nearby bands and straps..."
                     )
                   : tx(
-                      "No se detectaron sensores aún. Toca Buscar Sensor para actualizar.",
-                      "No sensors detected yet. Tap Scan Sensor to refresh."
+                      "Toca Buscar Sensor Bluetooth para detectar tu pulsera o banda.",
+                      "Tap Scan Bluetooth Sensor to detect your band or strap."
                     )}
               </div>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[196px] overflow-y-auto pr-0.5">
+              <div className="flex flex-col gap-2 max-h-[210px] overflow-y-auto pr-0.5">
                 {status.discoveredDevices.map((dev) => {
                   const isThisConnecting = isConnecting && status.deviceId === dev.id;
                   return (
@@ -433,7 +390,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                         type="button"
                         disabled={isThisConnecting}
                         onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
-                        className="min-h-[40px] px-3.5 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[13px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
+                        className="min-h-[42px] px-4 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[13px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
                       >
                         {isThisConnecting ? tx("Conectando...", "Connecting...") : t("bleHrConnect")}
                       </button>
@@ -445,32 +402,25 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           </div>
         )}
 
-        {/* Footer Actions */}
+        {/* Footer Actions — 100% In-App */}
         <div className="flex items-center gap-2.5 pt-0.5">
           {isConnected ? (
             <>
               <button
                 type="button"
                 onClick={() => disconnectBleHeartRateDevice(true)}
-                className="flex-1 min-h-[52px] rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[14.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+                className="flex-1 min-h-[54px] rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[14.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
               >
                 {t("bleHrDisconnect")}
               </button>
               <button
                 type="button"
                 onClick={handleCloseClick}
-                className="flex-1 min-h-[52px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[15px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+                className="flex-1 min-h-[54px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[15px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
               >
                 {tx("Listo", "Done")}
               </button>
             </>
-          ) : isOutdatedAndroidShell ? (
-            <a
-              href="https://archery101010-c0bb4.web.app/download-apk"
-              className="w-full min-h-[54px] rounded-2xl bg-[#FFE500] hover:brightness-105 text-black font-extrabold text-[15.5px] uppercase tracking-[0.05em] flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
-            >
-              {tx("Actualizar APK Android", "Update Android APK")}
-            </a>
           ) : (
             <div className="w-full flex items-center gap-2.5">
               {Boolean(status.deviceId) && (isReconnecting || isExplicitConnecting) && (
@@ -485,14 +435,12 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               <button
                 type="button"
                 disabled={isExplicitConnecting}
-                onClick={() => startBleHeartRateScanOrRequest()}
+                onClick={handleScanOrPairClick}
                 className="flex-1 min-h-[54px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[15.5px] uppercase tracking-[0.05em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
               >
                 {isScanning
                   ? t("bleHrScanning")
-                  : status.transport === "native_android"
-                  ? tx("Buscar Sensor Bluetooth", "Scan Bluetooth Sensor")
-                  : tx("Vincular Sensor Bluetooth", "Pair Bluetooth Sensor")}
+                  : tx("Buscar Sensor Bluetooth", "Scan Bluetooth Sensor")}
               </button>
             </div>
           )}

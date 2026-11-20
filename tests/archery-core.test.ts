@@ -444,13 +444,13 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(otaVerJson.version, APP_VERSION, "ota-version.json must match APP_VERSION");
     assert.equal(
       verJson.version,
-      APP_VERSION,
-      "public/version.json must match APP_VERSION so v2.100..v2.125 clients display the Update button"
+      "0.0.0",
+      "Legacy public/version.json must stay 0.0.0 so older shells never redirect users out of the app"
     );
     assert.equal(
       appVerJson.version,
-      APP_VERSION,
-      "public/app-version.json must match APP_VERSION"
+      "0.0.0",
+      "Legacy public/app-version.json must stay 0.0.0 so older shells never redirect users out of the app"
     );
     assert.equal(verJson.latestVersion, APP_VERSION);
   });
@@ -816,33 +816,28 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     }
   });
 
-  it("keeps all OTA/legacy version manifests synchronized, resets off-skin BLE BPM, and enforces Coach/Brand invariants", async () => {
+  it("keeps users 100% inside the app (zero APK/web exits), resets off-skin BLE BPM, and enforces Coach/Brand invariants", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const { APP_VERSION } = await import("../src/lib/version.ts");
     const { BleHeartRateSessionTracker } = await import("../src/lib/scoring/bleHeartRateService.ts");
 
-    // 1. All 3 remote manifests (ota-version.json, version.json for v2.100..v2.125, app-version.json)
-    // must match APP_VERSION and NEVER regress to "0.0.0" (which hid the update button on v2.100).
-    for (const manifestRel of [
-      "public/ota-version.json",
-      "public/version.json",
-      "public/app-version.json"
+    // 1. Neither BleHeartRateModal nor AppUpdateBanner may contain APK jargon, /download-apk, or external target="_blank" exits
+    for (const rel of [
+      "src/components/watch/BleHeartRateModal.tsx",
+      "src/components/ui/AppUpdateBanner.tsx"
     ]) {
-      const parsed = JSON.parse(
-        fs.readFileSync(path.resolve(process.cwd(), manifestRel), "utf8")
-      ) as { version?: string; apkDownloadUrl?: string };
+      const src = fs.readFileSync(path.resolve(process.cwd(), rel), "utf8");
       assert.equal(
-        parsed.version,
-        APP_VERSION,
-        `${manifestRel} must stay synchronized with APP_VERSION (${APP_VERSION})`
-      );
-      assert.notEqual(parsed.version, "0.0.0", `${manifestRel} must never be neutralized to 0.0.0`);
-      assert.ok(
-        parsed.apkDownloadUrl?.includes("/download-apk"),
-        `${manifestRel} must include /download-apk`
+        /download-apk|\bAPK\b|target="_blank"/i.test(src),
+        false,
+        `${rel} must keep the user 100% inside the app with zero APK jargon or external web links`
       );
     }
+    const otaParsed = JSON.parse(
+      fs.readFileSync(path.resolve(process.cwd(), "public/ota-version.json"), "utf8")
+    ) as { version?: string };
+    assert.equal(otaParsed.version, APP_VERSION);
 
     // 2. Off-skin BLE heart rate packet must immediately clear currentBpm while preserving session avg/max
     const tracker = new BleHeartRateSessionTracker();

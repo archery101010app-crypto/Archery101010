@@ -86,9 +86,9 @@ if (fs.existsSync(garminManifestPath)) {
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }
 
-// 6. Write public/ota-version.json, public/version.json, and public/app-version.json
-// with the live version so ALL installed users (from v2.100 through modern v2.126+)
-// receive the update notification banner cleanly without getting stuck on older builds.
+// 6. Write public/ota-version.json for 100% in-app OTA updates, while keeping legacy
+// public/version.json & public/app-version.json neutralized at "0.0.0" so older shells
+// never redirect users outside the app to a web browser.
 const otaVersionJsonPath = path.join(__dirname, '../public/ota-version.json');
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
@@ -98,11 +98,16 @@ const otaPayload = {
   latestVersion: displayVersion,
   fullVersion: newVersion,
   versionCode: vCode,
-  apkUrl: 'https://archery101010-c0bb4.web.app/download-apk',
-  apkDownloadUrl: 'https://archery101010-c0bb4.web.app/download-apk',
+  updatedAt: nowIso
+};
+const disarmedLegacyPayload = {
+  version: '0.0.0',
+  latestVersion: displayVersion,
+  fullVersion: newVersion,
+  versionCode: vCode,
   updatedAt: nowIso
 };
 fs.writeFileSync(otaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(appVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(versionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-console.log(`Updated public/ota-version.json, public/version.json & public/app-version.json for v${displayVersion} (versionCode ${vCode})`);
+fs.writeFileSync(appVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+fs.writeFileSync(versionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and kept legacy manifests in-app safe`);
