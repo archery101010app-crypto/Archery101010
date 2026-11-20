@@ -189,15 +189,15 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       ref={dialogRef}
       {...({ closedby: "any" } as any)}
       aria-labelledby={titleId}
-      className="m-auto w-[calc(100vw-24px)] max-w-[388px] max-h-[92dvh] p-0 bg-transparent border-0 text-white overflow-y-auto overscroll-contain outline-none open:block"
+      className="m-auto w-[calc(100vw-14px)] max-w-[420px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
     >
       <div
         dir="ltr"
-        className="w-full bg-[#06080C] border border-white/[0.11] rounded-[26px] p-4 flex flex-col gap-3.5 relative select-none"
+        className="w-full bg-[#04060A] border border-white/[0.15] rounded-[28px] p-5 flex flex-col gap-4 relative select-none font-sans"
       >
         {/* Top 101010 tricolor line */}
         <div
-          className="absolute top-0 left-12 right-12 h-[2px]"
+          className="absolute top-0 left-12 right-12 h-[2.5px]"
           style={{
             background:
               "linear-gradient(90deg, transparent, #00A8F3 25%, #FF1E1E 50%, #FFE500 75%, transparent)"
@@ -211,25 +211,25 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               src="/images/brand_logo_header.png"
               srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
               alt="ARCHERY 101010"
-              className="h-[11.5px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+              className="h-[12.5px] min-[385px]:h-[13.5px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
               draggable={false}
             />
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border text-[8.5px] font-extrabold tracking-[0.08em] uppercase leading-none shrink-0 tabular-nums ${
+              className={`inline-flex items-center gap-1.5 rounded-full h-[25px] px-2.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-none shrink-0 tabular-nums whitespace-nowrap ${
                 isConnected
-                  ? "bg-[#051810] border-[#00C853]/50 text-white"
+                  ? "bg-[#051810] border-[#00C853]/65 text-white"
                   : isScanning || isConnecting
-                  ? "bg-[#05121E] border-[#00BFFF]/50 text-white"
-                  : "bg-[#0B0E14] border-white/[0.12] text-white"
+                  ? "bg-[#05121E] border-[#00BFFF]/65 text-white"
+                  : "bg-[#0B0E15] border-white/[0.16] text-white"
               }`}
             >
               <span
-                className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                className={`w-[6px] h-[6px] rounded-full shrink-0 ${
                   isConnected
                     ? "bg-[#00C853]"
                     : isScanning || isConnecting
                     ? "bg-[#00BFFF]"
-                    : "bg-[#6E7785]"
+                    : "bg-[#8E96A4]"
                 }`}
               />
               <span>{statusBadgeText}</span>
@@ -240,76 +240,76 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
             type="button"
             onClick={handleCloseClick}
             aria-label={tx("Cerrar sensor de pulso", "Close heart rate sensor")}
-            className="min-w-[36px] min-h-[36px] w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
+            className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-[#10131B] border border-white/[0.16] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
           >
-            <X size={15} aria-hidden="true" />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Title Block */}
-        <div className="flex flex-col gap-0.5">
+        {/* Title Block (High-Visibility Outdoor Scale) */}
+        <div className="flex flex-col gap-1">
           <h2
             id={titleId}
-            className="text-[16.5px] font-extrabold text-white tracking-tight leading-snug"
+            className="text-[22px] font-bold text-white tracking-normal leading-tight"
           >
             {t("bleHrTitle")}
           </h2>
-          <p className="text-[13px] font-medium text-white leading-snug">
+          <p className="text-[15.5px] font-normal text-white leading-snug">
             {t("bleHrSubtitle")}
           </p>
         </div>
 
         {/* Matte Titanium Live Heart Rate Telemetry Chassis */}
-        <div className="bg-[#0B0E15] border border-white/[0.10] rounded-2xl p-3.5 flex flex-col gap-2.5">
+        <div className="bg-[#0B0E15] border border-white/[0.14] rounded-[22px] p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-white">
+            <span className="text-[13.5px] font-extrabold tracking-[0.07em] uppercase text-white">
               {t("cardHeartRate")}
             </span>
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               {status.deviceName && (
-                <span className="text-[10.5px] font-bold text-[#00BFFF] truncate max-w-[165px] tabular-nums">
+                <span className="text-[13px] font-bold text-[#00BFFF] truncate max-w-[175px] tabular-nums">
                   {status.deviceName}
                 </span>
               )}
               {typeof status.batteryPct === "number" && (
-                <span className="text-[9.5px] font-extrabold text-white bg-[#121621] border border-white/[0.12] px-1.5 py-0.5 rounded-md tabular-nums shrink-0">
+                <span className="text-[12px] font-bold text-white bg-[#121621] border border-white/[0.16] px-2 py-0.5 rounded-lg tabular-nums shrink-0">
                   {status.batteryPct}%
                 </span>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 items-end pt-0.5">
-            <div className="col-span-1 flex items-baseline gap-1">
-              <span className="font-sans text-[34px] font-extrabold leading-none text-white tabular-nums">
+          <div className="grid grid-cols-[1.05fr_1fr_1fr] gap-2.5 items-center pt-0.5">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-sans text-[42px] font-extrabold leading-none text-white tabular-nums">
                 {isConnected && status.currentBpm >= 30 ? status.currentBpm : "—"}
               </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#FF1E1E]">
+              <span className="text-[14px] font-extrabold uppercase tracking-wider text-[#FF1E1E]">
                 BPM
               </span>
             </div>
 
-            <div className="bg-[#06080C] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-center">
-              <span className="text-[8.5px] font-extrabold tracking-[0.1em] uppercase text-white block">
+            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[60px]">
+              <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-white block">
                 {tx("PROMEDIO", "AVERAGE")}
               </span>
-              <span className="text-[14px] font-extrabold text-white tabular-nums leading-tight block mt-0.5">
-                {status.avgHeartRateBpm >= 30 ? `${status.avgHeartRateBpm} BPM` : "—"}
+              <span className="text-[17.5px] font-extrabold text-white tabular-nums leading-tight block">
+                {status.avgHeartRateBpm >= 30 ? status.avgHeartRateBpm : "—"}
               </span>
             </div>
 
-            <div className="bg-[#06080C] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-center">
-              <span className="text-[8.5px] font-extrabold tracking-[0.1em] uppercase text-white block">
+            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[60px]">
+              <span className="text-[11px] font-bold tracking-[0.06em] uppercase text-white block">
                 {tx("MÁXIMO", "PEAK")}
               </span>
-              <span className="text-[14px] font-extrabold text-[#FFE500] tabular-nums leading-tight block mt-0.5">
-                {status.maxHeartRateBpm >= 30 ? `${status.maxHeartRateBpm} BPM` : "—"}
+              <span className="text-[17.5px] font-extrabold text-[#FFE500] tabular-nums leading-tight block">
+                {status.maxHeartRateBpm >= 30 ? status.maxHeartRateBpm : "—"}
               </span>
             </div>
           </div>
 
           {isConnected && status.contactDetected === false && (
-            <div className="text-[11px] font-semibold text-[#FFE500] bg-[#121107] border border-[#FFE500]/35 rounded-xl px-2.5 py-1.5">
+            <div className="text-[13.5px] font-semibold text-[#FFE500] bg-[#141206] border border-[#FFE500]/50 rounded-xl px-3.5 py-2.5 leading-snug">
               {tx(
                 "Ajusta el sensor sobre la piel para estabilizar la lectura.",
                 "Adjust the sensor against your skin to stabilize the reading."
@@ -318,21 +318,20 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           )}
         </div>
 
-        {/* Architectural 01 · 02 Instructions (Zero AI Icons, Pure Typography + Brand Bars) */}
+        {/* Architectural 01 · 02 Instructions (High-Contrast Sunlight Scale) */}
         {!isConnected && (
-          <div className="bg-[#090C12] border border-white/[0.08] rounded-2xl p-3.5 flex flex-col gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                <span className="w-[3px] h-[26px] rounded-full bg-[#00BFFF]" />
-                <span className="font-sans text-[15px] font-black text-white tabular-nums">
-                  01
+          <div className="bg-[#090C12] border border-white/[0.13] rounded-[22px] p-4 flex flex-col gap-3.5">
+            <div className="flex items-center gap-3">
+              <span className="w-[3.5px] h-[40px] rounded-full bg-[#00BFFF] shrink-0" />
+              <span className="font-sans text-[20px] font-extrabold text-[#00BFFF] tabular-nums shrink-0">
+                01
+              </span>
+              <span className="w-[1px] h-[34px] bg-white/[0.10] shrink-0" />
+              <div className="flex flex-col gap-1 min-w-0">
+                <span className="text-[14.5px] font-bold uppercase tracking-[0.03em] text-white leading-tight">
+                  {tx("Activa transmitir pulso", "Enable heart rate broadcast")}
                 </span>
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-white">
-                  {tx("ACTIVA TRANSMITIR PULSO", "ENABLE HEART RATE BROADCAST")}
-                </span>
-                <span className="text-[11.5px] font-normal text-white leading-snug">
+                <span className="text-[14px] font-normal text-white leading-snug">
                   {tx(
                     "En los ajustes de tu pulsera deportiva o banda, activa la opción de transmitir frecuencia cardíaca por Bluetooth.",
                     "In your fitness band or strap settings, turn on Bluetooth heart rate broadcasting."
@@ -341,20 +340,19 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               </div>
             </div>
 
-            <div className="h-[1px] bg-white/[0.06]" />
+            <div className="h-[1px] bg-white/[0.09]" />
 
-            <div className="flex items-start gap-3">
-              <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                <span className="w-[3px] h-[26px] rounded-full bg-[#FFE500]" />
-                <span className="font-sans text-[15px] font-black text-white tabular-nums">
-                  02
+            <div className="flex items-center gap-3">
+              <span className="w-[3.5px] h-[40px] rounded-full bg-[#FFE500] shrink-0" />
+              <span className="font-sans text-[20px] font-extrabold text-[#FFE500] tabular-nums shrink-0">
+                02
+              </span>
+              <span className="w-[1px] h-[34px] bg-white/[0.10] shrink-0" />
+              <div className="flex flex-col gap-1 min-w-0">
+                <span className="text-[14.5px] font-bold uppercase tracking-[0.03em] text-white leading-tight">
+                  {tx("Vincula en un toque", "Pair in one tap")}
                 </span>
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-white">
-                  {tx("VINCULA EN UN TOQUE", "PAIR IN ONE TAP")}
-                </span>
-                <span className="text-[11.5px] font-normal text-white leading-snug">
+                <span className="text-[14px] font-normal text-white leading-snug">
                   {tx(
                     "Elige tu sensor abajo. Se conectará automáticamente en tus próximas sesiones sin aplicaciones adicionales.",
                     "Select your sensor below. It will auto-connect in future sessions with no extra apps."
@@ -369,7 +367,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
         {errorBannerMessage && (
           <div
             role="alert"
-            className="bg-[#141106] border border-[#FFE500]/45 rounded-2xl px-3 py-2.5 text-[11.5px] font-semibold text-white leading-snug"
+            className="bg-[#151205] border border-[#FFE500]/65 rounded-2xl px-4 py-3 text-[14px] font-medium text-white leading-snug"
           >
             {errorBannerMessage}
           </div>
@@ -377,12 +375,12 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
         {/* Native Android Discovered Sensors List */}
         {status.transport === "native_android" && !isConnected && (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-0.5">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white">
+              <span className="text-[13px] font-bold uppercase tracking-[0.06em] text-white">
                 {tx("SENSORES DETECTADOS", "DETECTED SENSORS")}
               </span>
-              <span className="text-[10px] font-bold text-[#00BFFF] tabular-nums">
+              <span className="text-[13px] font-bold text-[#00BFFF] tabular-nums">
                 {isScanning
                   ? t("bleHrScanning")
                   : `${status.discoveredDevices.length} ${tx("disp.", "dev.")}`}
@@ -390,7 +388,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
             </div>
 
             {status.discoveredDevices.length === 0 ? (
-              <div className="bg-[#090C12] border border-white/[0.08] rounded-xl px-3 py-3 text-center text-[11.5px] text-white">
+              <div className="bg-[#090C12] border border-white/[0.12] rounded-2xl px-3.5 py-3.5 text-center text-[14px] font-normal text-white leading-snug">
                 {isScanning
                   ? tx(
                       "Buscando pulseras y bandas cercanas...",
@@ -402,29 +400,29 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                     )}
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5 max-h-[176px] overflow-y-auto pr-0.5">
+              <div className="flex flex-col gap-2 max-h-[196px] overflow-y-auto pr-0.5">
                 {status.discoveredDevices.map((dev) => {
                   const isThisConnecting = isConnecting && status.deviceId === dev.id;
                   return (
                     <div
                       key={dev.id}
-                      className="bg-[#0B0E15] border border-white/[0.10] rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                      className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-2.5"
                     >
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[12.5px] font-extrabold text-white truncate">
+                        <span className="text-[15.5px] font-bold text-white truncate">
                           {dev.name}
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {dev.hasHrService ? (
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#00C853]">
+                            <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00C853]">
                               {tx("● PULSO ACTIVO", "● HR READY")}
                             </span>
                           ) : dev.isBondedOrConnected ? (
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#00BFFF]">
+                            <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
                               {tx("EMPAREJADO EN TELÉFONO", "PAIRED ON PHONE")}
                             </span>
                           ) : (
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-white">
+                            <span className="text-[11.5px] font-bold uppercase tracking-wider text-white">
                               BLUETOOTH LE
                             </span>
                           )}
@@ -435,7 +433,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                         type="button"
                         disabled={isThisConnecting}
                         onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
-                        className="min-h-[34px] px-3 rounded-lg bg-[#00BFFF] hover:brightness-105 text-black font-black text-[11px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
+                        className="min-h-[40px] px-3.5 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[13px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
                       >
                         {isThisConnecting ? tx("Conectando...", "Connecting...") : t("bleHrConnect")}
                       </button>
@@ -448,20 +446,20 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center gap-2 pt-0.5">
+        <div className="flex items-center gap-2.5 pt-0.5">
           {isConnected ? (
             <>
               <button
                 type="button"
                 onClick={() => disconnectBleHeartRateDevice(true)}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#180709] border border-[#FF1E1E]/60 text-white font-extrabold text-[12px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+                className="flex-1 min-h-[52px] rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[14.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
               >
                 {t("bleHrDisconnect")}
               </button>
               <button
                 type="button"
                 onClick={handleCloseClick}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-black text-[12.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+                className="flex-1 min-h-[52px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[15px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
               >
                 {tx("Listo", "Done")}
               </button>
@@ -469,17 +467,17 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           ) : isOutdatedAndroidShell ? (
             <a
               href="https://archery101010-c0bb4.web.app/download-apk"
-              className="w-full min-h-[46px] rounded-xl bg-[#FFE500] hover:brightness-105 text-black font-black text-[13px] uppercase tracking-[0.08em] flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
+              className="w-full min-h-[54px] rounded-2xl bg-[#FFE500] hover:brightness-105 text-black font-extrabold text-[15.5px] uppercase tracking-[0.05em] flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
             >
               {tx("Actualizar APK Android", "Update Android APK")}
             </a>
           ) : (
-            <div className="w-full flex items-center gap-2">
+            <div className="w-full flex items-center gap-2.5">
               {Boolean(status.deviceId) && (isReconnecting || isExplicitConnecting) && (
                 <button
                   type="button"
                   onClick={() => disconnectBleHeartRateDevice(true)}
-                  className="min-h-[46px] px-3.5 rounded-xl bg-[#180709] border border-[#FF1E1E]/60 text-white font-extrabold text-[11.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-[0.99] transition"
+                  className="min-h-[54px] px-4 rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[13.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-[0.99] transition"
                 >
                   {tx("Olvidar", "Forget")}
                 </button>
@@ -488,7 +486,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                 type="button"
                 disabled={isExplicitConnecting}
                 onClick={() => startBleHeartRateScanOrRequest()}
-                className="flex-1 min-h-[46px] rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-black text-[13px] uppercase tracking-[0.08em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
+                className="flex-1 min-h-[54px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-extrabold text-[15.5px] uppercase tracking-[0.05em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
               >
                 {isScanning
                   ? t("bleHrScanning")
