@@ -110,6 +110,32 @@ textarea {
   font-family: 'Outfit', sans-serif;
 }
 
+/* --- Non-Spanish Multi-Script Font Stack, Symmetric Wrapping & RTL Shaping (Zero impact on lang="es") --- */
+html:not([lang="es"]) body,
+html:not([lang="es"]) dialog,
+html:not([lang="es"]) button,
+html:not([lang="es"]) input,
+html:not([lang="es"]) select,
+html:not([lang="es"]) textarea {
+  font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Hiragino Sans', 'Yu Gothic', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+html:not([lang="es"]) :is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+html:not([lang="es"]) p {
+  text-wrap: pretty;
+}
+
+html[dir="rtl"] *:not([translate="no"]):not(.notranslate):not([dir="ltr"]):not([dir="ltr"] *) {
+  letter-spacing: 0 !important;
+}
+
+html[dir="rtl"] :is(p, li, blockquote, .whitespace-pre-line) {
+  unicode-bidi: plaintext;
+}
+
 /* --- Outdoor Sunlight High-Contrast Solid White Text (OLED Mode) --- */
 html .text-gray-dim,
 html [class*="text-gray-dim"],

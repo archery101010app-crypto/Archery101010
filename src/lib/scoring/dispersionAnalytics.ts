@@ -55,8 +55,10 @@ export function getExactTargetDimensions(
   bowType: string = "Recurve",
   presetType?: string,
   format?: string,
-  targetType?: string
+  targetType?: string,
+  lang: string = "es"
 ): TargetDimensions {
+  const isEs = lang === "es";
   let resolvedPreset = presetType;
   if (!resolvedPreset) {
     if (bowType === "Compound") {
@@ -79,7 +81,7 @@ export function getExactTargetDimensions(
   if (resolvedPreset === "WA_300_COMPOUND") {
     return {
       presetKey: "WA_300_COMPOUND",
-      name: "Compuesto 18m WA 300",
+      name: isEs ? "Compuesto 18m WA 300" : "Compound 18m WA 300",
       nominalDiameterCm: 40,
       visibleDiameterCm: 20.0,
       visibleRadiusCm: 10.0,
@@ -87,7 +89,9 @@ export function getExactTargetDimensions(
       ringWidthCm: 2.0,
       tenRingDiameterCm: 2.0, // 10 reducido oficial WA (2 cm)
       xRingDiameterCm: 1.0,   // X reducida oficial (1 cm)
-      rulesRef: "World Archery Book 3, Art. 7.2.2.3 (Diana 40cm Compuesto, 10 reducido de 2cm)"
+      rulesRef: isEs
+        ? "World Archery Book 3, Art. 7.2.2.3 (Diana 40cm Compuesto, 10 reducido de 2cm)"
+        : "World Archery Book 3, Art. 7.2.2.3 (40cm Compound Face, 2cm Inner 10)"
     };
   }
 
@@ -102,7 +106,11 @@ export function getExactTargetDimensions(
     const isVegas = resolvedPreset === "VEGAS_300" || format === "Vegas 300";
     return {
       presetKey: isVegas ? "VEGAS_300" : "WA_RECURVE_18",
-      name: isVegas ? "Compuesto 18m Vegas 300" : `${bowType} 18m Indoor`,
+      name: isVegas
+        ? isEs
+          ? "Compuesto 18m Vegas 300"
+          : "Compound 18m Vegas 300"
+        : `${bowType} 18m Indoor`,
       nominalDiameterCm: 40,
       visibleDiameterCm: 20.0,
       visibleRadiusCm: 10.0,
@@ -110,7 +118,9 @@ export function getExactTargetDimensions(
       ringWidthCm: 2.0,
       tenRingDiameterCm: 4.0, // 10 completo de 4cm
       xRingDiameterCm: 2.0,   // X completa de 2cm
-      rulesRef: "World Archery Book 3, Art. 7.2.2.2 (Triple Spot 40cm, anillos 6-10, 10 de 4cm)"
+      rulesRef: isEs
+        ? "World Archery Book 3, Art. 7.2.2.2 (Triple Spot 40cm, anillos 6-10, 10 de 4cm)"
+        : "World Archery Book 3, Art. 7.2.2.2 (40cm Triple Spot, rings 6-10, 4cm 10-ring)"
     };
   }
 
@@ -123,7 +133,7 @@ export function getExactTargetDimensions(
   ) {
     return {
       presetKey: "WA_COMPOUND_50",
-      name: "Compuesto 50m (80cm Reducida)",
+      name: isEs ? "Compuesto 50m (80cm Reducida)" : "Compound 50m (80cm 6-Ring)",
       nominalDiameterCm: 80,
       visibleDiameterCm: 48.0, // Anillo 5 exterior: 6 zonas * 8cm diámetro = 48cm visible
       visibleRadiusCm: 24.0,   // Radio exterior visible = 24.0 cm
@@ -131,7 +141,9 @@ export function getExactTargetDimensions(
       ringWidthCm: 4.0,
       tenRingDiameterCm: 8.0,  // Anillo del 10: 8 cm de diámetro
       xRingDiameterCm: 4.0,    // Anillo X: 4 cm de diámetro
-      rulesRef: "World Archery Book 3, Art. 7.2.2.1 (Diana 80cm reducida 6 zonas, anillos 5-10)"
+      rulesRef: isEs
+        ? "World Archery Book 3, Art. 7.2.2.1 (Diana 80cm reducida 6 zonas, anillos 5-10)"
+        : "World Archery Book 3, Art. 7.2.2.1 (80cm 6-zone face, rings 5-10)"
     };
   }
 
@@ -139,7 +151,7 @@ export function getExactTargetDimensions(
   if (distanceM <= 40 && bowType !== "Compound") {
     return {
       presetKey: "WA_80_FULL",
-      name: `${bowType} ${distanceM}m (80cm Completa)`,
+      name: isEs ? `${bowType} ${distanceM}m (80cm Completa)` : `${bowType} ${distanceM}m (80cm Full Face)`,
       nominalDiameterCm: 80,
       visibleDiameterCm: 80.0,
       visibleRadiusCm: 40.0,
@@ -147,7 +159,9 @@ export function getExactTargetDimensions(
       ringWidthCm: 4.0,
       tenRingDiameterCm: 8.0,
       xRingDiameterCm: 4.0,
-      rulesRef: "World Archery Book 3, Art. 7.2.1.2 (Diana completa 80cm de 10 zonas)"
+      rulesRef: isEs
+        ? "World Archery Book 3, Art. 7.2.1.2 (Diana completa 80cm de 10 zonas)"
+        : "World Archery Book 3, Art. 7.2.1.2 (80cm 10-zone full target face)"
     };
   }
 
@@ -155,7 +169,7 @@ export function getExactTargetDimensions(
   // World Archery Libro 3, Art. 7.2.1.1
   return {
     presetKey: "WA_10_122",
-    name: `${bowType} ${distanceM}m (122cm Completa)`,
+    name: isEs ? `${bowType} ${distanceM}m (122cm Completa)` : `${bowType} ${distanceM}m (122cm Full Face)`,
     nominalDiameterCm: 122,
     visibleDiameterCm: 122.0,
     visibleRadiusCm: 61.0,
@@ -163,7 +177,9 @@ export function getExactTargetDimensions(
     ringWidthCm: 6.1,
     tenRingDiameterCm: 12.2, // Anillo del 10: 12.2 cm de diámetro
     xRingDiameterCm: 6.1,    // Anillo X: 6.1 cm de diámetro (exactamente la mitad del 10)
-    rulesRef: "World Archery Book 3, Art. 7.2.1.1 (Diana completa 122cm de 10 zonas)"
+    rulesRef: isEs
+      ? "World Archery Book 3, Art. 7.2.1.1 (Diana completa 122cm de 10 zonas)"
+      : "World Archery Book 3, Art. 7.2.1.1 (122cm 10-zone full target face)"
   };
 }
 
@@ -199,10 +215,12 @@ export function calculateDispersionAnalysis(
   bowType: string = "Recurve",
   presetType?: string,
   format?: string,
-  targetType?: string
+  targetType?: string,
+  lang: string = "es"
 ): DispersionAnalysis | null {
   if (!impacts || impacts.length === 0) return null;
 
+  const isEs = lang === "es";
   const count = impacts.length;
   const sumX = impacts.reduce((acc, imp) => acc + imp.x, 0);
   const sumY = impacts.reduce((acc, imp) => acc + imp.y, 0);
@@ -210,7 +228,7 @@ export function calculateDispersionAnalysis(
   const centroidY = sumY / count;
 
   // Obtener dimensiones reales exactas de la diana según World Archery
-  const dims = getExactTargetDimensions(distanceM, bowType, presetType, format, targetType);
+  const dims = getExactTargetDimensions(distanceM, bowType, presetType, format, targetType, lang);
   const cmPerUnit = dims.cmPerUnit;
 
   // Delta en porcentaje SVG (el centro está en 50, 50)
@@ -232,7 +250,7 @@ export function calculateDispersionAnalysis(
   let clockHour = Math.round((450 - angleDeg) / 30) % 12;
   if (clockHour === 0) clockHour = 12;
 
-  let clockDirection = "Centro";
+  let clockDirection = isEs ? "Centro" : "Center";
   // Si el grupo se aleja más de un cuarto del radio del 10, indicar reloj
   if (distanceFromCenterCm > dims.tenRingDiameterCm * 0.15) {
     clockDirection = `${clockHour}:00`;
@@ -280,17 +298,17 @@ export function calculateDispersionAnalysis(
   else if (deltaYCm < -toleranceCm) verticalDirection = "ABAJO";
 
   // Calidad del grupo según el tamaño real de los anillos de la diana
-  let groupQuality = "Excelente / Muy Compacto";
+  let groupQuality = isEs ? "Excelente / Muy Compacto" : "Tight";
   if (spreadCm <= dims.tenRingDiameterCm) {
-    groupQuality = "Grupo Élite (En el 10)";
+    groupQuality = isEs ? "Grupo Élite (En el 10)" : "Elite (10-Ring)";
   } else if (spreadCm <= dims.ringWidthCm * 2) {
-    groupQuality = "Excelente / Muy Cerrado";
+    groupQuality = isEs ? "Excelente / Muy Cerrado" : "Tight";
   } else if (spreadCm <= dims.ringWidthCm * 3.5) {
-    groupQuality = "Bueno / Agrupado";
+    groupQuality = isEs ? "Bueno / Agrupado" : "Good";
   } else if (spreadCm <= dims.ringWidthCm * 5) {
-    groupQuality = "Dispersión Moderada";
+    groupQuality = isEs ? "Dispersión Moderada" : "Moderate";
   } else {
-    groupQuality = "Disperso";
+    groupQuality = isEs ? "Disperso" : "Wide";
   }
 
   // Recomendación de mira: Solo direcciones (ej. "Mover arriba y a la izquierda", NUNCA clics)
@@ -298,19 +316,35 @@ export function calculateDispersionAnalysis(
   const hasVertical = verticalDirection !== "CENTRADO";
   const hasHorizontal = horizontalDirection !== "CENTRADO";
 
-  if (hasVertical && hasHorizontal) {
-    const vText = verticalDirection === "ARRIBA" ? "arriba" : "abajo";
-    const hText = horizontalDirection === "DERECHA" ? "a la derecha" : "a la izquierda";
-    directionRecommendation = `Mover ${vText} y ${hText}`;
-  } else if (hasVertical) {
-    directionRecommendation = verticalDirection === "ARRIBA" ? "Mover hacia arriba" : "Mover hacia abajo";
-  } else if (hasHorizontal) {
-    directionRecommendation = horizontalDirection === "DERECHA" ? "Mover a la derecha" : "Mover a la izquierda";
+  if (isEs) {
+    if (hasVertical && hasHorizontal) {
+      const vText = verticalDirection === "ARRIBA" ? "arriba" : "abajo";
+      const hText = horizontalDirection === "DERECHA" ? "a la derecha" : "a la izquierda";
+      directionRecommendation = `Mover ${vText} y ${hText}`;
+    } else if (hasVertical) {
+      directionRecommendation = verticalDirection === "ARRIBA" ? "Mover hacia arriba" : "Mover hacia abajo";
+    } else if (hasHorizontal) {
+      directionRecommendation = horizontalDirection === "DERECHA" ? "Mover a la derecha" : "Mover a la izquierda";
+    }
+  } else {
+    if (hasVertical && hasHorizontal) {
+      const vText = verticalDirection === "ARRIBA" ? "up" : "down";
+      const hText = horizontalDirection === "DERECHA" ? "right" : "left";
+      directionRecommendation = `Move ${vText} and ${hText}`;
+    } else if (hasVertical) {
+      directionRecommendation = verticalDirection === "ARRIBA" ? "Move up" : "Move down";
+    } else if (hasHorizontal) {
+      directionRecommendation = horizontalDirection === "DERECHA" ? "Move right" : "Move left";
+    }
   }
 
-  const adviceText = directionRecommendation 
-    ? `Recomendación: ${directionRecommendation} (Regla: sigue el impacto).` 
-    : "¡Excelente centrado! Tu grupo está calibrado en el 10.";
+  const adviceText = isEs
+    ? directionRecommendation
+      ? `Recomendación: ${directionRecommendation} (Regla: sigue el impacto).`
+      : "¡Excelente centrado! Tu grupo está calibrado en el 10."
+    : directionRecommendation
+    ? `Sight advice: ${directionRecommendation} (chase the arrow).`
+    : "Dead center! Your group is dialed into the 10-ring.";
 
   return {
     count,
@@ -381,7 +415,8 @@ export function calculateDispersionStats(
   distanceM: number = 70,
   bowType: string = "Recurve",
   format?: string,
-  targetType?: string
+  targetType?: string,
+  lang: string = "es"
 ) {
   if (!impacts || impacts.length === 0) return null;
   const normalized: ShotImpactData[] = impacts.map((imp, idx) => ({
@@ -391,7 +426,7 @@ export function calculateDispersionStats(
     y: imp.y,
     value: imp.value ?? "10"
   }));
-  const analysis = calculateDispersionAnalysis(normalized, distanceM, bowType, undefined, format, targetType);
+  const analysis = calculateDispersionAnalysis(normalized, distanceM, bowType, undefined, format, targetType, lang);
   if (!analysis) return null;
   const hullPolygon = getConvexHull(impacts.map((p) => ({ x: p.x, y: p.y })));
   return {

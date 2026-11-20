@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   AnalysisMarkedImpact,
   AnalysisShotRecord,
@@ -79,6 +80,7 @@ export default function AnalysisDianaSvg({
   onMarkImpact,
   compactWatchMode = false
 }: AnalysisDianaSvgProps) {
+  const { tx } = useLanguage();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const lastReplayTriggerRef = useRef<number>(replayTrigger);
   const doneTimeoutRef = useRef<number | null>(null);
@@ -206,7 +208,7 @@ export default function AnalysisDianaSvg({
       viewBox="0 0 240 240"
       onPointerDown={handleSvgPointerDown}
       role="img"
-      aria-label="Diana de análisis biomecánico"
+      aria-label={tx("Diana de análisis biomecánico", "Biomechanical analysis target")}
       className={`select-none max-w-full h-auto ${
         markMode ? "cursor-crosshair ring-2 ring-[#FFE500]/70 rounded-full" : ""
       }`}

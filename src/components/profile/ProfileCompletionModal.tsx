@@ -58,6 +58,7 @@ export default function ProfileCompletionModal({
   onReturnToLogin
 }: ProfileCompletionModalProps) {
   const { language, unitSystem, setUnitSystem, t, tx } = useLanguage();
+  const isEs = language === "es";
   const baseId = useId();
 
   const initialCountry = user.country || "CR";
@@ -371,7 +372,7 @@ export default function ProfileCompletionModal({
           <button
             type="button"
             onClick={handleExit}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
+            className="absolute top-4 end-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
             title={tx("Cerrar y volver a inicio", "Close and return to sign in")}
             aria-label={tx("Cerrar", "Close")}
           >
@@ -379,7 +380,7 @@ export default function ProfileCompletionModal({
           </button>
         )}
 
-        <div className="flex items-center gap-3 mb-1 pr-8">
+        <div className="flex items-center gap-3 mb-1 pe-8">
           <div className="w-10 h-10 rounded-xl bg-cyan-neon/10 flex items-center justify-center text-cyan-neon border border-cyan-neon/20 shrink-0">
             <User size={20} />
           </div>
@@ -416,9 +417,9 @@ export default function ProfileCompletionModal({
         )}
 
         <form onSubmit={handleSave} aria-labelledby={`${baseId}-heading`} className="flex flex-col gap-3 mt-1">
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${baseId}-fullname`} className="text-[11px] text-white uppercase font-bold tracking-wider">
+          <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+              <label htmlFor={`${baseId}-fullname`} className={`text-[11px] text-white uppercase font-bold tracking-wider${!isEs ? " truncate" : ""}`}>
                 {t("fullName")} *
               </label>
               <input
@@ -436,7 +437,7 @@ export default function ProfileCompletionModal({
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white text-xs px-3 py-2.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
               <label htmlFor={`${baseId}-nickname`} className="text-[11px] text-white uppercase font-bold tracking-wider truncate">
                 {t("nickname")}
               </label>
@@ -456,9 +457,9 @@ export default function ProfileCompletionModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
             <div className="flex flex-col gap-1 min-w-0">
-              <label htmlFor={`${baseId}-birthdate`} className="text-[11px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-birthdate`} className={`text-[11px] text-white uppercase font-bold tracking-wider${!isEs ? " truncate" : ""}`}>
                 {t("birthDate")} *
               </label>
               <input
@@ -480,7 +481,7 @@ export default function ProfileCompletionModal({
               />
             </div>
             <div className="flex flex-col gap-1 min-w-0">
-              <label htmlFor={`${baseId}-city`} className="text-[11px] text-white uppercase font-bold tracking-wider">
+              <label htmlFor={`${baseId}-city`} className={`text-[11px] text-white uppercase font-bold tracking-wider${!isEs ? " truncate" : ""}`}>
                 {t("city")} *
               </label>
               <input
@@ -500,9 +501,9 @@ export default function ProfileCompletionModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${baseId}-country`} className="text-[11px] text-white uppercase font-bold tracking-wider">
+          <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+              <label htmlFor={`${baseId}-country`} className={`text-[11px] text-white uppercase font-bold tracking-wider${!isEs ? " truncate" : ""}`}>
                 {t("country")} *
               </label>
               <select
@@ -521,8 +522,8 @@ export default function ProfileCompletionModal({
               </select>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${baseId}-gender`} className="text-[11px] text-white uppercase font-bold tracking-wider">
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+              <label htmlFor={`${baseId}-gender`} className={`text-[11px] text-white uppercase font-bold tracking-wider${!isEs ? " truncate" : ""}`}>
                 {t("gender")} *
               </label>
               <select
@@ -539,8 +540,8 @@ export default function ProfileCompletionModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1">
+          <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
               <label htmlFor={`${baseId}-phone`} className="text-[11px] text-white uppercase font-bold tracking-wider truncate">
                 {t("phoneMessagingLabel")}
               </label>
@@ -549,13 +550,14 @@ export default function ProfileCompletionModal({
                 name="phoneMessaging"
                 type="tel"
                 inputMode="tel"
+                dir="ltr"
                 value={phoneMessaging}
                 onChange={(e) => setPhoneMessaging(e.target.value)}
                 placeholder={`${COUNTRIES_MAP[country]?.dialCode || "+506"} 88888888`}
                 className="w-full bg-[#0D0F12] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3 py-2.5 rounded-xl outline-none tabular-nums transition-all duration-200 caret-cyan-neon"
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
               <label htmlFor={`${baseId}-club`} className="text-[11px] text-white uppercase font-bold tracking-wider truncate">
                 {tx("Club (Opcional)", "Club (Optional)")}
               </label>
@@ -676,8 +678,8 @@ export default function ProfileCompletionModal({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
+              <div className={`grid grid-cols-2 gap-2${!isEs ? " items-end" : ""}`}>
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
                   <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
                     {t("height")}
                   </label>
@@ -690,7 +692,7 @@ export default function ProfileCompletionModal({
                     className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
                   <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
                     {t("weight")}
                   </label>
@@ -760,8 +762,8 @@ export default function ProfileCompletionModal({
             </div>
 
             {/* Poundage & Draw Length */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1">
+            <div className={`grid grid-cols-2 gap-2${!isEs ? " items-end" : ""}`}>
+              <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
                 <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
                   {t("poundage")}
                 </label>
@@ -774,7 +776,7 @@ export default function ProfileCompletionModal({
                   className="w-full bg-[#090B0F] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-2.5 py-2 rounded-lg outline-none tabular-nums transition"
                 />
               </div>
-              <div className="flex flex-col gap-1">
+              <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
                 <label className="text-[10.5px] text-white uppercase font-bold tracking-wider truncate">
                   {tx("Apertura (in)", "Draw length (in)")}
                 </label>
@@ -804,9 +806,11 @@ export default function ProfileCompletionModal({
             <button
               type="button"
               onClick={onReturnToLogin}
-              className="w-full py-2.5 text-xs text-white hover:text-yellow-gold font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer border border-white/5 hover:border-yellow-gold/30 rounded-xl"
+              className={`w-full py-2.5${
+                !isEs ? " px-3 text-center" : ""
+              } text-xs text-white hover:text-yellow-gold font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer border border-white/5 hover:border-yellow-gold/30 rounded-xl`}
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={14} className="rtl:rotate-180 shrink-0" />
               <span>
                 {tx(
                   "Volver a inicio de sesión (Usuario y contraseña)",

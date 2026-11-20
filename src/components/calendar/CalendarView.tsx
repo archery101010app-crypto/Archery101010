@@ -75,6 +75,7 @@ interface CalendarViewProps {
 
 export default function CalendarView({ user, onBack, onNavigate, coachViewMode = false }: CalendarViewProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const hasCoachRole =
     user.role === "coach" ||
     user.role === "team_admin_coach" ||
@@ -151,15 +152,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     const recipientText = isCoach
       ? assignedIds.length > 0 && macrocycle.assignmentType !== "club"
         ? assignedIds.map((id) => roster.find((r) => r.uid === id)?.fullName || id).join(", ")
-        : "Todos los alumnos del Club"
-      : "Mi Calendario Personal";
+        : tx("Todos los alumnos del Club", "All Club Athletes")
+      : tx("Mi Calendario Personal", "My Personal Calendar");
 
     await showOledAlert(
-      `¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
-      `• Destinatario(s): ${recipientText}\n` +
-      `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-      `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-      `Toca cualquier fecha en el calendario para ver el detalle exacto de cada día.`
+      tx(
+        `¡Plan "${macrocycle.name}" Vinculado con Éxito al Calendario!\n\n` +
+          `• Destinatario(s): ${recipientText}\n` +
+          `• Días programados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+          `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+          `Toca cualquier fecha en el calendario para ver el detalle exacto de cada día.`,
+        `Plan "${macrocycle.name}" Linked to Calendar!\n\n` +
+          `• Recipient(s): ${recipientText}\n` +
+          `• Scheduled days: ${summary.syncedDaysCount} (${summary.trainingDaysCount} training, ${summary.restDaysCount} rest)\n` +
+          `• Total assigned arrows: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+          `Tap any date on the calendar to inspect each day's exact schedule.`
+      )
     );
   };
 
@@ -203,12 +211,23 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
       await showOledAlert(
         targetAthlete 
-          ? `Se ha desvinculado al alumno del plan "${planName}" y se retiraron sus tareas del calendario.`
-          : `El plan "${planName}" ha sido desvinculado y se eliminaron ${res.deletedEventsCount} eventos del calendario.`
+          ? tx(
+              `Se ha desvinculado al alumno del plan "${planName}" y se retiraron sus tareas del calendario.`,
+              `The athlete has been unlinked from plan "${planName}" and their tasks were removed from the calendar.`
+            )
+          : tx(
+              `El plan "${planName}" ha sido desvinculado y se eliminaron ${res.deletedEventsCount} eventos del calendario.`,
+              `Plan "${planName}" has been unlinked and ${res.deletedEventsCount} events were removed from the calendar.`
+            )
       );
     } catch (e) {
       console.error("Error unlinking plan:", e);
-      await showOledAlert("No se pudo desvincular el plan. Intenta de nuevo.");
+      await showOledAlert(
+        tx(
+          "No se pudo desvincular el plan. Intenta de nuevo.",
+          "Could not unlink the plan. Please try again."
+        )
+      );
     } finally {
       setIsUnlinking(false);
     }
@@ -587,14 +606,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   }
 
   const daysOfWeek =
-    language === "es"
+    isEs
       ? ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"]
       : language === "en"
       ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
       : Array.from({ length: 7 }, (_, i) => {
           try {
-            return new Intl.DateTimeFormat(activeLocale, { weekday: "short" })
-              .format(new Date(2026, 10, 1 + i, 12, 0, 0))
+            const d = new Date(2026, 10, 1 + i, 12, 0, 0);
+            if (/^(ar|iw|he|ko|ja|zh)/i.test(language)) {
+              return d.toLocaleDateString(activeLocale, { weekday: "narrow" }).replace(/\.$/, "");
+            }
+            return d
+              .toLocaleDateString(activeLocale, { weekday: "short" })
               .replace(/\.$/, "")
               .slice(0, 3);
           } catch {
@@ -676,7 +699,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
   const handleSyncCycleToMonth = async () => {
     const macro = macrocycles.find((m) => m.id === syncMacroId) || macrocycles[0];
     if (!macro) {
-      await showOledAlert("No hay ningún ciclo disponible para sincronizar.");
+      await showOledAlert(
+        tx(
+          "No hay ningún ciclo disponible para sincronizar.",
+          "No training cycle available to sync."
+        )
+      );
       return;
     }
 
@@ -690,16 +718,29 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       setShowSyncModal(false);
 
       await showOledAlert(
-        `¡Calendario Sincronizado con Éxito!\n\n` +
-        `• Plan: ${summary.macrocycleName}\n` +
-        `• Mes: ${summary.monthName} ${summary.year}\n` +
-        `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
-        `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
-        `Tus arqueros ahora pueden entrar a cada día y ver exactamente lo que les asignaste.`
+        tx(
+          `¡Calendario Sincronizado con Éxito!\n\n` +
+            `• Plan: ${summary.macrocycleName}\n` +
+            `• Mes: ${summary.monthName} ${summary.year}\n` +
+            `• Días planificados: ${summary.syncedDaysCount} (${summary.trainingDaysCount} entrenamientos, ${summary.restDaysCount} descansos)\n` +
+            `• Flechas totales asignadas: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+            `Tus arqueros ahora pueden entrar a cada día y ver exactamente lo que les asignaste.`,
+          `Calendar Synced Successfully!\n\n` +
+            `• Plan: ${summary.macrocycleName}\n` +
+            `• Month: ${summary.monthName} ${summary.year}\n` +
+            `• Planned days: ${summary.syncedDaysCount} (${summary.trainingDaysCount} training, ${summary.restDaysCount} rest)\n` +
+            `• Total assigned arrows: ${summary.totalArrowsAssigned.toLocaleString()}\n\n` +
+            `Your archers can now open each day and view their exact assignments.`
+        )
       );
     } catch (err) {
       console.error("Error syncing cycle:", err);
-      await showOledAlert("Hubo un error al sincronizar el ciclo con el calendario.");
+      await showOledAlert(
+        tx(
+          "Hubo un error al sincronizar el ciclo con el calendario.",
+          "An error occurred while syncing the cycle to the calendar."
+        )
+      );
     } finally {
       setIsSyncing(false);
     }
@@ -856,12 +897,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       .filter(Boolean);
 
     if (cleanItems.length === 0 && assignTargetArrows <= 0) {
-      await showOledAlert("Escribe al menos una actividad para este día.");
+      await showOledAlert(
+        tx(
+          "Escribe al menos una actividad para este día.",
+          "Enter at least one activity for this day."
+        )
+      );
       return;
     }
 
     if (isCoach && assignRecipientMode === "selected" && assignSelectedAthletes.length === 0) {
-      await showOledAlert("Marca al menos un alumno o selecciona 'Todos los Alumnos'.");
+      await showOledAlert(
+        tx(
+          "Marca al menos un alumno o selecciona 'Todos los Alumnos'.",
+          "Select at least one athlete or choose 'All Athletes'."
+        )
+      );
       return;
     }
 
@@ -897,7 +948,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       ? assignSelectedAthletes
       : [];
 
-    const mainTitle = cleanItems[0] || (assignTargetArrows > 0 ? `${assignTargetArrows} flechas` : "Entrenamiento");
+    const mainTitle =
+      cleanItems[0] ||
+      (assignTargetArrows > 0
+        ? `${assignTargetArrows} ${tx("flechas", "arrows")}`
+        : tx("Entrenamiento", "Training"));
     const isRest =
       cleanItems.length === 1 &&
       /^(descanso|libre|rest|off|día libre|dia libre)$/i.test(cleanItems[0]) &&
@@ -1079,7 +1134,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               aria-label={language === "es" ? "Volver" : "Back"}
               className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
             >
-              <ArrowLeft size={16} aria-hidden="true" />
+              <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -1105,7 +1160,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             type="button"
             onClick={handleOpenImportModal}
             className="h-10 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-400 font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
-            title="Planificar todo el mes (Tabla Día 1 al 31 o pegar de hoja de cálculo)"
+            title={tx(
+              "Planificar todo el mes (Tabla Día 1 al 31 o pegar de hoja de cálculo)",
+              "Plan the entire month (Day 1–31 table or paste from spreadsheet)"
+            )}
           >
             <FileSpreadsheet size={14} className="shrink-0" aria-hidden="true" />
             <span>{language === "es" ? "Plan de Mes" : "Month Plan"}</span>
@@ -1120,7 +1178,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               )
             }
             className="h-10 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon font-black text-[11.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap"
-            title="Escribir agenda para un día"
+            title={tx("Escribir agenda para un día", "Write daily schedule")}
           >
             <Plus size={15} className="shrink-0" aria-hidden="true" />
             <span>{language === "es" ? "Nueva Agenda" : "New Agenda"}</span>
@@ -1137,9 +1195,15 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             aria-label={language === "es" ? "Mes anterior" : "Previous month"}
             className="w-9 h-9 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronLeft size={16} aria-hidden="true" />
+            <ChevronLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
           </button>
-          <span className="text-white font-extrabold text-[14.5px] sm:text-[16.5px] tracking-tight capitalize truncate px-0.5 tabular-nums">
+          <span
+            className={
+              isEs
+                ? "text-white font-extrabold text-[14.5px] sm:text-[16.5px] tracking-tight capitalize truncate px-0.5 tabular-nums"
+                : "min-w-0 text-white font-extrabold text-[14px] sm:text-[16px] tracking-tight capitalize truncate px-0.5 tabular-nums"
+            }
+          >
             {monthName}
           </span>
           <button
@@ -1148,7 +1212,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             aria-label={language === "es" ? "Mes siguiente" : "Next month"}
             className="w-9 h-9 rounded-lg text-cyan-neon hover:bg-white/5 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <ChevronRight size={16} aria-hidden="true" />
+            <ChevronRight size={16} aria-hidden="true" className="rtl:rotate-180" />
           </button>
         </div>
 
@@ -1321,7 +1385,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       ? "bg-cyan-neon/5 text-cyan-neon border-cyan-neon/15 shadow-sm cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                       : "text-white hover:bg-neutral-900/80 border-white/[0.06] cursor-pointer hover:border-cyan-neon/50 active:scale-95"
                   } ${isToday ? "border-cyan-neon bg-cyan-neon/15" : ""}`}
-                  title={cell.isCurrentMonth ? "Toca para ver la agenda de este día" : ""}
+                  title={cell.isCurrentMonth ? tx("Toca para ver la agenda de este día", "Tap to view this day's schedule") : ""}
                 >
                   {coachAssignment && !coachAssignment.isRestDay && (
                     <span 
@@ -1338,7 +1402,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   {coachAssignment ? (
                     <div className="flex flex-col items-center justify-center w-full px-0.5 gap-0.5 overflow-hidden">
                       {coachAssignment.title &&
-                        coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` && (
+                        coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} flechas` &&
+                        coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} arrows` && (
                           <span
                             style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
                             className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-none truncate max-w-full text-center"
@@ -1353,11 +1418,11 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
                           className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
                         >
-                          {coachAssignment.targetArrows} fl.
+                          {coachAssignment.targetArrows} {tx("fl.", "arr.")}
                         </span>
                       ) : coachAssignment.dailyItems && coachAssignment.dailyItems.length > 1 ? (
                         <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-none truncate max-w-full text-center tabular-nums">
-                          +{coachAssignment.dailyItems.length - 1} más
+                          +{coachAssignment.dailyItems.length - 1} {tx("más", "more")}
                         </span>
                       ) : null}
                     </div>
@@ -1380,7 +1445,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         />
                       ))}
                       {cell.hasSession && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-gold" title="Práctica Realizada" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-gold" title={tx("Práctica Realizada", "Completed Practice")} />
                       )}
                     </div>
                   )}
@@ -1396,8 +1461,12 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
             const currentMonthCells = cells.filter((c) => c.isCurrentMonth);
             const weekdayLabelsShort = Array.from({ length: 7 }, (_, i) => {
               try {
+                const d = new Date(2026, 10, 1 + i, 12, 0, 0);
+                if (!isEs && /^(ar|iw|he|ko|ja|zh)/i.test(language)) {
+                  return d.toLocaleDateString(activeLocale, { weekday: "narrow" }).replace(/\.$/, "");
+                }
                 return new Intl.DateTimeFormat(activeLocale, { weekday: "short" })
-                  .format(new Date(2026, 10, 1 + i, 12, 0, 0))
+                  .format(d)
                   .replace(/\.$/, "")
                   .toUpperCase();
               } catch {
@@ -1419,7 +1488,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               return (
                 <div className="py-8 px-4 text-center flex flex-col items-center gap-3">
                   <p className="text-xs text-white font-bold">
-                    No hay actividades programadas todavía en este mes.
+                    {tx(
+                      "No hay actividades programadas todavía en este mes.",
+                      "No activities scheduled for this month yet."
+                    )}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap justify-center">
                     <button
@@ -1427,14 +1499,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       onClick={handleOpenImportModal}
                       className="px-4 py-2 rounded-xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer"
                     >
-                      Planificar Mes (Día 1 al 31)
+                      {tx("Planificar Mes (Día 1 al 31)", "Plan Month (Day 1 to 31)")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setAgendaShowEmptyDays(true)}
                       className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs cursor-pointer"
                     >
-                      Ver los días del mes para escribir
+                      {tx("Ver los días del mes para escribir", "Show month days to write")}
                     </button>
                   </div>
                 </div>
@@ -1548,7 +1620,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                               key={idx}
                               type="button"
                               onClick={() => handleToggleAgendaItem(idx)}
-                              className={`w-full text-left px-3 py-2 rounded-xl border flex items-start gap-2 transition cursor-pointer ${
+                              className={`w-full text-start px-3 py-2 rounded-xl border flex items-start gap-2 transition cursor-pointer ${
                                 done
                                   ? "bg-emerald-500/10 border-emerald-500/35 text-white"
                                   : "bg-neutral-950 border-white/10 hover:border-cyan-neon/40 text-white"
@@ -1804,15 +1876,19 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={`text-[10.5px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getEventBadgeColor(ev.type)}`}>
-                          {ev.type === "competition" ? "Competencia" :
-                           ev.type === "training" ? "Entrenamiento" :
-                           ev.type === "meeting" ? "Reunión" : "Otro"}
+                          {ev.type === "competition"
+                            ? tx("Competencia", "Competition")
+                            : ev.type === "training"
+                            ? tx("Entrenamiento", "Training")
+                            : ev.type === "meeting"
+                            ? tx("Reunión", "Meeting")
+                            : tx("Otro", "Other")}
                         </span>
                         
                         {isCoachEvent && (
                           <span className="text-[10.5px] px-2 py-0.5 rounded-full border border-yellow-gold/25 text-yellow-gold bg-yellow-gold/5 uppercase tracking-wider font-extrabold flex items-center gap-1">
                             <Shield size={9} />
-                            <span>Asignado por Coach</span>
+                            <span>{tx("Asignado por Coach", "Assigned by Coach")}</span>
                           </span>
                         )}
 
@@ -1838,7 +1914,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           })}
                         </span>
                         {ev.createdByName && (
-                          <span>· Por {ev.createdByName}</span>
+                          <span>· {tx("Por", "By")} {ev.createdByName}</span>
                         )}
                       </div>
                     </div>
@@ -1862,18 +1938,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         <button
                           type="button"
                           onClick={() => handleOpenEdit(ev)}
-                          aria-label={`Editar ${ev.title}`}
+                          aria-label={tx(`Editar ${ev.title}`, `Edit ${ev.title}`)}
                           className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-neutral-950 text-white hover:bg-neutral-800 transition cursor-pointer"
-                          title="Editar"
+                          title={tx("Editar", "Edit")}
                         >
                           <Edit size={13} aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(ev.id)}
-                          aria-label={`Eliminar ${ev.title}`}
+                          aria-label={tx(`Eliminar ${ev.title}`, `Delete ${ev.title}`)}
                           className="w-9 h-9 flex items-center justify-center rounded-xl border border-white bg-white text-black hover:bg-neutral-200 transition cursor-pointer"
-                          title="Eliminar"
+                          title={tx("Eliminar", "Delete")}
                         >
                           <Trash2 size={13} aria-hidden="true" />
                         </button>
@@ -1881,7 +1957,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     ) : (
                       <span className="text-[10.5px] text-white flex items-center gap-1">
                         <Lock size={10} />
-                        <span>Solo lectura (Coach)</span>
+                        <span>{tx("Solo lectura (Coach)", "Read-only (Coach)")}</span>
                       </span>
                     )}
                   </div>
@@ -1926,13 +2002,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-5 w-full max-w-lg shadow-2xl z-10 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto overscroll-contain"
+                className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-5 w-full max-w-lg shadow-2xl z-10 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto overscroll-contain text-start"
               >
                 {/* Header */}
                 <div className="flex justify-between items-start gap-2 border-b border-white/5 pb-3">
                   <div className="min-w-0 flex-1">
                     <span className="text-[10.5px] text-cyan-neon font-black uppercase tracking-widest block">
-                      Agenda del Día
+                      {tx("Agenda del Día", "Daily Schedule")}
                     </span>
                     <h3 className="text-sm font-black text-white capitalize mt-0.5">
                       {formattedDayTitle}
@@ -1945,7 +2021,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                     <button
                       type="button"
                       onClick={() => setShowDayModal(false)}
-                      aria-label="Cerrar detalle del día"
+                      aria-label={tx("Cerrar detalle del día", "Close day details")}
                       className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                     >
                       <X size={16} aria-hidden="true" />
@@ -1958,7 +2034,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center gap-1.5">
                       <CalendarIcon size={12} className="text-cyan-neon shrink-0" />
-                      <span>Actividades de este Día</span>
+                      <span>{tx("Actividades de este Día", "Today's Activities")}</span>
                     </span>
                     <button
                       type="button"
@@ -1970,7 +2046,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       className="px-2.5 py-1 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/35 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition shrink-0 whitespace-nowrap"
                     >
                       {coachAssignment ? <Edit2 size={11} /> : <Plus size={12} />}
-                      <span>{coachAssignment ? "Editar Agenda" : "Escribir Agenda"}</span>
+                      <span>{coachAssignment ? tx("Editar Agenda", "Edit Schedule") : tx("Escribir Agenda", "Write Schedule")}</span>
                     </button>
                   </div>
 
@@ -1988,7 +2064,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[9.3px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-gold/15 text-yellow-gold border border-yellow-gold/30 flex items-center gap-1">
                               <Shield size={9} />
-                              <span>Por: {coachAssignment.createdByName || "Coach"}</span>
+                              <span>{tx("Por:", "By:")} {coachAssignment.createdByName || "Coach"}</span>
                             </span>
 
                             {coachAssignment.assignedAthleteIds && coachAssignment.assignedAthleteIds.length > 0 ? (
@@ -1996,14 +2072,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 <User size={9} />
                                 <span>
                                   {isCoach 
-                                    ? `Para: ${coachAssignment.assignedAthleteIds.map(id => roster.find(r => r.uid === id)?.fullName || (id === user.uid ? "Mí" : id)).join(", ")}`
-                                    : "Agenda Personal"}
+                                    ? `${tx("Para:", "For:")} ${coachAssignment.assignedAthleteIds.map(id => roster.find(r => r.uid === id)?.fullName || (id === user.uid ? tx("Mí", "Me") : id)).join(", ")}`
+                                    : tx("Agenda Personal", "Personal Schedule")}
                                 </span>
                               </span>
                             ) : (
                               <span className="text-[9.3px] font-black uppercase px-2 py-0.5 rounded-full bg-white/5 text-white border border-white/5 flex items-center gap-1">
                                 <Users size={9} />
-                                <span>Todo el Club</span>
+                                <span>{tx("Todo el Club", "All Club")}</span>
                               </span>
                             )}
 
@@ -2035,7 +2111,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-cyan-neon border border-cyan-neon/30 transition text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <Edit2 size={11} />
-                            <span>Editar</span>
+                            <span>{tx("Editar", "Edit")}</span>
                           </button>
                           {/* Botón para Borrar / Desvincular */}
                           <button
@@ -2049,10 +2125,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                               }
                             }}
                             className="p-1.5 rounded-xl bg-white hover:bg-neutral-200 text-black border border-white transition text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
-                            title="Borrar o Desvincular"
+                            title={tx("Borrar o Desvincular", "Delete or Unlink")}
                           >
                             <Trash2 size={11} />
-                            <span>Borrar</span>
+                            <span>{tx("Borrar", "Delete")}</span>
                           </button>
                         </div>
                       </div>
@@ -2146,10 +2222,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] text-cyan-neon uppercase font-black tracking-wider flex items-center gap-1.5">
                                 <CheckCircle2 size={13} className="text-cyan-neon shrink-0" />
-                                <span>Lo que corresponde este día (Día {dayNumber})</span>
+                                <span>{tx(`Lo que corresponde este día (Día ${dayNumber})`, `Scheduled tasks (Day ${dayNumber})`)}</span>
                               </span>
                               <span className="text-[10.5px] text-white font-bold tabular-nums bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
-                                {completedSet.size}/{rawList.length} {rawList.length === 1 ? "tarea" : "tareas"}
+                                {completedSet.size}/{rawList.length} {rawList.length === 1 ? tx("tarea", "task") : tx("tareas", "tasks")}
                               </span>
                             </div>
 
@@ -2161,7 +2237,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                     key={idx}
                                     type="button"
                                     onClick={() => handleToggleChecklistItem(idx)}
-                                    className={`w-full text-left px-3 py-2.5 rounded-2xl border flex items-start gap-2.5 transition cursor-pointer ${
+                                    className={`w-full text-start px-3 py-2.5 rounded-2xl border flex items-start gap-2.5 transition cursor-pointer ${
                                       isDone
                                         ? "bg-emerald-500/10 border-emerald-500/35 text-white"
                                         : "bg-neutral-950/90 border-white/[0.08] hover:border-cyan-neon/40 text-white"
@@ -2190,7 +2266,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[10px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5">
                                     <Users size={12} />
-                                    <span>Cumplimiento por Arquero</span>
+                                    <span>{tx("Cumplimiento por Arquero", "Completion by Archer")}</span>
                                   </span>
                                   <span className="text-[10px] text-white/75 font-bold tabular-nums">
                                     {
@@ -2200,7 +2276,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                           rawList.length
                                       ).length
                                     }
-                                    /{coachTrackingAthletes.length} al 100%
+                                    /{coachTrackingAthletes.length} {tx("al 100%", "at 100%")}
                                   </span>
                                 </div>
                                 <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
@@ -2235,10 +2311,10 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                             }`}
                                           >
                                             {isFullDone
-                                              ? "Completado"
+                                              ? tx("Completado", "Completed")
                                               : isPartial
-                                              ? "En curso"
-                                              : "Pendiente"}
+                                              ? tx("En curso", "In progress")
+                                              : tx("Pendiente", "Pending")}
                                           </span>
                                         </div>
                                       </div>
@@ -2257,17 +2333,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           <div className="flex justify-between items-center">
                             <span className="text-[11.6px] text-white uppercase font-bold flex items-center gap-1">
                               <Target size={12} className="text-cyan-neon" />
-                              <span>Flechas del Día</span>
+                              <span>{tx("Flechas del Día", "Daily Arrows")}</span>
                             </span>
                             <span className="text-xs font-black text-cyan-neon tabular-nums">
-                              {coachAssignment.targetArrows} flechas
+                              {coachAssignment.targetArrows} {tx("flechas", "arrows")}
                             </span>
                           </div>
 
                           {/* Progress bar comparing with arrows shot */}
                           <div className="flex flex-col gap-1">
                             <div className="flex justify-between text-[10.5px]">
-                              <span className="text-white">Progreso registrado hoy:</span>
+                              <span className="text-white">{tx("Progreso registrado hoy:", "Logged today:")}</span>
                               <span className="text-white font-extrabold tabular-nums">
                                 {arrowsShot} / {coachAssignment.targetArrows} (
                                 {Math.min(100, Math.round((arrowsShot / coachAssignment.targetArrows) * 100))}%)
@@ -2287,7 +2363,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           {arrowsShot >= coachAssignment.targetArrows && (
                             <div className="flex items-center gap-1 text-[10.5px] text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-xl border border-green-500/20">
                               <CheckCircle2 size={12} />
-                              <span>Meta de flechas completada</span>
+                              <span>{tx("Meta de flechas completada", "Arrow goal completed")}</span>
                             </div>
                           )}
                         </div>
@@ -2303,8 +2379,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           className="w-full mt-1 py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
                         >
                           <Target size={14} />
-                          <span>Iniciar Práctica de Hoy</span>
-                          <ArrowRight size={14} />
+                          <span>{tx("Iniciar Práctica de Hoy", "Start Today's Practice")}</span>
+                          <ArrowRight size={14} className="rtl:rotate-180" />
                         </button>
                       )}
                     </div>
@@ -2316,19 +2392,19 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                           className="text-xs font-black uppercase flex items-center gap-1.5"
                         >
                           <span style={{ backgroundColor: activePhaseInfo.phase.color }} className="w-2 h-2 rounded-full" />
-                          Fase Activa: {activePhaseInfo.phase.name}
+                          {tx("Fase Activa:", "Active Phase:")} {activePhaseInfo.phase.name}
                         </span>
-                        <span className="text-[10.5px] text-white">Plan: {activePhaseInfo.macroName}</span>
+                        <span className="text-[10.5px] text-white">{tx("Plan:", "Plan:")} {activePhaseInfo.macroName}</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-[11.6px] bg-neutral-950/50 p-2 rounded-xl border border-white/5">
                         <div>
-                          <span className="text-white block uppercase font-bold text-[9.3px]">Meta Semanal</span>
-                          <span className="text-white font-medium tabular-nums">{activePhaseInfo.phase.weeklySessionGoal} sesiones</span>
+                          <span className="text-white block uppercase font-bold text-[9.3px]">{tx("Meta Semanal", "Weekly Goal")}</span>
+                          <span className="text-white font-medium tabular-nums">{activePhaseInfo.phase.weeklySessionGoal} {tx("sesiones", "sessions")}</span>
                         </div>
                         <div>
-                          <span className="text-white block uppercase font-bold text-[9.3px]">Flechas Semanales</span>
-                          <span className="text-cyan-neon font-medium tabular-nums">{activePhaseInfo.phase.weeklyArrowGoal} flechas</span>
+                          <span className="text-white block uppercase font-bold text-[9.3px]">{tx("Flechas Semanales", "Weekly Arrows")}</span>
+                          <span className="text-cyan-neon font-medium tabular-nums">{activePhaseInfo.phase.weeklyArrowGoal} {tx("flechas", "arrows")}</span>
                         </div>
                       </div>
 
@@ -2341,18 +2417,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         className="mt-1 py-2 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Plus size={12} />
-                        <span>Escribir Agenda para este Día</span>
+                        <span>{tx("Escribir Agenda para este Día", "Write Schedule for this Day")}</span>
                       </button>
                     </div>
                   ) : (
                     <div className="bg-neutral-900/20 border border-white/5 rounded-2xl p-4 text-center flex flex-col items-center gap-2">
-                      <p className="text-xs text-white">No hay actividades programadas en esta fecha.</p>
+                      <p className="text-xs text-white">{tx("No hay actividades programadas en esta fecha.", "No activities scheduled for this date.")}</p>
                       <button
                         onClick={() => handleOpenCreateAssignment(selectedDay, null)}
-                        className="py-2 px-4 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                        className="py-2 px-4 rounded-xl bg-cyan-neon text-black font-black text-[11.6px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Plus size={13} />
-                        <span>Escribir Agenda para este Día</span>
+                        <span>{tx("Escribir Agenda para este Día", "Write Schedule for this Day")}</span>
                       </button>
                     </div>
                   )}
@@ -2361,13 +2437,13 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* 2. REGISTRO DE TIRO EN ESTA FECHA */}
                 <div className="flex flex-col gap-2 border-t border-white/5 pt-3">
                   <span className="text-[10.5px] text-white uppercase font-black tracking-widest flex items-center justify-between">
-                    <span>Sesiones Realizadas en esta Fecha</span>
-                    <span className="text-cyan-neon font-black">{arrowsShot} flechas totales</span>
+                    <span>{tx("Sesiones Realizadas en esta Fecha", "Sessions Logged on this Date")}</span>
+                    <span className="text-cyan-neon font-black">{arrowsShot} {tx("flechas totales", "total arrows")}</span>
                   </span>
 
                   {daySessions.length === 0 ? (
                     <p className="text-[12.8px] text-white py-2 text-center bg-neutral-950/30 rounded-2xl">
-                      No hay registros de tiro guardados en esta fecha.
+                      {tx("No hay registros de tiro guardados en esta fecha.", "No shooting sessions logged on this date.")}
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2">
@@ -2378,17 +2454,37 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         >
                           <div className="flex flex-col">
                             <span className="text-xs font-bold text-white">
-                              {ses.practiceType || "Práctica"} ({ses.bowType || "Arco"})
+                              {isEs
+                                ? `${ses.practiceType || "Práctica"} (${ses.bowType || "Arco"})`
+                                : `${
+                                    ses.practiceType === "Control"
+                                      ? t("practiceControl")
+                                      : ses.practiceType === "Volumen"
+                                      ? t("practiceVolume")
+                                      : ses.practiceType === "Análisis"
+                                      ? t("navAnalysis")
+                                      : ses.practiceType === "Práctica" || !ses.practiceType
+                                      ? t("practicePractice")
+                                      : ses.practiceType
+                                  } (${
+                                    ses.bowType === "Recurve"
+                                      ? t("bowRecurve")
+                                      : ses.bowType === "Compound"
+                                      ? t("bowCompound")
+                                      : ses.bowType === "Barebow"
+                                      ? t("bowBarebow")
+                                      : ses.bowType || t("bowRecurve")
+                                  })`}
                             </span>
                             <span className="text-[10.5px] text-white">
                               {ses.distance ? `${ses.distance}m · ` : ""}
-                              {ses.endsCount && ses.arrowsPerEnd ? `${ses.endsCount * ses.arrowsPerEnd} flechas` : ""}
+                              {ses.endsCount && ses.arrowsPerEnd ? `${ses.endsCount * ses.arrowsPerEnd} ${tx("flechas", "arrows")}` : ""}
                             </span>
                           </div>
 
-                          <div className="text-right">
+                          <div className="text-end">
                             <span className="text-sm font-black text-cyan-neon block">
-                              {ses.score ? `${ses.score} pts` : "Completada"}
+                              {ses.score ? `${ses.score} pts` : tx("Completada", "Completed")}
                             </span>
                           </div>
                         </div>
@@ -2401,7 +2497,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {dayEvents.filter(e => !e.macrocycleId && e.targetArrows === undefined).length > 0 && (
                   <div className="flex flex-col gap-2 border-t border-white/5 pt-3">
                     <span className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                      Otros Eventos Programados
+                      {tx("Otros Eventos Programados", "Other Scheduled Events")}
                     </span>
                     <div className="flex flex-col gap-1.5">
                       {dayEvents.filter(e => !e.macrocycleId && e.targetArrows === undefined).map(ev => (
@@ -2435,7 +2531,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left"
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-start"
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div className="flex items-center gap-2">
@@ -2444,17 +2540,17 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                      Sincronizar Calendario
+                      {tx("Sincronizar Calendario", "Sync Calendar")}
                     </h3>
                     <span className="text-[10.5px] text-white block">
-                      Mes: <strong className="text-white capitalize">{monthName}</strong>
+                      {tx("Mes:", "Month:")} <strong className="text-white capitalize">{monthName}</strong>
                     </span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSyncModal(false)}
-                  aria-label="Cerrar ventana de sincronización"
+                  aria-label={tx("Cerrar ventana de sincronización", "Close sync dialog")}
                   className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                 >
                   <X size={16} aria-hidden="true" />
@@ -2463,15 +2559,21 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
               <div className="flex flex-col gap-3 text-xs">
                 <p className="text-[12.8px] text-white leading-relaxed">
-                  Esta acción sincronizará el ciclo con el calendario de la app para todos los días de{" "}
-                  <strong className="text-cyan-neon capitalize">{monthName}</strong>. 
-                  Tus arqueros podrán entrar a cada día y ver sus metas de flechas, puntos técnicos y notas asignadas.
+                  {tx(
+                    "Esta acción sincronizará el ciclo con el calendario de la app para todos los días de",
+                    "This action will sync the cycle to the app calendar for every day of"
+                  )}{" "}
+                  <strong className="text-cyan-neon capitalize">{monthName}</strong>.{" "}
+                  {tx(
+                    "Tus arqueros podrán entrar a cada día y ver sus metas de flechas, puntos técnicos y notas asignadas.",
+                    "Your archers will be able to open each day and view their arrow goals, technical focus points, and assigned notes."
+                  )}
                 </p>
 
                 {/* Macrocycle Selector */}
                 <div className="flex flex-col gap-1 mt-1">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Seleccionar Plan / Ciclo
+                    {tx("Seleccionar Plan / Ciclo", "Select Plan / Cycle")}
                   </label>
                   <select
                     value={syncMacroId}
@@ -2480,7 +2582,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   >
                     {macrocycles.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name} ({m.startDate} al {m.endDate})
+                        {m.name} ({m.startDate} {tx("al", "to")} {m.endDate})
                       </option>
                     ))}
                   </select>
@@ -2493,7 +2595,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                   return (
                     <div className="bg-neutral-950/60 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 mt-1">
-                      <span className="text-[10.5px] text-white uppercase font-bold">Fases Configurada(s)</span>
+                      <span className="text-[10.5px] text-white uppercase font-bold">{tx("Fases Configurada(s)", "Configured Phase(s)")}</span>
                       <div className="flex flex-wrap gap-1.5">
                         {macro.phases?.map((p) => (
                           <span
@@ -2501,7 +2603,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             style={{ color: p.color, borderColor: `${p.color}30`, backgroundColor: `${p.color}15` }}
                             className="text-[10.5px] font-bold px-2 py-0.5 border rounded-full uppercase"
                           >
-                            {p.name} ({p.weeklyArrowGoal} flechas/sem)
+                            {p.name} ({p.weeklyArrowGoal} {tx("flechas/sem", "arrows/wk")})
                           </span>
                         ))}
                       </div>
@@ -2517,7 +2619,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   className="w-full mt-2 py-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40"
                 >
                   <RefreshCw size={14} />
-                  <span>{isSyncing ? "Sincronizando..." : "Sincronizar y Publicar en Calendario"}</span>
+                  <span>{isSyncing ? tx("Sincronizando...", "Syncing...") : tx("Sincronizar y Publicar en Calendario", "Sync & Publish to Calendar")}</span>
                 </button>
               </div>
             </motion.div>
@@ -2536,21 +2638,21 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-left max-h-[90dvh] overflow-y-auto overscroll-contain"
+              className="relative bg-[#0A0A0C] border border-white/10 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl z-10 flex flex-col gap-4 text-start max-h-[90dvh] overflow-y-auto overscroll-contain"
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                    {assignmentEventId ? "Editar Agenda del Día" : "Agenda del Día"}
+                    {assignmentEventId ? tx("Editar Agenda del Día", "Edit Daily Schedule") : tx("Agenda del Día", "Daily Schedule")}
                   </h3>
                   <span className="text-[11px] text-cyan-neon font-black block mt-0.5">
-                    Fecha: {assignDate}
+                    {tx("Fecha:", "Date:")} {assignDate}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAssignmentModal(false)}
-                  aria-label="Cerrar agenda del día"
+                  aria-label={tx("Cerrar agenda del día", "Close daily schedule")}
                   className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/10 transition cursor-pointer shrink-0"
                 >
                   <X size={16} aria-hidden="true" />
@@ -2562,7 +2664,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {isCoach && (
                   <div className="flex flex-col gap-2 bg-[#0D1017] border border-cyan-neon/25 rounded-2xl p-3">
                     <span className="text-[10.5px] text-cyan-neon uppercase font-black tracking-wider">
-                      ¿En el calendario de quién se guardará?
+                      {tx("¿En el calendario de quién se guardará?", "Whose calendar should this be saved to?")}
                     </span>
                     <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-xl border border-white/10">
                       <button
@@ -2574,7 +2676,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             : "text-white hover:bg-white/5"
                         }`}
                       >
-                        1 o Varios
+                        {tx("1 o Varios", "1 or Multiple")}
                       </button>
                       <button
                         type="button"
@@ -2585,7 +2687,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             : "text-white hover:bg-white/5"
                         }`}
                       >
-                        Todos
+                        {tx("Todos", "All")}
                       </button>
                       <button
                         type="button"
@@ -2596,7 +2698,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             : "text-white hover:bg-white/5"
                         }`}
                       >
-                        Solo Mí
+                        {tx("Solo Mí", "Only Me")}
                       </button>
                     </div>
 
@@ -2609,7 +2711,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                               key={ath.uid}
                               type="button"
                               onClick={() => toggleAssignAthlete(ath.uid)}
-                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-left text-xs font-bold transition cursor-pointer ${
+                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-start text-xs font-bold transition cursor-pointer ${
                                 checked
                                   ? "bg-cyan-neon/15 border-cyan-neon text-white"
                                   : "bg-neutral-950 border-white/10 text-white"
@@ -2617,7 +2719,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                             >
                               <span className="truncate">{ath.fullName}</span>
                               <span className="text-[10px] text-cyan-neon font-black">
-                                {checked ? "✓ Marcado" : "Marcar"}
+                                {checked ? tx("✓ Marcado", "✓ Selected") : tx("Marcar", "Select")}
                               </span>
                             </button>
                           );
@@ -2630,13 +2732,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* Cuadro único: 1 tarea por renglón */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Lo que corresponde este día (escribe 1 actividad por renglón)
+                    {tx("Lo que corresponde este día (escribe 1 actividad por renglón)", "Activities for this day (1 per line)")}
                   </label>
                   <textarea
                     rows={5}
                     value={assignLinesText}
                     onChange={(e) => setAssignLinesText(e.target.value)}
-                    placeholder="Escribe aquí las actividades del día (cada renglón será un punto de la lista)..."
+                    placeholder={tx(
+                      "Escribe aquí las actividades del día (cada renglón será un punto de la lista)...",
+                      "Enter today's activities here (each line becomes a checklist item)..."
+                    )}
                     className="bg-neutral-950 border border-white/15 rounded-2xl p-3 text-xs text-white outline-none focus:border-cyan-neon resize-y leading-relaxed placeholder:text-white/35"
                   />
                 </div>
@@ -2644,7 +2749,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* Meta de flechas opcional */}
                 <div className="flex items-center justify-between gap-3 bg-neutral-950/80 border border-white/10 rounded-2xl px-3.5 py-2.5">
                   <label className="text-[11px] text-white font-bold">
-                    Meta de Flechas del Día (opcional):
+                    {tx("Meta de Flechas del Día (opcional):", "Daily Arrow Goal (optional):")}
                   </label>
                   <input
                     type="number"
@@ -2659,18 +2764,18 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 {/* ¿Repetir en otros días del mes? */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    ¿Repetir esta misma agenda en otros días de este mes?
+                    {tx("¿Repetir esta misma agenda en otros días de este mes?", "Repeat this schedule on other days this month?")}
                   </label>
                   <select
                     value={assignRepeatMode}
                     onChange={(e) => setAssignRepeatMode(e.target.value as any)}
                     className="bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none focus:border-cyan-neon cursor-pointer"
                   >
-                    <option value="none">Solo este día ({assignDate})</option>
-                    <option value="same_weekday">Todos los mismos días de la semana este mes</option>
-                    <option value="mwf">Todos los Lunes, Miércoles y Viernes de este mes</option>
-                    <option value="tts">Todos los Martes, Jueves y Sábados de este mes</option>
-                    <option value="weekdays">Todos los Lunes a Viernes de este mes</option>
+                    <option value="none">{tx(`Solo este día (${assignDate})`, `Only this day (${assignDate})`)}</option>
+                    <option value="same_weekday">{tx("Todos los mismos días de la semana este mes", "Every same weekday this month")}</option>
+                    <option value="mwf">{tx("Todos los Lunes, Miércoles y Viernes de este mes", "Every Mon, Wed & Fri this month")}</option>
+                    <option value="tts">{tx("Todos los Martes, Jueves y Sábados de este mes", "Every Tue, Thu & Sat this month")}</option>
+                    <option value="weekdays">{tx("Todos los Lunes a Viernes de este mes", "Every weekday (Mon–Fri) this month")}</option>
                   </select>
                 </div>
 
@@ -2681,14 +2786,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       onClick={() => handleDeleteDailyAssignment(assignmentEventId)}
                       className="px-3.5 py-3 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider cursor-pointer transition"
                     >
-                      Borrar
+                      {tx("Borrar", "Delete")}
                     </button>
                   )}
                   <button
                     type="submit"
                     className="flex-1 py-3 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer active:scale-98 transition"
                   >
-                    Guardar Agenda
+                    {tx("Guardar Agenda", "Save Schedule")}
                   </button>
                 </div>
               </form>
@@ -2707,16 +2812,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 w-full max-w-sm max-h-[90dvh] overflow-y-auto overscroll-contain flex flex-col gap-4 text-left shadow-2xl"
+              className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 w-full max-w-sm max-h-[90dvh] overflow-y-auto overscroll-contain flex flex-col gap-4 text-start shadow-2xl"
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <h3 className="text-white text-base font-black uppercase">
-                  {modalMode === "add" ? "Planificar Evento" : "Editar Evento"}
+                  {modalMode === "add" ? tx("Planificar Evento", "Schedule Event") : tx("Editar Evento", "Edit Event")}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  aria-label="Cerrar formulario de evento"
+                  aria-label={tx("Cerrar formulario de evento", "Close event form")}
                   className="w-9 h-9 flex items-center justify-center rounded-full text-white hover:bg-white/5 transition cursor-pointer shrink-0"
                 >
                   <X size={16} aria-hidden="true" />
@@ -2726,28 +2831,28 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               <form onSubmit={handleSave} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Título
+                    {tx("Título", "Title")}
                   </label>
                   <input
                     type="text"
                     required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Nombre del evento o torneo"
+                    placeholder={tx("Nombre del evento o torneo", "Event or tournament name")}
                     className="w-full bg-neutral-950 border border-neutral-800 text-white text-xs px-3.5 py-2.5 rounded-xl outline-none focus:border-cyan-neon"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Tipo de Evento
+                    {tx("Tipo de Evento", "Event Type")}
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { value: "training", label: "Práctica" },
-                      { value: "competition", label: "Torneo" },
-                      { value: "meeting", label: "Reunión" },
-                      { value: "other", label: "Otro" }
+                      { value: "training", label: tx("Práctica", "Practice") },
+                      { value: "competition", label: tx("Torneo", "Tournament") },
+                      { value: "meeting", label: tx("Reunión", "Meeting") },
+                      { value: "other", label: tx("Otro", "Other") }
                     ].map((type) => (
                       <button
                         key={type.value}
@@ -2767,7 +2872,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Fecha
+                    {tx("Fecha", "Date")}
                   </label>
                   <input
                     type="date"
@@ -2780,12 +2885,15 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11.6px] text-white font-bold uppercase tracking-wider">
-                    Notas / Detalles
+                    {tx("Notas / Detalles", "Notes / Details")}
                   </label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Detalles sobre distancia, diana o requerimientos..."
+                    placeholder={tx(
+                      "Detalles sobre distancia, diana o requerimientos...",
+                      "Details on distance, target face, or requirements..."
+                    )}
                     rows={3}
                     className="w-full bg-neutral-950 border border-neutral-800 text-white text-xs px-3.5 py-2.5 rounded-xl outline-none focus:border-cyan-neon resize-none"
                   />
@@ -2795,7 +2903,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   type="submit"
                   className="w-full py-3.5 mt-2 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-[0.98]"
                 >
-                  {modalMode === "add" ? "Programar Evento" : "Guardar Cambios"}
+                  {modalMode === "add" ? tx("Programar Evento", "Schedule Event") : tx("Guardar Cambios", "Save Changes")}
                 </button>
               </form>
             </motion.div>
@@ -2836,7 +2944,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-neutral-950 border border-white/10 rounded-3xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl z-10"
+              className="relative bg-neutral-950 border border-white/10 rounded-3xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl z-10 text-start"
             >
               <button
                 type="button"
@@ -2858,13 +2966,16 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
 
               <div>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  ¿Desvincular Plan?
+                  {tx("¿Desvincular Plan?", "Unlink Plan?")}
                 </h3>
                 <p className="text-xs text-white mt-1 leading-relaxed">
-                  Plan: <strong className="text-white">{macroToUnlink.name}</strong>
+                  {tx("Plan:", "Plan:")} <strong className="text-white">{macroToUnlink.name}</strong>
                 </p>
                 <p className="text-[12.8px] text-black font-bold mt-1.5 leading-relaxed bg-white p-2.5 rounded-xl border border-white">
-                  Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.
+                  {tx(
+                    "Al confirmar, se eliminará el plan y se retirarán todas sus tareas, metas de flechas y descansos programados del calendario.",
+                    "Confirming will remove this plan and delete all its scheduled tasks, arrow goals, and rest days from the calendar."
+                  )}
                 </p>
               </div>
 
@@ -2872,19 +2983,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
               {isCoach && macroToUnlink.assignedAthleteIds && macroToUnlink.assignedAthleteIds.length > 0 && (
                 <div className="flex flex-col gap-1.5 bg-neutral-900/60 p-3 rounded-2xl border border-white/5">
                   <label className="text-[10.5px] text-white uppercase font-black tracking-widest">
-                    Desvincular a:
+                    {tx("Desvincular a:", "Unlink for:")}
                   </label>
                   <select
                     value={unlinkTargetAthleteId}
                     onChange={(e) => setUnlinkTargetAthleteId(e.target.value)}
                     className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-neon font-bold"
                   >
-                    <option value="ALL">Todo el plan (Borrar completamente)</option>
+                    <option value="ALL">{tx("Todo el plan (Borrar completamente)", "Entire plan (Delete completely)")}</option>
                     {macroToUnlink.assignedAthleteIds.map((athId) => {
                       const athleteObj = roster.find((r) => r.uid === athId);
                       return (
                         <option key={athId} value={athId}>
-                          Solo al alumno {athleteObj ? athleteObj.fullName : athId}
+                          {tx(
+                            `Solo al alumno ${athleteObj ? athleteObj.fullName : athId}`,
+                            `Only athlete ${athleteObj ? athleteObj.fullName : athId}`
+                          )}
                         </option>
                       );
                     })}
@@ -2902,7 +3016,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   disabled={isUnlinking}
                   className="flex-1 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-white hover:text-white font-bold text-xs uppercase cursor-pointer transition border border-white/5"
                 >
-                  Cancelar
+                  {tx("Cancelar", "Cancel")}
                 </button>
                 <button
                   type="button"
@@ -2915,7 +3029,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                   ) : (
                     <Unlink size={14} />
                   )}
-                  <span>Confirmar</span>
+                  <span>{tx("Confirmar", "Confirm")}</span>
                 </button>
               </div>
             </motion.div>

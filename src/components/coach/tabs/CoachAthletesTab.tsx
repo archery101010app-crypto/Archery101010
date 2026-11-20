@@ -37,7 +37,8 @@ export default function CoachAthletesTab({
   onCreateAthlete,
   onOpenPlanImporter
 }: CoachAthletesTabProps) {
-  const { t, tx } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [searchTerm, setSearchTerm] = useState("");
   const [bowFilter, setBowFilter] = useState<string>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,11 +103,17 @@ export default function CoachAthletesTab({
   });
 
   const formatBowLabel = (type?: string) => {
-    if (type === "Recurve") return t("bowRecurve");
-    if (type === "Compound") return t("bowCompound");
-    if (type === "Barebow") return t("bowBarebow");
-    if (type === "Traditional") return tx("Tradicional", "Traditional");
-    return type || t("bowBarebow");
+    const raw =
+      type === "Recurve"
+        ? t("bowRecurve")
+        : type === "Compound"
+        ? t("bowCompound")
+        : type === "Barebow"
+        ? t("bowBarebow")
+        : type === "Traditional"
+        ? tx("Tradicional", "Traditional")
+        : type || t("bowBarebow");
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -310,13 +317,15 @@ export default function CoachAthletesTab({
               value={bowFilter}
               onChange={(e) => setBowFilter(e.target.value)}
               aria-label={tx("Filtrar por tipo de arco", "Filter by bow type")}
-              className="w-full h-10 bg-[#0D1017] border border-white/[0.09] hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs font-bold ps-7 pe-6 rounded-xl outline-none transition cursor-pointer appearance-none truncate"
+              className={`w-full h-10 bg-[#0D1017] border border-white/[0.09] hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs font-bold ps-7 pe-6 rounded-xl outline-none transition cursor-pointer appearance-none truncate${
+                isEs ? "" : " text-center"
+              }`}
             >
               <option value="ALL">{t("filterAll")}</option>
-              <option value="Recurve">{t("bowRecurve")}</option>
-              <option value="Compound">{t("bowCompound")}</option>
-              <option value="Barebow">{t("bowBarebow")}</option>
-              <option value="Traditional">{tx("Tradicional", "Traditional")}</option>
+              <option value="Recurve">{formatBowLabel("Recurve")}</option>
+              <option value="Compound">{formatBowLabel("Compound")}</option>
+              <option value="Barebow">{formatBowLabel("Barebow")}</option>
+              <option value="Traditional">{formatBowLabel("Traditional")}</option>
             </select>
             <div className="absolute end-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white">
               <ChevronDown size={13} />
@@ -531,9 +540,9 @@ export default function CoachAthletesTab({
                       onChange={(e) => setBowType(e.target.value as any)}
                       className="w-full min-w-0 bg-neutral-900/80 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-cyan-neon transition cursor-pointer"
                     >
-                      <option value="Recurve">{t("bowRecurve")}</option>
-                      <option value="Compound">{t("bowCompound")}</option>
-                      <option value="Barebow">{t("bowBarebow")}</option>
+                      <option value="Recurve">{formatBowLabel("Recurve")}</option>
+                      <option value="Compound">{formatBowLabel("Compound")}</option>
+                      <option value="Barebow">{formatBowLabel("Barebow")}</option>
                     </select>
                   </div>
 

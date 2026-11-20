@@ -45,6 +45,7 @@ interface CoachSessionsTabProps {
 
 export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTabProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [subMode, setSubMode] = useState<"SCORES" | "VOLUME" | "ANALYSIS">("SCORES");
   const [selectedAthleteUid, setSelectedAthleteUid] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -88,10 +89,38 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
   };
 
   const formatBowLabel = (bow?: string) => {
-    if (!bow || bow === "Recurve") return t("bowRecurve");
-    if (bow === "Compound") return t("bowCompound");
-    if (bow === "Barebow") return t("bowBarebow");
-    return bow;
+    const raw =
+      !bow || bow === "Recurve"
+        ? t("bowRecurve")
+        : bow === "Compound"
+        ? t("bowCompound")
+        : bow === "Barebow"
+        ? t("bowBarebow")
+        : bow;
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatPracticeType = (rawType?: string, fallback?: string) => {
+    if (isEs) return rawType || fallback || "";
+    if (!rawType) return fallback || "";
+    const raw =
+      rawType === "Control"
+        ? t("practiceControl")
+        : rawType === "Práctica"
+        ? t("practicePractice")
+        : rawType === "Volumen"
+        ? t("practiceVolume")
+        : rawType === "Análisis"
+        ? t("navAnalysis")
+        : rawType;
+    return raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatSessionFormat = (rawFormat?: string, fallback?: string) => {
+    if (isEs) return rawFormat || fallback || "";
+    const f = rawFormat || fallback || "";
+    if (f === "Libre") return "Custom";
+    return f.replace(/\(Bloque\s*(\d+)\)/gi, "(Block $1)");
   };
 
   // Only real shooting sessions (not duels)
@@ -143,7 +172,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
         maxScores[uid] = {
           userName: s.userName || t("roleAthlete"),
           score: sc,
-          format: s.format || "WA 720"
+          format: formatSessionFormat(s.format, "WA 720")
         };
       }
     });
@@ -393,7 +422,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                       )}
                     </div>
                     <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                      {dateStr} · {sess.practiceType || t("navSession")} · {sess.distance || 18}m ·{" "}
+                      {dateStr} · {formatPracticeType(sess.practiceType, t("navSession"))} · {sess.distance || 18}m ·{" "}
                       {getSessionActiveKcal(sess, sessAthlete)} kcal ·{" "}
                       {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                       {(() => {
@@ -467,11 +496,11 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           </span>
                         )}
                         <span className="text-[9.3px] bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-neon px-1.5 py-0.5 rounded-full font-black uppercase shrink-0">
-                          {sess.practiceType || t("practiceControl")}
+                          {formatPracticeType(sess.practiceType, t("practiceControl"))}
                         </span>
                       </div>
                       <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                        {sess.format || "WA 720"} · {sess.distance || 18}m · {bowTypeLabel}
+                        {formatSessionFormat(sess.format, "WA 720")} · {sess.distance || 18}m · {bowTypeLabel}
                         {sess.isDraft
                           ? ` · ${scoredArrows} ${tx("fl. en curso", "arr. live")}`
                           : ` · ${getSessionActiveKcal(sess, sessAthlete)} kcal · ${formatKmAndMiles(
@@ -538,7 +567,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                                     Number(sess.distance) || 18,
                                     sess.bowType,
                                     sess.format,
-                                    sess.targetType
+                                    sess.targetType,
+                                    language
                                   )
                                 : null;
 
@@ -650,7 +680,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                               sess.bowType || "Recurve",
                               presetType,
                               sess.format,
-                              sess.targetType
+                              sess.targetType,
+                              language
                             );
                             if (!analysis) return null;
                             return (

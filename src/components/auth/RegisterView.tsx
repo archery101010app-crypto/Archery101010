@@ -50,6 +50,7 @@ function normalizeOptionalPhone(raw: string, countryCode: string): string | unde
 
 export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: RegisterViewProps) {
   const { language, unitSystem, setUnitSystem, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -414,9 +415,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         <button
           type="button"
           onClick={onNavigateToLogin}
-          className="min-h-[38px] px-2 -ml-2 rounded-xl text-white hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition"
+          className="min-h-[38px] px-2 -ms-2 rounded-xl text-white hover:bg-white/[0.06] flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition"
         >
-          <ArrowLeft size={16} aria-hidden="true" />
+          <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
           <span>{t("back")}</span>
         </button>
         <span className="text-xs text-white font-bold tracking-widest uppercase">
@@ -495,14 +496,14 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("passwordPlaceholder")}
                   autoComplete="new-password"
-                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm ps-4 pe-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? tx("Ocultar contraseña", "Hide password") : tx("Mostrar contraseña", "Show password")}
                   aria-pressed={showPassword}
-                  className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
+                  className="absolute end-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
@@ -514,14 +515,14 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder={tx("Confirmar contraseña", "Confirm password")}
                   autoComplete="new-password"
-                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-4 pr-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
+                  className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm ps-4 pe-12 py-3.5 rounded-xl outline-none transition-all duration-200 caret-cyan-neon"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   aria-label={showConfirmPassword ? tx("Ocultar confirmación de contraseña", "Hide password confirmation") : tx("Mostrar confirmación de contraseña", "Show password confirmation")}
                   aria-pressed={showConfirmPassword}
-                  className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
+                  className="absolute end-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
                 >
                   {showConfirmPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
@@ -587,9 +588,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+              <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("fullName")} *
                   </label>
                   <input
@@ -601,7 +602,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   />
                 </div>
 
-                <div className="flex flex-col gap-1">
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
                   <label className="text-[11px] font-bold uppercase tracking-wider text-white truncate">
                     {t("nickname")}
                   </label>
@@ -615,9 +616,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("birthDate")} *
                   </label>
                   <input
@@ -630,7 +631,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("country")} *
                   </label>
                   <select
@@ -647,9 +648,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("city")}
                   </label>
                   <input
@@ -662,7 +663,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("gender")} *
                   </label>
                   <select
@@ -687,6 +688,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 <input
                   type="tel"
                   inputMode="tel"
+                  dir="ltr"
                   value={phoneMessaging}
                   onChange={(e) => setPhoneMessaging(e.target.value)}
                   placeholder={`${COUNTRIES_MAP[country]?.dialCode || "+506"} 8888 8888`}
@@ -709,7 +711,11 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
                     }`}
                   >
-                    {t("roleAthlete")}
+                    {isEs ? (
+                      t("roleAthlete")
+                    ) : (
+                      <span className="block truncate max-w-full text-center">{t("roleAthlete")}</span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -720,7 +726,11 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
                     }`}
                   >
-                    {t("clubOptB")}
+                    {isEs ? (
+                      t("clubOptB")
+                    ) : (
+                      <span className="block truncate max-w-full text-center">{t("clubOptB")}</span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -731,7 +741,11 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
                     }`}
                   >
-                    {t("roleCoach")} 18+
+                    {isEs ? (
+                      <>{t("roleCoach")} 18+</>
+                    ) : (
+                      <span className="block truncate max-w-full text-center">{t("roleCoach")} 18+</span>
+                    )}
                   </button>
                 </div>
 
@@ -831,7 +845,11 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                             : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
                         }`}
                       >
-                        {label}
+                        {isEs ? (
+                          label
+                        ) : (
+                          <span className="block truncate max-w-full text-center">{label}</span>
+                        )}
                       </button>
                     );
                   })}
@@ -839,9 +857,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               </div>
 
               {/* Brand & Model */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+              <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("bowBrand")}
                   </label>
                   <input
@@ -852,8 +870,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3 py-2.5 rounded-xl outline-none transition caret-cyan-neon"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("bowModel")}
                   </label>
                   <input
@@ -867,9 +885,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               </div>
 
               {/* Poundage & Draw Length (Decimal comma friendly) */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+              <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {t("poundage")}
                   </label>
                   <input
@@ -881,8 +899,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3 py-2.5 rounded-xl outline-none tabular-nums transition caret-cyan-neon"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                     {tx("Apertura (in)", "Draw length (in)")}
                   </label>
                   <input
@@ -966,9 +984,9 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                  <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                       {t("height")}
                     </label>
                     <input
@@ -980,8 +998,8 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                       className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white/30 text-xs px-3 py-2.5 rounded-xl outline-none tabular-nums transition caret-cyan-neon"
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-white">
+                  <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
+                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
                       {t("weight")}
                     </label>
                     <input
@@ -1070,7 +1088,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
             onClick={handlePrev}
             className="flex-1 py-3.5 rounded-xl border border-white/10 bg-[#0D0F12] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
           >
-            <ArrowLeft size={16} aria-hidden="true" />
+            <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
             <span>{t("prev")}</span>
           </button>
         ) : (
@@ -1084,7 +1102,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
             className="flex-1 py-3.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer"
           >
             <span>{t("next")}</span>
-            <ArrowRight size={16} aria-hidden="true" />
+            <ArrowRight size={16} aria-hidden="true" className="rtl:rotate-180" />
           </button>
         ) : (
           <button

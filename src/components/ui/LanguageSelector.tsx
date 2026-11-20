@@ -12,6 +12,7 @@ interface LanguageSelectorProps {
 export default function LanguageSelector({ variant = "pill" }: LanguageSelectorProps) {
   const { language, setLanguage, t, tx } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
+  const isEs = language === "es";
 
   const currentOption =
     SUPPORTED_LANGUAGES.find((l) => l.code.toLowerCase() === language.toLowerCase()) ||
@@ -51,6 +52,8 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 type="button"
                 onClick={() => handleSelect(lang.code)}
                 className={`h-10 px-3 rounded-xl border text-[13.8px] font-bold flex items-center justify-between transition cursor-pointer ${
+                  !isEs ? "last:col-span-2 sm:last:col-span-1 " : ""
+                }${
                   isSelected
                     ? "bg-[#111622] border-cyan-neon text-white"
                     : "bg-[#090B0F] border-white/[0.06] text-white hover:border-white/20"
@@ -120,7 +123,7 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                 </button>
               </div>
 
-              <div translate="no" className="notranslate grid grid-cols-2 gap-2 max-h-[70vh] overflow-y-auto pr-0.5">
+              <div translate="no" className="notranslate grid grid-cols-2 gap-2 max-h-[70vh] overflow-y-auto pe-0.5">
                 {SUPPORTED_LANGUAGES.map((lang) => {
                   const isSelected = lang.code.toLowerCase() === language.toLowerCase();
                   return (
@@ -129,6 +132,8 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                       type="button"
                       onClick={() => handleSelect(lang.code)}
                       className={`h-11 px-3 rounded-xl border text-xs font-bold flex items-center justify-between transition cursor-pointer ${
+                        !isEs ? "last:col-span-2 " : ""
+                      }${
                         isSelected
                           ? "bg-[#111622] border-cyan-neon text-white"
                           : "bg-[#0E1117] border-white/[0.06] text-white hover:border-white/20"

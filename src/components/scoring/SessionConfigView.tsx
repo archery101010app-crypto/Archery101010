@@ -25,6 +25,7 @@ const DISTANCES = [18, 30, 50, 60, 70];
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
@@ -194,6 +195,16 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     return raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
+  const getLocalizedPracticeName = (type: "Control" | "Práctica" | "Volumen") => {
+    const raw =
+      type === "Control"
+        ? t("practiceControl")
+        : type === "Práctica"
+        ? t("practicePractice")
+        : t("practiceVolume");
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
   return (
     <div className="flex flex-col gap-4 py-2 min-h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
@@ -202,7 +213,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           onClick={onBack}
           className="w-10 h-10 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/15 text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={18} className="rtl:rotate-180" />
         </button>
         <div className="min-w-0">
           <h2 className="text-white text-[21.1px] sm:text-[23.8px] font-black uppercase tracking-wide truncate leading-tight">
@@ -229,12 +240,16 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "bg-[#6E7785]"
                 }`}
               />
-              <span className="text-[16px] min-[390px]:text-[16.7px] sm:text-[17.5px] font-bold text-white uppercase tracking-wider leading-none whitespace-nowrap truncate">
+              <span
+                className={`text-[16px] min-[390px]:text-[16.7px] sm:text-[17.5px] font-bold text-white uppercase tracking-wider ${
+                  isEs ? "leading-none" : "leading-snug py-0.5 pe-0.5"
+                } whitespace-nowrap truncate`}
+              >
                 {t("bleHrTitle")}
               </span>
             </div>
             {bleHrStatus.state === "connected" && (
-              <span className="text-[13px] font-semibold text-white leading-snug mt-1 tabular-nums truncate pl-4.5">
+              <span className="text-[13px] font-semibold text-white leading-snug mt-1 tabular-nums truncate ps-4.5">
                 {`${
                   bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
                 }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}
@@ -296,10 +311,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             
             <button
               onClick={handleResumeDraft}
-              className="w-full h-11 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
+              className={
+                isEs
+                  ? "w-full h-11 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
+                  : "w-full min-h-11 py-2 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16px] min-[390px]:text-[18.4px] text-center leading-tight uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition"
+              }
             >
-              <RotateCcw size={15} />
-              <span>{tx("Reanudar Entrenamiento", "Resume Training")}</span>
+              <RotateCcw size={15} className={isEs ? undefined : "shrink-0"} />
+              <span className={isEs ? undefined : "text-center leading-tight"}>{tx("Reanudar Entrenamiento", "Resume Training")}</span>
             </button>
           </motion.div>
         )}
@@ -315,13 +334,23 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setPracticeType(type)}
-                className={`h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`${
+                  isEs
+                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer"
+                    : "h-12 min-w-0 px-1.5 sm:px-2 rounded-xl border text-[13.5px] min-[390px]:text-[15px] sm:text-[17.5px] leading-none tracking-tight font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer"
+                } ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
-                {type === "Control" ? t("practiceControl") : type === "Práctica" ? t("practicePractice") : t("practiceVolume")}
+                {isEs ? (
+                  getLocalizedPracticeName(type)
+                ) : (
+                  <span className="block truncate max-w-full text-center">
+                    {getLocalizedPracticeName(type)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -397,13 +426,23 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`${
+                  isEs
+                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer"
+                    : "h-12 min-w-0 px-1.5 sm:px-2 rounded-xl border text-[13.5px] min-[390px]:text-[15px] sm:text-[17.5px] leading-none tracking-tight font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer"
+                } ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                 }`}
               >
-                {getLocalizedBowName(type)}
+                {isEs ? (
+                  getLocalizedBowName(type)
+                ) : (
+                  <span className="block truncate max-w-full text-center">
+                    {getLocalizedBowName(type)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -510,9 +549,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full px-3 py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+          className={
+            isEs
+              ? "w-full px-3 py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+              : "w-full px-3 py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16px] min-[390px]:text-[18.4px] text-center leading-tight tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+          }
         >
-          <span>{t("startSessionBtn")}</span>
+          <span className={isEs ? undefined : "text-center leading-tight"}>{t("startSessionBtn")}</span>
         </motion.button>
       </div>
 
@@ -525,18 +568,14 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       <AnimatePresence>
         {showPracticeInfoModal && (
           <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-left">
+            <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-start">
               <div>
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
                   {tx("Metodología de Práctica", "Practice Methodology")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase mt-1">
                   {tx("Modo:", "Mode:")}{" "}
-                  {practiceInfoType === "Control"
-                    ? t("practiceControl")
-                    : practiceInfoType === "Práctica"
-                    ? t("practicePractice")
-                    : t("practiceVolume")}
+                  {getLocalizedPracticeName(practiceInfoType)}
                 </h3>
               </div>
 

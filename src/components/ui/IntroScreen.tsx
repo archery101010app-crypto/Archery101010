@@ -9,7 +9,7 @@ interface IntroScreenProps {
 }
 
 export default function IntroScreen({ onComplete }: IntroScreenProps) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [isExiting, setIsExiting] = useState(false);
 
   const activeLang =
@@ -46,7 +46,7 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
         aria-label={isSpanish ? "Saltar introducción" : "Skip intro"}
         className="intro-skip-btn absolute top-6 end-6 z-[70] px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:scale-95 text-[10.5px] font-black uppercase tracking-widest text-white hover:text-white transition-all cursor-pointer"
       >
-        {isSpanish ? "Saltar" : "Skip"}
+        {isSpanish ? "Saltar" : t("skip")}
       </button>
 
       {/* Top spacing placeholder */}
@@ -89,10 +89,14 @@ export default function IntroScreen({ onComplete }: IntroScreenProps) {
       {/* Bottom Slogan - subido 10% y 20% más grande texto y línea */}
       <div className="w-full flex flex-col items-center justify-center min-h-[90px] px-6 -translate-y-8 sm:-translate-y-12">
         <motion.h1
+          translate="no"
+          dir="ltr"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.8, ease: "easeOut" }}
-          className="text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-[0.28em] text-center"
+          className={`${!isSpanish ? "notranslate " : ""}text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-[0.28em] text-center${
+            !isSpanish ? " ps-[0.28em]" : ""
+          }`}
           style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
         >
           Your Archery App

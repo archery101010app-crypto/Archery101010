@@ -101,6 +101,7 @@ export default function ProfileView({
   onOpenCoachPortal
 }: ProfileViewProps) {
   const { language, unitSystem, setUnitSystem, t, tx } = useLanguage();
+  const isEs = language === "es";
 
   // Section edit toggles
   const [editPersonal, setEditPersonal] = useState(false);
@@ -188,7 +189,11 @@ export default function ProfileView({
     if (u.bows && u.bows.length > 0) {
       return u.bows.map((b, idx) => ({
         id: b.id || `BOW-${idx + 1}`,
-        name: b.name || (idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`),
+        name:
+          b.name ||
+          (idx === 0
+            ? tx("Arco Principal", "Primary Bow")
+            : tx(`Arco #${idx + 1}`, `Bow #${idx + 1}`)),
         type: b.type || "Recurve",
         brand: b.brand || "",
         model: b.model || "",
@@ -205,7 +210,7 @@ export default function ProfileView({
       return [
         {
           id: "BOW-1",
-          name: "Arco Principal",
+          name: tx("Arco Principal", "Primary Bow"),
           type: u.bowConfig.type || "Recurve",
           brand: u.bowConfig.brand || "",
           model: u.bowConfig.model || "",
@@ -227,7 +232,7 @@ export default function ProfileView({
     return [
       {
         id: "BOW-1",
-        name: "Arco Principal",
+        name: tx("Arco Principal", "Primary Bow"),
         type: "Recurve",
         brand: "",
         model: "",
@@ -264,7 +269,7 @@ export default function ProfileView({
       ...prev,
       {
         id: `BOW-${nextIdx}`,
-        name: `Arco #${nextIdx}`,
+        name: tx(`Arco #${nextIdx}`, `Bow #${nextIdx}`),
         type: "Recurve",
         brand: "",
         model: "",
@@ -752,9 +757,16 @@ export default function ProfileView({
         );
         return {
           id: b.id || `BOW-${idx + 1}`,
-          name: idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`,
+          name:
+            idx === 0
+              ? tx("Arco Principal", "Primary Bow")
+              : tx(`Arco #${idx + 1}`, `Bow #${idx + 1}`),
           type: b.type || "Recurve",
-          brand: b.brand?.trim() || (idx === 0 ? "Arco Principal" : `Arco #${idx + 1}`),
+          brand:
+            b.brand?.trim() ||
+            (idx === 0
+              ? tx("Arco Principal", "Primary Bow")
+              : tx(`Arco #${idx + 1}`, `Bow #${idx + 1}`)),
           model: b.model?.trim() || "",
           poundage: parsedPoundage,
           drawLength: parsedDrawLength,
@@ -971,9 +983,9 @@ export default function ProfileView({
     }
 
     return (
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+      <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+        <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
             {t("height")}
           </label>
           <input
@@ -985,8 +997,8 @@ export default function ProfileView({
             placeholder={tx("Ej. 175", "e.g. 175")}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+        <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
             {t("weight")}
           </label>
           <input
@@ -1012,7 +1024,7 @@ export default function ProfileView({
           aria-label={t("back")}
           className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
-          <ArrowLeft size={16} aria-hidden="true" />
+          <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
         </button>
         <div className="min-w-0">
           <h2 className="text-white text-[20.2px] sm:text-[22.8px] font-black uppercase tracking-wide truncate leading-tight">
@@ -1084,9 +1096,9 @@ export default function ProfileView({
 
         {editPersonal ? (
           <div className="flex flex-col gap-3 mt-1">
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+            <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                   {t("fullName")}
                 </label>
                 <input
@@ -1097,7 +1109,7 @@ export default function ProfileView({
                   placeholder=""
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
                 <label className="text-[13.3px] text-white uppercase font-black tracking-widest truncate">
                   {t("nickname")}
                 </label>
@@ -1110,9 +1122,9 @@ export default function ProfileView({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
               <div className="flex flex-col gap-1.5 min-w-0">
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                   {t("birthDate")}
                 </label>
                 <input
@@ -1123,7 +1135,7 @@ export default function ProfileView({
                 />
               </div>
               <div className="flex flex-col gap-1.5 min-w-0">
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                   {t("city")}
                 </label>
                 <input
@@ -1135,9 +1147,9 @@ export default function ProfileView({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+            <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                   {t("country")}
                 </label>
                 <select
@@ -1152,8 +1164,8 @@ export default function ProfileView({
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                   {t("gender")}
                 </label>
                 <select
@@ -1177,21 +1189,22 @@ export default function ProfileView({
             {/* Regional Height / Weight Inputs */}
             {renderBiometricEditInputs()}
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-1.5">
+            <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
                 <label className="text-[12.5px] text-white uppercase font-black tracking-wider truncate">
                   {t("phoneMessagingLabel")}
                 </label>
                 <input
                   type="tel"
                   inputMode="tel"
+                  dir="ltr"
                   value={clubWhatsApp}
                   onChange={(e) => setClubWhatsApp(e.target.value)}
                   className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none tabular-nums transition"
                   placeholder={`${currentDialCode} 88888888`}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
                 <label className="text-[12.5px] text-white uppercase font-black tracking-wider truncate">
                   {tx("Club (Opcional)", "Club (Optional)")}
                 </label>
@@ -1207,55 +1220,55 @@ export default function ProfileView({
           </div>
         ) : (
           <div className="flex flex-col gap-2 mt-1">
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {t("fullName")}:
               </span>
-              <span className="text-white text-[13.8px] font-bold">{user.fullName}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{user.fullName}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {tx("Alias para Retos:", "Match Alias:")}
               </span>
-              <span className="text-cyan-neon text-[13.8px] tabular-nums font-bold">
+              <span className={`text-cyan-neon text-[13.8px] tabular-nums font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
                 @{user.nickname || "arquero"}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {tx("Club (Opcional):", "Club (Optional):")}
               </span>
-              <span className="text-white text-[13.8px] font-bold">{clubName.trim() || "—"}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{clubName.trim() || "—"}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
                 {t("birthDate")}:
               </span>
-              <span className="text-white text-[13.8px] tabular-nums font-bold">
+              <span className={`text-white text-[13.8px] tabular-nums font-bold${!isEs ? " shrink-0 text-end" : ""}`}>
                 {user.birthDate ? formatRegionalDate(user.birthDate, language) : "—"}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {t("city")}:
               </span>
-              <span className="text-white text-[13.8px] font-bold">{user.city || "—"}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{user.city || "—"}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {t("country")}:
               </span>
-              <span className="text-white text-[13.8px] font-bold">
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
                 {COUNTRIES_MAP[user.country]?.flag ||
                   COUNTRIES.find((c) => c.code === user.country)?.flag}{" "}
                 {getLocalizedCountryName(user.country, language)}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
                 {t("gender")}:
               </span>
-              <span className="text-white text-[13.8px] font-bold">
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
                 {user.gender === "M"
                   ? t("genderM")
                   : user.gender === "F"
@@ -1263,21 +1276,21 @@ export default function ProfileView({
                   : t("genderO")}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5 border-b border-gray-border/20">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
                 {unitSystem === "imperial"
                   ? tx("Estatura (ft/in):", "Height (ft/in):")
                   : `${t("height")}:`}
               </span>
-              <span className="text-white text-[13.8px] tabular-nums font-bold">
+              <span dir={!isEs ? "ltr" : undefined} className={`text-white text-[13.8px] tabular-nums font-bold${!isEs ? " shrink-0 text-end" : ""}`}>
                 {formatHeightRegional(user.physicalData?.height, unitSystem)}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1.5">
-              <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
+            <div className={`flex justify-between items-center py-1.5${!isEs ? " gap-2 min-w-0" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
                 {unitSystem === "imperial" ? `${t("weightImperialLbs")}:` : `${t("weight")}:`}
               </span>
-              <span className="text-white text-[13.8px] tabular-nums font-bold">
+              <span dir={!isEs ? "ltr" : undefined} className={`text-white text-[13.8px] tabular-nums font-bold${!isEs ? " shrink-0 text-end" : ""}`}>
                 {formatWeightRegional(user.physicalData?.weight, unitSystem)}
               </span>
             </div>
@@ -1362,7 +1375,11 @@ export default function ProfileView({
                                 : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
                             }`}
                           >
-                            {label}
+                            {isEs ? (
+                              label
+                            ) : (
+                              <span className="block truncate max-w-full text-center">{label}</span>
+                            )}
                           </button>
                         );
                       })}
@@ -1370,9 +1387,9 @@ export default function ProfileView({
                   </div>
 
                   {/* Fila: Marca y Modelo */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                  <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                    <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                         {t("bowBrand")}
                       </label>
                       <input
@@ -1383,8 +1400,8 @@ export default function ProfileView({
                         className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition placeholder:text-white/40"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                    <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                         {t("bowModel")}
                       </label>
                       <input
@@ -1398,15 +1415,16 @@ export default function ProfileView({
                   </div>
 
                   {/* Fila: Potencia y Apertura (Decimal comma friendly) */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                  <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
+                    <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                         {t("poundage")}
                       </label>
-                      <div className="relative flex items-center">
+                      <div dir="ltr" className="relative flex items-center">
                         <input
                           type="text"
                           inputMode="decimal"
+                          dir="ltr"
                           value={bow.poundageInput}
                           onChange={(e) => handleUpdateBow(idx, { poundageInput: e.target.value })}
                           placeholder={tx("Ej. 38,5", "e.g. 38.5")}
@@ -1417,14 +1435,15 @@ export default function ProfileView({
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13.3px] text-white uppercase font-black tracking-widest">
+                    <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
                         {tx("Apertura", "Draw Length")}
                       </label>
-                      <div className="relative flex items-center">
+                      <div dir="ltr" className="relative flex items-center">
                         <input
                           type="text"
                           inputMode="decimal"
+                          dir="ltr"
                           value={bow.drawLengthInput}
                           onChange={(e) =>
                             handleUpdateBow(idx, { drawLengthInput: e.target.value })
@@ -1448,24 +1467,44 @@ export default function ProfileView({
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "RH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl ${
+                          isEs
+                            ? "text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap"
+                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase whitespace-nowrap truncate min-w-0"
+                        } transition border cursor-pointer ${
                           (bow.hand || "RH") === "RH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
                         }`}
                       >
-                        {tx("Diestro (RH)", "Right-Handed (RH)")}
+                        {isEs ? (
+                          tx("Diestro (RH)", "Right-Handed (RH)")
+                        ) : (
+                          <span className="block truncate max-w-full text-center">
+                            {tx("Diestro (RH)", "Right-Handed (RH)")}
+                          </span>
+                        )}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleUpdateBow(idx, { hand: "LH" })}
-                        className={`h-11 flex items-center justify-center rounded-xl text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap transition border cursor-pointer ${
+                        className={`h-11 flex items-center justify-center rounded-xl ${
+                          isEs
+                            ? "text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap"
+                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase whitespace-nowrap truncate min-w-0"
+                        } transition border cursor-pointer ${
                           bow.hand === "LH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
                         }`}
                       >
-                        {tx("Zurdo (LH)", "Left-Handed (LH)")}
+                        {isEs ? (
+                          tx("Zurdo (LH)", "Left-Handed (LH)")
+                        ) : (
+                          <span className="block truncate max-w-full text-center">
+                            {tx("Zurdo (LH)", "Left-Handed (LH)")}
+                          </span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1609,6 +1648,7 @@ export default function ProfileView({
         <button
           type="button"
           role="switch"
+          dir="ltr"
           aria-checked={pushNotif}
           aria-label={t("pushNotif")}
           onClick={() => handleNotifToggle("notif_push", pushNotif, setPushNotif)}
@@ -1787,7 +1827,12 @@ export default function ProfileView({
                 {t("inviteCode")}
               </span>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="flex-1 min-w-0 text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all truncate">
+                <span
+                  dir={!isEs ? "ltr" : undefined}
+                  className={`flex-1 ${
+                    !isEs ? "shrink-0 min-w-[96px] " : "min-w-0 "
+                  }text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all truncate`}
+                >
                   {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                     ? user.clubInviteCode
                     : "······"}
@@ -1796,11 +1841,13 @@ export default function ProfileView({
                   <button
                     type="button"
                     onClick={handleShareInviteCode}
-                    className="shrink-0 px-3 py-2.5 bg-cyan-neon/15 border border-cyan-neon/25 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                    className={`shrink-0 ${
+                      !isEs ? "px-2.5 " : "px-3 "
+                    }py-2.5 bg-cyan-neon/15 border border-cyan-neon/25 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95`}
                     title={t("share")}
                   >
-                    <Share2 size={14} aria-hidden="true" />
-                    <span>{t("share")}</span>
+                    <Share2 size={14} aria-hidden="true" className="shrink-0" />
+                    <span className={!isEs ? "truncate max-w-[115px]" : undefined}>{t("share")}</span>
                   </button>
                 )}
                 <button
@@ -1858,6 +1905,7 @@ export default function ProfileView({
                 <input
                   type="tel"
                   inputMode="tel"
+                  dir="ltr"
                   value={clubWhatsApp}
                   onChange={(e) => setClubWhatsApp(e.target.value)}
                   className="flex-1 min-w-0 bg-neutral-950 border border-gray-border text-white text-[13.8px] p-2.5 rounded-xl outline-none tabular-nums"

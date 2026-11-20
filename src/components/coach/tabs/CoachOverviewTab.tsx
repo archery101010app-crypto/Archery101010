@@ -39,6 +39,7 @@ export default function CoachOverviewTab({
   onNavigate
 }: CoachOverviewTabProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const presentCount = Object.values(attendance).filter(Boolean).length;
 
   const getSafeActivityArrows = (act: any): number => {
@@ -66,10 +67,38 @@ export default function CoachOverviewTab({
   });
 
   const formatBowType = (type?: string) => {
-    if (!type || type === "Recurve") return t("bowRecurve");
-    if (type === "Compound") return t("bowCompound");
-    if (type === "Barebow") return t("bowBarebow");
-    return type;
+    const raw =
+      !type || type === "Recurve"
+        ? t("bowRecurve")
+        : type === "Compound"
+        ? t("bowCompound")
+        : type === "Barebow"
+        ? t("bowBarebow")
+        : type;
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatPracticeType = (rawType?: string, fallback?: string) => {
+    if (isEs) return rawType || fallback || "";
+    if (!rawType) return fallback || "";
+    const raw =
+      rawType === "Control"
+        ? t("practiceControl")
+        : rawType === "Práctica"
+        ? t("practicePractice")
+        : rawType === "Volumen"
+        ? t("practiceVolume")
+        : rawType === "Análisis"
+        ? t("navAnalysis")
+        : rawType;
+    return raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatSessionFormat = (rawFormat?: string) => {
+    if (isEs) return rawFormat || "";
+    const f = rawFormat || "";
+    if (f === "Libre") return "Custom";
+    return f.replace(/\(Bloque\s*(\d+)\)/gi, "(Block $1)");
   };
 
   return (
@@ -281,7 +310,12 @@ export default function CoachOverviewTab({
                       {act.isDraft ? (
                         <span>
                           {tx("Tirando sesión en vivo", "Shooting live session")} (
-                          {act.format || act.practiceType || t("practicePractice")}) ·{" "}
+                          {isEs
+                            ? act.format || act.practiceType || t("practicePractice")
+                            : act.format
+                            ? formatSessionFormat(act.format)
+                            : formatPracticeType(act.practiceType, t("practicePractice"))}
+                          ) ·{" "}
                           <span className="text-emerald-400 font-extrabold">
                             {getSessionScore(act) > 0 ? `${getSessionScore(act)} pts · ` : ""}
                             {liveArrows} {t("arrowsLabel")}
@@ -329,8 +363,8 @@ export default function CoachOverviewTab({
                       ) : (
                         <span>
                           {tx("Registró sesión de", "Logged")}{" "}
-                          <span className="text-white font-bold">{act.practiceType}</span> (
-                          {act.format}) ·{" "}
+                          <span className="text-white font-bold">{formatPracticeType(act.practiceType)}</span> (
+                          {formatSessionFormat(act.format)}) ·{" "}
                           <span className="text-cyan-neon font-extrabold">
                             {getSessionScore(act)} pts
                           </span>

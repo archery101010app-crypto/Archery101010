@@ -69,6 +69,7 @@ export default function AnalysisView({
   onNavigateHistoryAnalysis
 }: AnalysisViewProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   useWakeLock(true);
 
   const defaultBowType: AnalysisBowType =
@@ -379,7 +380,7 @@ export default function AnalysisView({
       const docPayload = sanitizeForFirestore({
         id: sessionIdRef.current,
         userId: user.uid,
-        userName: user.fullName || user.nickname || "Arquero",
+        userName: user.fullName || user.nickname || (isEs ? "Arquero" : "Archer"),
         clubId: user.clubId || null,
         timestamp: sessionStartTsRef.current,
         updatedAt: now,
@@ -437,7 +438,7 @@ export default function AnalysisView({
       });
       runSync().catch(() => {});
     },
-    [user.uid, user.fullName, user.nickname, user.clubId, calibration]
+    [user.uid, user.fullName, user.nickname, user.clubId, calibration, isEs]
   );
 
   // Sync live Analysis mode & calibration to connected Smartwatch (without 1Hz BLE BPM cloud write churn)
@@ -631,9 +632,13 @@ export default function AnalysisView({
   }, [calibration.distanceM, calibration.bowType, persistSessionSnapshot]);
 
   const getBowLabel = (b?: string) => {
-    if (b === "Recurve") return t("bowRecurve");
-    if (b === "Compound") return t("bowCompound");
-    return t("bowBarebow");
+    const raw =
+      b === "Recurve"
+        ? t("bowRecurve")
+        : b === "Compound"
+        ? t("bowCompound")
+        : t("bowBarebow");
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   const handleMarkImpactOnCurrentShot = (impact: AnalysisMarkedImpact) => {
@@ -745,7 +750,9 @@ export default function AnalysisView({
             </h1>
             <div className="flex items-center gap-1.5 text-[14px] font-semibold text-white">
               <span className="w-2 h-2 rounded-full border-2 border-white/70 shrink-0" />
-              <span>{tx("Sin reloj conectado", "No watch connected")}</span>
+              <span className={isEs ? undefined : "truncate"}>
+                {tx("Sin reloj conectado", "No watch connected")}
+              </span>
             </div>
           </div>
 
@@ -753,9 +760,11 @@ export default function AnalysisView({
             type="button"
             onClick={() => setIsCalibrationOpen(true)}
             aria-label={tx("Ajuste del sensor", "Sensor calibration")}
-            className="h-[38px] px-3.5 rounded-[12px] bg-[#0D1017] border border-white/[0.12] text-[15px] font-bold text-white flex items-center gap-2 shrink-0 cursor-pointer tabular-nums"
+            className={`h-[38px] px-3.5 rounded-[12px] bg-[#0D1017] border border-white/[0.12] text-[15px] font-bold text-white flex items-center gap-2 shrink-0 cursor-pointer tabular-nums${
+              isEs ? "" : " max-w-[54%]"
+            }`}
           >
-            <span>
+            <span className={isEs ? undefined : "truncate"}>
               {getBowLabel(calibration.bowType)} · {calibration.distanceM}m
             </span>
             <Settings size={14} className="text-white/80 shrink-0" aria-hidden="true" />
@@ -975,27 +984,63 @@ export default function AnalysisView({
           </div>
 
           <div className="w-full grid grid-cols-3 gap-1.5">
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
+            <div
+              className={`bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 ${
+                isEs ? "px-1.5" : "overflow-hidden px-1"
+              } flex flex-col items-center gap-0.5`}
+            >
+              <span
+                className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
+                  isEs ? "" : " truncate max-w-full"
+                }`}
+              >
                 {tx("Paso 1", "Step 1")}
               </span>
-              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
+              <span
+                className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
+                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                }`}
+              >
                 {tx("Abre en reloj", "Open watch")}
               </span>
             </div>
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
+            <div
+              className={`bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 ${
+                isEs ? "px-1.5" : "overflow-hidden px-1"
+              } flex flex-col items-center gap-0.5`}
+            >
+              <span
+                className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
+                  isEs ? "" : " truncate max-w-full"
+                }`}
+              >
                 {tx("Paso 2", "Step 2")}
               </span>
-              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
+              <span
+                className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
+                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                }`}
+              >
                 {tx("Vincula código", "Link code")}
               </span>
             </div>
-            <div className="bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 px-1.5 flex flex-col items-center gap-0.5">
-              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]">
+            <div
+              className={`bg-[#06080D] border border-white/[0.08] rounded-[13px] py-2.5 ${
+                isEs ? "px-1.5" : "overflow-hidden px-1"
+              } flex flex-col items-center gap-0.5`}
+            >
+              <span
+                className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
+                  isEs ? "" : " truncate max-w-full"
+                }`}
+              >
                 {tx("Paso 3", "Step 3")}
               </span>
-              <span className="text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white whitespace-nowrap">
+              <span
+                className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
+                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                }`}
+              >
                 {tx("Tira normal", "Shoot normal")}
               </span>
             </div>
@@ -1045,7 +1090,9 @@ export default function AnalysisView({
                   key={sess.id}
                   type="button"
                   onClick={onNavigateHistoryAnalysis}
-                  className="h-[50px] bg-[#07090E] border border-white/[0.07] hover:border-white/[0.18] rounded-[14px] px-3 flex items-center justify-between gap-2 text-left cursor-pointer transition"
+                  className={`h-[50px] bg-[#07090E] border border-white/[0.07] hover:border-white/[0.18] rounded-[14px] px-3 flex items-center justify-between gap-2 ${
+                    isEs ? "text-left" : "text-start"
+                  } cursor-pointer transition`}
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="text-[13px] font-extrabold text-white truncate">
@@ -1094,7 +1141,9 @@ export default function AnalysisView({
           <button
             type="button"
             onClick={() => setIsWatchModalOpen(true)}
-            className="flex items-center gap-1.5 text-[14px] font-semibold text-white cursor-pointer text-left"
+            className={`flex items-center gap-1.5 text-[14px] font-semibold text-white cursor-pointer ${
+              isEs ? "text-left" : "text-start"
+            }`}
           >
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -1155,7 +1204,10 @@ export default function AnalysisView({
       {/* HERO FULL-WIDTH DIANA STAGE (312x312px — OUTDOOR HIGH CONTRAST) */}
       <section className="bg-[#0B0E15] border border-white/[0.09] rounded-[26px] p-3.5 flex flex-col items-center gap-3">
         <div className="w-full flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 bg-[#06080D] border border-white/[0.10] rounded-[12px] p-1">
+          <div
+            dir="ltr"
+            className="flex items-center gap-2 bg-[#06080D] border border-white/[0.10] rounded-[12px] p-1"
+          >
             <button
               type="button"
               disabled={shots.length <= 1}
@@ -1167,7 +1219,11 @@ export default function AnalysisView({
             >
               ‹
             </button>
-            <span className="text-[13.5px] font-black text-white px-1 tabular-nums">
+            <span
+              className={`text-[13.5px] font-black text-white px-1 tabular-nums${
+                isEs ? "" : " whitespace-nowrap"
+              }`}
+            >
               {shots.length > 0
                 ? `${tx("Tiro", "Shot")} ${activeShot?.shotNumber || 1} / ${shots.length}`
                 : tx("Esperando Tiro 1", "Waiting Shot 1")}
@@ -1418,13 +1474,19 @@ export default function AnalysisView({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[44px_56px_1fr_1fr_44px_42px] items-center gap-1.5 px-2.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white">
-              <span>{tx("Tiro", "Shot")}</span>
+            <div
+              className={`grid ${
+                isEs
+                  ? "grid-cols-[44px_56px_1fr_1fr_44px_42px]"
+                  : "grid-cols-[50px_56px_1fr_1fr_44px_42px]"
+              } items-center gap-1.5 px-2.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white`}
+            >
+              <span className={isEs ? undefined : "text-start"}>{tx("Tiro", "Shot")}</span>
               <span className="text-center">{tx("Diana", "Ring")}</span>
-              <span className="text-right">{tx("Prep.", "Prep")}</span>
-              <span className="text-right">{tx("Apunt.", "Aim")}</span>
-              <span className="text-right">BPM</span>
-              <span className="text-right">{tx("Estab.", "Stab.")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Prep.", "Prep")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Apunt.", "Aim")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>BPM</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Estab.", "Stab.")}</span>
             </div>
 
             {shots.map((s, idx) => {
@@ -1436,13 +1498,17 @@ export default function AnalysisView({
                     setSelectedShotIdx(idx);
                     setIsMarkMode(false);
                   }}
-                  className={`h-[44px] rounded-[14px] px-2.5 grid grid-cols-[44px_56px_1fr_1fr_44px_42px] items-center gap-1.5 text-[12px] font-bold text-white tabular-nums cursor-pointer transition ${
+                  className={`h-[44px] rounded-[14px] px-2.5 grid ${
+                    isEs
+                      ? "grid-cols-[44px_56px_1fr_1fr_44px_42px]"
+                      : "grid-cols-[50px_56px_1fr_1fr_44px_42px]"
+                  } items-center gap-1.5 text-[12px] font-bold text-white tabular-nums cursor-pointer transition ${
                     isSel
                       ? "bg-[#0E131D] border border-[#00BFFF]/45"
                       : "bg-[#080A0F] border border-white/[0.07]"
                   }`}
                 >
-                  <span className="font-extrabold whitespace-nowrap">
+                  <span className={`font-extrabold whitespace-nowrap${isEs ? "" : " text-start"}`}>
                     {tx("Tiro", "Shot")} {s.shotNumber}
                   </span>
 
@@ -1464,10 +1530,16 @@ export default function AnalysisView({
                     </button>
                   )}
 
-                  <span className="text-right">{s.prepSeconds.toFixed(1)} s</span>
-                  <span className="text-right">{s.aimSeconds.toFixed(1)} s</span>
-                  <span className="text-right">{s.heartRateBpm || "—"}</span>
-                  <span className="text-right font-black">{s.stabilityPct}%</span>
+                  <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                    {s.prepSeconds.toFixed(1)} s
+                  </span>
+                  <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                    {s.aimSeconds.toFixed(1)} s
+                  </span>
+                  <span className={isEs ? "text-right" : "text-end"}>{s.heartRateBpm || "—"}</span>
+                  <span className={`${isEs ? "text-right" : "text-end"} font-black`}>
+                    {s.stabilityPct}%
+                  </span>
                 </div>
               );
             })}

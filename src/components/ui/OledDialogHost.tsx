@@ -11,7 +11,7 @@ import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 export default function OledDialogHost() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [dialog, setDialog] = useState<OledDialogRequest | null>(null);
 
   const activeLang =
@@ -82,25 +82,31 @@ export default function OledDialogHost() {
                 <button
                   type="button"
                   onClick={() => resolveActiveOledDialog(false)}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-[#12151C] border border-white/15 text-white font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-white/10 transition"
+                  className={`w-full py-2.5 px-3 rounded-2xl bg-[#12151C] border border-white/15 text-white font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-white/10 transition${
+                    !isSpanish ? " flex items-center justify-center text-center leading-tight" : ""
+                  }`}
                 >
-                  {dialog.cancelLabel || tx("Cancelar", "Cancel")}
+                  {dialog.cancelLabel || (isSpanish ? "Cancelar" : t("cancel"))}
                 </button>
                 <button
                   type="button"
                   onClick={() => resolveActiveOledDialog(true)}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition"
+                  className={`w-full py-2.5 px-3 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition${
+                    !isSpanish ? " flex items-center justify-center text-center leading-tight" : ""
+                  }`}
                 >
-                  {dialog.confirmLabel || tx("Aceptar", "OK")}
+                  {dialog.confirmLabel || (isSpanish ? "Aceptar" : t("confirm"))}
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => resolveActiveOledDialog(true)}
-                className="w-full py-2.5 px-4 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition mt-1"
+                className={`w-full py-2.5 px-4 rounded-2xl bg-cyan-neon text-black font-black text-xs uppercase tracking-wider cursor-pointer hover:bg-cyan-brand transition mt-1${
+                  !isSpanish ? " flex items-center justify-center text-center leading-tight" : ""
+                }`}
               >
-                {dialog.confirmLabel || tx("Aceptar", "OK")}
+                {dialog.confirmLabel || (isSpanish ? "Aceptar" : t("confirm"))}
               </button>
             )}
           </motion.div>

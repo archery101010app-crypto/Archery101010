@@ -945,4 +945,54 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       "watch_sessions rules must permit watchHeartbeatAt"
     );
   });
+
+  it("enforces v2.139 multilingual visual, RTL, and zero-Spanish-regression invariants across all 13 languages", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { translations, offlineFallbackTranslations } = await import(
+      "../src/lib/translations/dict.ts"
+    );
+
+    // 1. Spanish dictionary must remain 100% intact (239 keys) and Italian/Japanese/German fixes must hold
+    assert.equal(Object.keys(translations.es).length, 239);
+    assert.equal(translations.es.navSession, "Sesión");
+    assert.equal(translations.es.practiceControl, "Puntuación");
+    assert.equal(offlineFallbackTranslations.it?.shareScorecardMessaging, "Condividi Tabellino");
+    assert.equal(offlineFallbackTranslations.ja?.navProfile, "プロフィール");
+    assert.equal(offlineFallbackTranslations.de?.dominantEye, "Dominantes Auge");
+
+    // 2. Compact selector labels across non-Spanish languages must have zero parenthetical bloat
+    for (const lang of ["fr", "de", "it", "ru", "cs", "ar"] as const) {
+      const dict = offlineFallbackTranslations[lang] || {};
+      for (const key of [
+        "bowRecurve",
+        "bowCompound",
+        "bowBarebow",
+        "practiceControl",
+        "practicePractice",
+        "practiceVolume"
+      ] as const) {
+        const val = dict[key] || translations.en[key] || "";
+        assert.ok(
+          val.length > 0 && !val.includes("("),
+          `${lang}.${key} ("${val}") must not contain parenthetical bloat`
+        );
+      }
+    }
+
+    // 3. globals.css must scope multi-script font fallback & text-wrap strictly to non-Spanish / RTL
+    const globalsCss = fs.readFileSync(path.resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    assert.ok(globalsCss.includes('html:not([lang="es"])'), "globals.css must scope multi-script rules to html:not([lang=\"es\"])");
+    assert.ok(globalsCss.includes('html[dir="rtl"]'), "globals.css must reset cursive letter-spacing under html[dir=\"rtl\"]");
+
+    // 4. Official ARCHERY 101010 lockups must enforce dir="ltr" so RTL never reverses brand geometry
+    for (const rel of [
+      "src/components/ui/Header.tsx",
+      "src/components/auth/LoginView.tsx",
+      "src/components/dashboard/DashboardView.tsx"
+    ]) {
+      const src = fs.readFileSync(path.resolve(process.cwd(), rel), "utf8");
+      assert.ok(src.includes('dir="ltr"'), `${rel} must protect brand/code lockups with dir="ltr"`);
+    }
+  });
 });

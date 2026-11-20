@@ -30,7 +30,8 @@ export default function AnalysisCalibrationModal({
   onClose,
   onSaveCalibration
 }: AnalysisCalibrationModalProps) {
-  const { t, tx } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const zeroIntervalRef = useRef<number | null>(null);
   const onCloseRef = useRef(onClose);
@@ -178,18 +179,24 @@ export default function AnalysisCalibrationModal({
       className="m-auto w-[calc(100vw-16px)] max-w-[412px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
     >
       <div
-        dir="ltr"
+        dir={isEs ? "ltr" : undefined}
         className="w-full bg-[#020305] border border-white/[0.11] rounded-[26px] p-4 sm:p-5 flex flex-col gap-3.5 select-none font-sans"
       >
         {/* Top Row: Editorial Header Kicker + Signature 101010 Tri-Color Bar + Close */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex items-center gap-[3px] shrink-0">
+            <div dir="ltr" className="flex items-center gap-[3px] shrink-0">
               <span className="w-[10px] h-[4px] rounded-full bg-[#00BFFF]" />
               <span className="w-[10px] h-[4px] rounded-full bg-[#FF1E1E]" />
               <span className="w-[10px] h-[4px] rounded-full bg-[#FFE500]" />
             </div>
-            <span className="text-[14.2px] min-[380px]:text-[15.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none whitespace-nowrap">
+            <span
+              className={`${
+                isEs
+                  ? "text-[14.2px] min-[380px]:text-[15.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none whitespace-nowrap"
+                  : "truncate min-w-0 text-[12.8px] min-[380px]:text-[14.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none"
+              }`}
+            >
               {tx("Calibración única", "One-time calibration")}
             </span>
             <span className="h-[24px] px-2 rounded-full bg-[#0D1119] border border-white/[0.14] text-[12px] font-bold text-white tracking-wide inline-flex items-center justify-center tabular-nums shrink-0 leading-none">
@@ -262,7 +269,7 @@ export default function AnalysisCalibrationModal({
             <span className="text-[13.6px] min-[380px]:text-[14.4px] font-bold text-white shrink-0">
               {t("distance")}
             </span>
-            <div className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
+            <div dir="ltr" className="flex bg-[#05070B] border border-white/[0.08] rounded-xl p-0.5 gap-0.5">
               {DISTANCES.map((d) => {
                 const isSelected = distanceM === d;
                 return (
@@ -347,7 +354,11 @@ export default function AnalysisCalibrationModal({
 
         {/* Primary CTA */}
         <div className="flex flex-col items-center gap-2 pt-0.5">
-          <span className="text-[12px] min-[380px]:text-[12.7px] font-medium text-white text-center leading-snug whitespace-nowrap">
+          <span
+            className={`text-[12px] min-[380px]:text-[12.7px] font-medium text-white text-center leading-snug ${
+              isEs ? "whitespace-nowrap" : "px-1 [text-wrap:balance]"
+            }`}
+          >
             {tx(
               "Usa automáticamente el arco configurado en tu perfil",
               "Automatically uses the bow configured in your profile"

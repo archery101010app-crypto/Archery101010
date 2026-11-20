@@ -54,6 +54,7 @@ export function AnalysisHistoryListSection({
   onDeleteSession?: (sessionId: string) => void;
 }) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
 
   const analysisSessions = sessions
     .filter((s) => s && s.deletedByArcher !== true && !s.isDraft && isAnalysisSession(s))
@@ -69,10 +70,15 @@ export function AnalysisHistoryListSection({
   const globalSummary = computeAnalysisSessionSummary(allShots);
 
   const getBowLabel = (b?: string) => {
-    if (b === "Recurve") return t("bowRecurve");
-    if (b === "Compound") return t("bowCompound");
-    if (b === "Barebow") return t("bowBarebow");
-    return b || "Barebow";
+    const raw =
+      b === "Recurve"
+        ? t("bowRecurve")
+        : b === "Compound"
+        ? t("bowCompound")
+        : b === "Barebow"
+        ? t("bowBarebow")
+        : b || "Barebow";
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   if (analysisSessions.length === 0) {
@@ -105,7 +111,11 @@ export function AnalysisHistoryListSection({
           </span>
         </div>
 
-        <div className="flex flex-col gap-0.5 min-w-0 border-l border-white/[0.08] pl-2">
+        <div
+          className={`flex flex-col gap-0.5 min-w-0 ${
+            isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
+          }`}
+        >
           <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
             {tx("Prep. Media", "Avg Prep")}
           </span>
@@ -115,7 +125,11 @@ export function AnalysisHistoryListSection({
           </span>
         </div>
 
-        <div className="flex flex-col gap-0.5 min-w-0 border-l border-white/[0.08] pl-2">
+        <div
+          className={`flex flex-col gap-0.5 min-w-0 ${
+            isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
+          }`}
+        >
           <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
             {tx("Apuntado", "Aiming")}
           </span>
@@ -125,7 +139,11 @@ export function AnalysisHistoryListSection({
           </span>
         </div>
 
-        <div className="flex flex-col gap-0.5 min-w-0 border-l border-white/[0.08] pl-2">
+        <div
+          className={`flex flex-col gap-0.5 min-w-0 ${
+            isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
+          }`}
+        >
           <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
             {tx("Suelta", "Release")}
           </span>
@@ -159,7 +177,9 @@ export function AnalysisHistoryListSection({
               key={sess.id}
               type="button"
               onClick={() => setExpandedId(sess.id)}
-              className="w-full bg-[#0B0E14] border border-white/[0.08] hover:border-white/[0.18] rounded-[18px] px-3.5 py-3 flex items-center justify-between gap-2 text-left cursor-pointer transition"
+              className={`w-full bg-[#0B0E14] border border-white/[0.08] hover:border-white/[0.18] rounded-[18px] px-3.5 py-3 flex items-center justify-between gap-2 ${
+                isEs ? "text-left" : "text-start"
+              } cursor-pointer transition`}
             >
               <div className="flex flex-col gap-0.5 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -196,7 +216,9 @@ export function AnalysisHistoryListSection({
               <button
                 type="button"
                 onClick={() => setExpandedId(null)}
-                className="flex flex-col gap-0.5 text-left min-w-0 cursor-pointer"
+                className={`flex flex-col gap-0.5 ${
+                  isEs ? "text-left" : "text-start"
+                } min-w-0 cursor-pointer`}
               >
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {isCoachResultsView && sess.userName && (
@@ -242,7 +264,10 @@ export function AnalysisHistoryListSection({
                 </div>
 
                 <div className="flex-1 min-w-0 flex flex-col justify-between gap-2">
-                  <div className="flex items-center justify-between bg-[#0C1018] border border-white/[0.09] rounded-[10px] px-2 py-1">
+                  <div
+                    dir="ltr"
+                    className="flex items-center justify-between bg-[#0C1018] border border-white/[0.09] rounded-[10px] px-2 py-1"
+                  >
                     <button
                       type="button"
                       onClick={() =>
@@ -255,7 +280,11 @@ export function AnalysisHistoryListSection({
                     >
                       ‹
                     </button>
-                    <span className="text-[12.5px] font-black text-white tabular-nums">
+                    <span
+                      className={`text-[12.5px] font-black text-white tabular-nums${
+                        isEs ? "" : " whitespace-nowrap"
+                      }`}
+                    >
                       {tx("Tiro", "Shot")} {activeShot.shotNumber} / {shots.length}
                     </span>
                     <button
@@ -308,13 +337,19 @@ export function AnalysisHistoryListSection({
             {/* Shot-by-Shot Table */}
             {shots.length > 0 && (
               <div className="flex flex-col gap-1">
-                <div className="grid grid-cols-[44px_52px_1fr_1fr_42px_42px] gap-1.5 px-2 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white">
-                  <span>{tx("Tiro", "Shot")}</span>
+                <div
+                  className={`grid ${
+                    isEs
+                      ? "grid-cols-[44px_52px_1fr_1fr_42px_42px]"
+                      : "grid-cols-[50px_52px_1fr_1fr_42px_42px]"
+                  } gap-1.5 px-2 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white`}
+                >
+                  <span className={isEs ? undefined : "text-start"}>{tx("Tiro", "Shot")}</span>
                   <span className="text-center">{tx("Diana", "Ring")}</span>
-                  <span className="text-right">{tx("Prep.", "Prep")}</span>
-                  <span className="text-right">{tx("Apunt.", "Aim")}</span>
-                  <span className="text-right">BPM</span>
-                  <span className="text-right">{tx("Estab.", "Stab.")}</span>
+                  <span className={isEs ? "text-right" : "text-end"}>{tx("Prep.", "Prep")}</span>
+                  <span className={isEs ? "text-right" : "text-end"}>{tx("Apunt.", "Aim")}</span>
+                  <span className={isEs ? "text-right" : "text-end"}>BPM</span>
+                  <span className={isEs ? "text-right" : "text-end"}>{tx("Estab.", "Stab.")}</span>
                 </div>
 
                 {shots.map((s, idx) => {
@@ -326,20 +361,36 @@ export function AnalysisHistoryListSection({
                       onClick={() =>
                         setSelectedShotBySess((prev) => ({ ...prev, [sess.id]: idx }))
                       }
-                      className={`h-[40px] rounded-[12px] px-2 grid grid-cols-[44px_52px_1fr_1fr_42px_42px] items-center gap-1.5 text-[11.5px] font-bold text-white tabular-nums cursor-pointer transition ${
+                      className={`h-[40px] rounded-[12px] px-2 grid ${
+                        isEs
+                          ? "grid-cols-[44px_52px_1fr_1fr_42px_42px]"
+                          : "grid-cols-[50px_52px_1fr_1fr_42px_42px]"
+                      } items-center gap-1.5 text-[11.5px] font-bold text-white tabular-nums cursor-pointer transition ${
                         isSel
                           ? "bg-[#0E131D] border border-[#00BFFF]/45"
                           : "bg-[#07090E] border border-white/[0.07]"
                       }`}
                     >
-                      <span className="font-extrabold text-left whitespace-nowrap">
+                      <span
+                        className={`font-extrabold ${
+                          isEs ? "text-left" : "text-start"
+                        } whitespace-nowrap`}
+                      >
                         {tx("Tiro", "Shot")} {s.shotNumber}
                       </span>
                       <div>{renderImpactBadge(s)}</div>
-                      <span className="text-right">{s.prepSeconds.toFixed(1)} s</span>
-                      <span className="text-right">{s.aimSeconds.toFixed(1)} s</span>
-                      <span className="text-right">{s.heartRateBpm || "—"}</span>
-                      <span className="text-right font-black">{s.stabilityPct}%</span>
+                      <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                        {s.prepSeconds.toFixed(1)} s
+                      </span>
+                      <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                        {s.aimSeconds.toFixed(1)} s
+                      </span>
+                      <span className={isEs ? "text-right" : "text-end"}>
+                        {s.heartRateBpm || "—"}
+                      </span>
+                      <span className={`${isEs ? "text-right" : "text-end"} font-black`}>
+                        {s.stabilityPct}%
+                      </span>
                     </button>
                   );
                 })}
@@ -374,6 +425,7 @@ export function CoachAthleteAnalysisInspector({
   onSendNote: (e: React.FormEvent) => void;
 }) {
   const { language, tx } = useLanguage();
+  const isEs = language === "es";
 
   const athleteAnalysisSessions = sessions
     .filter((s) => s && s.deletedByArcher !== true && isAnalysisSession(s))
@@ -449,7 +501,10 @@ export function CoachAthleteAnalysisInspector({
           {/* Coach Shot Inspector Card */}
           <section className="bg-[#0B0E15] border border-white/[0.09] rounded-[24px] p-3.5 flex flex-col items-center gap-3">
             <div className="w-full flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 bg-[#06080D] border border-white/[0.10] rounded-[11px] px-2 py-1">
+              <div
+                dir="ltr"
+                className="flex items-center gap-2 bg-[#06080D] border border-white/[0.10] rounded-[11px] px-2 py-1"
+              >
                 <button
                   type="button"
                   onClick={() =>
@@ -459,7 +514,11 @@ export function CoachAthleteAnalysisInspector({
                 >
                   ‹
                 </button>
-                <span className="text-[13px] font-black text-white tabular-nums">
+                <span
+                  className={`text-[13px] font-black text-white tabular-nums${
+                    isEs ? "" : " whitespace-nowrap"
+                  }`}
+                >
                   {tx("Tiro", "Shot")} {activeShot.shotNumber} / {shots.length}
                 </span>
                 <button
@@ -564,13 +623,19 @@ export function CoachAthleteAnalysisInspector({
 
           {/* Shot-by-Shot Table */}
           <section className="bg-[#0D1017] border border-white/[0.08] rounded-[20px] p-3 flex flex-col gap-1.5">
-            <div className="grid grid-cols-[44px_52px_1fr_1fr_42px_42px] gap-1.5 px-2 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white">
-              <span>{tx("Tiro", "Shot")}</span>
+            <div
+              className={`grid ${
+                isEs
+                  ? "grid-cols-[44px_52px_1fr_1fr_42px_42px]"
+                  : "grid-cols-[50px_52px_1fr_1fr_42px_42px]"
+              } gap-1.5 px-2 text-[9px] font-extrabold uppercase tracking-[0.06em] text-white`}
+            >
+              <span className={isEs ? undefined : "text-start"}>{tx("Tiro", "Shot")}</span>
               <span className="text-center">{tx("Diana", "Ring")}</span>
-              <span className="text-right">{tx("Prep.", "Prep")}</span>
-              <span className="text-right">{tx("Apunt.", "Aim")}</span>
-              <span className="text-right">BPM</span>
-              <span className="text-right">{tx("Estab.", "Stab.")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Prep.", "Prep")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Apunt.", "Aim")}</span>
+              <span className={isEs ? "text-right" : "text-end"}>BPM</span>
+              <span className={isEs ? "text-right" : "text-end"}>{tx("Estab.", "Stab.")}</span>
             </div>
 
             {shots.map((s, idx) => {
@@ -580,20 +645,36 @@ export function CoachAthleteAnalysisInspector({
                   key={s.id}
                   type="button"
                   onClick={() => setSelectedShotIdx(idx)}
-                  className={`h-[40px] rounded-[12px] px-2 grid grid-cols-[44px_52px_1fr_1fr_42px_42px] items-center gap-1.5 text-[11.5px] font-bold text-white tabular-nums cursor-pointer transition ${
+                  className={`h-[40px] rounded-[12px] px-2 grid ${
+                    isEs
+                      ? "grid-cols-[44px_52px_1fr_1fr_42px_42px]"
+                      : "grid-cols-[50px_52px_1fr_1fr_42px_42px]"
+                  } items-center gap-1.5 text-[11.5px] font-bold text-white tabular-nums cursor-pointer transition ${
                     isSel
                       ? "bg-[#0E131D] border border-[#00BFFF]/45"
                       : "bg-[#07090E] border border-white/[0.07]"
                   }`}
                 >
-                  <span className="font-extrabold text-left whitespace-nowrap">
+                  <span
+                    className={`font-extrabold ${
+                      isEs ? "text-left" : "text-start"
+                    } whitespace-nowrap`}
+                  >
                     {tx("Tiro", "Shot")} {s.shotNumber}
                   </span>
                   <div>{renderImpactBadge(s)}</div>
-                  <span className="text-right">{s.prepSeconds.toFixed(1)} s</span>
-                  <span className="text-right">{s.aimSeconds.toFixed(1)} s</span>
-                  <span className="text-right">{s.heartRateBpm || "—"}</span>
-                  <span className="text-right font-black">{s.stabilityPct}%</span>
+                  <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                    {s.prepSeconds.toFixed(1)} s
+                  </span>
+                  <span className={isEs ? "text-right" : "text-end whitespace-nowrap"}>
+                    {s.aimSeconds.toFixed(1)} s
+                  </span>
+                  <span className={isEs ? "text-right" : "text-end"}>
+                    {s.heartRateBpm || "—"}
+                  </span>
+                  <span className={`${isEs ? "text-right" : "text-end"} font-black`}>
+                    {s.stabilityPct}%
+                  </span>
                 </button>
               );
             })}

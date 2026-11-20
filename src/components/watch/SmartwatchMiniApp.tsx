@@ -73,6 +73,7 @@ export default function SmartwatchMiniApp({
   const isStandalone = Boolean(standaloneWatchScreen || standalone);
   const { language, unitSystem, t, tx } = useLanguage();
   const isSpanish = language === "es";
+  const isEs = language === "es";
 
   // 0: Contador, 1: Puntos (X..M), 2: Métricas, 3: Auto-Tiro, 4: Resumen
   const [screenIdx, setScreenIdx] = useState<number>(0);
@@ -1293,12 +1294,15 @@ export default function SmartwatchMiniApp({
     }
   };
 
-  const watchBowLabel =
+  const rawWatchBowLabel =
     activeState.bowType === "Recurve"
       ? t("bowRecurve")
       : activeState.bowType === "Compound"
       ? t("bowCompound")
       : t("bowBarebow");
+  const watchBowLabel = isEs
+    ? rawWatchBowLabel
+    : rawWatchBowLabel.replace(/\s*\([^)]*\)/g, "").trim() || rawWatchBowLabel;
   const liveAnalysisHr =
     lastAnalysisShot?.heartRateBpm ||
     (bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
@@ -1333,7 +1337,7 @@ export default function SmartwatchMiniApp({
                   src="/images/brand_logo_header.png"
                   srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
                   alt="ARCHERY 101010"
-                  className="h-[10px] w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                  className={`${isEs ? "h-[10px]" : "h-[9.5px]"} w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
                   draggable={false}
                 />
               </div>
@@ -1360,7 +1364,7 @@ export default function SmartwatchMiniApp({
                       justDetectedShot ? "bg-[#FFE500]" : "bg-[#00BFFF]"
                     }`}
                   />
-                  <span>
+                  <span className={isEs ? undefined : "max-w-[156px] truncate"}>
                     {shotNum > 0
                       ? `${t("navAnalysis")} · ${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
                       : !activeState.autoDetectEnabled && isStandalone
@@ -1430,10 +1434,14 @@ export default function SmartwatchMiniApp({
                 </div>
 
                 <div className="grid grid-cols-2 gap-[5.5px]">
-                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between">
-                    <div className="flex items-center gap-[4.5px]">
+                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between min-w-0">
+                    <div className={`flex items-center gap-[4.5px]${isEs ? "" : " min-w-0"}`}>
                       <span className="w-[9px] h-0 border-t-2 border-dashed border-white shrink-0" />
-                      <span className="text-[7.5px] font-black tracking-[0.04em] text-white uppercase whitespace-nowrap">
+                      <span
+                        className={`text-[7.5px] font-black tracking-[0.04em] text-white uppercase ${
+                          isEs ? "whitespace-nowrap" : "truncate"
+                        }`}
+                      >
                         {tx("Preparatorio", "Preparatory")}
                       </span>
                     </div>
@@ -1492,7 +1500,11 @@ export default function SmartwatchMiniApp({
               </div>
 
               <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
-                <span className="text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums">
+                <span
+                  className={`text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums${
+                    isEs ? "" : " max-w-[144px] truncate"
+                  }`}
+                >
                   {activeState.distanceM}m · {watchBowLabel}
                 </span>
                 <div className="flex items-center gap-[5px]">
@@ -1721,10 +1733,18 @@ export default function SmartwatchMiniApp({
             <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} flex flex-col gap-1.5`}>
               <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase whitespace-nowrap">
+                  <div
+                    className={`text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase ${
+                      isEs ? "whitespace-nowrap" : "min-w-0 truncate"
+                    }`}
+                  >
                     {tx("DISTANCIA RECORRIDA", "WALKED DISTANCE")}
                   </div>
-                  <div className="text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
+                  <div
+                    className={`text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 tabular-nums ${
+                      isEs ? "whitespace-nowrap" : "min-w-0 truncate"
+                    }`}
+                  >
                     {walkedDualStr}
                   </div>
                 </div>
@@ -2066,12 +2086,14 @@ export default function SmartwatchMiniApp({
 
           {/* Compact Single-Line Header: Official Brand Logo + Honest Connection Pill + Sync + Close */}
           <div className="w-full flex items-center justify-between gap-[6px]">
-            <div className="flex items-center gap-[8px] min-w-0">
+            <div className={`flex items-center gap-[8px] min-w-0${isEs ? "" : " overflow-hidden"}`}>
               <img
                 src="/images/brand_logo_header.png"
                 srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
                 alt="ARCHERY 101010"
-                className="h-[11.5px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                className={`${
+                  isEs ? "h-[11.5px]" : "h-[10px] min-[385px]:h-[11.5px]"
+                } w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
                 draggable={false}
               />
               <div

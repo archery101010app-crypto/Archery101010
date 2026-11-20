@@ -58,6 +58,25 @@ export const COACH_PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 export const COACH_PRO_ANNUAL_PERIOD_MS = 365 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function isSpanishBillingPreferred(): boolean {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("preferred_language");
+      if (saved && saved.trim()) {
+        return saved.trim().toLowerCase().startsWith("es");
+      }
+      if (typeof document !== "undefined" && document.documentElement?.lang) {
+        return document.documentElement.lang.trim().toLowerCase().startsWith("es");
+      }
+    } catch {}
+  }
+  return true;
+}
+
+function txBilling(esText: string, enText: string): string {
+  return isSpanishBillingPreferred() ? esText : enText;
+}
+
 /**
  * Pure testable helper to compute remaining days of Coach PRO access.
  * Returns 0 when `proExpiresAt` is undefined, invalid, or <= `nowMs`.
@@ -169,7 +188,12 @@ export async function activateCoachLaunchPromo(
     if (user.role !== "superadmin" && user.birthDate && user.birthDate.trim()) {
       const age = calculateAgeFromBirthDate(user.birthDate);
       if (age === null || age < 18) {
-        throw new Error("Debes ser mayor de 18 años para activar una cuenta de Entrenador.");
+        throw new Error(
+          txBilling(
+            "Debes ser mayor de 18 años para activar una cuenta de Entrenador.",
+            "You must be at least 18 years old to activate a Coach account."
+          )
+        );
       }
     }
 
@@ -273,7 +297,10 @@ export async function restoreCoachStorePurchases(
   if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
     return {
       success: false,
-      message: "Inicia sesión con tu cuenta para restaurar suscripciones."
+      message: txBilling(
+        "Inicia sesión con tu cuenta para restaurar suscripciones.",
+        "Sign in to your account to restore subscriptions."
+      )
     };
   }
 
@@ -340,7 +367,10 @@ export async function restoreCoachStorePurchases(
   if (validExpiresAt <= now) {
     return {
       success: false,
-      message: "No se encontraron suscripciones Coach PRO activas para restaurar."
+      message: txBilling(
+        "No se encontraron suscripciones Coach PRO activas para restaurar.",
+        "No active Coach PRO subscriptions found to restore."
+      )
     };
   }
 
@@ -375,7 +405,10 @@ export async function restoreCoachStorePurchases(
 
   return {
     success: true,
-    message: "¡Acceso Coach PRO restaurado y validado con éxito!",
+    message: txBilling(
+      "¡Acceso Coach PRO restaurado y validado con éxito!",
+      "Coach PRO access restored and verified!"
+    ),
     updatedUser
   };
 }

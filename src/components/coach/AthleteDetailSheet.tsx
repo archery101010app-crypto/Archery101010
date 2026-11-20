@@ -67,6 +67,7 @@ export default function AthleteDetailSheet({
   onUnlinkAthlete
 }: AthleteDetailSheetProps) {
   const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [activeTab, setActiveTab] = useState<SubTab>("PERFIL");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
@@ -140,10 +141,38 @@ export default function AthleteDetailSheet({
   if (!athlete) return null;
 
   const formatBowLabel = (type?: string) => {
-    if (type === "Recurve") return t("bowRecurve");
-    if (type === "Compound") return t("bowCompound");
-    if (type === "Barebow") return t("bowBarebow");
-    return type || "—";
+    const raw =
+      type === "Recurve"
+        ? t("bowRecurve")
+        : type === "Compound"
+        ? t("bowCompound")
+        : type === "Barebow"
+        ? t("bowBarebow")
+        : type || "—";
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatPracticeType = (rawType?: string, fallback?: string) => {
+    if (isEs) return rawType || fallback || "";
+    if (!rawType) return fallback || "";
+    const raw =
+      rawType === "Control"
+        ? t("practiceControl")
+        : rawType === "Práctica"
+        ? t("practicePractice")
+        : rawType === "Volumen"
+        ? t("practiceVolume")
+        : rawType === "Análisis"
+        ? t("navAnalysis")
+        : rawType;
+    return raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+  };
+
+  const formatSessionFormat = (rawFormat?: string, fallback?: string) => {
+    if (isEs) return rawFormat || fallback || "";
+    const f = rawFormat || fallback || "";
+    if (f === "Libre") return "Custom";
+    return f.replace(/\(Bloque\s*(\d+)\)/gi, "(Block $1)");
   };
 
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -227,7 +256,7 @@ export default function AthleteDetailSheet({
   const getPBs = () => {
     const pbs: Record<string, { score: number; maxScore: number; date: number }> = {};
     scoredSessions.forEach((s) => {
-      const format = s.format || tx("Libre", "Free");
+      const format = isEs ? (s.format || tx("Libre", "Free")) : formatSessionFormat(s.format, "Custom");
       if (!pbs[format] || s.score > pbs[format].score) {
         pbs[format] = {
           score: s.score,
@@ -330,7 +359,11 @@ export default function AthleteDetailSheet({
         </div>
 
         {/* Tabs navigation list */}
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]">
+        <div
+          className={`grid ${
+            isEs ? "grid-cols-4 sm:grid-cols-7" : "grid-cols-12 sm:grid-cols-7"
+          } gap-1.5 px-4 sm:px-5 py-2.5 shrink-0 border-b border-white/[0.05]`}
+        >
           {[
             { id: "PERFIL", label: t("navProfile"), icon: User },
             { id: "SESIONES", label: tx("Puntajes", "Scores"), icon: History },
@@ -339,9 +372,17 @@ export default function AthleteDetailSheet({
             { id: "RECORDS", label: tx("Récords", "Records"), icon: Award },
             { id: "TENDENCIAS", label: tx("Tendencias", "Trends"), icon: LineChart },
             { id: "NOTAS", label: tx("Notas", "Notes"), icon: MessageSquare }
-          ].map((tab) => {
+          ].map((tab, idx) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const spanClass = isEs
+              ? ""
+              : idx < 4
+              ? "col-span-3 sm:col-span-1 "
+              : "col-span-4 sm:col-span-1 ";
+            const cleanLabel = isEs
+              ? tab.label
+              : tab.label.replace(/\s*\([^)]*\)/g, "").trim() || tab.label;
             return (
               <button
                 key={tab.id}
@@ -353,15 +394,21 @@ export default function AthleteDetailSheet({
                     setExpandedSessionId(firstScored ? firstScored.id : null);
                   }
                 }}
-                className={`min-w-0 flex items-center sm:flex-col justify-center gap-1 sm:gap-1 px-1.5 py-2 sm:py-1.5 rounded-xl text-[11.6px] sm:text-[11px] font-black uppercase tracking-tight transition-all border cursor-pointer ${
+                className={`${spanClass}min-w-0 flex items-center sm:flex-col justify-center gap-1 sm:gap-1 px-1.5 py-2 sm:py-1.5 rounded-xl text-[11.6px] sm:text-[11px] font-black uppercase tracking-tight transition-all border cursor-pointer ${
                   active
                     ? "bg-cyan-neon/15 border-cyan-neon/35 text-cyan-neon"
                     : "bg-neutral-900/60 border-white/5 text-white hover:text-white"
                 }`}
               >
                 <Icon size={12} className="shrink-0" />
-                <span className="whitespace-nowrap leading-none truncate max-w-full">
-                  {tab.label}
+                <span
+                  className={
+                    isEs
+                      ? "whitespace-nowrap leading-none truncate max-w-full"
+                      : "whitespace-nowrap leading-none truncate max-w-full text-center"
+                  }
+                >
+                  {cleanLabel}
                 </span>
               </button>
             );
@@ -619,7 +666,7 @@ export default function AthleteDetailSheet({
                           >
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
-                                {sess.practiceType} · {sess.format}
+                                {formatPracticeType(sess.practiceType)} · {formatSessionFormat(sess.format)}
                               </span>
                               <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
                                 {dateStr} · {sess.distance}m ·{" "}
@@ -678,7 +725,8 @@ export default function AthleteDetailSheet({
                                                 Number(sess.distance) || 18,
                                                 sess.bowType || athlete.bowConfig?.type,
                                                 sess.format,
-                                                sess.targetType
+                                                sess.targetType,
+                                                language
                                               )
                                             : null;
 
@@ -795,7 +843,8 @@ export default function AthleteDetailSheet({
                                           sess.bowType || athlete.bowConfig?.type || "Recurve",
                                           presetType,
                                           sess.format,
-                                          sess.targetType
+                                          sess.targetType,
+                                          language
                                         );
                                         if (!analysis) return null;
                                         return (
@@ -945,7 +994,7 @@ export default function AthleteDetailSheet({
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
                                 <span className="truncate">
-                                  {sess.practiceType} · {sess.format}
+                                  {formatPracticeType(sess.practiceType)} · {formatSessionFormat(sess.format)}
                                 </span>
                                 <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5 shrink-0">
                                   {tx("ELIMINADA", "DELETED")}
@@ -1013,7 +1062,8 @@ export default function AthleteDetailSheet({
                                                 Number(sess.distance) || 18,
                                                 sess.bowType || athlete.bowConfig?.type,
                                                 sess.format,
-                                                sess.targetType
+                                                sess.targetType,
+                                                language
                                               )
                                             : null;
 
@@ -1226,7 +1276,7 @@ export default function AthleteDetailSheet({
                                 {dateStr}
                               </span>
                               <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
-                                {sess.practiceType || t("navSession")} · {sess.distance || 18}m ·{" "}
+                                {formatPracticeType(sess.practiceType, t("navSession"))} · {sess.distance || 18}m ·{" "}
                                 {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
                                 {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                                 {(() => {

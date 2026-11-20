@@ -103,6 +103,8 @@ const RIVAL_LIST = [
 
 export default function MatchplayLobbyView({ user, onBack, onStartDuel }: MatchplayLobbyViewProps) {
   const { language, t, tx, isRtl } = useLanguage();
+  const isEs = language === "es";
+  const isNonLatinScript = /^(ko|ja|zh|ru|iw|he|ar)/i.test(language);
   const languageRef = useRef(language);
   languageRef.current = language;
   const txCurrent = (esText: string, enText: string) =>
@@ -149,7 +151,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   // Competitor Gamertag / Alias State for Duels
   const [isEditingAlias, setIsEditingAlias] = useState(false);
-  const [currentAlias, setCurrentAlias] = useState(user.nickname || user.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero");
+  const [currentAlias, setCurrentAlias] = useState(
+    user.nickname ||
+      user.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) ||
+      tx("arquero", "archer")
+  );
 
   useEffect(() => {
     if (user.nickname) {
@@ -159,7 +165,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   const handleSaveAlias = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const cleanAlias = currentAlias.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 15) || "arquero";
+    const cleanAlias =
+      currentAlias.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 15) ||
+      tx("arquero", "archer");
     setCurrentAlias(cleanAlias);
     setIsEditingAlias(false);
     try {
@@ -586,7 +594,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         fullName: u.fullName || "",
         nickname:
           u.nickname ||
-          (u.fullName ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) : "arquero"),
+          (u.fullName
+            ? u.fullName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15)
+            : tx("arquero", "archer")),
         email: u.email || "",
         country: u.country || "CR",
         clubName: u.clubName || tx("Independiente", "Independent"),
@@ -904,7 +914,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         <div className="flex flex-col gap-1 pt-0.5">
           <h2
             className="text-white text-[16.5px] sm:text-[19.8px] font-black uppercase tracking-wider leading-snug [text-wrap:balance]"
-            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+            style={
+              isNonLatinScript
+                ? undefined
+                : { fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }
+            }
           >
             {tx("ELIMINATORIAS ONLINE", "ONLINE MATCHPLAY")}
           </h2>
@@ -921,38 +935,56 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       <div className="grid grid-cols-3 bg-[#0D1017] border border-white/[0.08] p-1 rounded-xl z-10 gap-1">
         <button
           onClick={() => setActiveTab("SEARCH")}
-          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
+          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap${
+            isEs ? "" : " min-w-0 overflow-hidden px-1"
+          } ${
             activeTab === "SEARCH"
               ? "bg-cyan-neon text-black"
               : "text-white hover:text-white"
           }`}
         >
-          {tx("Arena 1 vs 1", "1 vs 1 Arena")}
+          {isEs ? (
+            tx("Arena 1 vs 1", "1 vs 1 Arena")
+          ) : (
+            <span className="truncate px-1">{tx("Arena 1 vs 1", "1 vs 1 Arena")}</span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab("DRAFTS")}
-          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap${
+            isEs ? "" : " min-w-0 overflow-hidden px-1"
+          } ${
             activeTab === "DRAFTS"
               ? "bg-cyan-neon text-black"
               : "text-white hover:text-white"
           }`}
         >
-          <span>{tx("En Curso", "In Progress")}</span>
+          <span className={isEs ? undefined : "truncate"}>{tx("En Curso", "In Progress")}</span>
           {drafts.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none tabular-nums">
+            <span
+              className={`px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none tabular-nums${
+                isEs ? "" : " shrink-0"
+              }`}
+            >
               {drafts.length}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("HISTORY")}
-          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
+          className={`h-9 rounded-lg text-[11.6px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center whitespace-nowrap${
+            isEs ? "" : " min-w-0 overflow-hidden px-1"
+          } ${
             activeTab === "HISTORY"
               ? "bg-cyan-neon text-black"
               : "text-white hover:text-white"
           }`}
         >
-          {tx("Historial", "History")}
+          {isEs ? (
+            tx("Historial", "History")
+          ) : (
+            <span className="truncate px-1">{tx("Historial", "History")}</span>
+          )}
         </button>
       </div>
 

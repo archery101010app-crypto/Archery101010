@@ -20,7 +20,8 @@ interface BleHeartRateModalProps {
 }
 
 export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModalProps) {
-  const { t, tx } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -194,7 +195,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       className="m-auto w-[calc(100vw-14px)] max-w-[420px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
     >
       <div
-        dir="ltr"
+        dir={isEs ? "ltr" : undefined}
         className="w-full bg-[#04060A] border border-white/[0.15] rounded-[28px] p-5 flex flex-col gap-4 relative select-none font-sans"
       >
         {/* Top 101010 tricolor line */}
@@ -208,16 +209,20 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
         {/* Single-Line Brand Header */}
         <div className="w-full flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div dir="ltr" className="flex items-center gap-2 min-w-0">
             <img
               src="/images/brand_logo_header.png"
               srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
               alt="ARCHERY 101010"
-              className="h-[12.5px] min-[385px]:h-[13.5px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+              className={`${
+                isEs ? "h-[12.5px] min-[385px]:h-[13.5px]" : "h-[11px] min-[385px]:h-[12.5px]"
+              } w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
               draggable={false}
             />
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full h-[25px] px-2.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-none shrink-0 tabular-nums whitespace-nowrap ${
+              className={`inline-flex items-center gap-1.5 rounded-full h-[25px] px-2.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-none ${
+                isEs ? "shrink-0" : "min-w-0 overflow-hidden"
+              } tabular-nums whitespace-nowrap ${
                 isConnected
                   ? "bg-[#051810] border-[#00C853]/65 text-white"
                   : isScanning || isConnecting
@@ -234,7 +239,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                     : "bg-[#8E96A4]"
                 }`}
               />
-              <span>{statusBadgeText}</span>
+              <span className={isEs ? undefined : "max-w-[128px] truncate"}>{statusBadgeText}</span>
             </span>
           </div>
 
@@ -276,9 +281,17 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
             </div>
           </div>
 
-          <div className="grid grid-cols-[1.05fr_1fr_1fr] gap-2.5 items-center pt-0.5">
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-sans text-[44px] font-extrabold leading-none text-white tabular-nums">
+          <div
+            className={`grid ${
+              isEs ? "grid-cols-[1.05fr_1fr_1fr]" : "grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]"
+            } gap-2.5 items-center pt-0.5`}
+          >
+            <div dir="ltr" className="flex items-baseline gap-1.5">
+              <span
+                className={`font-sans ${
+                  isEs ? "text-[44px]" : "text-[38px] min-[385px]:text-[44px]"
+                } font-extrabold leading-none text-white tabular-nums`}
+              >
                 {isConnected && status.currentBpm >= 30 ? status.currentBpm : "—"}
               </span>
               <span className="text-[14px] font-extrabold uppercase tracking-wider text-[#FF1E1E]">
@@ -286,17 +299,37 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               </span>
             </div>
 
-            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]">
-              <span className="text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block">
-                {tx("PROMEDIO", "AVERAGE")}
+            <div
+              className={`bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]${
+                isEs ? "" : " min-w-0"
+              }`}
+            >
+              <span
+                className={
+                  isEs
+                    ? "text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                    : "truncate w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                }
+              >
+                {isEs ? tx("PROMEDIO", "AVERAGE") : t("cardAverage")}
               </span>
               <span className="text-[18px] font-extrabold text-white tabular-nums leading-tight block">
                 {status.avgHeartRateBpm >= 30 ? status.avgHeartRateBpm : "—"}
               </span>
             </div>
 
-            <div className="bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]">
-              <span className="text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block">
+            <div
+              className={`bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[62px]${
+                isEs ? "" : " min-w-0"
+              }`}
+            >
+              <span
+                className={
+                  isEs
+                    ? "text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                    : "truncate w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                }
+              >
                 {tx("MÁXIMO", "PEAK")}
               </span>
               <span className="text-[18px] font-extrabold text-[#FFE500] tabular-nums leading-tight block">
@@ -364,13 +397,13 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                         <span className="text-[16px] font-bold text-white truncate">
                           {dev.name}
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className={`flex items-center gap-1.5 mt-0.5${isEs ? "" : " min-w-0"}`}>
                           {dev.hasHrService ? (
                             <span className="text-[12px] font-bold uppercase tracking-wider text-[#00C853]">
                               {tx("● PULSO ACTIVO", "● HR READY")}
                             </span>
                           ) : dev.isBondedOrConnected ? (
-                            <span className="text-[12px] font-bold uppercase tracking-wider text-[#00BFFF]">
+                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#00BFFF]${isEs ? "" : " truncate"}`}>
                               {tx("EMPAREJADO EN TELÉFONO", "PAIRED ON PHONE")}
                             </span>
                           ) : (
@@ -385,7 +418,9 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                         type="button"
                         disabled={isThisConnecting}
                         onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
-                        className="min-h-[42px] px-4 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-bold text-[14px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
+                        className={`min-h-[42px] px-4 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-bold text-[14px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60${
+                          isEs ? "" : " max-w-[132px] truncate"
+                        }`}
                       >
                         {isThisConnecting ? tx("Conectando...", "Connecting...") : t("bleHrConnect")}
                       </button>

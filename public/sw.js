@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.138";
+const CACHE_NAME = "archery-101010-cache-v2.139";
 
 // Install event - pre-warm offline root shell bypassing HTTP disk cache
 self.addEventListener("install", (event) => {

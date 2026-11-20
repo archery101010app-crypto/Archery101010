@@ -36,6 +36,7 @@ export interface ShotImpact {
 
 export default function MatchplayGameView({ user, config, onBack, onDuelSaved }: MatchplayGameViewProps) {
   const { language, tx, isRtl } = useLanguage();
+  const isEs = language === "es";
   const languageRef = useRef(language);
   languageRef.current = language;
   const txCurrent = (esText: string, enText: string) =>
@@ -518,7 +519,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       uid: duelId,
       userId: user.uid,
       userUid: user.uid,
-      userName: user.fullName || user.nickname || "Arquero",
+      userName: user.fullName || user.nickname || txCurrent("Arquero", "Archer"),
       clubId: user.clubId || null,
       timestamp: nowTs,
       updatedAt: nowTs,
@@ -2819,7 +2820,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       uid: duelId,
       userId: user.uid,
       userUid: user.uid,
-      userName: user.fullName || user.nickname || "Arquero",
+      userName: user.fullName || user.nickname || tx("Arquero", "Archer"),
       clubId: user.clubId || null,
       timestamp: nowTs,
       updatedAt: nowTs,
@@ -4124,7 +4125,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   </label>
 
                   {/* Status Indicator */}
-                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold">
+                  <div
+                    className={`flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold${
+                      isEs ? "" : " gap-2 flex-wrap"
+                    }`}
+                  >
                     <span className="text-white">{tx("Tu Estado:", "Your Status:")}</span>
                     <span className={userPhoto ? "text-cyan-neon" : "text-yellow-gold"}>
                       {userPhoto
@@ -4133,7 +4138,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold tabular-nums">
+                  <div
+                    className={`flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5 text-[10.5px] font-bold tabular-nums${
+                      isEs ? "" : " gap-2 flex-wrap"
+                    }`}
+                  >
                     <span className="text-white">{tx("Estado del Rival:", "Opponent Status:")}</span>
                     <span className={rivalPhoto ? "text-cyan-neon" : photoUploadCountdown === 0 ? "text-white" : "text-yellow-gold flex items-center gap-1"}>
                       {rivalPhoto ? (

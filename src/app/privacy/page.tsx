@@ -60,12 +60,12 @@ export default function PrivacyPolicyPage() {
               href="/"
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#12151C] border border-white/[0.10] text-white hover:border-cyan-neon/40 transition active:scale-95 text-xs font-bold"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16} className="rtl:rotate-180" />
               <span>{isEs ? "Volver a ARCHERY 101010" : "Back to ARCHERY 101010"}</span>
             </Link>
 
             {/* Official Brand Logo + THE APP */}
-            <div className="flex items-center gap-2.5 select-none">
+            <div dir="ltr" className="flex items-center gap-2.5 select-none">
               <img
                 src="/images/brand_logo_header.png"
                 srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"

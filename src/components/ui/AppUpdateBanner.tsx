@@ -170,7 +170,8 @@ async function purgeServiceWorkersAndCachesBounded(): Promise<void> {
 }
 
 export default function AppUpdateBanner() {
-  const { tx } = useLanguage();
+  const { language, tx } = useLanguage();
+  const isEs = language === "es";
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -317,23 +318,29 @@ export default function AppUpdateBanner() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-3 pt-2 z-50 shrink-0">
+    <div className={`w-full max-w-md mx-auto ${isEs ? "px-3" : "px-0.5"} pt-2 z-50 shrink-0`}>
       <div className="bg-[#06080C] border border-[#00A8F3]/40 rounded-2xl p-3 flex items-center justify-between gap-2.5">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div className="w-8 h-8 rounded-xl bg-[#04101C] border border-[#00A8F3]/35 flex items-center justify-center text-[#00A8F3] shrink-0">
             <Sparkles size={15} />
           </div>
-          <div className="flex flex-col min-w-0">
+          <div className={`flex flex-col min-w-0${!isEs ? " text-start" : ""}`}>
             <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
-              {tx(
-                `Nueva versión disponible · v${remoteInfo.version}`,
-                `New version available · v${remoteInfo.version}`
+              {isEs ? (
+                `Nueva versión disponible · v${remoteInfo.version}`
+              ) : (
+                <>
+                  New version available · <span dir="ltr">v{remoteInfo.version}</span>
+                </>
               )}
             </span>
             <span className="text-[10.5px] text-white truncate tabular-nums">
-              {tx(
-                `Actualiza al instante con un toque (tienes v${APP_VERSION})`,
-                `Instant one-tap update (current v${APP_VERSION})`
+              {isEs ? (
+                `Actualiza al instante con un toque (tienes v${APP_VERSION})`
+              ) : (
+                <>
+                  Instant one-tap update <span dir="ltr">(current v{APP_VERSION})</span>
+                </>
               )}
             </span>
           </div>

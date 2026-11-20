@@ -55,7 +55,46 @@ interface DashboardViewProps {
 import { COUNTRIES } from "@/lib/countries";
 
 export default function DashboardView({ user, coachViewMode = false, onNavigate, onUserUpdate }: DashboardViewProps) {
-  const { language, t } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
+  const isNonLatinScript = /^(ko|ja|zh|ru|iw|he|ar)/i.test(language);
+
+  const stripBowParenthetical = (raw: string) =>
+    raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
+
+  const getLocalizedStarName = (name: string) => {
+    if (isEs) return name;
+    const map: Record<string, string> = {
+      "Estrella de Bronce": "Bronze Star",
+      "Estrella de Plata": "Silver Star",
+      "Estrella de Oro": "Gold Star",
+      "Estrella Blanca": "White Star",
+      "Estrella Negra": "Black Star",
+      "Estrella Azul": "Blue Star",
+      "Estrella Roja": "Red Star",
+      "Estrella Amarilla": "Gold Star",
+      "Estrella de Oro y Negro": "Gold & Black Star",
+      "Estrella Púrpura": "Purple Star",
+      "Estrella Naranja": "Orange Star",
+      "Estrella de Diamante": "Diamond Star",
+      "Estrella Diamante": "Diamond Star"
+    };
+    return map[name] || name;
+  };
+
+  const getLocalizedStarDescription = (star: { description?: string; minScore: number }) => {
+    if (isEs) {
+      return star.description || `Se obtiene con ${star.minScore}+ puntos en la ronda WA 720.`;
+    }
+    if (star.description) {
+      const m = star.description.match(/^Lograda en (Recurvo 70m|Compuesto 50m) con (\d+)\+ puntos$/i);
+      if (m) {
+        const bowEn = m[1].toLowerCase().startsWith("recurvo") ? "Recurve 70m" : "Compound 50m";
+        return `Earned in ${bowEn} with ${m[2]}+ points`;
+      }
+    }
+    return `Earned with ${star.minScore}+ points in the WA 720 round.`;
+  };
   const [sessions, setSessions] = useState<any[]>([]);
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
   const [attendance, setAttendance] = useState<Record<string, boolean>>({});
@@ -318,6 +357,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
     >
       {/* Titular Oficial: ARCHERY 101010 / THE APP (+15% Size) */}
       <div 
+        dir="ltr"
         translate="no"
         className="notranslate w-full flex flex-col justify-center items-center pt-1 pb-2 sm:pb-4 select-none gap-1"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
@@ -335,7 +375,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         </span>
       </div>
 
-      {/* Cabecera Editorial Limpia (Estilo Apple Fitness / WHOOP) */}
+      {/* Cabecera Editorial Limpia */}
       <div className="flex items-center justify-between px-1 gap-2 sm:gap-3">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -367,11 +407,19 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             ) : (
               <span className="text-white truncate">
-                {user?.bowConfig?.type === "Recurve"
-                  ? "Recurvo"
-                  : user?.bowConfig?.type === "Compound"
-                    ? "Compuesto"
-                    : user?.bowConfig?.type || "Barebow"}
+                {isEs
+                  ? user?.bowConfig?.type === "Recurve"
+                    ? "Recurvo"
+                    : user?.bowConfig?.type === "Compound"
+                      ? "Compuesto"
+                      : user?.bowConfig?.type || "Barebow"
+                  : stripBowParenthetical(
+                      user?.bowConfig?.type === "Recurve"
+                        ? t("bowRecurve")
+                        : user?.bowConfig?.type === "Compound"
+                          ? t("bowCompound")
+                          : t("bowBarebow")
+                    )}
               </span>
             )}
           </p>
@@ -389,7 +437,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
         )}
       </div>
 
-      {/* Bento Grid Principal (Estilo Nike Fitness / WHOOP / Apple Fitness+) */}
+      {/* Bento Grid Principal */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {/* 1. Progreso Semanal + Telemetría Esencial Integrada (Ancho Completo) */}
         <motion.div
@@ -484,16 +532,16 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-white/[0.07] text-[13.2px] text-white tabular-nums leading-none">
-                  <span className="truncate">
+                  <span dir={!isEs ? "ltr" : undefined} className="truncate">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
                     <strong className="text-white font-black">
                       {stats.bestScore > 0 ? `${stats.bestScore} pts` : "—"}
                     </strong>
                   </span>
-                  <span className="shrink-0">
+                  <span dir={!isEs ? "auto" : undefined} className="shrink-0">
                     {language === "es" ? "Volumen:" : "Volume:"}{" "}
                     <strong className="text-white font-black">
-                      {stats.totalArrows} fl.
+                      {stats.totalArrows} {isEs ? "fl." : t("arrowsLabel")}
                     </strong>
                   </span>
                 </div>
@@ -509,7 +557,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           className="col-span-3 bg-[#0D1017] rounded-2xl border border-white/[0.1] hover:border-cyan-neon/50 p-4 sm:p-5 cursor-pointer transition-all duration-200 relative overflow-hidden group flex flex-col gap-3"
         >
           {/* Top Accent Hairline (WA Target Trio: Cyan / Red / Gold) */}
-          <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+          <div dir="ltr" className="absolute top-0 left-0 right-0 h-[3px] flex">
             <div className="flex-1 bg-cyan-neon" />
             <div className="flex-1 bg-red-rival" />
             <div className="flex-1 bg-yellow-gold" />
@@ -533,14 +581,14 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           <div className="flex items-center justify-center w-full text-center py-1.5">
             <h3
               className="w-full text-white text-[20.4px] sm:text-[26.4px] font-black uppercase tracking-wider leading-tight group-hover:text-cyan-neon transition-colors text-center mx-auto"
-              style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+              style={isNonLatinScript ? undefined : { fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
             >
               {t("duelsTitle")}
             </h3>
           </div>
 
           {/* Row 3: Symmetrical 2-Column Footer (Real Duel Record + Clean CTA Button) */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 pt-2.5 border-t border-white/[0.07] items-center">
+          <div className={`grid grid-cols-2 gap-2 sm:gap-2.5 pt-2.5 border-t border-white/[0.07] ${isEs ? "items-center" : "items-stretch"}`}>
             <div className="min-h-[44px] py-1 bg-[#080A0F] border border-white/[0.08] rounded-xl px-1.5 sm:px-2 flex flex-wrap items-center justify-center gap-1 gap-y-0.5 overflow-hidden tabular-nums">
               <div className="flex items-baseline gap-0.5 sm:gap-1 min-w-0">
                 <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-tighter text-cyan-neon">
@@ -585,13 +633,19 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               <Star size={18} className="fill-yellow-gold text-yellow-gold" />
             </div>
             <div className="flex flex-col min-w-0 gap-0.5">
-              <span className="text-[13.2px] font-black uppercase tracking-[0.08em] text-white truncate">
-                Estrellas 101010 · WA 720
+              <span dir={!isEs ? "ltr" : undefined} className="text-[13.2px] font-black uppercase tracking-[0.08em] text-white truncate">
+                {tx("Estrellas 101010 · WA 720", "101010 Stars · WA 720")}
               </span>
-              <span className="text-[12.6px] font-semibold text-white tabular-nums truncate">
+              <span dir={!isEs ? "ltr" : undefined} className="text-[12.6px] font-semibold text-white tabular-nums truncate">
                 {athleteStar && athleteStar.highestStarLevel > 0
-                  ? `Nivel actual: Estrella ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`
-                  : "8 niveles oficiales · Recurvo 70 m y Compuesto 50 m"}
+                  ? tx(
+                      `Nivel actual: Estrella ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`,
+                      `Current tier: Star ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`
+                    )
+                  : tx(
+                      "8 niveles oficiales · Recurvo 70 m y Compuesto 50 m",
+                      "8 official tiers · Recurve 70 m & Compound 50 m"
+                    )}
               </span>
             </div>
           </div>
@@ -616,17 +670,17 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="fixed top-0 left-0 h-full w-[306px] sm:w-[342px] max-w-[90vw] bg-neutral-950/95 border-r border-yellow-gold/25 shadow-[8px_0_30px_rgba(0,0,0,0.8)] z-[50] flex flex-col pt-4 pb-6 text-left"
+              className="fixed top-0 left-0 h-full w-[306px] sm:w-[342px] max-w-[90vw] bg-neutral-950/95 border-r border-yellow-gold/25 shadow-[8px_0_30px_rgba(0,0,0,0.8)] z-[50] flex flex-col pt-4 pb-6 text-start"
             >
               {/* Header */}
               <div className="px-5 pb-4 border-b border-white/5 flex items-center justify-between">
                 <div>
                   <h3 className="text-white text-sm font-black uppercase tracking-wide flex items-center gap-1.5">
                     <Star size={14} className="text-yellow-gold fill-yellow-gold shrink-0" />
-                    <span>Estrellas 101010</span>
+                    <span>{tx("Estrellas 101010", "101010 Stars")}</span>
                   </h3>
                   <p className="text-[10.5px] text-white uppercase tracking-wider mt-0.5">
-                    Reglamento Oficial WA 720
+                    {tx("Reglamento Oficial WA 720", "Official WA 720 Rules")}
                   </p>
                 </div>
                 <button
@@ -640,7 +694,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                 <p className="text-[11.6px] text-white leading-relaxed [text-wrap:pretty]">
-                  Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70 m o Compuesto 50 m) con un puntaje mínimo de 500 para ganar estrellas.
+                  {tx(
+                    "Completa una sesión oficial WA 720 (72 flechas) a distancia reglamentaria (Recurvo 70 m o Compuesto 50 m) con un puntaje mínimo de 500 para ganar estrellas.",
+                    "Complete an official WA 720 round (72 arrows) at regulation distance (Recurve 70 m or Compound 50 m) with a minimum score of 500 to earn stars."
+                  )}
                 </p>
 
                 {/* Bow type tabs */}
@@ -653,7 +710,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                         : "text-white hover:text-white"
                     }`}
                   >
-                    Recurvo (70 m)
+                    {tx("Recurvo (70 m)", "Recurve (70 m)")}
                   </button>
                   <button
                     onClick={() => setActiveStarTab("Compound")}
@@ -663,7 +720,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                         : "text-white hover:text-white"
                     }`}
                   >
-                    Compuesto (50 m)
+                    {tx("Compuesto (50 m)", "Compound (50 m)")}
                   </button>
                 </div>
 
@@ -702,12 +759,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                             >
                               <Star size={18} className="fill-current" />
                             </div>
-                            <div className="flex flex-col text-left">
+                            <div className="flex flex-col text-start">
                               <span className="text-xs font-black text-white group-hover:text-yellow-gold transition-colors">
-                                {star.name}
+                                {getLocalizedStarName(star.name)}
                               </span>
                               <span className="text-[10.5px] text-white font-bold mt-0.5 tabular-nums">
-                                Mínimo: {star.minScore} pts
+                                {tx(`Mínimo: ${star.minScore} pts`, `Minimum: ${star.minScore} pts`)}
                               </span>
                             </div>
                           </div>
@@ -723,7 +780,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                                   color: star.color 
                                 }}
                               >
-                                LOGRADO
+                                {tx("LOGRADO", "EARNED")}
                               </span>
                             ) : (
                               <div className="text-[11.6px] text-white bg-neutral-900/40 px-2 py-1 rounded-lg border border-white/5 font-black uppercase flex items-center justify-center">
@@ -767,27 +824,37 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
 
                 <span className="text-[11.6px] text-yellow-gold font-black tracking-widest uppercase block mb-1">
-                  REGLAMENTO OFICIAL WA
+                  {tx("REGLAMENTO OFICIAL WA", "OFFICIAL WA RULES")}
                 </span>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                  {selectedDetailStar.star.name}
+                  {getLocalizedStarName(selectedDetailStar.star.name)}
                 </h3>
                 
-                <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3.5 w-full text-left flex flex-col gap-2">
+                <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3.5 w-full text-start flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[11.6px] text-white uppercase font-bold">Modalidad</span>
+                    <span className="text-[11.6px] text-white uppercase font-bold">
+                      {tx("Modalidad", "Division")}
+                    </span>
                     <span className="text-xs font-black text-white">
-                      {selectedDetailStar.bowType === "Recurve" ? "Arco Recurvo" : "Arco Compuesto"}
+                      {selectedDetailStar.bowType === "Recurve"
+                        ? tx("Arco Recurvo", "Recurve Bow")
+                        : tx("Arco Compuesto", "Compound Bow")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[11.6px] text-white uppercase font-bold">Distancia Oficial</span>
+                    <span className="text-[11.6px] text-white uppercase font-bold">
+                      {tx("Distancia Oficial", "Official Distance")}
+                    </span>
                     <span className="text-xs font-black text-white">
-                      {selectedDetailStar.bowType === "Recurve" ? "70 metros" : "50 metros"}
+                      {selectedDetailStar.bowType === "Recurve"
+                        ? tx("70 metros", "70 meters")
+                        : tx("50 metros", "50 meters")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[11.6px] text-white uppercase font-bold">Marca Mínima</span>
+                    <span className="text-[11.6px] text-white uppercase font-bold">
+                      {tx("Marca Mínima", "Minimum Score")}
+                    </span>
                     <span className="text-xs font-black text-white tabular-nums">{selectedDetailStar.star.minScore} / 720 pts</span>
                   </div>
                   <div className="flex flex-col pt-1">
@@ -804,9 +871,9 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                       return (
                         <>
                           <div className="flex justify-between items-center text-[11.6px] text-white font-bold mb-1">
-                            <span>Progreso de Puntuación</span>
+                            <span>{tx("Progreso de Puntuación", "Score Progress")}</span>
                             <span className="text-white font-extrabold tabular-nums">
-                              {userBest > 0 ? `${userBest} pts` : "Sin Récord"}
+                              {userBest > 0 ? `${userBest} pts` : tx("Sin Récord", "No Record")}
                             </span>
                           </div>
                           <div className="flex flex-col gap-1">
@@ -821,10 +888,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                             </div>
                             <span className="text-[10.5px] font-bold text-white mt-0.5">
                               {selectedDetailStar.isUnlocked 
-                                ? "Estrella obtenida y superada" 
+                                ? tx("Estrella obtenida y superada", "Star earned and surpassed")
                                 : pointsNeeded > 0 
-                                  ? `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`
-                                  : "Estrella lograda"
+                                  ? tx(
+                                      `Te faltan ${pointsNeeded} puntos para lograr esta estrella.`,
+                                      `You need ${pointsNeeded} more points to earn this star.`
+                                    )
+                                  : tx("Estrella lograda", "Star earned")
                               }
                             </span>
                           </div>
@@ -835,7 +905,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
 
                 <p className="text-[11.6px] text-white leading-relaxed px-2 [text-wrap:pretty]">
-                  {selectedDetailStar.star.description || `Se obtiene con ${selectedDetailStar.star.minScore}+ puntos en la ronda WA 720.`}
+                  {getLocalizedStarDescription(selectedDetailStar.star)}
                 </p>
 
                 <div className="mt-6 flex flex-col gap-2 w-full">
@@ -847,13 +917,13 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                     }}
                     className="w-full h-11 bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center whitespace-nowrap"
                   >
-                    <span>Entrenar para Lograrlo</span>
+                    <span>{tx("Entrenar para Lograrlo", "Train to Earn It")}</span>
                   </button>
                   <button
                     onClick={() => setSelectedDetailStar(null)}
                     className="w-full h-11 bg-[#111620] border border-white/10 text-white hover:text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center justify-center whitespace-nowrap"
                   >
-                    Volver al Listado
+                    {tx("Volver al Listado", "Back to List")}
                   </button>
                 </div>
               </div>

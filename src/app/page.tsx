@@ -13,6 +13,7 @@ import AppUpdateBanner from "@/components/ui/AppUpdateBanner";
 import OledDialogHost from "@/components/ui/OledDialogHost";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { showOledAlert } from "@/lib/oledDialog";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
 import ProfileCompletionModal from "@/components/profile/ProfileCompletionModal";
 import "@/lib/db/indexedDB";
 import "@/lib/db/syncManager";
@@ -96,7 +97,26 @@ import { initMobileBackNavigation, registerModalDismiss } from "@/lib/navigation
 type Screen = "HOME" | "TARGET" | "ANALYSIS" | "HISTORY" | "CALENDAR" | "PROFILE" | "MATCHPLAY_LOBBY" | "MATCHPLAY_ARENA" | "ADMIN";
 
 
+const STAR_NAME_EN_MAP: Record<string, string> = {
+  "Estrella de Bronce": "Bronze Star",
+  "Estrella de Plata": "Silver Star",
+  "Estrella de Oro": "Gold Star",
+  "Estrella Azul": "Blue Star",
+  "Estrella Roja": "Red Star",
+  "Estrella de Oro y Negro": "Gold & Black Star",
+  "Estrella Púrpura": "Purple Star",
+  "Estrella de Diamante": "Diamond Star"
+};
+
 export default function Home() {
+  const { language, t } = useLanguage();
+  const isEs = language === "es";
+  const txPage = (esText: string, enText: string): string => (isEs ? esText : enText);
+  const languageRef = React.useRef(language);
+  languageRef.current = language;
+  const txPageRef = (esText: string, enText: string): string =>
+    languageRef.current === "es" ? esText : enText;
+
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authScreen, setAuthScreen] = useState<"LOGIN" | "REGISTER">("LOGIN");
   const [currentScreen, setCurrentScreen] = useState<Screen>("HOME");
@@ -717,7 +737,7 @@ export default function Home() {
               isCreator: false,
               rival: {
                 uid: data.creatorUid || "RIV-FRIEND-CREATOR",
-                fullName: data.creatorName || "Anfitrión del Duelo",
+                fullName: data.creatorName || txPageRef("Anfitrión del Duelo", "Duel Host"),
                 country: data.creatorCountry || "CR",
                 clubName: "Lobby Archery",
                 clubLogo: "1",
@@ -729,11 +749,21 @@ export default function Home() {
             setDuelConfig(matchConfig);
             setCurrentScreen("MATCHPLAY_ARENA");
           } else {
-            await showOledAlert(`El código de desafío "${code}" no existe o es inválido.`);
+            await showOledAlert(
+              txPageRef(
+                `El código de desafío "${code}" no existe o es inválido.`,
+                `Challenge code "${code}" does not exist or is invalid.`
+              )
+            );
           }
         } catch (err) {
           console.error("Error joining duel from URL parameter:", err);
-          await showOledAlert("No se pudo conectar al desafío automáticamente. Intenta ingresar el código manual.");
+          await showOledAlert(
+            txPageRef(
+              "No se pudo conectar al desafío automáticamente. Intenta ingresar el código manual.",
+              "Could not join the challenge automatically. Please enter the code manually."
+            )
+          );
         }
       };
 
@@ -1063,7 +1093,12 @@ export default function Home() {
               }
             } catch {}
             console.warn("[Auth Guard] Firebase session missing or mismatched. Forcing re-login.");
-            await showOledAlert("Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.");
+            await showOledAlert(
+              txPageRef(
+                "Tu sesión expiró. Por seguridad vuelve a iniciar sesión para que tus entrenamientos se guarden en la nube.",
+                "Your session has expired. For security, please sign in again so your sessions sync to the cloud."
+              )
+            );
             try {
               const { logoutUser } = await import("@/lib/firebase").then(() => import("@/lib/authService"));
               await logoutUser();
@@ -1144,7 +1179,12 @@ export default function Home() {
         
         for (const session of restored) {
           // Notify the user
-          await showOledAlert(`Tu coach ha restituido tu entrenamiento de ${session.format} (${session.distance}m) del ${new Date(session.timestamp).toLocaleDateString()}.`);
+          await showOledAlert(
+            txPageRef(
+              `Tu coach ha restituido tu entrenamiento de ${session.format} (${session.distance}m) del ${new Date(session.timestamp).toLocaleDateString()}.`,
+              `Your Coach restored your ${session.format} (${session.distance}m) session from ${new Date(session.timestamp).toLocaleDateString()}.`
+            )
+          );
           
           // Clear restoredByCoach flag so the alert doesn't show again
           const updatedSession = { ...session, restoredByCoach: false };
@@ -1495,7 +1535,10 @@ export default function Home() {
     if (val) {
       if (isLinkedToExternalCoach(user)) {
         await showOledAlert(
-          "Estás vinculado como alumno a tu entrenador. Para activar un Portal de Coach propio debes desvincularte primero desde tu Perfil."
+          txPage(
+            "Estás vinculado como alumno a tu entrenador. Para activar un Portal de Coach propio debes desvincularte primero desde tu Perfil.",
+            "You are linked as an athlete to your Coach. To activate your own Coach Portal, unlink from your Coach in your Profile first."
+          )
         );
         return;
       }
@@ -1754,33 +1797,40 @@ export default function Home() {
                 </div>
 
                 <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
-                  NUEVA MARCA HISTÓRICA
+                  {txPage("NUEVA MARCA HISTÓRICA", "NEW PERSONAL MILESTONE")}
                 </span>
                 <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                  {unlockedStar.star.name}
+                  {isEs
+                    ? unlockedStar.star.name
+                    : STAR_NAME_EN_MAP[unlockedStar.star.name] || unlockedStar.star.name}
                 </h3>
                 
                 <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full">
                   <span className="text-[10.5px] text-white uppercase font-bold block">
-                    Puntuación Registrada
+                    {txPage("Puntuación Registrada", "Recorded Score")}
                   </span>
-                  <span className="text-2xl font-black text-white block mt-0.5 tabular-nums">
+                  <span dir={!isEs ? "ltr" : undefined} className="text-2xl font-black text-white block mt-0.5 tabular-nums">
                     {unlockedStar.score} <span className="text-xs text-white">/ 720</span>
                   </span>
                   <span className="text-[10.5px] text-cyan-neon uppercase font-black tracking-wider block mt-1">
-                    {unlockedStar.bowType === "Recurve" ? "Recurvo" : unlockedStar.bowType === "Compound" ? "Compuesto" : unlockedStar.bowType} · {unlockedStar.distance} m (72 flechas)
+                    {isEs
+                      ? `${unlockedStar.bowType === "Recurve" ? "Recurvo" : unlockedStar.bowType === "Compound" ? "Compuesto" : unlockedStar.bowType} · ${unlockedStar.distance} m (72 flechas)`
+                      : `${unlockedStar.bowType === "Recurve" ? t("bowRecurve") : unlockedStar.bowType === "Compound" ? t("bowCompound") : unlockedStar.bowType} · ${unlockedStar.distance} m (72 ${t("arrowsLabel")})`}
                   </span>
                 </div>
 
                 <p className="text-xs text-white leading-relaxed px-2 [text-wrap:pretty]">
-                  Felicitaciones, {unlockedStar.userName}. Has superado la marca mínima de {unlockedStar.star.minScore} puntos y desbloqueado esta Estrella 101010.
+                  {txPage(
+                    `Felicitaciones, ${unlockedStar.userName}. Has superado la marca mínima de ${unlockedStar.star.minScore} puntos y desbloqueado esta Estrella 101010.`,
+                    `Congratulations, ${unlockedStar.userName}. You surpassed the ${unlockedStar.star.minScore}-point mark and unlocked this 101010 Star.`
+                  )}
                 </p>
 
                 <button
                   onClick={() => setUnlockedStar(null)}
                   className="mt-6 w-full h-11 bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                 >
-                  Continuar
+                  {txPage("Continuar", "Continue")}
                 </button>
               </div>
             </motion.div>
@@ -1802,46 +1852,49 @@ export default function Home() {
                 {!showDiscardConfirm ? (
                   <>
                     <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase block mb-1">
-                      SESIÓN EN PAUSA
+                      {txPage("SESIÓN EN PAUSA", "PAUSED SESSION")}
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                      ¿Reanudar Entrenamiento?
+                      {txPage("¿Reanudar Entrenamiento?", "Resume Session?")}
                     </h3>
                     
-                    <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full text-left">
-                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[11.6px] text-white uppercase font-bold">Formato WA</span>
-                        <span className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance} m</span>
+                    <div className="my-4 bg-[#111620] border border-white/[0.07] rounded-2xl px-4 py-3 w-full text-start">
+                      <div className="flex justify-between items-center gap-2 border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[11.6px] text-white uppercase font-bold">{txPage("Formato WA", "WA Format")}</span>
+                        <span dir={!isEs ? "ltr" : undefined} className="text-xs font-black text-white">{activeDraft.format} · {activeDraft.distance} m</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[11.6px] text-white uppercase font-bold">Puntuación</span>
-                        <span className="text-xs font-black text-cyan-neon tabular-nums">{activeDraft.score} pts</span>
+                      <div className="flex justify-between items-center gap-2 border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[11.6px] text-white uppercase font-bold">{txPage("Puntuación", "Score")}</span>
+                        <span dir={!isEs ? "ltr" : undefined} className="text-xs font-black text-cyan-neon tabular-nums">{activeDraft.score} pts</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-2">
-                        <span className="text-[11.6px] text-white uppercase font-bold">Progreso</span>
+                      <div className="flex justify-between items-center gap-2 border-b border-white/[0.06] pb-2 mb-2">
+                        <span className="text-[11.6px] text-white uppercase font-bold">{txPage("Progreso", "Progress")}</span>
                         <span className="text-xs font-black text-white tabular-nums">
                           {(() => {
                             const shotCount = activeDraft.ends.reduce((sum: number, e: any) => sum + e.arrows.filter((a: string) => a !== "").length, 0);
                             const total = activeDraft.endsCount * activeDraft.arrowsPerEnd;
-                            return `${shotCount} / ${total} flechas`;
+                            return txPage(`${shotCount} / ${total} flechas`, `${shotCount} / ${total} arrows`);
                           })()}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[11.6px] text-white uppercase font-bold">Guardado</span>
-                        <span className="text-[11.6px] text-white font-medium">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-[11.6px] text-white uppercase font-bold">{txPage("Guardado", "Saved")}</span>
+                        <span dir={!isEs ? "ltr" : undefined} className="text-[11.6px] text-white font-medium">
                           {activeDraft.timestamp ? (
                             (() => {
                               const date = new Date(activeDraft.timestamp);
-                              return isNaN(date.getTime()) ? "Fecha N/A" : `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                              return isNaN(date.getTime()) ? txPage("Fecha N/A", "Date N/A") : `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                             })()
-                          ) : "Fecha N/A"}
+                          ) : txPage("Fecha N/A", "Date N/A")}
                         </span>
                       </div>
                     </div>
 
                     <p className="text-xs text-white leading-relaxed px-2 [text-wrap:pretty]">
-                      Tienes una sesión en curso guardada. ¿Deseas continuar registrando tus flechas donde lo dejaste?
+                      {txPage(
+                        "Tienes una sesión en curso guardada. ¿Deseas continuar registrando tus flechas donde lo dejaste?",
+                        "You have an unfinished session saved. Would you like to continue scoring where you left off?"
+                      )}
                     </p>
 
                     <div className="mt-5 flex flex-col gap-2 w-full">
@@ -1849,27 +1902,30 @@ export default function Home() {
                         onClick={() => resumeSession(activeDraft)}
                         className="w-full h-11 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
-                        Reanudar Entrenamiento
+                        {txPage("Reanudar Entrenamiento", "Resume Session")}
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(true)}
                         className="w-full h-11 bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
-                        Descartar Borrador
+                        {txPage("Descartar Borrador", "Discard Draft")}
                       </button>
                     </div>
                   </>
                 ) : (
                   <>
                     <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-black text-[11px] font-black tracking-widest uppercase mb-1.5">
-                      CONFIRMACIÓN DE DESCARTE
+                      {txPage("CONFIRMACIÓN DE DESCARTE", "CONFIRM DISCARD")}
                     </span>
                     <h3 className="text-white text-lg font-black uppercase tracking-wide">
-                      ¿Descartar Borrador?
+                      {txPage("¿Descartar Borrador?", "Discard Draft?")}
                     </h3>
                     
                     <p className="text-xs text-white leading-relaxed px-2 my-4 [text-wrap:pretty]">
-                      Esta acción es irreversible y se perderán los tiros registrados en esta sesión en pausa. ¿Estás seguro de continuar?
+                      {txPage(
+                        "Esta acción es irreversible y se perderán los tiros registrados en esta sesión en pausa. ¿Estás seguro de continuar?",
+                        "This action cannot be undone and all arrows recorded in this paused session will be lost. Are you sure you want to continue?"
+                      )}
                     </p>
 
                     <div className="mt-2 flex flex-col gap-2 w-full">
@@ -1877,13 +1933,13 @@ export default function Home() {
                         onClick={handleDiscardDraft}
                         className="w-full h-11 bg-white hover:bg-neutral-200 border border-white text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                       >
-                        Sí, Descartar Permanentemente
+                        {txPage("Sí, Descartar Permanentemente", "Yes, Discard Permanently")}
                       </button>
                       <button
                         onClick={() => setShowDiscardConfirm(false)}
                         className="w-full h-11 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                       >
-                        No, Volver Atrás
+                        {txPage("No, Volver Atrás", "No, Go Back")}
                       </button>
                     </div>
                   </>
@@ -1920,7 +1976,7 @@ export default function Home() {
               exit={{ scale: 0.95, opacity: 0 }}
               className="w-full max-w-[340px] bg-[#0B0E14] border border-white/[0.12] p-6 rounded-3xl flex flex-col gap-4 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 right-0 h-[3px] flex">
+              <div dir="ltr" className="absolute top-0 left-0 right-0 h-[3px] flex">
                 <div className="flex-1 bg-cyan-neon" />
                 <div className="flex-1 bg-red-rival" />
                 <div className="flex-1 bg-yellow-gold" />
@@ -1928,13 +1984,21 @@ export default function Home() {
 
               <div className="flex flex-col gap-1.5 mt-2">
                 <span className="text-[11.6px] font-black uppercase tracking-widest text-emerald-400">
-                  ELIMINATORIA ONLINE 1 VS 1
+                  {txPage("ELIMINATORIA ONLINE 1 VS 1", "LIVE 1V1 ONLINE DUEL")}
                 </span>
                 <h3 className="text-white text-base font-black uppercase tracking-wide">
-                  Desafío en Vivo Recibido
+                  {txPage("Desafío en Vivo Recibido", "Live Challenge Received")}
                 </h3>
                 <p className="text-xs text-white leading-relaxed [text-wrap:pretty]">
-                  <strong className="text-white">{pendingInvitation.senderName}</strong> te ha desafiado a una eliminatoria de <strong className="text-white">{pendingInvitation.bowType === "Recurve" ? "Recurvo" : pendingInvitation.bowType === "Compound" ? "Compuesto" : pendingInvitation.bowType}</strong> a <strong className="text-white">{pendingInvitation.distance} m</strong>.
+                  {isEs ? (
+                    <>
+                      <strong className="text-white">{pendingInvitation.senderName}</strong> te ha desafiado a una eliminatoria de <strong className="text-white">{pendingInvitation.bowType === "Recurve" ? "Recurvo" : pendingInvitation.bowType === "Compound" ? "Compuesto" : pendingInvitation.bowType}</strong> a <strong className="text-white">{pendingInvitation.distance} m</strong>.
+                    </>
+                  ) : (
+                    <>
+                      <strong className="text-white">{pendingInvitation.senderName}</strong> challenged you to a <strong className="text-white">{pendingInvitation.bowType === "Recurve" ? t("bowRecurve") : pendingInvitation.bowType === "Compound" ? t("bowCompound") : pendingInvitation.bowType}</strong> match at <strong dir="ltr" className="text-white">{pendingInvitation.distance} m</strong>.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -1974,7 +2038,7 @@ export default function Home() {
                           uid: pendingInvitation.senderUid,
                           fullName: pendingInvitation.senderName,
                           country: pendingInvitation.senderCountry || "CR",
-                          clubName: pendingInvitation.senderClubName || "Oponente en Línea",
+                          clubName: pendingInvitation.senderClubName || txPage("Oponente en Línea", "Online Opponent"),
                           clubLogo: "0",
                           clubCountry: pendingInvitation.senderCountry || "CR",
                           rating: 9.0
@@ -1991,7 +2055,7 @@ export default function Home() {
                   }}
                   className="w-full h-11 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition flex items-center justify-center"
                 >
-                  Aceptar Desafío
+                  {txPage("Aceptar Desafío", "Accept Challenge")}
                 </button>
                 <button
                   onClick={async () => {
@@ -2008,7 +2072,7 @@ export default function Home() {
                   }}
                   className="w-full h-10 bg-[#111620] border border-white/[0.08] text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer hover:text-white transition flex items-center justify-center"
                 >
-                  Rechazar
+                  {txPage("Rechazar", "Decline")}
                 </button>
               </div>
             </motion.div>
@@ -2026,7 +2090,7 @@ export default function Home() {
               exit={{ scale: 0.94, opacity: 0, y: 12 }}
               className="w-full max-w-[360px] bg-[#0B0E14] border border-white/[0.12] px-6 py-7 rounded-3xl flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 right-0 h-[3.5px] flex">
+              <div dir="ltr" className="absolute top-0 left-0 right-0 h-[3.5px] flex">
                 <div className="flex-1 bg-cyan-neon" />
                 <div className="flex-1 bg-red-rival" />
                 <div className="flex-1 bg-yellow-gold" />
@@ -2043,13 +2107,13 @@ export default function Home() {
               <div className="w-full flex flex-col items-center gap-3 px-1">
                 <span className="text-[13.5px] font-black uppercase tracking-[0.14em] text-white text-center">
                   {(pendingCoachLinkNotif as any).type === "athlete_unlinked"
-                    ? "ALUMNO DESVINCULADO"
-                    : "NUEVO ALUMNO VINCULADO"}
+                    ? txPage("ALUMNO DESVINCULADO", "ATHLETE UNLINKED")
+                    : txPage("NUEVO ALUMNO VINCULADO", "NEW ATHLETE LINKED")}
                 </span>
                 <h3
                   className="font-sans text-white text-[19px] font-extrabold uppercase tracking-[0.05em] text-center leading-[1.35] break-words max-w-full"
                 >
-                  {pendingCoachLinkNotif.athleteName || "Arquero"}
+                  {pendingCoachLinkNotif.athleteName || txPage("Arquero", "Archer")}
                 </h3>
               </div>
 
@@ -2077,7 +2141,7 @@ export default function Home() {
                   }}
                   className="w-full h-12 bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[14.4px] uppercase tracking-wider rounded-[13px] cursor-pointer active:scale-95 transition flex items-center justify-center gap-2 text-center"
                 >
-                  <span>Ver en Portal Coach</span>
+                  <span>{txPage("Ver en Portal Coach", "View in Coach Portal")}</span>
                 </button>
                 <button
                   onClick={async () => {
@@ -2098,7 +2162,7 @@ export default function Home() {
                   }}
                   className="w-full h-11 bg-[#111620] border border-white/[0.10] text-white font-black text-[14.4px] uppercase tracking-wider rounded-[13px] cursor-pointer hover:bg-white/[0.06] transition flex items-center justify-center text-center"
                 >
-                  Entendido
+                  {txPage("Entendido", "Got it")}
                 </button>
               </div>
             </motion.div>

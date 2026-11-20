@@ -236,13 +236,36 @@ function loadImageAsset(src: string): Promise<HTMLImageElement | null> {
 
 function drawFallbackArchery101010TheApp(ctx: CanvasRenderingContext2D, centerX: number, topY: number) {
   ctx.save();
-  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 54px 'Good Times', 'Outfit', sans-serif";
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText("ARCHERY 101010", centerX, topY + 28);
 
-  ctx.font = "900 32px 'Good Times', 'Outfit', sans-serif";
+  const archeryFont = "900 54px 'Good Times', sans-serif";
+  const numbersFont = "900 54px 'Outfit', sans-serif";
+
+  ctx.font = archeryFont;
+  const archeryText = "ARCHERY ";
+  const archeryW = ctx.measureText(archeryText).width;
+
+  ctx.font = numbersFont;
+  const pairW = ctx.measureText("10").width;
+  const totalW = archeryW + pairW * 3;
+  let cursorX = centerX - totalW / 2;
+
+  ctx.textAlign = "left";
+  ctx.font = archeryFont;
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(archeryText, cursorX, topY + 28);
+  cursorX += archeryW;
+
+  ctx.font = numbersFont;
+  const pairColors = ["#00A8F3", "#FF1E1E", "#FFE500"];
+  pairColors.forEach((col) => {
+    ctx.fillStyle = col;
+    ctx.fillText("10", cursorX, topY + 28);
+    cursorX += pairW;
+  });
+
+  ctx.textAlign = "center";
+  ctx.font = "900 32px 'Good Times', sans-serif";
   ctx.fillStyle = "#FFFFFF";
   ctx.letterSpacing = "8px";
   ctx.fillText("THE APP", centerX, topY + 96);
@@ -281,7 +304,7 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   const dispersion =
     initialDispersion ||
     (impacts.length > 0
-      ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format)
+      ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format, undefined, resolvedLang)
       : null);
 
   // Vertical 9:16 layout dimensions (scaled 2x for Ultra-HD 2160x3840 output)

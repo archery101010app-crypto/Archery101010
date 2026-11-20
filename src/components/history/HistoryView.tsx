@@ -41,6 +41,7 @@ export default function HistoryView({
   onBack
 }: HistoryViewProps) {
   const { language, unitSystem, t, tx } = useLanguage();
+  const isEs = language === "es";
   const isCoachResultsView = Boolean(
     coachViewMode &&
       (user?.clubId ||
@@ -64,18 +65,29 @@ export default function HistoryView({
   };
 
   const getLocalizedBowName = (bowType?: string): string => {
-    if (bowType === "Recurve") return t("bowRecurve");
-    if (bowType === "Compound") return t("bowCompound");
-    if (bowType === "Barebow") return t("bowBarebow");
-    return bowType || t("bowRecurve");
+    const raw =
+      bowType === "Recurve"
+        ? t("bowRecurve")
+        : bowType === "Compound"
+        ? t("bowCompound")
+        : bowType === "Barebow"
+        ? t("bowBarebow")
+        : bowType || t("bowRecurve");
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   const getLocalizedPracticeName = (practiceType?: string): string => {
-    if (practiceType === "Control") return t("practiceControl");
-    if (practiceType === "Práctica") return t("practicePractice");
-    if (practiceType === "Volumen") return t("practiceVolume");
-    if (practiceType === "Análisis") return t("navAnalysis");
-    return practiceType || "";
+    const raw =
+      practiceType === "Control"
+        ? t("practiceControl")
+        : practiceType === "Práctica"
+        ? t("practicePractice")
+        : practiceType === "Volumen"
+        ? t("practiceVolume")
+        : practiceType === "Análisis"
+        ? t("navAnalysis")
+        : practiceType || "";
+    return isEs ? raw : raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   const getSessionShootingDistLabel = (session: any): string => {
@@ -145,7 +157,8 @@ export default function HistoryView({
             session.bowType || "Recurve",
             presetType,
             session.format,
-            session.targetType
+            session.targetType,
+            language
           )
         : null;
       const dateStr = formatRegionalDate(session.timestamp, language);
@@ -668,7 +681,7 @@ export default function HistoryView({
               aria-label={t("back")}
               className="w-9 h-9 rounded-xl bg-[#0D1017] border border-white/[0.08] text-white hover:bg-white/[0.05] flex items-center justify-center cursor-pointer shrink-0 active:scale-95 transition"
             >
-              <ArrowLeft size={16} aria-hidden="true" />
+              <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -727,35 +740,35 @@ export default function HistoryView({
           <button
             type="button"
             onClick={() => setActiveTab("SESSIONS")}
-            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`${isEs ? "" : "min-w-0 "}h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "SESSIONS"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className="truncate">{t("practiceControl")}</span>
+            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{getLocalizedPracticeName("Control")}</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("VOLUME")}
-            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`${isEs ? "" : "min-w-0 "}h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "VOLUME"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className="truncate">{t("practiceVolume")}</span>
+            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{getLocalizedPracticeName("Volumen")}</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("ANALYSIS")}
-            className={`h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
+            className={`${isEs ? "" : "min-w-0 "}h-9 px-2 rounded-xl text-[11px] sm:text-[11.5px] font-black uppercase tracking-wider flex items-center justify-center whitespace-nowrap cursor-pointer transition ${
               activeTab === "ANALYSIS"
                 ? "bg-cyan-neon text-black shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className="truncate">{t("navAnalysis")}</span>
+            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{t("navAnalysis")}</span>
           </button>
         </div>
       </div>
@@ -771,11 +784,11 @@ export default function HistoryView({
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden"
               >
-                <div className="bg-[#0D1017] p-3.5 rounded-2xl border border-white/[0.08] flex flex-col gap-2.5">
+                <div className="bg-[#0D1017] p-3.5 rounded-2xl border border-white/[0.08] flex flex-col gap-2.5 text-start">
                   {/* Date Pills */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
                     <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                      Fecha:
+                      {tx("Fecha:", "Date:")}
                     </span>
                     <div className="flex gap-1.5">
                       {[
@@ -802,13 +815,13 @@ export default function HistoryView({
                   {/* Practice Type Filters */}
                   <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
                     <span className="text-[11px] text-white font-bold uppercase tracking-wider min-w-[46px] shrink-0">
-                      Tipo:
+                      {tx("Tipo:", "Type:")}
                     </span>
                     <div className="flex gap-1.5">
                       {[
                         { id: "ALL", label: t("filterAll") },
-                        { id: "Control", label: t("practiceControl") },
-                        { id: "Práctica", label: t("practicePractice") }
+                        { id: "Control", label: getLocalizedPracticeName("Control") },
+                        { id: "Práctica", label: getLocalizedPracticeName("Práctica") }
                       ].map((f) => (
                         <button
                           key={f.id}
@@ -834,9 +847,9 @@ export default function HistoryView({
                     <div className="flex gap-1.5">
                       {[
                         { id: "ALL", label: t("filterAll") },
-                        { id: "Recurve", label: t("bowRecurve") },
-                        { id: "Compound", label: t("bowCompound") },
-                        { id: "Barebow", label: t("bowBarebow") }
+                        { id: "Recurve", label: getLocalizedBowName("Recurve") },
+                        { id: "Compound", label: getLocalizedBowName("Compound") },
+                        { id: "Barebow", label: getLocalizedBowName("Barebow") }
                       ].map((f) => (
                         <button
                           key={f.id}
@@ -931,7 +944,7 @@ export default function HistoryView({
                           PB
                         </span>
                       )}
-                      <ChevronRight size={16} className="text-white group-hover:text-white transition-colors" />
+                      <ChevronRight size={16} className="text-white group-hover:text-white transition-colors rtl:rotate-180" />
                     </div>
                   </motion.div>
                 );
@@ -946,14 +959,19 @@ export default function HistoryView({
           {/* Card Volume Giant */}
           <div className="bg-[#0D1017] p-5 rounded-3xl border border-white/[0.08] flex flex-col items-center text-center gap-1.5 relative overflow-hidden shadow-sm">
             <span className="text-[11px] text-cyan-neon font-black tracking-widest uppercase">
-              Volumen Acumulado
+              {tx("Volumen Acumulado", "Cumulative Volume")}
             </span>
             <div className="flex items-baseline justify-center gap-2">
               <span className="text-4xl font-extrabold text-white tabular-nums">{volStats.total}</span>
-              <span className="text-xs text-white/80 font-bold uppercase tracking-wider">flechas registradas</span>
+              <span className="text-xs text-white/80 font-bold uppercase tracking-wider">
+                {tx("flechas registradas", "logged arrows")}
+              </span>
             </div>
             <p className="text-[11.5px] text-white/70 leading-relaxed max-w-[320px]">
-              Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.
+              {tx(
+                "Cada tiro registrado en tus prácticas libres, de volumen o controles oficiales suma a tu carga total.",
+                "Every arrow logged in open practice, volume training, or official scoring counts toward your total load."
+              )}
             </p>
           </div>
 
@@ -961,14 +979,16 @@ export default function HistoryView({
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             
             {/* Widget: Arco Volumen */}
-            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0">
-              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase truncate">Por Tipo de Arco</span>
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0 text-start">
+              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase truncate">
+                {tx("Por Tipo de Arco", "By Bow Type")}
+              </span>
               
               <div className="flex flex-col gap-2.5">
                 {[
-                  { name: t("bowRecurve"), val: volStats.recurve },
-                  { name: t("bowCompound"), val: volStats.compound },
-                  { name: t("bowBarebow"), val: volStats.barebow }
+                  { name: getLocalizedBowName("Recurve"), val: volStats.recurve },
+                  { name: getLocalizedBowName("Compound"), val: volStats.compound },
+                  { name: getLocalizedBowName("Barebow"), val: volStats.barebow }
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
@@ -990,14 +1010,16 @@ export default function HistoryView({
             </div>
 
             {/* Widget: Práctica Volumen */}
-            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0">
-              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase truncate">Por Práctica</span>
+            <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0 text-start">
+              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase truncate">
+                {tx("Por Práctica", "By Practice")}
+              </span>
               
               <div className="flex flex-col gap-2.5">
                 {[
-                  { name: t("practiceControl"), val: volStats.control },
-                  { name: t("practicePractice"), val: volStats.practice },
-                  { name: t("practiceVolume"), val: volStats.volume }
+                  { name: getLocalizedPracticeName("Control"), val: volStats.control },
+                  { name: getLocalizedPracticeName("Práctica"), val: volStats.practice },
+                  { name: getLocalizedPracticeName("Volumen"), val: volStats.volume }
                 ].map((item) => {
                   const percent = volStats.total > 0 ? Math.round((item.val / volStats.total) * 100) : 0;
                   return (
@@ -1021,15 +1043,15 @@ export default function HistoryView({
           </div>
 
           {/* Simplified List of Volume sessions (only total arrows shot per session including scored sessions) */}
-          <div className="flex flex-col gap-2">
-            <h4 className="text-white text-xs font-black uppercase tracking-wider pl-1">
-              Flechas Tiradas por Sesión
+          <div className="flex flex-col gap-2 text-start">
+            <h4 className="text-white text-xs font-black uppercase tracking-wider ps-1">
+              {tx("Flechas Tiradas por Sesión", "Arrows Shot per Session")}
             </h4>
             
             <div className="flex flex-col gap-2">
               {sessions.filter(s => s.deletedByArcher !== true && getSessionArrows(s) > 0).length === 0 ? (
                 <div className="text-center py-8 text-white text-xs">
-                  No hay sesiones para calcular volumen.
+                  {tx("No hay sesiones para calcular volumen.", "No sessions available to calculate volume.")}
                 </div>
               ) : (
                 sessions.filter(s => s.deletedByArcher !== true && getSessionArrows(s) > 0).map((s) => {
@@ -1039,7 +1061,7 @@ export default function HistoryView({
                       key={s.id}
                       className="bg-[#0D1017] border border-white/[0.08] p-3.5 rounded-2xl flex justify-between items-center"
                     >
-                      <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+                      <div className="flex flex-col gap-0.5 min-w-0 pe-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {isCoachResultsView && (
                             <span className="text-[9px] bg-cyan-neon/10 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/25 font-black uppercase tracking-wider truncate max-w-[140px]">
@@ -1057,7 +1079,7 @@ export default function HistoryView({
                           })()}
                         </span>
                       </div>
-                      <div className="text-right">
+                      <div className="text-end">
                         <span className="text-base font-black text-cyan-neon tabular-nums">{arrows}</span>
                         <span className="text-[10.5px] text-white block font-bold">
                           {t("arrowsLabel")}
@@ -1088,7 +1110,7 @@ export default function HistoryView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black-oled overflow-y-auto p-5 flex flex-col gap-5 pt-10"
+            className="fixed inset-0 z-[9999] bg-black-oled overflow-y-auto p-5 flex flex-col gap-5 pt-10 text-start"
           >
             {/* Top Toolbar */}
             <div className="flex justify-between items-center">
@@ -1098,7 +1120,7 @@ export default function HistoryView({
                 aria-label={t("back")}
                 className="w-9 h-9 flex items-center justify-center rounded-xl bg-neutral-900 border border-gray-border text-white hover:bg-neutral-800 cursor-pointer transition"
               >
-                <ArrowLeft size={16} aria-hidden="true" />
+                <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
               </button>
               <div className="flex gap-2">
                 <button
@@ -1159,7 +1181,7 @@ export default function HistoryView({
                     {getSessionArrows(selectedSession)} <span className="text-xs text-white">{t("arrowsLabel")}</span>
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("practiceType")}</span>
                   <p className="text-base font-black text-yellow-gold leading-tight">{t("practiceVolume")}</p>
                 </div>
@@ -1173,7 +1195,7 @@ export default function HistoryView({
                   </span>
                   <span className="text-[10.5px] text-white font-bold mt-0.5 tabular-nums">{getSessionArrows(selectedSession)} {t("arrowsLabel")}</span>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <span className="text-[10.5px] text-white font-bold uppercase tracking-widest">{t("precisionLabel")}</span>
                   <p className="text-2xl font-black text-yellow-gold leading-tight tabular-nums">
                     {getSessionMaxScore(selectedSession) > 0 ? Math.round((getSessionScore(selectedSession) / getSessionMaxScore(selectedSession)) * 100) : 0}%
@@ -1184,25 +1206,61 @@ export default function HistoryView({
 
             {/* Metadata Chips Grid */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">{t("distance")}</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{getSessionShootingDistLabel(selectedSession)}</span>
+              <div
+                className={
+                  isEs
+                    ? "bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0"
+                    : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
+                }
+              >
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                  {t("distance")}
+                </span>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center tabular-nums"}>
+                  {getSessionShootingDistLabel(selectedSession)}
+                </span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">{t("bowType")}</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
+              <div
+                className={
+                  isEs
+                    ? "bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0"
+                    : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
+                }
+              >
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                  {t("bowType")}
+                </span>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center"}>
                   {getLocalizedBowName(selectedSession.bowType)}
                 </span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">{t("practiceType")}</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block truncate">
+              <div
+                className={
+                  isEs
+                    ? "bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0"
+                    : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
+                }
+              >
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                  {t("practiceType")}
+                </span>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center"}>
                   {getLocalizedPracticeName(selectedSession.practiceType)}
                 </span>
               </div>
-              <div className="bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0">
-                <span className="text-[9.3px] text-white uppercase block">{t("rounds")}</span>
-                <span className="text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums">{selectedSession.endsCount} {t("rounds")}</span>
+              <div
+                className={
+                  isEs
+                    ? "bg-neutral-900/30 border border-white/5 p-2 rounded-xl text-center min-w-0"
+                    : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
+                }
+              >
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                  {t("rounds")}
+                </span>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center tabular-nums"}>
+                  {selectedSession.endsCount} {t("rounds")}
+                </span>
               </div>
             </div>
 
@@ -1249,27 +1307,32 @@ export default function HistoryView({
             {/* Bloques y Fatiga report (para WA600/720 en Historial) */}
             {selectedSession.blockStats && (
               <div className="bg-neutral-900/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
-                <span className="text-[10.5px] text-white uppercase font-bold">Rendimiento por Bloques</span>
+                <span className="text-[10.5px] text-white uppercase font-bold">
+                  {tx("Rendimiento por Bloques", "Block Performance")}
+                </span>
                 <div className="flex justify-between text-white">
-                  <span>Bloque 1 (Primera Mitad):</span>
+                  <span>{tx("Bloque 1 (Primera Mitad):", "Block 1 (First Half):")}</span>
                   <span className="font-extrabold text-cyan-neon tabular-nums">{selectedSession.blockStats.b1Score} pts</span>
                 </div>
                 {selectedSession.blockStats.completedB2 ? (
                   <>
                     <div className="flex justify-between text-white">
-                      <span>Bloque 2 (Segunda Mitad):</span>
+                      <span>{tx("Bloque 2 (Segunda Mitad):", "Block 2 (Second Half):")}</span>
                       <span className="font-extrabold text-cyan-neon tabular-nums">{selectedSession.blockStats.b2Score} pts</span>
                     </div>
                     <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-0.5">
-                      <span>Consistencia:</span>
+                      <span>{tx("Consistencia:", "Consistency:")}</span>
                       <span className={`font-black uppercase text-[11.6px] tabular-nums ${selectedSession.blockStats.diff < 0 ? "bg-white text-black px-2 py-0.5 rounded-md" : "text-cyan-neon"}`}>
-                        {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? "(Fatiga)" : "(Excelente)"}
+                        {selectedSession.blockStats.diff > 0 ? `+${selectedSession.blockStats.diff}` : selectedSession.blockStats.diff} pts {selectedSession.blockStats.diff < 0 ? tx("(Fatiga)", "(Fatigue)") : tx("(Excelente)", "(Strong)")}
                       </span>
                     </div>
                   </>
                 ) : (
                   <div className="text-[11.6px] text-yellow-gold italic mt-0.5 border-t border-white/5 pt-1">
-                    Sesión finalizada anticipadamente (Bloque 2 no realizado).
+                    {tx(
+                      "Sesión finalizada anticipadamente (Bloque 2 no realizado).",
+                      "Session ended early (Block 2 not completed)."
+                    )}
                   </div>
                 )}
               </div>
@@ -1280,7 +1343,7 @@ export default function HistoryView({
             <div className="bg-neutral-900/40 border border-white/5 rounded-2xl overflow-hidden p-4 flex flex-col gap-3">
               <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                 <FileText size={14} className="text-cyan-neon" />
-                Desglose de Rondas
+                {tx("Desglose de Rondas", "End Breakdown")}
               </h4>
               <div className="flex flex-col gap-2">
                 {selectedSession.ends?.map((e: any, idx: number) => (
@@ -1299,12 +1362,12 @@ export default function HistoryView({
                           </div>
                         ))}
                       </div>
-                      <span className="text-xs font-extrabold text-white min-w-[28px] text-right tabular-nums shrink-0">
+                      <span className="text-xs font-extrabold text-white min-w-[28px] text-end tabular-nums shrink-0">
                         {e.arrows.reduce((acc: number, val: string) => acc + (val === "X" || val === "10" ? 10 : val === "M" || val === "" ? 0 : Number(val)), 0)}
                       </span>
                     </div>
                     {e.note && (
-                      <p className="text-[11.6px] text-white italic mt-1 pl-1">
+                      <p className="text-[11.6px] text-white italic mt-1 ps-1">
                         "{e.note}"
                       </p>
                     )}
@@ -1329,7 +1392,8 @@ export default function HistoryView({
                     Number(selectedSession.distance) || 18,
                     selectedSession.bowType,
                     selectedSession.format,
-                    selectedSession.targetType
+                    selectedSession.targetType,
+                    language
                   );
                   
                   return (
@@ -1391,11 +1455,15 @@ export default function HistoryView({
                       {disp && (
                         <div className="w-full grid grid-cols-2 gap-2 mt-2 text-center">
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[9.3px] text-white uppercase font-bold block">Agrupación Real</span>
+                            <span className="text-[9.3px] text-white uppercase font-bold block">
+                              {tx("Agrupación Real", "Group Spread")}
+                            </span>
                             <span className="text-xs font-black text-cyan-neon tabular-nums">{disp.groupRadiusCm} cm</span>
                           </div>
                           <div className="bg-neutral-950/60 border border-white/5 rounded-xl p-2">
-                            <span className="text-[9.3px] text-white uppercase font-bold block">Centro (+) vs X</span>
+                            <span className="text-[9.3px] text-white uppercase font-bold block">
+                              {tx("Centro (+) vs X", "Center (+) vs X")}
+                            </span>
                             <span className="text-xs font-black text-white tabular-nums">
                               {Math.hypot(disp.offsetCmX, disp.offsetCmY).toFixed(1)} cm
                             </span>

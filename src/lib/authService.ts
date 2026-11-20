@@ -571,7 +571,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   const targetEmail = normalizedEmail === "admin101010" ? "admin@archery101010.com" : normalizedEmail;
 
   if (!password) {
-    throw new Error("Por favor ingresa tu contraseña.");
+    throw new Error(txAuth("Por favor ingresa tu contraseña.", "Please enter your password."));
   }
 
   let authUid = "";
@@ -590,7 +590,12 @@ export async function loginUser(email: string, password?: string): Promise<UserP
     if (auth.currentUser && (auth.currentUser.email || "").toLowerCase() === targetEmail) {
       authUid = auth.currentUser.uid;
     } else {
-      throw new Error("Se requiere conexión a internet para verificar tus credenciales de inicio de sesión.");
+      throw new Error(
+        txAuth(
+          "Se requiere conexión a internet para verificar tus credenciales de inicio de sesión.",
+          "An internet connection is required to verify your sign-in credentials."
+        )
+      );
     }
   }
 
@@ -704,7 +709,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   }
 
   if (!user) {
-    throw new Error("No se encontró el perfil del usuario.");
+    throw new Error(txAuth("No se encontró el perfil del usuario.", "User profile not found."));
   }
 
   if (isAdminEmail && user.role !== "superadmin") {
@@ -1318,7 +1323,12 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
   const authUid = explicitUid || auth.currentUser?.uid || "";
   if (!authUid) {
     // Never fabricate a local-only UID: without a real Firebase Auth session every cloud write is rejected
-    throw new Error("No se pudo verificar tu cuenta de Google. Intenta iniciar sesión de nuevo.");
+    throw new Error(
+      txAuth(
+        "No se pudo verificar tu cuenta de Google. Intenta iniciar sesión de nuevo.",
+        "Could not verify your Google account. Please try signing in again."
+      )
+    );
   }
   let user: UserProfile | undefined = undefined;
   let needsCloudWrite = false;
@@ -1507,7 +1517,12 @@ function verifyGoogleIdTokenNonce(idToken: string): boolean {
 function requireRealEmail(...candidates: (string | null | undefined)[]): string {
   const found = candidates.find((c) => typeof c === "string" && c.includes("@"));
   if (!found) {
-    throw new Error("Google no compartió tu correo. Vuelve a intentarlo y acepta el permiso de correo electrónico.");
+    throw new Error(
+      txAuth(
+        "Google no compartió tu correo. Vuelve a intentarlo y acepta el permiso de correo electrónico.",
+        "Google did not share your email address. Please try again and allow email access."
+      )
+    );
   }
   return found;
 }
@@ -1777,23 +1792,41 @@ export async function joinClubByInviteCode(
 ): Promise<{ success: boolean; clubName?: string | null; user?: UserProfile; error?: string }> {
   const cleanCode = (inviteCode || "").trim().toUpperCase();
   if (!/^\d{6}$/.test(cleanCode)) {
-    return { success: false, error: "El código de club debe tener 6 dígitos." };
+    return {
+      success: false,
+      error: txAuth("El código de club debe tener 6 dígitos.", "The club code must be 6 digits.")
+    };
   }
 
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { success: false, error: "Necesitas conexión a internet para vincularte con tu Coach." };
+    return {
+      success: false,
+      error: txAuth(
+        "Necesitas conexión a internet para vincularte con tu Coach.",
+        "An internet connection is required to link with your Coach."
+      )
+    };
   }
 
   if (!auth.currentUser || auth.currentUser.uid !== userUid) {
     return {
       success: false,
-      error: "Tu sesión expiró. Cierra sesión y vuelve a ingresar para vincularte con tu Coach."
+      error: txAuth(
+        "Tu sesión expiró. Cierra sesión y vuelve a ingresar para vincularte con tu Coach.",
+        "Your session has expired. Please sign out and sign in again to link with your Coach."
+      )
     };
   }
 
   const currentLogged = await getLoggedUser();
   if (currentLogged && (currentLogged.clubInviteCode || "").trim().toUpperCase() === cleanCode) {
-    return { success: false, error: "Este es tu propio código de Coach. Ingresa el código de 6 dígitos de tu entrenador." };
+    return {
+      success: false,
+      error: txAuth(
+        "Este es tu propio código de Coach. Ingresa el código de 6 dígitos de tu entrenador.",
+        "This is your own Coach code. Enter your Coach's 6-digit invite code."
+      )
+    };
   }
 
   // 1. Resolve the real Coach that owns this code (cloud first, never the athlete himself)
@@ -1802,12 +1835,21 @@ export async function joinClubByInviteCode(
   if (!clubCoach) {
     return {
       success: false,
-      error: "Código no encontrado. Pide a tu Coach que abra su Portal Coach para activar su código y vuelve a intentarlo."
+      error: txAuth(
+        "Código no encontrado. Pide a tu Coach que abra su Portal Coach para activar su código y vuelve a intentarlo.",
+        "Code not found. Ask your Coach to open their Coach Portal to activate their code and try again."
+      )
     };
   }
 
   if (clubCoach.uid === userUid) {
-    return { success: false, error: "Este es tu propio código de Coach. Compártelo con tus alumnos." };
+    return {
+      success: false,
+      error: txAuth(
+        "Este es tu propio código de Coach. Compártelo con tus alumnos.",
+        "This is your own Coach code. Share it with your athletes."
+      )
+    };
   }
 
   // 2. Canonical coach clubId + explicit coachId/coachName/coachEmail so the link is unambiguous.

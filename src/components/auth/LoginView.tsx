@@ -316,6 +316,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       {/* Brand logo section: ARCHERY 101010 / THE APP (Branding Oficial Permanente) */}
       <div 
         translate="no"
+        dir="ltr"
         className="notranslate w-full flex flex-col justify-center items-center my-auto pt-2 pb-6 select-none gap-1.5"
         style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
       >
@@ -346,50 +347,143 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
       <div className="w-full max-w-sm mx-auto flex flex-col gap-6">
         
         {/* PWA Install Banner */}
-        {showInstallBanner && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-[#0D0F12] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5 relative overflow-hidden"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon shrink-0">
-                  <Smartphone size={15} />
+        {showInstallBanner && (() => {
+          const pwaCopy: Record<string, { title: string; badge: string; desc: string; cta: string; close: string }> = {
+            es: {
+              title: "Instalar como App Local",
+              badge: "Recomendado · Velocidad 10x",
+              desc: "Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.",
+              cta: "Instalar Ahora",
+              close: "Cerrar aviso de instalación"
+            },
+            en: {
+              title: "Install as Local App",
+              badge: "Recommended · 10x Speed",
+              desc: "Install this app on your home screen. It runs locally for instant zero-latency speed and full offline support.",
+              cta: "Install Now",
+              close: "Close install banner"
+            },
+            ko: {
+              title: "로컬 앱으로 설치",
+              badge: "권장 · 10배 빠른 속도",
+              desc: "홈 화면에 앱을 설치하세요. 지연 없는 즉각적인 반응 속도와 완벽한 오프라인 모드를 지원합니다.",
+              cta: "지금 설치",
+              close: "설치 배너 닫기"
+            },
+            ja: {
+              title: "ローカルアプリとして追加",
+              badge: "推奨 · 10倍高速",
+              desc: "ホーム画面に追加すると、遅延ゼロの高速動作と完全なオフライン機能をご利用いただけます。",
+              cta: "今すぐインストール",
+              close: "バナーを閉じる"
+            },
+            fr: {
+              title: "Installer l'App Locale",
+              badge: "Recommandé · Vitesse 10x",
+              desc: "Ajoutez l'application à votre écran d'accueil pour une réactivité instantanée et un mode hors ligne complet.",
+              cta: "Installer Maintenant",
+              close: "Fermer la bannière"
+            },
+            de: {
+              title: "Als Lokale App installieren",
+              badge: "Empfohlen · 10x Schneller",
+              desc: "Füge diese App deinem Startbildschirm hinzu für verzögerungsfreie Geschwindigkeit und vollen Offline-Modus.",
+              cta: "Jetzt installieren",
+              close: "Banner schließen"
+            },
+            pt: {
+              title: "Instalar como App Local",
+              badge: "Recomendado · Velocidade 10x",
+              desc: "Instale este app na tela inicial para velocidade instantânea sem latência e suporte offline completo.",
+              cta: "Instalar Agora",
+              close: "Fechar aviso"
+            },
+            it: {
+              title: "Installa come App Locale",
+              badge: "Consigliato · Velocità 10x",
+              desc: "Aggiungi l'app alla schermata Home per velocità istantanea senza latenza e supporto offline completo.",
+              cta: "Installa Ora",
+              close: "Chiudi avviso"
+            },
+            "zh-CN": {
+              title: "安装为本地应用",
+              badge: "推荐 · 10倍极速",
+              desc: "将应用添加到主屏幕，享受零延迟极速响应与完整离线支持。",
+              cta: "立即安装",
+              close: "关闭安装提示"
+            },
+            iw: {
+              title: "התקן כאפליקציה מקומית",
+              badge: "מומלץ · מהירות פי 10",
+              desc: "הוסף את האפליקציה למסך הבית למהירות מיידית ללא השהיה ותמיכה מלאה במצב לא מקוון.",
+              cta: "התקן עכשיו",
+              close: "סגור הודעה"
+            },
+            ru: {
+              title: "Установить приложение",
+              badge: "Рекомендуем · Скорость 10x",
+              desc: "Добавьте приложение на главный экран для мгновенного отклика и полной работы офлайн.",
+              cta: "Установить",
+              close: "Закрыть баннер"
+            },
+            cs: {
+              title: "Nainstalovat lokální aplikaci",
+              badge: "Doporučeno · 10× rychlejší",
+              desc: "Přidejte si aplikaci na plochu pro okamžitou odezvu bez prodlevy a plný offline režim.",
+              cta: "Nainstalovat",
+              close: "Zavřít oznámení"
+            },
+            ar: {
+              title: "تثبيت كتطبيق محلي",
+              badge: "موصى به · سرعة 10 أضعاف",
+              desc: "ثبّت التطبيق على شاشتك الرئيسية للحصول على استجابة فورية بدون تأخير ودعم كامل دون اتصال.",
+              cta: "تثبيت الآن",
+              close: "إغلاق الإشعار"
+            }
+          };
+          const c = pwaCopy[language] || pwaCopy.en;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full bg-[#0D0F12] border border-white/[0.08] p-4 rounded-2xl flex flex-col gap-2.5 relative overflow-hidden"
+            >
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-neon/10 border border-cyan-neon/20 flex items-center justify-center text-cyan-neon shrink-0">
+                    <Smartphone size={15} />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white text-xs font-black uppercase tracking-wider">
+                      {c.title}
+                    </span>
+                    <span className="text-[9.3px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
+                      {c.badge}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-white text-xs font-black uppercase tracking-wider">
-                    {tx("Instalar como App Local", "Install as Local App")}
-                  </span>
-                  <span className="text-[9.3px] text-cyan-neon font-black uppercase tracking-widest mt-0.5">
-                    {tx("Recomendado · Velocidad 10x", "Recommended · 10x Speed")}
-                  </span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInstallBanner(false)}
+                  aria-label={c.close}
+                  className="w-9 h-9 -me-1.5 -mt-1.5 rounded-full flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer shrink-0"
+                >
+                  <X size={15} aria-hidden="true" />
+                </button>
               </div>
+              <p className="text-[11.6px] text-white leading-snug">
+                {c.desc}
+              </p>
               <button
                 type="button"
-                onClick={() => setShowInstallBanner(false)}
-                aria-label={tx("Cerrar aviso de instalación", "Close install banner")}
-                className="w-9 h-9 -mr-1.5 -mt-1.5 rounded-full flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer shrink-0"
+                onClick={handleInstallClick}
+                className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-center"
               >
-                <X size={15} aria-hidden="true" />
+                {c.cta}
               </button>
-            </div>
-            <p className="text-[11.6px] text-white leading-snug">
-              {tx(
-                "Instala esta app en tu pantalla de inicio. Se ejecutará 100% en local para una velocidad instantánea sin latencia, y soporte offline completo.",
-                "Install this app on your home screen. It runs locally for instant zero-latency speed and full offline support."
-              )}
-            </p>
-            <button
-              type="button"
-              onClick={handleInstallClick}
-              className="w-full py-2.5 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-center"
-            >
-              {tx("Instalar Ahora", "Install Now")}
-            </button>
-          </motion.div>
-        )}
+            </motion.div>
+          );
+        })()}
 
         {!isOnline && (
           <div className="bg-[#0D0F12] border border-yellow-gold/30 rounded-2xl p-3.5 flex flex-col gap-1.5">
@@ -410,14 +504,14 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         </h2>
 
         {error && (
-          <div className="bg-white border border-white rounded-xl p-3.5 flex items-start gap-2.5 text-black font-bold text-xs whitespace-pre-line leading-relaxed text-left">
+          <div className="bg-white border border-white rounded-xl p-3.5 flex items-start gap-2.5 text-black font-bold text-xs whitespace-pre-line leading-relaxed text-start">
             <AlertCircle size={16} className="shrink-0 mt-0.5 text-black" />
             <span>{error}</span>
           </div>
         )}
 
         {resetSuccessMsg && (
-          <div className="bg-cyan-neon/10 border border-cyan-neon/40 rounded-xl p-3.5 flex items-start gap-2.5 text-cyan-neon text-xs whitespace-pre-line leading-relaxed text-left">
+          <div className="bg-cyan-neon/10 border border-cyan-neon/40 rounded-xl p-3.5 flex items-start gap-2.5 text-cyan-neon text-xs whitespace-pre-line leading-relaxed text-start">
             <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-cyan-neon" />
             <span>{resetSuccessMsg}</span>
           </div>
@@ -426,7 +520,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Email field */}
           <div className="relative flex items-center">
-            <span className="absolute left-4 text-white">
+            <span className="absolute start-4 text-white">
               <Mail size={18} />
             </span>
             <input
@@ -434,13 +528,13 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("emailPlaceholder")}
-              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm ps-12 pe-4 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
           </div>
 
           {/* Password field */}
           <div className="relative flex items-center">
-            <span className="absolute left-4 text-white">
+            <span className="absolute start-4 text-white">
               <Lock size={18} />
             </span>
             <input
@@ -448,14 +542,14 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholder")}
-              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm pl-12 pr-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
+              className="w-full bg-[#0D0F12] border border-white/10 text-white placeholder-white text-sm ps-12 pe-12 py-3.5 rounded-xl outline-none focus:border-cyan-neon transition-all duration-200 caret-cyan-neon"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? tx("Ocultar contraseña", "Hide password") : tx("Mostrar contraseña", "Show password")}
               aria-pressed={showPassword}
-              className="absolute right-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
+              className="absolute end-1.5 w-9 h-9 rounded-lg flex items-center justify-center text-white hover:bg-white/[0.06] transition cursor-pointer"
             >
               {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
@@ -487,9 +581,11 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               type="button"
               onClick={handleBypassLogin}
               disabled={loading}
-              className="w-full py-3.5 rounded-xl bg-[#0D0F12] hover:bg-white/[0.04] text-cyan-neon font-black text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer flex justify-center items-center gap-2 mt-2 border border-cyan-neon/30"
+              className={`w-full py-3.5${
+                language !== "es" ? " px-3 text-center leading-snug" : ""
+              } rounded-xl bg-[#0D0F12] hover:bg-white/[0.04] text-cyan-neon font-black text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer flex justify-center items-center gap-2 mt-2 border border-cyan-neon/30`}
             >
-              <Unlock size={14} />
+              <Unlock size={14} className={language !== "es" ? "shrink-0" : undefined} />
               <span>{tx("Ingresar en Modo Local (Sin Contraseña)", "Sign In Locally (Offline Session)")}</span>
             </motion.button>
           )}
@@ -612,7 +708,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
               ) : (
                 <form onSubmit={handleConfirmPasswordReset} className="flex flex-col gap-3.5">
                   <div className="relative flex items-center">
-                    <span className="absolute left-3.5 text-white">
+                    <span className="absolute start-3.5 text-white">
                       <Mail size={16} />
                     </span>
                     <input
@@ -621,7 +717,7 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
                       onChange={(e) => setResetEmail(e.target.value)}
                       placeholder={tx("correo@ejemplo.com", "you@example.com")}
                       autoFocus
-                      className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm pl-10 pr-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
+                      className="w-full bg-[#0D1017] border border-white/10 focus:border-cyan-neon text-white placeholder-white text-sm ps-10 pe-4 py-3 rounded-xl outline-none transition-all caret-cyan-neon"
                     />
                   </div>
                   <div className="flex gap-2.5 pt-1">

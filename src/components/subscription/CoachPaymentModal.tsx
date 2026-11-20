@@ -30,7 +30,8 @@ export default function CoachPaymentModal({
   user,
   onSuccess
 }: CoachPaymentModalProps) {
-  const { t } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const products = getCoachStoreProducts();
   const [selectedProductId, setSelectedProductId] = useState<string>("coach_pro_annual");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -47,7 +48,7 @@ export default function CoachPaymentModal({
     setStatusMessage(null);
     try {
       const res = await activateCoachLaunchPromo(user, selectedProduct.id);
-      setStatusMessage({ text: "Coach Pro activado." });
+      setStatusMessage({ text: tx("Coach Pro activado.", "Coach Pro activated.") });
       setTimeout(() => {
         onSuccess(res.updatedUser);
       }, 400);
@@ -55,8 +56,11 @@ export default function CoachPaymentModal({
       const raw = String(err?.message || "");
       const friendly =
         raw.includes("INTERNAL ASSERTION") || raw.includes("FIRESTORE") || raw.length > 160
-          ? "Hubo un problema de conexión con la nube. Cierra y vuelve a abrir la app e inténtalo de nuevo."
-          : raw || "Error al activar.";
+          ? tx(
+              "Hubo un problema de conexión con la nube. Cierra y vuelve a abrir la app e inténtalo de nuevo.",
+              "There was a cloud connection issue. Please close and reopen the app and try again."
+            )
+          : raw || tx("Error al activar.", "Activation error.");
       setStatusMessage({
         text: friendly,
         isError: true
@@ -82,7 +86,7 @@ export default function CoachPaymentModal({
       }
     } catch {
       setStatusMessage({
-        text: "No se encontraron compras previas.",
+        text: tx("No se encontraron compras previas.", "No previous purchases found."),
         isError: true
       });
     } finally {
@@ -112,16 +116,19 @@ export default function CoachPaymentModal({
         >
           {/* Header Oficial de Marca ARCHERY 101010 */}
           <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 min-w-0">
               <div
                 translate="no"
-                className="notranslate flex items-center gap-2 select-none"
+                dir="ltr"
+                className={`notranslate flex items-center ${
+                  isEs ? "gap-2" : "gap-1.5 sm:gap-2 whitespace-nowrap"
+                } select-none`}
               >
                 <img
                   src="/images/brand_logo_header.png"
                   srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
                   alt="ARCHERY 101010"
-                  className="h-4 w-auto object-contain select-none"
+                  className={`${isEs ? "h-4" : "h-3.5 sm:h-4"} w-auto object-contain select-none`}
                   draggable={false}
                 />
                 <span
@@ -132,7 +139,7 @@ export default function CoachPaymentModal({
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <h2 translate="no" className="notranslate text-[22px] font-black text-white tracking-tight leading-none">
                   Coach Pro
                 </h2>
@@ -148,7 +155,7 @@ export default function CoachPaymentModal({
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] text-white flex items-center justify-center transition cursor-pointer shrink-0"
-              aria-label="Cerrar"
+              aria-label={tx("Cerrar", "Close")}
             >
               <X size={15} />
             </button>
@@ -164,18 +171,18 @@ export default function CoachPaymentModal({
                   key={prod.id}
                   type="button"
                   onClick={() => setSelectedProductId(prod.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  className={`p-4 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between ${
                     isSelected
                       ? "bg-[#111622] border-cyan-neon"
                       : "bg-[#0E1117] border-white/[0.08] hover:border-white/20"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-white">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-white truncate">
                       {isAnnual ? t("annualPlan") : t("monthlyPlan")}
                     </span>
                     {isAnnual && (
-                      <span translate="no" className="notranslate text-[10px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded uppercase">
+                      <span translate="no" dir={!isEs ? "ltr" : undefined} className="notranslate text-[10px] font-black bg-cyan-neon text-black px-1.5 py-0.5 rounded uppercase shrink-0">
                         -25%
                       </span>
                     )}
@@ -185,8 +192,8 @@ export default function CoachPaymentModal({
                     <span className="text-xs text-white line-through tabular-nums font-semibold">
                       {isAnnual ? `$89.91 ${t("perYear")}` : `$9.99 ${t("perMonth")}`}
                     </span>
-                    <div className="flex items-baseline gap-1.5 mt-0.5">
-                      <span translate="no" className="notranslate text-xl font-black text-white tabular-nums tracking-tight">
+                    <div className={`flex items-baseline gap-1.5 mt-0.5${!isEs ? " flex-wrap gap-y-0.5" : ""}`}>
+                      <span translate="no" dir={!isEs ? "ltr" : undefined} className="notranslate text-xl font-black text-white tabular-nums tracking-tight">
                         $0.00
                       </span>
                       <span className="text-[10px] font-extrabold text-cyan-neon uppercase tracking-wider">
@@ -252,26 +259,38 @@ export default function CoachPaymentModal({
             </span>
             <span className="text-[11px] text-center text-white font-bold tabular-nums">
               {isAnnualSelected
-                ? "Acceso Coach PRO por 365 días · Temporada completa bonificada"
-                : "Acceso Coach PRO por 30 días · Renuévalo gratis cada mes"}
+                ? tx(
+                    "Acceso Coach PRO por 365 días · Temporada completa bonificada",
+                    "Coach PRO access for 365 days · Full season waived"
+                  )
+                : tx(
+                    "Acceso Coach PRO por 30 días · Renuévalo gratis cada mes",
+                    "Coach PRO access for 30 days · Renew free each month"
+                  )}
             </span>
           </div>
 
           {/* Footer minimalista */}
-          <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between text-[11px] text-white">
+          <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between gap-2 text-[11px] text-white">
             <button
               type="button"
               onClick={handleRestore}
               disabled={isRestoring}
               className="hover:text-white flex items-center gap-1.5 font-semibold transition cursor-pointer"
             >
-              <RotateCw size={11} className={isRestoring ? "animate-spin text-cyan-neon" : ""} />
+              <RotateCw size={11} className={`${isRestoring ? "animate-spin text-cyan-neon " : ""}shrink-0`} />
               <span>{t("restorePurchases")}</span>
             </button>
 
-            <span translate="no" className="notranslate tabular-nums text-[10.5px]">
-              Tienda de Aplicaciones
-            </span>
+            {isEs ? (
+              <span translate="no" className="notranslate tabular-nums text-[10.5px]">
+                Tienda de Aplicaciones
+              </span>
+            ) : (
+              <span className="tabular-nums text-[10.5px] text-end">
+                {tx("Tienda de Aplicaciones", "Official Store")}
+              </span>
+            )}
           </div>
         </motion.div>
       </div>

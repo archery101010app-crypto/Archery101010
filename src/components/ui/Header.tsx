@@ -15,13 +15,14 @@ interface HeaderProps {
 export default function Header({ user, coachViewMode = false, onToggleCoachViewMode }: HeaderProps) {
   // Keep background sync hook active silently without showing any technical Wi-Fi/badge icon
   useSync();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const isEs = language === "es";
   const linkedToCoach = isLinkedToExternalCoach(user);
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between z-40 max-w-full">
+    <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between gap-2 z-40 max-w-full">
       {/* Brand logo compact: ONLY 101010 */}
-      <div translate="no" className="notranslate flex items-center gap-2 select-none min-w-0">
+      <div translate="no" dir="ltr" className="notranslate flex items-center gap-2 select-none min-w-0">
         <div className="flex items-baseline gap-1">
           <div 
             className="flex text-[23.8px] tracking-tighter font-extrabold brand-logo-101010" 
@@ -31,7 +32,7 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
             <span className="text-red-rival">10</span>
             <span className="text-yellow-gold">10</span>
           </div>
-          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider pl-0.5 tabular-nums">
+          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider ps-0.5 tabular-nums">
             v{APP_VERSION}
           </span>
         </div>
@@ -46,7 +47,11 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               type="button"
               aria-pressed={!coachViewMode}
               onClick={() => onToggleCoachViewMode(false)}
-              className={`min-h-[38px] h-[38px] px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
+              className={`min-h-[38px] h-[38px] ${
+                isEs
+                  ? "px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px]"
+                  : "px-2 sm:px-3 rounded-full text-[11px] min-[390px]:text-[11.8px] sm:text-[13px]"
+              } font-bold uppercase tracking-tight flex items-center justify-center whitespace-nowrap transition-all cursor-pointer ${
                 !coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"
@@ -58,7 +63,11 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
               type="button"
               aria-pressed={coachViewMode}
               onClick={() => onToggleCoachViewMode(true)}
-              className={`min-h-[38px] h-[38px] px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold uppercase tracking-tight flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
+              className={`min-h-[38px] h-[38px] ${
+                isEs
+                  ? "px-2.5 sm:px-3 rounded-full text-[12px] sm:text-[13px]"
+                  : "px-2 sm:px-3 rounded-full text-[11px] min-[390px]:text-[11.8px] sm:text-[13px]"
+              } font-bold uppercase tracking-tight flex items-center justify-center gap-1 whitespace-nowrap transition-all cursor-pointer ${
                 coachViewMode 
                   ? "bg-cyan-neon text-black font-extrabold" 
                   : "text-white hover:text-white"

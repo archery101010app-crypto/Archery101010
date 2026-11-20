@@ -89,7 +89,8 @@ function filterAndSortClubSessions(
 }
 
 export default function CoachPortalView({ user, onNavigate, onUserUpdate }: CoachPortalViewProps) {
-  const { t, tx } = useLanguage();
+  const { language, t, tx } = useLanguage();
+  const isEs = language === "es";
   const [activeTab, setActiveTab] = useState<Tab>("ATHLETES");
   const [athletes, setAthletes] = useState<UserProfile[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -1119,18 +1120,33 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
+          const cleanLabel = isEs
+            ? tab.label
+            : tab.label.replace(/\s*\([^)]*\)/g, "").trim() || tab.label;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 rounded-xl text-[10.4px] sm:text-[11.8px] font-black uppercase tracking-[-0.02em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 ${
+                isEs ? "px-0.5" : "px-1 overflow-hidden"
+              } py-2.5 rounded-xl ${
+                isEs ? "text-[10.4px] sm:text-[11.8px]" : "text-[9.8px] min-[390px]:text-[10.4px] sm:text-[11.8px]"
+              } font-black uppercase tracking-[-0.02em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
                   ? "bg-cyan-neon/12 border border-cyan-neon/35 text-cyan-neon"
                   : "text-white hover:bg-white/[0.04] border border-transparent"
               }`}
             >
               <Icon size={15} className={active ? "text-cyan-neon" : "text-white"} />
-              <span className="whitespace-nowrap leading-none truncate max-w-full">{tab.label}</span>
+              <span
+                className={
+                  isEs
+                    ? "whitespace-nowrap leading-none truncate max-w-full"
+                    : "block w-full text-center whitespace-nowrap leading-none truncate"
+                }
+              >
+                {cleanLabel}
+              </span>
             </button>
           );
         })}
