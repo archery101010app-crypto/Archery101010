@@ -80,12 +80,23 @@ export default function AnalysisDianaSvg({
   compactWatchMode = false
 }: AnalysisDianaSvgProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const lastReplayTriggerRef = useRef<number>(replayTrigger);
+  const doneTimeoutRef = useRef<number | null>(null);
   const [replayProgress, setReplayProgress] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!replayTrigger || !shot) {
+    if (!shot) {
       setReplayProgress(null);
+      lastReplayTriggerRef.current = replayTrigger;
       return;
+    }
+    if (!replayTrigger || replayTrigger === lastReplayTriggerRef.current) {
+      return;
+    }
+    lastReplayTriggerRef.current = replayTrigger;
+    if (doneTimeoutRef.current !== null) {
+      window.clearTimeout(doneTimeoutRef.current);
+      doneTimeoutRef.current = null;
     }
 
     const totalSec = Math.max(1.4, Math.min(7.5, (shot.prepSeconds || 1.5) + (shot.aimSeconds || 3.0)));
@@ -101,12 +112,21 @@ export default function AnalysisDianaSvg({
       if (t < 1) {
         rafId = requestAnimationFrame(step);
       } else {
-        window.setTimeout(() => setReplayProgress(null), 350);
+        doneTimeoutRef.current = window.setTimeout(() => {
+          doneTimeoutRef.current = null;
+          setReplayProgress(null);
+        }, 350);
       }
     };
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (doneTimeoutRef.current !== null) {
+        window.clearTimeout(doneTimeoutRef.current);
+        doneTimeoutRef.current = null;
+      }
+    };
   }, [replayTrigger, shot]);
 
   const renderedTrace = useMemo(() => {

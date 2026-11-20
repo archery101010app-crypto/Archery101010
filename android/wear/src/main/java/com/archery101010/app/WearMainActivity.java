@@ -176,6 +176,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private float lastRelX = 0f;
     private float lastRelY = 0f;
     private long lastHandledManualCaptureAt = 0L;
+    private long lastHandledCalibrateZeroAt = 0L;
+    private volatile long lastCloudHeartbeatTouchMs = 0L;
+    private double calZeroAx = 0.0;
+    private double calZeroAy = 0.0;
+    private double calZeroAz = 9.81;
+    private boolean hasCalZeroVec = false;
 
     // Post-release 220ms follow-through verification state (eliminates target arrow yanks & arm flings)
     private boolean pendingShotActive = false;
@@ -697,7 +703,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             // Sensitivity chosen on the phone (BAJA / MEDIA / ALTA) must drive the watch detector too
             String rootType = rootObj.optString("type", "");
             if ("ANALYSIS_MANUAL_CAPTURE".equals(rootType)) {
+                lastHandledManualCaptureAt = System.currentTimeMillis();
                 runOnUiThread(() -> emitWearAnalysisShot(System.currentTimeMillis(), "watch_manual"));
+                return;
+            }
+            if ("ANALYSIS_CALIBRATE_ZERO".equals(rootType)) {
+                lastHandledCalibrateZeroAt = System.currentTimeMillis();
+                heartbeatHandler.postDelayed(this::captureWearZeroGravityVector, 2000L);
                 return;
             }
             if ("SET_SENSITIVITY".equals(rootType) || "TOGGLE_AUTO_DETECT".equals(rootType)) {
@@ -1044,7 +1056,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     cmdFields.put("stepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
                     cmdFields.put("distanceWalkedM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
                     cmdFields.put("activeKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
-                } else if ("ANALYSIS_SHOT".equals(eventType)) {
+                } else if ("ANALYSIS_SHOT".equals(eventType) || "ANALYSIS_ZERO_VECTOR".equals(eventType)) {
                     String shotJson = src.optString("analysisShotJson", "");
                     if (!shotJson.isEmpty()) {
                         cmdFields.put("analysisShotJson", new JSONObject().put("stringValue", shotJson));
@@ -1055,6 +1067,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     }
                 }
 
+                lastCloudHeartbeatTouchMs = nowMs;
                 JSONObject docFields = new JSONObject();
                 docFields.put("lastWatchCmd", new JSONObject().put("mapValue", new JSONObject().put("fields", cmdFields)));
                 docFields.put("lastWatchCmdId", new JSONObject().put("stringValue", cmdId));
@@ -1062,11 +1075,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 docFields.put("watchStepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
                 docFields.put("watchDistanceM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
                 docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+                docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
                 docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
 
                 String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
                         + code
-                        + "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+                        + "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
                 conn = (HttpURLConnection) new URL(urlStr).openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
@@ -1129,6 +1143,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     if (fields != null) {
                         isCloudSynced = true;
                         long now = System.currentTimeMillis();
+                        if (now - lastCloudHeartbeatTouchMs >= 55_000L) {
+                            lastCloudHeartbeatTouchMs = now;
+                            touchWatchHeartbeatInFirestore(code, now);
+                        }
                         boolean recentlyTapped = (now - lastLocalActionTimeMs) < 3500L;
                         JSONObject activeNode = fields.optJSONObject("sessionActive");
                         boolean sessionActive = activeNode == null || activeNode.optBoolean("booleanValue", true);
@@ -1205,6 +1223,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                             emitWearAnalysisShot(System.currentTimeMillis(), "watch_manual");
                                         }
                                     }
+                                    long reqZeroAt = cal.optLong("calibrateZeroAt", 0L);
+                                    if (reqZeroAt > 0L
+                                            && reqZeroAt != lastHandledCalibrateZeroAt
+                                            && (now - reqZeroAt) <= 15_000L) {
+                                        if (lastHandledCalibrateZeroAt == 0L && (now - reqZeroAt) > 4_000L) {
+                                            lastHandledCalibrateZeroAt = reqZeroAt;
+                                        } else {
+                                            lastHandledCalibrateZeroAt = reqZeroAt;
+                                            heartbeatHandler.postDelayed(this::captureWearZeroGravityVector, 1800L);
+                                        }
+                                    }
+                                    JSONArray zArr = cal.optJSONArray("zeroGravityVec");
+                                    if (zArr != null && zArr.length() == 3) {
+                                        double zx = zArr.optDouble(0, 0.0);
+                                        double zy = zArr.optDouble(1, 0.0);
+                                        double zz = zArr.optDouble(2, 9.81);
+                                        if (Math.abs(zx) > 0.01 || Math.abs(zy) > 0.01) {
+                                            calZeroAx = zx;
+                                            calZeroAy = zy;
+                                            calZeroAz = zz;
+                                            hasCalZeroVec = true;
+                                        }
+                                    }
                                 } catch (Exception ignored) {}
                             }
                             if (!sessionActive) {
@@ -1270,7 +1311,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             if (canvasView != null) canvasView.invalidate();
                         });
                     }
-                } else if (rc == 404) {
+                } else if (rc == 404 || rc == 401 || rc == 403) {
                     isCloudSynced = false;
                     runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 }
@@ -1279,6 +1320,63 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (conn != null) conn.disconnect();
             }
         });
+    }
+
+    private void touchWatchHeartbeatInFirestore(final String code, final long nowMs) {
+        if (code == null || code.length() != 6) return;
+        cloudExecutor.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                JSONObject docFields = new JSONObject();
+                docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+                docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
+                        + code
+                        + "?updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&currentDocument.exists=true";
+                conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+                conn.setConnectTimeout(4500);
+                conn.setReadTimeout(4500);
+                conn.setDoOutput(true);
+                byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(body);
+                }
+                conn.getResponseCode();
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private void captureWearZeroGravityVector() {
+        try {
+            if (motionCount < 4) return;
+            int n = Math.min(24, motionCount);
+            double sx = 0.0, sy = 0.0, sz = 0.0;
+            for (int i = 0; i < n; i++) {
+                int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+                sx += motionAx[idx];
+                sy += motionAy[idx];
+                sz += motionAz[idx];
+            }
+            calZeroAx = Math.round((sx / n) * 1000.0) / 1000.0;
+            calZeroAy = Math.round((sy / n) * 1000.0) / 1000.0;
+            calZeroAz = Math.round((sz / n) * 1000.0) / 1000.0;
+            hasCalZeroVec = true;
+            triggerHaptic(35);
+            JSONArray vec = new JSONArray();
+            vec.put(calZeroAx);
+            vec.put(calZeroAy);
+            vec.put(calZeroAz);
+            JSONObject cmd = new JSONObject();
+            cmd.put("type", "ANALYSIS_ZERO_VECTOR");
+            cmd.put("analysisShotJson", vec.toString());
+            sendToPhone(cmd.toString());
+        } catch (Exception ignored) {}
     }
 
     private void syncTelemetryToPhone() {
@@ -1317,6 +1415,26 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     protected void onPause() {
         super.onPause();
         saveState();
+        boolean idleNoSession = !analysisMode
+                && arrowCount == 0
+                && lastAnalysisShotNum == 0
+                && totalScore == 0
+                && currentSessionId.isEmpty();
+        if (idleNoSession) {
+            heartbeatHandler.removeCallbacks(heartbeatRunnable);
+            stopAcousticSnapAnalyzer();
+            if (sensorManager != null && isSensorRegistered) {
+                try {
+                    sensorManager.unregisterListener(this);
+                    isSensorRegistered = false;
+                } catch (Exception ignored) {}
+            }
+            if (wakeLock != null && wakeLock.isHeld()) {
+                try {
+                    wakeLock.release();
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     @Override
@@ -1930,10 +2048,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             refAx /= Math.max(1, refN);
             refAy /= Math.max(1, refN);
             refAz /= Math.max(1, refN);
+            if (hasCalZeroVec) {
+                double zNorm = Math.sqrt(calZeroAx * calZeroAx + calZeroAy * calZeroAy + calZeroAz * calZeroAz);
+                if (zNorm >= 4.0 && zNorm <= 15.0) {
+                    refAx = 0.88 * refAx + 0.12 * calZeroAx;
+                    refAy = 0.88 * refAy + 0.12 * calZeroAy;
+                    refAz = 0.88 * refAz + 0.12 * calZeroAz;
+                }
+            }
             double refNorm = Math.max(4.0, Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz));
 
             float wristSign = "RIGHT".equals(syncedBowWrist) ? -1f : 1f;
-            double faceRadiusCm = (distanceMeters <= 25) ? 20.0 : ((distanceMeters <= 55) ? 40.0 : 61.0);
+            double faceRadiusCm;
+            if (distanceMeters <= 20) {
+                faceRadiusCm = 20.0;
+            } else if (distanceMeters <= 26) {
+                faceRadiusCm = 30.0;
+            } else if (distanceMeters <= 36) {
+                faceRadiusCm = 40.0;
+            } else if (distanceMeters <= 55) {
+                faceRadiusCm = "Compound".equals(syncedBowType) ? 40.0 : 61.0;
+            } else {
+                faceRadiusCm = 61.0;
+            }
             double distCm = Math.max(1000.0, distanceMeters * 100.0);
 
             float[] ptX = new float[count];
@@ -1980,32 +2117,51 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             meanYaw /= Math.max(1, centerN);
             meanPitch /= Math.max(1, centerN);
 
+            double[] dxCmArr = new double[count];
+            double[] dyCmArr = new double[count];
             for (int i = 0; i < count; i++) {
                 double xCm = Math.tan(yawArr[i] - meanYaw) * distCm;
                 double yCm = Math.tan(pitchArr[i] - meanPitch) * distCm;
-                ptX[i] = (float) Math.max(-0.98, Math.min(0.98, xCm / faceRadiusCm));
-                ptY[i] = (float) Math.max(-0.98, Math.min(0.98, yCm / faceRadiusCm));
+                dxCmArr[i] = xCm;
+                dyCmArr[i] = yCm;
+                ptX[i] = (float) Math.max(-1.08, Math.min(1.08, xCm / faceRadiusCm));
+                ptY[i] = (float) Math.max(-1.08, Math.min(1.08, yCm / faceRadiusCm));
             }
 
             // Detect settle index (transition from Preparatory to Aiming)
-            int settleIdx = Math.max(1, (int) (count * 0.32));
-            for (int i = count - 1; i >= 1; i--) {
-                double radial = Math.hypot(ptX[i] - ptX[count - 1], ptY[i] - ptY[count - 1]);
-                if (radial > 0.24 || energy[i] > 1.85) {
+            double settleRadiusCm = faceRadiusCm * 0.36;
+            int settleIdx = Math.max(0, count - 6);
+            for (int i = count - 1; i >= 0; i--) {
+                double radialCm = Math.hypot(dxCmArr[i], dyCmArr[i]);
+                if (radialCm > settleRadiusCm || energy[i] > 2.6) {
                     settleIdx = Math.min(count - 2, i + 1);
                     break;
                 }
+                settleIdx = i;
             }
-            int prepStartIdx = 0;
-            for (int i = settleIdx; i >= 0; i--) {
-                if (ts[settleIdx] - ts[i] > 3200L) {
+
+            // Detect real bow-lift / draw onset by walking backwards across angular sweep rate + motion energy
+            int prepStartIdx = Math.max(0, settleIdx - 1);
+            for (int i = settleIdx - 1; i >= 0; i--) {
+                if (ts[settleIdx] - ts[i] > 4500L) {
                     prepStartIdx = i;
                     break;
                 }
+                int lookbackIdx = Math.max(0, i - 3);
+                double dtSpanSec = Math.max(0.04, (ts[i] - ts[lookbackIdx]) / 1000.0);
+                double sweepRateCmPerSec = Math.hypot(
+                        dxCmArr[i] - dxCmArr[lookbackIdx],
+                        dyCmArr[i] - dyCmArr[lookbackIdx]
+                ) / dtSpanSec;
+                if ((settleIdx - i) > 6 && i > lookbackIdx && sweepRateCmPerSec < 6.0 && energy[i] < 0.28) {
+                    prepStartIdx = i;
+                    break;
+                }
+                prepStartIdx = i;
             }
 
-            float prepSec = Math.max(0.3f, Math.min(12.0f, Math.round(((ts[settleIdx] - ts[prepStartIdx]) / 100f)) / 10f));
-            float aimSec = Math.max(0.4f, Math.min(18.0f, Math.round(((ts[count - 1] - ts[settleIdx]) / 100f)) / 10f));
+            float prepSec = Math.max(0.5f, Math.min(6.5f, Math.round(((ts[settleIdx] - ts[prepStartIdx]) / 100f)) / 10f));
+            float aimSec = Math.max(0.7f, Math.min(14.0f, Math.round(((ts[count - 1] - ts[settleIdx]) / 100f)) / 10f));
 
             double meanAimX = 0.0, meanAimY = 0.0;
             int aimN = Math.max(1, count - settleIdx);
@@ -2022,8 +2178,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 double dy = (ptY[i] - meanAimY) * faceRadiusCm;
                 sumSqRad += dx * dx + dy * dy;
             }
-            float swayCm = Math.max(0.2f, Math.min(25.0f, Math.round((float) Math.sqrt(sumSqRad / aimN) * 10f) / 10f));
-            int stabPct = Math.max(35, Math.min(99, (int) Math.round(100.0 - (swayCm / Math.max(8.0, faceRadiusCm * 0.36)) * 42.0)));
+            float swayCm = Math.max(0.3f, Math.min((float) faceRadiusCm, Math.round((float) Math.sqrt(sumSqRad / aimN) * 10f) / 10f));
+            int stabPct = Math.max(38, Math.min(99, (int) Math.round(100.0 - (swayCm / faceRadiusCm) * 82.0)));
 
             int preRelIdx = count - 1;
             for (int i = count - 1; i >= 0; i--) {

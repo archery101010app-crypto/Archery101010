@@ -336,10 +336,39 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
   if (!cleanCode) return null;
 
   if (typeof navigator === "undefined" || navigator.onLine) {
+    // 1. Primary privacy-safe lookup on public directory (`users_public`)
+    try {
+      const pubSnap = await withTimeout(
+        getDocs(query(collection(db, "users_public"), where("clubInviteCode", "==", cleanCode), limit(10))),
+        6500
+      );
+      const pubMatches = pubSnap.docs
+        .map((d) => {
+          const raw = d.data() as any;
+          const uid = raw.uid || d.id;
+          return sanitizeUserProfile({
+            ...raw,
+            uid,
+            isClubCreator: Boolean(raw.isClubCreator) || isClubOwnerRole(raw)
+          });
+        })
+        .filter((u) => (!excludeUid || u.uid !== excludeUid) && !isLinkedToExternalCoach(u));
+      const pubOwners = pubMatches.filter((u) => isClubOwnerRole(u));
+      if (pubOwners.length > 0) {
+        return pubOwners[0];
+      }
+      if (pubMatches.length > 0) {
+        return pubMatches[0];
+      }
+    } catch (pubErr) {
+      console.warn("Public directory lookup of invite code failed, trying fallback:", pubErr);
+    }
+
+    // 2. Fallback lookup on `users` for legacy coach profiles not yet mirrored to `users_public`
     try {
       const snap = await withTimeout(
         getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode), limit(10))),
-        8000
+        6500
       );
       const allMatches = snap.docs
         .map((d) => sanitizeUserProfile({ ...d.data(), uid: (d.data() as any).uid || d.id }))
@@ -873,7 +902,7 @@ export async function emitCoachLinkNotification(
 ): Promise<void> {
   if (!coach?.uid || !athlete?.uid || coach.uid === athlete.uid) return;
   const now = Date.now();
-  const notifId = `NTF-LINK-${coach.uid}-${athlete.uid}`;
+  const notifId = `NTF-LINK-${coach.uid}-${athlete.uid}-${now}`;
   const notif: CoachLinkNotification = {
     id: notifId,
     coachUid: coach.uid,
@@ -893,7 +922,7 @@ export async function emitCoachLinkNotification(
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "coach_notifications",
-      operation: "UPDATE",
+      operation: "INSERT",
       payloadId: notifId,
       payload: notif,
       timestamp: now
@@ -971,6 +1000,9 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
       cloudWriteUser(updatedUser);
+      import("@/lib/db/realtimeSync")
+        .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updatedUser))
+        .catch(() => {});
       import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
     }
 
@@ -999,6 +1031,9 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
       cloudWriteUser(updated);
+      import("@/lib/db/realtimeSync")
+        .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updated))
+        .catch(() => {});
       import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
     }
 
@@ -1811,11 +1846,16 @@ export async function joinClubByInviteCode(
     currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
       ? "superadmin"
       : "archer";
+  const hasValidPro =
+    preservedRole === "superadmin" ||
+    (currentLogged?.plan === "PRO" &&
+      typeof currentLogged?.proExpiresAt === "number" &&
+      currentLogged.proExpiresAt > Date.now());
 
   const updates: Partial<UserProfile> = {
     role: preservedRole,
-    plan: preservedRole === "superadmin" ? "PRO" : "FREE",
-    proExpiresAt: preservedRole === "superadmin" ? currentLogged?.proExpiresAt : 0,
+    plan: hasValidPro ? "PRO" : "FREE",
+    proExpiresAt: hasValidPro ? currentLogged?.proExpiresAt : 0,
     isClubCreator: false,
     clubId: resolvedClubId,
     coachId: clubCoach.uid,
@@ -1957,6 +1997,24 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
                   })
                 )
               );
+              const clubSessSnap = await getDocs(
+                query(collection(db, "sessions"), where("clubId", "==", canonicalClubId), limit(250))
+              ).catch(() => null);
+              if (clubSessSnap && !clubSessSnap.empty) {
+                await Promise.allSettled(
+                  clubSessSnap.docs
+                    .filter((d) => {
+                      const ownerUid = (d.data() as any)?.userId || (d.data() as any)?.userUid;
+                      return ownerUid && studentUids.has(ownerUid);
+                    })
+                    .map((d) =>
+                      updateDoc(doc(db, "sessions", d.id), {
+                        clubId: null,
+                        updatedAt: now
+                      })
+                    )
+                );
+              }
             }
           })(),
           10000
@@ -1991,15 +2049,59 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
     }
   }
 
+  // Detach athlete's own completed sessions from the ex-coach's clubId so private history is no longer shared
+  if (userUid && userUid !== "USR-GUEST-OFFLINE") {
+    try {
+      const localSessions = await getLocalSessions();
+      for (const s of localSessions) {
+        if ((s.userId === userUid || s.userUid === userUid) && s.clubId) {
+          const detached = { ...s, clubId: null, updatedAt: now };
+          await saveLocalSession(s.id, detached);
+          if (!s.isDraft) {
+            await addToSyncQueue({
+              id: generateResilientId("TXN"),
+              collection: "sessions",
+              operation: "UPDATE",
+              payloadId: s.id,
+              payload: detached,
+              timestamp: now
+            });
+          }
+        }
+      }
+      if (isOnline && auth.currentUser?.uid === userUid) {
+        const { updateDoc } = await import("firebase/firestore");
+        const ownSessSnap = await withTimeout(
+          getDocs(query(collection(db, "sessions"), where("userId", "==", userUid), limit(250))),
+          6000
+        ).catch(() => null);
+        if (ownSessSnap && !ownSessSnap.empty) {
+          await Promise.allSettled(
+            ownSessSnap.docs
+              .filter((d) => Boolean(d.data()?.clubId))
+              .map((d) => updateDoc(doc(db, "sessions", d.id), { clubId: null, updatedAt: now }))
+          );
+        }
+      }
+    } catch (sessErr) {
+      console.warn("Could not detach clubId from unlinked athlete sessions:", sessErr);
+    }
+  }
+
   const preservedRole: UserProfile["role"] =
     currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
       ? "superadmin"
       : "archer";
+  const hasValidProOnLeave =
+    preservedRole === "superadmin" ||
+    (currentLogged?.plan === "PRO" &&
+      typeof currentLogged?.proExpiresAt === "number" &&
+      currentLogged.proExpiresAt > now);
 
   const updated = await updateProfile(userUid, {
     role: preservedRole,
-    plan: preservedRole === "superadmin" ? "PRO" : "FREE",
-    proExpiresAt: preservedRole === "superadmin" ? currentLogged?.proExpiresAt : 0,
+    plan: hasValidProOnLeave ? "PRO" : "FREE",
+    proExpiresAt: hasValidProOnLeave ? currentLogged?.proExpiresAt : 0,
     isClubCreator: false,
     clubId: null,
     coachId: null,

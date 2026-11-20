@@ -132,9 +132,7 @@ export class BleHeartRateSessionTracker {
     timestampMs: number = Date.now()
   ): boolean {
     if (contactDetected === false || !isValidHeartRateBpm(bpm)) {
-      if (contactDetected === false || bpm === 0) {
-        this.currentBpmVal = 0;
-      }
+      this.currentBpmVal = 0;
       return false;
     }
     const rounded = Math.round(bpm);
@@ -149,13 +147,14 @@ export class BleHeartRateSessionTracker {
     return true;
   }
 
-  resetSessionStats(seedAvgBpm = 0, seedMaxBpm = 0): void {
+  resetSessionStats(seedAvgBpm = 0, seedMaxBpm = 0, seedSampleCount = 1): void {
     const cleanAvg = isValidHeartRateBpm(seedAvgBpm) ? Math.round(seedAvgBpm) : 0;
     const cleanMax = isValidHeartRateBpm(seedMaxBpm)
       ? Math.max(cleanAvg, Math.round(seedMaxBpm))
       : cleanAvg;
-    this.sumBpm = cleanAvg > 0 ? cleanAvg : 0;
-    this.sampleCount = cleanAvg > 0 ? 1 : 0;
+    const count = cleanAvg > 0 ? Math.max(1, Math.round(seedSampleCount) || 1) : 0;
+    this.sumBpm = cleanAvg * count;
+    this.sampleCount = count;
     this.avgBpmVal = cleanAvg;
     this.maxBpmVal = cleanMax;
   }
@@ -164,9 +163,13 @@ export class BleHeartRateSessionTracker {
     this.currentBpmVal = 0;
   }
 
-  getSnapshot() {
+  getSnapshot(nowMs?: number) {
+    const isStale =
+      typeof nowMs === "number" &&
+      this.lastSampleAtMs > 0 &&
+      nowMs - this.lastSampleAtMs > 12_000;
     return {
-      currentBpm: this.currentBpmVal,
+      currentBpm: isStale ? 0 : this.currentBpmVal,
       avgHeartRateBpm: this.avgBpmVal,
       maxHeartRateBpm: this.maxBpmVal,
       samplesCount: this.sampleCount,
@@ -208,6 +211,22 @@ let webBleDevice: any = null;
 let webBleHrChar: any = null;
 let webUserDisconnected = false;
 let webReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let staleSampleWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+let lastNativeScanStartedAt = 0;
+
+function armStaleSampleWatchdog(): void {
+  if (typeof window === "undefined") return;
+  if (staleSampleWatchdogTimer) {
+    clearTimeout(staleSampleWatchdogTimer);
+    staleSampleWatchdogTimer = null;
+  }
+  if (statusState.state !== "connected") return;
+  staleSampleWatchdogTimer = setTimeout(() => {
+    staleSampleWatchdogTimer = null;
+    sessionTracker.clearCurrentReading();
+    emitStatus();
+  }, 12_500);
+}
 
 function getNativeBridge(): NativeBleBridge | null {
   if (typeof window === "undefined") return null;
@@ -259,7 +278,7 @@ export function getSavedBleSensorMeta(): { id: string; name: string } | null {
 }
 
 function emitStatus(): void {
-  const trackerSnap = sessionTracker.getSnapshot();
+  const trackerSnap = sessionTracker.getSnapshot(Date.now());
   const transport = detectTransport();
   statusState = {
     ...statusState,
@@ -328,14 +347,20 @@ function applyNativePayload(payload: any): void {
     const parsed = parseHeartRateMeasurement(Uint8Array.from(payload.rawBytes));
     if (parsed) {
       statusState.contactDetected = parsed.contactDetected;
-      sessionTracker.recordSample(parsed.bpm, parsed.contactDetected, Date.now());
+      if (sessionTracker.recordSample(parsed.bpm, parsed.contactDetected, Date.now())) {
+        armStaleSampleWatchdog();
+      }
     }
   } else if (typeof payload.bpm === "number" && payload.bpm > 0) {
-    sessionTracker.recordSample(
-      payload.bpm,
-      typeof payload.contactDetected === "boolean" ? payload.contactDetected : null,
-      Date.now()
-    );
+    if (
+      sessionTracker.recordSample(
+        payload.bpm,
+        typeof payload.contactDetected === "boolean" ? payload.contactDetected : null,
+        Date.now()
+      )
+    ) {
+      armStaleSampleWatchdog();
+    }
   }
 
   emitStatus();
@@ -388,10 +413,12 @@ function ensureInitialized(): void {
 export function getBleHeartRateStatus(): BleHeartRateStatus {
   ensureInitialized();
   const transport = detectTransport();
+  const trackerSnap = sessionTracker.getSnapshot(Date.now());
   return {
     ...statusState,
     transport,
     supported: transport !== "unsupported",
+    currentBpm: statusState.state === "connected" ? trackerSnap.currentBpm : 0,
     discoveredDevices: [...statusState.discoveredDevices]
   };
 }
@@ -407,8 +434,12 @@ export function subscribeBleHeartRate(
   };
 }
 
-export function resetBleHeartRateSessionStats(seedAvgBpm = 0, seedMaxBpm = 0): void {
-  sessionTracker.resetSessionStats(seedAvgBpm, seedMaxBpm);
+export function resetBleHeartRateSessionStats(
+  seedAvgBpm = 0,
+  seedMaxBpm = 0,
+  seedSampleCount = 1
+): void {
+  sessionTracker.resetSessionStats(seedAvgBpm, seedMaxBpm, seedSampleCount);
   emitStatus();
 }
 
@@ -477,7 +508,9 @@ function onWebCharValueChanged(event: any): void {
     const parsed = parseHeartRateMeasurement(bytes);
     if (!parsed) return;
     statusState.contactDetected = parsed.contactDetected;
-    sessionTracker.recordSample(parsed.bpm, parsed.contactDetected, Date.now());
+    if (sessionTracker.recordSample(parsed.bpm, parsed.contactDetected, Date.now())) {
+      armStaleSampleWatchdog();
+    }
     emitStatus();
   } catch {}
 }
@@ -519,6 +552,11 @@ export async function startBleHeartRateScanOrRequest(): Promise<void> {
 
   const bridge = getNativeBridge();
   if (bridge) {
+    const now = Date.now();
+    if (statusState.state === "scanning" && now - lastNativeScanStartedAt < 2500) {
+      return;
+    }
+    lastNativeScanStartedAt = now;
     statusState.state = "scanning";
     emitStatus();
     try {

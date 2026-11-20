@@ -381,6 +381,19 @@ export async function markSessionTombstone(sessionId: string): Promise<void> {
   }
 }
 
+export async function clearSessionTombstone(sessionId: string): Promise<void> {
+  const cleanId = String(sessionId || "").trim();
+  if (!cleanId) return;
+  try {
+    const existing = await settingsStore.getItem<string[]>(SESSION_TOMBSTONES_KEY);
+    if (!Array.isArray(existing) || !existing.includes(cleanId)) return;
+    const filtered = existing.filter((x) => typeof x === "string" && x !== cleanId);
+    await settingsStore.setItem(SESSION_TOMBSTONES_KEY, filtered);
+  } catch (err) {
+    console.error("Failed to clear session tombstone:", err);
+  }
+}
+
 export async function getSessionTombstones(): Promise<Set<string>> {
   try {
     const existing = await settingsStore.getItem<string[]>(SESSION_TOMBSTONES_KEY);
@@ -410,6 +423,10 @@ export async function getLocalSessions(): Promise<any[]> {
 
 export async function saveLocalSession(id: string, sessionData: any): Promise<void> {
   const cleanData = sanitizeForFirestore({ ...sessionData, id: sessionData.id || id });
+  await clearSessionTombstone(id);
+  if (cleanData.id && cleanData.id !== id) {
+    await clearSessionTombstone(cleanData.id);
+  }
   await sessionsStore.setItem(id, cleanData);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "sessions_local" } }));

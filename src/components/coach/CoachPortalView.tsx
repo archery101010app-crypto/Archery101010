@@ -658,7 +658,42 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       setAthletes((prev) => prev.filter((a) => a.uid !== targetUid));
       setSelectedAthlete(null);
 
-      // 5. Update ONLY permitted unlink fields via updateDoc in Firestore (or fallback to sync queue)
+      // 5. Detach athlete's sessions from this club locally and in Firestore so private history is no longer shared
+      try {
+        const { getLocalSessions, saveLocalSession } = await import("@/lib/db/indexedDB");
+        const localSessions = await getLocalSessions();
+        for (const s of localSessions) {
+          if ((s.userId === targetUid || s.userUid === targetUid) && s.clubId) {
+            await saveLocalSession(s.id, { ...s, clubId: null, updatedAt: unlinkTs });
+          }
+        }
+        if (typeof navigator === "undefined" || navigator.onLine) {
+          const { collection, query, where, limit, getDocs, doc, updateDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const clubIdsToDetach = Array.from(
+            new Set([activeClubId, canonicalCoachClubId, `CLB-${user.uid}`].filter(Boolean))
+          );
+          for (const cid of clubIdsToDetach) {
+            const sessSnap = await getDocs(
+              query(collection(db, "sessions"), where("clubId", "==", cid), limit(250))
+            ).catch(() => null);
+            if (sessSnap && !sessSnap.empty) {
+              await Promise.allSettled(
+                sessSnap.docs
+                  .filter((d) => {
+                    const ownerUid = (d.data() as any)?.userId || (d.data() as any)?.userUid;
+                    return ownerUid === targetUid;
+                  })
+                  .map((d) => updateDoc(doc(db, "sessions", d.id), { clubId: null, updatedAt: unlinkTs }))
+              );
+            }
+          }
+        }
+      } catch (sessErr) {
+        console.warn("Session clubId detach warning on unlink:", sessErr);
+      }
+
+      // 6. Update ONLY permitted unlink fields via updateDoc in Firestore (or fallback to sync queue)
       let wroteDirectlyToCloud = false;
       try {
         if (typeof navigator === "undefined" || navigator.onLine) {

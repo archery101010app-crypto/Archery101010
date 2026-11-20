@@ -87,7 +87,8 @@ export default function AnalysisView({
     const saved = loadSavedAnalysisCalibration(
       defaultBowType,
       defaultDistanceM,
-      user?.physicalData?.dominantHand
+      user?.physicalData?.dominantHand,
+      user?.uid
     );
     if (saved) {
       return {
@@ -123,11 +124,11 @@ export default function AnalysisView({
         bowWrist: nextWrist
       };
       if (prev.calibratedAt > 0) {
-        saveAnalysisCalibration(next);
+        saveAnalysisCalibration(next, user?.uid);
       }
       return next;
     });
-  }, [defaultBowType, defaultDistanceM, defaultWrist]);
+  }, [defaultBowType, defaultDistanceM, defaultWrist, user?.uid]);
 
   const [captureMode, setCaptureMode] = useState<"AUTO" | "MANUAL">("AUTO");
   const [shots, setShots] = useState<AnalysisShotRecord[]>([]);
@@ -143,6 +144,8 @@ export default function AnalysisView({
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
   const [manualCaptureAt, setManualCaptureAt] = useState<number>(0);
+  const [calibrateZeroAt, setCalibrateZeroAt] = useState<number>(0);
+  const isFinishingRef = useRef<boolean>(false);
   const [coachTechnicalNotes, setCoachTechnicalNotes] = useState<
     Array<{ id: string; date: number; content: string }>
   >([]);
@@ -184,8 +187,20 @@ export default function AnalysisView({
   const hasCloudWatchConnected =
     cloudStatus.watchLinked &&
     cloudStatus.lastWatchSeenAt > 0 &&
-    Date.now() - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
+    Date.now() - cloudStatus.lastWatchSeenAt <= 3 * 60 * 1000;
   const isWatchConnected = hasNativeWatchConnected || hasCloudWatchConnected;
+
+  // Report whether Análisis is actively capturing/holding shots so idle visits never block OTA updates
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const winAny = window as unknown as { __archeryAnalysisActive?: boolean };
+    winAny.__archeryAnalysisActive = Boolean(isWatchConnected || shots.length > 0);
+    window.dispatchEvent(new CustomEvent("archery-analysis-busy-changed"));
+    return () => {
+      winAny.__archeryAnalysisActive = false;
+      window.dispatchEvent(new CustomEvent("archery-analysis-busy-changed"));
+    };
+  }, [isWatchConnected, shots.length]);
 
   // Load saved past Analysis sessions (and resume any active Analysis draft)
   const reloadSavedAnalysisSessions = useCallback(async () => {
@@ -238,8 +253,15 @@ export default function AnalysisView({
   // Listen for Coach technical notes addressed to this athlete (offline-first + real-time Firestore)
   useEffect(() => {
     if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
-    let cancelled = false;
     const localKey = `athlete_received_coach_notes_${user.uid}`;
+    const linkedCoachId = user.coachId || "";
+    const linkedClubId = user.clubId || "";
+    if (!linkedCoachId && !linkedClubId) {
+      setCoachTechnicalNotes([]);
+      saveLocalSetting(localKey, []).catch(() => {});
+      return;
+    }
+    let cancelled = false;
 
     getLocalSetting<Array<{ id: string; date: number; content: string }>>(localKey, [])
       .then((cached) => {
@@ -270,6 +292,12 @@ export default function AnalysisView({
           const merged = new Map<string, { id: string; date: number; content: string }>();
           snap.docs.forEach((d) => {
             const data = d.data();
+            if (linkedCoachId && data?.coachId && data.coachId !== linkedCoachId) {
+              return;
+            }
+            if (!linkedCoachId && linkedClubId && data?.clubId && data.clubId !== linkedClubId) {
+              return;
+            }
             const arr = Array.isArray(data?.notes) ? data.notes : [];
             arr.forEach((n: any) => {
               if (n && n.id && typeof n.content === "string" && n.content.trim()) {
@@ -311,7 +339,7 @@ export default function AnalysisView({
         } catch {}
       }
     };
-  }, [user?.uid]);
+  }, [user?.uid, user?.coachId, user?.clubId]);
 
   useEffect(() => {
     reloadSavedAnalysisSessions();
@@ -412,12 +440,13 @@ export default function AnalysisView({
     [user.uid, user.fullName, user.nickname, user.clubId, calibration]
   );
 
-  // Sync live Analysis mode & calibration to connected Smartwatch
+  // Sync live Analysis mode & calibration to connected Smartwatch (without 1Hz BLE BPM cloud write churn)
   const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
     const summary = computeAnalysisSessionSummary(shots);
+    const curBle = bleHrRef.current;
     const liveHr =
-      bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-        ? bleHrStatus.currentBpm
+      curBle.state === "connected" && curBle.currentBpm >= 30
+        ? curBle.currentBpm
         : summary.avgHeartRateBpm;
     return {
       sessionId: sessionIdRef.current,
@@ -448,17 +477,18 @@ export default function AnalysisView({
         bowWrist: calibration.bowWrist,
         distanceM: calibration.distanceM,
         zeroGravityVec: calibration.zeroGravityVec,
-        ...(manualCaptureAt > 0 ? { manualCaptureAt } : {})
+        ...(manualCaptureAt > 0 ? { manualCaptureAt } : {}),
+        ...(calibrateZeroAt > 0 ? { calibrateZeroAt } : {})
       }),
-      updatedAt: Date.now()
+      updatedAt: sessionStartTsRef.current + shots.length
     };
   }, [
     shots,
     calibration,
     captureMode,
     manualCaptureAt,
+    calibrateZeroAt,
     bleHrStatus.state,
-    bleHrStatus.currentBpm,
     user
   ]);
 
@@ -466,6 +496,7 @@ export default function AnalysisView({
   latestWatchSnapshotRef.current = liveWatchSnapshot;
 
   useEffect(() => {
+    if (isFinishingRef.current) return;
     publishWatchState(liveWatchSnapshot);
   }, [liveWatchSnapshot]);
 
@@ -519,6 +550,37 @@ export default function AnalysisView({
         setCaptureMode(msg.enabled ? "AUTO" : "MANUAL");
         return;
       }
+      if (msg.type === "ANALYSIS_ZERO_VECTOR") {
+        let vec: [number, number, number] | null = null;
+        if (Array.isArray(msg.zeroGravityVec) && msg.zeroGravityVec.length === 3) {
+          vec = [
+            Number(msg.zeroGravityVec[0]) || 0,
+            Number(msg.zeroGravityVec[1]) || 0,
+            Number(msg.zeroGravityVec[2]) || 9.81
+          ];
+        } else if (typeof msg.analysisShotJson === "string") {
+          try {
+            const parsed = JSON.parse(msg.analysisShotJson);
+            if (Array.isArray(parsed) && parsed.length === 3) {
+              vec = [
+                Number(parsed[0]) || 0,
+                Number(parsed[1]) || 0,
+                Number(parsed[2]) || 9.81
+              ];
+            }
+          } catch {}
+        }
+        if (vec) {
+          setCalibration((prev) => {
+            const next = { ...prev, zeroGravityVec: vec as [number, number, number] };
+            if (next.calibratedAt > 0) {
+              saveAnalysisCalibration(next, user?.uid);
+            }
+            return next;
+          });
+        }
+        return;
+      }
       if (msg.type === "ANALYSIS_SHOT" && typeof msg.analysisShotJson === "string") {
         const nextNum = shotsRef.current.length + 1;
         const decoded = decodeCompactShotAnalysis(msg.analysisShotJson, nextNum);
@@ -530,7 +592,8 @@ export default function AnalysisView({
         const nowRecv = Date.now();
         if (
           seenShotKeysRef.current.has(dedupKey) ||
-          (nowRecv - lastShotRecvTsRef.current.ts < 850 && lastShotRecvTsRef.current.sig === sigKey)
+          nowRecv - lastShotRecvTsRef.current.ts < 1200 ||
+          (nowRecv - lastShotRecvTsRef.current.ts < 2500 && lastShotRecvTsRef.current.sig === sigKey)
         ) {
           return;
         }
@@ -622,28 +685,34 @@ export default function AnalysisView({
   };
 
   const handleSaveAndFinishSession = async () => {
-    if (shots.length === 0) return;
-    triggerHaptic("confirm");
-    await persistSessionSnapshot(shots, false);
-    resetBleHeartRateSessionStats(0, 0);
-    seenShotKeysRef.current.clear();
-    publishWatchState({
-      ...latestWatchSnapshotRef.current,
-      sessionId: "",
-      sessionActive: false,
-      analysisMode: false,
-      practiceType: "Práctica",
-      arrowsCount: 0,
-      updatedAt: Date.now()
-    });
-    sessionIdRef.current = generateResilientId("SES");
-    sessionStartTsRef.current = Date.now();
-    shotsRef.current = [];
-    setShots([]);
-    setSelectedShotIdx(0);
-    setIsMarkMode(false);
-    await reloadSavedAnalysisSessions();
-    onNavigateHistoryAnalysis();
+    if (shots.length === 0 || isFinishingRef.current) return;
+    isFinishingRef.current = true;
+    try {
+      triggerHaptic("confirm");
+      await persistSessionSnapshot(shots, false);
+      resetBleHeartRateSessionStats(0, 0);
+      seenShotKeysRef.current.clear();
+      publishWatchState({
+        ...latestWatchSnapshotRef.current,
+        sessionId: "",
+        sessionActive: false,
+        analysisMode: false,
+        practiceType: "Práctica",
+        arrowsCount: 0,
+        updatedAt: Date.now()
+      });
+      sessionIdRef.current = generateResilientId("SES");
+      sessionStartTsRef.current = Date.now();
+      shotsRef.current = [];
+      setShots([]);
+      setSelectedShotIdx(0);
+      setIsMarkMode(false);
+      await reloadSavedAnalysisSessions();
+      onNavigateHistoryAnalysis();
+    } catch (err) {
+      console.error("Failed to save analysis session:", err);
+      isFinishingRef.current = false;
+    }
   };
 
   const safeShotIdx = Math.min(selectedShotIdx, Math.max(0, shots.length - 1));
@@ -1445,6 +1514,11 @@ export default function AnalysisView({
       <AnalysisCalibrationModal
         isOpen={isCalibrationOpen}
         initialProfile={calibration}
+        userUid={user?.uid}
+        onStartZeroCapture={() => {
+          setCalibrateZeroAt(Date.now());
+          sendWatchCommand({ type: "ANALYSIS_CALIBRATE_ZERO" });
+        }}
         onClose={() => setIsCalibrationOpen(false)}
         onSaveCalibration={(next) => setCalibration(next)}
       />

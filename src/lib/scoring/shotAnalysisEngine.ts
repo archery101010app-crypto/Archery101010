@@ -63,10 +63,12 @@ export interface AnalysisShotRecord {
 
 const CALIBRATION_STORAGE_KEY = "archery101010_analysis_calibration_v1";
 
-/** Official World Archery outer target face radius (cm) for a given shooting distance (m). */
-export function getTargetFaceRadiusCm(distanceM: number): number {
+/** Official World Archery outer target face radius (cm) for a given shooting distance (m) and bow division. */
+export function getTargetFaceRadiusCm(distanceM: number, bowType?: AnalysisBowType): number {
   if (distanceM <= 20) return 20; // 40 cm face at 18m
-  if (distanceM <= 55) return 40; // 80 cm face at 30m / 50m
+  if (distanceM <= 26) return 30; // 60 cm face at 25m
+  if (distanceM <= 36) return 40; // 80 cm face at 30m
+  if (distanceM <= 55) return bowType === "Compound" ? 40 : 61; // Compound 80 cm vs Recurve/Barebow 122 cm at 50m
   return 61; // 122 cm face at 60m / 70m
 }
 
@@ -210,6 +212,7 @@ export function analyzeImuShotWindow(params: {
   distanceM: number;
   bowType: AnalysisBowType;
   bowWrist?: AnalysisBowWrist;
+  zeroGravityVec?: [number, number, number];
   heartRateBpm?: number;
 }): AnalysisShotRecord | null {
   const {
@@ -218,6 +221,7 @@ export function analyzeImuShotWindow(params: {
     distanceM = 18,
     bowType = "Barebow",
     bowWrist = "LEFT",
+    zeroGravityVec,
     heartRateBpm
   } = params;
 
@@ -244,10 +248,23 @@ export function analyzeImuShotWindow(params: {
   refAx /= refList.length;
   refAy /= refList.length;
   refAz /= refList.length;
+  // Blend calibrated resting zero-gravity baseline (when non-synthetic) to stabilize wrist mount tilt reference
+  if (
+    Array.isArray(zeroGravityVec) &&
+    zeroGravityVec.length === 3 &&
+    (Math.abs(zeroGravityVec[0]) > 0.01 || Math.abs(zeroGravityVec[1]) > 0.01)
+  ) {
+    const zNorm = Math.hypot(zeroGravityVec[0], zeroGravityVec[1], zeroGravityVec[2]);
+    if (zNorm >= 4.0 && zNorm <= 15.0) {
+      refAx = 0.88 * refAx + 0.12 * zeroGravityVec[0];
+      refAy = 0.88 * refAy + 0.12 * zeroGravityVec[1];
+      refAz = 0.88 * refAz + 0.12 * zeroGravityVec[2];
+    }
+  }
   const refNorm = Math.max(4.0, Math.hypot(refAx, refAy, refAz));
 
   const wristSign = bowWrist === "RIGHT" ? -1 : 1;
-  const faceRadiusCm = getTargetFaceRadiusCm(distanceM);
+  const faceRadiusCm = getTargetFaceRadiusCm(distanceM, bowType);
   const distCm = Math.max(1000, distanceM * 100);
 
   // Complementary low-pass tilt + gyro angle integration (rad) relative to anchor equilibrium
@@ -428,12 +445,27 @@ export function analyzeImuShotWindow(params: {
 }
 
 export function normalizeShotRecord(raw: any, fallbackShotNumber = 1): AnalysisShotRecord {
-  const prepSeconds = Number(clamp(Number(raw?.prepSeconds ?? raw?.prepSec) || 1.5, 0.2, 20).toFixed(1));
-  const aimSeconds = Number(clamp(Number(raw?.aimSeconds ?? raw?.aimSec) || 3.5, 0.2, 30).toFixed(1));
+  const rawPrep = Number(raw?.prepSeconds ?? raw?.prepSec);
+  const rawAim = Number(raw?.aimSeconds ?? raw?.aimSec);
+  const rawStab = Number(raw?.stabilityPct ?? raw?.stab);
+  const rawSway = Number(raw?.swayRadiusCm ?? raw?.swayCm);
+  const rawRel = Number(raw?.releaseJumpCm ?? raw?.relCm);
+  const prepSeconds = Number(
+    clamp(Number.isFinite(rawPrep) && rawPrep > 0 ? rawPrep : 0, 0, 20).toFixed(1)
+  );
+  const aimSeconds = Number(
+    clamp(Number.isFinite(rawAim) && rawAim > 0 ? rawAim : 0, 0, 30).toFixed(1)
+  );
   const totalSeconds = Number((prepSeconds + aimSeconds).toFixed(1));
-  const stabilityPct = Math.round(clamp(Number(raw?.stabilityPct ?? raw?.stab) || 85, 1, 100));
-  const swayRadiusCm = Number(clamp(Number(raw?.swayRadiusCm ?? raw?.swayCm) || 1.8, 0.1, 60).toFixed(1));
-  const releaseJumpCm = Number(clamp(Number(raw?.releaseJumpCm ?? raw?.relCm) || 0.8, 0.1, 50).toFixed(1));
+  const stabilityPct = Math.round(
+    clamp(Number.isFinite(rawStab) && rawStab > 0 ? rawStab : 0, 0, 100)
+  );
+  const swayRadiusCm = Number(
+    clamp(Number.isFinite(rawSway) && rawSway > 0 ? rawSway : 0, 0, 60).toFixed(1)
+  );
+  const releaseJumpCm = Number(
+    clamp(Number.isFinite(rawRel) && rawRel > 0 ? rawRel : 0, 0, 50).toFixed(1)
+  );
   const hrRaw = Number(raw?.heartRateBpm ?? raw?.bpm) || 0;
 
   const parsePts = (arr: any): NormalizedTargetPoint[] => {
@@ -527,11 +559,15 @@ export function decodeCompactShotAnalysis(
 export function loadSavedAnalysisCalibration(
   defaultBowType?: string,
   defaultDistanceM?: number,
-  dominantHand?: string
+  dominantHand?: string,
+  userUid?: string
 ): AnalysisCalibrationProfile | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(CALIBRATION_STORAGE_KEY);
+    const scopedKey = userUid ? `${CALIBRATION_STORAGE_KEY}_${userUid}` : CALIBRATION_STORAGE_KEY;
+    const raw =
+      localStorage.getItem(scopedKey) ||
+      (!userUid ? null : localStorage.getItem(CALIBRATION_STORAGE_KEY));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || !parsed.calibratedAt) return null;
@@ -561,9 +597,16 @@ export function loadSavedAnalysisCalibration(
   }
 }
 
-export function saveAnalysisCalibration(profile: AnalysisCalibrationProfile): void {
+export function saveAnalysisCalibration(
+  profile: AnalysisCalibrationProfile,
+  userUid?: string
+): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(profile));
+    const serialized = JSON.stringify(profile);
+    if (userUid) {
+      localStorage.setItem(`${CALIBRATION_STORAGE_KEY}_${userUid}`, serialized);
+    }
+    localStorage.setItem(CALIBRATION_STORAGE_KEY, serialized);
   } catch {}
 }

@@ -81,6 +81,12 @@ export type WatchCommandMessage =
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean; sensitivityLevel?: 0 | 1 | 2 }
   | { type: "ANALYSIS_SHOT"; analysisShotJson: string; heartRateBpm?: number }
   | { type: "ANALYSIS_MANUAL_CAPTURE" }
+  | { type: "ANALYSIS_CALIBRATE_ZERO" }
+  | {
+      type: "ANALYSIS_ZERO_VECTOR";
+      zeroGravityVec?: [number, number, number];
+      analysisShotJson?: string;
+    }
   | { type: "FINISH_SESSION_FROM_WATCH" }
   | { type: "REQUEST_STATE" };
 
@@ -549,6 +555,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       const watchSource = typeof data.watchSource === "string" && data.watchSource ? data.watchSource : null;
       const incomingCmdId = typeof data.lastWatchCmdId === "string" ? data.lastWatchCmdId : "";
       const docUpdatedAt = Number(data.updatedAt) || 0;
+      const watchHeartbeatAt = Number(data.watchHeartbeatAt) || 0;
 
       if (isInitialSnapshot) {
         isInitialSnapshot = false;
@@ -562,13 +569,13 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         if (typeof data.watchDistanceM === "number") {
           lastCloudTelemetryDistM = Math.max(0, data.watchDistanceM);
         }
-        if (watchSource && docUpdatedAt > 0 && now - docUpdatedAt <= 10 * 60 * 1000) {
+        if (watchSource && watchHeartbeatAt > 0 && now - watchHeartbeatAt <= 3 * 60 * 1000) {
           notifyCloudPairingStatus({
             pairingCode: code,
             cloudConnected: true,
             watchLinked: true,
             watchSource,
-            lastWatchSeenAt: docUpdatedAt
+            lastWatchSeenAt: watchHeartbeatAt
           });
         }
       }
@@ -666,13 +673,24 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
           watchSource: watchSource || "CLOUD_WATCH",
           lastWatchSeenAt: now
         });
-      } else if (watchSource && docUpdatedAt > 0 && now - docUpdatedAt <= 90_000) {
+      } else if (watchSource && watchHeartbeatAt > 0 && now - watchHeartbeatAt <= 3 * 60 * 1000) {
         notifyCloudPairingStatus({
           pairingCode: code,
           cloudConnected: true,
           watchLinked: true,
           watchSource,
-          lastWatchSeenAt: Math.max(cloudPairingStatusState.lastWatchSeenAt, docUpdatedAt)
+          lastWatchSeenAt: Math.max(cloudPairingStatusState.lastWatchSeenAt, watchHeartbeatAt)
+        });
+      } else if (
+        cloudPairingStatusState.watchLinked &&
+        watchHeartbeatAt > 0 &&
+        now - watchHeartbeatAt > 3 * 60 * 1000 &&
+        now - cloudPairingStatusState.lastWatchSeenAt > 3 * 60 * 1000
+      ) {
+        notifyCloudPairingStatus({
+          pairingCode: code,
+          cloudConnected: true,
+          watchLinked: false
         });
       }
     },
@@ -957,9 +975,11 @@ export async function connectWatchClientToPairingCode(
   }
 
   try {
+    const hbNow = Date.now();
     await updateDoc(sessionRef, {
       watchSource: "WEB_WATCH",
-      updatedAt: Date.now()
+      watchHeartbeatAt: hbNow,
+      updatedAt: hbNow
     });
   } catch {}
 
@@ -1096,6 +1116,14 @@ function buildCompactCloudWatchCmd(
     if (typeof cmd.heartRateBpm === "number" && cmd.heartRateBpm >= 30 && cmd.heartRateBpm <= 250) {
       out.heartRateBpm = Math.round(cmd.heartRateBpm);
     }
+  } else if (cmd.type === "ANALYSIS_ZERO_VECTOR") {
+    if (Array.isArray(cmd.zeroGravityVec) && cmd.zeroGravityVec.length === 3) {
+      out.analysisShotJson = JSON.stringify(
+        cmd.zeroGravityVec.map((n) => Number((Number(n) || 0).toFixed(3)))
+      );
+    } else if (typeof cmd.analysisShotJson === "string") {
+      out.analysisShotJson = cmd.analysisShotJson.slice(0, 240);
+    }
   }
 
   const bounded: Record<string, string | number | boolean> = {};
@@ -1164,6 +1192,7 @@ export function sendWatchCommand(cmd: WatchCommandMessage): void {
       watchStepsCount: latestWatchClientSteps,
       watchDistanceM: latestWatchClientDistM,
       watchSource: "WEB_WATCH",
+      watchHeartbeatAt: now,
       updatedAt: now
     }).catch(() => {});
   }

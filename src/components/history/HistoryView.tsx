@@ -405,7 +405,12 @@ export default function HistoryView({
           s.ends.every((e: any) => Array.isArray(e.arrows) && e.arrows.length > 0 && e.arrows.every((a: string) => a !== "" && a !== undefined));
 
         if (allEndsComplete) {
-          const finalId = String(s.id || "").startsWith("SES-DRAFT-") ? generateResilientId("SES") : s.id;
+          const draftTs = Number(s.timestamp) || 0;
+          const finalId = String(s.id || "").startsWith("SES-DRAFT-")
+            ? draftTs > 0
+              ? `SES-RESCUED-${user.uid}-${draftTs}`
+              : generateResilientId("SES")
+            : s.id;
           const volumeDraft = isVolumeSession(s);
           const rescued = sanitizeForFirestore({
             ...s,
@@ -459,17 +464,17 @@ export default function HistoryView({
         return;
       }
       try {
-        const { collection, query, where, getDocs } = await import("firebase/firestore");
+        const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
         const { db, auth } = await import("@/lib/firebase");
         if (!auth.currentUser) return;
 
-        const queries = [query(collection(db, "sessions"), where("userId", "==", user.uid))];
+        const queries = [query(collection(db, "sessions"), where("userId", "==", user.uid), limit(250))];
         if (isCoachResultsView) {
           const clubIdsToFetch = new Set<string>(
             [effectiveClubId, canonicalClubId, `CLB-${user.uid}`].filter(Boolean)
           );
           for (const cid of clubIdsToFetch) {
-            queries.push(query(collection(db, "sessions"), where("clubId", "==", cid)));
+            queries.push(query(collection(db, "sessions"), where("clubId", "==", cid), limit(250)));
           }
         }
 

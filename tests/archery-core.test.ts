@@ -876,4 +876,73 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       "globals.css @theme must map --font-sans to Outfit across the entire app"
     );
   });
+
+  it("enforces v2.138 full-audit fixes: WA division target radii, BLE staleness/weighting, draft tombstone clearing, and hardened Firestore rules", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { getTargetFaceRadiusCm } = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+    const { BleHeartRateSessionTracker } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. World Archery target face radii by distance & bow division
+    assert.equal(getTargetFaceRadiusCm(18, "Recurve"), 20);
+    assert.equal(getTargetFaceRadiusCm(25, "Barebow"), 30);
+    assert.equal(getTargetFaceRadiusCm(50, "Compound"), 40);
+    assert.equal(getTargetFaceRadiusCm(50, "Recurve"), 61);
+    assert.equal(getTargetFaceRadiusCm(50, "Barebow"), 61);
+    assert.equal(getTargetFaceRadiusCm(70, "Recurve"), 61);
+
+    // 2. BLE stale-sample expiration (>12s), invalid out-of-range BPM reset, and weighted draft resume
+    const hr = new BleHeartRateSessionTracker();
+    hr.resetSessionStats(110, 125, 20);
+    assert.equal(hr.recordSample(131, true, 10_000), true);
+    // Weighted average: (110 * 20 + 131) / 21 = 2331 / 21 = 111 (not 121!)
+    assert.equal(hr.getSnapshot(11_000).avgHeartRateBpm, 111);
+    assert.equal(hr.getSnapshot(11_000).currentBpm, 131);
+    // Stale > 12s clears live reading while preserving session avg/max
+    assert.equal(hr.getSnapshot(23_000).currentBpm, 0);
+    assert.equal(hr.getSnapshot(23_000).avgHeartRateBpm, 111);
+    assert.equal(hr.getSnapshot(23_000).maxHeartRateBpm, 131);
+    // Out-of-range physiological noise (<30 BPM) clears currentBpm immediately
+    assert.equal(hr.recordSample(122, true, 24_000), true);
+    assert.equal(hr.getSnapshot(24_500).currentBpm, 122);
+    assert.equal(hr.recordSample(14, true, 25_000), false);
+    assert.equal(hr.getSnapshot(25_500).currentBpm, 0);
+
+    // 3. Structural checks for tombstones, watchHeartbeatAt liveness, and Firestore security rules
+    const idbSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/db/indexedDB.ts"), "utf8");
+    assert.ok(
+      idbSrc.includes("clearSessionTombstone"),
+      "saveLocalSession must clear session tombstones so active drafts are never resurrected-deleted"
+    );
+
+    const bioSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/biometricsEngine.ts"),
+      "utf8"
+    );
+    assert.ok(
+      bioSrc.includes("watchHeartbeatAt"),
+      "biometricsEngine.ts must track genuine watch liveness via watchHeartbeatAt"
+    );
+
+    const authSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/authService.ts"), "utf8");
+    assert.ok(
+      authSrc.includes('"users_public"'),
+      "findClubOwnerByInviteCode must query PII-free users_public first"
+    );
+
+    const rulesSrc = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf8");
+    assert.ok(rulesSrc.includes("'clubLogo'"), "Coach unlink whitelist must include clubLogo");
+    assert.ok(
+      rulesSrc.includes("isAuthorizedCoachRecordTarget"),
+      "coach_records must verify coach-athlete link on create/update"
+    );
+    assert.ok(
+      rulesSrc.includes("isAuthorizedForTargetClub"),
+      "calendar_events and macrocycles must verify club membership on create/update"
+    );
+    assert.ok(
+      rulesSrc.includes("'watchHeartbeatAt'"),
+      "watch_sessions rules must permit watchHeartbeatAt"
+    );
+  });
 });

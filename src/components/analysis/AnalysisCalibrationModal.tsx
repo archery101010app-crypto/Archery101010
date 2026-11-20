@@ -6,7 +6,6 @@ import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { triggerHaptic } from "@/lib/haptics";
 import {
-  AnalysisBowType,
   AnalysisBowWrist,
   AnalysisCalibrationProfile,
   saveAnalysisCalibration
@@ -15,6 +14,8 @@ import {
 interface AnalysisCalibrationModalProps {
   isOpen: boolean;
   initialProfile: AnalysisCalibrationProfile;
+  userUid?: string;
+  onStartZeroCapture?: () => void;
   onClose: () => void;
   onSaveCalibration: (profile: AnalysisCalibrationProfile) => void;
 }
@@ -24,6 +25,8 @@ const DISTANCES = [18, 30, 50, 60, 70] as const;
 export default function AnalysisCalibrationModal({
   isOpen,
   initialProfile,
+  userUid,
+  onStartZeroCapture,
   onClose,
   onSaveCalibration
 }: AnalysisCalibrationModalProps) {
@@ -41,19 +44,29 @@ export default function AnalysisCalibrationModal({
   };
   const titleId = useId();
 
-  const [bowType, setBowType] = useState<AnalysisBowType>(initialProfile.bowType);
   const [bowWrist, setBowWrist] = useState<AnalysisBowWrist>(initialProfile.bowWrist);
   const [distanceM, setDistanceM] = useState<number>(initialProfile.distanceM || 18);
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
+  const latestValuesRef = useRef({
+    bowType: initialProfile.bowType,
+    bowWrist,
+    distanceM,
+    zeroGravityVec: initialProfile.zeroGravityVec
+  });
+  latestValuesRef.current = {
+    bowType: initialProfile.bowType,
+    bowWrist,
+    distanceM,
+    zeroGravityVec: initialProfile.zeroGravityVec
+  };
 
   useEffect(() => {
     if (isOpen) {
-      setBowType(initialProfile.bowType);
       setBowWrist(initialProfile.bowWrist);
       setDistanceM(initialProfile.distanceM || 18);
       setCountdownSec(null);
     }
-  }, [isOpen, initialProfile]);
+  }, [isOpen, initialProfile.bowWrist, initialProfile.distanceM]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -126,6 +139,7 @@ export default function AnalysisCalibrationModal({
     if (countdownSec !== null) return;
     clearZeroTimer();
     triggerHaptic("arrow");
+    onStartZeroCapture?.();
     setCountdownSec(3);
 
     let remaining = 3;
@@ -138,14 +152,18 @@ export default function AnalysisCalibrationModal({
         clearZeroTimer();
         setCountdownSec(null);
         triggerHaptic("confirm");
+        const cur = latestValuesRef.current;
         const updated: AnalysisCalibrationProfile = {
-          bowType,
-          bowWrist,
-          distanceM,
-          zeroGravityVec: [0, 0, 9.81],
+          bowType: cur.bowType,
+          bowWrist: cur.bowWrist,
+          distanceM: cur.distanceM,
+          zeroGravityVec:
+            Array.isArray(cur.zeroGravityVec) && cur.zeroGravityVec.length === 3
+              ? cur.zeroGravityVec
+              : [0, 0, 9.81],
           calibratedAt: Date.now()
         };
-        saveAnalysisCalibration(updated);
+        saveAnalysisCalibration(updated, userUid);
         onSaveCalibration(updated);
         handleClose();
       }
@@ -175,7 +193,7 @@ export default function AnalysisCalibrationModal({
               {tx("Calibración única", "One-time calibration")}
             </span>
             <span className="h-[24px] px-2 rounded-full bg-[#0D1119] border border-white/[0.14] text-[12px] font-bold text-white tracking-wide inline-flex items-center justify-center tabular-nums shrink-0 leading-none">
-              20 S
+              3 S
             </span>
           </div>
 
@@ -222,8 +240,9 @@ export default function AnalysisCalibrationModal({
                   <button
                     key={w.id}
                     type="button"
+                    disabled={countdownSec !== null}
                     onClick={() => setBowWrist(w.id)}
-                    className={`min-h-[35px] px-3 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] transition cursor-pointer whitespace-nowrap ${
+                    className={`min-h-[35px] px-3 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] transition cursor-pointer whitespace-nowrap disabled:opacity-60 ${
                       isSelected
                         ? "bg-white text-black font-extrabold"
                         : "text-white font-semibold hover:bg-white/5"
@@ -250,8 +269,9 @@ export default function AnalysisCalibrationModal({
                   <button
                     key={d}
                     type="button"
+                    disabled={countdownSec !== null}
                     onClick={() => setDistanceM(d)}
-                    className={`min-h-[35px] px-2 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] tabular-nums transition cursor-pointer whitespace-nowrap ${
+                    className={`min-h-[35px] px-2 rounded-[9px] text-[13px] min-[380px]:text-[13.8px] tabular-nums transition cursor-pointer whitespace-nowrap disabled:opacity-60 ${
                       isSelected
                         ? "bg-white text-black font-extrabold"
                         : "text-white font-semibold hover:bg-white/5"
@@ -313,12 +333,12 @@ export default function AnalysisCalibrationModal({
             <span className="w-[1px] h-[32px] bg-white/[0.08] shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
               <h3 className="text-[15px] font-bold text-white leading-tight">
-                {tx("Dispara 1 flecha normal", "Shoot 1 normal arrow")}
+                {tx("Listo para tirar", "Ready to shoot")}
               </h3>
               <p className="text-[13.2px] font-normal text-white leading-snug">
                 {tx(
-                  "Tira como siempre sin tocar el teléfono; al soltar queda registrada tu postura y ritmo.",
-                  "Shoot naturally without touching your phone; your stance and timing register on release."
+                  "Al terminar los 3 segundos ya puedes tirar normal; cada suelta se registra sola.",
+                  "Once the 3 seconds finish you can shoot normally; every release records automatically."
                 )}
               </p>
             </div>

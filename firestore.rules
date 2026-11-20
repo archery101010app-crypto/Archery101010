@@ -314,6 +314,9 @@ service cloud.firestore {
     //   - watchHeartRateBpm: number (optional, 0-260)
     //   - watchAvgHeartRateBpm: number (optional, 0-260)
     //   - watchMaxHeartRateBpm: number (optional, 0-260)
+    //   - watchHeartbeatAt: number / timestamp (optional, >= 0)
+    //   - calibrateZeroAt: number / timestamp (optional, >= 0)
+    //   - zeroGravityVec: list (optional, 3 numbers for 3D zero-point gravity calibration)
     //   - watchSource: string (optional, 0-60 chars)
     //   - watchDeviceId: string (optional, 0-80 chars)
     //   - updatedAt: number / timestamp (optional)
@@ -540,32 +543,42 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
-    // Coach authorization for unlinking a linked or legacy invite-code-matched athlete
+    // Coach authorization for updating linking/membership fields on a linked athlete
     function isAuthorizedCoachUnlink() {
-      let athleteCode = resource.data.get('clubInviteCode', '');
       return isCoach() && (
         resource.data.get('coachId', null) == request.auth.uid ||
-        isCoachOfClub(resource.data.get('clubId', null)) ||
-        (athleteCode is string && athleteCode != '' && athleteCode == getUserData().get('clubInviteCode', '__none__'))
+        isCoachOfClub(resource.data.get('clubId', null))
       );
     }
 
-    // Coach partial unlink update (clears link fields safely even on incomplete legacy athlete profiles)
+    // Coach restricted update on linked athlete: ONLY linking/club membership fields may change,
+    // and if role is modified by a coach, request.resource.data.role must be 'archer'.
     function isValidCoachUnlinkUpdate(data) {
-      return data.diff(resource.data).affectedKeys().hasOnly([
+      let changedKeys = data.diff(resource.data).affectedKeys();
+      return changedKeys.hasOnly([
           'clubId', 'clubName', 'clubLogo', 'clubInviteCode', 'joinedWithInviteCode',
           'coachId', 'coachName', 'coachEmail', 'isClubCreator', 'role', 'updatedAt'
         ]) &&
-        (data.get('clubId', null) == null || data.get('clubId', '') == '') &&
-        (data.get('coachId', null) == null || data.get('coachId', '') == '') &&
-        (data.get('isClubCreator', false) == false || data.get('isClubCreator', null) == resource.data.get('isClubCreator', null)) &&
-        (data.get('role', 'archer') == 'archer' || data.get('role', '') == resource.data.get('role', '')) &&
+        (data.get('clubId', null) == null ||
+          data.get('clubId', '') == '' ||
+          data.get('clubId', null) == resource.data.get('clubId', null) ||
+          isCoachOfClub(data.get('clubId', null))) &&
+        (data.get('coachId', null) == null ||
+          data.get('coachId', '') == '' ||
+          data.get('coachId', null) == resource.data.get('coachId', null) ||
+          data.get('coachId', '') == request.auth.uid) &&
+        (data.get('isClubCreator', false) == false ||
+          data.get('isClubCreator', null) == resource.data.get('isClubCreator', null)) &&
+        (!changedKeys.hasAny(['role']) || data.get('role', '') == 'archer') &&
+        validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalString(data, 'clubName', 0, 100) &&
         validOptionalString(data, 'clubLogo', 0, 2048) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
+        validOptionalString(data, 'coachId', 0, 128) &&
         validOptionalString(data, 'coachName', 0, 100) &&
         validOptionalString(data, 'coachEmail', 0, 128) &&
+        validOptionalBool(data, 'isClubCreator') &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
@@ -661,9 +674,9 @@ service cloud.firestore {
     // Strict PII-protected read authorization for private users/{userId} documents:
     // 1) Owner (by UID or verified auth email fallback)
     // 2) SuperAdmin
-    // 3) Coach of the athlete (by shared clubId, canonical CLB-<coachUid>, direct coachId, or legacy invite code)
+    // 3) Coach of the athlete (by shared clubId, canonical CLB-<coachUid>, or direct coachId)
     // 4) Fellow member of the caller's own non-empty clubId
-    // 5) Coach / Team Admin profile lookup
+    // 5) Assigned coach's profile read ONLY by an athlete explicitly linked to that coach (caller.coachId == userId)
     function isCallerAuthorizedForClubOrCoachRead(data) {
       let caller = getUserData();
       let callerClubId = caller.get('clubId', null);
@@ -673,9 +686,7 @@ service cloud.firestore {
       return (callerClubId is string && callerClubId != '' && docClubId == callerClubId) ||
         (callerIsCoach && docClubId is string &&
           (docClubId == 'CLB-' + request.auth.uid || docClubId == 'CLB-' + request.auth.uid.replace('USR-', ''))) ||
-        (data.get('coachId', null) == request.auth.uid && (callerIsCoach || caller.get('isClubCreator', false) == true)) ||
-        (callerIsCoach && caller.get('clubInviteCode', '') != '' &&
-          data.get('clubInviteCode', '') == caller.get('clubInviteCode', '__none__'));
+        (data.get('coachId', null) == request.auth.uid && (callerIsCoach || caller.get('isClubCreator', false) == true));
     }
 
     function canReadPrivateUserDoc(userId, data) {
@@ -684,7 +695,10 @@ service cloud.firestore {
         (request.auth.token.get('email', '') != '' &&
           data.get('email', '') == request.auth.token.get('email', '__none__')) ||
         isSuperAdmin() ||
-        data.get('role', '') in ['coach', 'team_admin', 'team_admin_coach'] ||
+        (data.get('role', '') in ['coach', 'team_admin', 'team_admin_coach'] &&
+          (getUserData().get('coachId', '') == userId ||
+           getUserData().get('clubId', '') == 'CLB-' + userId ||
+           getUserData().get('clubId', '') == 'CLB-' + userId.replace('USR-', ''))) ||
         isCallerAuthorizedForClubOrCoachRead(data);
     }
 
@@ -743,6 +757,36 @@ service cloud.firestore {
         validOptionalBool(data, 'isDraft') &&
         validOptionalBool(data, 'singleBlockSaved') &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Allows session owner or club coach to detach clubId to null on club leave / athlete unlink
+    function isValidSessionClubDetach(data) {
+      return data.diff(resource.data).affectedKeys().hasOnly(['clubId', 'updatedAt']) &&
+        (data.get('clubId', null) == null || data.get('clubId', '') == '') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Restricts coach session updates on linked athletes to soft-restore / coach note / clubId detach
+    function isValidCoachSessionUpdate(data) {
+      return data.diff(resource.data).affectedKeys().hasOnly([
+          'deletedByArcher', 'restoredByCoach', 'sessionNote', 'clubId', 'updatedAt'
+        ]) &&
+        (data.get('clubId', null) == null ||
+          data.get('clubId', '') == '' ||
+          data.get('clubId', null) == resource.data.get('clubId', null)) &&
+        validOptionalBool(data, 'deletedByArcher') &&
+        validOptionalBool(data, 'restoredByCoach') &&
+        validOptionalString(data, 'sessionNote', 0, 2000) &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Ensures non-empty clubId on calendar_events / macrocycles belongs to the caller or their club
+    function isAuthorizedForTargetClub(clubId) {
+      return clubId == null ||
+        (clubId is string && clubId == '') ||
+        isSuperAdmin() ||
+        isCoachOfClub(clubId) ||
+        getUserData().get('clubId', '') == clubId;
     }
 
     function isValidCalendarEvent(data) {
@@ -966,13 +1010,51 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
+    // Prevents unlinked users or ex-coaches from injecting fake technical notes or club attendance records
+    function isAuthorizedCoachRecordTarget(data) {
+      let recType = data.get('type', '');
+      let athUid = data.get('athleteUid', '');
+      let recClubId = data.get('clubId', null);
+      let validClubScope = recClubId == null ||
+        (recClubId is string && recClubId == '') ||
+        isSuperAdmin() ||
+        isCoachOfClub(recClubId) ||
+        (recType == 'note' && athUid == request.auth.uid && requesterClubId() == recClubId);
+      let validNoteTarget = recType != 'note' ||
+        athUid == '' ||
+        isSuperAdmin() ||
+        athUid == request.auth.uid ||
+        isCoachOfAthlete(athUid) ||
+        (athUid is string &&
+          athUid.matches('^USR-ATH-.+') &&
+          !exists(/databases/$(database)/documents/users/$(athUid)) &&
+          isCoachOfClub(recClubId));
+      return (isSuperAdmin() || isCoach() || (recType == 'note' && athUid == request.auth.uid)) &&
+        validClubScope &&
+        validNoteTarget;
+    }
+
+    function isValidZeroGravityVec(vec) {
+      return vec == null || (
+        vec is list && (
+          vec.size() == 0 || (
+            vec.size() == 3 &&
+            vec[0] is number && vec[0] >= -100000 && vec[0] <= 100000 &&
+            vec[1] is number && vec[1] >= -100000 && vec[1] <= 100000 &&
+            vec[2] is number && vec[2] >= -100000 && vec[2] <= 100000
+          )
+        )
+      );
+    }
+
     function isValidWatchCmdPayload(p) {
       return p == null || (
         p is map &&
-        p.keys().size() <= 8 &&
+        p.keys().size() <= 11 &&
         p.keys().hasOnly([
           'value', 'totalScore', 'stepsCount', 'distanceWalkedM', 'activeKcal',
-          'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm'
+          'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm',
+          'watchHeartbeatAt', 'calibrateZeroAt', 'zeroGravityVec'
         ]) &&
         (p.get('value', null) == null ||
           (p.value is string && p.value.size() <= 40) ||
@@ -983,7 +1065,10 @@ service cloud.firestore {
         validOptionalNumber(p, 'activeKcal', 0, 100000) &&
         validOptionalNumber(p, 'heartRateBpm', 0, 260) &&
         validOptionalNumber(p, 'avgHeartRateBpm', 0, 260) &&
-        validOptionalNumber(p, 'maxHeartRateBpm', 0, 260)
+        validOptionalNumber(p, 'maxHeartRateBpm', 0, 260) &&
+        validOptionalNumberOrTimestamp(p, 'watchHeartbeatAt') &&
+        validOptionalNumberOrTimestamp(p, 'calibrateZeroAt') &&
+        isValidZeroGravityVec(p.get('zeroGravityVec', null))
       );
     }
 
@@ -992,13 +1077,14 @@ service cloud.firestore {
         (cmd is string && cmd.size() <= 120) ||
         (
           cmd is map &&
-          cmd.keys().size() <= 15 &&
+          cmd.keys().size() <= 18 &&
           cmd.keys().hasOnly([
             'type', 'value', 'id', 'cmdId', '_cmdId',
             'seq', 'cmdSeq', '_cmdSeq', 'ts', '_ts',
             'delta', 'source', 'totalScore', 'enabled', 'sensitivityLevel',
             'stepsCount', 'distanceWalkedM', 'activeKcal',
             'heartRateBpm', 'avgHeartRateBpm', 'maxHeartRateBpm',
+            'watchHeartbeatAt', 'calibrateZeroAt', 'zeroGravityVec',
             'analysisShotJson', 'payload'
           ]) &&
           validOptionalString(cmd, 'type', 1, 40) &&
@@ -1024,6 +1110,9 @@ service cloud.firestore {
           validOptionalNumber(cmd, 'heartRateBpm', 0, 260) &&
           validOptionalNumber(cmd, 'avgHeartRateBpm', 0, 260) &&
           validOptionalNumber(cmd, 'maxHeartRateBpm', 0, 260) &&
+          validOptionalNumberOrTimestamp(cmd, 'watchHeartbeatAt') &&
+          validOptionalNumberOrTimestamp(cmd, 'calibrateZeroAt') &&
+          isValidZeroGravityVec(cmd.get('zeroGravityVec', null)) &&
           validOptionalString(cmd, 'analysisShotJson', 0, 3500) &&
           isValidWatchCmdPayload(cmd.get('payload', null))
         );
@@ -1034,7 +1123,7 @@ service cloud.firestore {
       let ttl = data.get('expireAt', null);
       return pairingCode.matches('^[0-9]{6}$') &&
         data.keys().hasAll(['userId', 'expiresAt']) &&
-        data.keys().size() <= 42 &&
+        data.keys().size() <= 50 &&
         data.keys().hasOnly([
           'pairingCode', 'userId', 'sessionId', 'sessionActive', 'gpsActive',
           'autoDetectEnabled', 'watchConnected', 'analysisMode', 'analysisCalibrationJson',
@@ -1046,6 +1135,7 @@ service cloud.firestore {
           'currentEndArrows', 'lastWatchCmd', 'lastWatchCmdId', 'lastWatchCmdSeq',
           'watchStepsCount', 'watchDistanceM', 'watchCaloriesKcal',
           'watchHeartRateBpm', 'watchAvgHeartRateBpm', 'watchMaxHeartRateBpm',
+          'watchHeartbeatAt', 'calibrateZeroAt', 'zeroGravityVec',
           'watchSource', 'watchDeviceId', 'lastShotTimestamp', 'createdAt',
           'updatedAt', 'expiresAt', 'expireAt'
         ]) &&
@@ -1079,6 +1169,9 @@ service cloud.firestore {
         validOptionalNumber(data, 'watchHeartRateBpm', 0, 260) &&
         validOptionalNumber(data, 'watchAvgHeartRateBpm', 0, 260) &&
         validOptionalNumber(data, 'watchMaxHeartRateBpm', 0, 260) &&
+        validOptionalNumberOrTimestamp(data, 'watchHeartbeatAt') &&
+        validOptionalNumberOrTimestamp(data, 'calibrateZeroAt') &&
+        isValidZeroGravityVec(data.get('zeroGravityVec', null)) &&
         validOptionalDateOrTimestamp(data, 'lastShotTimestamp') &&
         validOptionalDateOrTimestamp(data, 'createdAt') &&
         validOptionalDateOrTimestamp(data, 'updatedAt') &&
@@ -1204,9 +1297,9 @@ service cloud.firestore {
     match /users/{userId} {
       // Strictly protect PII (email, whatsappNumber, birthDate, fcmToken, physicalData):
       // - get: owner (including non-existent bootstrap check), matching auth email, superadmin,
-      //        coach/club fellow member, or coach/team_admin profile lookup.
-      // - list: superadmin, or bounded query (limit <= 300) matching the 5 strict cases above
-      //         OR tight 6-digit invite-code lookup (limit <= 15 && non-empty clubInviteCode).
+      //        coach/club fellow member, or an athlete reading ONLY their linked coach's profile.
+      // - list: superadmin, or bounded query (limit <= 300) strictly satisfying canReadPrivateUserDoc
+      //         (invite-code directory lookups use PII-free users_public).
       allow get: if isAuthenticated() && (
         isOwner(userId) ||
         isSuperAdmin() ||
@@ -1218,12 +1311,7 @@ service cloud.firestore {
         (
           request.query.limit != null &&
           request.query.limit <= 300 &&
-          (
-            canReadPrivateUserDoc(userId, resource.data) ||
-            (request.query.limit <= 15 &&
-             resource.data.get('clubInviteCode', '') is string &&
-             resource.data.get('clubInviteCode', '') != '')
-          )
+          canReadPrivateUserDoc(userId, resource.data)
         )
       );
 
@@ -1249,9 +1337,9 @@ service cloud.firestore {
 
       // Updates allow:
       // 1) Owner partial presence heartbeat (lastActiveAt / updatedAt) even on incomplete legacy profiles
-      // 2) Coach partial unlink update on linked or legacy invite-code-matched athletes
+      // 2) Coach restricted linking/membership update ONLY on linked athletes (cannot alter PII, plan, or bowConfig)
       // 3) SuperAdmin partial plan / proExpiresAt / role patch
-      // 4) Full validated profile update by owner, athlete's club coach, or superadmin
+      // 4) Full validated profile update ONLY by owner or superadmin
       // Non-superadmins can NEVER set role == 'superadmin', tamper with an existing superadmin profile,
       // self-escalate to coach of another club, or join a club without a verified 6-digit clubInviteCode.
       allow update: if isAuthenticated() &&
@@ -1259,15 +1347,13 @@ service cloud.firestore {
         (resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
         (
           (isOwner(userId) && isValidUserPresenceUpdate(request.resource.data)) ||
-          (isAuthorizedCoachUnlink() && isValidCoachUnlinkUpdate(request.resource.data)) ||
+          (!isOwner(userId) && !isSuperAdmin() &&
+            isAuthorizedCoachUnlink() && isValidCoachUnlinkUpdate(request.resource.data)) ||
           (isSuperAdmin() && isValidSuperAdminPatch(request.resource.data)) ||
           (
             request.resource.data.uid == userId &&
             request.resource.data.uid == resource.data.get('uid', userId) &&
-            (isOwner(userId) || isSuperAdmin() ||
-              (request.resource.data.role == 'archer' &&
-                ((resource.data.get('coachId', null) == request.auth.uid && isCoach()) ||
-                 isCoachOfClub(resource.data.get('clubId', null))))) &&
+            (isOwner(userId) || isSuperAdmin()) &&
             isNotSelfEscalatingCoachClub(request.resource.data, userId) &&
             isValidArcherClubJoinOnUpdate(request.resource.data, resource.data, userId) &&
             isValidUser(request.resource.data)
@@ -1313,15 +1399,28 @@ service cloud.firestore {
         (request.resource.data.userId == request.auth.uid || isSuperAdmin()) &&
         isValidSession(request.resource.data);
 
-      // Session owner, the athlete's/session's coach, or superadmin can update (e.g., soft delete, coach note, session restore).
+      // Session updates:
+      // 1) Owner or SuperAdmin can fully update (including setting clubId to null) or run partial clubId detach
+      // 2) Coach of the session's current clubId can detach the session from their club (clubId: null) on unlink
+      // 3) Linked athlete's coach can restore soft-deleted sessions or add sessionNote without altering scores
       // Session ownership cannot be transferred (userId is immutable).
-      allow update: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid ||
-          isSuperAdmin() ||
-          isCoachOfClub(resource.data.get('clubId', null)) ||
-          isCoachOfAthlete(resource.data.userId)) &&
-        request.resource.data.userId == resource.data.userId &&
-        isValidSession(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (
+          (resource.data.userId == request.auth.uid || isSuperAdmin()) &&
+          request.resource.data.userId == resource.data.userId &&
+          (isValidSession(request.resource.data) || isValidSessionClubDetach(request.resource.data))
+        ) ||
+        (
+          isCoachOfClub(resource.data.get('clubId', null)) &&
+          isValidSessionClubDetach(request.resource.data)
+        ) ||
+        (
+          isCoachOfAthlete(resource.data.userId) &&
+          request.resource.data.userId == resource.data.userId &&
+          isValidCoachSessionUpdate(request.resource.data) &&
+          isValidSession(request.resource.data)
+        )
+      );
 
       // Only the session owner or a superadmin can permanently delete a session
       allow delete: if isAuthenticated() &&
@@ -1340,14 +1439,15 @@ service cloud.firestore {
         isSuperAdmin()
       );
 
-      // Creator, coach of the event's club, or superadmin can create events
+      // Creator, coach of the event's club, or superadmin can create events; non-empty clubId must belong to caller
       allow create: if isAuthenticated() &&
         (request.resource.data.createdByUid == request.auth.uid ||
          isCoachOfClub(request.resource.data.get('clubId', null)) ||
          isSuperAdmin()) &&
+        isAuthorizedForTargetClub(request.resource.data.get('clubId', null)) &&
         isValidCalendarEvent(request.resource.data);
 
-      // a) Creator, coach of the event's club, or superadmin can update (createdByUid immutable), OR
+      // a) Creator, coach of the event's club, or superadmin can update (createdByUid immutable & clubId authorized), OR
       // b) Assigned/club athlete can toggle checklist completion fields only
       allow update: if isAuthenticated() && (
         (
@@ -1355,6 +1455,8 @@ service cloud.firestore {
            isCoachOfClub(resource.data.get('clubId', null)) ||
            isSuperAdmin()) &&
           request.resource.data.createdByUid == resource.data.createdByUid &&
+          (request.resource.data.get('clubId', null) == resource.data.get('clubId', null) ||
+           isAuthorizedForTargetClub(request.resource.data.get('clubId', null))) &&
           isValidCalendarEvent(request.resource.data)
         ) ||
         (
@@ -1385,19 +1487,22 @@ service cloud.firestore {
         isSuperAdmin()
       );
 
-      // Author coach, coach of the macrocycle's club, or superadmin can create macrocycles
+      // Author coach, coach of the macrocycle's club, or superadmin can create macrocycles; non-empty clubId must belong to caller
       allow create: if isAuthenticated() &&
         (request.resource.data.coachId == request.auth.uid ||
          isCoachOfClub(request.resource.data.get('clubId', null)) ||
          isSuperAdmin()) &&
+        isAuthorizedForTargetClub(request.resource.data.get('clubId', null)) &&
         isValidMacrocycle(request.resource.data);
 
-      // Author coach, coach of the macrocycle's club, or superadmin can update. CoachId is immutable.
+      // Author coach, coach of the macrocycle's club, or superadmin can update. CoachId is immutable & clubId authorized.
       allow update: if isAuthenticated() &&
         (resource.data.coachId == request.auth.uid ||
          isCoachOfClub(resource.data.get('clubId', null)) ||
          isSuperAdmin()) &&
         request.resource.data.coachId == resource.data.coachId &&
+        (request.resource.data.get('clubId', null) == resource.data.get('clubId', null) ||
+         isAuthorizedForTargetClub(request.resource.data.get('clubId', null))) &&
         isValidMacrocycle(request.resource.data);
 
       // Author coach, coach of the macrocycle's club, or superadmin can delete macrocycles
@@ -1607,12 +1712,14 @@ service cloud.firestore {
 
       allow create: if isAuthenticated() &&
         isValidCoachRecord(request.resource.data) &&
+        isAuthorizedCoachRecordTarget(request.resource.data) &&
         (request.resource.data.coachId == request.auth.uid ||
          isCoachOfClub(request.resource.data.get('clubId', null)) ||
          isSuperAdmin());
 
       allow update: if isAuthenticated() &&
         isValidCoachRecord(request.resource.data) &&
+        isAuthorizedCoachRecordTarget(request.resource.data) &&
         (resource.data.coachId == request.auth.uid ||
          isCoachOfClub(resource.data.get('clubId', null)) ||
          isSuperAdmin()) &&

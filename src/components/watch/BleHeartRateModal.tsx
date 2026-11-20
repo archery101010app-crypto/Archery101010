@@ -148,6 +148,30 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       );
     }
     if (!status.errorCode || status.errorCode === "BLE_UNSUPPORTED") return "";
+    if (status.errorCode === "PERMISSION_DENIED") {
+      return tx(
+        "Permite el acceso a Bluetooth en Ajustes",
+        "Allow Bluetooth access in Settings"
+      );
+    }
+    if (status.errorCode === "LOCATION_SERVICES_OFF") {
+      return tx(
+        "Activa la Ubicación para detectar dispositivos",
+        "Turn on Location to detect devices"
+      );
+    }
+    if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
+      return tx(
+        "Activa transmitir pulso en tu dispositivo",
+        "Enable heart rate broadcast on your device"
+      );
+    }
+    if (status.errorCode === "CONNECT_FAILED") {
+      return tx(
+        "Acerca tu dispositivo y vuelve a intentar",
+        "Move your device closer and try again"
+      );
+    }
     return tx(
       "Activa el Bluetooth de tu dispositivo",
       "Turn on Bluetooth on your device"
@@ -405,7 +429,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               )}
               <button
                 type="button"
-                disabled={isExplicitConnecting}
+                disabled={isExplicitConnecting || isScanning}
                 onClick={handleScanOrPairClick}
                 className="flex-1 min-h-[54px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-bold text-[16.5px] uppercase tracking-[0.04em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
               >

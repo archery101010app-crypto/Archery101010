@@ -338,6 +338,26 @@ export default function SmartwatchMiniApp({
         }
       } else if (msg.type === "ANALYSIS_MANUAL_CAPTURE" && isStandalone) {
         emitAnalysisShotRef.current(Date.now(), "watch_manual");
+      } else if (msg.type === "ANALYSIS_CALIBRATE_ZERO" && isStandalone) {
+        window.setTimeout(() => {
+          const recent = motionBufRef.current.slice(-25);
+          if (recent.length >= 3) {
+            let sx = 0;
+            let sy = 0;
+            let sz = 0;
+            for (const s of recent) {
+              sx += s.ax;
+              sy += s.ay;
+              sz += s.az;
+            }
+            const vec: [number, number, number] = [
+              Number((sx / recent.length).toFixed(3)),
+              Number((sy / recent.length).toFixed(3)),
+              Number((sz / recent.length).toFixed(3))
+            ];
+            sendWatchCommand({ type: "ANALYSIS_ZERO_VECTOR", zeroGravityVec: vec });
+          }
+        }, 2200);
       } else if (msg.type === "ANALYSIS_SHOT" && msg.analysisShotJson) {
         const decoded = decodeCompactShotAnalysis(msg.analysisShotJson);
         if (decoded) setLastAnalysisShot(decoded);
@@ -585,6 +605,7 @@ export default function SmartwatchMiniApp({
       distanceM: calibration.distanceM || activeState.distanceM || 18,
       bowType: calibration.bowType || "Barebow",
       bowWrist: calibration.bowWrist || "LEFT",
+      zeroGravityVec: calibration.zeroGravityVec,
       heartRateBpm: liveHr
     });
 
@@ -795,6 +816,8 @@ export default function SmartwatchMiniApp({
       }
     }[sensitivity];
 
+    let lastImpulseUiUpdateMs = 0;
+
     const handleMotion = (event: DeviceMotionEvent) => {
       const acc = event.accelerationIncludingGravity;
       if (!acc) return;
@@ -813,13 +836,17 @@ export default function SmartwatchMiniApp({
       let gz = 0;
       if (event.rotationRate) {
         const degToRad = Math.PI / 180;
-        gx = (event.rotationRate.alpha || 0) * degToRad;
-        gy = (event.rotationRate.beta || 0) * degToRad;
-        gz = (event.rotationRate.gamma || 0) * degToRad;
+        // W3C DeviceMotionEvent: beta = X-axis, gamma = Y-axis, alpha = Z-axis
+        gx = (event.rotationRate.beta || 0) * degToRad;
+        gy = (event.rotationRate.gamma || 0) * degToRad;
+        gz = (event.rotationRate.alpha || 0) * degToRad;
         gyroRad = Math.sqrt(gx * gx + gy * gy + gz * gz);
       }
 
-      setWristImpulseLevel(Math.min(100, Math.round((lin / cfg.threshold) * 100)));
+      if (now - lastImpulseUiUpdateMs >= 160) {
+        lastImpulseUiUpdateMs = now;
+        setWristImpulseLevel(Math.min(100, Math.round((lin / cfg.threshold) * 100)));
+      }
 
       // Sensitive walking / bow-carry cadence lock (peaks >= 1.08 m/s²)
       const sig = Math.max(lin, Math.abs(dyn));

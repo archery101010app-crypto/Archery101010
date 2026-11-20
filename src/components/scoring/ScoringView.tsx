@@ -333,11 +333,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   useEffect(() => {
     const seedAvg = avgHeartRateRef.current;
     const seedMax = maxHeartRateRef.current;
+    const resumedArrows = Array.isArray(config?.ends)
+      ? config.ends.reduce(
+          (acc: number, e: any) =>
+            acc +
+            (Array.isArray(e?.arrows)
+              ? e.arrows.filter((a: any) => a !== "" && a !== undefined).length
+              : 0),
+          0
+        )
+      : 0;
+    const seedWeight = Math.max(1, resumedArrows * 4);
     if (seedAvg >= 30 && hrSamplesCountRef.current === 0) {
-      hrSumRef.current = seedAvg;
-      hrSamplesCountRef.current = 1;
+      hrSumRef.current = seedAvg * seedWeight;
+      hrSamplesCountRef.current = seedWeight;
     }
-    resetBleHeartRateSessionStats(seedAvg, seedMax);
+    resetBleHeartRateSessionStats(seedAvg, seedMax, seedWeight);
     tryAutoReconnectBleHeartRate();
 
     return subscribeBleHeartRate((next) => {

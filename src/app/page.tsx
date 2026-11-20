@@ -1268,12 +1268,27 @@ export default function Home() {
 
   // Expose active scoring/duel guard so OTA auto-refresh never interrupts an active shooting session
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      (window as unknown as { __archeryBusySession?: boolean }).__archeryBusySession =
+    if (typeof window === "undefined") return;
+    const winAny = window as unknown as {
+      __archeryBusySession?: boolean;
+      __archeryAnalysisActive?: boolean;
+    };
+    const syncBusyFlag = () => {
+      const wasBusy = Boolean(winAny.__archeryBusySession);
+      const nextBusy =
         (currentScreen === "TARGET" && Boolean(sessionConfig)) ||
-        currentScreen === "ANALYSIS" ||
+        (currentScreen === "ANALYSIS" && Boolean(winAny.__archeryAnalysisActive)) ||
         currentScreen === "MATCHPLAY_ARENA";
-    }
+      winAny.__archeryBusySession = nextBusy;
+      if (!nextBusy && (wasBusy || currentScreen === "HOME")) {
+        window.dispatchEvent(new CustomEvent("archery-check-ota"));
+      }
+    };
+    syncBusyFlag();
+    window.addEventListener("archery-analysis-busy-changed", syncBusyFlag);
+    return () => {
+      window.removeEventListener("archery-analysis-busy-changed", syncBusyFlag);
+    };
   }, [currentScreen, sessionConfig]);
 
   // Offline-first storage (IndexedDB + Firestore sync) persists changes immediately;

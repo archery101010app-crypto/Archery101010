@@ -101,6 +101,37 @@ export function proDaysLeft(user: UserProfile | null | undefined): number {
 export async function enforceProExpiry(user: UserProfile): Promise<UserProfile> {
   if (user.role === "superadmin" || user.plan !== "PRO" || isProActive(user)) return user;
   try {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.onLine &&
+      user.uid &&
+      user.uid !== "USR-GUEST-OFFLINE"
+    ) {
+      const [{ doc, getDoc }, { auth, db }, { saveLocalSetting }] = await Promise.all([
+        import("firebase/firestore"),
+        import("@/lib/firebase"),
+        import("@/lib/db/indexedDB")
+      ]);
+      if (auth.currentUser?.uid === user.uid) {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const cloudData = snap.data() as Partial<UserProfile>;
+          if (
+            cloudData.plan === "PRO" &&
+            typeof cloudData.proExpiresAt === "number" &&
+            cloudData.proExpiresAt > Date.now()
+          ) {
+            const refreshed: UserProfile = {
+              ...user,
+              plan: "PRO",
+              proExpiresAt: cloudData.proExpiresAt
+            };
+            await saveLocalSetting("current_user", refreshed);
+            return refreshed;
+          }
+        }
+      }
+    }
     const { updateProfile } = await import("@/lib/authService");
     return await updateProfile(user.uid, { plan: "FREE" });
   } catch (err) {

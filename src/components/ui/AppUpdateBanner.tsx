@@ -174,6 +174,7 @@ export default function AppUpdateBanner() {
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
   const updatingRef = useRef(false);
 
   useEffect(() => {
@@ -185,9 +186,10 @@ export default function AppUpdateBanner() {
       if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.onLine) {
         return;
       }
-      if (updatingRef.current) return;
       const winAny = window as unknown as WinUpdateBridge;
-      if (winAny.__archeryBusySession) return;
+      const busyNow = Boolean(winAny.__archeryBusySession);
+      if (mounted) setIsBusy(busyNow);
+      if (updatingRef.current || busyNow) return;
       if (
         window.location.hash.includes("id_token") ||
         window.location.search.includes("id_token")
@@ -234,6 +236,7 @@ export default function AppUpdateBanner() {
     void checkRemoteVersion();
 
     const handleOnline = () => void checkRemoteVersion();
+    const handleCheckOta = () => void checkRemoteVersion();
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         void checkRemoteVersion();
@@ -241,10 +244,12 @@ export default function AppUpdateBanner() {
     };
 
     window.addEventListener("online", handleOnline);
+    window.addEventListener("archery-check-ota", handleCheckOta);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       mounted = false;
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("archery-check-ota", handleCheckOta);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
@@ -302,8 +307,9 @@ export default function AppUpdateBanner() {
   }, [remoteInfo]);
 
   const winBusy =
-    typeof window !== "undefined" &&
-    Boolean((window as unknown as WinUpdateBridge).__archeryBusySession);
+    isBusy ||
+    (typeof window !== "undefined" &&
+      Boolean((window as unknown as WinUpdateBridge).__archeryBusySession));
   const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
 
   if (winBusy || dismissed || !remoteInfo || (isNativeAndroidWebView && !canReloadNatively)) {

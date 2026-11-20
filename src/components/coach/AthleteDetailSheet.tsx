@@ -173,7 +173,7 @@ export default function AthleteDetailSheet({
       content: newNoteText.trim()
     };
 
-    const updatedNotes = [newNote, ...notes];
+    const updatedNotes = [newNote, ...notes].slice(0, 195);
     setNotes(updatedNotes);
     setNewNoteText("");
     setNoteSentAck(true);
