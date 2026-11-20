@@ -444,13 +444,13 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(otaVerJson.version, APP_VERSION, "ota-version.json must match APP_VERSION");
     assert.equal(
       verJson.version,
-      "0.0.0",
-      "Legacy public/version.json must remain 0.0.0 so pre-v2.110 APKs never trigger external Chrome jumps"
+      APP_VERSION,
+      "public/version.json must match APP_VERSION so v2.100..v2.125 clients display the Update button"
     );
     assert.equal(
       appVerJson.version,
-      "0.0.0",
-      "Legacy public/app-version.json must remain 0.0.0 so pre-v2.110 APKs never trigger external Chrome jumps"
+      APP_VERSION,
+      "public/app-version.json must match APP_VERSION"
     );
     assert.equal(verJson.latestVersion, APP_VERSION);
   });
@@ -814,5 +814,66 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       const content = fs.readFileSync(path.resolve(process.cwd(), rel), "utf8");
       assert.equal(forbiddenBrands.test(content), false, `${rel} must never mention third-party brands`);
     }
+  });
+
+  it("keeps all OTA/legacy version manifests synchronized, resets off-skin BLE BPM, and enforces Coach/Brand invariants", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { APP_VERSION } = await import("../src/lib/version.ts");
+    const { BleHeartRateSessionTracker } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. All 3 remote manifests (ota-version.json, version.json for v2.100..v2.125, app-version.json)
+    // must match APP_VERSION and NEVER regress to "0.0.0" (which hid the update button on v2.100).
+    for (const manifestRel of [
+      "public/ota-version.json",
+      "public/version.json",
+      "public/app-version.json"
+    ]) {
+      const parsed = JSON.parse(
+        fs.readFileSync(path.resolve(process.cwd(), manifestRel), "utf8")
+      ) as { version?: string; apkDownloadUrl?: string };
+      assert.equal(
+        parsed.version,
+        APP_VERSION,
+        `${manifestRel} must stay synchronized with APP_VERSION (${APP_VERSION})`
+      );
+      assert.notEqual(parsed.version, "0.0.0", `${manifestRel} must never be neutralized to 0.0.0`);
+      assert.ok(
+        parsed.apkDownloadUrl?.includes("/download-apk"),
+        `${manifestRel} must include /download-apk`
+      );
+    }
+
+    // 2. Off-skin BLE heart rate packet must immediately clear currentBpm while preserving session avg/max
+    const tracker = new BleHeartRateSessionTracker();
+    assert.equal(tracker.recordSample(118, true, 1000), true);
+    assert.equal(tracker.getSnapshot().currentBpm, 118);
+    assert.equal(tracker.recordSample(92, false, 2000), false);
+    assert.equal(
+      tracker.getSnapshot().currentBpm,
+      0,
+      "Off-skin contactDetected=false must clear live currentBpm to 0"
+    );
+    assert.equal(tracker.getSnapshot().avgHeartRateBpm, 118);
+
+    // 3. Firestore rules must support list/string coach notes and athlete read access to their own coach notes
+    const rulesSrc = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf8");
+    assert.ok(rulesSrc.includes("notesVal is list"), "firestore.rules must permit notes array on coach_records");
+    assert.ok(
+      rulesSrc.includes("resource.data.get('athleteUid', '') == request.auth.uid"),
+      "firestore.rules must allow athletes to read their own coach technical notes"
+    );
+    assert.ok(
+      rulesSrc.includes("isCoachOfAthlete(resource.data.userId)"),
+      "firestore.rules must allow coaches to update linked athlete sessions"
+    );
+
+    // 4. Zero third-party bow brand defaults in authService.ts
+    const authSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/authService.ts"), "utf8");
+    assert.equal(
+      /\b(Hoyt|Satori)\b/i.test(authSrc),
+      false,
+      "authService.ts must not inject third-party bow brand defaults"
+    );
   });
 });

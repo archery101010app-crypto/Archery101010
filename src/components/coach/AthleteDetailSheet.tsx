@@ -74,6 +74,7 @@ export default function AthleteDetailSheet({
   // Coach notes state
   const [notes, setNotes] = useState<Array<{ id: string; date: number; content: string }>>([]);
   const [newNoteText, setNewNoteText] = useState("");
+  const [noteSentAck, setNoteSentAck] = useState(false);
   const [maxStar, setMaxStar] = useState<any | null>(null);
 
   useEffect(() => {
@@ -175,6 +176,8 @@ export default function AthleteDetailSheet({
     const updatedNotes = [newNote, ...notes];
     setNotes(updatedNotes);
     setNewNoteText("");
+    setNoteSentAck(true);
+    window.setTimeout(() => setNoteSentAck(false), 2600);
 
     const key = `coach_notes_${athlete.uid}`;
     await saveLocalSetting(key, updatedNotes);
@@ -1256,6 +1259,8 @@ export default function AthleteDetailSheet({
               sessions={sessions.filter(
                 (s) => (s.userId === athlete.uid || s.userUid === athlete.uid) && !s.isDuel
               )}
+              savedNotes={notes}
+              noteSentAck={noteSentAck}
               noteText={newNoteText}
               onNoteTextChange={setNewNoteText}
               onSendNote={handleAddNote}

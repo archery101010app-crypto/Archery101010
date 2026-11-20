@@ -141,6 +141,28 @@ export default function SmartwatchMiniApp({
     activeState.analysisMode || activeState.practiceType === "Análisis"
   );
 
+  const lastHandledManualCaptureAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isStandalone || !activeState.analysisCalibrationJson) return;
+    try {
+      const parsed = JSON.parse(activeState.analysisCalibrationJson);
+      const reqTs = Number(parsed?.manualCaptureAt) || 0;
+      if (
+        reqTs > 0 &&
+        reqTs !== lastHandledManualCaptureAtRef.current &&
+        Date.now() - reqTs <= 15_000
+      ) {
+        if (lastHandledManualCaptureAtRef.current === 0 && Date.now() - reqTs > 4_000) {
+          lastHandledManualCaptureAtRef.current = reqTs;
+          return;
+        }
+        lastHandledManualCaptureAtRef.current = reqTs;
+        emitAnalysisShotRef.current(Date.now(), "watch_manual");
+      }
+    } catch {}
+  }, [isStandalone, activeState.analysisCalibrationJson]);
+
   useEffect(() => {
     if ((activeState.arrowsCount || 0) === 0) {
       setLastAnalysisShot(null);
@@ -527,8 +549,23 @@ export default function SmartwatchMiniApp({
     if (activeState.analysisCalibrationJson) {
       try {
         const parsed = JSON.parse(activeState.analysisCalibrationJson);
-        if (parsed && Array.isArray(parsed.zeroGravityVec) && parsed.zeroGravityVec.length === 3) {
-          calibration = parsed as AnalysisCalibrationProfile;
+        if (parsed && typeof parsed === "object") {
+          if (
+            parsed.bowType === "Compound" ||
+            parsed.bowType === "Recurve" ||
+            parsed.bowType === "Barebow"
+          ) {
+            calibration.bowType = parsed.bowType;
+          }
+          if (parsed.bowWrist === "LEFT" || parsed.bowWrist === "RIGHT") {
+            calibration.bowWrist = parsed.bowWrist;
+          }
+          if (typeof parsed.distanceM === "number" && parsed.distanceM >= 5) {
+            calibration.distanceM = parsed.distanceM;
+          }
+          if (Array.isArray(parsed.zeroGravityVec) && parsed.zeroGravityVec.length === 3) {
+            calibration.zeroGravityVec = parsed.zeroGravityVec as [number, number, number];
+          }
         }
       } catch {}
     }

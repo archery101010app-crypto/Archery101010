@@ -23,7 +23,7 @@ import {
   parseBowPoundageLbs
 } from "@/lib/scoring/biometricsEngine";
 import StravaShareModal from "../scoring/StravaShareModal";
-import { isVolumeSession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
+import { isVolumeSession, isAnalysisOnlySession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 import { AnalysisHistoryListSection } from "../analysis/AnalysisInspectorShared";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 
@@ -393,6 +393,7 @@ export default function HistoryView({
 
       // Auto-rescue any draft session that already has scored arrows so the user never loses a session
       if (s.isDraft) {
+        if (isAnalysisOnlySession(s)) continue;
         const hasArrows =
           (s.score || 0) > 0 ||
           (Array.isArray(s.ends) && s.ends.some((e: any) => Array.isArray(e.arrows) && e.arrows.some((a: string) => a !== "" && a !== undefined)));

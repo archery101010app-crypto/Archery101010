@@ -502,8 +502,12 @@ function buildPhoneCloudSessionFields(
     autoDetectEnabled: s ? Boolean(s.autoDetectEnabled) : true,
     sensitivityLevel,
     bowPoundageLbs: Math.max(10, Number(s?.bowPoundageLbs) || 36),
+    bowType: String(s?.bowType || "Recurve").slice(0, 40),
     practiceType: String(s?.practiceType || "Práctica").slice(0, 60),
     analysisMode: Boolean(s?.analysisMode || s?.practiceType === "Análisis"),
+    ...(typeof s?.heartRateBpm === "number" && s.heartRateBpm >= 30 && s.heartRateBpm <= 245
+      ? { watchHeartRateBpm: Math.round(s.heartRateBpm) }
+      : {}),
     ...(typeof s?.analysisCalibrationJson === "string"
       ? { analysisCalibrationJson: s.analysisCalibrationJson.slice(0, 950) }
       : {}),
@@ -766,6 +770,8 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
     .catch(() => {});
 }
 
+let lastPushedAnalysisCalSig = "";
+
 function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
   if (typeof window === "undefined") return;
   // Never overwrite phone session fields from the standalone /watch companion view
@@ -785,7 +791,14 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
 
   if (!activePhonePairingCode) return;
 
+  const nextCalSig = `${Boolean(snapshot.analysisMode)}|${snapshot.analysisCalibrationJson || ""}`;
+  const calChanged = nextCalSig !== lastPushedAnalysisCalSig;
+  if (calChanged) {
+    lastPushedAnalysisCalSig = nextCalSig;
+  }
+
   const isImmediateEvent =
+    calChanged ||
     snapshot.sessionActive === false ||
     (snapshot.arrowsCount === 0 && lastPushedPhoneArrowsCount > 0);
   const elapsed = Date.now() - lastPhoneCloudPushMs;
@@ -870,6 +883,9 @@ function mapCloudDocToSnapshot(data: Record<string, any>): BiometricSessionSnaps
     distanceWalkedM: walkedM,
     gpsActive: true,
     activeKcal: Math.max(0, Math.round(Number(data.caloriesBurnedKcal) || 0)),
+    ...(Number(data.watchHeartRateBpm) >= 30 && Number(data.watchHeartRateBpm) <= 245
+      ? { heartRateBpm: Math.round(Number(data.watchHeartRateBpm)) }
+      : {}),
     bowPoundageLbs: Math.max(10, Number(data.bowPoundageLbs) || 36),
     practiceType: String(data.practiceType || "Práctica"),
     bowType: String(data.bowType || "Compound"),
@@ -906,7 +922,16 @@ export async function connectWatchClientToPairingCode(
       return { ok: false, error: "Código no encontrado. Abre el panel Reloj en tu teléfono." };
     }
     initialSnapshot = mapCloudDocToSnapshot(snap.data() || {});
-  } catch {
+  } catch (err: any) {
+    const isPermDenied =
+      err?.code === "permission-denied" ||
+      String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
+    if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+      return {
+        ok: false,
+        error: "Código no encontrado o expirado. Abre Vincular Reloj en tu teléfono."
+      };
+    }
     return { ok: false, error: "Sin conexión para verificar el código." };
   }
 

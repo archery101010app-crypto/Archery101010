@@ -14,6 +14,7 @@ import {
   getLocalSetting,
   saveLocalSetting,
   saveLocalSession,
+  deleteLocalSession,
   purgeAllFictitiousData,
   isFictitiousUser,
   isFictitiousSession
@@ -436,6 +437,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 async (snap) => {
                   let changed = false;
                   for (const change of snap.docChanges()) {
+                    if (change.type === "removed") {
+                      if (snap.size < 250) {
+                        await deleteLocalSession(change.doc.id).catch(() => {});
+                        changed = true;
+                      }
+                      continue;
+                    }
                     const data = change.doc.data();
                     if (data && !isFictitiousSession(data, change.doc.id)) {
                       await saveLocalSession(change.doc.id, { ...data, id: change.doc.id });
@@ -622,12 +630,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         console.warn("Error unlinking athlete plans:", planErr);
       }
 
-      // 3. Clean club/coach fields locally in simulated_users
+      // 3. Clean club/coach fields locally in simulated_users (preserving athlete's optional clubName text)
       const unlinkFields = {
         clubId: null,
-        clubName: "",
         clubLogo: "",
         clubInviteCode: "",
+        joinedWithInviteCode: "",
         coachId: null,
         coachName: "",
         coachEmail: "",
@@ -1006,11 +1014,17 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   <div className="flex items-start sm:items-center justify-between gap-2.5 min-w-0 flex-1">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 rounded-xl bg-cyan-neon/15 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon shrink-0">
-                        <CheckCircle2 size={20} />
+                        {(notif as any).type === "athlete_unlinked" ? (
+                          <Users size={19} />
+                        ) : (
+                          <CheckCircle2 size={20} />
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                         <span className="text-xs sm:text-[12.6px] font-black uppercase tracking-wider text-white leading-snug">
-                          {tx("¡Nuevo Alumno Vinculado!", "New Linked Athlete!")}
+                          {(notif as any).type === "athlete_unlinked"
+                            ? tx("Alumno Desvinculado", "Athlete Unlinked")
+                            : tx("¡Nuevo Alumno Vinculado!", "New Linked Athlete!")}
                         </span>
                         <span className="text-[13.5px] font-bold uppercase tracking-wide text-white truncate">
                           {notif.athleteName || t("roleAthlete")}

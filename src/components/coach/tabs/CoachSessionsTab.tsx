@@ -36,6 +36,7 @@ import {
   getSessionActiveKcal,
   formatKmAndMiles
 } from "@/lib/scoring/biometricsEngine";
+import { AnalysisHistoryListSection } from "@/components/analysis/AnalysisInspectorShared";
 
 interface CoachSessionsTabProps {
   athletes: UserProfile[];
@@ -44,7 +45,7 @@ interface CoachSessionsTabProps {
 
 export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTabProps) {
   const { language, t, tx } = useLanguage();
-  const [subMode, setSubMode] = useState<"SCORES" | "VOLUME">("SCORES");
+  const [subMode, setSubMode] = useState<"SCORES" | "VOLUME" | "ANALYSIS">("SCORES");
   const [selectedAthleteUid, setSelectedAthleteUid] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [starRanking, setStarRanking] = useState<any[]>([]);
@@ -279,11 +280,11 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             </select>
           </div>
 
-          {/* Selector Puntuaciones | Volumen */}
-          <div className="grid grid-cols-2 sm:flex gap-1.5 shrink-0">
+          {/* Selector Puntuaciones | Volumen | Análisis */}
+          <div className="grid grid-cols-3 sm:flex gap-1.5 shrink-0">
             <button
               onClick={() => setSubMode("SCORES")}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
                 subMode === "SCORES"
                   ? "bg-cyan-neon text-black font-extrabold"
                   : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -293,7 +294,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             </button>
             <button
               onClick={() => setSubMode("VOLUME")}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
                 subMode === "VOLUME"
                   ? "bg-cyan-neon text-black font-extrabold"
                   : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -301,11 +302,32 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             >
               {t("practiceVolume")}
             </button>
+            <button
+              onClick={() => setSubMode("ANALYSIS")}
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
+                subMode === "ANALYSIS"
+                  ? "bg-cyan-neon text-black font-extrabold"
+                  : "bg-neutral-950 border border-white/5 text-white hover:text-white"
+              }`}
+            >
+              {t("navAnalysis")}
+            </button>
           </div>
         </div>
       </div>
 
       {/* Feed Ordenado de Resultados Recibidos */}
+      {subMode === "ANALYSIS" ? (
+        <AnalysisHistoryListSection
+          sessions={athleteSessions.filter(
+            (s) =>
+              selectedAthleteUid === "ALL" ||
+              s.userId === selectedAthleteUid ||
+              s.userUid === selectedAthleteUid
+          )}
+          isCoachResultsView={true}
+        />
+      ) : (
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center gap-2 flex-wrap px-1">
           <span className="text-[11.6px] text-white font-black uppercase tracking-wider tabular-nums">
@@ -777,6 +799,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           })
         )}
       </div>
+      )}
 
       {/* Clasificación de Estrellas 101010 */}
       <div className="bg-neutral-900/40 p-4 rounded-3xl border border-white/5 flex flex-col gap-3 mt-2">

@@ -29,8 +29,16 @@ export default function AnalysisCalibrationModal({
 }: AnalysisCalibrationModalProps) {
   const { t, tx } = useLanguage();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const zeroIntervalRef = useRef<number | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  const clearZeroTimer = () => {
+    if (zeroIntervalRef.current !== null) {
+      window.clearInterval(zeroIntervalRef.current);
+      zeroIntervalRef.current = null;
+    }
+  };
   const titleId = useId();
 
   const [bowType, setBowType] = useState<AnalysisBowType>(initialProfile.bowType);
@@ -52,6 +60,7 @@ export default function AnalysisCalibrationModal({
     if (!dialog) return;
 
     const handleNativeClose = () => {
+      clearZeroTimer();
       dialog.returnValue = "";
       setCountdownSec(null);
       onCloseRef.current();
@@ -80,6 +89,7 @@ export default function AnalysisCalibrationModal({
     }
 
     return () => {
+      clearZeroTimer();
       dialog.removeEventListener("close", handleNativeClose);
       if (removeLightDismissFallback) removeLightDismissFallback();
     };
@@ -106,6 +116,7 @@ export default function AnalysisCalibrationModal({
   }, [isOpen]);
 
   const handleClose = () => {
+    clearZeroTimer();
     setCountdownSec(null);
     if (dialogRef.current?.open) dialogRef.current.close();
     else onClose();
@@ -113,17 +124,18 @@ export default function AnalysisCalibrationModal({
 
   const handleStartZeroing = () => {
     if (countdownSec !== null) return;
+    clearZeroTimer();
     triggerHaptic("arrow");
     setCountdownSec(3);
 
     let remaining = 3;
-    const interval = window.setInterval(() => {
+    zeroIntervalRef.current = window.setInterval(() => {
       remaining -= 1;
       if (remaining > 0) {
         setCountdownSec(remaining);
         triggerHaptic("tick");
       } else {
-        window.clearInterval(interval);
+        clearZeroTimer();
         setCountdownSec(null);
         triggerHaptic("confirm");
         const updated: AnalysisCalibrationProfile = {

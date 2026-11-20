@@ -634,8 +634,8 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       gender: "M",
       bowConfig: {
         type: "Barebow",
-        brand: "Hoyt",
-        model: "Satori",
+        brand: "",
+        model: "",
         poundage: 35,
         defaultDistance: 18
       },
@@ -819,8 +819,8 @@ export async function registerUser(
     profileSetupCompleted: true,
     bowConfig: profileData.bowConfig || {
       type: "Barebow",
-      brand: "Hoyt",
-      model: "Satori",
+      brand: "",
+      model: "",
       poundage: 35,
       defaultDistance: 18
     },
@@ -1685,8 +1685,8 @@ export async function loginGuestOffline(): Promise<UserProfile> {
     gender: "M",
     bowConfig: {
       type: "Barebow",
-      brand: "Hoyt",
-      model: "Satori",
+      brand: "",
+      model: "",
       poundage: 35,
       defaultDistance: 18
     },
@@ -1947,6 +1947,7 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
                   updateDoc(doc(db, "users", studentUid), {
                     clubId: null,
                     clubInviteCode: "",
+                    joinedWithInviteCode: "",
                     coachId: null,
                     coachName: null,
                     coachEmail: null,
@@ -2004,7 +2005,8 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
     coachId: null,
     coachName: null,
     coachEmail: null,
-    clubInviteCode: ""
+    clubInviteCode: "",
+    joinedWithInviteCode: ""
   });
 
   if (externalCoachUid && externalCoachUid !== userUid) {

@@ -276,7 +276,7 @@ service cloud.firestore {
     //   - athleteUid: string (optional, 0-128 chars)
     //   - athleteName: string (optional, 0-100 chars)
     //   - dateKey: string (optional, 0-30 chars)
-    //   - notes: string (optional, 0-5000 chars)
+    //   - notes: string (optional, 0-5000 chars) or list (optional, max 200 items)
     //   - presentUids: list (optional, max 500 items)
     //   - attendance: map (optional, max 500 keys)
     //   - createdAt: number / timestamp (optional)
@@ -947,6 +947,7 @@ service cloud.firestore {
     }
 
     function isValidCoachRecord(data) {
+      let notesVal = data.get('notes', null);
       return data.keys().hasAll(['coachId', 'type']) &&
         data.keys().size() <= 20 &&
         validString(data.coachId, 1, 128) &&
@@ -956,7 +957,9 @@ service cloud.firestore {
         validOptionalString(data, 'athleteUid', 0, 128) &&
         validOptionalString(data, 'athleteName', 0, 100) &&
         validOptionalString(data, 'dateKey', 0, 30) &&
-        validOptionalString(data, 'notes', 0, 5000) &&
+        (notesVal == null ||
+          (notesVal is string && notesVal.size() <= 5000) ||
+          (notesVal is list && notesVal.size() <= 200)) &&
         validOptionalList(data, 'presentUids', 500) &&
         validOptionalBoundedMap(data, 'attendance', 500) &&
         validOptionalDateOrTimestamp(data, 'createdAt') &&
@@ -1310,11 +1313,13 @@ service cloud.firestore {
         (request.resource.data.userId == request.auth.uid || isSuperAdmin()) &&
         isValidSession(request.resource.data);
 
-      // Session owner, the coach of the session's club, or superadmin can update (e.g., soft delete, coach note, session restore).
+      // Session owner, the athlete's/session's coach, or superadmin can update (e.g., soft delete, coach note, session restore).
       // Session ownership cannot be transferred (userId is immutable).
       allow update: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isSuperAdmin() ||
-          isCoachOfClub(resource.data.get('clubId', null))) &&
+        (resource.data.userId == request.auth.uid ||
+          isSuperAdmin() ||
+          isCoachOfClub(resource.data.get('clubId', null)) ||
+          isCoachOfAthlete(resource.data.userId)) &&
         request.resource.data.userId == resource.data.userId &&
         isValidSession(request.resource.data);
 
@@ -1588,13 +1593,16 @@ service cloud.firestore {
          isSuperAdmin());
     }
 
-    // 11. Coach Records Collection (Coach Private Notes & Attendance)
+    // 11. Coach Records Collection (Coach Technical Notes & Attendance)
     match /coach_records/{recordId} {
-      // Strictly private to the authoring coach, coaches of the same club, or superadmin
+      // Readable by the authoring coach, coaches of the same club, superadmin,
+      // or the target athlete when reading technical notes addressed to them (type == 'note').
       allow read: if isAuthenticated() &&
         (resource == null ||
          resource.data.coachId == request.auth.uid ||
          isCoachOfClub(resource.data.get('clubId', null)) ||
+         (resource.data.get('type', '') == 'note' &&
+          resource.data.get('athleteUid', '') == request.auth.uid) ||
          isSuperAdmin());
 
       allow create: if isAuthenticated() &&

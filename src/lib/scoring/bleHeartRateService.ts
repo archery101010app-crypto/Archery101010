@@ -132,6 +132,9 @@ export class BleHeartRateSessionTracker {
     timestampMs: number = Date.now()
   ): boolean {
     if (contactDetected === false || !isValidHeartRateBpm(bpm)) {
+      if (contactDetected === false || bpm === 0) {
+        this.currentBpmVal = 0;
+      }
       return false;
     }
     const rounded = Math.round(bpm);
@@ -426,6 +429,7 @@ async function connectWebBluetoothGatt(device: any): Promise<void> {
 
   statusState.state = "connecting";
   statusState.errorCode = "";
+  statusState.batteryPct = null;
   statusState.deviceId = String(device.id || "web-ble");
   statusState.deviceName = String(device.name || "Sensor Bluetooth");
   emitStatus();
@@ -480,6 +484,7 @@ function onWebCharValueChanged(event: any): void {
 
 function onWebGattDisconnected(): void {
   sessionTracker.clearCurrentReading();
+  statusState.batteryPct = null;
   if (webUserDisconnected || !webBleDevice) {
     statusState.state = "disconnected";
     emitStatus();
@@ -590,6 +595,7 @@ export function connectBleHeartRateDevice(deviceId: string, deviceName?: string)
   if (!bridge) return;
   statusState.state = "connecting";
   statusState.errorCode = "";
+  statusState.batteryPct = null;
   statusState.deviceId = deviceId;
   if (deviceName) statusState.deviceName = deviceName;
   emitStatus();

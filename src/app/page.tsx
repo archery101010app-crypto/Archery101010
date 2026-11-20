@@ -874,18 +874,29 @@ export default function Home() {
                 const lastSeenTs = Number(seenMap?.[notifId] || 0);
                 if (!data || data.read === true || (lastSeenTs > 0 && notifTs > 0 && lastSeenTs >= notifTs)) continue;
 
-                // Immediately pull the athlete's latest profile into simulated_users so the Coach roster updates instantly
+                const isUnlinkNotif = (data as any).type === "athlete_unlinked";
                 if (data.athleteUid) {
                   try {
-                    const athSnap = await getDoc(doc(db, "users", data.athleteUid));
-                    if (athSnap.exists()) {
-                      const athData = { ...(athSnap.data() as UserProfile), uid: data.athleteUid };
-                      if (!isFictitiousUser(athData)) {
-                        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-                        const merged = [athData, ...localUsers.filter((u) => u.uid !== data.athleteUid)];
-                        await saveLocalSetting("simulated_users", merged);
+                    if (isUnlinkNotif) {
+                      const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                      const filtered = localUsers.filter((u) => u.uid !== data.athleteUid);
+                      if (filtered.length !== localUsers.length) {
+                        await saveLocalSetting("simulated_users", filtered);
                         if (typeof window !== "undefined") {
-                          window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: merged.length } }));
+                          window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: filtered.length } }));
+                        }
+                      }
+                    } else {
+                      const athSnap = await getDoc(doc(db, "users", data.athleteUid));
+                      if (athSnap.exists()) {
+                        const athData = { ...(athSnap.data() as UserProfile), uid: data.athleteUid };
+                        if (!isFictitiousUser(athData)) {
+                          const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+                          const merged = [athData, ...localUsers.filter((u) => u.uid !== data.athleteUid)];
+                          await saveLocalSetting("simulated_users", merged);
+                          if (typeof window !== "undefined") {
+                            window.dispatchEvent(new CustomEvent("users-roster-updated", { detail: { count: merged.length } }));
+                          }
                         }
                       }
                     }
@@ -896,16 +907,23 @@ export default function Home() {
 
                 // Trigger haptic, chime, and system notification
                 import("@/lib/haptics")
-                  .then(({ triggerHaptic }) => triggerHaptic("confirm"))
+                  .then(({ triggerHaptic }) => triggerHaptic(isUnlinkNotif ? "undo" : "confirm"))
                   .catch(() => {});
-                playLinkChime();
+                if (!isUnlinkNotif) {
+                  playLinkChime();
+                }
 
                 try {
                   if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-                    new Notification("¡Nuevo Alumno Vinculado!", {
-                      body: `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
-                      icon: "/icon-192.png"
-                    });
+                    new Notification(
+                      isUnlinkNotif ? "Alumno Desvinculado" : "¡Nuevo Alumno Vinculado!",
+                      {
+                        body: isUnlinkNotif
+                          ? `${data.athleteName || "Un arquero"} se ha desvinculado de tu equipo.`
+                          : `${data.athleteName || "Un arquero"} se ha vinculado a tu equipo con tu código de 6 dígitos.`,
+                        icon: "/icon-192.png"
+                      }
+                    );
                   }
                 } catch {
                   // ignore
@@ -1073,14 +1091,22 @@ export default function Home() {
         setActiveDraft(null);
         return;
       }
-      if (currentScreen === "TARGET" && sessionConfig) {
+      if ((currentScreen === "TARGET" && sessionConfig) || currentScreen === "ANALYSIS") {
         return;
       }
       try {
         const { getLocalSessions } = await import("@/lib/db/indexedDB");
         const localSessions = await getLocalSessions();
         const draft = localSessions
-          .filter((s) => s.userId === user.uid && s.isDraft === true && !s.isDuel)
+          .filter(
+            (s) =>
+              s.userId === user.uid &&
+              s.isDraft === true &&
+              !s.isDuel &&
+              !s.isAnalysisSession &&
+              s.practiceType !== "Análisis" &&
+              !s.biometrics?.isAnalysisSession
+          )
           .sort((a, b) => (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0))[0];
         if (draft) {
           setActiveDraft(draft);
@@ -1992,17 +2018,23 @@ export default function Home() {
               </div>
 
               <div className="mx-auto w-[60px] h-[60px] rounded-[18px] bg-cyan-neon/12 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon mt-0.5">
-                <CheckCircle2 size={32} />
+                {(pendingCoachLinkNotif as any).type === "athlete_unlinked" ? (
+                  <Users size={30} />
+                ) : (
+                  <CheckCircle2 size={32} />
+                )}
               </div>
 
               <div className="w-full flex flex-col items-center gap-3 px-1">
                 <span className="text-[13.5px] font-black uppercase tracking-[0.14em] text-white text-center">
-                  NUEVO ALUMNO VINCULADO
+                  {(pendingCoachLinkNotif as any).type === "athlete_unlinked"
+                    ? "ALUMNO DESVINCULADO"
+                    : "NUEVO ALUMNO VINCULADO"}
                 </span>
                 <h3
                   className="font-sans text-white text-[19px] font-extrabold uppercase tracking-[0.05em] text-center leading-[1.35] break-words max-w-full"
                 >
-                  {pendingCoachLinkNotif.athleteName || "Arquero Vinculado"}
+                  {pendingCoachLinkNotif.athleteName || "Arquero"}
                 </h3>
               </div>
 

@@ -1,6 +1,9 @@
 {
-  "version": "2.129",
-  "fullVersion": "2.129.0",
-  "versionCode": 52900,
-  "updatedAt": "2026-11-20T13:07:39.558Z"
+  "version": "2.130",
+  "latestVersion": "2.130",
+  "fullVersion": "2.130.0",
+  "versionCode": 53000,
+  "apkUrl": "https://archery101010-c0bb4.web.app/download-apk",
+  "apkDownloadUrl": "https://archery101010-c0bb4.web.app/download-apk",
+  "updatedAt": "2026-11-20T15:13:00.000Z"
 }

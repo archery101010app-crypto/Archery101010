@@ -122,9 +122,17 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
   const isConnected = status.state === "connected";
   const isScanning = status.state === "scanning";
-  const isConnecting = status.state === "connecting" || status.state === "reconnecting";
+  const isExplicitConnecting = status.state === "connecting";
+  const isReconnecting = status.state === "reconnecting";
+  const isConnecting = isExplicitConnecting || isReconnecting;
+  const isOutdatedAndroidShell =
+    !status.supported &&
+    typeof window !== "undefined" &&
+    Boolean((window as any).ArcheryNativeAuth || (window as any).Capacitor?.isNativePlatform?.());
 
-  const statusBadgeText = isConnected
+  const statusBadgeText = !status.supported
+    ? tx("ACTUALIZAR APP", "UPDATE APP")
+    : isConnected
     ? tx("EN VIVO", "LIVE")
     : isConnecting
     ? tx("CONECTANDO", "CONNECTING")
@@ -133,6 +141,18 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     : tx("EN ESPERA", "STANDBY");
 
   const errorBannerMessage = (() => {
+    if (isOutdatedAndroidShell) {
+      return tx(
+        "Instala la actualización más reciente del APK de Android para activar la conexión Bluetooth directa con tu sensor de pulso.",
+        "Install the latest Android APK update to enable direct Bluetooth connection with your heart rate sensor."
+      );
+    }
+    if (!status.supported || status.errorCode === "BLE_UNSUPPORTED") {
+      return tx(
+        "Este navegador no admite Bluetooth directo. Usa la aplicación instalada en Android o un navegador compatible con Bluetooth Web.",
+        "This browser does not support direct Bluetooth. Use the installed Android app or a Web Bluetooth browser."
+      );
+    }
     if (!status.errorCode) return "";
     if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
       return tx(
@@ -146,16 +166,16 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
         "Turn on your phone's Bluetooth to detect your heart rate sensor."
       );
     }
-    if (status.errorCode === "PERMISSION_DENIED") {
+    if (status.errorCode === "LOCATION_SERVICES_OFF") {
       return tx(
-        "Autoriza el permiso de dispositivos cercanos (Bluetooth) para vincular tu sensor.",
-        "Allow Nearby Devices (Bluetooth) permission to pair your sensor."
+        "En Android 10/11 activa la Ubicación del teléfono para que el sistema permita escanear sensores Bluetooth cercanos.",
+        "On Android 10/11 turn on system Location so Android permits scanning nearby Bluetooth sensors."
       );
     }
-    if (status.errorCode === "BLE_UNSUPPORTED") {
+    if (status.errorCode === "PERMISSION_DENIED") {
       return tx(
-        "Este navegador no admite Bluetooth directo. Usa la aplicación instalada en Android o un navegador compatible con Bluetooth Web.",
-        "This browser does not support direct Bluetooth. Use the installed Android app or a Web Bluetooth browser."
+        "Autoriza el permiso de dispositivos cercanos / ubicación Bluetooth para vincular tu sensor.",
+        "Allow Nearby Devices / Bluetooth permission to pair your sensor."
       );
     }
     return tx(
@@ -446,19 +466,37 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                 {tx("Listo", "Done")}
               </button>
             </>
-          ) : (
-            <button
-              type="button"
-              disabled={isConnecting}
-              onClick={() => startBleHeartRateScanOrRequest()}
-              className="w-full min-h-[46px] rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-black text-[13px] uppercase tracking-[0.08em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
+          ) : isOutdatedAndroidShell ? (
+            <a
+              href="https://archery101010-c0bb4.web.app/download-apk"
+              className="w-full min-h-[46px] rounded-xl bg-[#FFE500] hover:brightness-105 text-black font-black text-[13px] uppercase tracking-[0.08em] flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
             >
-              {isScanning
-                ? t("bleHrScanning")
-                : status.transport === "native_android"
-                ? tx("Buscar Sensor Bluetooth", "Scan Bluetooth Sensor")
-                : tx("Vincular Sensor Bluetooth", "Pair Bluetooth Sensor")}
-            </button>
+              {tx("Actualizar APK Android", "Update Android APK")}
+            </a>
+          ) : (
+            <div className="w-full flex items-center gap-2">
+              {Boolean(status.deviceId) && (isReconnecting || isExplicitConnecting) && (
+                <button
+                  type="button"
+                  onClick={() => disconnectBleHeartRateDevice(true)}
+                  className="min-h-[46px] px-3.5 rounded-xl bg-[#180709] border border-[#FF1E1E]/60 text-white font-extrabold text-[11.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-[0.99] transition"
+                >
+                  {tx("Olvidar", "Forget")}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={isExplicitConnecting}
+                onClick={() => startBleHeartRateScanOrRequest()}
+                className="flex-1 min-h-[46px] rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-black text-[13px] uppercase tracking-[0.08em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
+              >
+                {isScanning
+                  ? t("bleHrScanning")
+                  : status.transport === "native_android"
+                  ? tx("Buscar Sensor Bluetooth", "Scan Bluetooth Sensor")
+                  : tx("Vincular Sensor Bluetooth", "Pair Bluetooth Sensor")}
+              </button>
+            </div>
           )}
         </div>
       </div>

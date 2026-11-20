@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Play, Plus, RotateCcw, Save, Settings } from "lucide-react";
+import { ChevronDown, MessageSquare, Play, Plus, RotateCcw, Save, Settings } from "lucide-react";
 import { UserProfile } from "@/lib/authService";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, limit, onSnapshot, query, where } from "firebase/firestore";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
 import {
@@ -10,10 +13,13 @@ import {
   deleteLocalSession,
   generateResilientId,
   getLocalSessions,
+  getLocalSetting,
   sanitizeForFirestore,
-  saveLocalSession
+  saveLocalSession,
+  saveLocalSetting
 } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
+import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import { showOledConfirm } from "@/lib/oledDialog";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -32,6 +38,7 @@ import {
 import {
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
 } from "@/lib/scoring/bleHeartRateService";
@@ -104,10 +111,17 @@ export default function AnalysisView({
   const [isCalibrationOpen, setIsCalibrationOpen] = useState<boolean>(false);
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
+  const [manualCaptureAt, setManualCaptureAt] = useState<number>(0);
+  const [coachTechnicalNotes, setCoachTechnicalNotes] = useState<
+    Array<{ id: string; date: number; content: string }>
+  >([]);
 
   const sessionIdRef = useRef<string>(generateResilientId("SES"));
   const sessionStartTsRef = useRef<number>(Date.now());
   const promptedCalibrationOnceRef = useRef<boolean>(false);
+  const prevWatchConnectedRef = useRef<boolean>(false);
+  const seenShotKeysRef = useRef<Set<string>>(new Set());
+  const lastShotRecvTsRef = useRef<{ ts: number; sig: string }>({ ts: 0, sig: "" });
 
   const [watchConnStatus, setWatchConnStatus] = useState<WatchConnectionStatus>({
     isNativeAndroid: false,
@@ -171,19 +185,105 @@ export default function AnalysisView({
           if (restoredShots.length > 0) {
             sessionIdRef.current = draft.id;
             sessionStartTsRef.current = draft.timestamp || Date.now();
+            shotsRef.current = restoredShots;
             setShots(restoredShots);
             setSelectedShotIdx(restoredShots.length - 1);
+            const sum = computeAnalysisSessionSummary(restoredShots);
+            resetBleHeartRateSessionStats(sum.avgHeartRateBpm || 0, sum.maxHeartRateBpm || 0);
+            return;
           }
         }
+        resetBleHeartRateSessionStats(0, 0);
       }
     } catch {}
   }, [user.uid]);
 
   useEffect(() => {
-    reloadSavedAnalysisSessions();
-    if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
-      getOrCreatePhoneWatchPairingCode(user.uid).catch(() => {});
+    if (isWatchModalOpen) {
+      return registerModalDismiss(() => setIsWatchModalOpen(false));
     }
+  }, [isWatchModalOpen]);
+
+  // Listen for Coach technical notes addressed to this athlete (offline-first + real-time Firestore)
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    let cancelled = false;
+    const localKey = `athlete_received_coach_notes_${user.uid}`;
+
+    getLocalSetting<Array<{ id: string; date: number; content: string }>>(localKey, [])
+      .then((cached) => {
+        if (!cancelled && Array.isArray(cached) && cached.length > 0) {
+          setCoachTechnicalNotes(cached);
+        }
+      })
+      .catch(() => {});
+
+    let unsubFirestore: (() => void) | null = null;
+    const attach = (uid: string) => {
+      if (cancelled || !uid) return;
+      if (unsubFirestore) {
+        try {
+          unsubFirestore();
+        } catch {}
+        unsubFirestore = null;
+      }
+      const q = query(
+        collection(db, "coach_records"),
+        where("type", "==", "note"),
+        where("athleteUid", "==", uid),
+        limit(5)
+      );
+      unsubFirestore = onSnapshot(
+        q,
+        (snap) => {
+          const merged = new Map<string, { id: string; date: number; content: string }>();
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            const arr = Array.isArray(data?.notes) ? data.notes : [];
+            arr.forEach((n: any) => {
+              if (n && n.id && typeof n.content === "string" && n.content.trim()) {
+                merged.set(String(n.id), {
+                  id: String(n.id),
+                  date: Number(n.date) || Number(data?.updatedAt) || Date.now(),
+                  content: n.content.trim()
+                });
+              }
+            });
+          });
+          const sorted = Array.from(merged.values())
+            .sort((a, b) => b.date - a.date)
+            .slice(0, 6);
+          if (!cancelled) {
+            setCoachTechnicalNotes(sorted);
+            saveLocalSetting(localKey, sorted).catch(() => {});
+          }
+        },
+        () => {}
+      );
+    };
+
+    if (auth.currentUser?.uid === user.uid) {
+      attach(user.uid);
+    }
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser?.uid === user.uid) {
+        attach(user.uid);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubAuth();
+      if (unsubFirestore) {
+        try {
+          unsubFirestore();
+        } catch {}
+      }
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    reloadSavedAnalysisSessions();
     tryAutoReconnectBleHeartRate();
     const unsubWatch = subscribeWatchConnectionStatus(setWatchConnStatus);
     const unsubCloud = subscribeCloudWatchPairingStatus(setCloudStatus);
@@ -195,8 +295,13 @@ export default function AnalysisView({
     };
   }, [user?.uid, reloadSavedAnalysisSessions]);
 
-  // Prompt one-time initial sensor setup when watch connects for the first time
+  // Close watch linking sheet automatically on fresh connection & prompt one-time sensor zeroing
   useEffect(() => {
+    const becameConnected = isWatchConnected && !prevWatchConnectedRef.current;
+    prevWatchConnectedRef.current = isWatchConnected;
+    if (becameConnected && isWatchModalOpen) {
+      setIsWatchModalOpen(false);
+    }
     if (
       isWatchConnected &&
       calibration.calibratedAt === 0 &&
@@ -205,7 +310,7 @@ export default function AnalysisView({
       promptedCalibrationOnceRef.current = true;
       setIsCalibrationOpen(true);
     }
-  }, [isWatchConnected, calibration.calibratedAt]);
+  }, [isWatchConnected, isWatchModalOpen, calibration.calibratedAt]);
 
   const persistSessionSnapshot = useCallback(
     async (nextShots: AnalysisShotRecord[], isDraft: boolean) => {
@@ -310,7 +415,9 @@ export default function AnalysisView({
       analysisCalibrationJson: JSON.stringify({
         bowType: calibration.bowType,
         bowWrist: calibration.bowWrist,
-        distanceM: calibration.distanceM
+        distanceM: calibration.distanceM,
+        zeroGravityVec: calibration.zeroGravityVec,
+        ...(manualCaptureAt > 0 ? { manualCaptureAt } : {})
       }),
       updatedAt: Date.now()
     };
@@ -318,22 +425,86 @@ export default function AnalysisView({
     shots,
     calibration,
     captureMode,
+    manualCaptureAt,
     bleHrStatus.state,
     bleHrStatus.currentBpm,
     user
   ]);
 
+  const latestWatchSnapshotRef = useRef<BiometricSessionSnapshot>(liveWatchSnapshot);
+  latestWatchSnapshotRef.current = liveWatchSnapshot;
+
   useEffect(() => {
     publishWatchState(liveWatchSnapshot);
   }, [liveWatchSnapshot]);
 
-  // Listen for real ANALYSIS_SHOT telemetry coming from Smartwatch (Wear OS or /watch)
+  // Initialize 6-digit Cloud Pairing Code AFTER publishing analysisMode:true & reset watch mode cleanly on unmount
+  useEffect(() => {
+    let cancelled = false;
+    const ensureCloudWatchReady = (uid: string) => {
+      if (cancelled || !uid || uid === "USR-GUEST-OFFLINE") return;
+      publishWatchState(latestWatchSnapshotRef.current);
+      getOrCreatePhoneWatchPairingCode(uid)
+        .then(() => {
+          if (!cancelled) {
+            publishWatchState(latestWatchSnapshotRef.current);
+          }
+        })
+        .catch(() => {});
+    };
+
+    if (auth.currentUser?.uid && auth.currentUser.uid === user?.uid) {
+      ensureCloudWatchReady(user.uid);
+    }
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser?.uid && fbUser.uid === user?.uid) {
+        ensureCloudWatchReady(fbUser.uid);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubAuth();
+      publishWatchState({
+        ...latestWatchSnapshotRef.current,
+        sessionId: "",
+        sessionActive: false,
+        analysisMode: false,
+        practiceType: "Práctica",
+        arrowsCount: 0,
+        updatedAt: Date.now()
+      });
+    };
+  }, [user?.uid]);
+
+  // Listen for real ANALYSIS_SHOT telemetry & state requests coming from Smartwatch (Wear OS or /watch)
   useEffect(() => {
     return subscribeWatchMessages((msg) => {
+      if (msg.type === "REQUEST_STATE") {
+        publishWatchState(latestWatchSnapshotRef.current);
+        return;
+      }
+      if (msg.type === "TOGGLE_AUTO_DETECT" && typeof msg.enabled === "boolean") {
+        setCaptureMode(msg.enabled ? "AUTO" : "MANUAL");
+        return;
+      }
       if (msg.type === "ANALYSIS_SHOT" && typeof msg.analysisShotJson === "string") {
         const nextNum = shotsRef.current.length + 1;
         const decoded = decodeCompactShotAnalysis(msg.analysisShotJson, nextNum);
         if (!decoded) return;
+
+        // Deduplicate simultaneous Bluetooth + 6-Digit Cloud delivery of the same shot
+        const dedupKey = `${decoded.id}|${decoded.timestamp}`;
+        const sigKey = `${decoded.prepSeconds.toFixed(1)}|${decoded.aimSeconds.toFixed(1)}|${decoded.stabilityPct}`;
+        const nowRecv = Date.now();
+        if (
+          seenShotKeysRef.current.has(dedupKey) ||
+          (nowRecv - lastShotRecvTsRef.current.ts < 850 && lastShotRecvTsRef.current.sig === sigKey)
+        ) {
+          return;
+        }
+        seenShotKeysRef.current.add(dedupKey);
+        lastShotRecvTsRef.current = { ts: nowRecv, sig: sigKey };
 
         const bleNow = bleHrRef.current;
         const resolvedBpm =
@@ -400,6 +571,17 @@ export default function AnalysisView({
 
     const oldId = sessionIdRef.current;
     await deleteLocalSession(oldId).catch(() => {});
+    await addToSyncQueue({
+      id: generateResilientId("TXN"),
+      collection: "sessions",
+      operation: "DELETE",
+      payloadId: oldId,
+      payload: { id: oldId },
+      timestamp: Date.now()
+    }).catch(() => {});
+    runSync().catch(() => {});
+    resetBleHeartRateSessionStats(0, 0);
+    seenShotKeysRef.current.clear();
     sessionIdRef.current = generateResilientId("SES");
     sessionStartTsRef.current = Date.now();
     shotsRef.current = [];
@@ -412,6 +594,17 @@ export default function AnalysisView({
     if (shots.length === 0) return;
     triggerHaptic("confirm");
     await persistSessionSnapshot(shots, false);
+    resetBleHeartRateSessionStats(0, 0);
+    seenShotKeysRef.current.clear();
+    publishWatchState({
+      ...latestWatchSnapshotRef.current,
+      sessionId: "",
+      sessionActive: false,
+      analysisMode: false,
+      practiceType: "Práctica",
+      arrowsCount: 0,
+      updatedAt: Date.now()
+    });
     sessionIdRef.current = generateResilientId("SES");
     sessionStartTsRef.current = Date.now();
     shotsRef.current = [];
@@ -847,6 +1040,7 @@ export default function AnalysisView({
             type="button"
             onClick={() => {
               triggerHaptic("arrow");
+              setManualCaptureAt(Date.now());
               sendWatchCommand({ type: "ANALYSIS_MANUAL_CAPTURE" });
             }}
             className="w-full h-[40px] rounded-[12px] bg-[#081320] border border-[#00BFFF]/55 text-white text-[12px] font-black uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
@@ -1051,6 +1245,33 @@ export default function AnalysisView({
           </>
         )}
       </div>
+
+      {/* COACH TECHNICAL NOTES RECEIVED BY ATHLETE */}
+      {coachTechnicalNotes.length > 0 && (
+        <div className="bg-[#0D1017] border border-white/[0.08] rounded-[22px] p-3.5 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={14} className="text-[#00BFFF] shrink-0" aria-hidden="true" />
+            <span className="text-[11px] font-black uppercase tracking-[0.09em] text-white">
+              {tx("Notas Técnicas de tu Entrenador", "Coach Technical Notes")}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {coachTechnicalNotes.slice(0, 3).map((note) => (
+              <div
+                key={note.id}
+                className="bg-[#080A0F] border border-white/[0.07] rounded-[13px] px-3 py-2.5 flex flex-col gap-1"
+              >
+                <span className="text-[12.5px] font-semibold text-white leading-snug break-words">
+                  {note.content}
+                </span>
+                <span className="text-[10px] font-bold text-white/75 tabular-nums">
+                  {formatRegionalDate(note.date, language)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <AnalysisCalibrationModal
         isOpen={isCalibrationOpen}

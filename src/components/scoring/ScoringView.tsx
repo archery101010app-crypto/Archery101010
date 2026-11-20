@@ -302,7 +302,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
   const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
-  const lastBleSampleAtRef = useRef<number>(0);
+  const lastBleSampleAtRef = useRef<number>(Date.now() - 5000);
   const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
   const watchFinishedSessionRef = useRef<boolean>(false);
   const lastGpsCoordRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
@@ -344,6 +344,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       setBleHrStatus(next);
       if (
         next.state === "connected" &&
+        next.contactDetected !== false &&
         next.currentBpm >= 30 &&
         next.currentBpm <= 245 &&
         next.lastSampleAt > lastBleSampleAtRef.current
@@ -489,6 +490,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       return registerModalDismiss(() => setIsWatchModalOpen(false));
     }
   }, [isWatchModalOpen]);
+
+  useEffect(() => {
+    if (isConfirmingVolume) {
+      return registerModalDismiss(() => setIsConfirmingVolume(false));
+    }
+  }, [isConfirmingVolume]);
+
+  useEffect(() => {
+    if (stravaSharePreview) {
+      return registerModalDismiss(() => setStravaSharePreview(null));
+    }
+  }, [stravaSharePreview]);
 
   // Keep endNote synchronized with the currently selected End
   useEffect(() => {
@@ -1411,6 +1424,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const handleConfirmAbandon = async () => {
     isClosingSessionRef.current = true;
+    resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();
@@ -1449,6 +1463,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSavePartialBlock = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();
@@ -1582,6 +1597,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSaveFull = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
     await cleanupLiveDrafts();

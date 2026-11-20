@@ -86,28 +86,23 @@ if (fs.existsSync(garminManifestPath)) {
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }
 
-// 6. Write public/ota-version.json for modern in-app OTA (v2.126+) and neutralize legacy
-// public/version.json + public/app-version.json ("0.0.0") so older installed APKs (< v2.110,
-// before @Keep reloadInAppOta & allowNavigation) NEVER display a banner that jumps to Chrome.
+// 6. Write public/ota-version.json, public/version.json, and public/app-version.json
+// with the live version so ALL installed users (from v2.100 through modern v2.126+)
+// receive the update notification banner cleanly without getting stuck on older builds.
 const otaVersionJsonPath = path.join(__dirname, '../public/ota-version.json');
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
 const nowIso = new Date().toISOString();
 const otaPayload = {
   version: displayVersion,
-  fullVersion: newVersion,
-  versionCode: vCode,
-  updatedAt: nowIso
-};
-const legacyNeutralPayload = {
-  version: '0.0.0',
   latestVersion: displayVersion,
   fullVersion: newVersion,
   versionCode: vCode,
-  legacyDisabled: true,
+  apkUrl: 'https://archery101010-c0bb4.web.app/download-apk',
+  apkDownloadUrl: 'https://archery101010-c0bb4.web.app/download-apk',
   updatedAt: nowIso
 };
 fs.writeFileSync(otaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(appVersionJsonPath, JSON.stringify(legacyNeutralPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(versionJsonPath, JSON.stringify(legacyNeutralPayload, null, 2) + '\n', 'utf8');
-console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and neutralized legacy public/version.json`);
+fs.writeFileSync(appVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
+fs.writeFileSync(versionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/ota-version.json, public/version.json & public/app-version.json for v${displayVersion} (versionCode ${vCode})`);

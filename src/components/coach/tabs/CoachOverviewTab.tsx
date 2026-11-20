@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   isVolumeSession,
+  isAnalysisOnlySession,
   getSessionArrows,
   getSessionScore,
   countScoredArrows
@@ -304,6 +305,17 @@ export default function CoachOverviewTab({
                               : act.outcome === "loss"
                               ? tx("Perdió", "Lost")
                               : tx("Empató", "Tied")}
+                          </span>
+                        </span>
+                      ) : isAnalysisOnlySession(act) ? (
+                        <span>
+                          {tx("Registró sesión de", "Logged")}{" "}
+                          <span className="text-white font-bold">{t("navAnalysis")}</span> ·{" "}
+                          <span className="text-cyan-neon font-extrabold tabular-nums">
+                            {liveArrows} {t("arrowsLabel")}
+                            {act?.biometrics?.avgStabilityPct
+                              ? ` · ${act.biometrics.avgStabilityPct}%`
+                              : ""}
                           </span>
                         </span>
                       ) : isVolumeSession(act) ? (

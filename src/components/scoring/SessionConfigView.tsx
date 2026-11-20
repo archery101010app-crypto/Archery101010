@@ -10,6 +10,7 @@ import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
 import {
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
 } from "@/lib/scoring/bleHeartRateService";
@@ -34,6 +35,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
 
   useEffect(() => {
+    resetBleHeartRateSessionStats(0, 0);
     tryAutoReconnectBleHeartRate();
     return subscribeBleHeartRate((next) => setBleHrStatus(next));
   }, []);
@@ -57,7 +59,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     async function checkDrafts() {
       const list = await getLocalSessions();
       const draft = list
-        .filter((s) => s.isDraft === true && !s.isDuel && (s.userId === user.uid || s.userUid === user.uid))
+        .filter(
+          (s) =>
+            s.isDraft === true &&
+            !s.isDuel &&
+            !s.isAnalysisSession &&
+            s.practiceType !== "Análisis" &&
+            !s.biometrics?.isAnalysisSession &&
+            (s.userId === user.uid || s.userUid === user.uid)
+        )
         .sort((a, b) => (b.updatedAt || b.timestamp || 0) - (a.updatedAt || a.timestamp || 0))[0];
       if (draft) {
         setDraftSession(draft);
@@ -173,10 +183,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
   };
 
   const getLocalizedBowName = (type?: string) => {
-    if (type === "Recurve") return t("bowRecurve");
-    if (type === "Compound") return t("bowCompound");
-    if (type === "Barebow") return t("bowBarebow");
-    return type || t("bowBarebow");
+    const raw =
+      type === "Recurve"
+        ? t("bowRecurve")
+        : type === "Compound"
+        ? t("bowCompound")
+        : type === "Barebow"
+        ? t("bowBarebow")
+        : type || t("bowBarebow");
+    return raw.replace(/\s*\([^)]*\)/g, "").trim() || raw;
   };
 
   return (
@@ -214,11 +229,11 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                     : "bg-[#6E7785]"
                 }`}
               />
-              <span className="text-[13.6px] sm:text-[14.5px] font-extrabold text-white uppercase tracking-[-0.02em] leading-tight whitespace-nowrap truncate">
+              <span className="text-[12px] min-[390px]:text-[13.6px] sm:text-[14.5px] font-extrabold text-white uppercase tracking-[-0.02em] leading-tight whitespace-nowrap truncate">
                 {t("bleHrTitle")}
               </span>
             </div>
-            <span className="text-[12.6px] sm:text-[13.5px] font-medium text-white tracking-[-0.01em] leading-snug mt-0.5 tabular-nums truncate">
+            <span className="text-[11.2px] min-[390px]:text-[12.6px] sm:text-[13.5px] font-medium text-white tracking-[-0.01em] leading-snug mt-0.5 tabular-nums truncate">
               {bleHrStatus.state === "connected"
                 ? `${
                     bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
@@ -281,7 +296,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
             
             <button
               onClick={handleResumeDraft}
-              className="w-full h-11 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[18.4px] leading-none uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
+              className="w-full h-11 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none uppercase tracking-wider flex justify-center items-center gap-1.5 whitespace-nowrap cursor-pointer transition"
             >
               <RotateCcw size={15} />
               <span>{tx("Reanudar Entrenamiento", "Resume Training")}</span>
@@ -300,7 +315,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setPracticeType(type)}
-                className={`h-12 px-1 sm:px-2 rounded-xl border text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   practiceType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -382,7 +397,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={type}
                 type="button"
                 onClick={() => setBowType(type)}
-                className={`h-12 px-1 sm:px-2 rounded-xl border text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
+                className={`h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer ${
                   bowType === type
                     ? "border-cyan-neon bg-cyan-neon/15 text-cyan-neon"
                     : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
@@ -440,7 +455,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           >
             <div className="flex flex-col gap-1.5">
               <label className="text-[16.7px] text-white font-bold">{t("rounds")}</label>
-              <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
+              <div className="h-12 flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setEndsCount(Math.max(1, endsCount - 1))}
@@ -462,7 +477,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[16.7px] text-white font-bold">{tx("Flechas", "Arrows")}</label>
-              <div className="flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
+              <div className="h-12 flex items-center bg-[#0D0F12] border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setArrowsPerEnd(Math.max(1, arrowsPerEnd - 1))}
@@ -495,7 +510,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleStart}
-          className="w-full py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[18.4px] leading-none tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
+          className="w-full px-3 py-4 mt-2 mb-4 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16px] min-[390px]:text-[18.4px] leading-none tracking-widest uppercase cursor-pointer flex justify-center items-center transition-colors"
         >
           <span>{t("startSessionBtn")}</span>
         </motion.button>

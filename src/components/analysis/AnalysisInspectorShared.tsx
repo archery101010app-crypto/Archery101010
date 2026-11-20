@@ -359,12 +359,16 @@ export function AnalysisHistoryListSection({
 export function CoachAthleteAnalysisInspector({
   athleteFirstName,
   sessions,
+  savedNotes = [],
+  noteSentAck = false,
   noteText,
   onNoteTextChange,
   onSendNote
 }: {
   athleteFirstName: string;
   sessions: any[];
+  savedNotes?: Array<{ id: string; date: number; content: string }>;
+  noteSentAck?: boolean;
   noteText: string;
   onNoteTextChange: (val: string) => void;
   onSendNote: (e: React.FormEvent) => void;
@@ -618,6 +622,33 @@ export function CoachAthleteAnalysisInspector({
               <span>{tx("Enviar", "Send")}</span>
             </button>
           </form>
+
+          {noteSentAck && (
+            <div className="px-3 py-1.5 rounded-[10px] bg-[#051810] border border-[#00C853]/45 text-white text-[11.5px] font-extrabold tracking-wide text-center">
+              ✓ {tx("Nota técnica enviada al atleta", "Technical note sent to athlete")}
+            </div>
+          )}
+
+          {savedNotes.length > 0 && (
+            <div className="bg-[#0B0E15] border border-white/[0.08] rounded-[16px] p-3 flex flex-col gap-1.5">
+              <span className="text-[9.5px] font-extrabold uppercase tracking-[0.08em] text-white">
+                {tx("Notas técnicas enviadas", "Sent technical notes")}
+              </span>
+              {savedNotes.slice(0, 3).map((n) => (
+                <div
+                  key={n.id}
+                  className="bg-[#07090E] border border-white/[0.06] rounded-[11px] px-2.5 py-2 flex flex-col gap-0.5"
+                >
+                  <span className="text-[12px] font-semibold text-white leading-snug break-words">
+                    {n.content}
+                  </span>
+                  <span className="text-[9.8px] font-bold text-white/70 tabular-nums">
+                    {formatRegionalDate(n.date, language)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

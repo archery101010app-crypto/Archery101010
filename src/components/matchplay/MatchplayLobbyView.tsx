@@ -268,7 +268,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       // Reload list
       const localSess = await getLocalSessions();
       const duelSessions = localSess.filter(
-        (s) => s.isDuel === true && s.userUid === user.uid && s.deletedByArcher !== true
+        (s) =>
+          s.isDuel === true &&
+          (s.userId === user.uid || s.userUid === user.uid) &&
+          s.deletedByArcher !== true
       );
       setDrafts(duelSessions.filter((s) => s.isDraft === true));
     } catch (err) {
@@ -282,7 +285,10 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       try {
         const localSess = await getLocalSessions();
         const duelSessions = localSess.filter(
-          (s) => s.isDuel === true && s.userUid === user.uid && s.deletedByArcher !== true
+          (s) =>
+            s.isDuel === true &&
+            (s.userId === user.uid || s.userUid === user.uid) &&
+            s.deletedByArcher !== true
         );
         
         const activeDrafts = duelSessions.filter((s) => s.isDraft === true);
@@ -696,6 +702,16 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         `¡Te desafío a una Eliminatoria Online 1 vs 1 en Archery 101010!\n\nFormato: ${formatBowLabel(customBow)} a ${customDistance}m\nCódigo de Sala: ${generatedCode}\n\nEntra al duelo en vivo aquí:\n${shareUrl}`,
         `I challenge you to a Live 1 vs 1 Match on Archery 101010!\n\nFormat: ${formatBowLabel(customBow)} at ${customDistance}m\nRoom Code: ${generatedCode}\n\nJoin the live match here:\n${shareUrl}`
       );
+
+      if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
+        void showOledAlert(
+          tx(
+            "Inicia sesión con tu cuenta para crear una sala en línea con código de invitación.",
+            "Sign in to your account to create an online room with an invite code."
+          )
+        );
+        return;
+      }
 
       // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
       if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
