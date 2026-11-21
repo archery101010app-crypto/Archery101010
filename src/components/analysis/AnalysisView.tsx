@@ -64,6 +64,91 @@ interface AnalysisViewProps {
   onNavigateHistoryAnalysis: () => void;
 }
 
+function computeEcgWaveY(phase01: number): number {
+  const p = ((phase01 % 1) + 1) % 1;
+  if (p > 0.12 && p < 0.19) {
+    return 26 - Math.sin(((p - 0.12) / 0.07) * Math.PI) * 5;
+  }
+  if (p >= 0.25 && p < 0.28) return 30.5;
+  if (p >= 0.28 && p < 0.32) return 6.5;
+  if (p >= 0.32 && p < 0.36) return 38;
+  if (p >= 0.36 && p < 0.40) return 26;
+  if (p >= 0.46 && p < 0.59) {
+    return 26 - Math.sin(((p - 0.46) / 0.13) * Math.PI) * 6.5;
+  }
+  return 26;
+}
+
+function LiveHeartRateEcgGraph({ bpm }: { bpm: number }) {
+  const pathRef = useRef<SVGPathElement | null>(null);
+  const dotRef = useRef<SVGCircleElement | null>(null);
+  const bpmRef = useRef<number>(bpm);
+  bpmRef.current = bpm;
+  const isActive = bpm >= 30 && bpm <= 245;
+
+  useEffect(() => {
+    const pathEl = pathRef.current;
+    const dotEl = dotRef.current;
+    if (!pathEl || !dotEl) return;
+
+    if (!isActive) {
+      pathEl.setAttribute("d", "M 2 26 L 162 26");
+      dotEl.setAttribute("cy", "26");
+      return;
+    }
+
+    let rafId = 0;
+    let lastMs = performance.now();
+    let beatCursor = 0;
+
+    const tick = (nowMs: number) => {
+      const dtSec = Math.min(0.1, Math.max(0, (nowMs - lastMs) / 1000));
+      lastMs = nowMs;
+      const currentBpm = Math.max(30, Math.min(245, bpmRef.current || 72));
+      beatCursor = (beatCursor + dtSec * (currentBpm / 60)) % 1000;
+
+      let d = "";
+      let endY = 26;
+      for (let x = 2; x <= 162; x += 2) {
+        const samplePhase = beatCursor - (162 - x) * 0.0125;
+        const y = computeEcgWaveY(samplePhase);
+        d += (x === 2 ? "M " : " L ") + x + " " + y.toFixed(1);
+        if (x === 162) endY = y;
+      }
+      pathEl.setAttribute("d", d);
+      dotEl.setAttribute("cy", endY.toFixed(1));
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isActive]);
+
+  return (
+    <svg width="156" height="44" viewBox="0 0 166 44" aria-hidden="true" className="shrink-0">
+      <line x1="0" y1="26" x2="162" y2="26" stroke="rgba(255,59,48,0.18)" strokeWidth="1" />
+      <path
+        ref={pathRef}
+        d="M 2 26 L 162 26"
+        fill="none"
+        stroke="#FF3B30"
+        strokeOpacity={isActive ? 1 : 0.4}
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        ref={dotRef}
+        cx="162"
+        cy="26"
+        r="3.4"
+        fill="#FF3B30"
+        fillOpacity={isActive ? 1 : 0.45}
+      />
+    </svg>
+  );
+}
+
 export default function AnalysisView({
   user,
   onNavigateHistoryAnalysis
@@ -180,6 +265,10 @@ export default function AnalysisView({
   );
   const bleHrRef = useRef<BleHeartRateStatus>(bleHrStatus);
   bleHrRef.current = bleHrStatus;
+  const [watchLiveHr, setWatchLiveHr] = useState<{ bpm: number; at: number }>({
+    bpm: 0,
+    at: 0
+  });
 
   const hasNativeWatchConnected =
     watchConnStatus.bridgeReady &&
@@ -543,6 +632,17 @@ export default function AnalysisView({
   // Listen for real ANALYSIS_SHOT telemetry & state requests coming from Smartwatch (Wear OS or /watch)
   useEffect(() => {
     return subscribeWatchMessages((msg) => {
+      const incomingHr =
+        "heartRateBpm" in msg && typeof msg.heartRateBpm === "number"
+          ? msg.heartRateBpm
+          : msg.type === "STATE_UPDATE" && typeof msg.payload?.heartRateBpm === "number"
+          ? msg.payload.heartRateBpm
+          : null;
+      if (incomingHr !== null && incomingHr >= 30 && incomingHr <= 245) {
+        setWatchLiveHr({ bpm: Math.round(incomingHr), at: Date.now() });
+      } else if (incomingHr !== null && incomingHr <= 0 && "type" in msg && String(msg.type) === "HEART_RATE") {
+        setWatchLiveHr({ bpm: 0, at: 0 });
+      }
       if (msg.type === "REQUEST_STATE") {
         publishWatchState(latestWatchSnapshotRef.current);
         return;
@@ -722,11 +822,29 @@ export default function AnalysisView({
 
   const safeShotIdx = Math.min(selectedShotIdx, Math.max(0, shots.length - 1));
   const activeShot = shots[safeShotIdx] || null;
-  const liveBpmDisplay =
-    activeShot?.heartRateBpm ||
-    (bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+  const isViewingLatestShot = shots.length === 0 || safeShotIdx === shots.length - 1;
+  const freshWatchBpm =
+    watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 15_000 ? watchLiveHr.bpm : 0;
+  const liveStreamBpm =
+    bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
       ? bleHrStatus.currentBpm
-      : 0);
+      : freshWatchBpm;
+  const liveBpmDisplay = isViewingLatestShot
+    ? liveStreamBpm || activeShot?.heartRateBpm || 0
+    : activeShot?.heartRateBpm || liveStreamBpm || 0;
+
+  const sessionSummary = useMemo(() => computeAnalysisSessionSummary(shots), [shots]);
+  const sessionAvgBpm =
+    bleHrStatus.avgHeartRateBpm && bleHrStatus.avgHeartRateBpm >= 30
+      ? bleHrStatus.avgHeartRateBpm
+      : sessionSummary.avgHeartRateBpm || 0;
+  const sessionMaxBpm = Math.max(
+    bleHrStatus.maxHeartRateBpm && bleHrStatus.maxHeartRateBpm >= 30
+      ? bleHrStatus.maxHeartRateBpm
+      : 0,
+    sessionSummary.maxHeartRateBpm || 0,
+    liveBpmDisplay >= 30 ? liveBpmDisplay : 0
+  );
 
   const prepPct = activeShot
     ? Math.round(
@@ -1264,39 +1382,44 @@ export default function AnalysisView({
           />
         </div>
 
-        {/* Single-Line Telemetry Key Strip */}
-        <div className="w-full min-h-[36px] bg-[#06080D] border border-white/[0.08] rounded-[12px] px-2.5 py-1.5 flex items-center justify-between gap-1.5 text-[11px] font-extrabold text-white tabular-nums overflow-x-auto">
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="w-[11px] border-t-2 border-dashed border-white inline-block" />
-            <span>
-              {tx("Prep.", "Prep")}{" "}
-              {activeShot ? `${activeShot.prepSeconds.toFixed(1)}s` : "—"}
+        {/* Live Heart Rate & Real-Time Red ECG Waveform Module (Directly Below Target) */}
+        <button
+          type="button"
+          onClick={() => setIsBleHrModalOpen(true)}
+          className={`w-full bg-[#06080C] border border-[#FF3B30]/30 hover:border-[#FF3B30]/55 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2.5 ${
+            isEs ? "text-left" : "text-start"
+          } cursor-pointer transition active:scale-[0.99] tabular-nums`}
+        >
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <span
+                className={`w-[7px] h-[7px] rounded-full bg-[#FF3B30] shrink-0 ${
+                  liveBpmDisplay >= 30 ? "animate-pulse" : "opacity-50"
+                }`}
+              />
+              <span className="text-[10.5px] font-extrabold uppercase tracking-[0.11em] text-white truncate">
+                {t("bleHrTitle")}
+              </span>
+            </div>
+            <div dir="ltr" className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className="text-[27px] font-black text-white leading-none tracking-tight">
+                {liveBpmDisplay >= 30 ? liveBpmDisplay : "—"}
+              </span>
+              <span className="text-[12.5px] font-black text-white uppercase tracking-[0.06em]">
+                BPM
+              </span>
+            </div>
+            <span className="text-[11px] font-bold text-white whitespace-nowrap truncate">
+              {sessionAvgBpm >= 30 && sessionMaxBpm >= 30
+                ? `${tx("Prom.", "Avg")} ${sessionAvgBpm} · ${tx("Máx.", "Max")} ${sessionMaxBpm}`
+                : liveBpmDisplay >= 30
+                ? tx("Pulso en tiempo real", "Live heart rate")
+                : tx("Conectar pulsaciones", "Connect heart rate")}
             </span>
           </div>
-          <span className="w-[1px] h-[13px] bg-white/[0.12] shrink-0" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="w-[11px] h-[2.8px] rounded-full bg-[#00BFFF] inline-block" />
-            <span>
-              {tx("Apuntado", "Aim")}{" "}
-              {activeShot ? `${activeShot.aimSeconds.toFixed(1)}s` : "—"}
-            </span>
-          </div>
-          <span className="w-[1px] h-[13px] bg-white/[0.12] shrink-0" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="w-[7px] h-[7px] rounded-full bg-white inline-block" />
-            <span>{tx("Suelta", "Release")}</span>
-          </div>
-          <span className="w-[1px] h-[13px] bg-white/[0.12] shrink-0" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="w-[7px] h-[7px] rounded-full bg-[#FFE500] inline-block" />
-            <span>
-              {tx("Impacto", "Impact")}{" "}
-              {activeShot?.markedImpact
-                ? activeShot.markedImpact.scoreLabel.replace("10 · X", "X")
-                : "—"}
-            </span>
-          </div>
-        </div>
+
+          <LiveHeartRateEcgGraph bpm={liveBpmDisplay} />
+        </button>
 
         {/* 2-Button Tactile Action Bar */}
         <div className="w-full grid grid-cols-[1.15fr_1fr] gap-2">
