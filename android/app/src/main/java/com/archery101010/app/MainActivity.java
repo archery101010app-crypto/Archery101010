@@ -1883,16 +1883,31 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void openInSpotifyApp(final String spotifyUri, final String webUrl) {
             runOnUiThread(() -> {
-                try {
-                    if (spotifyUri != null && !spotifyUri.isEmpty() && isSpotifyAppInstalledInternal()) {
-                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(spotifyUri));
-                        i.setPackage("com.spotify.music");
-                        i.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://" + getPackageName()));
-                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(i);
-                        return;
+                if (isSpotifyAppInstalledInternal()) {
+                    boolean wantsDirectHome = spotifyUri == null
+                            || spotifyUri.isEmpty()
+                            || "spotify:".equalsIgnoreCase(spotifyUri)
+                            || "spotify://open".equalsIgnoreCase(spotifyUri)
+                            || "spotify:app".equalsIgnoreCase(spotifyUri);
+                    if (!wantsDirectHome) {
+                        try {
+                            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(spotifyUri));
+                            i.setPackage("com.spotify.music");
+                            i.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://" + getPackageName()));
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(i);
+                            return;
+                        } catch (Exception ignored) {}
                     }
-                } catch (Exception ignored) {}
+                    try {
+                        Intent launchIntent = getPackageManager().getLaunchIntentForPackage("com.spotify.music");
+                        if (launchIntent != null) {
+                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(launchIntent);
+                            return;
+                        }
+                    } catch (Exception ignored) {}
+                }
                 try {
                     if (webUrl != null && !webUrl.isEmpty()) {
                         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
