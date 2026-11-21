@@ -118,6 +118,27 @@
             "value": "application/octet-stream"
           },
           {
+            "key": "Content-Disposition",
+            "value": "attachment"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010.iq",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010.iq\""
+          },
+          {
             "key": "Cache-Control",
             "value": "no-store, no-cache, must-revalidate"
           }
