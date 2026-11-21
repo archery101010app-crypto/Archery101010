@@ -7,7 +7,9 @@
 3.  **Frontend SaaS Premium 2025:** Estructura moderna con Next.js, TypeScript, Tailwind CSS, Framer Motion, shadcn/ui y modo oscuro OLED por defecto.
 4.  **Control de Versión de Publicación:** Cada vez que se realicen cambios y se publiquen commits en el repositorio, se debe incrementar el número de versión de la aplicación sumando +0.1 a la versión actual mediante el script de auto-incremento.
 5.  **Control Centralizado:** La versión de la aplicación se almacena de forma centralizada en `src/lib/version.ts` y se actualiza mediante `npm run bump-version`.
-6.  **Flujo de Usuario Mobile-First (Dispositivo Android):** El usuario opera, evalúa y prueba casi en su totalidad desde su celular Android. Todas las entregas, enlaces, interfaces táctiles y pruebas deben estar orientadas para que el usuario pueda abrirlas, probarlas y descargarlas directamente en su teléfono móvil sin depender de configuraciones complejas en la computadora.
+6.  **ORDEN PERMANENTE — 100% Exclusivo Celular Android (Cero PC):** El usuario trabaja **única y exclusivamente desde su celular Android** (nunca desde computadora). Todas las entregas, archivos descargables (`.aab` para Google Play Console, PDFs, videos, muestras PNG), enlaces y flujos deben funcionar al 100% con un solo toque en Android:
+    *   **Nunca** entregar rutas locales de PC como medio de descarga para el usuario.
+    *   **Regla técnica obligatoria de enlaces de descarga en Android:** Como `archery101010-c0bb4.web.app` tiene `Android App Links` (`autoVerify="true"` en `AndroidManifest.xml`), Android intercepta los enlaces `.web.app` y abre la app instalada en vez del gestor de descargas de Chrome. Por eso, **todo archivo descargable** (como paquetes `.aab` para subir a Google Play Console desde el celular) debe servirse directamente en el dominio espejo **`https://archery101010-c0bb4.firebaseapp.com/<archivo>`** con encabezado HTTP `Content-Disposition: attachment; filename="..."` verificado antes de entregar el link.
 
 ---
 

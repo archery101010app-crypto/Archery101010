@@ -5,8 +5,7 @@
       "firebase.json",
       "**/node_modules/**",
       "demos/**",
-      "**/*.apk",
-      "**/*.aab"
+      "**/*.apk"
     ],
     "headers": [
       {
@@ -117,6 +116,40 @@
           {
             "key": "Content-Type",
             "value": "application/octet-stream"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010-Mobile-v2.144.aab",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-Mobile-v2.144.aab\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010-WearOS-v2.144.aab",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.144.aab\""
           },
           {
             "key": "Cache-Control",
