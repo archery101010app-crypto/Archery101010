@@ -48,22 +48,15 @@ function isNewerVersion(remoteVer: string, localVer: string): boolean {
   return false;
 }
 
-function detectNativeAndroidShellState(): {
-  isNativeAndroidWebView: boolean;
+function detectNativeReloadBridge(): {
   canReloadNatively: boolean;
 } {
   if (typeof window === "undefined") {
-    return { isNativeAndroidWebView: false, canReloadNatively: false };
+    return { canReloadNatively: false };
   }
   const winAny = window as unknown as WinUpdateBridge;
   const canReloadNatively = typeof winAny.ArcheryNativeAuth?.reloadInAppOta === "function";
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
-  const isNativeAndroidWebView =
-    canReloadNatively ||
-    Boolean(winAny.ArcheryNativeAuth) ||
-    Boolean(winAny.Capacitor?.isNativePlatform?.()) ||
-    /;\s*wv\)|Capacitor/i.test(ua);
-  return { isNativeAndroidWebView, canReloadNatively };
+  return { canReloadNatively };
 }
 
 function wasRecentlyAttempted(ver: string): boolean {
@@ -145,18 +138,25 @@ async function purgeServiceWorkersAndCachesBounded(): Promise<void> {
         const keys = await caches.keys();
         await Promise.allSettled(keys.map((k) => caches.delete(k)));
       }
-      const controller = new AbortController();
-      const abortTimer = setTimeout(() => controller.abort(), PREWARM_FETCH_TIMEOUT_MS);
-      try {
-        await fetch(window.location.href, {
-          cache: "reload",
-          credentials: "same-origin",
-          signal: controller.signal
-        });
-      } catch {
-        // Ignore network/abort errors during pre-warm
-      } finally {
-        clearTimeout(abortTimer);
+      if (
+        typeof window !== "undefined" &&
+        window.location.protocol.startsWith("http") &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
+      ) {
+        const controller = new AbortController();
+        const abortTimer = setTimeout(() => controller.abort(), PREWARM_FETCH_TIMEOUT_MS);
+        try {
+          await fetch(window.location.href, {
+            cache: "reload",
+            credentials: "same-origin",
+            signal: controller.signal
+          });
+        } catch {
+          // Ignore network/abort errors during pre-warm
+        } finally {
+          clearTimeout(abortTimer);
+        }
       }
     } catch {
       // Ignore cleanup errors
@@ -198,20 +198,13 @@ export default function AppUpdateBanner() {
         return;
       }
 
-      const isBundledLocalhost =
-        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
-
-      // Legacy Android shells (< v2.110): keep 100% inside the app, never surface external web jumps
-      if (isNativeAndroidWebView && !canReloadNatively) {
-        if (!isBundledLocalhost) {
-          void purgeServiceWorkersAndCachesBounded();
-        }
-        return;
-      }
+      const isLocalOrigin =
+        !window.location.protocol.startsWith("http") ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
 
       try {
-        const versionEndpoint = isBundledLocalhost
+        const versionEndpoint = isLocalOrigin
           ? `${REMOTE_WEB_ORIGIN}${OTA_MANIFEST_PATH}?t=${Date.now()}`
           : `${OTA_MANIFEST_PATH}?t=${Date.now()}`;
         const res = await fetch(versionEndpoint, { cache: "no-store" });
@@ -265,7 +258,7 @@ export default function AppUpdateBanner() {
 
   const handleUpdateNow = useCallback(async () => {
     if (updatingRef.current) return;
-    const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
+    const { canReloadNatively } = detectNativeReloadBridge();
     const winAny = window as unknown as WinUpdateBridge;
 
     updatingRef.current = true;
@@ -300,21 +293,14 @@ export default function AppUpdateBanner() {
       setIsUpdating(false);
     }, RELOAD_FAILSAFE_RESET_MS);
 
-    // 1. Modern Android native shell (v2.110+): 100% in-app Java WebView reload
+    // 1. Native reload bridge (Google Play v2.110+): 100% in-app WebView reload
     if (canReloadNatively && winAny.ArcheryNativeAuth?.reloadInAppOta) {
       winAny.ArcheryNativeAuth.reloadInAppOta();
       return;
     }
 
-    // 2. Legacy Android WebView (< v2.110): NEVER execute JS location.reload()
-    if (isNativeAndroidWebView || Boolean(winAny.ArcheryNativeAuth)) {
-      updatingRef.current = false;
-      setIsUpdating(false);
-      setDismissed(true);
-      return;
-    }
-
-    // 3. Standard Web Browser / Installed PWA: safe in-place reload
+    // 2. Google Play v2.100 shells on remote origin, Apple App Store WKWebView & Web/PWA:
+    // PAGE_TRANSITION_RELOAD stays 100% inside the app and never invokes external browser intents
     window.location.reload();
   }, [remoteInfo]);
 
@@ -322,9 +308,8 @@ export default function AppUpdateBanner() {
     isBusy ||
     (typeof window !== "undefined" &&
       Boolean((window as unknown as WinUpdateBridge).__archeryBusySession));
-  const { isNativeAndroidWebView, canReloadNatively } = detectNativeAndroidShellState();
 
-  if (winBusy || dismissed || !remoteInfo || (isNativeAndroidWebView && !canReloadNatively)) {
+  if (winBusy || dismissed || !remoteInfo) {
     return null;
   }
 

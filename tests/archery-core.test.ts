@@ -425,17 +425,16 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     );
     assert.ok(
       bannerSrc.includes("window.location.reload()"),
-      "AppUpdateBanner must use in-place window.location.reload() for standard web/PWA"
+      "AppUpdateBanner must use in-place window.location.reload() so Google Play, App Store & Web shells stay 100% in-app"
     );
-    const legacyGuardIdx = bannerSrc.indexOf("if (isNativeAndroidWebView || Boolean(winAny.ArcheryNativeAuth))");
-    const webReloadIdx = bannerSrc.indexOf("window.location.reload();");
-    assert.ok(
-      legacyGuardIdx > 0 && legacyGuardIdx < webReloadIdx,
-      "AppUpdateBanner must return early for legacy Android shells (< v2.110) BEFORE window.location.reload() so Capacitor Bridge.launchIntent never opens Chrome"
+    assert.equal(
+      bannerSrc.includes("!canReloadNatively"),
+      false,
+      "AppUpdateBanner must NEVER hide or block the update popup on Google Play v2.100 or App Store shells"
     );
     assert.ok(
       bannerSrc.includes('"/ota-version.json"'),
-      "AppUpdateBanner must read /ota-version.json rather than legacy /version.json"
+      "AppUpdateBanner must read /ota-version.json"
     );
 
     const otaVerJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "public/ota-version.json"), "utf8"));
@@ -444,13 +443,13 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(otaVerJson.version, APP_VERSION, "ota-version.json must match APP_VERSION");
     assert.equal(
       verJson.version,
-      "0.0.0",
-      "Legacy public/version.json must stay 0.0.0 so older shells never redirect users out of the app"
+      APP_VERSION,
+      "public/version.json must match APP_VERSION (never 0.0.0) so Google Play v2.100 users always get the Update popup"
     );
     assert.equal(
       appVerJson.version,
-      "0.0.0",
-      "Legacy public/app-version.json must stay 0.0.0 so older shells never redirect users out of the app"
+      APP_VERSION,
+      "public/app-version.json must match APP_VERSION (never 0.0.0)"
     );
     assert.equal(verJson.latestVersion, APP_VERSION);
   });
