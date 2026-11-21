@@ -995,4 +995,41 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       assert.ok(src.includes('dir="ltr"'), `${rel} must protect brand/code lockups with dir="ltr"`);
     }
   });
+
+  it("enforces v2.141 profile persistence: non-destructive cloud merge, presence ping isolation, and wide country rule", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const rulesSrc = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf8");
+    assert.ok(
+      rulesSrc.includes("validOptionalString(data, 'country', 0, 100)"),
+      "firestore.rules must permit full country names up to 100 chars so profile writes never fail"
+    );
+
+    const pageSrc = fs.readFileSync(path.resolve(process.cwd(), "src/app/page.tsx"), "utf8");
+    assert.ok(
+      pageSrc.includes("mergeUserProfilesNonDestructive"),
+      "page.tsx startup reconciliation must use non-destructive profile merge"
+    );
+    assert.equal(
+      /updateDoc\(doc\(db,\s*"users",\s*uid\),\s*\{\s*lastActiveAt:\s*now,\s*updatedAt:\s*now/.test(pageSrc),
+      false,
+      "bootstrapSessionPresence must NEVER bump updatedAt on users/{uid} presence pings"
+    );
+
+    const authSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/authService.ts"), "utf8");
+    assert.ok(
+      authSrc.includes("await cloudWriteUser("),
+      "updateProfile must await cloudWriteUser before returning"
+    );
+
+    const bannerSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/ui/AppUpdateBanner.tsx"),
+      "utf8"
+    );
+    assert.ok(
+      bannerSrc.includes("runSync"),
+      "AppUpdateBanner must flush pending profile sync queue before OTA reload"
+    );
+  });
 });

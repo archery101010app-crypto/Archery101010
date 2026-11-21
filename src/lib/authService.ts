@@ -299,18 +299,108 @@ function sanitizeUserProfile(u: any): UserProfile {
 }
 
 /**
- * Fire-and-forget profile write to Firestore that can NEVER break the calling flow
- * (catches both async rejections and synchronous SDK throws).
+ * Non-destructive merge of a cloud user profile over a local cached profile.
+ * Prevents stale/incomplete Firestore documents from wiping locally saved personal data
+ * (birthDate, nickname, city, country, gender, physicalData height/weight, bows, bowConfig).
  */
-function cloudWriteUser(profile: UserProfile): void {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return;
-  if (!profile?.uid) return;
+export function mergeUserProfilesNonDestructive(
+  local: UserProfile | null | undefined,
+  remote: UserProfile
+): { merged: UserProfile; localHadMissingCloudFields: boolean } {
+  if (!local || local.uid !== remote.uid) {
+    return { merged: sanitizeUserProfile(remote), localHadMissingCloudFields: false };
+  }
+
+  let localHadMissingCloudFields = false;
+
+  const pickNonEmptyStr = (remoteVal?: string | null, localVal?: string | null): string => {
+    const r = (remoteVal || "").trim();
+    const l = (localVal || "").trim();
+    if (r) return remoteVal as string;
+    if (l) {
+      localHadMissingCloudFields = true;
+      return localVal as string;
+    }
+    return "";
+  };
+
+  const remotePhys = remote.physicalData;
+  const localPhys = local.physicalData;
+  const height =
+    Number(remotePhys?.height) > 0
+      ? Number(remotePhys?.height)
+      : Number(localPhys?.height) > 0
+      ? ((localHadMissingCloudFields = true), Number(localPhys?.height))
+      : 0;
+  const weight =
+    Number(remotePhys?.weight) > 0
+      ? Number(remotePhys?.weight)
+      : Number(localPhys?.weight) > 0
+      ? ((localHadMissingCloudFields = true), Number(localPhys?.weight))
+      : 0;
+  const mergedPhysicalData =
+    remotePhys || localPhys
+      ? {
+          height,
+          weight,
+          dominantEye: remotePhys?.dominantEye || localPhys?.dominantEye,
+          dominantHand: remotePhys?.dominantHand || localPhys?.dominantHand || "R"
+        }
+      : undefined;
+
+  const hasPopulatedBow = (b?: BowConfig | null) =>
+    Boolean(b && (b.brand?.trim() || b.model?.trim() || Number(b.poundage) > 0 || Number(b.drawLength) > 0));
+
+  let mergedBows = remote.bows;
+  if ((!Array.isArray(remote.bows) || remote.bows.length === 0) && Array.isArray(local.bows) && local.bows.length > 0) {
+    mergedBows = local.bows;
+    localHadMissingCloudFields = true;
+  }
+
+  let mergedBowConfig = remote.bowConfig;
+  if (!hasPopulatedBow(remote.bowConfig) && hasPopulatedBow(local.bowConfig)) {
+    mergedBowConfig = local.bowConfig;
+    localHadMissingCloudFields = true;
+  }
+
+  const merged = sanitizeUserProfile({
+    ...local,
+    ...remote,
+    uid: remote.uid,
+    fullName: pickNonEmptyStr(remote.fullName, local.fullName),
+    nickname: pickNonEmptyStr(remote.nickname, local.nickname),
+    birthDate: pickNonEmptyStr(remote.birthDate, local.birthDate),
+    country: pickNonEmptyStr(remote.country, local.country),
+    city: pickNonEmptyStr(remote.city, local.city),
+    gender: pickNonEmptyStr(remote.gender, local.gender),
+    whatsappNumber: pickNonEmptyStr(remote.whatsappNumber, local.whatsappNumber),
+    unitSystem: remote.unitSystem || local.unitSystem,
+    ...(mergedPhysicalData ? { physicalData: mergedPhysicalData } : {}),
+    ...(mergedBowConfig ? { bowConfig: mergedBowConfig } : {}),
+    ...(mergedBows ? { bows: mergedBows } : {}),
+    profileSetupCompleted: Boolean(remote.profileSetupCompleted || local.profileSetupCompleted),
+    updatedAt: Math.max(Number(remote.updatedAt || 0), Number(local.updatedAt || 0))
+  });
+
+  return { merged, localHadMissingCloudFields };
+}
+
+/**
+ * Resilient profile write to Firestore that returns a Promise (so callers can await it
+ * with a bounded timeout while still never crashing offline flows).
+ */
+async function cloudWriteUser(profile: UserProfile): Promise<boolean> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  if (!profile?.uid) return false;
   try {
-    withTimeout(setDoc(doc(db, "users", profile.uid), sanitizeUserProfile(profile), { merge: true }), LOGIN_TIMEOUT_MS).catch(
-      (err) => console.warn("Cloud profile write deferred to sync queue:", err?.message || err)
+    await withTimeout(
+      setDoc(doc(db, "users", profile.uid), sanitizeUserProfile(profile), { merge: true }),
+      Math.min(LOGIN_TIMEOUT_MS, 5000)
     );
+    return true;
   } catch (err: any) {
     console.warn("Cloud profile write deferred to sync queue:", err?.message || err);
+    return false;
   }
 }
 
@@ -1004,7 +1094,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     });
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      cloudWriteUser(updatedUser);
+      await cloudWriteUser(updatedUser);
       import("@/lib/db/realtimeSync")
         .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updatedUser))
         .catch(() => {});
@@ -1035,7 +1125,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     });
 
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      cloudWriteUser(updated);
+      await cloudWriteUser(updated);
       import("@/lib/db/realtimeSync")
         .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updated))
         .catch(() => {});

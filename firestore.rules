@@ -16,9 +16,10 @@ service cloud.firestore {
     //   - fullName: string (required, 1-100 chars)
     //   - nickname: string (optional, 0-50 chars)
     //   - birthDate: string (optional, 0-30 chars)
-    //   - country: string (optional, 0-10 chars)
+    //   - country: string (optional, 0-100 chars)
     //   - city: string (optional, 0-100 chars)
     //   - gender: string (optional, 0-20 chars)
+    //   - unitSystem: string (optional, 0-20 chars)
     //   - role: string (required: 'archer' | 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
     //   - plan: string (optional: 'FREE' | 'PRO')
     //   - proExpiresAt: number / timestamp / string (optional; non-superadmin capped at request.time + 370 days)
@@ -28,7 +29,7 @@ service cloud.firestore {
     //   - coachEmail: string or null (optional, 0-128 chars)
     //   - clubName: string or null (optional, 0-100 chars)
     //   - clubLogo: string (optional, 0-2048 chars)
-    //   - clubCountry: string (optional, 0-10 chars)
+    //   - clubCountry: string (optional, 0-100 chars)
     //   - clubInviteCode: string (optional, 0-50 chars)
     //   - joinedWithInviteCode: string (optional, 0-20 chars, archer 6-digit invite proof)
     //   - isClubCreator: bool (optional)
@@ -48,7 +49,7 @@ service cloud.firestore {
     //   - uid: string (optional/if present must match userId) [Immutable]
     //   - fullName: string or null (optional, 0-100 chars)
     //   - nickname: string or null (optional, 0-50 chars)
-    //   - country: string or null (optional, 0-10 chars)
+    //   - country: string or null (optional, 0-100 chars)
     //   - bowType: string or null (optional, 0-30 chars)
     //   - clubId: string or null (optional, 0-100 chars)
     //   - clubName: string or null (optional, 0-100 chars)
@@ -492,9 +493,10 @@ service cloud.firestore {
         data.role in ['archer', 'coach', 'team_admin', 'team_admin_coach', 'superadmin'] &&
         validOptionalString(data, 'nickname', 0, 50) &&
         validOptionalString(data, 'birthDate', 0, 30) &&
-        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'country', 0, 100) &&
         validOptionalString(data, 'city', 0, 100) &&
         validOptionalString(data, 'gender', 0, 20) &&
+        validOptionalString(data, 'unitSystem', 0, 20) &&
         (data.get('plan', null) == null || data.plan in ['FREE', 'PRO']) &&
         validOptionalDateOrTimestamp(data, 'proExpiresAt') &&
         (isSuperAdmin() ||
@@ -508,7 +510,7 @@ service cloud.firestore {
         validOptionalString(data, 'coachEmail', 0, 128) &&
         validOptionalString(data, 'clubName', 0, 100) &&
         validOptionalString(data, 'clubLogo', 0, 2048) &&
-        validOptionalString(data, 'clubCountry', 0, 10) &&
+        validOptionalString(data, 'clubCountry', 0, 100) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
         validOptionalBool(data, 'isClubCreator') &&
@@ -711,7 +713,7 @@ service cloud.firestore {
         data.get('uid', userId) == userId &&
         validOptionalString(data, 'fullName', 0, 100) &&
         validOptionalString(data, 'nickname', 0, 50) &&
-        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'country', 0, 100) &&
         validOptionalString(data, 'bowType', 0, 30) &&
         validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalString(data, 'clubName', 0, 100) &&

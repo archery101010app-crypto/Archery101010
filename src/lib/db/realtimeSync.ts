@@ -32,7 +32,8 @@ import {
   hasRecentLocalUserWrite,
   getCanonicalCoachClubId,
   getExternalCoachUid,
-  isLinkedToExternalCoach
+  isLinkedToExternalCoach,
+  mergeUserProfilesNonDestructive
 } from "@/lib/authService";
 import { logger } from "@/lib/logger";
 
@@ -390,6 +391,9 @@ export function startRealtimeSync(
           const isLocalValid = isProfileValid(localCurrent);
           const isRemoteValid = isProfileValid(updatedCurrentUser);
 
+          const { merged: safeCurrentUser, localHadMissingCloudFields } =
+            mergeUserProfilesNonDestructive(localCurrent, updatedCurrentUser);
+
           if (localIsNewer) {
             // Skip overwriting a newer local profile with an older snapshot
           } else if (isLocalValid && !isRemoteValid) {
@@ -399,18 +403,24 @@ export function startRealtimeSync(
           } else {
             const hasFunctionalDifference = isProfileFunctionallyDifferent(
               localCurrent,
-              updatedCurrentUser
+              safeCurrentUser
             );
             const hasAnyDifference =
-              JSON.stringify(localCurrent) !== JSON.stringify(updatedCurrentUser);
+              JSON.stringify(localCurrent) !== JSON.stringify(safeCurrentUser);
 
             if (hasFunctionalDifference) {
-              await settingsStore.setItem("current_user", updatedCurrentUser);
+              await settingsStore.setItem("current_user", safeCurrentUser);
               window.dispatchEvent(
-                new CustomEvent("current-user-updated", { detail: { user: updatedCurrentUser } })
+                new CustomEvent("current-user-updated", { detail: { user: safeCurrentUser } })
               );
             } else if (hasAnyDifference) {
-              await settingsStore.setItem("current_user", updatedCurrentUser);
+              await settingsStore.setItem("current_user", safeCurrentUser);
+            }
+
+            if (localHadMissingCloudFields && typeof navigator !== "undefined" && navigator.onLine) {
+              setDoc(doc(db, "users", safeCurrentUser.uid), safeCurrentUser, { merge: true }).catch(
+                () => {}
+              );
             }
           }
         }

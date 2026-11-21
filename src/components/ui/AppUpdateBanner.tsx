@@ -281,6 +281,17 @@ export default function AppUpdateBanner() {
       // Ignore sessionStorage errors
     }
 
+    // Flush any pending profile/session writes to Firestore before reloading for OTA update
+    try {
+      const { runSync } = await import("@/lib/db/syncManager");
+      await Promise.race([
+        runSync().catch(() => {}),
+        new Promise<void>((resolve) => setTimeout(resolve, 1800))
+      ]);
+    } catch {
+      // Ignore sync errors so update reload always proceeds
+    }
+
     stripOtaQueryParams();
     await purgeServiceWorkersAndCachesBounded();
 

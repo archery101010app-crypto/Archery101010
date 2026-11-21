@@ -396,19 +396,22 @@ export default function Home() {
             try {
               const { doc, getDoc, setDoc } = await import("firebase/firestore");
               const { db } = await import("@/lib/firebase");
-              const { getExternalCoachUid } = await import("@/lib/authService");
+              const { getExternalCoachUid, mergeUserProfilesNonDestructive } = await import("@/lib/authService");
               const snap = await getDoc(doc(db, "users", loggedUser.uid));
               if (snap.exists()) {
                 const rawCloud = { ...(snap.data() as UserProfile), uid: loggedUser.uid };
                 const localUpdatedAt = Number(loggedUser.updatedAt || 0);
                 const cloudUpdatedAt = Number(rawCloud.updatedAt || 0);
-                // If local profile has a recent local write or newer updatedAt than cloud, do not let a stale cloud doc overwrite it
-                if (!hasRecentLocalUserWrite(loggedUser.uid) && (cloudUpdatedAt === 0 || cloudUpdatedAt >= localUpdatedAt)) {
+                // Never let a missing/older cloud timestamp overwrite a newer local profile
+                const cloudIsAtLeastAsNew =
+                  localUpdatedAt === 0 || (cloudUpdatedAt > 0 && cloudUpdatedAt >= localUpdatedAt);
+                if (!hasRecentLocalUserWrite(loggedUser.uid) && cloudIsAtLeastAsNew) {
                   const externalCoachUid = getExternalCoachUid(rawCloud);
                   const cloudLinked = isLinkedToExternalCoach(rawCloud);
+                  const { merged: nonDestructive, localHadMissingCloudFields } =
+                    mergeUserProfilesNonDestructive(loggedUser, rawCloud);
                   const normalizedCloud: UserProfile = {
-                    ...loggedUser,
-                    ...rawCloud,
+                    ...nonDestructive,
                     uid: loggedUser.uid,
                     role: cloudLinked && rawCloud.role !== "superadmin" ? "archer" : rawCloud.role || loggedUser.role,
                     isClubCreator: cloudLinked ? false : !!rawCloud.isClubCreator,
@@ -419,6 +422,7 @@ export default function Home() {
                   setUser(normalizedCloud);
 
                   if (
+                    localHadMissingCloudFields ||
                     rawCloud.isClubCreator !== normalizedCloud.isClubCreator ||
                     rawCloud.role !== normalizedCloud.role ||
                     (rawCloud.coachId || null) !== (normalizedCloud.coachId || null) ||
@@ -429,10 +433,7 @@ export default function Home() {
                     await setDoc(
                       doc(db, "users", loggedUser.uid),
                       {
-                        role: normalizedCloud.role,
-                        isClubCreator: normalizedCloud.isClubCreator,
-                        coachId: normalizedCloud.coachId || null,
-                        clubInviteCode: normalizedCloud.clubInviteCode || "",
+                        ...normalizedCloud,
                         updatedAt: repairTs
                       },
                       { merge: true }
@@ -639,9 +640,9 @@ export default function Home() {
           bootstrappedPresenceUidRef.current = uid;
           const { doc, updateDoc } = await import("firebase/firestore");
           const now = Date.now();
+          // Only update lastActiveAt — NEVER bump updatedAt on presence pings so stale cloud docs cannot overwrite local profile edits
           await updateDoc(doc(db, "users", uid), {
-            lastActiveAt: now,
-            updatedAt: now
+            lastActiveAt: now
           }).catch(() => {});
         }
 
