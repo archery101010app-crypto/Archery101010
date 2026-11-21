@@ -30,10 +30,12 @@ import {
 import {
   UserProfile,
   hasRecentLocalUserWrite,
+  markLocalUserWrite,
   getCanonicalCoachClubId,
   getExternalCoachUid,
   isLinkedToExternalCoach,
-  mergeUserProfilesNonDestructive
+  mergeUserProfilesNonDestructive,
+  cloudWriteUser
 } from "@/lib/authService";
 import { logger } from "@/lib/logger";
 
@@ -323,7 +325,9 @@ export function startRealtimeSync(
           typeof remoteU.updatedAt === "number" &&
           localU.updatedAt > remoteU.updatedAt;
         if (!pendingUserUids.has(remoteU.uid) && !localIsNewer) {
-          mergedList.push(remoteU);
+          mergedList.push(
+            localU ? mergeUserProfilesNonDestructive(localU, remoteU).merged : remoteU
+          );
         }
       }
 
@@ -395,11 +399,18 @@ export function startRealtimeSync(
             mergeUserProfilesNonDestructive(localCurrent, updatedCurrentUser);
 
           if (localIsNewer) {
-            // Skip overwriting a newer local profile with an older snapshot
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              markLocalUserWrite(safeCurrentUser.uid, Number(localCurrent?.updatedAt || Date.now()));
+              cloudWriteUser(safeCurrentUser).catch(() => {});
+            }
           } else if (isLocalValid && !isRemoteValid) {
             console.warn(
               "[Sync] Local profile is complete, but remote is missing mandatory fields. Skip overwrite to avoid reset loop."
             );
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              markLocalUserWrite(safeCurrentUser.uid, Date.now());
+              cloudWriteUser(safeCurrentUser).catch(() => {});
+            }
           } else {
             const hasFunctionalDifference = isProfileFunctionallyDifferent(
               localCurrent,
@@ -418,9 +429,8 @@ export function startRealtimeSync(
             }
 
             if (localHadMissingCloudFields && typeof navigator !== "undefined" && navigator.onLine) {
-              setDoc(doc(db, "users", safeCurrentUser.uid), safeCurrentUser, { merge: true }).catch(
-                () => {}
-              );
+              markLocalUserWrite(safeCurrentUser.uid, Date.now());
+              cloudWriteUser(safeCurrentUser).catch(() => {});
             }
           }
         }

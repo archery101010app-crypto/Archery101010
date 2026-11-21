@@ -11,7 +11,7 @@ import {
   ChevronDown,
   Loader2
 } from "lucide-react";
-import { UserProfile, updateProfile } from "@/lib/authService";
+import { UserProfile, updateProfile, mergeUserProfilesNonDestructive } from "@/lib/authService";
 import {
   getLocalSetting,
   saveLocalSetting,
@@ -104,10 +104,10 @@ export default function AdminSubscriptionsTab() {
           const uid = data?.uid;
           if (!uid || uid === "USR-GUEST-OFFLINE") return;
           const prev = mergedUsersMap.get(uid);
-          const remoteTs = Number(data?.updatedAt || data?.createdAt || 0);
-          const localTs = Number(prev?.updatedAt || prev?.createdAt || 0);
-          if (!prev || remoteTs >= localTs) {
-            mergedUsersMap.set(uid, { ...prev, ...data, uid });
+          if (!prev) {
+            mergedUsersMap.set(uid, { ...data, uid });
+          } else {
+            mergedUsersMap.set(uid, mergeUserProfilesNonDestructive(prev, { ...data, uid }).merged);
           }
         });
         const mergedUsers = Array.from(mergedUsersMap.values()).sort(

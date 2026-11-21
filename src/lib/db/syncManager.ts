@@ -196,16 +196,44 @@ export async function runSync(
               updatedAt: rawPayload?.updatedAt ?? Date.now()
             });
             if (item.operation === "INSERT") {
-              await withTimeout(setDoc(docRef, cleanPayload, { merge: true }), NETWORK_TIMEOUT_MS);
+              try {
+                await withTimeout(setDoc(docRef, cleanPayload, { merge: true }), NETWORK_TIMEOUT_MS);
+              } catch (insErr) {
+                if (item.collection === "users" && auth.currentUser?.uid === item.payloadId) {
+                  const { buildOwnerSelfServiceProfilePatch } = await import("@/lib/authService");
+                  const safePatch = buildOwnerSelfServiceProfilePatch(cleanPayload);
+                  if (Object.keys(safePatch).length > 0) {
+                    await withTimeout(updateDoc(docRef, safePatch), NETWORK_TIMEOUT_MS);
+                  } else {
+                    throw insErr;
+                  }
+                } else {
+                  throw insErr;
+                }
+              }
             } else if (item.operation === "UPDATE") {
               if (item.collection === "ad_campaigns" && !cleanPayload.name) {
                 const { id: _omitId, ...metricOnlyPayload } = cleanPayload;
                 await withTimeout(updateDoc(docRef, metricOnlyPayload), NETWORK_TIMEOUT_MS);
               } else {
-                await withTimeout(
-                  setDoc(docRef, cleanPayload, { merge: true }),
-                  NETWORK_TIMEOUT_MS
-                );
+                try {
+                  await withTimeout(
+                    setDoc(docRef, cleanPayload, { merge: true }),
+                    NETWORK_TIMEOUT_MS
+                  );
+                } catch (updErr) {
+                  if (item.collection === "users" && auth.currentUser?.uid === item.payloadId) {
+                    const { buildOwnerSelfServiceProfilePatch } = await import("@/lib/authService");
+                    const safePatch = buildOwnerSelfServiceProfilePatch(cleanPayload);
+                    if (Object.keys(safePatch).length > 0) {
+                      await withTimeout(updateDoc(docRef, safePatch), NETWORK_TIMEOUT_MS);
+                    } else {
+                      throw updErr;
+                    }
+                  } else {
+                    throw updErr;
+                  }
+                }
               }
             } else if (item.operation === "DELETE") {
               if (item.collection === "sessions") {

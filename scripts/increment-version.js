@@ -86,9 +86,9 @@ if (fs.existsSync(garminManifestPath)) {
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }
 
-// 6. Write public/ota-version.json, public/version.json, and public/app-version.json
-// with the live version so ALL Google Play, App Store, and Web clients (from v2.100 through latest)
-// receive the clean in-app update banner without ever getting stuck on an older version.
+// 6. Write public/ota-version.json with the live version for all modern Google Play, App Store & Web
+// clients (v2.110+), while keeping legacy public/version.json & public/app-version.json at "0.0.0"
+// so old v2.100 shells (before allowNavigation & reloadInAppOta) never freeze or jump to external browser.
 const otaVersionJsonPath = path.join(__dirname, '../public/ota-version.json');
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
@@ -100,7 +100,14 @@ const otaPayload = {
   versionCode: vCode,
   updatedAt: nowIso
 };
+const disarmedLegacyPayload = {
+  version: '0.0.0',
+  latestVersion: displayVersion,
+  fullVersion: newVersion,
+  versionCode: vCode,
+  updatedAt: nowIso
+};
 fs.writeFileSync(otaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(appVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-fs.writeFileSync(versionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
-console.log(`Updated public/ota-version.json, public/version.json & public/app-version.json for v${displayVersion} (versionCode ${vCode})`);
+fs.writeFileSync(appVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+fs.writeFileSync(versionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and silenced legacy v2.100 manifest`);

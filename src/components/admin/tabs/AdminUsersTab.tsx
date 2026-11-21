@@ -17,7 +17,7 @@ import {
   Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { UserProfile } from "@/lib/authService";
+import { UserProfile, mergeUserProfilesNonDestructive } from "@/lib/authService";
 import { getLocalSetting, saveLocalSetting, generateResilientId } from "@/lib/db/indexedDB";
 import { COUNTRIES, COUNTRIES_MAP } from "@/lib/countries";
 import { downloadOrShareFile } from "@/lib/fileDownload";
@@ -111,7 +111,12 @@ export default function AdminUsersTab() {
             const key = u.uid || (u.email || "").toLowerCase();
             if (!key || key === "USR-GUEST-OFFLINE") return;
             const existing = mergedMap.get(key);
-            mergedMap.set(key, { ...existing, ...u });
+            mergedMap.set(
+              key,
+              existing && existing.uid && u.uid
+                ? mergeUserProfilesNonDestructive(existing, u).merged
+                : { ...existing, ...u }
+            );
           });
 
           const finalList = Array.from(mergedMap.values());

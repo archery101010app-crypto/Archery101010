@@ -1,11 +1,11 @@
-import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getLocalSessions, saveLocalSession } from "./db/indexedDB";
+import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getSyncQueue, removeFromSyncQueue, sanitizeForFirestore, getLocalSessions, saveLocalSession } from "./db/indexedDB";
 import { auth, db } from "./firebase";
 import {
   toStandardLangCode,
   getMinimumConsentAge,
   getDefaultUnitSystemForCountry
 } from "./i18n/regionalUtils";
-import { collection, doc, getDoc, setDoc, query, where, getDocs, limit } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, query, where, getDocs, limit } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -298,107 +298,92 @@ function sanitizeUserProfile(u: any): UserProfile {
   return copy as UserProfile;
 }
 
-/**
- * Non-destructive merge of a cloud user profile over a local cached profile.
- * Prevents stale/incomplete Firestore documents from wiping locally saved personal data
- * (birthDate, nickname, city, country, gender, physicalData height/weight, bows, bowConfig).
- */
-export function mergeUserProfilesNonDestructive(
-  local: UserProfile | null | undefined,
-  remote: UserProfile
-): { merged: UserProfile; localHadMissingCloudFields: boolean } {
-  if (!local || local.uid !== remote.uid) {
-    return { merged: sanitizeUserProfile(remote), localHadMissingCloudFields: false };
-  }
+import {
+  OWNER_SELF_SERVICE_PROFILE_KEYS,
+  mergeUserProfilesNonDestructive,
+  buildOwnerSelfServiceProfilePatch
+} from "./profileMerge";
 
-  let localHadMissingCloudFields = false;
-
-  const pickNonEmptyStr = (remoteVal?: string | null, localVal?: string | null): string => {
-    const r = (remoteVal || "").trim();
-    const l = (localVal || "").trim();
-    if (r) return remoteVal as string;
-    if (l) {
-      localHadMissingCloudFields = true;
-      return localVal as string;
-    }
-    return "";
-  };
-
-  const remotePhys = remote.physicalData;
-  const localPhys = local.physicalData;
-  const height =
-    Number(remotePhys?.height) > 0
-      ? Number(remotePhys?.height)
-      : Number(localPhys?.height) > 0
-      ? ((localHadMissingCloudFields = true), Number(localPhys?.height))
-      : 0;
-  const weight =
-    Number(remotePhys?.weight) > 0
-      ? Number(remotePhys?.weight)
-      : Number(localPhys?.weight) > 0
-      ? ((localHadMissingCloudFields = true), Number(localPhys?.weight))
-      : 0;
-  const mergedPhysicalData =
-    remotePhys || localPhys
-      ? {
-          height,
-          weight,
-          dominantEye: remotePhys?.dominantEye || localPhys?.dominantEye,
-          dominantHand: remotePhys?.dominantHand || localPhys?.dominantHand || "R"
-        }
-      : undefined;
-
-  const hasPopulatedBow = (b?: BowConfig | null) =>
-    Boolean(b && (b.brand?.trim() || b.model?.trim() || Number(b.poundage) > 0 || Number(b.drawLength) > 0));
-
-  let mergedBows = remote.bows;
-  if ((!Array.isArray(remote.bows) || remote.bows.length === 0) && Array.isArray(local.bows) && local.bows.length > 0) {
-    mergedBows = local.bows;
-    localHadMissingCloudFields = true;
-  }
-
-  let mergedBowConfig = remote.bowConfig;
-  if (!hasPopulatedBow(remote.bowConfig) && hasPopulatedBow(local.bowConfig)) {
-    mergedBowConfig = local.bowConfig;
-    localHadMissingCloudFields = true;
-  }
-
-  const merged = sanitizeUserProfile({
-    ...local,
-    ...remote,
-    uid: remote.uid,
-    fullName: pickNonEmptyStr(remote.fullName, local.fullName),
-    nickname: pickNonEmptyStr(remote.nickname, local.nickname),
-    birthDate: pickNonEmptyStr(remote.birthDate, local.birthDate),
-    country: pickNonEmptyStr(remote.country, local.country),
-    city: pickNonEmptyStr(remote.city, local.city),
-    gender: pickNonEmptyStr(remote.gender, local.gender),
-    whatsappNumber: pickNonEmptyStr(remote.whatsappNumber, local.whatsappNumber),
-    unitSystem: remote.unitSystem || local.unitSystem,
-    ...(mergedPhysicalData ? { physicalData: mergedPhysicalData } : {}),
-    ...(mergedBowConfig ? { bowConfig: mergedBowConfig } : {}),
-    ...(mergedBows ? { bows: mergedBows } : {}),
-    profileSetupCompleted: Boolean(remote.profileSetupCompleted || local.profileSetupCompleted),
-    updatedAt: Math.max(Number(remote.updatedAt || 0), Number(local.updatedAt || 0))
-  });
-
-  return { merged, localHadMissingCloudFields };
-}
+export {
+  OWNER_SELF_SERVICE_PROFILE_KEYS,
+  mergeUserProfilesNonDestructive,
+  buildOwnerSelfServiceProfilePatch
+};
 
 /**
- * Resilient profile write to Firestore that returns a Promise (so callers can await it
- * with a bounded timeout while still never crashing offline flows).
+ * Resilient profile write to Firestore:
+ * 1) When an owner updates personal/bow fields, uses surgical `updateDoc` first so unrelated
+ *    club/plan/coach fields on `resource.data` can never block saving bow, height, weight, or alias.
+ * 2) Falls back to full `setDoc(..., { merge: true })` (e.g. if doc doesn't exist yet or club/role changed),
+ *    and if full `setDoc` is rejected by a club/plan rule, still commits all owner personal/bow fields via `updateDoc`.
  */
-async function cloudWriteUser(profile: UserProfile): Promise<boolean> {
+export async function cloudWriteUser(
+  profile: UserProfile,
+  partialUpdates?: Partial<UserProfile>
+): Promise<boolean> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   if (!profile?.uid) return false;
+  const userDocRef = doc(db, "users", profile.uid);
+  const isSelfAuthenticated = Boolean(auth.currentUser && auth.currentUser.uid === profile.uid);
+  const nowTs = profile.updatedAt || Date.now();
+
+  const updateKeys = partialUpdates
+    ? Object.keys(partialUpdates).filter((k) => (partialUpdates as any)[k] !== undefined)
+    : [];
+  const isPureSelfServicePatch =
+    isSelfAuthenticated &&
+    updateKeys.length > 0 &&
+    updateKeys.every((k) => OWNER_SELF_SERVICE_PROFILE_KEYS.has(k));
+
+  if (isPureSelfServicePatch && partialUpdates) {
+    const directPatch = buildOwnerSelfServiceProfilePatch({
+      ...partialUpdates,
+      profileSetupCompleted: true,
+      updatedAt: nowTs
+    });
+    try {
+      await withTimeout(updateDoc(userDocRef, directPatch), 6000);
+      return true;
+    } catch {
+      // Document may not exist yet (`not-found`); fall through to full setDoc creation below
+    }
+  }
+
   try {
     await withTimeout(
-      setDoc(doc(db, "users", profile.uid), sanitizeUserProfile(profile), { merge: true }),
-      Math.min(LOGIN_TIMEOUT_MS, 5000)
+      setDoc(userDocRef, sanitizeUserProfile({ ...profile, updatedAt: nowTs }), { merge: true }),
+      6000
     );
     return true;
   } catch (err: any) {
+    if (isSelfAuthenticated) {
+      try {
+        const safePatch = buildOwnerSelfServiceProfilePatch({
+          ...profile,
+          ...(partialUpdates || {}),
+          profileSetupCompleted: true,
+          updatedAt: nowTs
+        });
+        if (Object.keys(safePatch).length > 0) {
+          await withTimeout(updateDoc(userDocRef, safePatch), 6000);
+          return true;
+        }
+      } catch {
+        // Last-resort bootstrap create if document did not exist yet and had unverified club fields
+        try {
+          const cleanBootstrap = sanitizeUserProfile({
+            ...profile,
+            role: profile.role === "superadmin" && !isSuperAdminEmail(profile.email) ? "archer" : profile.role,
+            clubId: profile.role === "archer" ? null : profile.clubId,
+            coachId: profile.role === "archer" ? null : profile.coachId,
+            joinedWithInviteCode: "",
+            updatedAt: nowTs
+          });
+          await withTimeout(setDoc(userDocRef, cleanBootstrap, { merge: true }), 6000);
+          return true;
+        } catch {}
+      }
+    }
     console.warn("Cloud profile write deferred to sync queue:", err?.message || err);
     return false;
   }
@@ -713,12 +698,29 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       }
 
       if (user) {
-        const localUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
-        const localUser = localUsers.find(
+        const localUsers = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+        const currentCached = await getLocalSetting<UserProfile | null>("current_user", null);
+        const fromList = localUsers.find(
           (u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail
         );
-        if (localUser && isProfileValid(localUser) && !isProfileValid(user)) {
-          user = sanitizeUserProfile({ ...user, ...localUser, uid: authUid, profileSetupCompleted: true });
+        const localCandidate =
+          currentCached &&
+          (currentCached.uid === authUid || (currentCached.email || "").toLowerCase() === targetEmail) &&
+          Number(currentCached.updatedAt || 0) >= Number(fromList?.updatedAt || 0)
+            ? sanitizeUserProfile({ ...currentCached, uid: authUid })
+            : fromList
+            ? sanitizeUserProfile({ ...fromList, uid: authUid })
+            : null;
+
+        if (localCandidate) {
+          const { merged, localHadMissingCloudFields } = mergeUserProfilesNonDestructive(localCandidate, {
+            ...user,
+            uid: authUid
+          });
+          user = merged;
+          if (localHadMissingCloudFields) {
+            await cloudWriteUser(user);
+          }
         }
         const cleanedList = localUsers
           .filter((u) => u.uid !== authUid && (u.email || "").toLowerCase() !== targetEmail)
@@ -1058,6 +1060,43 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 
   const nowTs = Date.now();
 
+  const persistUserCloudOrQueue = async (finalProfile: UserProfile) => {
+    const isOnlineNow = typeof navigator === "undefined" || navigator.onLine;
+    let wroteCloud = false;
+    if (isOnlineNow) {
+      wroteCloud = await cloudWriteUser(finalProfile, updates);
+    }
+    if (wroteCloud) {
+      // Remove any older queued full-doc user item so stale fields can never replay over the confirmed cloud write
+      try {
+        const queue = await getSyncQueue();
+        await Promise.allSettled(
+          queue
+            .filter(
+              (item) =>
+                item.collection === "users" &&
+                item.payloadId === finalProfile.uid &&
+                item.operation !== "DELETE"
+            )
+            .map((item) => removeFromSyncQueue(item.id))
+        );
+      } catch {}
+      import("@/lib/db/realtimeSync")
+        .then(({ syncPublicUserPresence }) => syncPublicUserPresence(finalProfile))
+        .catch(() => {});
+      import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
+    } else {
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "UPDATE",
+        payloadId: finalProfile.uid,
+        payload: finalProfile,
+        timestamp: nowTs
+      });
+    }
+  };
+
   if (index !== -1) {
     const updatedUser = sanitizeUserProfile({
       ...usersList[index],
@@ -1083,23 +1122,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     }
 
     await saveLocalSetting("simulated_users", usersList);
-
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "UPDATE",
-      payloadId: updatedUser.uid,
-      payload: updatedUser,
-      timestamp: nowTs
-    });
-
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      await cloudWriteUser(updatedUser);
-      import("@/lib/db/realtimeSync")
-        .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updatedUser))
-        .catch(() => {});
-      import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
-    }
+    await persistUserCloudOrQueue(updatedUser);
 
     return updatedUser;
   }
@@ -1114,23 +1137,7 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     });
     markLocalUserWrite(uid, nowTs);
     await saveLocalSetting("current_user", updated);
-
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "UPDATE",
-      payloadId: updated.uid,
-      payload: updated,
-      timestamp: nowTs
-    });
-
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      await cloudWriteUser(updated);
-      import("@/lib/db/realtimeSync")
-        .then(({ syncPublicUserPresence }) => syncPublicUserPresence(updated))
-        .catch(() => {});
-      import("@/lib/db/syncManager").then(({ runSync }) => runSync()).catch(() => {});
-    }
+    await persistUserCloudOrQueue(updated);
 
     return updated;
   }
@@ -1451,12 +1458,28 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
 
       if (user) {
         const localUsers = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
-        const localUser = localUsers.find(
+        const currentCached = await getLocalSetting<UserProfile | null>("current_user", null);
+        const fromList = localUsers.find(
           (u) => u.uid === user!.uid || (u.email || "").toLowerCase() === targetEmail
         );
+        const localCandidate =
+          currentCached &&
+          (currentCached.uid === user.uid || (currentCached.email || "").toLowerCase() === targetEmail) &&
+          Number(currentCached.updatedAt || 0) >= Number(fromList?.updatedAt || 0)
+            ? sanitizeUserProfile({ ...currentCached, uid: authUid })
+            : fromList
+            ? sanitizeUserProfile({ ...fromList, uid: authUid })
+            : null;
 
-        if (localUser && isProfileValid(localUser) && !isProfileValid(user)) {
-          user = sanitizeUserProfile({ ...user, ...localUser, uid: authUid, profileSetupCompleted: true });
+        if (localCandidate) {
+          const { merged, localHadMissingCloudFields } = mergeUserProfilesNonDestructive(localCandidate, {
+            ...user,
+            uid: authUid
+          });
+          user = merged;
+          if (localHadMissingCloudFields) {
+            needsCloudWrite = true;
+          }
         }
 
         if (!user.nickname?.trim()) {
@@ -1551,16 +1574,19 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
   }
 
   if (needsCloudWrite) {
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "INSERT",
-      payloadId: user.uid,
-      payload: user,
-      timestamp: Date.now()
-    });
+    let wroteCloud = false;
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      cloudWriteUser(user);
+      wroteCloud = await cloudWriteUser(user);
+    }
+    if (!wroteCloud) {
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "INSERT",
+        payloadId: user.uid,
+        payload: user,
+        timestamp: Date.now()
+      });
     }
   }
 

@@ -155,12 +155,17 @@
     "redirects": [
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.142.apk",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.144.apk",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.142.aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.144.aab",
+        "type": 302
+      },
+      {
+        "source": "/download-wear-aab",
+        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.144.aab",
         "type": 302
       }
     ],

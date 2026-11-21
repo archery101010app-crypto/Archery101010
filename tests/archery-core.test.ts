@@ -443,13 +443,13 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(otaVerJson.version, APP_VERSION, "ota-version.json must match APP_VERSION");
     assert.equal(
       verJson.version,
-      APP_VERSION,
-      "public/version.json must match APP_VERSION (never 0.0.0) so Google Play v2.100 users always get the Update popup"
+      "0.0.0",
+      "Legacy public/version.json must stay 0.0.0 so old v2.100 shells never freeze or redirect to Chrome"
     );
     assert.equal(
       appVerJson.version,
-      APP_VERSION,
-      "public/app-version.json must match APP_VERSION (never 0.0.0)"
+      "0.0.0",
+      "Legacy public/app-version.json must stay 0.0.0 so old v2.100 shells never freeze or redirect to Chrome"
     );
     assert.equal(verJson.latestVersion, APP_VERSION);
   });
@@ -1029,6 +1029,106 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(
       bannerSrc.includes("runSync"),
       "AppUpdateBanner must flush pending profile sync queue before OTA reload"
+    );
+  });
+
+  it("enforces v2.143 normal-account profile persistence: owner self-service rule, custom alias/bow/biometrics priority & logout isolation", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { mergeUserProfilesNonDestructive, buildOwnerSelfServiceProfilePatch } = await import(
+      "../src/lib/profileMerge.ts"
+    );
+
+    // 1. Firestore rules must expose dedicated owner self-service profile & bow validator
+    const rulesSrc = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf8");
+    assert.ok(
+      rulesSrc.includes("function isValidOwnerProfileFieldsUpdate(data)"),
+      "firestore.rules must define isValidOwnerProfileFieldsUpdate for normal accounts"
+    );
+    assert.ok(
+      rulesSrc.includes("(isOwner(userId) && isValidOwnerProfileFieldsUpdate(request.resource.data))"),
+      "match /users/{userId} allow update must authorize owner personal & bow patches independently of club/PRO rules"
+    );
+
+    // 2. buildOwnerSelfServiceProfilePatch must strip role, plan, proExpiresAt, clubId, coachId, clubInviteCode
+    const patch = buildOwnerSelfServiceProfilePatch({
+      uid: "u-norm-1",
+      email: "archer@example.com",
+      role: "archer",
+      plan: "PRO",
+      proExpiresAt: 9999999999999,
+      clubId: "CLB-STALE",
+      coachId: "c-1",
+      clubInviteCode: "123456",
+      nickname: "HalconDorado",
+      physicalData: { height: 178, weight: 76, dominantHand: "R", dominantEye: "R" },
+      bowConfig: { type: "Compound", brand: "Custom", model: "X1", poundage: 58, drawLength: 28.5 },
+      updatedAt: 5000
+    });
+    assert.equal("role" in patch, false);
+    assert.equal("plan" in patch, false);
+    assert.equal("proExpiresAt" in patch, false);
+    assert.equal("clubId" in patch, false);
+    assert.equal("coachId" in patch, false);
+    assert.equal("clubInviteCode" in patch, false);
+    assert.equal(patch.nickname, "HalconDorado");
+    assert.equal(patch.physicalData.height, 178);
+    assert.equal(patch.physicalData.weight, 76);
+    assert.equal(patch.bowConfig.poundage, 58);
+
+    // 3. mergeUserProfilesNonDestructive must preserve custom alias, bow, height & weight over initial auto-nickname & empty cloud doc
+    const localSaved = {
+      uid: "u-norm-1",
+      email: "juanperez@gmail.com",
+      fullName: "Juan Perez",
+      nickname: "ElTico10",
+      birthDate: "1992-08-14",
+      country: "CR",
+      city: "Heredia",
+      gender: "M",
+      role: "archer" as const,
+      plan: "FREE" as const,
+      isClubCreator: false,
+      clubId: null,
+      clubName: null,
+      physicalData: { height: 181, weight: 82.5, dominantHand: "R" as const, dominantEye: "R" as const },
+      bowConfig: { type: "Compound" as const, brand: "Pro", model: "Target", poundage: 59, drawLength: 29 },
+      bows: [{ id: "BOW-1", type: "Compound" as const, brand: "Pro", model: "Target", poundage: 59, drawLength: 29 }],
+      updatedAt: 2000
+    };
+    const staleCloud = {
+      uid: "u-norm-1",
+      email: "juanperez@gmail.com",
+      fullName: "Juan Perez",
+      nickname: "juanperez", // initial autoNickname!
+      birthDate: "1992-08-14",
+      country: "CR",
+      city: "Heredia",
+      gender: "M",
+      role: "archer" as const,
+      plan: "FREE" as const,
+      isClubCreator: false,
+      clubId: null,
+      clubName: null,
+      physicalData: { height: 0, weight: 0, dominantHand: "R" as const, dominantEye: "R" as const },
+      bowConfig: { type: "Recurve" as const, brand: "", model: "", poundage: 0, defaultDistance: 18 },
+      updatedAt: 3000 // even if logout previously bumped updatedAt!
+    };
+    const { merged, localHadMissingCloudFields } = mergeUserProfilesNonDestructive(localSaved, staleCloud);
+    assert.equal(localHadMissingCloudFields, true);
+    assert.equal(merged.nickname, "ElTico10", "Custom alias must never be overwritten by initial autoNickname");
+    assert.equal(merged.physicalData?.height, 181, "Saved height must never be wiped by 0");
+    assert.equal(merged.physicalData?.weight, 82.5, "Saved weight must never be wiped by 0");
+    assert.equal(merged.bowConfig?.type, "Compound", "Saved bow type must never be wiped by initial blank bow");
+    assert.equal(merged.bowConfig?.poundage, 59, "Saved bow poundage must never be wiped");
+    assert.equal(merged.bows?.length, 1);
+
+    // 4. Logout in page.tsx must NEVER bump updatedAt on users/{outgoingUid}
+    const pageSrc = fs.readFileSync(path.resolve(process.cwd(), "src/app/page.tsx"), "utf8");
+    assert.equal(
+      /outgoingUid[\s\S]{0,160}updatedAt:\s*Date\.now\(\)/.test(pageSrc),
+      false,
+      "handleLogout must NEVER bump updatedAt on users/{outgoingUid}"
     );
   });
 });

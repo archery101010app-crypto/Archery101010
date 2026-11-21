@@ -778,14 +778,21 @@ export default function ProfileView({
       });
 
       const primaryBow = cleanedBows[0];
+      const preservedBio = editPersonal
+        ? resolveCanonicalBiometrics()
+        : {
+            height: user.physicalData?.height || 0,
+            weight: user.physicalData?.weight || 0
+          };
 
       const updated = await updateProfile(user.uid, {
         unitSystem,
+        ...(editPersonal && nickname.trim() ? { nickname: nickname.trim() } : {}),
         bowConfig: primaryBow,
         bows: cleanedBows,
         physicalData: {
-          height: user.physicalData?.height || 0,
-          weight: user.physicalData?.weight || 0,
+          height: preservedBio.height,
+          weight: preservedBio.weight,
           dominantEye: user.physicalData?.dominantEye || (primaryBow.hand === "LH" ? "L" : "R"),
           dominantHand: primaryBow.hand === "LH" ? "L" : "R"
         }

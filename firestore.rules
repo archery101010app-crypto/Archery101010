@@ -22,13 +22,13 @@ service cloud.firestore {
     //   - unitSystem: string (optional, 0-20 chars)
     //   - role: string (required: 'archer' | 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
     //   - plan: string (optional: 'FREE' | 'PRO')
-    //   - proExpiresAt: number / timestamp / string (optional; non-superadmin capped at request.time + 370 days)
+    //   - proExpiresAt: number / timestamp / string (optional; non-superadmin capped at request.time + 370 days, or unchanged on update)
     //   - clubId: string or null (optional, 0-100 chars)
     //   - coachId: string or null (optional, 0-128 chars)
     //   - coachName: string or null (optional, 0-100 chars)
     //   - coachEmail: string or null (optional, 0-128 chars)
     //   - clubName: string or null (optional, 0-100 chars)
-    //   - clubLogo: string (optional, 0-2048 chars)
+    //   - clubLogo: string (optional, 0-150000 chars)
     //   - clubCountry: string (optional, 0-100 chars)
     //   - clubInviteCode: string (optional, 0-50 chars)
     //   - joinedWithInviteCode: string (optional, 0-20 chars, archer 6-digit invite proof)
@@ -500,6 +500,7 @@ service cloud.firestore {
         (data.get('plan', null) == null || data.plan in ['FREE', 'PRO']) &&
         validOptionalDateOrTimestamp(data, 'proExpiresAt') &&
         (isSuperAdmin() ||
+          (resource != null && data.get('proExpiresAt', null) == resource.data.get('proExpiresAt', null)) ||
           ((!(data.get('proExpiresAt', null) is number) ||
             (data.proExpiresAt >= 0 && data.proExpiresAt <= request.time.toMillis() + 370 * 24 * 60 * 60 * 1000)) &&
            (!(data.get('proExpiresAt', null) is timestamp) ||
@@ -509,7 +510,7 @@ service cloud.firestore {
         validOptionalString(data, 'coachName', 0, 100) &&
         validOptionalString(data, 'coachEmail', 0, 128) &&
         validOptionalString(data, 'clubName', 0, 100) &&
-        validOptionalString(data, 'clubLogo', 0, 2048) &&
+        validOptionalString(data, 'clubLogo', 0, 150000) &&
         validOptionalString(data, 'clubCountry', 0, 100) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
@@ -545,6 +546,33 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
+    // Owner self-service update of personal & bow equipment fields (never touches role, plan, proExpiresAt, clubId, coachId, isClubCreator, or clubInviteCode)
+    function isValidOwnerProfileFieldsUpdate(data) {
+      let changed = data.diff(resource.data).affectedKeys();
+      return changed.hasOnly([
+          'fullName', 'nickname', 'birthDate', 'country', 'city', 'gender', 'unitSystem',
+          'whatsappNumber', 'clubName', 'clubCountry', 'fcmToken', 'profileSetupCompleted',
+          'bowConfig', 'bows', 'physicalData', 'lastActiveAt', 'updatedAt'
+        ]) &&
+        (!changed.hasAny(['fullName']) || validString(data.fullName, 1, 100)) &&
+        validOptionalString(data, 'nickname', 0, 50) &&
+        validOptionalString(data, 'birthDate', 0, 30) &&
+        validOptionalString(data, 'country', 0, 100) &&
+        validOptionalString(data, 'city', 0, 100) &&
+        validOptionalString(data, 'gender', 0, 20) &&
+        validOptionalString(data, 'unitSystem', 0, 20) &&
+        validOptionalString(data, 'whatsappNumber', 0, 30) &&
+        validOptionalString(data, 'clubName', 0, 100) &&
+        validOptionalString(data, 'clubCountry', 0, 100) &&
+        validOptionalString(data, 'fcmToken', 0, 512) &&
+        validOptionalBool(data, 'profileSetupCompleted') &&
+        validOptionalMap(data, 'bowConfig') &&
+        validOptionalList(data, 'bows', 10) &&
+        validOptionalMap(data, 'physicalData') &&
+        validOptionalDateOrTimestamp(data, 'lastActiveAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
     // Coach authorization for updating linking/membership fields on a linked athlete
     function isAuthorizedCoachUnlink() {
       return isCoach() && (
@@ -574,7 +602,7 @@ service cloud.firestore {
         (!changedKeys.hasAny(['role']) || data.get('role', '') == 'archer') &&
         validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalString(data, 'clubName', 0, 100) &&
-        validOptionalString(data, 'clubLogo', 0, 2048) &&
+        validOptionalString(data, 'clubLogo', 0, 150000) &&
         validOptionalString(data, 'clubInviteCode', 0, 50) &&
         validOptionalString(data, 'joinedWithInviteCode', 0, 20) &&
         validOptionalString(data, 'coachId', 0, 128) &&
@@ -1339,6 +1367,7 @@ service cloud.firestore {
 
       // Updates allow:
       // 1) Owner partial presence heartbeat (lastActiveAt / updatedAt) even on incomplete legacy profiles
+      // 1b) Owner self-service personal & bow equipment fields update (isolated from clubId/coachId/proExpiresAt/clubLogo)
       // 2) Coach restricted linking/membership update ONLY on linked athletes (cannot alter PII, plan, or bowConfig)
       // 3) SuperAdmin partial plan / proExpiresAt / role patch
       // 4) Full validated profile update ONLY by owner or superadmin
@@ -1349,6 +1378,7 @@ service cloud.firestore {
         (resource.data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
         (
           (isOwner(userId) && isValidUserPresenceUpdate(request.resource.data)) ||
+          (isOwner(userId) && isValidOwnerProfileFieldsUpdate(request.resource.data)) ||
           (!isOwner(userId) && !isSuperAdmin() &&
             isAuthorizedCoachUnlink() && isValidCoachUnlinkUpdate(request.resource.data)) ||
           (isSuperAdmin() && isValidSuperAdminPatch(request.resource.data)) ||
