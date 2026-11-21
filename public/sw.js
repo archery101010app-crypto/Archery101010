@@ -1,4 +1,4 @@
-const CACHE_NAME = "archery-101010-cache-v2.144";
+const CACHE_NAME = "archery-101010-cache-v2.145";
 
 // Install event - pre-warm offline root shell bypassing HTTP disk cache
 self.addEventListener("install", (event) => {
@@ -121,7 +121,7 @@ self.addEventListener("fetch", (event) => {
             return cachedRoot;
           }
           return new Response(
-            "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ARCHERY 101010</title></head><body style=\"background:#020305;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px\"><div><h2 style=\"margin:0 0 8px\">Modo sin conexión</h2><p style=\"opacity:0.75;font-size:14px\">Conéctate a internet una vez para sincronizar los recursos locales.</p></div></body></html>",
+            "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ARCHERY 101010</title></head><body style=\"background:#020305;color:#fff;font-family:'Outfit',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px\"><div style=\"max-width:340px;background:#06080C;border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px 24px\"><h2 style=\"margin:0 0 8px;font-size:18px;font-weight:800;letter-spacing:0.02em\">Modo sin conexión</h2><p style=\"margin:0 0 20px;color:rgba(255,255,255,0.78);font-size:13.5px;line-height:1.5\">Conéctate a internet una vez para sincronizar los recursos locales.</p><button onclick=\"location.reload()\" type=\"button\" style=\"width:100%;height:44px;border:none;border-radius:14px;background:#00A8F3;color:#020305;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer\">Reintentar</button></div></body></html>",
             {
               status: 503,
               statusText: "Offline",

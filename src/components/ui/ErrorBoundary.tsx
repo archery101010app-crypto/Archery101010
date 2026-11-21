@@ -91,6 +91,13 @@ export default class ErrorBoundary extends Component<Props, State> {
       } catch {
         // ignore
       }
+      if (
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      ) {
+        window.location.reload();
+        return;
+      }
       const winAny = window as any;
       if (winAny.ArcheryNativeAuth && typeof winAny.ArcheryNativeAuth.reloadInAppOta === "function") {
         winAny.ArcheryNativeAuth.reloadInAppOta();
@@ -106,6 +113,13 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   private handleReset = () => {
     if (typeof window !== "undefined") {
+      if (
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      ) {
+        window.location.reload();
+        return;
+      }
       const winAny = window as any;
       if (winAny.ArcheryNativeAuth && typeof winAny.ArcheryNativeAuth.reloadInAppOta === "function") {
         winAny.ArcheryNativeAuth.reloadInAppOta();

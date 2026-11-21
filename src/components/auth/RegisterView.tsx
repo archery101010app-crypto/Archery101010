@@ -1054,12 +1054,6 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         {t("legalConsentPrefix")}{" "}
         <a
           href="/terms"
-          onClick={(e) => {
-            if (typeof window !== "undefined" && window.location.protocol === "file:") {
-              e.preventDefault();
-              window.open("https://archery101010-c0bb4.web.app/terms", "_blank", "noopener,noreferrer");
-            }
-          }}
           className="text-cyan-neon hover:underline underline-offset-2 font-semibold"
         >
           {t("termsLink")}
@@ -1067,12 +1061,6 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
         {t("legalConsentAnd")}{" "}
         <a
           href="/privacy"
-          onClick={(e) => {
-            if (typeof window !== "undefined" && window.location.protocol === "file:") {
-              e.preventDefault();
-              window.open("https://archery101010-c0bb4.web.app/privacy", "_blank", "noopener,noreferrer");
-            }
-          }}
           className="text-cyan-neon hover:underline underline-offset-2 font-semibold"
         >
           {t("privacyLink")}

@@ -247,6 +247,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private volatile long cmdSequence = 0L;
     private volatile long pendingCmdSeq = 0L;
     private volatile long lastAckedCmdSeq = 0L;
+    private int mPendingUnackedDelta = 0;
+    private long mLastDataItemNonceMs = 0L;
 
     private MessageClient.OnMessageReceivedListener messageListener = null;
     private DataClient.OnDataChangedListener dataListener = null;
@@ -354,6 +356,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         autoDetectEnabled = prefs.getBoolean("autoDetectEnabled_v2", false);
         sensitivityLevel = Math.max(0, Math.min(2, prefs.getInt("sensitivityLevel", 1)));
         cmdSequence = prefs.getLong("cmdSequence", 0L);
+        mPendingUnackedDelta = prefs.getInt("pendingUnackedDelta", 0);
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -817,9 +820,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
             }
 
+            if (obj.has("arrowsCount") && incomingArrows == arrowCount) {
+                mPendingUnackedDelta = 0;
+            }
+
+            long unackedProtectMs = (mPendingUnackedDelta != 0) ? 20000L : 6000L;
             boolean hasUnackedLocalAction =
-                ((now - lastLocalActionTimeMs) < 6000L) &&
-                (pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
+                ((now - lastLocalActionTimeMs) < unackedProtectMs) &&
+                (mPendingUnackedDelta != 0 || pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
 
             if (obj.has("arrowsCount")) {
                 if (hasUnackedLocalAction) {
@@ -828,6 +836,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     arrowCount = Math.max(0, incomingArrows);
                     syncedArrowsCount = arrowCount;
                     totalScoredArrows = arrowCount;
+                    mPendingUnackedDelta = 0;
                 }
             }
             if (obj.has("totalScore") && !hasUnackedLocalAction) {
@@ -923,7 +932,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private void sendToPhone(String path, String jsonPayload, boolean persistViaDataClient) {
         try {
             String enrichedPayload = jsonPayload;
+            String dataItemCommandJson = jsonPayload;
             long now = System.currentTimeMillis();
+            int rawDelta = 0;
+            boolean isArrowDeltaCmd = false;
             if (persistViaDataClient && jsonPayload != null && jsonPayload.startsWith("{")) {
                 try {
                     JSONObject obj = new JSONObject(jsonPayload);
@@ -936,7 +948,21 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     if (!"SYNC_TELEMETRY_FROM_WATCH".equals(cmdType)) {
                         pendingCmdSeq = seq;
                     }
+                    if ("INCREMENT_ARROW".equals(cmdType) || "DECREMENT_ARROW".equals(cmdType)) {
+                        isArrowDeltaCmd = true;
+                        rawDelta = obj.optInt("delta", "DECREMENT_ARROW".equals(cmdType) ? -1 : 1);
+                        obj.put("targetArrowsCount", arrowCount);
+                    }
                     enrichedPayload = obj.toString();
+                    if (isArrowDeltaCmd) {
+                        JSONObject dataObj = new JSONObject(enrichedPayload);
+                        int coalescedDelta = (mPendingUnackedDelta != 0) ? mPendingUnackedDelta : rawDelta;
+                        dataObj.put("delta", coalescedDelta);
+                        dataObj.put("targetArrowsCount", arrowCount);
+                        dataItemCommandJson = dataObj.toString();
+                    } else {
+                        dataItemCommandJson = enrichedPayload;
+                    }
                     saveState();
                 } catch (Exception ignored) {}
             }
@@ -954,12 +980,23 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             });
 
             if (persistViaDataClient && enrichedPayload != null) {
+                long nonceTs;
+                synchronized (this) {
+                    nonceTs = Math.max(now, mLastDataItemNonceMs + 1L);
+                    mLastDataItemNonceMs = nonceTs;
+                }
                 PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/watch_command");
-                putReq.getDataMap().putString("command_json", enrichedPayload);
-                putReq.getDataMap().putLong("sent_at", now);
+                putReq.getDataMap().putString("command_json", dataItemCommandJson != null ? dataItemCommandJson : enrichedPayload);
+                if (isArrowDeltaCmd) {
+                    int delta = rawDelta;
+                    putReq.getDataMap().putInt("delta", mPendingUnackedDelta != 0 ? mPendingUnackedDelta : delta);
+                    putReq.getDataMap().putInt("targetArrowsCount", arrowCount);
+                }
+                putReq.getDataMap().putLong("sent_at", nonceTs);
+                putReq.getDataMap().putLong("nonce", nonceTs);
                 Wearable.getDataClient(this).putDataItem(putReq.asPutDataRequest().setUrgent());
                 if (hasPairingCode && pairingCode.length() == 6) {
-                    syncCommandWithFirestoreCloud(enrichedPayload);
+                    syncCommandWithFirestoreCloud(dataItemCommandJson != null ? dataItemCommandJson : enrichedPayload);
                 }
             }
         } catch (Exception ignored) {}
@@ -1036,10 +1073,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 cmdFields.put("_ts", new JSONObject().put("integerValue", String.valueOf(nowMs)));
 
                 if ("INCREMENT_ARROW".equals(eventType)) {
-                    cmdFields.put("delta", new JSONObject().put("integerValue", "1"));
+                    int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", 1)));
+                    cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
                     cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
                 } else if ("DECREMENT_ARROW".equals(eventType)) {
-                    cmdFields.put("delta", new JSONObject().put("integerValue", "-1"));
+                    int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", -1)));
+                    cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
                     cmdFields.put("source", new JSONObject().put("stringValue", "watch_manual"));
                     cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
                 } else if ("SCORE_INPUT".equals(eventType)) {
@@ -1147,13 +1186,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             lastCloudHeartbeatTouchMs = now;
                             touchWatchHeartbeatInFirestore(code, now);
                         }
-                        boolean recentlyTapped = (now - lastLocalActionTimeMs) < 3500L;
+                        long cloudProtectWindowMs = (mPendingUnackedDelta != 0) ? 20000L : 3500L;
+                        boolean recentlyTapped = (now - lastLocalActionTimeMs) < cloudProtectWindowMs;
                         JSONObject activeNode = fields.optJSONObject("sessionActive");
                         boolean sessionActive = activeNode == null || activeNode.optBoolean("booleanValue", true);
                         JSONObject sidNode = fields.optJSONObject("sessionId");
                         String incomingSid = sidNode != null ? sidNode.optString("stringValue", "") : "";
 
                         final int fsArrows = extractFsInt(fields, "arrowsCount", arrowCount);
+                        if (fields.has("arrowsCount") && fsArrows == arrowCount) {
+                            mPendingUnackedDelta = 0;
+                        }
                         final int fsScore = extractFsInt(fields, "totalScore", totalScore);
                         final int fsEnd = Math.max(1, extractFsInt(fields, "currentEnd", currentEnd));
                         final int fsDistM = extractFsInt(fields, "distanceM", distanceMeters);
@@ -1267,6 +1310,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             }
                             if (!recentlyTapped) {
                                 arrowCount = fsArrows;
+                                mPendingUnackedDelta = 0;
                                 totalScore = fsScore;
                                 currentEnd = fsEnd;
                                 if (arrVal != null) {
@@ -1475,6 +1519,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     private void resetWatchSessionCounters(boolean clearSessionId) {
         arrowCount = 0;
+        mPendingUnackedDelta = 0;
         syncedArrowsCount = 0;
         totalScoredArrows = 0;
         totalScore = 0;
@@ -1509,6 +1554,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putInt("currentEnd", 1);
         editor.putInt("stepsCount", 0);
         editor.putFloat("walkedMeters", 0f);
+        editor.putInt("pendingUnackedDelta", 0);
         editor.apply();
     }
 
@@ -1529,6 +1575,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         editor.putBoolean("autoDetectEnabled_v2", autoDetectEnabled);
         editor.putInt("sensitivityLevel", sensitivityLevel);
         editor.putLong("cmdSequence", cmdSequence);
+        editor.putInt("pendingUnackedDelta", mPendingUnackedDelta);
         editor.apply();
     }
 
@@ -1938,6 +1985,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             } else {
                                 markUserActivity(true);
                                 arrowCount++;
+                                mPendingUnackedDelta += 1;
                                 triggerHaptic(55);
                                 saveState();
                                 sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
@@ -2418,6 +2466,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         private void incrementArrowManually() {
             markUserActivity(true);
             arrowCount++;
+            mPendingUnackedDelta += 1;
             triggerHaptic(45);
             saveState();
             sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_manual\"}");
@@ -2428,6 +2477,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (arrowCount > 0) {
                 markUserActivity(true);
                 arrowCount--;
+                mPendingUnackedDelta -= 1;
                 if (!currentEndArrows.isEmpty()) {
                     String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
                     int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));

@@ -217,6 +217,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       const updated = await updateProfile(user.uid, updates);
       try {
         await setDoc(doc(db, "users", user.uid), updated, { merge: true });
+        const authMod: any = await import("@/lib/authService");
+        if (typeof authMod.syncCoachInviteCodeDoc === "function") {
+          authMod.syncCoachInviteCodeDoc(updated).catch(() => {});
+        }
       } catch (cloudErr) {
         console.warn("Código del Coach pendiente de subir a la nube:", cloudErr);
       }
@@ -227,6 +231,20 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
       console.error("Error asegurando código de 6 dígitos:", err);
     }
   }, [user, activeClubId, onUserUpdate]);
+
+  // Sync 6-digit Coach invite code directory doc on mount when coach has a valid 6-digit code
+  useEffect(() => {
+    if (isLinkedToExternalCoach(user)) return;
+    const code = (user?.clubInviteCode || "").trim();
+    if (!/^\d{6}$/.test(code)) return;
+    import("@/lib/authService")
+      .then((m: any) => {
+        if (typeof m.syncCoachInviteCodeDoc === "function") {
+          m.syncCoachInviteCodeDoc(user).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [user?.uid, user?.clubInviteCode]);
 
   // Load real linked roster, cloud attendance, live/completed sessions, and active duels
   useEffect(() => {
@@ -488,18 +506,29 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           setSessions(filterAndSortClubSessions(allSessions, linkedUids, activeClubId));
         }
 
-        // 4. Subscribe to waiting active_duels (bounded to 50 and compliant with Firestore security rules)
+        // 4. Subscribe to waiting active_duels scoped to Coach's club (bounded to 50 and compliant with Firestore security rules)
         if (typeof navigator !== "undefined" && navigator.onLine) {
           try {
             const { collection, query, where, limit, onSnapshot } = await import(
               "firebase/firestore"
             );
             const { db } = await import("@/lib/firebase");
-            const qActiveDuels = query(
-              collection(db, "active_duels"),
-              where("status", "==", "waiting"),
-              limit(50)
-            );
+            const effectiveClubId =
+              activeClubId && activeClubId !== "CLB-DIRECTOR"
+                ? activeClubId
+                : (user.clubId || "").trim();
+            const qActiveDuels = effectiveClubId
+              ? query(
+                  collection(db, "active_duels"),
+                  where("status", "==", "waiting"),
+                  where("clubId", "==", effectiveClubId),
+                  limit(50)
+                )
+              : query(
+                  collection(db, "active_duels"),
+                  where("status", "==", "waiting"),
+                  limit(50)
+                );
             unsubDuels();
             unsubDuels = onSnapshot(
               qActiveDuels,
@@ -512,6 +541,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                   const involvesClub =
                     linkedUids.has(data.creatorUid) ||
                     linkedUids.has(data.playerUid) ||
+                    (effectiveClubId && data.clubId === effectiveClubId) ||
                     data.clubId === activeClubId ||
                     data.creatorUid === user.uid ||
                     data.playerUid === user.uid;

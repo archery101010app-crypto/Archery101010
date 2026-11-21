@@ -111,3 +111,13 @@ fs.writeFileSync(otaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n',
 fs.writeFileSync(appVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
 fs.writeFileSync(versionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
 console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and silenced legacy v2.100 manifest`);
+
+// 7. Keep firebase.json .aab headers & Android-safe .firebaseapp.com download redirects synchronized
+const firebaseJsonPath = path.join(__dirname, '../firebase.json');
+if (fs.existsSync(firebaseJsonPath)) {
+  let fbContent = fs.readFileSync(firebaseJsonPath, 'utf8');
+  fbContent = fbContent.replace(/Archery101010-Mobile-v\d+\.\d+(?:\.\d+)?\.aab/g, `Archery101010-Mobile-v${displayVersion}.aab`);
+  fbContent = fbContent.replace(/Archery101010-WearOS-v\d+\.\d+(?:\.\d+)?\.aab/g, `Archery101010-WearOS-v${displayVersion}.aab`);
+  fs.writeFileSync(firebaseJsonPath, fbContent, 'utf8');
+  console.log(`Synchronized firebase.json .aab download endpoints to v${displayVersion}`);
+}

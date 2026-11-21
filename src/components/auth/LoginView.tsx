@@ -748,12 +748,6 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <a
             href="/privacy"
-            onClick={(e) => {
-              if (typeof window !== "undefined" && window.location.protocol === "file:") {
-                e.preventDefault();
-                window.open("https://archery101010-c0bb4.web.app/privacy", "_blank", "noopener,noreferrer");
-              }
-            }}
             className="min-h-[38px] px-1.5 inline-flex items-center text-white/80 hover:text-cyan-neon underline underline-offset-4 transition-colors"
           >
             {t("privacyLink")}
@@ -761,12 +755,6 @@ export default function LoginView({ onLoginSuccess, onNavigateToRegister }: Logi
           <span aria-hidden="true" className="text-white/40">·</span>
           <a
             href="/terms"
-            onClick={(e) => {
-              if (typeof window !== "undefined" && window.location.protocol === "file:") {
-                e.preventDefault();
-                window.open("https://archery101010-c0bb4.web.app/terms", "_blank", "noopener,noreferrer");
-              }
-            }}
             className="min-h-[38px] px-1.5 inline-flex items-center text-white/80 hover:text-cyan-neon underline underline-offset-4 transition-colors"
           >
             {t("termsLink")}

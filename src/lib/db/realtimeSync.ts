@@ -35,7 +35,8 @@ import {
   getExternalCoachUid,
   isLinkedToExternalCoach,
   mergeUserProfilesNonDestructive,
-  cloudWriteUser
+  cloudWriteUser,
+  syncCoachInviteCodeDoc
 } from "@/lib/authService";
 import { logger } from "@/lib/logger";
 
@@ -44,7 +45,7 @@ const SESSION_BACKFILL_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
  * Syncs only the safe public presence & club directory fields to `users_public/{uid}`.
- * Decouples 5-minute online heartbeats from `users/{uid}` to eliminate O(N^2) club read storms.
+ * Never writes non-empty `clubInviteCode` to `users_public` (6-digit codes live exclusively in `coach_invite_codes/{code}`).
  */
 export async function syncPublicUserPresence(
   profile: Partial<UserProfile> & { uid: string },
@@ -54,16 +55,26 @@ export async function syncPublicUserPresence(
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
   if (!auth.currentUser || auth.currentUser.uid !== profile.uid) return;
 
+  const isCoachOwner =
+    !isLinkedToExternalCoach(profile) &&
+    (profile.role === "coach" ||
+      profile.role === "team_admin" ||
+      profile.role === "team_admin_coach" ||
+      profile.role === "superadmin" ||
+      Boolean(profile.isClubCreator));
+  if (isCoachOwner && /^\d{6}$/.test((profile.clubInviteCode || "").trim())) {
+    syncCoachInviteCodeDoc(profile).catch(() => {});
+  }
+
   const now = Date.now();
   const publicPayload = {
     uid: profile.uid,
     fullName: (profile.fullName || "").slice(0, 100),
     nickname: (profile.nickname || "").slice(0, 50),
-    country: (profile.country || "CR").slice(0, 10),
+    country: (profile.country || "CR").slice(0, 100),
     bowType: profile.bowConfig?.type || "Recurve",
     clubId: (profile.clubId || "").slice(0, 100),
     clubName: (profile.clubName || "").slice(0, 100),
-    clubInviteCode: (profile.clubInviteCode || "").slice(0, 20),
     role: profile.role || "archer",
     lastActiveAt: typeof lastActiveOverride === "number" ? lastActiveOverride : now,
     updatedAt: now
@@ -72,6 +83,17 @@ export async function syncPublicUserPresence(
   try {
     await setDoc(doc(db, "users_public", profile.uid), publicPayload, { merge: true });
   } catch (err: any) {
+    // If a legacy users_public doc still held a non-empty clubInviteCode, clear it once so rules pass
+    if (String(err?.code || "").includes("permission-denied")) {
+      try {
+        await setDoc(
+          doc(db, "users_public", profile.uid),
+          { ...publicPayload, clubInviteCode: "" },
+          { merge: true }
+        );
+        return;
+      } catch {}
+    }
     logger.debug("Public presence sync skipped:", err?.message || err);
   }
 }
@@ -658,7 +680,8 @@ export function startRealtimeSync(
     store: LocalForage,
     storeEventName: string,
     targets: ScopedTarget[],
-    belongsToCurrentScope?: (localVal: any, key: string) => boolean
+    belongsToCurrentScope?: (localVal: any, key: string) => boolean,
+    shouldAcceptRemoteDoc?: (remoteVal: any, docId: string) => boolean
   ) {
     if (targets.length === 0) return;
     const liveIdsByTarget = new Map<string, Set<string>>();
@@ -691,13 +714,21 @@ export function startRealtimeSync(
               const docId = docSnap.id;
 
               if (docSnap.exists()) {
-                targetSet.add(docId);
-                if (!pendingIds.has(docId)) {
-                  await store.setItem(docId, docSnap.data());
+                const remoteData = docSnap.data();
+                if (shouldAcceptRemoteDoc && !shouldAcceptRemoteDoc(remoteData, docId)) {
+                  targetSet.delete(docId);
+                  if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId)) {
+                    await store.removeItem(docId);
+                  }
+                } else {
+                  targetSet.add(docId);
+                  if (!pendingIds.has(docId)) {
+                    await store.setItem(docId, remoteData);
+                  }
                 }
               } else {
                 targetSet.delete(docId);
-                if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId)) {
+                if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId) && !docSnap.metadata?.fromCache) {
                   await store.removeItem(docId);
                 }
               }
@@ -714,7 +745,7 @@ export function startRealtimeSync(
         );
         activeUnsubscribes.push(unsub);
       } else {
-        let isFirstSnapshot = true;
+        let needsServerReconcile = true;
         const unsub = onSnapshot(
           target.ref,
           async (snapshot) => {
@@ -726,27 +757,36 @@ export function startRealtimeSync(
               );
               const targetSet = liveIdsByTarget.get(target.label)!;
               const hitCap = snapshot.size >= target.capLimit;
+              const fromCache = Boolean(snapshot.metadata?.fromCache);
               if (hitCap) {
                 truncatedTargets.add(target.label);
               } else {
                 truncatedTargets.delete(target.label);
               }
 
-              if (isFirstSnapshot) {
-                isFirstSnapshot = false;
+              if (needsServerReconcile) {
+                if (!fromCache) {
+                  needsServerReconcile = false;
+                }
+                const acceptedDocs = snapshot.docs.filter(
+                  (d) => !shouldAcceptRemoteDoc || shouldAcceptRemoteDoc(d.data(), d.id)
+                );
                 targetSet.clear();
-                snapshot.docs.forEach((d) => targetSet.add(d.id));
+                acceptedDocs.forEach((d) => targetSet.add(d.id));
 
                 await Promise.all(
-                  snapshot.docs
+                  acceptedDocs
                     .filter((d) => !pendingIds.has(d.id))
                     .map((d) => store.setItem(d.id, d.data()))
                 );
 
-                initializedTargets.add(target.label);
+                if (!fromCache) {
+                  initializedTargets.add(target.label);
+                }
 
-                // Reconcile offline server-side deletions ONLY once all sibling scopes loaded without truncation
+                // Reconcile offline server-side deletions ONLY once all sibling scopes loaded from server without truncation
                 if (
+                  !fromCache &&
                   belongsToCurrentScope &&
                   initializedTargets.size === targets.length &&
                   truncatedTargets.size === 0
@@ -764,6 +804,17 @@ export function startRealtimeSync(
                   if (keysToRemove.length > 0) {
                     await Promise.all(keysToRemove.map((k) => store.removeItem(k)));
                   }
+                } else if (shouldAcceptRemoteDoc) {
+                  // Immediately evict any locally stored docs explicitly rejected by shouldAcceptRemoteDoc
+                  const rejectedLocalKeys: string[] = [];
+                  await store.iterate((val: any, key: string) => {
+                    if (!pendingIds.has(key) && !shouldAcceptRemoteDoc(val, key)) {
+                      rejectedLocalKeys.push(key);
+                    }
+                  });
+                  if (rejectedLocalKeys.length > 0) {
+                    await Promise.all(rejectedLocalKeys.map((k) => store.removeItem(k)));
+                  }
                 }
               } else {
                 const changes = snapshot.docChanges();
@@ -774,14 +825,22 @@ export function startRealtimeSync(
                     const docId = change.doc.id;
                     if (change.type === "removed") {
                       targetSet.delete(docId);
-                      // Only remove locally if not pending, not in a sibling scope, and not merely evicted by query limit
-                      if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId) && !hitCap) {
+                      // Only remove locally if not pending, not in a sibling scope, not from cache, and not merely evicted by query limit
+                      if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId) && !hitCap && !fromCache) {
                         await store.removeItem(docId);
                       }
                     } else {
-                      targetSet.add(docId);
-                      if (!pendingIds.has(docId)) {
-                        await store.setItem(docId, change.doc.data());
+                      const remoteData = change.doc.data();
+                      if (shouldAcceptRemoteDoc && !shouldAcceptRemoteDoc(remoteData, docId)) {
+                        targetSet.delete(docId);
+                        if (!pendingIds.has(docId) && !isStillLiveAnywhere(docId)) {
+                          await store.removeItem(docId);
+                        }
+                      } else {
+                        targetSet.add(docId);
+                        if (!pendingIds.has(docId)) {
+                          await store.setItem(docId, remoteData);
+                        }
                       }
                     }
                   })
@@ -911,7 +970,13 @@ export function startRealtimeSync(
       val?.coachId === currentUserUid ||
       Boolean(effectiveClubId && val?.clubId === effectiveClubId) ||
       (isCoachRole && val?.clubId === canonicalClubId) ||
-      (Array.isArray(val?.assignedAthleteIds) && val.assignedAthleteIds.includes(currentUserUid))
+      (Array.isArray(val?.assignedAthleteIds) && val.assignedAthleteIds.includes(currentUserUid)),
+    (remoteVal) => {
+      if (!isCoachRole && !isSuperAdmin && !effectiveClubId) {
+        return remoteVal?.coachId === currentUserUid;
+      }
+      return true;
+    }
   );
 
   // =========================================================================
@@ -923,9 +988,10 @@ export function startRealtimeSync(
       queue.filter((item) => item.collection === "sessions").map((item) => item.payloadId)
     );
     const isWindowFull = snapshot.size >= SESSION_QUERY_LIMIT;
+    const fromCache = Boolean(snapshot?.metadata?.fromCache);
 
     if (isFirst) {
-      const remoteIds = new Set(snapshot.docs.map((d: any) => d.id));
+      const seenRemoteIds = new Set(snapshot.docs.map((d: any) => d.id));
       let oldestRemoteTimestamp = Infinity;
       snapshot.docs.forEach((d: any) => {
         const ts = Number(d.data()?.timestamp) || 0;
@@ -938,33 +1004,39 @@ export function startRealtimeSync(
       const keysToRemove: string[] = [];
       const localSessionsToRescue: Array<{ key: string; value: any }> = [];
 
-      await sessionsStore.iterate((value: any, key: string) => {
-        if (isFictitiousSession(value, key) || tombstones.has(key)) {
+      await sessionsStore.iterate((localSess: any, key: string) => {
+        if (isFictitiousSession(localSess, key) || tombstones.has(key)) {
           keysToRemove.push(key);
           return;
         }
         if (!isOwnScope || !currentUserUid) return;
-        const isOwnSession = value && (value.userId === currentUserUid || value.userUid === currentUserUid);
-        if (!isOwnSession || value.isDraft) return;
+        const isOwnSession =
+          localSess && (localSess.userId === currentUserUid || localSess.userUid === currentUserUid);
+        if (!isOwnSession || localSess.isDraft) return;
 
-        if (!remoteIds.has(key) && !pendingSessionIds.has(key)) {
-          const localTs = Number(value.timestamp || value.createdAt) || 0;
+        const sessId = localSess.id || key;
+        if (!seenRemoteIds.has(sessId) && !seenRemoteIds.has(key) && !pendingSessionIds.has(key)) {
+          // Guard remote-deletion pruning & rescue against incomplete initial cached snapshots (Fixes M13)
+          if (fromCache) return;
+
+          const localTs = Number(localSess.timestamp || localSess.createdAt) || 0;
           const inActiveWindow =
             !isWindowFull || (oldestRemoteTimestamp < Infinity && localTs > oldestRemoteTimestamp);
 
-          // Previously synced session missing from remote active window => deleted on another device
-          if (value.syncedAt && inActiveWindow) {
+          // Previously synced session missing from authoritative server active window => deleted on another device
+          if (localSess.syncedAt && inActiveWindow && !snapshot.metadata.fromCache) {
             keysToRemove.push(key);
             return;
           }
 
           // Only auto-backfill never-synced local sessions from the last 14 days that were never deleted
-          const isNeverSynced = !value.syncedAt;
+          const isNeverSynced = !localSess.syncedAt;
           const isWithin14Days = localTs > 0 && nowMs - localTs <= SESSION_BACKFILL_MAX_AGE_MS;
-          const isNotDeleted = !value.deletedAt && !value.deletedByArcher && !tombstones.has(key);
+          const isNotDeleted =
+            !localSess.deletedAt && !localSess.deletedByArcher && !tombstones.has(key);
 
           if (inActiveWindow && isNeverSynced && isWithin14Days && isNotDeleted) {
-            localSessionsToRescue.push({ key, value });
+            localSessionsToRescue.push({ key, value: localSess });
           }
         }
       });
@@ -1031,9 +1103,8 @@ export function startRealtimeSync(
           if (pendingSessionIds.has(docId)) return;
 
           if (change.type === "removed") {
-            // When the 200-session window is full, a "removed" change simply means an older session slid out of the top-200 window.
-            // Preserve local IndexedDB sessions so years of archer history stay intact!
-            if (isWindowFull) return;
+            // When the 200-session window is full or snapshot is from local cache, preserve local IndexedDB sessions!
+            if (isWindowFull || fromCache) return;
 
             const existingLocal = await sessionsStore.getItem<any>(docId);
             if (
@@ -1087,7 +1158,7 @@ export function startRealtimeSync(
     isOwnScope: boolean,
     label: string
   ) {
-    let isFirst = true;
+    let needsServerReconcile = true;
     let didFallback = false;
 
     const subscribeTo = (qRef: Query<DocumentData>, allowIndexFallback: boolean) => {
@@ -1095,10 +1166,12 @@ export function startRealtimeSync(
         qRef,
         async (snapshot: any) => {
           if (generation !== syncGeneration) return;
-          const first = isFirst;
-          isFirst = false;
+          const runFullReconcile = needsServerReconcile;
+          if (!snapshot?.metadata?.fromCache) {
+            needsServerReconcile = false;
+          }
           try {
-            await applySessionsSnapshot(snapshot, first, isOwnScope);
+            await applySessionsSnapshot(snapshot, runFullReconcile, isOwnScope);
           } catch (err) {
             console.error(`Error in real-time sessions sync (${label}):`, err);
           }
@@ -1111,7 +1184,7 @@ export function startRealtimeSync(
             (err?.code === "failed-precondition" || String(err?.message || "").includes("index"))
           ) {
             didFallback = true;
-            isFirst = true;
+            needsServerReconcile = true;
             subscribeTo(fallbackQuery, false);
             return;
           }

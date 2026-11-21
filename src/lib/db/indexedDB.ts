@@ -313,7 +313,10 @@ export async function addToSyncQueue(item: Omit<SyncItem, "attempts" | "status">
     await syncQueueStore.setItem(duplicate.id, {
       ...duplicate,
       payload: mergedPayload,
-      timestamp: item.timestamp
+      timestamp: item.timestamp,
+      attempts: 0,
+      lastAttemptAt: undefined,
+      status: "pending"
     });
   } else {
     const newItem: SyncItem = {
@@ -327,11 +330,26 @@ export async function addToSyncQueue(item: Omit<SyncItem, "attempts" | "status">
     const totalCount = existingQueue.length + 1;
     if (totalCount > MAX_SYNC_QUEUE_ITEMS) {
       const excessCount = totalCount - MAX_SYNC_QUEUE_ITEMS;
-      const nonDeleteOldest = existingQueue.filter((q) => q.operation !== "DELETE");
-      const evictionPool =
-        nonDeleteOldest.length >= excessCount
-          ? nonDeleteOldest
-          : [...nonDeleteOldest, ...existingQueue.filter((q) => q.operation === "DELETE")];
+      const LOW_PRIORITY_COLLECTIONS = new Set([
+        "ad_campaigns",
+        "coach_notifications",
+        "star_history"
+      ]);
+      const CRITICAL_COLLECTIONS = new Set(["sessions", "users"]);
+      const getEvictionPriority = (q: SyncItem): number => {
+        if (LOW_PRIORITY_COLLECTIONS.has(q.collection)) {
+          return q.operation === "DELETE" ? 1 : 0;
+        }
+        if (!CRITICAL_COLLECTIONS.has(q.collection)) {
+          return q.operation === "DELETE" ? 3 : 2;
+        }
+        return q.operation === "DELETE" ? 5 : 4;
+      };
+      const evictionPool = [...existingQueue].sort((a, b) => {
+        const prioDiff = getEvictionPriority(a) - getEvictionPriority(b);
+        if (prioDiff !== 0) return prioDiff;
+        return a.timestamp - b.timestamp;
+      });
       const toEvict = evictionPool.slice(0, excessCount);
       await Promise.all(toEvict.map((ev) => syncQueueStore.removeItem(ev.id)));
     }

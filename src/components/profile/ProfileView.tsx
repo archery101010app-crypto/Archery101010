@@ -502,7 +502,9 @@ export default function ProfileView({
         const { getLocalSetting, saveLocalSetting, isFictitiousUser } = await import(
           "@/lib/db/indexedDB"
         );
-        const { generateClubInviteCode } = await import("@/lib/authService");
+        const { generateUniqueClubInviteCode, syncCoachInviteCodeDoc } = await import(
+          "@/lib/authService"
+        );
         const canonicalClubId = getCanonicalCoachClubId(user);
 
         if (
@@ -514,14 +516,19 @@ export default function ProfileView({
           const codeToUse =
             user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
               ? user.clubInviteCode
-              : generateClubInviteCode();
+              : await generateUniqueClubInviteCode();
           updateProfile(user.uid, {
             clubInviteCode: codeToUse,
             clubId: canonicalClubId,
             isClubCreator: true
           })
-            .then((updated) => onProfileUpdated(updated))
+            .then((updated) => {
+              onProfileUpdated(updated);
+              syncCoachInviteCodeDoc(updated).catch(() => {});
+            })
             .catch(() => {});
+        } else if (/^\d{6}$/.test(user.clubInviteCode)) {
+          syncCoachInviteCodeDoc(user).catch(() => {});
         }
 
         const unlinkedIds = await getLocalSetting<string[]>(
@@ -713,6 +720,13 @@ export default function ProfileView({
   };
 
   const handleSavePersonal = async () => {
+    const trimmedFullName = fullName.trim().slice(0, 100);
+    if (!trimmedFullName) {
+      await showOledAlert(
+        tx("Por favor ingresa tu nombre completo.", "Please enter your full name.")
+      );
+      return;
+    }
     try {
       const { height: parsedHeight, weight: parsedWeight } = resolveCanonicalBiometrics();
       const primaryHand =
@@ -721,11 +735,11 @@ export default function ProfileView({
         (user.physicalData?.dominantHand === "L" ? "LH" : "RH");
       const formattedPhone = formatPhoneForSave(clubWhatsApp, country);
       const updated = await updateProfile(user.uid, {
-        fullName,
-        nickname,
-        clubName: clubName.trim() || null,
+        fullName: trimmedFullName,
+        nickname: nickname.trim().slice(0, 50),
+        clubName: clubName.trim().slice(0, 100) || null,
         birthDate,
-        city,
+        city: city.trim().slice(0, 100),
         country,
         gender,
         unitSystem,
@@ -1110,6 +1124,7 @@ export default function ProfileView({
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
@@ -1122,6 +1137,7 @@ export default function ProfileView({
                 </label>
                 <input
                   type="text"
+                  maxLength={50}
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
@@ -1147,6 +1163,7 @@ export default function ProfileView({
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   className="h-11 min-w-0 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
@@ -1217,6 +1234,7 @@ export default function ProfileView({
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   value={clubName}
                   onChange={(e) => setClubName(e.target.value)}
                   className="h-11 w-full bg-neutral-900 border border-white/10 focus:border-cyan-neon text-white text-[13.8px] px-3.5 rounded-xl outline-none transition"
@@ -1868,10 +1886,10 @@ export default function ProfileView({
                         )
                       )
                     ) {
-                      const { generateClubInviteCode, updateProfile } = await import(
+                      const { generateUniqueClubInviteCode, updateProfile } = await import(
                         "@/lib/authService"
                       );
-                      const freshCode = generateClubInviteCode();
+                      const freshCode = await generateUniqueClubInviteCode();
                       const canonicalClubId = getCanonicalCoachClubId(user);
                       const updated = await updateProfile(user.uid, {
                         clubInviteCode: freshCode,

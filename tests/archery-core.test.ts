@@ -1131,4 +1131,82 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       "handleLogout must NEVER bump updatedAt on users/{outgoingUid}"
     );
   });
+
+  it("enforces v2.145 full-system audit hardening across OTA migration, Auth/Sync, Coach Invite privacy, Matchplay & Watch telemetry", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    // 1. Cross-origin localhost -> .web.app IndexedDB migration bridge & .firebaseapp.com Android download headers
+    const mainActivitySrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    assert.ok(mainActivitySrc.includes("saveCrossOriginMigrationSnapshot"));
+    assert.ok(mainActivitySrc.includes("consumeCrossOriginMigrationSnapshot"));
+
+    const bannerSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/ui/AppUpdateBanner.tsx"),
+      "utf8"
+    );
+    assert.ok(bannerSrc.includes("saveCrossOriginMigrationSnapshot"));
+    assert.ok(bannerSrc.includes("consumeCrossOriginMigrationSnapshot"));
+
+    const firebaseJson = fs.readFileSync(path.resolve(process.cwd(), "firebase.json"), "utf8");
+    assert.equal(
+      firebaseJson.includes("raw.githubusercontent.com"),
+      false,
+      "firebase.json must never redirect downloads to private GitHub raw URLs"
+    );
+    assert.ok(
+      firebaseJson.includes("https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-"),
+      "firebase.json /download-aab must serve via Android-safe .firebaseapp.com mirror"
+    );
+
+    // 2. Auth network-timeout guard, O(1) private coach_invite_codes, and Firestore security rules
+    const authSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/authService.ts"), "utf8");
+    assert.ok(authSrc.includes("cloudFetchFailed"), "authService.ts must guard against overwriting profiles on cloud fetch timeout");
+    assert.ok(authSrc.includes("coach_invite_codes"), "authService.ts must resolve 6-digit codes via O(1) coach_invite_codes");
+    assert.ok(authSrc.includes("generateUniqueClubInviteCode"), "authService.ts must check uniqueness when generating 6-digit invite codes");
+
+    const rulesSrc = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf8");
+    assert.ok(rulesSrc.includes("match /coach_invite_codes/{inviteCode}"));
+    assert.ok(rulesSrc.includes("function isValidDuelParticipantMutation("));
+
+    const realtimeSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/db/realtimeSync.ts"),
+      "utf8"
+    );
+    assert.ok(
+      realtimeSrc.includes("!snapshot.metadata.fromCache"),
+      "realtimeSync.ts must never prune local sessions from stale cached snapshots"
+    );
+
+    // 3. Smartwatch unacked delta protection & zero third-party brand leakage across modified UI views
+    const wearSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"),
+      "utf8"
+    );
+    assert.ok(wearSrc.includes("mPendingUnackedDelta"));
+
+    const garminSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "garmin-ciq/source/Archery101010WatchApp.mc"),
+      "utf8"
+    );
+    assert.ok(garminSrc.includes("mPendingRetryCmd"));
+
+    const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|fitbit|suunto|nike)\b/i;
+    for (const rel of [
+      "src/components/ui/AppUpdateBanner.tsx",
+      "src/components/ui/ErrorBoundary.tsx",
+      "src/components/auth/LoginView.tsx",
+      "src/components/auth/RegisterView.tsx",
+      "src/components/profile/ProfileCompletionModal.tsx",
+      "src/components/matchplay/MatchplayLobbyView.tsx",
+      "src/components/matchplay/MatchplayGameView.tsx",
+      "src/components/coach/CoachPortalView.tsx"
+    ]) {
+      const content = fs.readFileSync(path.resolve(process.cwd(), rel), "utf8");
+      assert.equal(forbiddenBrands.test(content), false, `${rel} must never mention third-party brands`);
+    }
+  });
 });

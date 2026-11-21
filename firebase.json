@@ -145,7 +145,7 @@
         ]
       },
       {
-        "source": "/Archery101010-Mobile-v2.144.aab",
+        "source": "**/*.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -153,7 +153,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-Mobile-v2.144.aab\""
+            "value": "attachment"
           },
           {
             "key": "Cache-Control",
@@ -162,7 +162,7 @@
         ]
       },
       {
-        "source": "/Archery101010-WearOS-v2.144.aab",
+        "source": "/Archery101010-Mobile-v2.145.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -170,7 +170,24 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-WearOS-v2.144.aab\""
+            "value": "attachment; filename=\"Archery101010-Mobile-v2.145.aab\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010-WearOS-v2.145.aab",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.145.aab\""
           },
           {
             "key": "Cache-Control",
@@ -209,17 +226,17 @@
     "redirects": [
       {
         "source": "/download-apk",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.144.apk",
+        "destination": "https://play.google.com/store/apps/details?id=com.archery101010.app",
         "type": 302
       },
       {
         "source": "/download-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-Mobile-v2.144.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-v2.145.aab",
         "type": 302
       },
       {
         "source": "/download-wear-aab",
-        "destination": "https://raw.githubusercontent.com/archery101010app-crypto/Archery101010/main/releases/Archery101010-WearOS-v2.144.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-WearOS-v2.145.aab",
         "type": 302
       }
     ],

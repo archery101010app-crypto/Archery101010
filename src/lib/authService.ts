@@ -1,11 +1,11 @@
-import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getSyncQueue, removeFromSyncQueue, sanitizeForFirestore, getLocalSessions, saveLocalSession } from "./db/indexedDB";
+import { saveLocalSetting, getLocalSetting, generateResilientId, addToSyncQueue, getSyncQueue, removeFromSyncQueue, updateSyncItem, sanitizeForFirestore, getLocalSessions, saveLocalSession, macrocyclesStore } from "./db/indexedDB";
 import { auth, db } from "./firebase";
 import {
   toStandardLangCode,
   getMinimumConsentAge,
   getDefaultUnitSystemForCountry
 } from "./i18n/regionalUtils";
-import { collection, doc, getDoc, setDoc, updateDoc, query, where, getDocs, limit } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, getDocs, limit } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -92,6 +92,7 @@ export interface CoachLinkNotification {
 }
 
 const recentLocalUserWrites = new Map<string, number>();
+const lastFullUserSetDocTs = new Map<string, number>();
 
 export function markLocalUserWrite(uid: string, ts: number = Date.now()): void {
   if (!uid) return;
@@ -105,7 +106,7 @@ export function hasRecentLocalUserWrite(uid: string, windowMs: number = 15000): 
   return Date.now() - ts < windowMs;
 }
 
-const LOGIN_TIMEOUT_MS = 5000;
+const LOGIN_TIMEOUT_MS = 9000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return Promise.race([
@@ -330,10 +331,11 @@ export async function cloudWriteUser(
   const updateKeys = partialUpdates
     ? Object.keys(partialUpdates).filter((k) => (partialUpdates as any)[k] !== undefined)
     : [];
+  const hasNonSelfServiceUpdates = updateKeys.some((k) => !OWNER_SELF_SERVICE_PROFILE_KEYS.has(k));
   const isPureSelfServicePatch =
     isSelfAuthenticated &&
     updateKeys.length > 0 &&
-    updateKeys.every((k) => OWNER_SELF_SERVICE_PROFILE_KEYS.has(k));
+    !hasNonSelfServiceUpdates;
 
   if (isPureSelfServicePatch && partialUpdates) {
     const directPatch = buildOwnerSelfServiceProfilePatch({
@@ -354,9 +356,20 @@ export async function cloudWriteUser(
       setDoc(userDocRef, sanitizeUserProfile({ ...profile, updatedAt: nowTs }), { merge: true }),
       6000
     );
+    lastFullUserSetDocTs.set(profile.uid, nowTs);
     return true;
   } catch (err: any) {
     if (isSelfAuthenticated) {
+      const hasUnconfirmedPrivilegeOrClubFields =
+        hasNonSelfServiceUpdates ||
+        (!partialUpdates &&
+          (Boolean(profile.clubId) ||
+            Boolean(profile.coachId) ||
+            Boolean(profile.clubInviteCode) ||
+            Boolean(profile.joinedWithInviteCode) ||
+            Boolean(profile.isClubCreator) ||
+            (Boolean(profile.role) && profile.role !== "archer") ||
+            profile.plan === "PRO"));
       try {
         const safePatch = buildOwnerSelfServiceProfilePatch({
           ...profile,
@@ -366,7 +379,14 @@ export async function cloudWriteUser(
         });
         if (Object.keys(safePatch).length > 0) {
           await withTimeout(updateDoc(userDocRef, safePatch), 6000);
-          return true;
+          if (!hasUnconfirmedPrivilegeOrClubFields) {
+            return true;
+          }
+          console.warn(
+            "Self-service profile fields saved; club/role/plan fields deferred to sync queue:",
+            err?.message || err
+          );
+          return false;
         }
       } catch {
         // Last-resort bootstrap create if document did not exist yet and had unverified club fields
@@ -380,7 +400,16 @@ export async function cloudWriteUser(
             updatedAt: nowTs
           });
           await withTimeout(setDoc(userDocRef, cleanBootstrap, { merge: true }), 6000);
-          return true;
+          const strippedPrivilegedField =
+            cleanBootstrap.role !== profile.role ||
+            (cleanBootstrap.clubId || null) !== (profile.clubId || null) ||
+            (cleanBootstrap.coachId || null) !== (profile.coachId || null) ||
+            Boolean(profile.joinedWithInviteCode);
+          if (!hasNonSelfServiceUpdates && !strippedPrivilegedField) {
+            lastFullUserSetDocTs.set(profile.uid, nowTs);
+            return true;
+          }
+          return false;
         } catch {}
       }
     }
@@ -402,58 +431,117 @@ function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
 }
 
 /**
+ * Registers or updates the private O(1) lookup-only `coach_invite_codes/{code}` document for a Coach.
+ */
+export async function syncCoachInviteCodeDoc(coach: Partial<UserProfile>): Promise<boolean> {
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
+  const cleanCode = (coach?.clubInviteCode || "").trim();
+  if (
+    !coach?.uid ||
+    !isOnline ||
+    !auth.currentUser ||
+    isLinkedToExternalCoach(coach) ||
+    !isClubOwnerRole(coach) ||
+    !/^\d{6}$/.test(cleanCode)
+  ) {
+    return false;
+  }
+
+  try {
+    await withTimeout(
+      setDoc(
+        doc(db, "coach_invite_codes", cleanCode),
+        sanitizeForFirestore({
+          code: cleanCode,
+          coachUid: coach.uid,
+          fullName: (coach.fullName || "").slice(0, 100),
+          email: (coach.email || "").slice(0, 128),
+          clubId: getCanonicalCoachClubId(coach),
+          clubName: coach.clubName || null,
+          clubCountry: coach.clubCountry || coach.country || "CR",
+          clubLogo: coach.clubLogo || "0",
+          role: coach.role === "archer" ? "coach" : (coach.role || "coach"),
+          updatedAt: Date.now()
+        }),
+        { merge: true }
+      ),
+      6000
+    );
+    return true;
+  } catch (err) {
+    console.warn("Could not sync coach_invite_codes doc:", err);
+    return false;
+  }
+}
+
+/**
+ * Generates a unique 6-digit Coach invite code verified against `coach_invite_codes/{candidate}` when online,
+ * falling back to `generateClubInviteCode()` offline.
+ */
+export async function generateUniqueClubInviteCode(): Promise<string> {
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
+  if (!isOnline || !auth.currentUser) {
+    return generateClubInviteCode();
+  }
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const candidate = generateClubInviteCode();
+    try {
+      const snap = await withTimeout(getDoc(doc(db, "coach_invite_codes", candidate)), 4000);
+      if (!snap.exists()) {
+        return candidate;
+      }
+    } catch {
+      return candidate;
+    }
+  }
+  return generateClubInviteCode();
+}
+
+/**
  * Finds the Coach / club owner that owns a 6-digit invite code.
- * Cloud (Firestore) is the source of truth; local cache is only an offline fallback.
- * Never returns the requesting athlete himself or an athlete linked to another coach.
+ * Primary lookup uses the O(1) non-listable `coach_invite_codes/{code}` directory (never `users_public`).
+ * Never returns the requesting athlete himself or any non-coach account.
  */
 export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: string): Promise<UserProfile | null> {
   const cleanCode = (rawCode || "").trim().toUpperCase();
   if (!cleanCode) return null;
 
   if (typeof navigator === "undefined" || navigator.onLine) {
-    // 1. Primary privacy-safe lookup on public directory (`users_public`)
+    // 1. Primary O(1) lookup on private non-listable `coach_invite_codes/{cleanCode}`
     try {
-      const pubSnap = await withTimeout(
-        getDocs(query(collection(db, "users_public"), where("clubInviteCode", "==", cleanCode), limit(10))),
-        6500
-      );
-      const pubMatches = pubSnap.docs
-        .map((d) => {
-          const raw = d.data() as any;
-          const uid = raw.uid || d.id;
+      const codeSnap = await withTimeout(getDoc(doc(db, "coach_invite_codes", cleanCode)), 6500);
+      if (codeSnap.exists()) {
+        const data = codeSnap.data() as Record<string, any>;
+        if (data?.coachUid && (!excludeUid || data.coachUid !== excludeUid)) {
           return sanitizeUserProfile({
-            ...raw,
-            uid,
-            isClubCreator: Boolean(raw.isClubCreator) || isClubOwnerRole(raw)
+            uid: data.coachUid,
+            fullName: data.fullName || "Entrenador",
+            email: data.email || "",
+            clubId: data.clubId || getCanonicalCoachClubId({ uid: data.coachUid }),
+            clubName: data.clubName || null,
+            clubCountry: data.clubCountry || "CR",
+            clubLogo: data.clubLogo || "0",
+            clubInviteCode: cleanCode,
+            role: data.role || "coach",
+            isClubCreator: true
           });
-        })
-        .filter((u) => (!excludeUid || u.uid !== excludeUid) && !isLinkedToExternalCoach(u));
-      const pubOwners = pubMatches.filter((u) => isClubOwnerRole(u));
-      if (pubOwners.length > 0) {
-        return pubOwners[0];
+        }
       }
-      if (pubMatches.length > 0) {
-        return pubMatches[0];
-      }
-    } catch (pubErr) {
-      console.warn("Public directory lookup of invite code failed, trying fallback:", pubErr);
+    } catch (codeErr) {
+      console.warn("Primary coach_invite_codes lookup failed, trying users fallback:", codeErr);
     }
 
-    // 2. Fallback lookup on `users` for legacy coach profiles not yet mirrored to `users_public`
+    // 2. Fallback lookup on `users` filtered strictly to `isClubOwnerRole(u)`
     try {
       const snap = await withTimeout(
         getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode), limit(10))),
         6500
       );
-      const allMatches = snap.docs
+      const owners = snap.docs
         .map((d) => sanitizeUserProfile({ ...d.data(), uid: (d.data() as any).uid || d.id }))
-        .filter((u) => (!excludeUid || u.uid !== excludeUid) && !isLinkedToExternalCoach(u));
-      const owners = allMatches.filter((u) => isClubOwnerRole(u));
+        .filter((u) => (!excludeUid || u.uid !== excludeUid) && isClubOwnerRole(u));
       if (owners.length > 0) {
         return owners.find((u) => u.isClubCreator) || owners[0];
-      }
-      if (allMatches.length > 0) {
-        return allMatches[0];
       }
     } catch (err) {
       console.warn("Cloud lookup of invite code failed, trying local cache:", err);
@@ -461,14 +549,13 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
   }
 
   const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
-  const localMatches = usersList.filter(
+  const localOwners = usersList.filter(
     (u) =>
       (!excludeUid || u.uid !== excludeUid) &&
-      !isLinkedToExternalCoach(u) &&
+      isClubOwnerRole(u) &&
       (u.clubInviteCode || "").trim().toUpperCase() === cleanCode
   );
-  const localOwners = localMatches.filter((u) => isClubOwnerRole(u));
-  return localOwners.find((u) => u.isClubCreator) || localOwners[0] || localMatches[0] || null;
+  return localOwners.find((u) => u.isClubCreator) || localOwners[0] || null;
 }
 
 function resolveActiveAuthLanguage(): string {
@@ -675,13 +762,14 @@ export async function loginUser(email: string, password?: string): Promise<UserP
   }
 
   let user: UserProfile | undefined = undefined;
+  let cloudFetchFailed = false;
 
   // 2. Fetch user profile from Firestore by UID (or email fallback)
   if (isOnline && authUid) {
     try {
       const directSnap = await withTimeout(getDoc(doc(db, "users", authUid)), LOGIN_TIMEOUT_MS);
       if (directSnap.exists()) {
-        user = sanitizeUserProfile(directSnap.data());
+        user = sanitizeUserProfile({ ...directSnap.data(), uid: authUid });
       } else {
         const q = query(collection(db, "users"), where("email", "==", targetEmail), limit(5));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
@@ -693,7 +781,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
             uid: authUid,
             email: targetEmail
           });
-          cloudWriteUser(user);
+          await cloudWriteUser(user);
         }
       }
 
@@ -729,23 +817,41 @@ export async function loginUser(email: string, password?: string): Promise<UserP
         await saveLocalSetting("simulated_users", cleanedList);
       }
     } catch (err) {
+      cloudFetchFailed = true;
       console.warn("Firestore user fetch timed out or failed, falling back to local cache:", err);
     }
   }
 
-  // 3. Fallback to local IndexedDB cache if Firestore had no document yet
+  // 3. Fallback to local IndexedDB cache (`current_user` or `simulated_users`) WITHOUT overwriting cloud on timeout (Fixes A6)
   if (!user) {
-    const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
-    const cached = usersList.find(
+    const currentCached = await getLocalSetting<UserProfile | null>("current_user", null);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+    const fromList = usersList.find(
       (u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail
     );
+    const cached =
+      currentCached &&
+      (currentCached.uid === authUid || (currentCached.email || "").toLowerCase() === targetEmail) &&
+      Number(currentCached.updatedAt || 0) >= Number(fromList?.updatedAt || 0)
+        ? currentCached
+        : fromList || null;
     if (cached) {
       user = sanitizeUserProfile({ ...cached, uid: authUid || cached.uid });
     }
   }
 
-  // 4. If authenticated in Firebase Auth but profile doc doesn't exist yet, initialize it
-  if (!user && authUid) {
+  // Never fabricate a blank profile when cloud fetch failed or timed out (Fixes C3)
+  if (!user && cloudFetchFailed) {
+    throw new Error(
+      txAuth(
+        "Conexión inestable al cargar tu perfil. Verifica tu señal e inténtalo de nuevo.",
+        "Unstable connection while loading your profile. Check your signal and try again."
+      )
+    );
+  }
+
+  // 4. Confirmed new account in Firestore (`!cloudFetchFailed && !user && authUid`): initialize with clean blank/0 defaults
+  if (isOnline && !cloudFetchFailed && !user && authUid) {
     const autoNickname = isAdminEmail
       ? "admin"
       : targetEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
@@ -754,20 +860,20 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       email: targetEmail,
       fullName: auth.currentUser?.displayName || (isAdminEmail ? "Admin101010" : "Arquero"),
       nickname: autoNickname,
-      birthDate: "1995-05-15",
-      country: "CR",
-      city: "San José",
-      gender: "M",
+      birthDate: isAdminEmail ? "1995-05-15" : "",
+      country: isAdminEmail ? "CR" : "",
+      city: "",
+      gender: (isAdminEmail ? "M" : "") as any,
       bowConfig: {
-        type: "Barebow",
+        type: "Recurve",
         brand: "",
         model: "",
-        poundage: 35,
+        poundage: 0,
         defaultDistance: 18
       },
       physicalData: {
-        height: 175,
-        weight: 70,
+        height: 0,
+        weight: 0,
         dominantEye: "R",
         dominantHand: "R"
       },
@@ -776,7 +882,7 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       role: isAdminEmail ? "superadmin" : "archer",
       plan: isAdminEmail ? "PRO" : "FREE",
       isClubCreator: false,
-      profileSetupCompleted: true,
+      profileSetupCompleted: isAdminEmail,
       createdAt: Date.now()
     };
 
@@ -786,17 +892,16 @@ export async function loginUser(email: string, password?: string): Promise<UserP
     usersList.push(user);
     await saveLocalSetting("simulated_users", usersList);
 
-    await addToSyncQueue({
-      id: generateResilientId("TXN"),
-      collection: "users",
-      operation: "INSERT",
-      payloadId: user.uid,
-      payload: user,
-      timestamp: Date.now()
-    });
-
-    if (isOnline) {
-      cloudWriteUser(user);
+    const wroteCloud = await cloudWriteUser(user);
+    if (!wroteCloud) {
+      await addToSyncQueue({
+        id: generateResilientId("TXN"),
+        collection: "users",
+        operation: "INSERT",
+        payloadId: user.uid,
+        payload: user,
+        timestamp: Date.now()
+      });
     }
   }
 
@@ -898,7 +1003,7 @@ export async function registerUser(
       finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
       isCreator = true;
       userFields.clubId = getCanonicalCoachClubId({ uid });
-      inviteCode = generateClubInviteCode();
+      inviteCode = await generateUniqueClubInviteCode();
     } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
       userFields.clubId = null;
       finalRole = "archer";
@@ -980,8 +1085,26 @@ export async function registerUser(
     timestamp: nowTs
   });
 
-  if (typeof navigator !== "undefined" && navigator.onLine) {
-    cloudWriteUser(newProfile);
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    const wroteCloud = await cloudWriteUser(newProfile);
+    if (wroteCloud && lastFullUserSetDocTs.get(newProfile.uid) === nowTs) {
+      try {
+        const queue = await getSyncQueue();
+        await Promise.allSettled(
+          queue
+            .filter(
+              (item) =>
+                item.collection === "users" &&
+                item.payloadId === newProfile.uid &&
+                item.operation !== "DELETE"
+            )
+            .map((item) => removeFromSyncQueue(item.id))
+        );
+      } catch {}
+    }
+    if (isClubOwnerRole(newProfile) && /^\d{6}$/.test(newProfile.clubInviteCode || "")) {
+      await syncCoachInviteCodeDoc(newProfile).catch(() => {});
+    }
   }
 
   if (linkedCoachOnRegister) {
@@ -1059,6 +1182,13 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
   }
 
   const nowTs = Date.now();
+  const prevProfile =
+    index !== -1
+      ? usersList[index]
+      : currentLogged && currentLogged.uid === uid
+      ? currentLogged
+      : null;
+  const prevInviteCode = (prevProfile?.clubInviteCode || "").trim();
 
   const persistUserCloudOrQueue = async (finalProfile: UserProfile) => {
     const isOnlineNow = typeof navigator === "undefined" || navigator.onLine;
@@ -1066,20 +1196,63 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
     if (isOnlineNow) {
       wroteCloud = await cloudWriteUser(finalProfile, updates);
     }
+
+    if (isOnlineNow && auth.currentUser) {
+      const nextInviteCode = (finalProfile.clubInviteCode || "").trim();
+      if (isClubOwnerRole(finalProfile) && /^\d{6}$/.test(nextInviteCode)) {
+        await syncCoachInviteCodeDoc(finalProfile).catch(() => {});
+      }
+      if (/^\d{6}$/.test(prevInviteCode) && prevInviteCode !== nextInviteCode) {
+        await deleteDoc(doc(db, "coach_invite_codes", prevInviteCode)).catch(() => {});
+      }
+    }
+
     if (wroteCloud) {
-      // Remove any older queued full-doc user item so stale fields can never replay over the confirmed cloud write
+      const confirmedFullSetDoc = lastFullUserSetDocTs.get(finalProfile.uid) === nowTs;
       try {
         const queue = await getSyncQueue();
-        await Promise.allSettled(
-          queue
-            .filter(
-              (item) =>
-                item.collection === "users" &&
-                item.payloadId === finalProfile.uid &&
-                item.operation !== "DELETE"
-            )
-            .map((item) => removeFromSyncQueue(item.id))
+        const queuedUserItems = queue.filter(
+          (item) =>
+            item.collection === "users" &&
+            item.payloadId === finalProfile.uid &&
+            item.operation !== "DELETE"
         );
+        if (confirmedFullSetDoc) {
+          // Full setDoc succeeded: safe to remove any older queued user items for this uid
+          await Promise.allSettled(
+            queuedUserItems.map((item) => removeFromSyncQueue(item.id))
+          );
+        } else if (queuedUserItems.length > 0) {
+          // Pure self-service updateDoc succeeded: preserve queued items that carry pending club/role diffs,
+          // merging the latest profile fields so newly saved self-service values are never overwritten on replay
+          const CLUB_OR_ROLE_KEYS = [
+            "role",
+            "plan",
+            "proExpiresAt",
+            "clubId",
+            "coachId",
+            "isClubCreator",
+            "clubInviteCode",
+            "joinedWithInviteCode"
+          ] as const;
+          await Promise.allSettled(
+            queuedUserItems.map((item) => {
+              const p = item.payload || {};
+              const hasClubOrRolePayload = CLUB_OR_ROLE_KEYS.some(
+                (k) =>
+                  k in p &&
+                  (Boolean(p[k]) ||
+                    (p[k] ?? null) !== ((finalProfile as any)[k] ?? null))
+              );
+              if (hasClubOrRolePayload) {
+                return updateSyncItem(item.id, {
+                  payload: sanitizeForFirestore({ ...p, ...finalProfile })
+                });
+              }
+              return removeFromSyncQueue(item.id);
+            })
+          );
+        }
       } catch {}
       import("@/lib/db/realtimeSync")
         .then(({ syncPublicUserPresence }) => syncPublicUserPresence(finalProfile))
@@ -1148,6 +1321,15 @@ export async function updateProfile(uid: string, updates: Partial<UserProfile>):
 export async function logoutUser(): Promise<void> {
   if (typeof window !== "undefined") {
     (window as any).__archeryManualLogout = true;
+  }
+  if (auth.currentUser && (typeof navigator === "undefined" || navigator.onLine)) {
+    try {
+      const { runSync } = await import("./db/syncManager");
+      await Promise.race([
+        runSync(undefined, true).catch(() => {}),
+        new Promise((r) => setTimeout(r, 3500))
+      ]);
+    } catch {}
   }
   await saveLocalSetting("current_user", null);
   try {
@@ -1270,6 +1452,9 @@ export async function deleteUserAccount(uid: string): Promise<void> {
             deleteByQuery("duel_invitations", "receiverUid"),
             /^[0-9]{6}$/.test(savedPairingCode)
               ? deleteDoc(doc(db, "watch_sessions", savedPairingCode))
+              : Promise.resolve(),
+            targetProfile?.clubInviteCode && /^[0-9]{6}$/.test(targetProfile.clubInviteCode.trim())
+              ? deleteDoc(doc(db, "coach_invite_codes", targetProfile.clubInviteCode.trim()))
               : Promise.resolve(),
             deleteDoc(doc(db, "athlete_stars", uid))
           ]);
@@ -1429,6 +1614,8 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
   }
   let user: UserProfile | undefined = undefined;
   let needsCloudWrite = false;
+  let cloudFetchFailed = false;
+  const isOnline = typeof navigator === "undefined" || navigator.onLine;
 
   const cleanDisplay = (displayName || targetEmail.split("@")[0] || "Arquero").trim();
   const autoNickname = isAdminEmail
@@ -1436,11 +1623,11 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
     : cleanDisplay.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 15) || "arquero";
 
   // 1. Try to fetch from Firestore if online
-  if (typeof navigator !== "undefined" && navigator.onLine) {
+  if (isOnline && authUid) {
     try {
       const directSnap = await withTimeout(getDoc(doc(db, "users", authUid)), LOGIN_TIMEOUT_MS);
       if (directSnap.exists()) {
-        user = sanitizeUserProfile(directSnap.data());
+        user = sanitizeUserProfile({ ...directSnap.data(), uid: authUid });
       } else {
         const q = query(collection(db, "users"), where("email", "==", targetEmail), limit(5));
         const querySnapshot = await withTimeout(getDocs(q), LOGIN_TIMEOUT_MS);
@@ -1502,31 +1689,53 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
         await saveLocalSetting("simulated_users", localUsers);
       }
     } catch (err) {
+      cloudFetchFailed = true;
       console.warn("Firestore user fetch failed, falling back to local database:", err);
     }
   }
 
-  // 2. Fallback to local IndexedDB store
+  // 2. Fallback to local IndexedDB store (`current_user` or `simulated_users`)
   if (!user) {
+    const currentCached = await getLocalSetting<UserProfile | null>("current_user", null);
     const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
-    user = usersList.find((u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail);
-    if (user) {
+    const fromList = usersList.find((u) => u.uid === authUid || (u.email || "").toLowerCase() === targetEmail);
+    const cached =
+      currentCached &&
+      (currentCached.uid === authUid || (currentCached.email || "").toLowerCase() === targetEmail) &&
+      Number(currentCached.updatedAt || 0) >= Number(fromList?.updatedAt || 0)
+        ? currentCached
+        : fromList || undefined;
+
+    if (cached) {
       user = sanitizeUserProfile({
-        ...user,
-        uid: authUid || user.uid,
-        nickname: user.nickname?.trim() || autoNickname,
-        fullName: user.fullName?.trim() || cleanDisplay,
-        role: isAdminEmail ? "superadmin" : user.role,
-        plan: isAdminEmail ? "PRO" : user.plan,
+        ...cached,
+        uid: authUid || cached.uid,
+        nickname: cached.nickname?.trim() || autoNickname,
+        fullName: cached.fullName?.trim() || cleanDisplay,
+        role: isAdminEmail ? "superadmin" : cached.role,
+        plan: isAdminEmail ? "PRO" : cached.plan
       });
-      // Profile only existed on this device: make sure it reaches the cloud so the Coach can find it
-      needsCloudWrite = true;
+      // Only queue a cloud write if Firestore fetch succeeded and confirmed no remote document existed.
+      // Never overwrite cloud with stale local cache during a network timeout (Fixes A6).
+      if (isOnline && !cloudFetchFailed) {
+        needsCloudWrite = true;
+      }
     }
   }
 
-  // 3. Create default profile if user doesn't exist anywhere.
+  // Never fabricate a blank profile when cloud fetch failed or device is offline (Fixes C3)
+  if (!user && (cloudFetchFailed || !isOnline)) {
+    throw new Error(
+      txAuth(
+        "Conexión inestable al cargar tu perfil. Verifica tu señal e inténtalo de nuevo.",
+        "Unstable connection while loading your profile. Check your signal and try again."
+      )
+    );
+  }
+
+  // 3. Create default profile ONLY when Firestore fetch succeeded and confirmed user doesn't exist anywhere.
   // No fictitious equipment/body data: blank values, ProfileCompletionModal asks the real data once.
-  if (!user) {
+  if (!cloudFetchFailed && !user) {
     user = {
       uid: authUid,
       email: targetEmail,
@@ -1566,6 +1775,10 @@ async function loginSocialUserInternal(email: string, displayName: string, expli
     // Always persist the new account in the cloud (even before the profile is completed),
     // otherwise an athlete who closes the app early is invisible to the Coach / invite code.
     needsCloudWrite = true;
+  }
+
+  if (!user) {
+    throw new Error(txAuth("No se encontró el perfil del usuario.", "User profile not found."));
   }
 
   if (isAdminEmail && user.role !== "superadmin") {
@@ -2026,17 +2239,76 @@ export async function joinClubByInviteCode(
   const updated = await updateProfile(userUid, updates);
 
   // 4. Confirm the link reached the cloud right away (so the Coach sees the athlete immediately)
-  try {
-    await withTimeout(
-      setDoc(
-        doc(db, "users", userUid),
-        sanitizeUserProfile({ ...updated, uid: userUid, updatedAt: Date.now() }),
-        { merge: true }
-      ),
-      8000
-    );
-  } catch (err: any) {
-    console.warn("Link saved locally; cloud confirmation pending in sync queue:", err?.message || err);
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    try {
+      const confirmTs = Date.now();
+      await withTimeout(
+        setDoc(
+          doc(db, "users", userUid),
+          sanitizeUserProfile({ ...updated, uid: userUid, updatedAt: confirmTs }),
+          { merge: true }
+        ),
+        8000
+      );
+      lastFullUserSetDocTs.set(userUid, confirmTs);
+      try {
+        const queue = await getSyncQueue();
+        await Promise.allSettled(
+          queue
+            .filter(
+              (item) =>
+                item.collection === "users" &&
+                item.payloadId === userUid &&
+                item.operation !== "DELETE"
+            )
+            .map((item) => removeFromSyncQueue(item.id))
+        );
+      } catch {}
+    } catch (err: any) {
+      const errCode = String(err?.code || "");
+      const errMsg = String(err?.message || "");
+      if (
+        errCode.includes("permission-denied") ||
+        errCode.includes("invalid-argument") ||
+        errMsg.includes("Missing or insufficient permissions") ||
+        errMsg.includes("invalid-argument")
+      ) {
+        if (currentLogged && currentLogged.uid === userUid) {
+          const restored = sanitizeUserProfile({ ...currentLogged, updatedAt: Date.now() });
+          markLocalUserWrite(userUid, restored.updatedAt!);
+          await saveLocalSetting("current_user", restored);
+          const latestList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(
+            sanitizeUserProfile
+          );
+          const uIdx = latestList.findIndex((u) => u.uid === userUid);
+          if (uIdx !== -1) {
+            latestList[uIdx] = restored;
+            await saveLocalSetting("simulated_users", latestList);
+          }
+        }
+        try {
+          const queue = await getSyncQueue();
+          await Promise.allSettled(
+            queue
+              .filter(
+                (item) =>
+                  item.collection === "users" &&
+                  item.payloadId === userUid &&
+                  item.operation !== "DELETE"
+              )
+              .map((item) => removeFromSyncQueue(item.id))
+          );
+        } catch {}
+        return {
+          success: false,
+          error: txAuth(
+            "No se pudo confirmar la vinculación en el servidor. Pide a tu Coach abrir su perfil para sincronizar su código e inténtalo de nuevo.",
+            "Could not confirm linking on the server. Ask your Coach to open their profile to sync their code and try again."
+          )
+        };
+      }
+      console.warn("Link saved locally; cloud confirmation pending in sync queue:", err?.message || err);
+    }
   }
 
   // 5. Emit real-time Coach linking notification so the Coach is alerted immediately
@@ -2122,6 +2394,9 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
 
     // Unlink students in Firestore FIRST while the caller still holds Coach permissions in Firestore rules
     if (isOnline && auth.currentUser && auth.currentUser.uid === userUid) {
+      if (/^\d{6}$/.test(coachInviteCode)) {
+        await deleteDoc(doc(db, "coach_invite_codes", coachInviteCode)).catch(() => {});
+      }
       try {
         const { updateDoc } = await import("firebase/firestore");
         await withTimeout(
@@ -2204,6 +2479,28 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
         window.dispatchEvent(new CustomEvent("local-db-change", { detail: { store: "simulated_users" } }));
         window.dispatchEvent(new CustomEvent("users-roster-updated"));
       }
+    }
+  }
+
+  // Clean ex-coach macrocycles locally when an athlete unlinks (Fixes M9)
+  if (!wasCoachOwner && userUid && userUid !== "USR-GUEST-OFFLINE") {
+    try {
+      const macroKeysToRemove: string[] = [];
+      await macrocyclesStore.iterate((val: any, key: string) => {
+        if (val?.coachId && val.coachId !== userUid) {
+          macroKeysToRemove.push(key);
+        }
+      });
+      if (macroKeysToRemove.length > 0) {
+        await Promise.allSettled(macroKeysToRemove.map((k) => macrocyclesStore.removeItem(k)));
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("local-db-change", { detail: { store: "macrocycles_local" } })
+          );
+        }
+      }
+    } catch (macroErr) {
+      console.warn("Could not clean ex-coach macrocycles locally:", macroErr);
     }
   }
 

@@ -238,7 +238,7 @@ export default function Home() {
       (!user.fullName?.trim() || !user.birthDate || !user.city?.trim() || !user.country || !user.gender)
     ) {
       return registerModalDismiss(() => {
-        handleReturnToLoginFromProfile();
+        setDismissedProfileModal(true);
       });
     }
   }, [user, dismissedProfileModal]);

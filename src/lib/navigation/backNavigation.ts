@@ -118,20 +118,48 @@ export function initMobileBackNavigation(config: {
   let capacitorRemoveListener: (() => void) | null = null;
   import("@capacitor/app")
     .then(({ App }) => {
-      App.addListener("backButton", ({ canGoBack }) => {
-        const handled = handleBackAction(
-          config.getCurrentScreen(),
-          config.onNavigateHome,
-          config.showToast
-        );
+      try {
+        const listenerPromise = App.addListener("backButton", () => {
+          const handled = handleBackAction(
+            config.getCurrentScreen(),
+            config.onNavigateHome,
+            config.showToast
+          );
 
-        if (!handled) {
-          // Double press on HOME confirmed: exit native app
-          App.exitApp();
+          if (!handled) {
+            // Double press on HOME confirmed: exit native app
+            try {
+              const exitPromise = App.exitApp();
+              if (exitPromise && typeof (exitPromise as Promise<void>).catch === "function") {
+                (exitPromise as Promise<void>).catch(() => {});
+              }
+            } catch {
+              // Ignore when native App plugin bridge is unavailable on remote OTA origin
+            }
+          }
+        });
+
+        if (listenerPromise && typeof listenerPromise.then === "function") {
+          listenerPromise
+            .then((listener) => {
+              capacitorRemoveListener = () => {
+                try {
+                  const rm = listener.remove();
+                  if (rm && typeof rm.catch === "function") {
+                    rm.catch(() => {});
+                  }
+                } catch {
+                  // ignore
+                }
+              };
+            })
+            .catch(() => {
+              // Running on remote OTA origin or pure web without Capacitor JS bridge
+            });
         }
-      }).then((listener) => {
-        capacitorRemoveListener = () => listener.remove();
-      });
+      } catch {
+        // Ignore synchronous Capacitor plugin errors
+      }
     })
     .catch(() => {
       // Capacitor not running or running in pure web mode

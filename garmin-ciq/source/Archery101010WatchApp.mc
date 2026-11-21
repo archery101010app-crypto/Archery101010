@@ -122,6 +122,7 @@ class Archery101010WatchView extends WatchUi.View {
     public var isEditingCode = false;
     public var editDigitPos = 0;
     public var isCloudSynced = false;
+    public var mCloudSyncOk = false;
     public var isBleConnected = false;
 
     private var mStartElapsedDistM = null;
@@ -162,6 +163,8 @@ class Archery101010WatchView extends WatchUi.View {
     private var mPeakT1 = 0;
     private var mPeakT2 = 0;
     private var mCmdSeq = 0;
+    private var mPendingRetryCmd = null;
+    private var mPendingRetryDelta = 0;
     private var mLastLocalActionMs = 0;
     private var mLastActivityMs = 0;
     private var mLastCloudPollMs = 0;
@@ -443,6 +446,8 @@ class Archery101010WatchView extends WatchUi.View {
         pairingCode = built;
         hasPairingCode = true;
         isEditingCode = false;
+        mPendingRetryCmd = null;
+        mPendingRetryDelta = 0;
         mLastRemoteStateSig = "";
         var now = System.getTimer();
         mLastActivityMs = now;
@@ -1087,65 +1092,19 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     (:typecheck(false))
-    function syncWithFirestoreCloud(eventType as Lang.String, extra) as Void {
-        if (!hasPairingCode || pairingCode.length() != 6) {
+    function sendCloudPatch(docFields as Lang.Dictionary) as Void {
+        if (!hasPairingCode || pairingCode.length() != 6 || docFields == null) {
             return;
         }
-        mCmdSeq = mCmdSeq + 1;
-        var epochMsStr = (Time.now().value().toLong() * 1000l + (System.getTimer() % 1000)).toString();
-        var cmdId = "gciq-" + epochMsStr + "-" + mCmdSeq.toString();
-
-        var cmdFields = {
-            "type" => { "stringValue" => eventType },
-            "cmdId" => { "stringValue" => cmdId },
-            "_cmdId" => { "stringValue" => cmdId },
-            "_ts" => { "integerValue" => epochMsStr }
-        };
-
-        if (eventType.equals("INCREMENT_ARROW")) {
-            var src = (extra != null) ? extra.toString() : "watch_manual";
-            cmdFields["delta"] = { "integerValue" => "1" };
-            cmdFields["source"] = { "stringValue" => src };
-        } else if (eventType.equals("DECREMENT_ARROW")) {
-            cmdFields["delta"] = { "integerValue" => "-1" };
-            cmdFields["source"] = { "stringValue" => "watch_manual" };
-            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
-        } else if (eventType.equals("SCORE_INPUT") && extra != null) {
-            cmdFields["value"] = { "stringValue" => extra.toString() };
-            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
-        } else if (eventType.equals("UNDO_ARROW")) {
-            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
-        } else if (eventType.equals("TOGGLE_AUTO_DETECT")) {
-            cmdFields["enabled"] = { "booleanValue" => autoDetectEnabled };
-            cmdFields["sensitivityLevel"] = { "integerValue" => sensitivityLevel.toString() };
-        } else if (eventType.equals("SYNC_TELEMETRY_FROM_WATCH")) {
-            cmdFields["stepsCount"] = { "integerValue" => stepsCount.toString() };
-            cmdFields["distanceWalkedM"] = { "integerValue" => distanceWalkedM.toString() };
-            cmdFields["activeKcal"] = { "integerValue" => activeKcal.toString() };
-            if (avgHeartRateBpm >= 35) {
-                cmdFields["heartRateBpm"] = { "integerValue" => heartRateBpm.toString() };
-                cmdFields["avgHeartRateBpm"] = { "integerValue" => avgHeartRateBpm.toString() };
-                cmdFields["maxHeartRateBpm"] = { "integerValue" => maxHeartRateBpm.toString() };
-            }
-        }
-
-        var docFields = {
-            "lastWatchCmd" => { "mapValue" => { "fields" => cmdFields } },
-            "lastWatchCmdId" => { "stringValue" => cmdId },
-            "lastWatchCmdSeq" => { "integerValue" => mCmdSeq.toString() },
-            "watchStepsCount" => { "integerValue" => stepsCount.toString() },
-            "watchDistanceM" => { "integerValue" => distanceWalkedM.toString() },
-            "watchHeartRateBpm" => { "integerValue" => heartRateBpm.toString() },
-            "watchAvgHeartRateBpm" => { "integerValue" => avgHeartRateBpm.toString() },
-            "watchMaxHeartRateBpm" => { "integerValue" => maxHeartRateBpm.toString() },
-            "watchSource" => { "stringValue" => "GARMIN_CIQ" },
-            "updatedAt" => { "integerValue" => epochMsStr }
-        };
+        var hbEpochMsStr = (Time.now().value().toLong() * 1000l).toString();
+        var updEpochMsStr = (Time.now().value().toLong() * 1000l + (System.getTimer() % 1000)).toString();
+        docFields["watchHeartbeatAt"] = { "integerValue" => hbEpochMsStr };
+        docFields["updatedAt"] = { "integerValue" => updEpochMsStr };
 
         var url =
             "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" +
             pairingCode +
-            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchHeartRateBpm&updateMask.fieldPaths=watchAvgHeartRateBpm&updateMask.fieldPaths=watchMaxHeartRateBpm&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchHeartRateBpm&updateMask.fieldPaths=watchAvgHeartRateBpm&updateMask.fieldPaths=watchMaxHeartRateBpm&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
 
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
@@ -1162,14 +1121,105 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     (:typecheck(false))
+    function syncWithFirestoreCloud(eventType as Lang.String, extra) as Void {
+        if (!hasPairingCode || pairingCode.length() != 6) {
+            return;
+        }
+        mCmdSeq = mCmdSeq + 1;
+        var hbEpochMsStr = (Time.now().value().toLong() * 1000l).toString();
+        var epochMsStr = (Time.now().value().toLong() * 1000l + (System.getTimer() % 1000)).toString();
+        var cmdId = "gciq-" + epochMsStr + "-" + mCmdSeq.toString();
+
+        var cmdFields = {
+            "type" => { "stringValue" => eventType },
+            "cmdId" => { "stringValue" => cmdId },
+            "_cmdId" => { "stringValue" => cmdId },
+            "_ts" => { "integerValue" => epochMsStr }
+        };
+
+        if (eventType.equals("INCREMENT_ARROW")) {
+            var src = (extra != null) ? extra.toString() : "watch_manual";
+            mPendingRetryDelta = mPendingRetryDelta + 1;
+            if (mPendingRetryDelta > 20) { mPendingRetryDelta = 20; }
+            if (mPendingRetryDelta == 0) { mPendingRetryDelta = 1; }
+            var effIncType = (mPendingRetryDelta >= 0) ? "INCREMENT_ARROW" : "DECREMENT_ARROW";
+            cmdFields["type"] = { "stringValue" => effIncType };
+            cmdFields["delta"] = { "integerValue" => mPendingRetryDelta.toString() };
+            cmdFields["source"] = { "stringValue" => src };
+        } else if (eventType.equals("DECREMENT_ARROW")) {
+            mPendingRetryDelta = mPendingRetryDelta - 1;
+            if (mPendingRetryDelta < -20) { mPendingRetryDelta = -20; }
+            if (mPendingRetryDelta == 0) { mPendingRetryDelta = -1; }
+            var effDecType = (mPendingRetryDelta >= 0) ? "INCREMENT_ARROW" : "DECREMENT_ARROW";
+            cmdFields["type"] = { "stringValue" => effDecType };
+            cmdFields["delta"] = { "integerValue" => mPendingRetryDelta.toString() };
+            cmdFields["source"] = { "stringValue" => "watch_manual" };
+            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
+        } else if (eventType.equals("SCORE_INPUT") && extra != null) {
+            mPendingRetryDelta = 0;
+            cmdFields["value"] = { "stringValue" => extra.toString() };
+            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
+        } else if (eventType.equals("UNDO_ARROW")) {
+            mPendingRetryDelta = 0;
+            cmdFields["totalScore"] = { "integerValue" => totalScore.toString() };
+        } else if (eventType.equals("TOGGLE_AUTO_DETECT")) {
+            cmdFields["enabled"] = { "booleanValue" => autoDetectEnabled };
+            cmdFields["sensitivityLevel"] = { "integerValue" => sensitivityLevel.toString() };
+        } else if (eventType.equals("SYNC_TELEMETRY_FROM_WATCH")) {
+            cmdFields["stepsCount"] = { "integerValue" => stepsCount.toString() };
+            cmdFields["distanceWalkedM"] = { "integerValue" => distanceWalkedM.toString() };
+            cmdFields["activeKcal"] = { "integerValue" => activeKcal.toString() };
+            if (avgHeartRateBpm >= 35) {
+                cmdFields["heartRateBpm"] = { "integerValue" => heartRateBpm.toString() };
+                cmdFields["avgHeartRateBpm"] = { "integerValue" => avgHeartRateBpm.toString() };
+                cmdFields["maxHeartRateBpm"] = { "integerValue" => maxHeartRateBpm.toString() };
+            }
+        }
+
+        // If a non-telemetry command is already waiting to retry, do not let a routine telemetry ping overwrite it
+        if (eventType.equals("SYNC_TELEMETRY_FROM_WATCH") && mPendingRetryCmd != null) {
+            sendCloudPatch(mPendingRetryCmd);
+            return;
+        }
+
+        var docFields = {
+            "lastWatchCmd" => { "mapValue" => { "fields" => cmdFields } },
+            "lastWatchCmdId" => { "stringValue" => cmdId },
+            "lastWatchCmdSeq" => { "integerValue" => mCmdSeq.toString() },
+            "watchStepsCount" => { "integerValue" => stepsCount.toString() },
+            "watchDistanceM" => { "integerValue" => distanceWalkedM.toString() },
+            "watchHeartRateBpm" => { "integerValue" => heartRateBpm.toString() },
+            "watchAvgHeartRateBpm" => { "integerValue" => avgHeartRateBpm.toString() },
+            "watchMaxHeartRateBpm" => { "integerValue" => maxHeartRateBpm.toString() },
+            "watchSource" => { "stringValue" => "GARMIN_CIQ" },
+            "watchHeartbeatAt" => { "integerValue" => hbEpochMsStr },
+            "updatedAt" => { "integerValue" => epochMsStr }
+        };
+
+        if (!eventType.equals("SYNC_TELEMETRY_FROM_WATCH")) {
+            mPendingRetryCmd = docFields;
+        }
+
+        sendCloudPatch(docFields);
+    }
+
+    (:typecheck(false))
     function onCloudPatchResponse(responseCode, data) as Void {
-        if (responseCode >= 200 && responseCode < 300) {
+        if (responseCode == 200) {
+            mPendingRetryCmd = null;
+            mPendingRetryDelta = 0;
+            mCloudSyncOk = true;
             if (!isCloudSynced) {
                 isCloudSynced = true;
                 WatchUi.requestUpdate();
             }
         } else {
-            if (isCloudSynced && responseCode != -101) {
+            if (responseCode == 404) {
+                mPendingRetryCmd = null;
+                mPendingRetryDelta = 0;
+            }
+            if (responseCode == 401 || responseCode == 403 || responseCode == 404 || (isCloudSynced && responseCode != -101)) {
+                mCloudSyncOk = false;
                 isCloudSynced = false;
                 WatchUi.requestUpdate();
             }
@@ -1179,6 +1229,11 @@ class Archery101010WatchView extends WatchUi.View {
     (:typecheck(false))
     function pollFirestoreCloud() as Void {
         if (!hasPairingCode || pairingCode.length() != 6) {
+            return;
+        }
+        // Retry any unacknowledged local arrow/score command FIRST before polling remote state
+        if (mPendingRetryCmd != null) {
+            sendCloudPatch(mPendingRetryCmd);
             return;
         }
         var url =
@@ -1238,7 +1293,14 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function onCloudPollResponse(responseCode, data) as Void {
+        if (responseCode == 401 || responseCode == 403) {
+            mCloudSyncOk = false;
+            isCloudSynced = false;
+            WatchUi.requestUpdate();
+            return;
+        }
         if (responseCode == 200 && data != null && (data instanceof Lang.Dictionary) && data.hasKey("fields")) {
+            mCloudSyncOk = true;
             isCloudSynced = true;
             var fields = data["fields"];
             if (!(fields instanceof Lang.Dictionary)) {
@@ -1290,11 +1352,21 @@ class Archery101010WatchView extends WatchUi.View {
                 mLastActivityMs = System.getTimer();
             }
 
+            var nowTimer = System.getTimer();
+            var elapsedSinceLocal = (nowTimer >= mLastLocalActionMs) ? (nowTimer - mLastLocalActionMs) : 999999;
+
             if (!sessionActive) {
-                if (arrowsCount > 0 || totalScore > 0 || stepsCount > 0 || distanceWalkedM > 0) {
-                    resetAllCounters("");
+                if (mPendingRetryCmd == null && (mLastLocalActionMs == 0 || elapsedSinceLocal > 6000)) {
+                    if (arrowsCount > 0 || totalScore > 0 || stepsCount > 0 || distanceWalkedM > 0) {
+                        resetAllCounters("");
+                    }
                 }
                 WatchUi.requestUpdate();
+                return;
+            }
+
+            if (mPendingRetryCmd != null) {
+                sendCloudPatch(mPendingRetryCmd);
                 return;
             }
 
@@ -1304,8 +1376,7 @@ class Archery101010WatchView extends WatchUi.View {
                 currentSessionId = incomingSid;
             }
 
-            var nowTimer = System.getTimer();
-            var recentlyTapped = (nowTimer >= mLastLocalActionMs) && ((nowTimer - mLastLocalActionMs) < 3500);
+            var recentlyTapped = (nowTimer >= mLastLocalActionMs) && (elapsedSinceLocal < 3500);
             if (!recentlyTapped) {
                 arrowsCount = fsArrows;
                 totalScore = fsScore;
@@ -1335,7 +1406,8 @@ class Archery101010WatchView extends WatchUi.View {
             saveStateToStorage();
             WatchUi.requestUpdate();
         } else if (responseCode == 404 || responseCode < 0) {
-            if (isCloudSynced) {
+            if (isCloudSynced || mCloudSyncOk) {
+                mCloudSyncOk = false;
                 isCloudSynced = false;
                 WatchUi.requestUpdate();
             }

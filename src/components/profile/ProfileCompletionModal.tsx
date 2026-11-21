@@ -8,7 +8,7 @@ import {
   updateProfile,
   calculateAgeFromBirthDate,
   getCanonicalCoachClubId,
-  generateClubInviteCode
+  generateUniqueClubInviteCode
 } from "@/lib/authService";
 import { motion } from "framer-motion";
 import { AlertCircle, User, X, ArrowLeft } from "lucide-react";
@@ -311,16 +311,16 @@ export default function ProfileCompletionModal({
               clubInviteCode:
                 user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                   ? user.clubInviteCode
-                  : generateClubInviteCode()
+                  : await generateUniqueClubInviteCode()
             }
           : {};
 
       const updated = await updateProfile(user.uid, {
-        fullName: fullName.trim(),
-        nickname: cleanNick,
-        clubName: clubName.trim() || null,
+        fullName: fullName.trim().slice(0, 100),
+        nickname: cleanNick.slice(0, 50),
+        clubName: clubName.trim().slice(0, 100) || null,
         birthDate,
-        city: city.trim(),
+        city: city.trim().slice(0, 100),
         country,
         gender,
         unitSystem,
@@ -344,10 +344,10 @@ export default function ProfileCompletionModal({
   };
 
   const handleExit = () => {
-    if (onReturnToLogin) {
-      onReturnToLogin();
-    } else if (onClose) {
+    if (onClose) {
       onClose();
+    } else if (onReturnToLogin) {
+      onReturnToLogin();
     }
   };
 
@@ -373,7 +373,7 @@ export default function ProfileCompletionModal({
             type="button"
             onClick={handleExit}
             className="absolute top-4 end-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:text-white hover:bg-white/15 transition-all cursor-pointer z-20 active:scale-90"
-            title={tx("Cerrar y volver a inicio", "Close and return to sign in")}
+            title={tx("Cerrar", "Close")}
             aria-label={tx("Cerrar", "Close")}
           >
             <X size={18} />
@@ -427,6 +427,7 @@ export default function ProfileCompletionModal({
                 name="fullName"
                 type="text"
                 autoComplete="name"
+                maxLength={100}
                 required
                 value={fullName}
                 onChange={(e) => {
@@ -449,6 +450,7 @@ export default function ProfileCompletionModal({
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
+                maxLength={50}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder={tx("Opcional", "Optional")}
@@ -489,6 +491,7 @@ export default function ProfileCompletionModal({
                 name="city"
                 type="text"
                 autoComplete="address-level2"
+                maxLength={100}
                 required
                 value={city}
                 onChange={(e) => {
@@ -566,6 +569,7 @@ export default function ProfileCompletionModal({
                 name="clubName"
                 type="text"
                 autoComplete="organization"
+                maxLength={100}
                 value={clubName}
                 onChange={(e) => setClubName(e.target.value)}
                 placeholder={tx("Opcional", "Optional")}

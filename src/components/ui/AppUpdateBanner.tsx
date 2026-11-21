@@ -4,11 +4,21 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { RefreshCw, X, Sparkles } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
+import type { UserProfile } from "@/lib/authService";
+import type { SyncItem } from "@/lib/db/indexedDB";
 
 interface RemoteVersionInfo {
   version: string;
   versionCode?: number;
   updatedAt?: string;
+}
+
+interface CrossOriginMigrationSnapshot {
+  currentUser?: UserProfile | null;
+  simulatedUsers?: UserProfile[];
+  syncQueue?: SyncItem[];
+  preferredLanguage?: string | null;
+  unitSystem?: string | null;
 }
 
 type WinUpdateBridge = {
@@ -20,6 +30,8 @@ type WinUpdateBridge = {
   ArcheryNativeAuth?: {
     reloadInAppOta?: () => void;
     getShellVersion?: () => string;
+    saveCrossOriginMigrationSnapshot?: (jsonPayload: string) => void;
+    consumeCrossOriginMigrationSnapshot?: () => string;
   };
 };
 
@@ -27,6 +39,8 @@ const REMOTE_WEB_ORIGIN = "https://archery101010-c0bb4.web.app";
 const OTA_MANIFEST_PATH = "/ota-version.json";
 const ATTEMPTED_VER_LOCAL_KEY = "archery_attempted_update_meta";
 const LOOP_GUARD_MS = 60 * 1000;
+const DISMISS_COOLDOWN_MS = 30 * 60 * 1000;
+const SYNC_FLUSH_TIMEOUT_MS = 12000;
 const CLEANUP_TIMEOUT_MS = 2200;
 const PREWARM_FETCH_TIMEOUT_MS = 1800;
 const RELOAD_FAILSAFE_RESET_MS = 5000;
@@ -64,9 +78,10 @@ function wasRecentlyAttempted(ver: string): boolean {
   try {
     const raw = localStorage.getItem(ATTEMPTED_VER_LOCAL_KEY);
     if (!raw) return false;
-    const parsed = JSON.parse(raw) as { ver?: string; ts?: number };
+    const parsed = JSON.parse(raw) as { ver?: string; ts?: number; dismissed?: boolean };
     if (parsed.ver === ver && typeof parsed.ts === "number") {
-      return Date.now() - parsed.ts < LOOP_GUARD_MS;
+      const guardWindowMs = parsed.dismissed ? DISMISS_COOLDOWN_MS : LOOP_GUARD_MS;
+      return Date.now() - parsed.ts < guardWindowMs;
     }
   } catch {
     // Ignore storage read errors
@@ -74,10 +89,13 @@ function wasRecentlyAttempted(ver: string): boolean {
   return false;
 }
 
-function markVersionAttempted(ver: string): void {
+function markVersionAttempted(ver: string, dismissed: boolean = false): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(ATTEMPTED_VER_LOCAL_KEY, JSON.stringify({ ver, ts: Date.now() }));
+    localStorage.setItem(
+      ATTEMPTED_VER_LOCAL_KEY,
+      JSON.stringify({ ver, ts: Date.now(), ...(dismissed ? { dismissed: true } : {}) })
+    );
   } catch {
     // Ignore storage write errors
   }
@@ -170,7 +188,7 @@ async function purgeServiceWorkersAndCachesBounded(): Promise<void> {
 }
 
 export default function AppUpdateBanner() {
-  const { language, tx } = useLanguage();
+  const { language, setLanguage, setUnitSystem, tx } = useLanguage();
   const isEs = language === "es";
   const [remoteInfo, setRemoteInfo] = useState<RemoteVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -182,6 +200,117 @@ export default function AppUpdateBanner() {
     let mounted = true;
     clearAttemptedIfCurrent();
     stripOtaQueryParams();
+
+    async function restoreCrossOriginSnapshotIfPresent() {
+      if (typeof window === "undefined") return;
+      const winAny = window as unknown as WinUpdateBridge;
+      if (typeof winAny.ArcheryNativeAuth?.consumeCrossOriginMigrationSnapshot !== "function") {
+        return;
+      }
+      let rawSnapshot = "";
+      try {
+        rawSnapshot = winAny.ArcheryNativeAuth.consumeCrossOriginMigrationSnapshot() || "";
+      } catch {
+        return;
+      }
+      if (!rawSnapshot.trim()) return;
+
+      try {
+        const snapshot = JSON.parse(rawSnapshot) as CrossOriginMigrationSnapshot;
+        const { getLocalSetting, saveLocalSetting, addToSyncQueue } = await import(
+          "@/lib/db/indexedDB"
+        );
+        const { mergeUserProfilesNonDestructive } = await import("@/lib/profileMerge");
+
+        if (snapshot.preferredLanguage && typeof snapshot.preferredLanguage === "string") {
+          try {
+            localStorage.setItem("preferred_language", snapshot.preferredLanguage);
+          } catch {}
+          await setLanguage(snapshot.preferredLanguage).catch(() => {});
+        }
+        if (snapshot.unitSystem === "metric" || snapshot.unitSystem === "imperial") {
+          try {
+            localStorage.setItem("preferred_unit_system", snapshot.unitSystem);
+          } catch {}
+          await setUnitSystem(snapshot.unitSystem).catch(() => {});
+        }
+
+        let restoredUser: UserProfile | null = null;
+        if (snapshot.currentUser && snapshot.currentUser.uid) {
+          const existingCurrent = await getLocalSetting<UserProfile | null>("current_user", null);
+          if (existingCurrent && existingCurrent.uid === snapshot.currentUser.uid) {
+            const snapTs = Number(snapshot.currentUser.updatedAt || 0);
+            const curTs = Number(existingCurrent.updatedAt || 0);
+            const { merged } =
+              snapTs >= curTs
+                ? mergeUserProfilesNonDestructive(existingCurrent, snapshot.currentUser)
+                : mergeUserProfilesNonDestructive(snapshot.currentUser, existingCurrent);
+            restoredUser = merged;
+          } else if (!existingCurrent) {
+            restoredUser = snapshot.currentUser;
+          } else {
+            const snapTs = Number(snapshot.currentUser.updatedAt || 0);
+            const curTs = Number(existingCurrent.updatedAt || 0);
+            restoredUser = snapTs >= curTs ? snapshot.currentUser : existingCurrent;
+          }
+          if (restoredUser) {
+            await saveLocalSetting("current_user", restoredUser);
+          }
+        }
+
+        if (Array.isArray(snapshot.simulatedUsers) && snapshot.simulatedUsers.length > 0) {
+          const existingUsers = await getLocalSetting<UserProfile[]>("simulated_users", []);
+          const byUid = new Map<string, UserProfile>();
+          for (const u of existingUsers) {
+            if (u?.uid) byUid.set(u.uid, u);
+          }
+          for (const snapUser of snapshot.simulatedUsers) {
+            if (!snapUser?.uid) continue;
+            const prev = byUid.get(snapUser.uid);
+            if (prev) {
+              const snapTs = Number(snapUser.updatedAt || 0);
+              const prevTs = Number(prev.updatedAt || 0);
+              const { merged } =
+                snapTs >= prevTs
+                  ? mergeUserProfilesNonDestructive(prev, snapUser)
+                  : mergeUserProfilesNonDestructive(snapUser, prev);
+              byUid.set(snapUser.uid, merged);
+            } else {
+              byUid.set(snapUser.uid, snapUser);
+            }
+          }
+          if (restoredUser?.uid) {
+            byUid.set(restoredUser.uid, restoredUser);
+          }
+          await saveLocalSetting("simulated_users", Array.from(byUid.values()));
+        }
+
+        if (Array.isArray(snapshot.syncQueue) && snapshot.syncQueue.length > 0) {
+          for (const item of snapshot.syncQueue) {
+            if (item && item.id && item.collection && item.operation && item.payloadId) {
+              await addToSyncQueue({
+                id: item.id,
+                collection: item.collection,
+                operation: item.operation,
+                payloadId: item.payloadId,
+                payload: item.payload,
+                timestamp: item.timestamp || Date.now()
+              }).catch(() => {});
+            }
+          }
+        }
+
+        if (restoredUser && typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("current-user-updated", { detail: { user: restoredUser } })
+          );
+        }
+      } catch {
+        // Ignore malformed cross-origin migration payloads
+      }
+    }
+
+    void restoreCrossOriginSnapshotIfPresent();
 
     async function checkRemoteVersion() {
       if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.onLine) {
@@ -251,7 +380,7 @@ export default function AppUpdateBanner() {
   const handleDismiss = useCallback(() => {
     if (isUpdating) return;
     if (remoteInfo?.version) {
-      markVersionAttempted(remoteInfo.version);
+      markVersionAttempted(remoteInfo.version, true);
     }
     setDismissed(true);
   }, [isUpdating, remoteInfo]);
@@ -265,7 +394,7 @@ export default function AppUpdateBanner() {
     setIsUpdating(true);
 
     const targetVer = remoteInfo?.version || APP_VERSION;
-    markVersionAttempted(targetVer);
+    markVersionAttempted(targetVer, false);
 
     winAny.__archeryBypassBeforeUnload = true;
     try {
@@ -278,8 +407,8 @@ export default function AppUpdateBanner() {
     try {
       const { runSync } = await import("@/lib/db/syncManager");
       await Promise.race([
-        runSync().catch(() => {}),
-        new Promise<void>((resolve) => setTimeout(resolve, 1800))
+        runSync(undefined, true).catch(() => {}),
+        new Promise<void>((resolve) => setTimeout(resolve, SYNC_FLUSH_TIMEOUT_MS))
       ]);
     } catch {
       // Ignore sync errors so update reload always proceeds
@@ -295,6 +424,36 @@ export default function AppUpdateBanner() {
 
     // 1. Native reload bridge (Google Play v2.110+): 100% in-app WebView reload
     if (canReloadNatively && winAny.ArcheryNativeAuth?.reloadInAppOta) {
+      if (typeof winAny.ArcheryNativeAuth.saveCrossOriginMigrationSnapshot === "function") {
+        try {
+          const { getLocalSetting, getSyncQueue } = await import("@/lib/db/indexedDB");
+          const [currentUser, simulatedUsers, syncQueue, idbLang, idbUnits] = await Promise.all([
+            getLocalSetting<UserProfile | null>("current_user", null),
+            getLocalSetting<UserProfile[]>("simulated_users", []),
+            getSyncQueue(),
+            getLocalSetting<string | null>("preferred_language", null),
+            getLocalSetting<string | null>("preferred_unit_system", null)
+          ]);
+          let lsLang: string | null = null;
+          let lsUnits: string | null = null;
+          try {
+            lsLang = localStorage.getItem("preferred_language");
+            lsUnits = localStorage.getItem("preferred_unit_system");
+          } catch {}
+          const snapshotPayload: CrossOriginMigrationSnapshot = {
+            currentUser,
+            simulatedUsers,
+            syncQueue,
+            preferredLanguage: lsLang || idbLang || null,
+            unitSystem: lsUnits || idbUnits || null
+          };
+          winAny.ArcheryNativeAuth.saveCrossOriginMigrationSnapshot(
+            JSON.stringify(snapshotPayload)
+          );
+        } catch {
+          // Proceed with in-app reload even if snapshot serialization fails
+        }
+      }
       winAny.ArcheryNativeAuth.reloadInAppOta();
       return;
     }

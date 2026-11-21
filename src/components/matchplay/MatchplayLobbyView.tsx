@@ -8,9 +8,30 @@ import ClubLogoIcon from "../ui/ClubLogoIcon";
 import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  limit
+} from "firebase/firestore";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { logger } from "@/lib/logger";
+
+const INVITE_TTL_MS = 3 * 60 * 1000;
+
+function extractInviteTimestampMs(val: any): number {
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  if (val && typeof val.toMillis === "function") return val.toMillis();
+  if (val && typeof val.seconds === "number") return val.seconds * 1000;
+  return 0;
+}
 
 interface MatchplayLobbyViewProps {
   user: UserProfile;
@@ -146,8 +167,271 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("FRIEND");
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; system?: string; text: string } | null>(null);
   const [sentInvite, setSentInvite] = useState<any | null>(null);
+  const [incomingLobbyInvite, setIncomingLobbyInvite] = useState<any | null>(null);
   const [inviteStatusMessage, setInviteStatusMessage] = useState("");
-  const [inviteRemainingSeconds, setInviteRemainingSeconds] = useState<number>(120);
+  const [inviteRemainingSeconds, setInviteRemainingSeconds] = useState<number>(
+    Math.floor(INVITE_TTL_MS / 1000)
+  );
+
+  const transitioningRoomRef = useRef<string | null>(null);
+  const generatedInviteRef = useRef<typeof generatedInvite>(null);
+  generatedInviteRef.current = generatedInvite;
+  const sentInviteRef = useRef<any | null>(null);
+  sentInviteRef.current = sentInvite;
+
+  const cancelWaitingRoomAndInvites = async (roomCode?: string, explicitInviteId?: string) => {
+    const nowTs = Date.now();
+    if (explicitInviteId) {
+      await updateDoc(doc(db, "duel_invitations", explicitInviteId), {
+        status: "cancelled",
+        updatedAt: nowTs
+      }).catch(() => {});
+    }
+    if (!roomCode) return;
+
+    await deleteDoc(doc(db, "active_duels", roomCode)).catch(() => {});
+
+    const curUid = userRef.current?.uid;
+    if (curUid && curUid !== "USR-GUEST-OFFLINE") {
+      try {
+        const qPendingOut = query(
+          collection(db, "duel_invitations"),
+          where("senderUid", "==", curUid),
+          where("status", "==", "pending"),
+          limit(25)
+        );
+        const snap = await getDocs(qPendingOut);
+        await Promise.allSettled(
+          snap.docs
+            .filter((d) => d.data()?.roomCode === roomCode && d.id !== explicitInviteId)
+            .map((d) =>
+              updateDoc(doc(db, "duel_invitations", d.id), {
+                status: "cancelled",
+                updatedAt: nowTs
+              })
+            )
+        );
+      } catch {
+        // ignore offline/cleanup errors
+      }
+    }
+  };
+
+  // Cleanup any unjoined waiting room hosted from this lobby on unmount
+  useEffect(() => {
+    return () => {
+      const pendingGeneratedCode = generatedInviteRef.current?.code;
+      if (pendingGeneratedCode && transitioningRoomRef.current !== pendingGeneratedCode) {
+        void cancelWaitingRoomAndInvites(pendingGeneratedCode);
+      }
+      const pendingSent = sentInviteRef.current;
+      if (pendingSent?.roomCode && transitioningRoomRef.current !== pendingSent.roomCode) {
+        void cancelWaitingRoomAndInvites(pendingSent.roomCode, pendingSent.id);
+      }
+    };
+  }, []);
+
+  // Enforce INVITE_TTL_MS (3 min) on duel_invitations & track valid incoming invites
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    const currentUid = user.uid;
+    let isDisposed = false;
+    let unsubIncoming: () => void = () => {};
+    let unsubOutgoing: () => void = () => {};
+
+    const attachInviteGuards = async () => {
+      try {
+        const { auth } = await import("@/lib/firebase");
+        if (isDisposed || !auth.currentUser || auth.currentUser.uid !== currentUid) return;
+
+        const qIn = query(
+          collection(db, "duel_invitations"),
+          where("receiverUid", "==", currentUid),
+          where("status", "==", "pending"),
+          limit(25)
+        );
+        unsubIncoming = onSnapshot(
+          qIn,
+          (snap) => {
+            if (isDisposed) return;
+            const nowTs = Date.now();
+            let newestValid: any | null = null;
+            snap.forEach((d) => {
+              const data = d.data();
+              const createdMs = extractInviteTimestampMs(data?.createdAt);
+              if (!createdMs || nowTs - createdMs > INVITE_TTL_MS) {
+                updateDoc(doc(db, "duel_invitations", d.id), {
+                  status: "cancelled",
+                  updatedAt: nowTs
+                }).catch(() => {});
+                return;
+              }
+              if (
+                !newestValid ||
+                createdMs > extractInviteTimestampMs(newestValid.createdAt)
+              ) {
+                newestValid = { id: d.id, ...data };
+              }
+            });
+            setIncomingLobbyInvite(newestValid);
+          },
+          () => {}
+        );
+
+        const qOut = query(
+          collection(db, "duel_invitations"),
+          where("senderUid", "==", currentUid),
+          where("status", "==", "pending"),
+          limit(25)
+        );
+        unsubOutgoing = onSnapshot(
+          qOut,
+          (snap) => {
+            if (isDisposed) return;
+            const nowTs = Date.now();
+            snap.forEach((d) => {
+              const data = d.data();
+              const createdMs = extractInviteTimestampMs(data?.createdAt);
+              if (!createdMs || nowTs - createdMs > INVITE_TTL_MS) {
+                updateDoc(doc(db, "duel_invitations", d.id), {
+                  status: "cancelled",
+                  updatedAt: nowTs
+                }).catch(() => {});
+                if (data?.roomCode) {
+                  deleteDoc(doc(db, "active_duels", data.roomCode)).catch(() => {});
+                }
+              }
+            });
+          },
+          () => {}
+        );
+      } catch {
+        // ignore listener bootstrap errors
+      }
+    };
+
+    attachInviteGuards();
+    const sweepInterval = setInterval(() => {
+      setIncomingLobbyInvite((prev: any) => {
+        if (!prev) return null;
+        const createdMs = extractInviteTimestampMs(prev.createdAt);
+        if (!createdMs || Date.now() - createdMs > INVITE_TTL_MS) {
+          updateDoc(doc(db, "duel_invitations", prev.id), {
+            status: "cancelled",
+            updatedAt: Date.now()
+          }).catch(() => {});
+          return null;
+        }
+        return prev;
+      });
+    }, 15000);
+
+    return () => {
+      isDisposed = true;
+      clearInterval(sweepInterval);
+      unsubIncoming();
+      unsubOutgoing();
+    };
+  }, [user?.uid]);
+
+  const handleAcceptLobbyInvite = async (invite: any) => {
+    if (!invite?.id || !invite?.roomCode) return;
+    const nowTs = Date.now();
+    const createdMs = extractInviteTimestampMs(invite.createdAt);
+    if (!createdMs || nowTs - createdMs > INVITE_TTL_MS) {
+      await updateDoc(doc(db, "duel_invitations", invite.id), {
+        status: "cancelled",
+        updatedAt: nowTs
+      }).catch(() => {});
+      setIncomingLobbyInvite(null);
+      await showOledAlert(
+        tx(
+          "Esta invitación expiró. Solicita un nuevo desafío en vivo.",
+          "This invitation has expired. Ask for a new live challenge."
+        )
+      );
+      return;
+    }
+
+    try {
+      const duelRef = doc(db, "active_duels", invite.roomCode);
+      const duelSnap = await getDoc(duelRef);
+      const duelData = duelSnap.exists() ? duelSnap.data() : null;
+      if (
+        !duelData ||
+        duelData.creatorUid === user.uid ||
+        duelData.status !== "waiting" ||
+        (duelData.playerUid && duelData.playerUid !== user.uid)
+      ) {
+        await updateDoc(doc(db, "duel_invitations", invite.id), {
+          status: "cancelled",
+          updatedAt: nowTs
+        }).catch(() => {});
+        setIncomingLobbyInvite(null);
+        await showOledAlert(
+          tx(
+            "La sala de duelo ya no está disponible o fue cerrada por el anfitrión.",
+            "The match room is no longer available or was closed by the host."
+          )
+        );
+        return;
+      }
+
+      await updateDoc(doc(db, "duel_invitations", invite.id), {
+        status: "accepted",
+        updatedAt: nowTs
+      });
+      await updateDoc(duelRef, {
+        playerUid: user.uid,
+        playerName: user.fullName,
+        playerConnected: true,
+        playerConnectedAt: nowTs,
+        status: "active",
+        updatedAt: nowTs
+      });
+
+      const matchConfig = {
+        id: invite.roomCode,
+        bowType: duelData.bowType || invite.bowType,
+        distance: duelData.distance || invite.distance,
+        system:
+          duelData.system ||
+          invite.system ||
+          ((duelData.bowType || invite.bowType) === "Compound" ? "cumulative" : "set"),
+        ...(duelData.targetFace || duelData.targetType
+          ? {
+              targetFace: duelData.targetFace || duelData.targetType,
+              targetType: duelData.targetType || duelData.targetFace
+            }
+          : {}),
+        isCreator: false,
+        rival: {
+          uid: duelData.creatorUid || invite.senderUid,
+          fullName:
+            duelData.creatorName ||
+            invite.senderName ||
+            tx("Anfitrión del Duelo", "Match Host"),
+          country: duelData.creatorCountry || "CR",
+          clubName: tx("Oponente en Línea", "Online Opponent"),
+          clubLogo: "0",
+          clubCountry: duelData.creatorCountry || "CR",
+          rating: 9.0
+        }
+      };
+
+      transitioningRoomRef.current = invite.roomCode;
+      setIncomingLobbyInvite(null);
+      onStartDuel(matchConfig);
+    } catch (err) {
+      logger.error("Error accepting lobby duel invitation:", err);
+      await showOledAlert(
+        tx(
+          "No se pudo unir a la sala del desafío.",
+          "Could not join the challenge room."
+        )
+      );
+    }
+  };
 
   // Competitor Gamertag / Alias State for Duels
   const [isEditingAlias, setIsEditingAlias] = useState(false);
@@ -381,13 +665,13 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     };
   }, [user]);
 
-  // Listen for invitation status updates + auto-expire unanswered invites after 120s
+  // Listen for invitation status updates + auto-expire unanswered invites after INVITE_TTL_MS (180s)
   useEffect(() => {
     if (!sentInvite) return;
 
     let unsubscribe: () => void = () => {};
     let isDisposed = false;
-    setInviteRemainingSeconds(120);
+    setInviteRemainingSeconds(Math.floor(INVITE_TTL_MS / 1000));
 
     const countdownInterval = setInterval(() => {
       setInviteRemainingSeconds((prev) => Math.max(0, prev - 1));
@@ -400,19 +684,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       clearInterval(countdownInterval);
 
       try {
-        const { doc, updateDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        const nowTs = Date.now();
-        await updateDoc(doc(db, "duel_invitations", sentInvite.id), {
-          status: "cancelled",
-          updatedAt: nowTs
-        }).catch(() => {});
-        if (sentInvite.roomCode) {
-          await updateDoc(doc(db, "active_duels", sentInvite.roomCode), {
-            status: "cancelled",
-            updatedAt: nowTs
-          }).catch(() => {});
-        }
+        await cancelWaitingRoomAndInvites(sentInvite.roomCode, sentInvite.id);
       } catch (err) {
         logger.warn("Error expiring duel invite:", err);
       } finally {
@@ -420,18 +692,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         setInviteStatusMessage("");
         await showOledAlert(
           txCurrent(
-            "El desafío en línea expiró automáticamente tras 120 segundos sin respuesta del oponente.",
-            "The online challenge expired automatically after 120 seconds with no response."
+            "El desafío en línea expiró automáticamente tras 3 minutos sin respuesta del oponente.",
+            "The online challenge expired automatically after 3 minutes with no response."
           )
         );
       }
-    }, 120000);
+    }, INVITE_TTL_MS);
 
     async function listenToInvite() {
       try {
-        const { doc, onSnapshot, deleteDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-
         const inviteRef = doc(db, "duel_invitations", sentInvite.id);
         unsubscribe = onSnapshot(inviteRef, (snap) => {
           if (isDisposed) return;
@@ -468,7 +737,8 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 }
               };
 
-              // Clean up invite
+              // Clean up invite and mark room as transitioning so unmount does not delete it
+              transitioningRoomRef.current = data.roomCode;
               deleteDoc(inviteRef).catch(() => {});
 
               setSentInvite(null);
@@ -477,6 +747,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               isDisposed = true;
               clearTimeout(expiryTimer);
               clearInterval(countdownInterval);
+              if (sentInvite.roomCode) {
+                deleteDoc(doc(db, "active_duels", sentInvite.roomCode)).catch(() => {});
+              }
               setInviteStatusMessage(
                 txCurrent("El oponente ha rechazado el reto.", "The opponent declined the challenge.")
               );
@@ -487,6 +760,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               isDisposed = true;
               clearTimeout(expiryTimer);
               clearInterval(countdownInterval);
+              if (sentInvite.roomCode) {
+                deleteDoc(doc(db, "active_duels", sentInvite.roomCode)).catch(() => {});
+              }
               setSentInvite(null);
             }
           }
@@ -513,9 +789,6 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     const code = "MAT-" + Math.random().toString(36).substring(2, 5).toUpperCase() + "-" + Math.random().toString(36).substring(2, 5).toUpperCase();
     
     try {
-      const { doc, setDoc } = await import("firebase/firestore");
-      const { db } = await import("@/lib/firebase");
-
       const inviteId = `INV-${Date.now()}`;
       const resolvedSystem = rival.bowConfig.type === "Compound" ? "cumulative" : "set";
       
@@ -540,6 +813,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         bowType: rival.bowConfig.type,
         distance: rival.bowConfig.defaultDistance,
         system: resolvedSystem,
+        ...(user.clubId ? { clubId: user.clubId } : {}),
         creatorUid: user.uid,
         creatorName: user.fullName,
         creatorConnected: true,
@@ -730,6 +1004,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           bowType: customBow,
           distance: customDistance,
           system: resolvedSystem,
+          ...(user.clubId ? { clubId: user.clubId } : {}),
           creatorUid: user.uid,
           creatorName: user.fullName,
           creatorConnected: true,
@@ -800,42 +1075,72 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
       const docRef = doc(db, "active_duels", code);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        
-        // Update document to connect player
-        await updateDoc(docRef, {
-          playerUid: user.uid,
-          playerName: user.fullName,
-          playerConnected: true,
-          playerConnectedAt: Date.now(),
-          status: "active",
-          updatedAt: Date.now()
-        });
-
-        const matchConfig = {
-          id: data.id,
-          bowType: data.bowType,
-          distance: data.distance,
-          system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
-          ...(data.targetFace || data.targetType ? { targetFace: data.targetFace || data.targetType, targetType: data.targetType || data.targetFace } : {}),
-          isCreator: false,
-          rival: {
-            uid: data.creatorUid || "RIV-FRIEND-CREATOR",
-            fullName: data.creatorName || tx("Anfitrión del Duelo", "Match Host"),
-            country: data.creatorCountry || "CR",
-            clubName: "Lobby Archery",
-            clubLogo: "1",
-            clubCountry: data.creatorCountry || "CR",
-            rating: 9.2
-          }
-        };
-        onStartDuel(matchConfig);
-      } else {
+      if (!docSnap.exists()) {
         await showOledAlert(
           tx("El código de duelo no existe o es inválido.", "Room code does not exist or is invalid.")
         );
+        return;
       }
+
+      const data = docSnap.data();
+
+      if (data.creatorUid === user.uid) {
+        await showOledAlert(
+          tx(
+            "No puedes unirte como rival a tu propia sala de duelo.",
+            "You cannot join your own match room as the opponent."
+          )
+        );
+        return;
+      }
+
+      if (
+        data.status !== "waiting" ||
+        (data.playerUid && data.playerUid !== user.uid)
+      ) {
+        await showOledAlert(
+          tx(
+            "Esta sala de duelo ya no está disponible o fue cerrada.",
+            "This match room is unavailable or already closed."
+          )
+        );
+        return;
+      }
+
+      // Update document to connect player
+      await updateDoc(docRef, {
+        playerUid: user.uid,
+        playerName: user.fullName,
+        playerConnected: true,
+        playerConnectedAt: Date.now(),
+        status: "active",
+        updatedAt: Date.now()
+      });
+
+      const matchConfig = {
+        id: data.id || code,
+        bowType: data.bowType,
+        distance: data.distance,
+        system: data.system || (data.bowType === "Compound" ? "cumulative" : "set"),
+        ...(data.targetFace || data.targetType
+          ? {
+              targetFace: data.targetFace || data.targetType,
+              targetType: data.targetType || data.targetFace
+            }
+          : {}),
+        isCreator: false,
+        rival: {
+          uid: data.creatorUid || "RIV-FRIEND-CREATOR",
+          fullName: data.creatorName || tx("Anfitrión del Duelo", "Match Host"),
+          country: data.creatorCountry || "CR",
+          clubName: "Lobby Archery",
+          clubLogo: "1",
+          clubCountry: data.creatorCountry || "CR",
+          rating: 9.2
+        }
+      };
+      transitioningRoomRef.current = data.id || code;
+      onStartDuel(matchConfig);
     } catch (err) {
       logger.error("Error joining duel in Firestore:", err);
       await showOledAlert(
@@ -930,6 +1235,51 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           </p>
         </div>
       </div>
+
+      {/* Live Verified Incoming Duel Invitation Banner (TTL-guarded & room-verified) */}
+      {incomingLobbyInvite && (
+        <div className="bg-[#0D1017] border border-cyan-neon/35 rounded-2xl p-3.5 z-10 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10.5px] font-black uppercase tracking-widest text-emerald-400">
+              {tx("Desafío en Vivo Recibido", "Live Challenge Received")}
+            </span>
+            <span className="text-[10.5px] font-bold text-cyan-neon tabular-nums">
+              {formatBowLabel(incomingLobbyInvite.bowType)} · {incomingLobbyInvite.distance} m
+            </span>
+          </div>
+          <p className="text-xs text-white leading-snug">
+            {tx(
+              `${incomingLobbyInvite.senderName || "Un arquero"} te invita a competir en la sala ${incomingLobbyInvite.roomCode}.`,
+              `${incomingLobbyInvite.senderName || "An archer"} invited you to compete in room ${incomingLobbyInvite.roomCode}.`
+            )}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void handleAcceptLobbyInvite(incomingLobbyInvite)}
+              className="h-9 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center"
+            >
+              {tx("Aceptar Reto", "Accept")}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const inv = incomingLobbyInvite;
+                setIncomingLobbyInvite(null);
+                if (inv?.id) {
+                  await updateDoc(doc(db, "duel_invitations", inv.id), {
+                    status: "rejected",
+                    updatedAt: Date.now()
+                  }).catch(() => {});
+                }
+              }}
+              className="h-9 rounded-xl bg-[#080A0F] border border-white/[0.1] text-white font-black text-[11.6px] uppercase tracking-wider cursor-pointer active:scale-95 transition flex items-center justify-center"
+            >
+              {tx("Rechazar", "Decline")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Lobby Tab Bar */}
       <div className="grid grid-cols-3 bg-[#0D1017] border border-white/[0.08] p-1 rounded-xl z-10 gap-1">
@@ -1607,6 +1957,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                       }
                     };
 
+                    transitioningRoomRef.current = generatedInvite.code;
                     setGeneratedInvite(null);
                     onStartDuel(matchConfig);
                   }}
@@ -1616,7 +1967,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 </button>
 
                 <button
-                  onClick={() => setGeneratedInvite(null)}
+                  onClick={() => {
+                    const roomCodeToCancel = generatedInvite.code;
+                    setGeneratedInvite(null);
+                    void cancelWaitingRoomAndInvites(roomCodeToCancel);
+                  }}
                   className="text-[11.6px] text-white hover:text-white uppercase font-black tracking-widest mt-4 cursor-pointer"
                 >
                   {tx("Cerrar", "Close")}
@@ -1674,27 +2029,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               <div className="flex flex-col gap-2 mt-1">
                 <button
                   onClick={async () => {
+                    const inviteToCancel = sentInvite;
+                    setSentInvite(null);
                     try {
-                      const { doc, updateDoc } = await import("firebase/firestore");
-                      const { db } = await import("@/lib/firebase");
-                      const nowTs = Date.now();
-                      // Cancel the invitation in Firestore
-                      await updateDoc(doc(db, "duel_invitations", sentInvite.id), {
-                        status: "cancelled",
-                        updatedAt: nowTs
-                      }).catch(() => {});
-
-                      // Also clean up the active duel room
-                      if (sentInvite.roomCode) {
-                        await updateDoc(doc(db, "active_duels", sentInvite.roomCode), {
-                          status: "cancelled",
-                          updatedAt: nowTs
-                        }).catch(() => {});
-                      }
+                      await cancelWaitingRoomAndInvites(
+                        inviteToCancel?.roomCode,
+                        inviteToCancel?.id
+                      );
                     } catch (err) {
                       logger.error("Error cancelling duel invite:", err);
-                    } finally {
-                      setSentInvite(null);
                     }
                   }}
                   className="w-full py-3 rounded-xl bg-neutral-900 border border-white/10 text-white hover:text-white font-black text-xs uppercase tracking-wider cursor-pointer transition"

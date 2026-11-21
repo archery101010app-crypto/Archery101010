@@ -39,13 +39,14 @@ import {
 import SmartwatchMiniApp from "@/components/watch/SmartwatchMiniApp";
 import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
 import {
+  BleHeartRateSessionTracker,
   BleHeartRateStatus,
   getBleHeartRateStatus,
   resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
 } from "@/lib/scoring/bleHeartRateService";
-import StravaShareModal from "./StravaShareModal";
+import SharePreviewModal from "./StravaShareModal";
 import { triggerHaptic } from "@/lib/haptics";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { playRealisticMechanicalClockClick } from "@/lib/soundUtils";
@@ -292,7 +293,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [showDispersionDrawer, setShowDispersionDrawer] = useState(false); // Modal de Clics de Mira & Agrupación
   const [dispersionScope, setDispersionScope] = useState<"END" | "GLOBAL">("GLOBAL");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [stravaSharePreview, setStravaSharePreview] = useState<ShareTargetResult | null>(null);
+  const [sharePreview, setSharePreview] = useState<ShareTargetResult | null>(null);
 
   // Biometric GPS Distance + Active Kcal + Open Smartwatch Companion states
   const [gpsDistanceM, setGpsDistanceM] = useState<number>(
@@ -303,7 +304,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
   const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
+  const bleHrStatusRef = useRef<BleHeartRateStatus>(bleHrStatus);
+  bleHrStatusRef.current = bleHrStatus;
+  const bleTrackerRef = useRef<BleHeartRateSessionTracker>(new BleHeartRateSessionTracker());
   const lastBleSampleAtRef = useRef<number>(Date.now() - 5000);
+  const lastWatchArrowSeqRef = useRef<number>(0);
   const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
   const watchFinishedSessionRef = useRef<boolean>(false);
   const lastGpsCoordRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
@@ -350,9 +355,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       hrSamplesCountRef.current = seedWeight;
     }
     resetBleHeartRateSessionStats(seedAvg, seedMax, seedWeight);
+    bleTrackerRef.current.resetSessionStats(0, 0);
     tryAutoReconnectBleHeartRate();
 
     return subscribeBleHeartRate((next) => {
+      bleHrStatusRef.current = next;
       setBleHrStatus(next);
       if (
         next.state === "connected" &&
@@ -362,6 +369,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         next.lastSampleAt > lastBleSampleAtRef.current
       ) {
         lastBleSampleAtRef.current = next.lastSampleAt;
+        bleTrackerRef.current.recordSample(
+          next.currentBpm,
+          next.contactDetected,
+          next.lastSampleAt
+        );
         hrSumRef.current += next.currentBpm;
         hrSamplesCountRef.current += 1;
         const computedAvg = Math.round(hrSumRef.current / hrSamplesCountRef.current);
@@ -510,10 +522,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [isConfirmingVolume]);
 
   useEffect(() => {
-    if (stravaSharePreview) {
-      return registerModalDismiss(() => setStravaSharePreview(null));
+    if (sharePreview) {
+      return registerModalDismiss(() => setSharePreview(null));
     }
-  }, [stravaSharePreview]);
+  }, [sharePreview]);
 
   // Keep endNote synchronized with the currently selected End
   useEffect(() => {
@@ -770,7 +782,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   };
 
-  // Publish live state to Open Smartwatch Companion (Wear OS, Garmin IQ, /watch)
+  // Publish live state to Open Smartwatch Companion (Wear OS, Connect IQ, /watch)
   useEffect(() => {
     if (watchFinishedSessionRef.current || isClosingSessionRef.current) return;
     publishWatchState(liveWatchSnapshot);
@@ -1087,7 +1099,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     setEnds(nextEnds);
   };
 
-  // WhatsApp Scorecard Sharing (Strava-style Diana+Planilla Image + Clean Scorecard Text without homepage URL)
+  // Scorecard Sharing (Diana + Planilla Image + Clean Scorecard Text without homepage URL)
   const handleShareScorecardWhatsApp = async () => {
     setIsGeneratingImage(true);
     try {
@@ -1121,7 +1133,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         lang: language,
         unitSystem
       });
-      setStravaSharePreview(result);
+      setSharePreview(result);
     } catch (err) {
       console.error("Error sharing WhatsApp scorecard:", err);
     } finally {
@@ -1436,6 +1448,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const handleConfirmAbandon = async () => {
     isClosingSessionRef.current = true;
+    bleTrackerRef.current.resetSessionStats(0, 0);
     resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
@@ -1478,6 +1491,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSavePartialBlock = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    bleTrackerRef.current.resetSessionStats(0, 0);
     resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
@@ -1612,6 +1626,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const executeSaveFull = async (finalVolume: number) => {
     isClosingSessionRef.current = true;
+    bleTrackerRef.current.resetSessionStats(0, 0);
     resetBleHeartRateSessionStats(0, 0);
     publishResetWatchState();
     stopNativeLocationTracking();
@@ -1848,7 +1863,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
   const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
 
-  // Shot Chart Share Handler (HD Target Image with 101010 THE APP Strava watermark)
+  // Shot Chart Share Handler (HD Target Image with official 101010 THE APP watermark)
   const handleShareShotChart = async () => {
     setIsGeneratingImage(true);
     try {
@@ -1881,7 +1896,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         lang: language,
         unitSystem
       });
-      setStravaSharePreview(result);
+      setSharePreview(result);
     } catch (err) {
       console.error("Error sharing target shot chart:", err);
     } finally {
@@ -1988,19 +2003,42 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     setCurrentEndIdx(nextEndIdx);
   };
 
-  // Handle commands coming from Open Smartwatch Companion (/watch or native Wear OS / Garmin IQ)
-  const handleWatchArrowDelta = (delta: number) => {
+  // Handle commands coming from Open Smartwatch Companion (/watch or native Wear OS / Connect IQ)
+  const handleWatchArrowDelta = (delta: number, targetArrowsCount?: number, cmdSeq?: number) => {
     watchFinishedSessionRef.current = false;
-    if (config.practiceType === "Volumen") {
-      if (delta > 0) {
-        handleTallyIncrement();
-      } else if (delta < 0) {
-        handleTallyDecrement();
+    if (typeof cmdSeq === "number" && cmdSeq > 0) {
+      if (cmdSeq < lastWatchArrowSeqRef.current) {
+        return;
       }
-    } else if (delta !== 0) {
+      lastWatchArrowSeqRef.current = cmdSeq;
+    }
+
+    let effectiveDelta = Math.round(Number(delta) || 0);
+    if (typeof targetArrowsCount === "number" && Number.isFinite(targetArrowsCount) && targetArrowsCount >= 0) {
+      const currentCount =
+        config.practiceType === "Volumen"
+          ? tallyCountRef.current
+          : watchPhysicalArrowsRef.current;
+      effectiveDelta = Math.round(targetArrowsCount) - currentCount;
+    }
+
+    if (effectiveDelta === 0) return;
+
+    if (config.practiceType === "Volumen") {
+      const steps = Math.min(100, Math.abs(effectiveDelta));
+      if (effectiveDelta > 0) {
+        for (let i = 0; i < steps; i++) {
+          handleTallyIncrement();
+        }
+      } else {
+        for (let i = 0; i < steps; i++) {
+          handleTallyDecrement();
+        }
+      }
+    } else {
       // Scored rounds (Control / Práctica): track physical watch arrow counter separately;
       // NEVER inject a fake "10" into scorecard ends (scores come strictly from SCORE_INPUT or phone input).
-      const nextPhysical = Math.max(0, watchPhysicalArrowsRef.current + delta);
+      const nextPhysical = Math.max(0, watchPhysicalArrowsRef.current + effectiveDelta);
       watchPhysicalArrowsRef.current = nextPhysical;
       setWatchPhysicalArrows(nextPhysical);
       playTallyClickSound();
@@ -2011,7 +2049,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   watchMessageHandlerRef.current = (msg: any) => {
     if (!msg || !msg.type) return;
     if (msg.type === "INCREMENT_ARROW") {
-      handleWatchArrowDelta(msg.delta ?? 1);
+      const rawTarget = msg.targetArrowsCount ?? msg.payload?.targetArrowsCount;
+      const targetNum =
+        typeof rawTarget === "number" && Number.isFinite(rawTarget) ? rawTarget : undefined;
+      const seqNum = Number(msg._cmdSeq ?? msg.cmdSeq) || undefined;
+      handleWatchArrowDelta(msg.delta ?? 1, targetNum, seqNum);
     } else if (msg.type === "DECREMENT_ARROW") {
       if (config.practiceType === "Volumen") {
         const incomingTotal = Number(msg.payload?.totalScore ?? msg.totalScore);
@@ -2019,7 +2061,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           !isNaN(incomingTotal) && incomingTotal >= 0 ? incomingTotal : Math.max(0, prev - 10)
         );
       }
-      handleWatchArrowDelta(msg.delta ?? -1);
+      const rawTarget = msg.targetArrowsCount ?? msg.payload?.targetArrowsCount;
+      const targetNum =
+        typeof rawTarget === "number" && Number.isFinite(rawTarget) ? rawTarget : undefined;
+      const seqNum = Number(msg._cmdSeq ?? msg.cmdSeq) || undefined;
+      handleWatchArrowDelta(msg.delta ?? -1, targetNum, seqNum);
     } else if (msg.type === "UNDO_ARROW") {
       watchFinishedSessionRef.current = false;
       if (config.practiceType === "Volumen") {
@@ -2069,26 +2115,33 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       gpsDistanceAccumRef.current = nextDistM;
       setGpsDistanceM((curr) => Math.max(curr, nextDistM));
 
-      const rawHr = Number(msg.payload?.heartRateBpm ?? msg.heartRateBpm) || 0;
-      const rawAvgHr = Number(msg.payload?.avgHeartRateBpm ?? msg.avgHeartRateBpm) || 0;
-      const rawMaxHr = Number(msg.payload?.maxHeartRateBpm ?? msg.maxHeartRateBpm) || 0;
-      if (rawAvgHr >= 30 && rawAvgHr <= 250) {
-        avgHeartRateRef.current = Math.round(rawAvgHr);
-        setAvgHeartRateBpm(avgHeartRateRef.current);
-      } else if (rawHr >= 30 && rawHr <= 250) {
-        hrSumRef.current += rawHr;
-        hrSamplesCountRef.current += 1;
-        avgHeartRateRef.current = Math.round(hrSumRef.current / hrSamplesCountRef.current);
-        setAvgHeartRateBpm(avgHeartRateRef.current);
-      }
-      const candidateMax = Math.max(
-        rawMaxHr >= 30 && rawMaxHr <= 250 ? Math.round(rawMaxHr) : 0,
-        rawHr >= 30 && rawHr <= 250 ? Math.round(rawHr) : 0,
-        avgHeartRateRef.current
-      );
-      if (candidateMax >= 30 && candidateMax > maxHeartRateRef.current) {
-        maxHeartRateRef.current = candidateMax;
-        setMaxHeartRateBpm(candidateMax);
+      // Never overwrite phone BLE Heart Rate session stats when phone BLE HR tracker is connected or has active samples
+      const bleSnap = bleTrackerRef.current.getSnapshot();
+      const hasActivePhoneBleHr =
+        bleHrStatusRef.current.state === "connected" ||
+        bleSnap.samplesCount > 0;
+      if (!hasActivePhoneBleHr) {
+        const rawHr = Number(msg.payload?.heartRateBpm ?? msg.heartRateBpm) || 0;
+        const rawAvgHr = Number(msg.payload?.avgHeartRateBpm ?? msg.avgHeartRateBpm) || 0;
+        const rawMaxHr = Number(msg.payload?.maxHeartRateBpm ?? msg.maxHeartRateBpm) || 0;
+        if (rawAvgHr >= 30 && rawAvgHr <= 250) {
+          avgHeartRateRef.current = Math.round(rawAvgHr);
+          setAvgHeartRateBpm(avgHeartRateRef.current);
+        } else if (rawHr >= 30 && rawHr <= 250) {
+          hrSumRef.current += rawHr;
+          hrSamplesCountRef.current += 1;
+          avgHeartRateRef.current = Math.round(hrSumRef.current / hrSamplesCountRef.current);
+          setAvgHeartRateBpm(avgHeartRateRef.current);
+        }
+        const candidateMax = Math.max(
+          rawMaxHr >= 30 && rawMaxHr <= 250 ? Math.round(rawMaxHr) : 0,
+          rawHr >= 30 && rawHr <= 250 ? Math.round(rawHr) : 0,
+          avgHeartRateRef.current
+        );
+        if (candidateMax >= 30 && candidateMax > maxHeartRateRef.current) {
+          maxHeartRateRef.current = candidateMax;
+          setMaxHeartRateBpm(candidateMax);
+        }
       }
     } else if (msg.type === "TOGGLE_AUTO_DETECT") {
       setAutoDetectEnabled(Boolean(msg.enabled));
@@ -2209,7 +2262,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         }}
       />
 
-      {/* Unified WHOOP-Style Telemetry HUD (Score + End + Active Arrows in 1 compact block) */}
+      {/* Unified Matte-OLED Telemetry HUD (Score + End + Active Arrows in 1 compact block) */}
       {config.practiceType === "Volumen" ? (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 flex justify-between items-center gap-2">
           <div className="flex items-baseline gap-2">
@@ -3761,10 +3814,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         onClose={() => setIsBleHrModalOpen(false)}
       />
 
-      {/* Strava-Style Share Preview Modal */}
-      <StravaShareModal
-        shareResult={stravaSharePreview}
-        onClose={() => setStravaSharePreview(null)}
+      {/* Share Preview Modal */}
+      <SharePreviewModal
+        shareResult={sharePreview}
+        onClose={() => setSharePreview(null)}
       />
     </div>
   );

@@ -31,6 +31,9 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.ExifInterface;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -130,6 +133,45 @@ public class MainActivity extends BridgeActivity {
     private File pendingCameraCaptureFile = null;
     private volatile String activeAppOrigin = "https://localhost";
     private volatile boolean isWebWatchListenerReady = false;
+    private volatile boolean pendingClearHistoryAfterOta = false;
+    private final Handler otaWatchdogHandler = new Handler(Looper.getMainLooper());
+    private Runnable otaWatchdogRunnable = null;
+
+    private boolean hasActiveNetworkConnection() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            Network activeNet = cm.getActiveNetwork();
+            if (activeNet == null) return false;
+            NetworkCapabilities caps = cm.getNetworkCapabilities(activeNet);
+            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void cancelOtaWatchdog() {
+        if (otaWatchdogRunnable != null) {
+            otaWatchdogHandler.removeCallbacks(otaWatchdogRunnable);
+            otaWatchdogRunnable = null;
+        }
+    }
+
+    private void scheduleOtaWatchdog(final WebView webView) {
+        cancelOtaWatchdog();
+        otaWatchdogRunnable = () -> {
+            otaWatchdogRunnable = null;
+            if (webView != null && !"https://localhost".equals(activeAppOrigin)) {
+                pendingClearHistoryAfterOta = false;
+                activeAppOrigin = "https://localhost";
+                try {
+                    webView.stopLoading();
+                } catch (Exception ignored) {}
+                webView.loadUrl("https://localhost/");
+            }
+        };
+        otaWatchdogHandler.postDelayed(otaWatchdogRunnable, 8000L);
+    }
 
     // Native Live Session GPS + Movement Tracker (active ONLY during an active training session)
     private volatile boolean isSessionTrackingActive = false;
@@ -416,8 +458,11 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ArcheryBleHeartRateBridge(), "ArcheryBleHeartRateBridge");
             initWearableListener();
 
-            if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)) {
+            if (getSharedPreferences("archery_ota_prefs", MODE_PRIVATE).getBoolean("prefer_remote_ota", false)
+                    && hasActiveNetworkConnection()) {
                 activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                pendingClearHistoryAfterOta = true;
+                scheduleOtaWatchdog(webView);
                 java.util.Map<String, String> otaStartupHeaders = new java.util.HashMap<>();
                 otaStartupHeaders.put("Cache-Control", "no-cache");
                 webView.loadUrl("https://archery101010-c0bb4.web.app/", otaStartupHeaders);
@@ -482,7 +527,11 @@ public class MainActivity extends BridgeActivity {
                 }
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     try {
-                        Intent dlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        Uri dlUri = Uri.parse(url);
+                        if (dlUri != null && "archery101010-c0bb4.web.app".equalsIgnoreCase(dlUri.getHost())) {
+                            dlUri = dlUri.buildUpon().authority("archery101010-c0bb4.firebaseapp.com").build();
+                        }
+                        Intent dlIntent = new Intent(Intent.ACTION_VIEW, dlUri);
                         dlIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(dlIntent);
                     } catch (Exception ignored) {}
@@ -505,8 +554,23 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 @Override
+                public void onPageCommitVisible(WebView view, String url) {
+                    super.onPageCommitVisible(view, url);
+                    if (url != null && url.contains("archery101010-c0bb4.web.app")) {
+                        cancelOtaWatchdog();
+                    }
+                }
+
+                @Override
                 public void onPageFinished(WebView view, String url) {
                     super.onPageFinished(view, url);
+                    if (url != null && url.contains("archery101010-c0bb4.web.app")) {
+                        cancelOtaWatchdog();
+                        if (pendingClearHistoryAfterOta && view != null) {
+                            pendingClearHistoryAfterOta = false;
+                            view.clearHistory();
+                        }
+                    }
                     flushPendingWatchCommandsToWebView();
                 }
 
@@ -515,12 +579,29 @@ public class MainActivity extends BridgeActivity {
                     if (request != null && request.isForMainFrame() && request.getUrl() != null) {
                         String host = request.getUrl().getHost();
                         if (host != null && host.contains("archery101010-c0bb4.web.app")) {
+                            cancelOtaWatchdog();
+                            pendingClearHistoryAfterOta = false;
                             activeAppOrigin = "https://localhost";
                             view.loadUrl("https://localhost/");
                             return;
                         }
                     }
                     super.onReceivedError(view, request, error);
+                }
+
+                @Override
+                public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                    if (request != null && request.isForMainFrame() && errorResponse != null && errorResponse.getStatusCode() >= 500 && request.getUrl() != null) {
+                        String host = request.getUrl().getHost();
+                        if (host != null && host.contains("archery101010-c0bb4.web.app")) {
+                            cancelOtaWatchdog();
+                            pendingClearHistoryAfterOta = false;
+                            activeAppOrigin = "https://localhost";
+                            view.loadUrl("https://localhost/");
+                            return;
+                        }
+                    }
+                    super.onReceivedHttpError(view, request, errorResponse);
                 }
 
                 @Override
@@ -601,7 +682,8 @@ public class MainActivity extends BridgeActivity {
                                 lowerPath.equals("/download-aab");
                             if (host.equals("archery101010-c0bb4.web.app") && isDirectDownloadAsset) {
                                 try {
-                                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                                    Uri safeDlUri = uri.buildUpon().authority("archery101010-c0bb4.firebaseapp.com").build();
+                                    Intent intent = new Intent(Intent.ACTION_VIEW, safeDlUri);
                                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                                     startActivity(intent);
                                     return true;
@@ -735,6 +817,33 @@ public class MainActivity extends BridgeActivity {
 
         @Keep
         @JavascriptInterface
+        public void saveCrossOriginMigrationSnapshot(final String jsonPayload) {
+            try {
+                getSharedPreferences("archery_ota_prefs", MODE_PRIVATE)
+                    .edit()
+                    .putString("pending_origin_migration_json", jsonPayload != null ? jsonPayload : "")
+                    .commit();
+            } catch (Exception ignored) {}
+        }
+
+        @Keep
+        @JavascriptInterface
+        public String consumeCrossOriginMigrationSnapshot() {
+            try {
+                android.content.SharedPreferences prefs = getSharedPreferences("archery_ota_prefs", MODE_PRIVATE);
+                String payload = prefs.getString("pending_origin_migration_json", "");
+                if (payload != null && !payload.isEmpty()) {
+                    prefs.edit().remove("pending_origin_migration_json").apply();
+                    return payload;
+                }
+                return "";
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
+        @Keep
+        @JavascriptInterface
         public void reloadInAppOta() {
             runOnUiThread(() -> {
                 try {
@@ -743,8 +852,10 @@ public class MainActivity extends BridgeActivity {
                         .putBoolean("prefer_remote_ota", true)
                         .apply();
                     activeAppOrigin = "https://archery101010-c0bb4.web.app";
+                    pendingClearHistoryAfterOta = true;
                     if (getBridge() != null && getBridge().getWebView() != null) {
                         WebView wv = getBridge().getWebView();
+                        scheduleOtaWatchdog(wv);
                         wv.clearCache(true);
                         java.util.Map<String, String> otaHeaders = new java.util.HashMap<>();
                         otaHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1281,25 +1392,11 @@ public class MainActivity extends BridgeActivity {
                 int prevArrows = Math.max(0, state.optInt("arrowsCount", 0));
                 int nextArrows = Math.max(0, prevArrows + delta);
                 state.put("arrowsCount", nextArrows);
-                state.put("sessionActive", true);
-
-                String practiceType = state.optString("practiceType", "Práctica");
-                if (!"Volumen".equalsIgnoreCase(practiceType) && delta > 0) {
-                    for (int i = 0; i < delta; i++) {
-                        if (curEndArrows.length() >= arrowsPerEnd) {
-                            if (curEndIdx < endsCount - 1) {
-                                curEndIdx++;
-                                curEndArrows = new JSONArray();
-                            } else {
-                                break;
-                            }
-                        }
-                        curEndArrows.put("10");
-                        state.put("totalScore", Math.max(0, state.optInt("totalScore", 0) + 10));
-                    }
-                    state.put("currentEndIndex", curEndIdx);
-                    state.put("currentEndArrows", curEndArrows);
+                if (state.has("totalArrowsVolume")) {
+                    int prevVol = Math.max(0, state.optInt("totalArrowsVolume", prevArrows));
+                    state.put("totalArrowsVolume", Math.max(0, prevVol + delta));
                 }
+                state.put("sessionActive", true);
             } else if ("DECREMENT_ARROW".equals(cmdType) || "UNDO_ARROW".equals(cmdType)) {
                 int prevArrows = Math.max(0, state.optInt("arrowsCount", 0));
                 state.put("arrowsCount", Math.max(0, prevArrows - 1));
@@ -2803,6 +2900,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        cancelOtaWatchdog();
         if (activeInstanceRef != null && activeInstanceRef.get() == this) {
             activeInstanceRef = new WeakReference<>(null);
         }

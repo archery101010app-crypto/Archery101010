@@ -7,7 +7,7 @@ import { ArrowLeft, RotateCcw, HelpCircle, Sparkles, Trophy, Mic, MicOff, Volume
 import { saveLocalSession, generateResilientId, addToSyncQueue, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
 import confetti from "canvas-confetti";
 import { playWABeepStart, playWABeepWarning, playWABeepEnd, playRadioStatic, startRingingSound, stopRingingSound } from "@/lib/soundUtils";
@@ -2932,12 +2932,15 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       if (confirmCancelWaiting) {
         localVoluntaryForfeitRef.current = true;
         if (config.id) {
-          await updateDoc(doc(db, "active_duels", config.id), {
-            status: "cancelled",
-            webrtcOffer: null,
-            webrtcAnswer: null,
-            updatedAt: Date.now()
-          }).catch(() => {});
+          const roomRef = doc(db, "active_duels", config.id);
+          await deleteDoc(roomRef).catch(async () => {
+            await updateDoc(roomRef, {
+              status: "cancelled",
+              webrtcOffer: null,
+              webrtcAnswer: null,
+              updatedAt: Date.now()
+            }).catch(() => {});
+          });
         }
         onBack();
       }

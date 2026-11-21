@@ -467,11 +467,33 @@ export default function AdminUsersTab() {
     const userToUpdate = users.find((u) => u.uid === uid);
     if (!userToUpdate) return;
 
+    if (userToUpdate.role === "superadmin") {
+      await showOledAlert(
+        tx(
+          "Las cuentas Super Admin están protegidas y no se rotan desde este botón rápido.",
+          "Super Admin accounts are protected and cannot be cycled from this quick button."
+        )
+      );
+      return;
+    }
+
     try {
-      const { updateProfile } = await import("@/lib/authService");
-      const roles: UserProfile["role"][] = ["archer", "coach", "team_admin", "superadmin"];
-      const currentIndex = roles.indexOf(userToUpdate.role);
-      const nextIndex = (currentIndex + 1) % roles.length;
+      const { updateProfile, isLinkedToExternalCoach } = await import("@/lib/authService");
+      if (isLinkedToExternalCoach(userToUpdate)) {
+        await showOledAlert(
+          tx(
+            "Este arquero está vinculado a un Coach. Desvincúlalo primero antes de cambiar su rol.",
+            "This archer is linked to a Coach. Unlink them first before changing their role."
+          )
+        );
+        return;
+      }
+
+      const roles: UserProfile["role"][] = ["archer", "coach", "team_admin"];
+      const normalizedCurrent: UserProfile["role"] =
+        userToUpdate.role === "team_admin_coach" ? "coach" : userToUpdate.role;
+      const currentIndex = roles.indexOf(normalizedCurrent);
+      const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % roles.length;
       const newRole = roles[nextIndex];
       const now = Date.now();
 

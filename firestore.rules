@@ -53,9 +53,23 @@ service cloud.firestore {
     //   - bowType: string or null (optional, 0-30 chars)
     //   - clubId: string or null (optional, 0-100 chars)
     //   - clubName: string or null (optional, 0-100 chars)
-    //   - clubInviteCode: string or null (optional, 0-20 chars)
+    //   - clubInviteCode: null or "" only (non-empty invite codes forbidden in users_public; stored in coach_invite_codes)
     //   - role: string or null (optional: 'archer' | 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
     //   - lastActiveAt: number / timestamp / string (optional)
+    //   - updatedAt: number / timestamp / string (optional)
+    //
+    // Collection: coach_invite_codes
+    // Document ID: {inviteCode} (6-digit numeric coach invite code: ^[0-9]{6}$; O(1) lookup-only, non-listable)
+    // Fields:
+    //   - code: string (required, matches inviteCode and ^[0-9]{6}$) [Immutable]
+    //   - coachUid: string (required, 1-128 chars, matches owning coach UID) [Immutable for non-superadmin]
+    //   - clubId: string (required, 1-100 chars)
+    //   - fullName: string or null (optional, 0-100 chars)
+    //   - email: string or null (optional, 0-128 chars)
+    //   - clubName: string or null (optional, 0-100 chars)
+    //   - clubCountry: string or null (optional, 0-100 chars)
+    //   - clubLogo: string or null (optional, 0-150000 chars)
+    //   - role: string or null (optional: 'coach' | 'team_admin' | 'team_admin_coach' | 'superadmin')
     //   - updatedAt: number / timestamp / string (optional)
     //
     // Collection: sessions
@@ -622,11 +636,11 @@ service cloud.firestore {
     }
 
     // Anti self-escalation (enforced on BOTH create and update):
-    // An owner can only hold a coach/team_admin role when not linked to an external coach
+    // An owner can only hold a coach/team_admin role (or isClubCreator == true) when not linked to an external coach
     // and when clubId is null/empty or their own canonical CLB-<uid>.
     function isNotSelfEscalatingCoachClub(data, userId) {
       let clubId = data.get('clubId', null);
-      return data.role == 'archer' || !isOwner(userId) || isSuperAdmin() || (
+      return (data.role == 'archer' && data.get('isClubCreator', false) != true) || !isOwner(userId) || isSuperAdmin() || (
         (data.get('coachId', null) == null || data.get('coachId', '') == '') &&
         (
           clubId == null ||
@@ -637,14 +651,18 @@ service cloud.firestore {
       );
     }
 
-    // Verifies that targetCoachUid exists, holds the submitted 6-digit clubInviteCode, and owns clubId
+    // Verifies that targetCoachUid exists, holds the submitted 6-digit clubInviteCode (or coach_invite_codes/{code} entry), and owns clubId
     function isCoachInviteMatchForUid(targetCoachUid, clubId, code) {
       let coachExists = exists(/databases/$(database)/documents/users/$(targetCoachUid));
       let coachData = coachExists
         ? get(/databases/$(database)/documents/users/$(targetCoachUid)).data
         : {};
-      return coachExists &&
-        coachData.get('clubInviteCode', '') == code &&
+      return (
+          (coachExists && coachData.get('clubInviteCode', '') == code) ||
+          (code is string && code.matches('^[0-9]{6}$') &&
+           exists(/databases/$(database)/documents/coach_invite_codes/$(code)) &&
+           get(/databases/$(database)/documents/coach_invite_codes/$(code)).data.get('coachUid', '') == targetCoachUid)
+        ) &&
         (clubId == null || clubId == '' ||
          clubId == coachData.get('clubId', '') ||
          clubId == 'CLB-' + targetCoachUid ||
@@ -664,11 +682,12 @@ service cloud.firestore {
     function isValidVerifiedCoachInvite(clubId, coachId, code, userId) {
       let hasValidCode = code is string && code.matches('^[0-9]{6}$');
       let hasCoachUid = coachId is string && coachId.size() > 0 && coachId != userId;
-      let coachMatches = hasCoachUid && isCoachInviteMatchForUid(coachId, clubId, code);
+      let coachMatches = hasValidCode && hasCoachUid && isCoachInviteMatchForUid(coachId, clubId, code);
       let derivedCoachUid = (clubId is string && clubId.matches('^CLB-.+'))
         ? clubId.replace('CLB-', '')
         : '';
-      let derivedMatches = derivedCoachUid != '' &&
+      let derivedMatches = hasValidCode &&
+        derivedCoachUid != '' &&
         derivedCoachUid != userId &&
         (!hasCoachUid || coachId == derivedCoachUid || coachId == 'USR-' + derivedCoachUid) &&
         isCoachInviteMatchForUid(derivedCoachUid, clubId, code);
@@ -704,16 +723,16 @@ service cloud.firestore {
     // Strict PII-protected read authorization for private users/{userId} documents:
     // 1) Owner (by UID or verified auth email fallback)
     // 2) SuperAdmin
-    // 3) Coach of the athlete (by shared clubId, canonical CLB-<coachUid>, or direct coachId)
-    // 4) Fellow member of the caller's own non-empty clubId
-    // 5) Assigned coach's profile read ONLY by an athlete explicitly linked to that coach (caller.coachId == userId)
+    // 3) Coach / Club Creator of the athlete (by shared clubId, canonical CLB-<coachUid>, or direct coachId; plain fellow archers excluded)
+    // 4) Assigned coach's profile read ONLY by an athlete explicitly linked to that coach (caller.coachId == userId or CLB-<userId>)
     function isCallerAuthorizedForClubOrCoachRead(data) {
       let caller = getUserData();
       let callerClubId = caller.get('clubId', null);
       let docClubId = data.get('clubId', null);
       let callerIsCoach = request.auth.token.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'] ||
         caller.get('role', '') in ['coach', 'team_admin_coach', 'team_admin'];
-      return (callerClubId is string && callerClubId != '' && docClubId == callerClubId) ||
+      return ((callerIsCoach || caller.get('isClubCreator', false) == true) &&
+          callerClubId is string && callerClubId != '' && docClubId == callerClubId) ||
         (callerIsCoach && docClubId is string &&
           (docClubId == 'CLB-' + request.auth.uid || docClubId == 'CLB-' + request.auth.uid.replace('USR-', ''))) ||
         (data.get('coachId', null) == request.auth.uid && (callerIsCoach || caller.get('isClubCreator', false) == true));
@@ -732,7 +751,8 @@ service cloud.firestore {
         isCallerAuthorizedForClubOrCoachRead(data);
     }
 
-    // Validator for PII-free users_public/{userId} directory documents (enforced on BOTH create and update)
+    // Validator for PII-free users_public/{userId} directory documents (enforced on BOTH create and update).
+    // Non-empty clubInviteCode is strictly forbidden here to prevent scraping 6-digit invite codes.
     function isValidUserPublic(data, userId) {
       return data.keys().hasOnly([
           'uid', 'fullName', 'nickname', 'country', 'bowType',
@@ -745,10 +765,33 @@ service cloud.firestore {
         validOptionalString(data, 'bowType', 0, 30) &&
         validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalString(data, 'clubName', 0, 100) &&
-        validOptionalString(data, 'clubInviteCode', 0, 20) &&
+        (data.get('clubInviteCode', null) == null || data.get('clubInviteCode', '') == '') &&
         (data.get('role', null) == null ||
           data.role in ['archer', 'coach', 'team_admin', 'team_admin_coach', 'superadmin']) &&
         validOptionalDateOrTimestamp(data, 'lastActiveAt') &&
+        validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Validator for private O(1) lookup-only coach_invite_codes/{inviteCode} documents (enforced on BOTH create and update)
+    function isValidCoachInviteCodeDoc(data, inviteCode) {
+      return inviteCode.matches('^[0-9]{6}$') &&
+        data.keys().hasOnly([
+          'code', 'coachUid', 'fullName', 'email', 'clubId',
+          'clubName', 'clubCountry', 'clubLogo', 'role', 'updatedAt'
+        ]) &&
+        data.keys().hasAll(['code', 'coachUid', 'clubId']) &&
+        data.code is string &&
+        data.code == inviteCode &&
+        validString(data.coachUid, 1, 128) &&
+        validString(data.clubId, 1, 100) &&
+        validOptionalString(data, 'fullName', 0, 100) &&
+        validOptionalString(data, 'email', 0, 128) &&
+        validOptionalString(data, 'clubName', 0, 100) &&
+        validOptionalString(data, 'clubCountry', 0, 100) &&
+        validOptionalString(data, 'clubLogo', 0, 150000) &&
+        (data.get('role', null) == null ||
+          data.role in ['coach', 'team_admin', 'team_admin_coach', 'superadmin']) &&
+        (data.get('role', '') != 'superadmin' || isSuperAdmin()) &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
 
@@ -911,13 +954,13 @@ service cloud.firestore {
         validString(data.id, 1, 100) &&
         validString(data.creatorUid, 1, 128) &&
         validOptionalString(data, 'creatorName', 0, 100) &&
-        validOptionalString(data, 'creatorCountry', 0, 10) &&
+        validOptionalString(data, 'creatorCountry', 0, 100) &&
         validOptionalBool(data, 'creatorConnected') &&
         validOptionalDateOrTimestamp(data, 'creatorConnectedAt') &&
         validOptionalBool(data, 'creatorReady') &&
         validOptionalString(data, 'playerUid', 0, 128) &&
         validOptionalString(data, 'playerName', 0, 100) &&
-        validOptionalString(data, 'playerCountry', 0, 10) &&
+        validOptionalString(data, 'playerCountry', 0, 100) &&
         validOptionalBool(data, 'playerConnected') &&
         validOptionalDateOrTimestamp(data, 'playerConnectedAt') &&
         validOptionalBool(data, 'playerReady') &&
@@ -942,6 +985,20 @@ service cloud.firestore {
         validOptionalString(data, 'forfeitByUid', 0, 128) &&
         validOptionalString(data, 'winnerUid', 0, 128) &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
+    }
+
+    // Per-participant field integrity on active_duels updates:
+    // - Creator cannot overwrite rival's playerShots or playerShootoff
+    // - Challenger/player cannot overwrite creatorShots, creatorShootoff, or room match settings (bowType, distance, system)
+    function isValidDuelParticipantMutation(data, oldData) {
+      let changed = data.diff(oldData).affectedKeys();
+      return isSuperAdmin() || (
+        (request.auth.uid != oldData.creatorUid ||
+         request.auth.uid == oldData.get('playerUid', '') ||
+         !changed.hasAny(['playerShots', 'playerShootoff'])) &&
+        (request.auth.uid == oldData.creatorUid ||
+         !changed.hasAny(['creatorShots', 'creatorShootoff', 'bowType', 'distance', 'system']))
+      );
     }
 
     function isValidDuelInvitation(data) {
@@ -1006,6 +1063,10 @@ service cloud.firestore {
 
     function isValidCoachNotification(data) {
       return data.keys().hasAll(['id', 'coachUid', 'athleteUid', 'athleteName', 'type', 'read', 'createdAt']) &&
+        data.keys().hasOnly([
+          'id', 'coachUid', 'athleteUid', 'athleteName', 'athleteEmail',
+          'bowType', 'country', 'clubId', 'type', 'read', 'createdAt', 'updatedAt'
+        ]) &&
         validString(data.id, 1, 128) &&
         validString(data.coachUid, 1, 128) &&
         validString(data.athleteUid, 1, 128) &&
@@ -1015,7 +1076,7 @@ service cloud.firestore {
         validOptionalDateOrTimestamp(data, 'createdAt') &&
         validOptionalString(data, 'athleteEmail', 0, 128) &&
         validOptionalString(data, 'bowType', 0, 30) &&
-        validOptionalString(data, 'country', 0, 10) &&
+        validOptionalString(data, 'country', 0, 100) &&
         validOptionalString(data, 'clubId', 0, 100) &&
         validOptionalDateOrTimestamp(data, 'updatedAt');
     }
@@ -1327,9 +1388,9 @@ service cloud.firestore {
     match /users/{userId} {
       // Strictly protect PII (email, whatsappNumber, birthDate, fcmToken, physicalData):
       // - get: owner (including non-existent bootstrap check), matching auth email, superadmin,
-      //        coach/club fellow member, or an athlete reading ONLY their linked coach's profile.
+      //        coach/club creator of the athlete, or an athlete reading ONLY their linked coach's profile.
       // - list: superadmin, or bounded query (limit <= 300) strictly satisfying canReadPrivateUserDoc
-      //         (invite-code directory lookups use PII-free users_public).
+      //         (6-digit invite-code lookups use private O(1) coach_invite_codes/{inviteCode}).
       allow get: if isAuthenticated() && (
         isOwner(userId) ||
         isSuperAdmin() ||
@@ -1396,7 +1457,7 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
     }
 
-    // 1b. Users Public Directory Collection (PII-free online duel lobby & athlete presence)
+    // 1b. Users Public Directory Collection (PII-free online duel lobby & athlete presence; non-empty clubInviteCode forbidden)
     match /users_public/{userId} {
       allow get: if isAuthenticated();
       allow list: if isAuthenticated() &&
@@ -1414,6 +1475,31 @@ service cloud.firestore {
         isValidUserPublic(request.resource.data, userId);
 
       allow delete: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
+    }
+
+    // 1c. Coach Invite Codes Collection (Private O(1) exact-code lookup only; NEVER listable by regular users)
+    match /coach_invite_codes/{inviteCode} {
+      // O(1) lookup ONLY when caller already knows the exact 6-digit code (returns resource == null cleanly on free code check)
+      allow get: if isAuthenticated();
+
+      // Strictly forbid scraping/enumerating 6-digit coach invite codes
+      allow list: if isSuperAdmin();
+
+      // Owning coach (or superadmin) can claim an unclaimed 6-digit code
+      allow create: if isAuthenticated() &&
+        (request.resource.data.coachUid == request.auth.uid || isSuperAdmin()) &&
+        isValidCoachInviteCodeDoc(request.resource.data, inviteCode);
+
+      // Owning coach (or superadmin) can update their own claimed code; prevents another coach from overwriting an already-claimed code
+      allow update: if isAuthenticated() &&
+        (isSuperAdmin() ||
+          (resource.data.coachUid == request.auth.uid &&
+           request.resource.data.coachUid == request.auth.uid)) &&
+        isValidCoachInviteCodeDoc(request.resource.data, inviteCode);
+
+      // Owning coach (or superadmin) can delete their invite code (idempotent if unsynced / resource == null)
+      allow delete: if isAuthenticated() &&
+        (resource == null || resource.data.coachUid == request.auth.uid || isSuperAdmin());
     }
 
     // 2. Sessions Collection
@@ -1454,9 +1540,9 @@ service cloud.firestore {
         )
       );
 
-      // Only the session owner or a superadmin can permanently delete a session
+      // Only the session owner or a superadmin can permanently delete a session (idempotent for unsynced local drafts where resource == null)
       allow delete: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isSuperAdmin());
+        (resource == null || resource.data.userId == request.auth.uid || isSuperAdmin());
     }
 
     // 3. Calendar Events Collection
@@ -1625,6 +1711,7 @@ service cloud.firestore {
       // - creatorUid is always immutable
       // - While playerUid is empty/unset, only creatorUid, a joining user setting playerUid == request.auth.uid, or superadmin can update
       // - Once playerUid is set, only creatorUid, playerUid, or superadmin can update, and playerUid cannot be hijacked
+      // - Per-participant shot/shootoff & room-config integrity enforced via isValidDuelParticipantMutation
       allow update: if isAuthenticated() &&
         request.resource.data.creatorUid == resource.data.creatorUid &&
         (
@@ -1642,6 +1729,7 @@ service cloud.firestore {
             request.resource.data.get('playerUid', '') == resource.data.playerUid
           )
         ) &&
+        isValidDuelParticipantMutation(request.resource.data, resource.data) &&
         isValidActiveDuel(request.resource.data);
 
       // Either duel participant (creatorUid or playerUid) or superadmin can delete the duel room
@@ -1706,11 +1794,15 @@ service cloud.firestore {
          resource.data.athleteUid == request.auth.uid ||
          isSuperAdmin());
 
-      // Athlete linking to coach (or coach/superadmin) can create notification
+      // Athlete linking/unlinking to an existing coach (or superadmin) can create notification;
+      // blocks self-notifications and fake/non-existent coachUid spam.
       allow create: if isAuthenticated() &&
         (request.resource.data.athleteUid == request.auth.uid ||
          request.resource.data.coachUid == request.auth.uid ||
          isSuperAdmin()) &&
+        (isSuperAdmin() ||
+         (request.resource.data.coachUid != request.auth.uid &&
+          exists(/databases/$(database)/documents/users/$(request.resource.data.coachUid)))) &&
         isValidCoachNotification(request.resource.data);
 
       // Coach recipient or athlete sender can update (e.g. mark read or re-trigger on re-link).

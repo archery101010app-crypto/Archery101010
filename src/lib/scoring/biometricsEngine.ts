@@ -45,10 +45,16 @@ export interface BiometricSessionSnapshot {
 
 export type WatchCommandMessage =
   | { type: "STATE_UPDATE"; payload: BiometricSessionSnapshot }
-  | { type: "INCREMENT_ARROW"; delta: number; source: "watch_manual" | "watch_auto" | "phone" }
+  | {
+      type: "INCREMENT_ARROW";
+      delta: number;
+      targetArrowsCount?: number;
+      source: "watch_manual" | "watch_auto" | "phone";
+    }
   | {
       type: "DECREMENT_ARROW";
       delta?: number;
+      targetArrowsCount?: number;
       source?: "watch_manual" | "watch_auto" | "phone";
       totalScore?: number;
     }
@@ -125,6 +131,8 @@ const WATCH_CHANNEL_NAME = "archery_101010_watch_bridge_v1";
 const WATCH_STORAGE_KEY = "archery_101010_watch_state_v1";
 const WATCH_CMD_STORAGE_KEY = "archery_101010_watch_cmd_v1";
 const WATCH_CLIENT_CODE_KEY = "archery_watch_client_pairing_code";
+const PENDING_WATCH_CMDS_SESSION_KEY = "archery_pending_watch_cmds";
+const PENDING_WATCH_CMD_TTL_MS = 60_000;
 
 /**
  * Parses bow poundage from user profile (e.g., "38", "38 lbs", "42#")
@@ -324,9 +332,9 @@ export function getSessionActiveKcal(session: any, userProfile?: any): number {
 // NATIVE + BUFFERED WATCH COMMAND DISPATCHER & 6-DIGIT CLOUD PAIRING ENGINE
 // ============================================================================
 
-const nativeWatchListeners = new Set<(msg: WatchCommandMessage) => void>();
+const watchCommandListeners = new Set<(msg: WatchCommandMessage) => void>();
 const seenNativeCmdIds = new Set<string>();
-const pendingIncomingWatchMessages: WatchCommandPayload[] = [];
+const pendingWatchCommands: WatchCommandPayload[] = [];
 const watchStatusListeners = new Set<(status: WatchConnectionStatus) => void>();
 const cloudPairingListeners = new Set<(status: CloudWatchPairingStatus) => void>();
 
@@ -345,6 +353,10 @@ let lastCloudTelemetrySteps = 0;
 let lastCloudTelemetryDistM = 0;
 let lastCloudTelemetryAvgHr = 0;
 let lastCloudTelemetryMaxHr = 0;
+let watchHrSum = 0;
+let watchHrCount = 0;
+let lastWatchHrSampleKey = "";
+let activeWatchHrSessionId = "";
 
 // Standalone /watch client Cloud Sync state
 let activeWatchClientCode = "";
@@ -412,18 +424,91 @@ function recordSeenCmdId(id: string): boolean {
   return false;
 }
 
+function getWatchCmdTimestampMs(cmd: WatchCommandPayload): number {
+  const rawTs = Number((cmd as any)?._ts || (cmd as any)?.ts || 0);
+  return Number.isFinite(rawTs) && rawTs > 0 ? rawTs : 0;
+}
+
+function persistPendingWatchCommandsToSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const now = Date.now();
+    for (let i = pendingWatchCommands.length - 1; i >= 0; i--) {
+      const ts = getWatchCmdTimestampMs(pendingWatchCommands[i]);
+      if (!ts || now - ts >= PENDING_WATCH_CMD_TTL_MS) {
+        pendingWatchCommands.splice(i, 1);
+      }
+    }
+    if (pendingWatchCommands.length === 0) {
+      sessionStorage.removeItem(PENDING_WATCH_CMDS_SESSION_KEY);
+    } else {
+      sessionStorage.setItem(
+        PENDING_WATCH_CMDS_SESSION_KEY,
+        JSON.stringify(pendingWatchCommands)
+      );
+    }
+  } catch {}
+}
+
+function rehydratePendingWatchCommandsFromSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = sessionStorage.getItem(PENDING_WATCH_CMDS_SESSION_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      sessionStorage.removeItem(PENDING_WATCH_CMDS_SESSION_KEY);
+      return;
+    }
+    const now = Date.now();
+    let mutated = false;
+    for (const item of parsed) {
+      if (!item || typeof item !== "object" || !item.type || item.type === "REQUEST_STATE") {
+        mutated = true;
+        continue;
+      }
+      const ts = getWatchCmdTimestampMs(item as WatchCommandPayload);
+      if (!ts || now - ts >= PENDING_WATCH_CMD_TTL_MS) {
+        mutated = true;
+        continue;
+      }
+      const cmdId = String(item.cmdId || item._cmdId || "");
+      if (cmdId) {
+        recordSeenCmdId(cmdId);
+        const alreadyQueued = pendingWatchCommands.some(
+          (existing) => (existing.cmdId || existing._cmdId) === cmdId
+        );
+        if (alreadyQueued) continue;
+      }
+      if (pendingWatchCommands.length >= 100) {
+        pendingWatchCommands.shift();
+      }
+      pendingWatchCommands.push(item as WatchCommandPayload);
+    }
+    if (mutated) {
+      persistPendingWatchCommandsToSession();
+    }
+  } catch {}
+}
+
 function bufferIncomingWatchCommand(cmd: WatchCommandPayload): void {
-  const cmdId = String(cmd.cmdId || cmd._cmdId || "");
+  const now = Date.now();
+  const stamped: WatchCommandPayload = {
+    ...cmd,
+    _ts: getWatchCmdTimestampMs(cmd) || now
+  };
+  const cmdId = String(stamped.cmdId || stamped._cmdId || "");
   if (cmdId) {
-    const alreadyBuffered = pendingIncomingWatchMessages.some(
+    const alreadyBuffered = pendingWatchCommands.some(
       (item) => (item.cmdId || item._cmdId) === cmdId
     );
     if (alreadyBuffered) return;
   }
-  if (pendingIncomingWatchMessages.length >= 100) {
-    pendingIncomingWatchMessages.shift();
+  if (pendingWatchCommands.length >= 100) {
+    pendingWatchCommands.shift();
   }
-  pendingIncomingWatchMessages.push(cmd);
+  pendingWatchCommands.push(stamped);
+  persistPendingWatchCommandsToSession();
 }
 
 function dispatchWatchCommandInternal(jsonOrObj: any): string {
@@ -442,14 +527,14 @@ function dispatchWatchCommandInternal(jsonOrObj: any): string {
       return "DELIVERED";
     }
 
-    if (nativeWatchListeners.size === 0) {
+    if (watchCommandListeners.size === 0) {
       if (parsed.type !== "REQUEST_STATE") {
         bufferIncomingWatchCommand(parsed);
       }
       return "DELIVERED";
     }
 
-    nativeWatchListeners.forEach((listener) => {
+    watchCommandListeners.forEach((listener) => {
       try {
         listener(parsed);
       } catch {}
@@ -464,9 +549,11 @@ function ensureGlobalNativeWatchDispatcher(): void {
   if (typeof window === "undefined") return;
   (window as any).__onNativeWatchMessage = dispatchWatchCommandInternal;
   (window as any).onArcheryWatchCommand = dispatchWatchCommandInternal;
+  (window as any).__archeryWatchListenerReady = watchCommandListeners.size > 0;
 }
 
 if (typeof window !== "undefined") {
+  rehydratePendingWatchCommandsFromSession();
   ensureGlobalNativeWatchDispatcher();
 }
 
@@ -511,9 +598,6 @@ function buildPhoneCloudSessionFields(
     bowType: String(s?.bowType || "Recurve").slice(0, 40),
     practiceType: String(s?.practiceType || "Práctica").slice(0, 60),
     analysisMode: Boolean(s?.analysisMode || s?.practiceType === "Análisis"),
-    ...(typeof s?.heartRateBpm === "number" && s.heartRateBpm >= 30 && s.heartRateBpm <= 245
-      ? { watchHeartRateBpm: Math.round(s.heartRateBpm) }
-      : {}),
     ...(typeof s?.analysisCalibrationJson === "string"
       ? { analysisCalibrationJson: s.analysisCalibrationJson.slice(0, 950) }
       : {}),
@@ -612,26 +696,63 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         });
       }
 
+      const docSessionId = typeof data.sessionId === "string" ? data.sessionId : "";
+      if (
+        data.sessionActive === false ||
+        (docSessionId && activeWatchHrSessionId && docSessionId !== activeWatchHrSessionId)
+      ) {
+        watchHrSum = 0;
+        watchHrCount = 0;
+        lastWatchHrSampleKey = "";
+        lastCloudTelemetryAvgHr = 0;
+        lastCloudTelemetryMaxHr = 0;
+      }
+      if (docSessionId && data.sessionActive !== false) {
+        activeWatchHrSessionId = docSessionId;
+      }
+
       const incomingSteps =
         typeof data.watchStepsCount === "number" ? Math.max(0, Math.round(data.watchStepsCount)) : -1;
       const incomingDistM =
         typeof data.watchDistanceM === "number" ? Math.max(0, Math.round(data.watchDistanceM)) : -1;
       const incomingHrBpm =
         typeof data.watchHeartRateBpm === "number" ? Math.max(0, Math.round(data.watchHeartRateBpm)) : 0;
-      const incomingAvgHr =
+      const rawWatchAvgHr =
         typeof data.watchAvgHeartRateBpm === "number"
           ? Math.max(0, Math.round(data.watchAvgHeartRateBpm))
-          : incomingHrBpm;
-      const incomingMaxHr =
+          : 0;
+      const rawWatchMaxHr =
         typeof data.watchMaxHeartRateBpm === "number"
           ? Math.max(0, Math.round(data.watchMaxHeartRateBpm))
-          : incomingHrBpm;
+          : 0;
+
+      let incomingAvgHr = 0;
+      if (rawWatchAvgHr >= 30 && rawWatchAvgHr <= 250) {
+        incomingAvgHr = rawWatchAvgHr;
+      } else if (data.sessionActive !== false && incomingHrBpm >= 30 && incomingHrBpm <= 250) {
+        const sampleKey = `${watchHeartbeatAt}|${incomingCmdId}|${incomingHrBpm}`;
+        if (sampleKey !== lastWatchHrSampleKey) {
+          lastWatchHrSampleKey = sampleKey;
+          watchHrSum += incomingHrBpm;
+          watchHrCount += 1;
+        }
+        incomingAvgHr = watchHrCount > 0 ? Math.round(watchHrSum / watchHrCount) : 0;
+      }
+      const incomingMaxHr = Math.max(
+        rawWatchMaxHr >= 30 && rawWatchMaxHr <= 250 ? rawWatchMaxHr : 0,
+        incomingHrBpm >= 30 && incomingHrBpm <= 250 ? incomingHrBpm : 0,
+        incomingAvgHr
+      );
 
       if (incomingSteps === 0 && incomingDistM === 0 && data.sessionActive === false) {
         lastCloudTelemetrySteps = 0;
         lastCloudTelemetryDistM = 0;
         lastCloudTelemetryAvgHr = 0;
         lastCloudTelemetryMaxHr = 0;
+        watchHrSum = 0;
+        watchHrCount = 0;
+        lastWatchHrSampleKey = "";
+        activeWatchHrSessionId = "";
       } else if (
         (incomingSteps > lastCloudTelemetrySteps && incomingSteps > 0) ||
         (incomingDistM > lastCloudTelemetryDistM && incomingDistM > 0) ||
@@ -702,7 +823,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
 
 /**
  * Generates or restores the archer's 6-digit Cloud Watch Pairing Code (`100000`–`999999`),
- * persists `watch_sessions/{code}` in Firestore, and listens in real time for Garmin / Web Watch commands.
+ * persists `watch_sessions/{code}` in Firestore, and listens in real time for Connect IQ / Web Watch commands.
  */
 export async function getOrCreatePhoneWatchPairingCode(
   uid?: string,
@@ -779,6 +900,10 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
     lastCloudTelemetryDistM = 0;
     lastCloudTelemetryAvgHr = 0;
     lastCloudTelemetryMaxHr = 0;
+    watchHrSum = 0;
+    watchHrCount = 0;
+    lastWatchHrSampleKey = "";
+    activeWatchHrSessionId = "";
   }
 
   setDoc(doc(db, "watch_sessions", code), fields, { merge: true })
@@ -1012,7 +1137,7 @@ export async function connectWatchClientToPairingCode(
         lastCloudSyncAt: Date.now(),
         lastWatchSeenAt: Date.now()
       });
-      nativeWatchListeners.forEach((listener) => {
+      watchCommandListeners.forEach((listener) => {
         try {
           listener({ type: "STATE_UPDATE", payload: mapped });
         } catch {}
@@ -1044,7 +1169,7 @@ export function publishWatchState(snapshot: BiometricSessionSnapshot): void {
     }
   } catch {}
   try {
-    // Notify native Android Wear OS bridge or Apple iOS WKWebView WatchConnectivity bridge
+    // Notify native Android Wear OS bridge or iOS WKWebView WatchConnectivity bridge
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.onSessionTelemetryUpdate) {
       bridge.onSessionTelemetryUpdate(serialized);
@@ -1234,18 +1359,30 @@ export function subscribeWatchMessages(
   window.addEventListener("storage", handleStorage);
 
   // Register listener in the multi-subscriber Set (never overwrites or deletes other subscribers)
-  nativeWatchListeners.add(onMessage);
+  watchCommandListeners.add(onMessage);
   ensureGlobalNativeWatchDispatcher();
-  (window as any).__archeryWatchListenerReady = true;
+  (window as any).__archeryWatchListenerReady = watchCommandListeners.size > 0;
 
-  // Immediately flush any commands buffered in JS before this listener mounted
-  if (pendingIncomingWatchMessages.length > 0) {
-    const buffered = pendingIncomingWatchMessages.splice(0, pendingIncomingWatchMessages.length);
+  // Rehydrate & immediately flush any non-expired (< 60_000ms) commands buffered before this listener mounted
+  rehydratePendingWatchCommandsFromSession();
+  if (pendingWatchCommands.length > 0 && watchCommandListeners.size > 0) {
+    const now = Date.now();
+    const buffered = pendingWatchCommands.splice(0, pendingWatchCommands.length);
+    let deliveredToActiveListener = false;
     buffered.forEach((cmd) => {
-      try {
-        onMessage(cmd);
-      } catch {}
+      const ts = getWatchCmdTimestampMs(cmd);
+      if (ts && now - ts < PENDING_WATCH_CMD_TTL_MS) {
+        try {
+          onMessage(cmd);
+          deliveredToActiveListener = true;
+        } catch {}
+      }
     });
+    if (deliveredToActiveListener || pendingWatchCommands.length === 0) {
+      try {
+        sessionStorage.removeItem(PENDING_WATCH_CMDS_SESSION_KEY);
+      } catch {}
+    }
   }
 
   // Notify native Android / iOS bridges that JS listener is ready and flush any natively queued commands
@@ -1265,10 +1402,13 @@ export function subscribeWatchMessages(
 
   return () => {
     window.removeEventListener("storage", handleStorage);
-    nativeWatchListeners.delete(onMessage);
-    if (nativeWatchListeners.size === 0 && typeof window !== "undefined") {
-      // Keep __onNativeWatchMessage active so incoming commands go into pendingIncomingWatchMessages
-      ensureGlobalNativeWatchDispatcher();
+    watchCommandListeners.delete(onMessage);
+    if (typeof window !== "undefined") {
+      (window as any).__archeryWatchListenerReady = watchCommandListeners.size > 0;
+      if (watchCommandListeners.size === 0) {
+        // Keep __onNativeWatchMessage active so incoming commands go into pendingWatchCommands + sessionStorage
+        ensureGlobalNativeWatchDispatcher();
+      }
     }
     if (channel) {
       try {

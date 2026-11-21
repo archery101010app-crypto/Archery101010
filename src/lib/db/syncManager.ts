@@ -1,10 +1,11 @@
 import { auth, db } from "@/lib/firebase";
-import { doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { logger } from "@/lib/logger";
 import {
   SyncItem,
   sessionsStore,
+  settingsStore,
   getSyncQueue,
   removeFromSyncQueue,
   updateSyncItem,
@@ -37,6 +38,52 @@ function getBackoffDelayMs(attempts: number): number {
 
 function isPlainObject(val: unknown): val is Record<string, any> {
   return Boolean(val) && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date);
+}
+
+const SUPERADMIN_EMAILS = new Set([
+  "admin101010",
+  "admin@archery101010.com",
+  "admin101010@archery101010.com",
+  "info@archery101010.com",
+  "archery101010app@gmail.com"
+]);
+
+const CLUB_OR_ROLE_SYNC_KEYS = [
+  "role",
+  "plan",
+  "proExpiresAt",
+  "clubId",
+  "coachId",
+  "isClubCreator",
+  "clubInviteCode",
+  "joinedWithInviteCode"
+] as const;
+
+async function hasPendingClubOrRoleChanges(
+  docRef: ReturnType<typeof doc>,
+  cleanPayload: Record<string, any>
+): Promise<boolean> {
+  const hasNonDefaultPrivilege =
+    Boolean(cleanPayload.clubId) ||
+    Boolean(cleanPayload.coachId) ||
+    Boolean(cleanPayload.clubInviteCode) ||
+    Boolean(cleanPayload.joinedWithInviteCode) ||
+    Boolean(cleanPayload.isClubCreator) ||
+    (Boolean(cleanPayload.role) && cleanPayload.role !== "archer") ||
+    cleanPayload.plan === "PRO";
+
+  try {
+    const snap = await withTimeout(getDoc(docRef), 5000);
+    if (!snap.exists()) {
+      return hasNonDefaultPrivilege;
+    }
+    const remote = snap.data() || {};
+    return CLUB_OR_ROLE_SYNC_KEYS.some(
+      (k) => k in cleanPayload && (cleanPayload[k] ?? null) !== (remote[k] ?? null)
+    );
+  } catch {
+    return hasNonDefaultPrivilege;
+  }
 }
 
 /**
@@ -81,6 +128,21 @@ export async function runSync(
   try {
     let queue = await getSyncQueue();
     const skippedKeys = new Set<string>();
+    const localCurrentUser = await settingsStore.getItem<any>("current_user").catch(() => null);
+    const activeEmail = (auth.currentUser?.email || localCurrentUser?.email || "")
+      .trim()
+      .toLowerCase();
+    const isSuperAdminActive =
+      localCurrentUser?.role === "superadmin" || SUPERADMIN_EMAILS.has(activeEmail);
+    const isCoachActive =
+      !isSuperAdminActive &&
+      (localCurrentUser?.role === "coach" ||
+        localCurrentUser?.role === "team_admin" ||
+        localCurrentUser?.role === "team_admin_coach" ||
+        Boolean(localCurrentUser?.isClubCreator));
+    const activeCoachClubId = auth.currentUser?.uid
+      ? `CLB-${auth.currentUser.uid.replace("USR-", "")}`
+      : "";
 
     while (queue.length > 0) {
       // Group items by collection + payloadId to coalesce redundant intermediate updates safely
@@ -152,6 +214,46 @@ export async function runSync(
           continue;
         }
 
+        // Preserve offline items belonging to a different account on a shared device instead of failing 5x & dropping (Fixes A8/B15)
+        if (!isSuperAdminActive && auth.currentUser) {
+          const activeUid = auth.currentUser.uid;
+          if (item.collection === "users") {
+            const ownerUid = String(item.payloadId || item.payload?.uid || "").trim();
+            const isCoachManagedRosterCreate =
+              isCoachActive &&
+              ownerUid.startsWith("USR-ATH-") &&
+              item.payload?.coachId === activeUid;
+            const isCoachStudentUnlink =
+              isCoachActive &&
+              item.operation === "UPDATE" &&
+              item.payload?.clubId === null &&
+              item.payload?.coachId === null &&
+              !item.payload?.email;
+            if (
+              ownerUid &&
+              ownerUid !== activeUid &&
+              !isCoachManagedRosterCreate &&
+              !isCoachStudentUnlink
+            ) {
+              skippedKeys.add(targetKey);
+              continue;
+            }
+          } else if (item.collection === "sessions") {
+            const sessionOwnerUid = String(
+              item.payload?.userId || item.payload?.userUid || ""
+            ).trim();
+            const isCoachSessionRestore =
+              isCoachActive &&
+              item.payload?.restoredByCoach === true &&
+              activeCoachClubId &&
+              item.payload?.clubId === activeCoachClubId;
+            if (sessionOwnerUid && sessionOwnerUid !== activeUid && !isCoachSessionRestore) {
+              skippedKeys.add(targetKey);
+              continue;
+            }
+          }
+        }
+
         if (!ignoreBackoff && item.lastAttemptAt && (item.attempts || 0) > 0) {
           const backoffMs = getBackoffDelayMs(item.attempts || 0);
           if (nowMs - item.lastAttemptAt < backoffMs) {
@@ -195,6 +297,7 @@ export async function runSync(
               ...cloudFields,
               updatedAt: rawPayload?.updatedAt ?? Date.now()
             });
+            let deferredPendingUserClubOrRole = false;
             if (item.operation === "INSERT") {
               try {
                 await withTimeout(setDoc(docRef, cleanPayload, { merge: true }), NETWORK_TIMEOUT_MS);
@@ -204,6 +307,10 @@ export async function runSync(
                   const safePatch = buildOwnerSelfServiceProfilePatch(cleanPayload);
                   if (Object.keys(safePatch).length > 0) {
                     await withTimeout(updateDoc(docRef, safePatch), NETWORK_TIMEOUT_MS);
+                    deferredPendingUserClubOrRole = await hasPendingClubOrRoleChanges(
+                      docRef,
+                      cleanPayload
+                    );
                   } else {
                     throw insErr;
                   }
@@ -227,6 +334,10 @@ export async function runSync(
                     const safePatch = buildOwnerSelfServiceProfilePatch(cleanPayload);
                     if (Object.keys(safePatch).length > 0) {
                       await withTimeout(updateDoc(docRef, safePatch), NETWORK_TIMEOUT_MS);
+                      deferredPendingUserClubOrRole = await hasPendingClubOrRoleChanges(
+                        docRef,
+                        cleanPayload
+                      );
                     } else {
                       throw updErr;
                     }
@@ -240,6 +351,17 @@ export async function runSync(
                 await markSessionTombstone(item.payloadId);
               }
               await withTimeout(deleteDoc(docRef), NETWORK_TIMEOUT_MS);
+            }
+
+            if (deferredPendingUserClubOrRole) {
+              const nextAttempts = (item.attempts || 0) + 1;
+              await updateSyncItem(item.id, {
+                status: "failed",
+                attempts: nextAttempts,
+                lastAttemptAt: Date.now()
+              });
+              skippedKeys.add(targetKey);
+              return;
             }
 
             if (
@@ -258,10 +380,22 @@ export async function runSync(
             logger.debug(`[SyncManager] Synced ${item.operation} ${targetKey}`);
             await removeFromSyncQueue(item.id);
           } catch (err: any) {
-            const errCode = String(err?.code || "");
+            const errCode = String(err?.code || "").toLowerCase();
             const errMsg = String(err?.message || err || "");
+            const errMsgLower = errMsg.toLowerCase();
             const nextAttempts = (item.attempts || 0) + 1;
             const attemptTs = Date.now();
+
+            // Cleanly remove DELETE operations if target document is already absent
+            if (
+              item.operation === "DELETE" &&
+              (errCode.includes("not-found") ||
+                errMsgLower.includes("not-found") ||
+                errMsg.includes("No document to update"))
+            ) {
+              await removeFromSyncQueue(item.id);
+              return;
+            }
 
             // Local demo ad campaigns (AD-DEMO-*) don't exist in Firestore unless created by SuperAdmin
             if (
@@ -272,18 +406,31 @@ export async function runSync(
               return;
             }
 
+            const isUnauthenticatedErr =
+              errCode.includes("unauthenticated") || errMsgLower.includes("unauthenticated");
+            if (isUnauthenticatedErr && auth.currentUser) {
+              await auth.currentUser.getIdToken(true).catch(() => {});
+            }
+
             const isTransientNetworkError =
               (typeof navigator !== "undefined" && !navigator.onLine) ||
+              isUnauthenticatedErr ||
+              errCode.includes("aborted") ||
+              errMsgLower.includes("aborted") ||
+              errCode.includes("resource-exhausted") ||
+              errMsgLower.includes("resource-exhausted") ||
+              errCode.includes("internal") ||
+              errMsgLower.includes("internal") ||
               errMsg.includes("NETWORK_TIMEOUT") ||
               errMsg.includes("Sync timeout") ||
               errCode.includes("unavailable") ||
-              errMsg.includes("unavailable") ||
+              errMsgLower.includes("unavailable") ||
               errCode.includes("deadline-exceeded") ||
-              errMsg.includes("deadline-exceeded") ||
+              errMsgLower.includes("deadline-exceeded") ||
               errCode.includes("network-request-failed") ||
-              errMsg.includes("network-request-failed") ||
+              errMsgLower.includes("network-request-failed") ||
               errMsg.includes("Failed to fetch") ||
-              errMsg.toLowerCase().includes("offline");
+              errMsgLower.includes("offline");
 
             if (isTransientNetworkError) {
               // NEVER drop user sessions/events on weak or offline signal! Keep indefinitely with backoff.
