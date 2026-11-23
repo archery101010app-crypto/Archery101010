@@ -144,13 +144,19 @@ export default function HistoryView({
     if (!session) return;
     setIsGeneratingImage(true);
     try {
+      const isVol = isVolumeSession(session);
+      const sessionArrows = getSessionArrows(session);
       const archerName = isCoachResultsView
         ? getSessionAthleteName(session)
         : user.nickname || user.fullName || defaultArcherLabel;
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
-      const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
-      const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
-      const dispersion = session.impacts && session.impacts.length > 0
+      const tens = isVol
+        ? 0
+        : (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
+      const xs = isVol
+        ? 0
+        : (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
+      const dispersion = !isVol && session.impacts && session.impacts.length > 0
         ? calculateDispersionAnalysis(
             session.impacts,
             Number(session.distance) || 18,
@@ -165,13 +171,17 @@ export default function HistoryView({
       const distanceLabel = getSessionShootingDistLabel(session);
 
       const result = await shareTargetShotChart({
-        impacts: session.impacts || [],
-        ends: session.impacts ? session.ends || [] : session.ends || [],
+        impacts: isVol ? [] : session.impacts || [],
+        ends: session.ends || [],
         presetType,
-        score: session.score || 0,
-        maxScore: session.maxScore || 300,
+        score: getSessionScore(session),
+        maxScore: getSessionMaxScore(session),
         tensCount: tens,
         xsCount: xs,
+        isVolumeOnly: isVol,
+        practiceType: session.practiceType,
+        arrowsCount: sessionArrows,
+        arrowsPerEnd: Number(session.arrowsPerEnd) || 6,
         distanceM: Number(session.distance) || 18,
         distanceLabel,
         bowType: session.bowType || "Recurve",
@@ -199,23 +209,33 @@ export default function HistoryView({
     if (!session) return;
     setIsGeneratingImage(true);
     try {
+      const isVol = isVolumeSession(session);
+      const sessionArrows = getSessionArrows(session);
       const archerName = isCoachResultsView
         ? getSessionAthleteName(session)
         : user.nickname || user.fullName || defaultArcherLabel;
       const presetType = getDianaPresetKey(session.bowType, session.distance, session.format, session.targetType);
-      const tens = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
-      const xs = (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
+      const tens = isVol
+        ? 0
+        : (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "10" || a === "X").length, 0);
+      const xs = isVol
+        ? 0
+        : (session.ends || []).reduce((acc: number, e: any) => acc + (e.arrows || []).filter((a: string) => a === "X").length, 0);
       const dateStr = formatRegionalDate(session.timestamp, language);
       const distanceLabel = getSessionShootingDistLabel(session);
 
       const result = await shareScorecardWhatsAppNative({
-        impacts: session.impacts || [],
+        impacts: isVol ? [] : session.impacts || [],
         ends: session.ends || [],
         presetType,
-        score: session.score || 0,
-        maxScore: session.maxScore || 300,
+        score: getSessionScore(session),
+        maxScore: getSessionMaxScore(session),
         tensCount: tens,
         xsCount: xs,
+        isVolumeOnly: isVol,
+        practiceType: session.practiceType,
+        arrowsCount: sessionArrows,
+        arrowsPerEnd: Number(session.arrowsPerEnd) || 6,
         distanceM: Number(session.distance) || 18,
         distanceLabel,
         bowType: session.bowType || "Recurve",

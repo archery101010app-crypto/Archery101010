@@ -1375,4 +1375,31 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       `Expected ~71m after indoor segment without GPS, got ${mixedFused}m`
     );
   });
+
+  it("never renders Volume-only sessions as points, 10s/Xs, or synthetic impacts on shareable telemetry cards", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const cardGenSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/targetImageGenerator.ts"),
+      "utf8"
+    );
+    assert.ok(cardGenSrc.includes("function isVolumeTelemetryParams"));
+    assert.ok(cardGenSrc.includes("const impacts = isVolOnly ? [] : synthesizeImpactsFromEnds"));
+    assert.ok(cardGenSrc.includes("isVolOnly ? `${totalArrowsCount}` : `${score}`"));
+    assert.ok(cardGenSrc.includes("*SESIÓN DE VOLUMEN · ARCHERY 101010 THE APP*"));
+
+    const scoringSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/ScoringView.tsx"),
+      "utf8"
+    );
+    assert.ok(scoringSrc.includes("isVolumeOnly: isVolMode"));
+
+    const historySrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/history/HistoryView.tsx"),
+      "utf8"
+    );
+    assert.ok(historySrc.includes("isVolumeOnly: isVol"));
+    assert.ok(historySrc.includes("score: getSessionScore(session)"));
+  });
 });

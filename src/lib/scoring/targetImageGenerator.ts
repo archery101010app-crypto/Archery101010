@@ -30,6 +30,10 @@ export interface TargetShotChartParams {
   maxScore: number;
   tensCount: number;
   xsCount: number;
+  isVolumeOnly?: boolean;
+  practiceType?: string;
+  arrowsCount?: number;
+  arrowsPerEnd?: number;
   distanceM: number;
   distanceLabel?: string;
   bowType: string;
@@ -122,6 +126,80 @@ const MAX_SHORT_LABEL_BY_LANG: Record<string, string> = {
   cs: "MAX",
   ar: "أقصى"
 };
+
+const VOLUME_BOX_TITLE_BY_LANG: Record<string, string> = {
+  es: "VOLUMEN",
+  en: "VOLUME",
+  ko: "볼륨",
+  ja: "本数",
+  fr: "VOLUME",
+  de: "VOLUMEN",
+  pt: "VOLUME",
+  it: "VOLUME",
+  "zh-CN": "箭量",
+  iw: "נפח",
+  ru: "ОБЪЁМ",
+  cs: "OBJEM",
+  ar: "الحجم"
+};
+
+const ENDS_BOX_TITLE_BY_LANG: Record<string, string> = {
+  es: "TANDAS",
+  en: "ENDS",
+  ko: "엔드",
+  ja: "エンド",
+  fr: "VOLÉES",
+  de: "PASSEN",
+  pt: "SÉRIES",
+  it: "VOLEÉ",
+  "zh-CN": "组数",
+  iw: "מקצים",
+  ru: "СЕРИИ",
+  cs: "SADY",
+  ar: "الأشواط"
+};
+
+const SHOOT_DIST_TITLE_BY_LANG: Record<string, string> = {
+  es: "DISTANCIA",
+  en: "DISTANCE",
+  ko: "거리",
+  ja: "距離",
+  fr: "DISTANCE",
+  de: "DISTANZ",
+  pt: "DISTÂNCIA",
+  it: "DISTANZA",
+  "zh-CN": "距离",
+  iw: "מרחק",
+  ru: "ДИСТАНЦИЯ",
+  cs: "VZDÁLENOST",
+  ar: "المسافة"
+};
+
+function isVolumeTelemetryParams(params: TargetShotChartParams): boolean {
+  return Boolean(
+    params.isVolumeOnly === true ||
+      params.practiceType === "Volumen" ||
+      params.format === "Volumen"
+  );
+}
+
+function resolveTelemetryArrowsCount(params: TargetShotChartParams): number {
+  const fromEnds =
+    params.ends && params.ends.length > 0
+      ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
+      : 0;
+  const explicitCount =
+    typeof params.arrowsCount === "number" && Number.isFinite(params.arrowsCount) && params.arrowsCount > 0
+      ? Math.round(params.arrowsCount)
+      : 0;
+  if (explicitCount > 0) {
+    return Math.max(explicitCount, fromEnds);
+  }
+  if (fromEnds > 0) {
+    return fromEnds;
+  }
+  return params.impacts?.length || 0;
+}
 
 declare global {
   interface Window {
@@ -300,12 +378,14 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     backgroundPhotoUrl = null
   } = params;
 
-  const impacts = synthesizeImpactsFromEnds(rawImpacts, ends, presetType);
-  const dispersion =
-    initialDispersion ||
-    (impacts.length > 0
-      ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format, undefined, resolvedLang)
-      : null);
+  const isVolOnly = isVolumeTelemetryParams(params);
+  const impacts = isVolOnly ? [] : synthesizeImpactsFromEnds(rawImpacts, ends, presetType);
+  const dispersion = isVolOnly
+    ? null
+    : initialDispersion ||
+      (impacts.length > 0
+        ? calculateDispersionAnalysis(impacts, distanceM, bowType, presetType, format, undefined, resolvedLang)
+        : null);
 
   // Vertical 9:16 layout dimensions (scaled 2x for Ultra-HD 2160x3840 output)
   const logicalWidth = 1080;
@@ -330,11 +410,8 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
 
   const appFont = "Outfit, Inter, system-ui, -apple-system, sans-serif";
 
-  const totalArrowsCount =
-    ends.length > 0
-      ? ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
-      : impacts.length;
-  const effectiveMaxScore = totalArrowsCount > 0 ? totalArrowsCount * 10 : maxScore;
+  const totalArrowsCount = resolveTelemetryArrowsCount(params);
+  const effectiveMaxScore = isVolOnly ? 0 : totalArrowsCount > 0 ? totalArrowsCount * 10 : maxScore;
 
   const isPhotoMode = themeMode === "photo";
   const isBlackMode = !isPhotoMode;
@@ -459,16 +536,28 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
       : bowType || tCard(resolvedLang, "bowRecurve");
   const displayShootDist =
     params.distanceLabel || formatShootingDistance(distanceM, resolvedUnitSystem);
-  const displayFormat =
-    format === "Libre" && !resolvedLang.toLowerCase().startsWith("es") ? "Custom" : format;
+  const volumeBadgeTitle =
+    VOLUME_BOX_TITLE_BY_LANG[resolvedLang] ||
+    (resolvedLang.toLowerCase().startsWith("es") ? "VOLUMEN" : "VOLUME");
+  const displayFormat = isVolOnly
+    ? volumeBadgeTitle
+    : format === "Libre" && !resolvedLang.toLowerCase().startsWith("es")
+    ? "Custom"
+    : format;
   ctx.font = `700 22.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(`${displayBowType} • ${displayShootDist} • ${displayFormat} • ${dateStr}`, 54, 236, 630);
   ctx.restore();
 
-  // SCORE Box (+15% box & text: 315x168, r=32, x=711, y=76)
+  // SCORE / VOLUME Box (+15% box & text: 315x168, r=32, x=711, y=76)
   ctx.fillStyle = boxFillStyle;
-  ctx.strokeStyle = isBlackMode ? "rgba(253, 216, 53, 0.55)" : "rgba(253, 216, 53, 0.68)";
+  ctx.strokeStyle = isVolOnly
+    ? isBlackMode
+      ? "rgba(0, 168, 243, 0.58)"
+      : "rgba(0, 168, 243, 0.72)"
+    : isBlackMode
+    ? "rgba(253, 216, 53, 0.55)"
+    : "rgba(253, 216, 53, 0.68)";
   ctx.lineWidth = 2;
   drawRoundedRect(ctx, 711, 76, 315, 168, 32);
   ctx.fill();
@@ -479,17 +568,24 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   ctx.font = `800 20.7px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText(tCard(resolvedLang, "cardScore").toUpperCase(), scoreBoxCenterX, 114, 285);
+  ctx.fillText(
+    isVolOnly ? volumeBadgeTitle : tCard(resolvedLang, "cardScore").toUpperCase(),
+    scoreBoxCenterX,
+    114,
+    285
+  );
 
   ctx.font = `900 69px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${score}`, scoreBoxCenterX, 182);
+  ctx.fillText(isVolOnly ? `${totalArrowsCount}` : `${score}`, scoreBoxCenterX, 182);
 
-  const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
+  const pct = !isVolOnly && effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
   ctx.font = `700 18.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(
-    `/ ${effectiveMaxScore} (${pct}%) • ${totalArrowsCount} ${tCard(resolvedLang, "cardArrows").toUpperCase()}`,
+    isVolOnly
+      ? `${tCard(resolvedLang, "cardArrows").toUpperCase()} • ${displayShootDist}`
+      : `/ ${effectiveMaxScore} (${pct}%) • ${totalArrowsCount} ${tCard(resolvedLang, "cardArrows").toUpperCase()}`,
     scoreBoxCenterX,
     218,
     290
@@ -703,8 +799,8 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.textBaseline = "alphabetic";
   }
 
-  // 6. Bottom 4 Harmonious & Centered KPI Stat Boxes (PROMEDIO | PRECISIÓN | KCAL | DISTANCIA)
-  const avgArrow = totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
+  // 6. Bottom 4 Harmonious & Centered KPI Stat Boxes
+  const avgArrow = !isVolOnly && totalArrowsCount > 0 ? (score / totalArrowsCount).toFixed(2) : "0.00";
   const computedDistanceM =
     typeof params.distanceWalkedM === "number" && params.distanceWalkedM >= 0
       ? Math.round(params.distanceWalkedM)
@@ -723,27 +819,61 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
   const boxGap = 16;
   const boxW = 231; // 4 * 231 + 3 * 16 = 972px (54..1026)
 
-  const hasGrouping = Boolean(dispersion && dispersion.spreadCm > 0);
-  const kpiItems = [
-    {
-      title: tCard(resolvedLang, "cardAverage").toUpperCase(),
-      main: `${avgArrow} pts`
-    },
-    {
-      title: hasGrouping
-        ? tCard(resolvedLang, "cardGrouping").toUpperCase()
-        : tCard(resolvedLang, "precisionLabel").toUpperCase(),
-      main: hasGrouping ? `Ø ${dispersion!.spreadCm.toFixed(1)} cm` : `${tensCount} 10s • ${xsCount} Xs`
-    },
-    {
-      title: tCard(resolvedLang, "cardCalories").toUpperCase(),
-      main: `${computedKcal} kcal`
-    },
-    {
-      title: tCard(resolvedLang, "cardWalked").toUpperCase(),
-      main: formatWalkedDistanceRegional(computedDistanceM, resolvedUnitSystem)
-    }
-  ];
+  const nonEmptyEndsCount = ends.filter((e) => (e.arrows || []).some((a) => a !== "")).length;
+  const perEnd = Math.max(1, Number(params.arrowsPerEnd) || 6);
+  const volumeEndsCount =
+    nonEmptyEndsCount > 0
+      ? nonEmptyEndsCount
+      : totalArrowsCount > 0
+      ? Math.max(1, Math.ceil(totalArrowsCount / perEnd))
+      : 0;
+  const endsTitle =
+    ENDS_BOX_TITLE_BY_LANG[resolvedLang] ||
+    (resolvedLang.toLowerCase().startsWith("es") ? "TANDAS" : "ENDS");
+  const shootDistTitle =
+    SHOOT_DIST_TITLE_BY_LANG[resolvedLang] ||
+    (resolvedLang.toLowerCase().startsWith("es") ? "DISTANCIA" : "DISTANCE");
+
+  const hasGrouping = !isVolOnly && Boolean(dispersion && dispersion.spreadCm > 0);
+  const kpiItems = isVolOnly
+    ? [
+        {
+          title: endsTitle,
+          main: `${volumeEndsCount}`
+        },
+        {
+          title: shootDistTitle,
+          main: displayShootDist
+        },
+        {
+          title: tCard(resolvedLang, "cardCalories").toUpperCase(),
+          main: `${computedKcal} kcal`
+        },
+        {
+          title: tCard(resolvedLang, "cardWalked").toUpperCase(),
+          main: formatWalkedDistanceRegional(computedDistanceM, resolvedUnitSystem)
+        }
+      ]
+    : [
+        {
+          title: tCard(resolvedLang, "cardAverage").toUpperCase(),
+          main: `${avgArrow} pts`
+        },
+        {
+          title: hasGrouping
+            ? tCard(resolvedLang, "cardGrouping").toUpperCase()
+            : tCard(resolvedLang, "precisionLabel").toUpperCase(),
+          main: hasGrouping ? `Ø ${dispersion!.spreadCm.toFixed(1)} cm` : `${tensCount} 10s • ${xsCount} Xs`
+        },
+        {
+          title: tCard(resolvedLang, "cardCalories").toUpperCase(),
+          main: `${computedKcal} kcal`
+        },
+        {
+          title: tCard(resolvedLang, "cardWalked").toUpperCase(),
+          main: formatWalkedDistanceRegional(computedDistanceM, resolvedUnitSystem)
+        }
+      ];
 
   kpiItems.forEach((item, idx) => {
     const bx = 54 + (boxW + boxGap) * idx;
@@ -895,11 +1025,9 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
   const canvas = await renderTargetShotChartCanvas(initialParams);
   const dataUrl = canvas.toDataURL("image/png");
   const fileName = `Archery101010-Telemetry-${Date.now()}.png`;
-  const totalArrows =
-    params.ends && params.ends.length > 0
-      ? params.ends.reduce((sum, e) => sum + (e.arrows || []).filter((a) => a !== "").length, 0)
-      : params.impacts?.length || 0;
-  const effectiveMax = totalArrows > 0 ? totalArrows * 10 : params.maxScore;
+  const isVolOnly = isVolumeTelemetryParams(params);
+  const totalArrows = resolveTelemetryArrowsCount(params);
+  const effectiveMax = isVolOnly ? 0 : totalArrows > 0 ? totalArrows * 10 : params.maxScore;
 
   const archerFallback = tCard(resolvedLang, "roleAthlete");
   const capAvgBpm =
@@ -925,7 +1053,17 @@ export async function shareTargetShotChart(params: TargetShotChartParams): Promi
         }`
       : "";
 
-  const captionText = isSpanish
+  const captionText = isVolOnly
+    ? isSpanish
+      ? `🎯 *ARCHERY 101010 THE APP*\n` +
+        `• *Arquero:* ${params.archerName || "Arquero"}\n` +
+        `• *Volumen:* ${totalArrows} flechas · ${displayShootDist}` +
+        hrCaptionLineEs
+      : `🎯 *ARCHERY 101010 THE APP*\n` +
+        `• *${archerFallback}:* ${params.archerName || archerFallback}\n` +
+        `• *${VOLUME_BOX_TITLE_BY_LANG[resolvedLang] || "Volume"}:* ${totalArrows} ${tCard(resolvedLang, "cardArrows").toLowerCase()} · ${displayShootDist}` +
+        hrCaptionLineEn
+    : isSpanish
     ? `🎯 *ARCHERY 101010 THE APP*\n` +
       `• *Arquero:* ${params.archerName || "Arquero"}\n` +
       `• *Puntaje:* ${params.score} / ${effectiveMax} pts\n` +
@@ -969,19 +1107,11 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
     sessionNote
   } = params;
 
-  let totalArrows = 0;
-  ends.forEach((e) => {
-    (e.arrows || []).forEach((a) => {
-      if (a !== "") totalArrows++;
-    });
-  });
-  if (totalArrows === 0 && params.impacts) {
-    totalArrows = params.impacts.length;
-  }
-
-  const effectiveMaxScore = totalArrows > 0 ? totalArrows * 10 : maxScore;
-  const pct = effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
-  const avgPerArrow = totalArrows > 0 ? (score / totalArrows).toFixed(2) : "0.00";
+  const isVolOnly = isVolumeTelemetryParams(params);
+  const totalArrows = resolveTelemetryArrowsCount(params);
+  const effectiveMaxScore = isVolOnly ? 0 : totalArrows > 0 ? totalArrows * 10 : maxScore;
+  const pct = !isVolOnly && effectiveMaxScore > 0 ? Math.round((score / effectiveMaxScore) * 100) : 0;
+  const avgPerArrow = !isVolOnly && totalArrows > 0 ? (score / totalArrows).toFixed(2) : "0.00";
   const bowLabel =
     bowType === "Recurve"
       ? tCard(resolvedLang, "bowRecurve")
@@ -992,11 +1122,25 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
       : bowType || tCard(resolvedLang, "bowRecurve");
   const displayShootDist =
     params.distanceLabel || formatShootingDistance(distanceM, resolvedUnitSystem);
-  const displayFormat = format === "Libre" && !isSpanish ? "Custom" : format;
+  const displayFormat = isVolOnly
+    ? isSpanish
+      ? "Volumen"
+      : VOLUME_BOX_TITLE_BY_LANG[resolvedLang] || "Volume"
+    : format === "Libre" && !isSpanish
+    ? "Custom"
+    : format;
   const walkedStr =
     typeof params.distanceWalkedM === "number" && params.distanceWalkedM > 0
       ? formatWalkedDistanceRegional(params.distanceWalkedM, resolvedUnitSystem)
       : "";
+  const computedVolKcal =
+    typeof params.activeKcal === "number" && params.activeKcal > 0
+      ? Math.round(params.activeKcal)
+      : calculateActiveKcal({
+          arrowsCount: totalArrows,
+          distanceWalkedM: Math.max(0, Math.round(params.distanceWalkedM || 0)),
+          bowPoundageLbs: params.bowPoundageLbs || 36
+        });
   const scAvgBpm =
     typeof params.avgHeartRateBpm === "number" &&
     params.avgHeartRateBpm >= 30 &&
@@ -1020,21 +1164,49 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
         }\n`
       : "";
 
-  const endsDetail = ends
-    .map((e, idx) => {
-      const valid = (e.arrows || []).filter((a) => a !== "");
-      if (valid.length === 0) return null;
-      const endSum = valid.reduce(
-        (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
-        0
-      );
-      return `• ${String(idx + 1).padStart(2, "0")}: ${valid.join(", ")}  →  *${endSum}* pts`;
-    })
-    .filter(Boolean)
-    .join("\n");
+  const endsDetail = isVolOnly
+    ? ""
+    : ends
+        .map((e, idx) => {
+          const valid = (e.arrows || []).filter((a) => a !== "");
+          if (valid.length === 0) return null;
+          const endSum = valid.reduce(
+            (s, a) => s + (a === "X" || a === "10" ? 10 : a === "M" ? 0 : Number(a) || 0),
+            0
+          );
+          return `• ${String(idx + 1).padStart(2, "0")}: ${valid.join(", ")}  →  *${endSum}* pts`;
+        })
+        .filter(Boolean)
+        .join("\n");
 
   const archerFallback = tCard(resolvedLang, "roleAthlete");
-  const message = isSpanish
+  const message = isVolOnly
+    ? isSpanish
+      ? `*SESIÓN DE VOLUMEN · ARCHERY 101010 THE APP*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *Arquero:* ${archerName || "Arquero"}\n` +
+        `• *Arco:* ${bowLabel}\n` +
+        `• *Modalidad:* Volumen · ${displayShootDist}\n` +
+        `• *Volumen Total:* *${totalArrows}* flechas\n` +
+        `• *Calorías:* ${computedVolKcal} kcal\n` +
+        (walkedStr ? `• *Recorrido:* ${walkedStr}\n` : "") +
+        hrScorecardLineEs +
+        (sessionNote ? `\n*Notas:* ${sessionNote}\n` : "") +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 *ARCHERY 101010 THE APP*`
+      : `*OFFICIAL VOLUME LOG · ARCHERY 101010 THE APP*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *${archerFallback}:* ${archerName || archerFallback}\n` +
+        `• *${tCard(resolvedLang, "bowType")}:* ${bowLabel}\n` +
+        `• *${tCard(resolvedLang, "sessionFormat")}:* ${displayFormat} · ${displayShootDist}\n` +
+        `• *${VOLUME_BOX_TITLE_BY_LANG[resolvedLang] || "VOLUME"}:* *${totalArrows}* ${tCard(resolvedLang, "cardArrows").toLowerCase()}\n` +
+        `• *${tCard(resolvedLang, "cardCalories")}:* ${computedVolKcal} kcal\n` +
+        (walkedStr ? `• *${tCard(resolvedLang, "cardWalked")}:* ${walkedStr}\n` : "") +
+        hrScorecardLineIntl +
+        (sessionNote ? `\n*Notes:* ${sessionNote}\n` : "") +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 *ARCHERY 101010 THE APP*`
+    : isSpanish
     ? `*PLANILLA OFICIAL · ARCHERY 101010 THE APP*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Arquero:* ${archerName || "Arquero"}\n` +

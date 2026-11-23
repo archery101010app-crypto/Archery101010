@@ -1177,20 +1177,33 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const handleShareScorecardWhatsApp = async () => {
     setIsGeneratingImage(true);
     try {
-      const totalScore = calculateTotalScore();
-      const maxScore = config.maxScore || (config.endsCount * config.arrowsPerEnd * 10);
-      const tens = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "10" || a === "X").length, 0);
-      const xs = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "X").length, 0);
+      const isVolMode = config.practiceType === "Volumen";
+      const totalScore = isVolMode ? 0 : calculateTotalScore();
+      const maxScore = isVolMode
+        ? 0
+        : config.maxScore || config.endsCount * config.arrowsPerEnd * 10;
+      const tens = isVolMode
+        ? 0
+        : ends.reduce((acc, e) => acc + e.arrows.filter((a) => a === "10" || a === "X").length, 0);
+      const xs = isVolMode
+        ? 0
+        : ends.reduce((acc, e) => acc + e.arrows.filter((a) => a === "X").length, 0);
+      const volumeArrows =
+        isFinishing && confirmedVolume > 0 ? confirmedVolume : tallyCount;
       const archerName = user.nickname || user.fullName || "Arquero";
 
       const result = await shareScorecardWhatsAppNative({
-        impacts,
+        impacts: isVolMode ? [] : impacts,
         ends,
         presetType,
         score: totalScore,
         maxScore,
         tensCount: tens,
         xsCount: xs,
+        isVolumeOnly: isVolMode,
+        practiceType: config.practiceType,
+        arrowsCount: isVolMode ? volumeArrows : totalShotArrows,
+        arrowsPerEnd: config.arrowsPerEnd,
         distanceM: config.distance || 70,
         distanceLabel: shootingDistanceLabel,
         bowType: config.bowType || user.bowConfig?.type || "Recurve",
@@ -1198,7 +1211,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         archerName,
         dateStr: formatRegionalDate(new Date(), language),
         sessionNote,
-        dispersion: globalDispersion,
+        dispersion: isVolMode ? null : globalDispersion,
         activeKcal,
         distanceWalkedM,
         bowPoundageLbs,
@@ -1941,19 +1954,30 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const handleShareShotChart = async () => {
     setIsGeneratingImage(true);
     try {
+      const isVolMode = config.practiceType === "Volumen";
       const archerName = user.nickname || user.fullName || "Arquero";
-      const totalScore = calculateTotalScore();
-      const tens = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "10" || a === "X").length, 0);
-      const xs = ends.reduce((acc, e) => acc + e.arrows.filter(a => a === "X").length, 0);
+      const totalScore = isVolMode ? 0 : calculateTotalScore();
+      const tens = isVolMode
+        ? 0
+        : ends.reduce((acc, e) => acc + e.arrows.filter((a) => a === "10" || a === "X").length, 0);
+      const xs = isVolMode
+        ? 0
+        : ends.reduce((acc, e) => acc + e.arrows.filter((a) => a === "X").length, 0);
+      const volumeArrows =
+        isFinishing && confirmedVolume > 0 ? confirmedVolume : tallyCount;
 
       const result = await shareTargetShotChart({
-        impacts,
+        impacts: isVolMode ? [] : impacts,
         ends,
         presetType: presetType,
         score: totalScore,
-        maxScore: config.maxScore,
+        maxScore: isVolMode ? 0 : config.maxScore,
         tensCount: tens,
         xsCount: xs,
+        isVolumeOnly: isVolMode,
+        practiceType: config.practiceType,
+        arrowsCount: isVolMode ? volumeArrows : totalShotArrows,
+        arrowsPerEnd: config.arrowsPerEnd,
         distanceM: config.distance || 70,
         distanceLabel: shootingDistanceLabel,
         bowType: config.bowType || "Recurve",
@@ -1961,7 +1985,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         archerName,
         dateStr: formatRegionalDate(new Date(), language),
         sessionNote,
-        dispersion: globalDispersion,
+        dispersion: isVolMode ? null : globalDispersion,
         activeKcal,
         distanceWalkedM,
         bowPoundageLbs,
@@ -3285,8 +3309,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 </div>
               </div>
 
-              {/* Bloques y Fatiga report (para WA600/720) */}
-              {isBlockFormat && (
+              {/* Bloques y Fatiga report (para WA600/720 con puntaje) */}
+              {isBlockFormat && config.practiceType !== "Volumen" && (
                 <div className="bg-neutral-950/60 p-4 rounded-2xl border border-white/5 flex flex-col gap-2 text-xs">
                   <span className="text-[10.5px] text-white uppercase font-bold">{tx("Rendimiento por Bloques", "Block Performance")}</span>
                   <div className="flex justify-between text-white">
@@ -3410,7 +3434,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   className="w-full h-11 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Share2 size={16} aria-hidden="true" />
-                  <span>{t("shareScorecardMessaging")}</span>
+                  <span>
+                    {config.practiceType === "Volumen"
+                      ? tx("Compartir Resumen", "Share Summary")
+                      : t("shareScorecardMessaging")}
+                  </span>
                 </button>
                 <button
                   onClick={handleFinishAndSave}

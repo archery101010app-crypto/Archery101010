@@ -346,7 +346,11 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               className="w-full h-11 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
             >
               <MessageCircle size={16} className="text-emerald-400 shrink-0" strokeWidth={2.4} />
-              <span className="truncate">{tx("Enviar Foto + Planilla", "Share Photo + Scorecard")}</span>
+              <span className="truncate">
+                {shareResult.params?.isVolumeOnly || shareResult.params?.practiceType === "Volumen"
+                  ? tx("Enviar Foto + Resumen", "Share Photo + Summary")
+                  : tx("Enviar Foto + Planilla", "Share Photo + Scorecard")}
+              </span>
             </button>
 
             <button
